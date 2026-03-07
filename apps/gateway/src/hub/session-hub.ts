@@ -129,6 +129,7 @@ export class SessionHub {
 	private readonly proxyConnections = new Set<string>();
 	private lastActivityAt = Date.now();
 	private lastKnownAgentIdleAt: number | null = null;
+	private lastPromptSenderUserId: string | null = null;
 
 	// In-memory guard for initial prompt sending (prevents concurrent sends)
 	private initialPromptSending = false;
@@ -1051,6 +1052,9 @@ export class SessionHub {
 				getOpenCodeUrl: () => this.runtime.getOpenCodeUrl(),
 				broadcast: (message) => this.broadcast(message),
 				recordUserPromptTelemetry: () => this.telemetry.recordUserPrompt(),
+				setLastPromptSenderUserId: (promptUserId) => {
+					this.lastPromptSenderUserId = promptUserId;
+				},
 				getSessionClientType: () => this.runtime.getContext().session.client_type ?? null,
 				resetEventProcessorForNewPrompt: () => this.eventProcessor.resetForNewPrompt(),
 				sendPromptToRuntime: (promptContent, images) =>
@@ -1159,27 +1163,22 @@ export class SessionHub {
 			this.sendError(ws, "Unauthorized");
 			return false;
 		}
-		const context = this.runtime.getContext();
-		// If created_by is null (e.g. Slack/automation sessions), allow any
-		// authenticated user — they already passed org-level auth to connect.
-		if (context.session.created_by && context.session.created_by !== userId) {
-			this.sendError(ws, "Not authorized to modify this session");
-			return false;
-		}
 		return true;
 	}
 
 	private async handleGitStatus(ws: WebSocket, workspacePath?: string): Promise<void> {
+		const preferredGitUserId = this.lastPromptSenderUserId;
 		await runGitStatusWorkflow(
 			{
 				ensureRuntimeReady: () => this.ensureRuntimeReady(),
-				refreshGitContext: () => this.runtime.refreshGitContext(),
+				refreshGitContext: (userId) => this.runtime.refreshGitContext(userId),
 				getGitOps: () => this.getGitOps(),
 				sendMessage: (socket, message) => this.sendMessage(socket, message as ServerMessage),
 				logError: (message, error) => this.logError(message, error),
 			},
 			ws,
 			workspacePath,
+			preferredGitUserId,
 		);
 	}
 
@@ -1189,10 +1188,11 @@ export class SessionHub {
 		fn: () => Promise<{ success: boolean; code: GitResultCode; message: string; prUrl?: string }>,
 		workspacePath?: string,
 	): Promise<void> {
+		const preferredGitUserId = this.lastPromptSenderUserId;
 		await runGitActionWorkflow(
 			{
 				ensureRuntimeReady: () => this.ensureRuntimeReady(),
-				refreshGitContext: () => this.runtime.refreshGitContext(),
+				refreshGitContext: (userId) => this.runtime.refreshGitContext(userId),
 				getGitOps: () => this.getGitOps(),
 				sendMessage: (socket, message) => this.sendMessage(socket, message as ServerMessage),
 				logError: (message, error) => this.logError(message, error),
@@ -1202,6 +1202,7 @@ export class SessionHub {
 				ws,
 				action,
 				workspacePath,
+				preferredGitUserId,
 				run: fn,
 			},
 		);

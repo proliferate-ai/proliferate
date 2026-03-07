@@ -29,7 +29,7 @@ export async function getDisabledSourceIds(userId: string, orgId: string): Promi
 }
 
 /**
- * Get disabled source + action preferences for a user in an org.
+ * Get both disabled sources and disabled per-action preferences.
  */
 export async function getDisabledPreferences(userId: string, orgId: string) {
 	return db.getDisabledPreferences(userId, orgId);

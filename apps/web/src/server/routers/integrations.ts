@@ -28,6 +28,29 @@ import { z } from "zod";
 import { orgProcedure } from "./middleware";
 
 const log = logger.child({ handler: "integrations" });
+const CONNECTOR_ACTIONS_CACHE_TTL_MS = 2 * 60 * 1000;
+
+interface ConnectorActionSummary {
+	name: string;
+	description: string;
+	riskLevel: "read" | "write" | "danger";
+}
+
+interface CachedConnectorActions {
+	actions: ConnectorActionSummary[];
+	error: string | null;
+	expiresAt: number;
+}
+
+const connectorActionsCache = new Map<string, CachedConnectorActions>();
+const connectorActionsInFlight = new Map<
+	string,
+	Promise<{ actions: ConnectorActionSummary[]; error: string | null }>
+>();
+
+function connectorActionsCacheKey(orgId: string, connectorId: string): string {
+	return `${orgId}:${connectorId}`;
+}
 
 /**
  * Translate service-layer errors to ORPCError.
@@ -624,6 +647,67 @@ export const integrationsRouter = {
 				throwAsORPC(err);
 			}
 			return connectors.validateConnector(context.orgId, input.connector);
+		}),
+
+	/**
+	 * Get connector tool actions for permissions UI.
+	 */
+	getConnectorActions: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(
+			z.object({
+				actions: z.array(
+					z.object({
+						name: z.string(),
+						description: z.string(),
+						riskLevel: z.enum(["read", "write", "danger"]),
+					}),
+				),
+				error: z.string().nullable(),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const cacheKey = connectorActionsCacheKey(context.orgId, input.id);
+			const now = Date.now();
+			const cached = connectorActionsCache.get(cacheKey);
+			if (cached && cached.expiresAt > now) {
+				return { actions: cached.actions, error: cached.error };
+			}
+
+			const inFlight = connectorActionsInFlight.get(cacheKey);
+			if (inFlight) {
+				return inFlight;
+			}
+
+			const loadActionsPromise = (async () => {
+				const connector = await connectors.getConnector(input.id, context.orgId);
+				if (!connector) {
+					throw new ORPCError("NOT_FOUND", { message: "Connector not found" });
+				}
+
+				const result = await connectors.validateConnector(context.orgId, connector);
+				const response = {
+					actions: result.tools.map((tool) => ({
+						name: tool.name,
+						description: tool.description,
+						riskLevel: tool.riskLevel,
+					})),
+					error: result.error,
+				};
+				connectorActionsCache.set(cacheKey, {
+					actions: response.actions,
+					error: response.error,
+					expiresAt: Date.now() + CONNECTOR_ACTIONS_CACHE_TTL_MS,
+				});
+				return response;
+			})();
+
+			connectorActionsInFlight.set(cacheKey, loadActionsPromise);
+			try {
+				return await loadActionsPromise;
+			} finally {
+				connectorActionsInFlight.delete(cacheKey);
+			}
 		}),
 
 	/**

@@ -4,7 +4,7 @@ import type { GitOperations } from "../git/git-operations";
 
 export interface GitWorkflowDeps {
 	ensureRuntimeReady: () => Promise<void>;
-	refreshGitContext: () => Promise<void>;
+	refreshGitContext: (preferredGitUserId?: string | null) => Promise<void>;
 	getGitOps: () => GitOperations;
 	sendMessage: (ws: WebSocket, message: unknown) => void;
 	logError: (message: string, error?: unknown) => void;
@@ -14,10 +14,11 @@ export async function runGitStatusWorkflow(
 	deps: GitWorkflowDeps,
 	ws: WebSocket,
 	workspacePath?: string,
+	preferredGitUserId?: string | null,
 ): Promise<void> {
 	await deps.ensureRuntimeReady();
 	try {
-		await deps.refreshGitContext();
+		await deps.refreshGitContext(preferredGitUserId);
 	} catch (err) {
 		deps.logError("Failed to refresh git context (using cached values)", err);
 	}
@@ -31,12 +32,13 @@ export async function runGitActionWorkflow(
 		ws: WebSocket;
 		action: string;
 		workspacePath?: string;
+		preferredGitUserId?: string | null;
 		run: () => Promise<{ success: boolean; code: GitResultCode; message: string; prUrl?: string }>;
 	},
 ): Promise<void> {
 	await deps.ensureRuntimeReady();
 	try {
-		await deps.refreshGitContext();
+		await deps.refreshGitContext(input.preferredGitUserId);
 	} catch (err) {
 		deps.logError("Failed to refresh git context (using cached values)", err);
 	}

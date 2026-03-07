@@ -29,6 +29,35 @@ export const actions: ActionDefinition[] = [
 		params: z.object({}),
 	},
 	{
+		id: "list_projects",
+		description: "List Jira projects for a site",
+		riskLevel: "read",
+		params: z.object({
+			cloud_id: z.string().describe("Atlassian Cloud site ID"),
+			query: z.string().optional().describe("Filter projects by text query"),
+			max_results: z.number().int().min(1).max(100).optional().describe("Max results (default 50)"),
+		}),
+	},
+	{
+		id: "list_issue_types",
+		description: "List issue types, optionally scoped to a project",
+		riskLevel: "read",
+		params: z.object({
+			cloud_id: z.string().describe("Atlassian Cloud site ID"),
+			project_key: z.string().optional().describe("Project key to scope issue types"),
+		}),
+	},
+	{
+		id: "list_users",
+		description: "Search users in a Jira site",
+		riskLevel: "read",
+		params: z.object({
+			cloud_id: z.string().describe("Atlassian Cloud site ID"),
+			query: z.string().optional().describe("Name or email query"),
+			max_results: z.number().int().min(1).max(100).optional().describe("Max results (default 50)"),
+		}),
+	},
+	{
 		id: "list_issues",
 		description: "Search for issues using JQL",
 		riskLevel: "read",
@@ -180,6 +209,58 @@ export async function execute(
 		switch (actionId) {
 			case "list_sites": {
 				data = await jiraFetch("/oauth/token/accessible-resources", ctx.token);
+				break;
+			}
+
+			case "list_projects": {
+				const { cloud_id, query, max_results } = params as {
+					cloud_id: string;
+					query?: string;
+					max_results?: number;
+				};
+				const base = jiraBase(cloud_id);
+				const searchParams = new URLSearchParams();
+				searchParams.set("maxResults", String(max_results ?? 50));
+				if (query) searchParams.set("query", query);
+				data = await jiraFetch(`${base}/project/search?${searchParams.toString()}`, ctx.token);
+				break;
+			}
+
+			case "list_issue_types": {
+				const { cloud_id, project_key } = params as {
+					cloud_id: string;
+					project_key?: string;
+				};
+				const base = jiraBase(cloud_id);
+				if (project_key) {
+					const project = (await jiraFetch(
+						`${base}/project/${encodeURIComponent(project_key)}`,
+						ctx.token,
+					)) as { id?: string };
+					if (!project.id) {
+						throw new Error(`Jira project not found for key: ${project_key}`);
+					}
+					data = await jiraFetch(
+						`${base}/issuetype/project?projectId=${encodeURIComponent(project.id)}`,
+						ctx.token,
+					);
+				} else {
+					data = await jiraFetch(`${base}/issuetype`, ctx.token);
+				}
+				break;
+			}
+
+			case "list_users": {
+				const { cloud_id, query, max_results } = params as {
+					cloud_id: string;
+					query?: string;
+					max_results?: number;
+				};
+				const base = jiraBase(cloud_id);
+				const searchParams = new URLSearchParams();
+				searchParams.set("query", query ?? "");
+				searchParams.set("maxResults", String(max_results ?? 50));
+				data = await jiraFetch(`${base}/user/search?${searchParams.toString()}`, ctx.token);
 				break;
 			}
 
@@ -367,6 +448,7 @@ All actions require a \`cloud_id\` parameter identifying the Atlassian site.
 
 ## Discovery
 Use \`list_sites\` first to discover available Jira Cloud sites and their IDs.
+Then use \`list_projects\`, \`list_issue_types\`, and \`list_users\` to discover IDs needed by write actions.
 
 ## Searching Issues
 Use \`list_issues\` with a JQL query to find issues:

@@ -42,6 +42,8 @@ interface ConfigurationOption {
 
 interface IntegrationDetailDialogProps {
 	entry: CatalogEntry | null;
+	connectorId?: string;
+	initialTab?: "connect" | "about" | "settings";
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	showBack: boolean;
@@ -68,6 +70,8 @@ interface IntegrationDetailDialogProps {
 
 export function IntegrationDetailDialog({
 	entry,
+	connectorId,
+	initialTab,
 	open,
 	onOpenChange,
 	showBack,
@@ -119,6 +123,13 @@ export function IntegrationDetailDialog({
 	});
 
 	const showSettingsTab = isConnected;
+	const defaultTabValue = initialTab
+		? initialTab === "settings" && !showSettingsTab
+			? "connect"
+			: initialTab
+		: showSettingsTab && (entry.type === "mcp-preset" || entry.type === "custom-mcp")
+			? "settings"
+			: "connect";
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -143,7 +154,11 @@ export function IntegrationDetailDialog({
 
 				{/* Tabs body */}
 				<div className="flex-1 overflow-hidden flex flex-col">
-					<Tabs defaultValue="connect" className="flex-1 flex flex-col overflow-hidden">
+					<Tabs
+						key={`${entry.key}:${connectorId ?? "none"}:${defaultTabValue}`}
+						defaultValue={defaultTabValue}
+						className="flex-1 flex flex-col overflow-hidden"
+					>
 						<TabsList className="inline-flex gap-3.5 border-b border-border w-full h-11 px-5 pt-3 pb-0 shrink-0 bg-transparent rounded-none justify-start">
 							<TabsTrigger
 								value="connect"
@@ -241,6 +256,7 @@ export function IntegrationDetailDialog({
 							<TabsContent value="settings" className="flex-1 overflow-y-auto p-5 mt-0">
 								<IntegrationSettingsContent
 									entry={entry}
+									connectorId={connectorId}
 									slackConfig={slackConfig}
 									readyConfigurations={readyConfigurations}
 									onUpdateSlackConfig={onUpdateSlackConfig}
@@ -265,11 +281,13 @@ export function IntegrationDetailDialog({
 
 function IntegrationSettingsContent({
 	entry,
+	connectorId,
 	slackConfig,
 	readyConfigurations,
 	onUpdateSlackConfig,
 }: {
 	entry: CatalogEntry;
+	connectorId?: string;
 	slackConfig?: SlackConfigData | null;
 	readyConfigurations?: ConfigurationOption[];
 	onUpdateSlackConfig?: (input: {
@@ -286,6 +304,9 @@ function IntegrationSettingsContent({
 			<PermissionsTab
 				isOAuth={entry.type === "oauth" || entry.type === "slack"}
 				provider={entry.provider ?? null}
+				connectorId={
+					entry.type === "mcp-preset" || entry.type === "custom-mcp" ? connectorId : undefined
+				}
 			/>
 			{isSlack && slackConfig?.installationId && onUpdateSlackConfig && (
 				<div className="rounded-lg border border-border/80 p-4">

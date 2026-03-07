@@ -5,7 +5,6 @@ import { ReasoningSelector } from "@/components/dashboard/reasoning-selector";
 import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
 import { BlocksIcon } from "@/components/ui/icons";
-import { Input } from "@/components/ui/input";
 import { RoundIconActionButton } from "@/components/ui/round-icon-action-button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSessionAvailableActions } from "@/hooks/actions/use-actions";
@@ -17,29 +16,16 @@ import {
 	MessagePrimitive,
 	ThreadPrimitive,
 	useComposerRuntime,
-	useThreadRuntime,
 } from "@assistant-ui/react";
 import type { ActionApprovalRequestMessage } from "@proliferate/shared";
 import type { ModelId } from "@proliferate/shared";
 import type { Session } from "@proliferate/shared/contracts/sessions";
 import type { OverallWorkState } from "@proliferate/shared/sessions";
-import {
-	ArrowUp,
-	Camera,
-	ChevronDown,
-	ChevronRight,
-	Loader2,
-	Mic,
-	Paperclip,
-	Plus,
-	Square,
-	X,
-} from "lucide-react";
+import { ArrowUp, Camera, ChevronDown, ChevronRight, Loader2, Square } from "lucide-react";
 import Link from "next/link";
 import type { FC } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import Markdown from "react-markdown";
-import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 import { InboxTray } from "./inbox-tray";
 import { allToolUIs } from "./tool-ui/all-tool-uis";
 import { ProliferateToolCard } from "./tool-ui/proliferate-tool-card";
@@ -265,32 +251,6 @@ const MarkdownContent: FC<MarkdownContentProps> = ({ text, variant = "assistant"
 	);
 };
 
-// Attachment preview with remove button
-interface AttachmentPreviewProps {
-	preview: string;
-	index: number;
-	onRemove: (index: number) => void;
-}
-
-const AttachmentPreview: FC<AttachmentPreviewProps> = ({ preview, index, onRemove }) => (
-	<div className="relative group">
-		<img
-			src={preview}
-			alt={`Attachment ${index + 1}`}
-			className="h-16 w-16 object-cover rounded-xl border border-border"
-		/>
-		<Button
-			type="button"
-			variant="destructive"
-			size="icon"
-			onClick={() => onRemove(index)}
-			className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-		>
-			<X className="h-3 w-3" />
-		</Button>
-	</div>
-);
-
 // Context selectors (model selector) - left side of toolbar
 interface ComposerActionsLeftProps {
 	selectedModel: ModelId;
@@ -315,55 +275,25 @@ const ComposerActionsLeft: FC<ComposerActionsLeftProps> = ({
 	</div>
 );
 
-// Action buttons (attach, mic, send/cancel) - right side of toolbar
+// Action buttons (send/cancel) - right side of toolbar
 interface ComposerActionsRightProps {
-	hasAttachments: boolean;
 	hasContent: boolean;
-	onSendWithAttachments: () => void;
-	onAttachClick: () => void;
-	onToggleRecording: () => void;
-	listening: boolean;
-	browserSupportsSpeechRecognition: boolean;
+	isTerminal: boolean;
+	onTerminalSend: () => void;
 }
 
 const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
-	hasAttachments,
 	hasContent,
-	onSendWithAttachments,
-	onAttachClick,
-	onToggleRecording,
-	listening,
-	browserSupportsSpeechRecognition,
+	isTerminal,
+	onTerminalSend,
 }) => (
 	<div className="flex items-center gap-0.5">
-		<Button
-			variant="ghost"
-			size="icon"
-			className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-full"
-			onClick={onAttachClick}
-		>
-			<Paperclip className="h-4 w-4" />
-		</Button>
-		<Button
-			variant="ghost"
-			size="icon"
-			className={cn(
-				"h-7 w-7 rounded-full",
-				listening
-					? "text-destructive hover:text-destructive/80"
-					: "text-muted-foreground hover:text-foreground",
-			)}
-			onClick={onToggleRecording}
-			disabled={!browserSupportsSpeechRecognition}
-		>
-			<Mic className={cn("h-4 w-4", listening && "animate-pulse")} />
-		</Button>
 		<ThreadPrimitive.If running={false}>
-			{hasAttachments ? (
+			{isTerminal ? (
 				<RoundIconActionButton
 					ariaLabel="Send message"
 					icon={<ArrowUp className="h-4 w-4" />}
-					onClick={onSendWithAttachments}
+					onClick={onTerminalSend}
 					disabled={!hasContent}
 				/>
 			) : (
@@ -620,10 +550,6 @@ const EnabledActionsStrip: FC<{ sessionId?: string; token?: string | null }> = (
 };
 
 const Composer: FC<ComposerProps> = ({ sessionState, sessionId, token }) => {
-	const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
-	const fileInputRef = useRef<HTMLInputElement>(null);
-
-	const threadRuntime = useThreadRuntime();
 	const composerRuntime = useComposerRuntime();
 	const { selectedModel, setSelectedModel, reasoningEffort, setReasoningEffort } =
 		useDashboardStore();
@@ -632,44 +558,6 @@ const Composer: FC<ComposerProps> = ({ sessionState, sessionId, token }) => {
 	const composerMode = deriveComposerMode(sessionState);
 	const label = COMPOSER_LABELS[composerMode];
 	const placeholder = COMPOSER_PLACEHOLDERS[composerMode];
-
-	const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } =
-		useSpeechRecognition();
-
-	// Append transcript to composer when speech recognition completes
-	useEffect(() => {
-		if (!listening && transcript) {
-			const currentText = composerRuntime.getState().text;
-			composerRuntime.setText(currentText + (currentText ? " " : "") + transcript);
-			resetTranscript();
-		}
-	}, [listening, transcript, resetTranscript, composerRuntime]);
-
-	const handleAttachClick = () => fileInputRef.current?.click();
-
-	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const file = e.target.files?.[0];
-		if (file?.type.startsWith("image/")) {
-			const reader = new FileReader();
-			reader.onloadend = () => {
-				setAttachments((prev) => [...prev, { file, preview: reader.result as string }]);
-			};
-			reader.readAsDataURL(file);
-		}
-		e.target.value = "";
-	};
-
-	const removeAttachment = (index: number) => {
-		setAttachments((prev) => prev.filter((_, i) => i !== index));
-	};
-
-	const toggleRecording = () => {
-		if (listening) {
-			SpeechRecognition.stopListening();
-		} else {
-			SpeechRecognition.startListening({ continuous: true });
-		}
-	};
 
 	const handleFollowUpSubmit = useCallback(
 		(text: string) => {
@@ -694,57 +582,25 @@ const Composer: FC<ComposerProps> = ({ sessionState, sessionId, token }) => {
 
 	const isTerminal = composerMode === "completed" || composerMode === "failed";
 
-	const handleSendWithAttachments = () => {
+	const handleTerminalSend = () => {
 		const text = composerRuntime.getState().text.trim();
-		if (!text && attachments.length === 0) return;
+		if (!text) return;
 
 		if (isTerminal && text) {
 			handleFollowUpSubmit(text);
 			composerRuntime.setText("");
-			setAttachments([]);
 			return;
 		}
-
-		const content: Array<{ type: "text"; text: string } | { type: "image"; image: string }> = [];
-		if (text) content.push({ type: "text", text });
-		for (const attachment of attachments) {
-			content.push({ type: "image", image: attachment.preview });
-		}
-
-		threadRuntime.append({ role: "user", content });
-		composerRuntime.setText("");
-		setAttachments([]);
 	};
 
-	const hasContent = composerRuntime.getState().text.trim() || attachments.length > 0;
+	const hasContent = composerRuntime.getState().text.trim();
 
 	return (
 		<ComposerPrimitive.Root className="max-w-2xl mx-auto w-full">
-			<Input
-				ref={fileInputRef}
-				type="file"
-				accept="image/*"
-				onChange={handleFileChange}
-				className="hidden"
-			/>
-
 			{label && <p className="text-xs text-muted-foreground px-5 pb-1.5">{label}</p>}
 			<EnabledActionsStrip sessionId={sessionId} token={token} />
 
 			<div className="flex flex-col rounded-3xl border border-border bg-muted/40 dark:bg-card">
-				{attachments.length > 0 && (
-					<div className="flex gap-2 px-4 pt-3 pb-0 flex-wrap">
-						{attachments.map((attachment, index) => (
-							<AttachmentPreview
-								key={attachment.preview}
-								preview={attachment.preview}
-								index={index}
-								onRemove={removeAttachment}
-							/>
-						))}
-					</div>
-				)}
-
 				<ComposerPrimitive.Input
 					placeholder={placeholder}
 					className="flex-1 resize-none bg-transparent px-5 py-3.5 text-sm outline-none placeholder:text-muted-foreground"
@@ -754,10 +610,7 @@ const Composer: FC<ComposerProps> = ({ sessionState, sessionId, token }) => {
 						if (e.key === "Enter" && !e.shiftKey) {
 							if (isTerminal) {
 								e.preventDefault();
-								handleSendWithAttachments();
-							} else if (attachments.length > 0) {
-								e.preventDefault();
-								handleSendWithAttachments();
+								handleTerminalSend();
 							}
 						}
 					}}
@@ -765,14 +618,6 @@ const Composer: FC<ComposerProps> = ({ sessionState, sessionId, token }) => {
 
 				<div className="flex items-center justify-between px-3 pb-2">
 					<div className="flex items-center gap-0.5">
-						<Button
-							variant="ghost"
-							size="icon"
-							className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-full"
-							onClick={handleAttachClick}
-						>
-							<Plus className="h-4 w-4" />
-						</Button>
 						<ComposerActionsLeft
 							selectedModel={selectedModel}
 							reasoningEffort={reasoningEffort}
@@ -792,13 +637,9 @@ const Composer: FC<ComposerProps> = ({ sessionState, sessionId, token }) => {
 							</Button>
 						)}
 						<ComposerActionsRight
-							hasAttachments={attachments.length > 0}
 							hasContent={!!hasContent}
-							onSendWithAttachments={handleSendWithAttachments}
-							onAttachClick={handleAttachClick}
-							onToggleRecording={toggleRecording}
-							listening={listening}
-							browserSupportsSpeechRecognition={browserSupportsSpeechRecognition}
+							isTerminal={isTerminal}
+							onTerminalSend={handleTerminalSend}
 						/>
 					</div>
 				</div>

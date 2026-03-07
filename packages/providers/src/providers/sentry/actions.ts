@@ -16,6 +16,20 @@ const SENTRY_API = "https://sentry.io/api/0";
 
 export const actions: ActionDefinition[] = [
 	{
+		id: "list_organizations",
+		description: "List organizations available to the connected Sentry account",
+		riskLevel: "read",
+		params: z.object({}),
+	},
+	{
+		id: "list_projects",
+		description: "List projects, optionally scoped to an organization",
+		riskLevel: "read",
+		params: z.object({
+			organization_slug: z.string().optional().describe("Sentry org slug"),
+		}),
+	},
+	{
 		id: "list_issues",
 		description: "List issues for a project",
 		riskLevel: "read",
@@ -109,6 +123,20 @@ export async function execute(
 		let data: unknown;
 
 		switch (actionId) {
+			case "list_organizations": {
+				data = await sentryFetch("/organizations/", token);
+				break;
+			}
+
+			case "list_projects": {
+				const org = typeof params.organization_slug === "string" ? params.organization_slug : null;
+				data = await sentryFetch(
+					org ? `/organizations/${enc(org)}/projects/` : "/projects/",
+					token,
+				);
+				break;
+			}
+
 			case "list_issues": {
 				const org = params.organization_slug as string;
 				const project = params.project_slug as string;
@@ -175,6 +203,12 @@ Authentication is handled server-side — no API keys needed.
 
 ## Available Actions
 
+### list_organizations (read)
+List organizations available to the connected Sentry account.
+
+### list_projects (read)
+List projects globally or scoped to an organization.
+
 ### list_issues (read)
 List issues for a project, with optional search query.
 
@@ -191,6 +225,7 @@ Get details of a specific event.
 Resolve, assign, or update an issue.
 
 ## Tips
+- Use \`list_organizations\` and \`list_projects\` to discover slugs before querying issues.
 - Read actions execute immediately.
 - Write actions require approval unless your org has set them to "always allow".
 - Use search queries like \`is:unresolved level:error\` to filter issues.

@@ -143,17 +143,12 @@ export class SessionRuntime implements RuntimeFacade {
 	 * Refresh git-related context fields so git operations can use
 	 * newly-resolved integration tokens and latest user identity.
 	 */
-	async refreshGitContext(): Promise<void> {
-		const refreshed = await loadSessionRuntimeContext(this.env, this.sessionId);
-		this.runtimeContext = {
-			config: {
-				...this.runtimeContext.config,
-				primaryRepo: refreshed.config.primaryRepo,
-				repos: refreshed.config.repos,
-				gitIdentity: refreshed.config.gitIdentity,
-			},
-			live: this.runtimeContext.live,
-		};
+	async refreshGitContext(preferredGitUserId?: string | null): Promise<void> {
+		const refreshed = await loadSessionContext(this.env, this.sessionId, {
+			preferredGitUserId: preferredGitUserId ?? null,
+		});
+		this.context.repos = refreshed.repos;
+		this.context.gitIdentity = refreshed.gitIdentity;
 	}
 
 	getOpenCodeUrl(): string | null {

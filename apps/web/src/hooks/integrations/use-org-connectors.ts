@@ -72,3 +72,12 @@ export function useDeleteOrgConnector() {
 export function useValidateOrgConnector() {
 	return useMutation(orpc.integrations.validateConnector.mutationOptions());
 }
+
+export function useConnectorActions(connectorId?: string) {
+	return useQuery({
+		...orpc.integrations.getConnectorActions.queryOptions({
+			input: { id: connectorId ?? "" },
+		}),
+		enabled: Boolean(connectorId),
+	});
+}

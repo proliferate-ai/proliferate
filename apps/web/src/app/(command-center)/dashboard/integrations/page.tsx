@@ -11,6 +11,7 @@ import { ConnectorForm } from "@/components/integrations/connector-form";
 import { ConnectorIcon } from "@/components/integrations/connector-icon";
 import { findPresetKey } from "@/components/integrations/connector-icon";
 import { ConnectorMenu } from "@/components/integrations/connector-menu";
+import { IntegrationActionsSummary } from "@/components/integrations/integration-actions-summary";
 import { IntegrationDetailDialog } from "@/components/integrations/integration-detail-dialog";
 import { IntegrationPickerDialog } from "@/components/integrations/integration-picker-dialog";
 import { ProviderIcon } from "@/components/integrations/provider-icon";
@@ -61,9 +62,12 @@ export default function IntegrationsPage() {
 		pickerOpen,
 		setPickerOpen,
 		selectedEntry,
+		selectedConnectorId,
+		selectedDetailTab,
 		openedFromPicker,
 		handleSelectFromPicker,
 		handleSelectFromRow,
+		handleSelectConnectorRow,
 		handleDetailBack,
 		handleDetailOpenChange,
 		pickerCatalog,
@@ -230,6 +234,12 @@ export default function IntegrationsPage() {
 										<p className="text-sm font-medium">{entry.name}</p>
 										<p className="text-xs text-muted-foreground truncate">{entry.description}</p>
 										<p className="text-[11px] text-muted-foreground/80">{scopeMeta.label}</p>
+										<IntegrationActionsSummary
+											isOAuth={entry.type === "oauth" || entry.type === "slack"}
+											provider={entry.provider ?? null}
+											context={isAdmin ? "admin" : "user"}
+											onOpenSettings={() => handleSelectFromRow(entry, "settings")}
+										/>
 									</div>
 
 									{/* Admin: Status */}
@@ -289,7 +299,8 @@ export default function IntegrationsPage() {
 							return (
 								<div
 									key={c.id}
-									className={`flex items-center gap-3 px-3 py-3 hover:bg-muted/30 transition-colors rounded-lg ${!c.enabled && isAdmin ? "opacity-60" : ""}`}
+									className={`flex items-center gap-3 px-3 py-3 hover:bg-muted/30 transition-colors rounded-lg ${!c.enabled && isAdmin ? "opacity-60" : ""} ${isAdmin ? "cursor-pointer" : ""}`}
+									onClick={() => isAdmin && handleSelectConnectorRow(c)}
 								>
 									{/* Icon */}
 									<div className="w-10 h-10 rounded-lg border border-border bg-background flex items-center justify-center p-2 shrink-0">
@@ -305,6 +316,13 @@ export default function IntegrationsPage() {
 											)}
 										</div>
 										<p className="text-xs text-muted-foreground truncate">{c.url}</p>
+										<IntegrationActionsSummary
+											isOAuth={false}
+											provider={null}
+											connectorId={c.id}
+											context={isAdmin ? "admin" : "user"}
+											onOpenSettings={() => handleSelectConnectorRow(c, "settings")}
+										/>
 									</div>
 
 									{/* Admin: Status — inline toggle */}
@@ -485,11 +503,15 @@ export default function IntegrationsPage() {
 			{/* Detail modal */}
 			<IntegrationDetailDialog
 				entry={selectedEntry}
+				connectorId={selectedConnectorId ?? undefined}
+				initialTab={selectedDetailTab ?? undefined}
 				open={!!selectedEntry}
 				onOpenChange={handleDetailOpenChange}
 				showBack={openedFromPicker}
 				onBack={handleDetailBack}
-				isConnected={selectedEntry ? getConnectionStatus(selectedEntry) : false}
+				isConnected={
+					selectedEntry ? (selectedConnectorId ? true : getConnectionStatus(selectedEntry)) : false
+				}
 				isLoading={selectedEntry ? getLoadingStatus(selectedEntry) : false}
 				connectedMeta={selectedEntry ? getConnectedMeta(selectedEntry) : null}
 				onConnect={() => selectedEntry && handleConnect(selectedEntry)}

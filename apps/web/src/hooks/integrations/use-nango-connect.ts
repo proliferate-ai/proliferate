@@ -31,7 +31,7 @@ export const NANGO_INTEGRATION_IDS = ALL_NANGO_INTEGRATION_IDS;
  * Get provider type from Nango integration ID (reverse lookup)
  * Handles both configured integration IDs and fallback defaults
  */
-export function getProviderFromIntegrationId(integrationId: string): NangoManagedProvider | null {
+export function getProviderFromIntegrationId(integrationId: string): Provider | null {
 	// Check against configured integration IDs
 	for (const [provider, id] of Object.entries(ALL_NANGO_INTEGRATION_IDS)) {
 		if (id === integrationId) {
@@ -43,6 +43,7 @@ export function getProviderFromIntegrationId(integrationId: string): NangoManage
 	if (integrationId.includes("sentry")) return "sentry";
 	if (integrationId === "linear") return "linear";
 	if (integrationId.includes("jira")) return "jira";
+	if (integrationId.includes("slack")) return "slack";
 	return null;
 }
 

@@ -86,6 +86,10 @@ export interface SessionContext {
 	initialPrompt?: string | null;
 }
 
+interface SessionContextLoadOptions {
+	preferredGitUserId?: string | null;
+}
+
 interface ConfigurationRepoRow {
 	workspace_path: string;
 	repo: RepoRecord;
@@ -108,6 +112,7 @@ function buildSystemPrompt(
 export async function loadSessionContext(
 	env: GatewayEnv,
 	sessionId: string,
+	options?: SessionContextLoadOptions,
 ): Promise<SessionContext> {
 	const startMs = Date.now();
 	const log = logger.child({ sessionId });
@@ -173,7 +178,8 @@ export async function loadSessionContext(
 		"Session loaded",
 	);
 
-	const gitIdentity = await resolveGitIdentity(session.created_by);
+	const gitUserId = options?.preferredGitUserId ?? session.created_by;
+	const gitIdentity = await resolveGitIdentity(gitUserId);
 
 	// Scratch session: no configuration, no repos — boot from base snapshot only
 	if (!session.configuration_id) {
@@ -287,7 +293,7 @@ export async function loadSessionContext(
 				env,
 				session.organization_id,
 				pr.repo.id,
-				session.created_by,
+				gitUserId,
 				pr.repo.github_url,
 			);
 			log.info(

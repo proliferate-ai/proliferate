@@ -18,6 +18,7 @@ export interface PromptWorkflowDeps {
 	getOpenCodeUrl: () => string | null;
 	broadcast: (message: { type: "message"; payload: Message }) => void;
 	recordUserPromptTelemetry: () => void;
+	setLastPromptSenderUserId: (userId: string) => void;
 	getSessionClientType: () => string | null;
 	resetEventProcessorForNewPrompt: () => void;
 	sendPromptToRuntime: (content: string, images?: PromptOptions["images"]) => Promise<void>;
@@ -52,6 +53,7 @@ export async function runPromptWorkflow(
 		source: options?.source,
 		imageCount: options?.images?.length,
 	});
+	deps.setLastPromptSenderUserId(userId);
 
 	await deps.ensureRuntimeReady();
 	const openCodeSessionId = deps.getOpenCodeSessionId();

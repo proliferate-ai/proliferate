@@ -1,7 +1,7 @@
 /**
  * User action preferences — DB operations.
  *
- * Stores per-user, per-org opt-out preferences for action sources.
+ * Stores per-user, per-org opt-out preferences for action sources and actions.
  * Absence of a row means "enabled" (default). Only explicit changes are stored.
  */
 
@@ -12,7 +12,6 @@ import { and, eq, getDb, isNull, userActionPreferences } from "../db/client";
 // ============================================
 
 export type UserActionPreferenceRow = typeof userActionPreferences.$inferSelect;
-
 export interface DisabledActionPreferences {
 	disabledSourceIds: Set<string>;
 	disabledActionsBySource: Map<string, Set<string>>;
@@ -60,8 +59,8 @@ export async function getDisabledSourceIds(userId: string, orgId: string): Promi
 }
 
 /**
- * Get all explicit disabled preferences for a user/org.
- * Includes both source-level and action-level rows.
+ * Get both disabled source-level and action-level preferences.
+ * Used by gateway and actions service to enforce per-action visibility and invoke guards.
  */
 export async function getDisabledPreferences(
 	userId: string,
@@ -96,11 +95,13 @@ export async function getDisabledPreferences(
 			existing.add(row.actionId);
 			continue;
 		}
-
 		disabledActionsBySource.set(row.sourceId, new Set([row.actionId]));
 	}
 
-	return { disabledSourceIds, disabledActionsBySource };
+	return {
+		disabledSourceIds,
+		disabledActionsBySource,
+	};
 }
 
 /**

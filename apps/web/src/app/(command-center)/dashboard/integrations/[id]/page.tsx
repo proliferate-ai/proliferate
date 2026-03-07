@@ -11,6 +11,7 @@ import { useIntegrations } from "@/hooks/integrations/use-integrations";
 import { getProviderFromIntegrationId } from "@/hooks/integrations/use-nango-connect";
 import { useOrgConnectors } from "@/hooks/integrations/use-org-connectors";
 import { cn } from "@/lib/display/utils";
+import { ACTION_ADAPTERS } from "@/lib/integrations/action-adapters";
 import { ArrowLeft, Shield } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -65,6 +66,10 @@ export default function IntegrationDetailPage() {
 			: null;
 	const displayName =
 		isOAuth && provider ? getProviderDisplayName(provider) : (connector?.name ?? "Integration");
+	const providerHasActions = provider
+		? ACTION_ADAPTERS.some((adapter) => adapter.integration === provider)
+		: false;
+	const showPermissionsTab = Boolean(connector) || (isOAuth && providerHasActions);
 
 	return (
 		<div className="h-full overflow-y-auto">
@@ -103,23 +108,25 @@ export default function IntegrationDetailPage() {
 					>
 						Connection
 					</Button>
-					<Button
-						variant="ghost"
-						onClick={() => setActiveTab("permissions")}
-						className={cn(
-							"px-3 py-2 h-auto text-sm font-medium border-b-2 rounded-none transition-colors -mb-px",
-							activeTab === "permissions"
-								? "border-primary text-foreground"
-								: "border-transparent text-muted-foreground hover:text-foreground",
-						)}
-					>
-						<Shield className="h-3.5 w-3.5 inline mr-1.5" />
-						Agent Permissions
-					</Button>
+					{showPermissionsTab && (
+						<Button
+							variant="ghost"
+							onClick={() => setActiveTab("permissions")}
+							className={cn(
+								"px-3 py-2 h-auto text-sm font-medium border-b-2 rounded-none transition-colors -mb-px",
+								activeTab === "permissions"
+									? "border-primary text-foreground"
+									: "border-transparent text-muted-foreground hover:text-foreground",
+							)}
+						>
+							<Shield className="h-3.5 w-3.5 inline mr-1.5" />
+							Agent Permissions
+						</Button>
+					)}
 				</div>
 
 				{/* Tab content */}
-				{activeTab === "connection" ? (
+				{activeTab === "connection" || !showPermissionsTab ? (
 					isOAuth && provider ? (
 						<OAuthConnectionTab integrationId={id} provider={provider} />
 					) : connector ? (

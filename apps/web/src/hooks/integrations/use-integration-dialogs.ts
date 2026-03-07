@@ -11,6 +11,8 @@ interface UseIntegrationDialogsOptions {
 	handleRemoveConnector: (id: string) => Promise<void>;
 }
 
+export type IntegrationDetailTab = "connect" | "about" | "settings";
+
 export function useIntegrationDialogs({
 	connectors,
 	searchQuery,
@@ -21,6 +23,8 @@ export function useIntegrationDialogs({
 	// ---- Picker / detail dialog state ----
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [selectedEntry, setSelectedEntry] = useState<CatalogEntry | null>(null);
+	const [selectedConnectorId, setSelectedConnectorId] = useState<string | null>(null);
+	const [selectedDetailTab, setSelectedDetailTab] = useState<IntegrationDetailTab | null>(null);
 	const [openedFromPicker, setOpenedFromPicker] = useState(false);
 
 	// ---- Disconnect confirmation ----
@@ -36,16 +40,38 @@ export function useIntegrationDialogs({
 	const handleSelectFromPicker = useCallback((entry: CatalogEntry) => {
 		setPickerOpen(false);
 		setSelectedEntry(entry);
+		setSelectedConnectorId(null);
+		setSelectedDetailTab(null);
 		setOpenedFromPicker(true);
 	}, []);
 
-	const handleSelectFromRow = useCallback((entry: CatalogEntry) => {
+	const handleSelectFromRow = useCallback((entry: CatalogEntry, tab?: IntegrationDetailTab) => {
 		setSelectedEntry(entry);
+		setSelectedConnectorId(null);
+		setSelectedDetailTab(tab ?? null);
 		setOpenedFromPicker(false);
 	}, []);
 
+	const handleSelectConnectorRow = useCallback(
+		(connector: ConnectorConfig, tab?: IntegrationDetailTab) => {
+			setSelectedEntry({
+				key: `connector:${connector.id}`,
+				name: connector.name,
+				description: connector.url,
+				category: "developer-tools",
+				type: "custom-mcp",
+			});
+			setSelectedConnectorId(connector.id);
+			setSelectedDetailTab(tab ?? null);
+			setOpenedFromPicker(false);
+		},
+		[],
+	);
+
 	const handleDetailBack = useCallback(() => {
 		setSelectedEntry(null);
+		setSelectedConnectorId(null);
+		setSelectedDetailTab(null);
 		setPickerOpen(true);
 	}, []);
 
@@ -53,6 +79,8 @@ export function useIntegrationDialogs({
 		(open: boolean) => {
 			if (!open) {
 				setSelectedEntry(null);
+				setSelectedConnectorId(null);
+				setSelectedDetailTab(null);
 				if (openedFromPicker) {
 					setPickerOpen(false);
 				}
@@ -97,6 +125,8 @@ export function useIntegrationDialogs({
 		pickerOpen,
 		setPickerOpen,
 		selectedEntry,
+		selectedConnectorId,
+		selectedDetailTab,
 		setSelectedEntry,
 		openedFromPicker,
 		disconnectTarget,
@@ -106,6 +136,7 @@ export function useIntegrationDialogs({
 		filteredConnectors,
 		handleSelectFromPicker,
 		handleSelectFromRow,
+		handleSelectConnectorRow,
 		handleDetailBack,
 		handleDetailOpenChange,
 		handleConfirmDisconnect,

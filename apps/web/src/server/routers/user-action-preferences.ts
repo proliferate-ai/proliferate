@@ -5,7 +5,9 @@
  * Users can enable/disable which tools appear in their coding sessions.
  */
 
-import { userActionPreferences } from "@proliferate/services";
+import { isOrgActionDenied } from "@/lib/integrations/action-permissions";
+import { ORPCError } from "@orpc/server";
+import { orgs, userActionPreferences } from "@proliferate/services";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 
@@ -46,6 +48,19 @@ export const userActionPreferencesRouter = {
 		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ input, context }) => {
 			if (input.actionId) {
+				if (input.enabled) {
+					const actionModes = await orgs.getActionModes(context.orgId);
+					const actionModeKey = `${input.sourceId}:${input.actionId}`;
+					if (isOrgActionDenied(actionModes, actionModeKey)) {
+						throw new ORPCError("FORBIDDEN", {
+							message: "Action is disabled by organization policy",
+							data: {
+								code: "ACTION_DENIED_BY_ORG_POLICY",
+								key: actionModeKey,
+							},
+						});
+					}
+				}
 				await userActionPreferences.setActionEnabled(
 					context.user.id,
 					context.orgId,

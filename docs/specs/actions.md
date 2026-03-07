@@ -7,7 +7,7 @@
 - Three-mode policy resolution (`allow`, `require_approval`, `deny`) and mode-source attribution.
 - Provider-backed action sources (Linear, Sentry, Slack, Jira) and connector-backed MCP action sources.
 - Org-level and automation-level action mode overrides.
-- User action source preferences (source-level enable/disable) in list/invoke paths.
+- User action preferences (source-level and action-level enable/disable) in list/invoke paths.
 - Invocation persistence, expiry sweep, redaction, and truncation.
 - Org inbox query surface for pending approvals.
 - Sandbox bootstrap guidance and CLI contracts (`proliferate actions list|guide|run`).
@@ -21,7 +21,7 @@
 ### Mental Models
 - **Actions are policy-gated side effects, not chat tools.** Every external side effect goes through gateway policy and audit rows (`action_invocations`), even when execution is immediate.
 - **One catalog, two source archetypes.** Sessions see one merged catalog, but runtime execution is polymorphic (`ActionSource`) across static provider adapters and dynamic MCP connectors.
-- **Two independent control planes exist.** User preferences control source visibility (`user_action_preferences`), while org/automation mode maps control execution policy (`action_modes` JSONB).
+- **Two independent control planes exist.** User preferences control source/action visibility (`user_action_preferences`), while org/automation mode maps control execution policy (`action_modes` JSONB).
 - **The CLI is synchronous UX over async workflow.** `proliferate actions run` may return immediately (allow), fail immediately (deny), or block with polling while waiting for human approval (require_approval).
 - **Risk is only a default hint.** `riskLevel` informs inferred defaults; enforcement is always the resolved mode.
 
@@ -32,6 +32,7 @@
 - Gateway `/invoke` now forwards `session.automationId` to `actions.invokeAction()`, so automation-level mode overrides apply in live automation sessions.
 - Connector listing failures are degraded to empty tool lists; they do not fail the entire `/available` response.
 - Connector drift guard only applies when a stored tool hash exists; absence of a stored hash means "not drifted".
+- User preference writes cannot re-enable actions denied by org policy; admin deny is a hard ceiling.
 - Sandbox callers can invoke/list/guide/status, but only user tokens with `owner|admin` can approve/deny.
 - Result handling is not passthrough: DB writes always redact sensitive keys and structurally truncate JSON.
 
@@ -70,6 +71,21 @@ Connector risk level precedence (`packages/services/src/actions/connectors/risk.
 - Sandbox setup writes `.proliferate/actions-guide.md` from `ACTIONS_BOOTSTRAP` (`packages/shared/src/sandbox/config.ts`).
 - Actual runtime discovery always comes from `GET /actions/available` via `proliferate actions list`.
 - `proliferate actions run` polls invocation status every 2s while pending (`packages/sandbox-mcp/src/proliferate-cli.ts`).
+
+### 2.6 Slack Action Surface
+- Slack provider actions are `list_channels` (`read`) and `post_message` (`write`).
+- `list_channels` is the discovery step for channel IDs and should be used before `post_message`.
+- `post_message` remains channel-ID based (`channel: C...`) to avoid ambiguous channel-name routing.
+
+### 2.7 Provider Discovery Surfaces
+- Linear discovery actions: `list_teams`, `list_projects`, `list_workflow_states`, `list_users`.
+- Jira discovery actions: `list_sites`, `list_projects`, `list_issue_types`, `list_users`.
+- Sentry discovery actions: `list_organizations`, `list_projects`.
+- Discovery actions are `read` risk and use the same policy/toggle keying as all other actions.
+
+### 2.8 Session Git Attribution (Runtime-Only)
+- Git identity/token attribution may follow the most recent prompt sender tracked in gateway runtime memory.
+- This attribution is intentionally non-persistent; after gateway restart, attribution falls back to session creator identity until a new prompt arrives.
 
 ---
 
@@ -123,7 +139,7 @@ Connector risk level precedence (`packages/services/src/actions/connectors/risk.
   - If session provider links are empty, active org integrations (same provider module constraints) as fallback.
   - Enabled org connectors with non-empty discovered tool lists.
 - Connector/tool discovery failures must degrade to omission, not global request failure.
-- User source-level disable preferences must be enforced in both listing and invoke paths.
+- User source-level and action-level disable preferences must be enforced in both listing and invoke paths.
 
 ### 6.2 Invocation and Policy Invariants
 - Every invocation must resolve to exactly one mode and one mode source.
@@ -167,6 +183,7 @@ Connector risk level precedence (`packages/services/src/actions/connectors/risk.
 - Org-level mode management writes `organization.action_modes`.
 - Automation-level mode management writes `automations.action_modes`.
 - Inbox, integrations, and automation permission UIs all mutate the same mode maps and must preserve key format invariants.
+- User-level preference toggles may only further restrict visibility and must never override org-level `deny`.
 
 ---
 
@@ -181,7 +198,7 @@ Connector risk level precedence (`packages/services/src/actions/connectors/risk.
 | `agent-contract.md` | Contract → Actions | `ACTIONS_BOOTSTRAP`, system prompt CLI instructions | Agent discovery and usage model |
 | `sessions-gateway.md` | Actions → Gateway WS | `action_approval_request`, `action_completed`, `action_approval_result` | Human-in-loop signaling |
 | `automations-runs.md` | Actions ↔ Automations | automation mode APIs + integration-action resolver | Automation-scoped permissions UI/metadata |
-| `user-action-preferences` | Actions ↔ Preferences | `getDisabledSourceIds()` | Source-level visibility/enforcement |
+| `user-action-preferences` | Actions ↔ Preferences | `getDisabledPreferences()` | Source/action visibility and invoke enforcement |
 
 ### Security & Auth
 - Sandbox tokens are limited to invoke/list/guide/status session surfaces.
@@ -214,8 +231,8 @@ Connector risk level precedence (`packages/services/src/actions/connectors/risk.
 - [x] **Automation override wiring in invoke path**: gateway `/invoke` forwards `session.automationId` to `actions.invokeAction()`, so automation mode overrides now apply in that path (`apps/gateway/src/api/proliferate/http/actions.ts`).
 - [ ] **Connector drift hash persistence gap**: drift checks read `org_connectors.tool_risk_overrides[*].hash`, but there is no first-class write flow in current connector CRUD/permissions UI to persist these hashes.
 - [x] **Inbox "Always Allow" key format**: inbox writes org mode keys as `${integration}:${action}`, matching resolver expectations (`apps/web/src/components/inbox/inbox-item.tsx`).
-- [ ] **Connector permission UX gap**: integration detail page shows placeholder text for connector tool permissions; connector action-mode editing is not fully exposed there.
-- [ ] **Action-level user preferences not enforced in gateway**: preference schema supports `actionId`, but gateway enforcement currently checks disabled sources only.
+- [x] **Connector permission UX gap**: integration settings now fetch connector tools for action-level toggles via `integrations.getConnectorActions` with short-lived server caching.
+- [x] **Action-level user preferences now enforced in gateway and catalog filtering**: both source-level and action-level disabled preferences are applied in available-actions filtering and invoke guards.
 - [ ] **Legacy grant CLI commands remain**: sandbox CLI still exposes `proliferate actions grant*` commands even though gateway grant routes are removed.
 - [ ] **Gateway route test gap**: no route-level automated tests currently cover `apps/gateway/src/api/proliferate/http/actions.ts`.
 - [ ] **Database connectors planned**: provider-backed + MCP connector-backed sources are implemented; DB-native action sources are still planned.

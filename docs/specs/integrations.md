@@ -82,6 +82,7 @@
 - Connectors are org-scoped `org_connectors` records managed via Integrations router + connectors service.
 - Preset quick-setup can atomically create an org secret and connector in one DB transaction.
 - Validation preflight resolves secret, calls MCP `tools/list` through Actions connector client, and returns diagnostics.
+- Integrations exposes connector action discovery for permissions UI via `getConnectorActions`, backed by short-lived server caching to avoid repeated `tools/list` calls during settings usage.
 - Evidence: `packages/services/src/connectors/service.ts`, `packages/services/src/connectors/db.ts`, `apps/web/src/server/routers/integrations.ts`.
 
 ### 2.7 Token Resolution Boundary

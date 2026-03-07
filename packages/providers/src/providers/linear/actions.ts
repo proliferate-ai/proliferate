@@ -16,6 +16,43 @@ const LINEAR_API = "https://api.linear.app/graphql";
 
 export const actions: ActionDefinition[] = [
 	{
+		id: "list_teams",
+		description: "List teams available to the connected Linear account",
+		riskLevel: "read",
+		params: z.object({
+			first: z.number().max(50).optional().describe("Number of teams (max 50)"),
+			after: z.string().optional().describe("Pagination cursor"),
+		}),
+	},
+	{
+		id: "list_projects",
+		description: "List projects, optionally filtered by team",
+		riskLevel: "read",
+		params: z.object({
+			teamId: z.string().optional().describe("Filter by team ID"),
+			first: z.number().max(50).optional().describe("Number of projects (max 50)"),
+			after: z.string().optional().describe("Pagination cursor"),
+		}),
+	},
+	{
+		id: "list_workflow_states",
+		description: "List workflow states, optionally filtered by team",
+		riskLevel: "read",
+		params: z.object({
+			teamId: z.string().optional().describe("Filter by team ID"),
+		}),
+	},
+	{
+		id: "list_users",
+		description: "List users in the workspace, optionally filtered by query",
+		riskLevel: "read",
+		params: z.object({
+			query: z.string().optional().describe("Search users by name or email"),
+			first: z.number().max(50).optional().describe("Number of users (max 50)"),
+			after: z.string().optional().describe("Pagination cursor"),
+		}),
+	},
+	{
 		id: "list_issues",
 		description: "List issues, optionally filtered by team or project",
 		riskLevel: "read",
@@ -121,6 +158,99 @@ export async function execute(
 		let data: unknown;
 
 		switch (actionId) {
+			case "list_teams": {
+				data = await linearQuery(
+					`query ListTeams($first: Int, $after: String) {
+						teams(first: $first, after: $after) {
+							nodes {
+								id key name
+							}
+							pageInfo { hasNextPage endCursor }
+						}
+					}`,
+					{
+						first: typeof params.first === "number" ? Math.min(params.first, 50) : 25,
+						after: typeof params.after === "string" ? params.after : null,
+					},
+					token,
+				);
+				break;
+			}
+
+			case "list_projects": {
+				const filter: Record<string, unknown> = {};
+				if (typeof params.teamId === "string") {
+					filter.teams = { some: { id: { eq: params.teamId } } };
+				}
+				data = await linearQuery(
+					`query ListProjects($first: Int, $after: String, $filter: ProjectFilter) {
+						projects(first: $first, after: $after, filter: $filter) {
+							nodes {
+								id name state
+								teams { nodes { id name key } }
+							}
+							pageInfo { hasNextPage endCursor }
+						}
+					}`,
+					{
+						first: typeof params.first === "number" ? Math.min(params.first, 50) : 25,
+						after: typeof params.after === "string" ? params.after : null,
+						filter: Object.keys(filter).length > 0 ? filter : null,
+					},
+					token,
+				);
+				break;
+			}
+
+			case "list_workflow_states": {
+				const filter: Record<string, unknown> = {};
+				if (typeof params.teamId === "string") {
+					filter.team = { id: { eq: params.teamId } };
+				}
+				data = await linearQuery(
+					`query ListWorkflowStates($filter: WorkflowStateFilter) {
+						workflowStates(filter: $filter) {
+							nodes {
+								id name type
+								team { id name key }
+							}
+						}
+					}`,
+					{
+						filter: Object.keys(filter).length > 0 ? filter : null,
+					},
+					token,
+				);
+				break;
+			}
+
+			case "list_users": {
+				const filter: Record<string, unknown> = {};
+				if (typeof params.query === "string" && params.query.trim().length > 0) {
+					filter.or = [
+						{ name: { containsIgnoreCase: params.query.trim() } },
+						{ email: { containsIgnoreCase: params.query.trim() } },
+					];
+				}
+				data = await linearQuery(
+					`query ListUsers($first: Int, $after: String, $filter: UserFilter) {
+						users(first: $first, after: $after, filter: $filter) {
+							nodes {
+								id name email active
+							}
+							pageInfo { hasNextPage endCursor }
+						}
+					}`,
+					{
+						first: typeof params.first === "number" ? Math.min(params.first, 50) : 25,
+						after: typeof params.after === "string" ? params.after : null,
+						filter: Object.keys(filter).length > 0 ? filter : null,
+					},
+					token,
+				);
+				break;
+			}
+
 			case "list_issues": {
 				const filter: Record<string, unknown> = {};
 				if (typeof params.teamId === "string") filter.team = { id: { eq: params.teamId } };
@@ -250,6 +380,18 @@ Authentication is handled server-side — no API keys needed.
 
 ## Available Actions
 
+### list_teams (read)
+List teams and IDs available to the connected workspace.
+
+### list_projects (read)
+List projects and IDs, optionally filtered by team.
+
+### list_workflow_states (read)
+List workflow states and IDs used by issue transitions.
+
+### list_users (read)
+List workspace users and IDs for assignee lookups.
+
 ### list_issues (read)
 List issues, optionally filtered by team or project.
 
@@ -266,6 +408,7 @@ Update an existing issue's title, description, assignee, state, or priority.
 Add a markdown comment to an issue.
 
 ## Tips
+- Use discovery actions (\`list_teams\`, \`list_projects\`, \`list_workflow_states\`, \`list_users\`) before write actions.
 - Read actions execute immediately.
 - Write actions require approval unless your org has set them to "always allow".
 - Issue identifiers like \`ENG-123\` work anywhere an \`issueId\` is accepted.

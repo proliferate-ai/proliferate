@@ -1,16 +1,23 @@
 "use client";
 
 import { ModelSelector } from "@/components/automations/model-selector";
-import { EnvironmentPicker } from "@/components/dashboard/environment-picker";
 import { ReasoningSelector } from "@/components/dashboard/reasoning-selector";
+import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { BlocksIcon } from "@/components/ui/icons";
 import { Textarea } from "@/components/ui/textarea";
+import { useActionModes } from "@/hooks/actions/use-action-modes";
+import { useActionPreferenceIndex } from "@/hooks/actions/use-action-preferences";
+import { useIntegrations, useSlackStatus } from "@/hooks/integrations/use-integrations";
+import { getProviderFromIntegrationId } from "@/hooks/integrations/use-nango-connect";
+import { useOrgConnectors } from "@/hooks/integrations/use-org-connectors";
 import { cn } from "@/lib/display/utils";
+import { ACTION_ADAPTERS, type AdapterProvider } from "@/lib/integrations/action-adapters";
+import { resolveUserToggleState } from "@/lib/integrations/action-permissions";
 import { useDashboardStore } from "@/stores/dashboard";
-import { ArrowUp, Mic, Paperclip } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
+import { ArrowUp } from "lucide-react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 
 interface PromptInputProps {
 	onSubmit: (prompt: string) => void;
@@ -18,24 +25,126 @@ interface PromptInputProps {
 	isLoading?: boolean;
 }
 
+function isAdapterProvider(provider: Provider): provider is AdapterProvider {
+	return (
+		provider === "linear" || provider === "sentry" || provider === "slack" || provider === "jira"
+	);
+}
+
 export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps) {
 	const [prompt, setPrompt] = useState("");
-	const fileInputRef = useRef<HTMLInputElement>(null);
-	const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
-
-	const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } =
-		useSpeechRecognition();
+	const { data: integrationsData } = useIntegrations();
+	const { data: slackStatus } = useSlackStatus();
+	const { data: connectors } = useOrgConnectors();
+	const { data: actionModesData } = useActionModes();
+	const actionModes = actionModesData?.modes ?? {};
+	const preferenceIndex = useActionPreferenceIndex();
 
 	const { selectedModel, setSelectedModel, reasoningEffort, setReasoningEffort } =
 		useDashboardStore();
 
-	// Append transcript to prompt when speech recognition completes
-	useEffect(() => {
-		if (!listening && transcript) {
-			setPrompt((prev) => prev + (prev ? " " : "") + transcript);
-			resetTranscript();
+	const enabledIntegrationSummaries = useMemo(() => {
+		const summaries: Array<{
+			id: string;
+			displayName: string;
+			detail: string;
+			provider: Provider | null;
+		}> = [];
+		const seenProviders = new Set<Provider>();
+		const adaptersByProvider = new Map(
+			ACTION_ADAPTERS.map((adapter) => [adapter.integration, adapter]),
+		);
+
+		for (const integration of integrationsData?.integrations ?? []) {
+			if (integration.status !== "active" || !integration.integration_id) {
+				continue;
+			}
+
+			const provider = getProviderFromIntegrationId(integration.integration_id);
+			if (!provider || seenProviders.has(provider)) {
+				continue;
+			}
+			if (!isAdapterProvider(provider)) {
+				continue;
+			}
+
+			const adapter = adaptersByProvider.get(provider);
+			if (!adapter || adapter.actions.length === 0) {
+				continue;
+			}
+
+			const sourceId = provider;
+			const enabledActionCount = adapter.actions.filter((action) => {
+				const adminActionEnabled =
+					(actionModes[`${sourceId}:${action.name}`] ?? "require_approval") !== "deny";
+				const userActionEnabled = preferenceIndex.isActionEnabled(sourceId, action.name);
+				return resolveUserToggleState({
+					adminActionEnabled,
+					userActionEnabled,
+				}).checked;
+			}).length;
+
+			if (enabledActionCount === 0) {
+				continue;
+			}
+
+			seenProviders.add(provider);
+			summaries.push({
+				id: `provider:${provider}`,
+				displayName: adapter.displayName,
+				detail: `${enabledActionCount} actions enabled`,
+				provider,
+			});
 		}
-	}, [listening, transcript, resetTranscript]);
+
+		if (slackStatus?.connected && !seenProviders.has("slack")) {
+			const slackAdapter = adaptersByProvider.get("slack");
+			if (slackAdapter) {
+				const sourceId = "slack";
+				const enabledActionCount = slackAdapter.actions.filter((action) => {
+					const adminActionEnabled =
+						(actionModes[`${sourceId}:${action.name}`] ?? "require_approval") !== "deny";
+					const userActionEnabled = preferenceIndex.isActionEnabled(sourceId, action.name);
+					return resolveUserToggleState({
+						adminActionEnabled,
+						userActionEnabled,
+					}).checked;
+				}).length;
+				if (enabledActionCount > 0) {
+					summaries.push({
+						id: "provider:slack",
+						displayName: slackAdapter.displayName,
+						detail: `${enabledActionCount} actions enabled`,
+						provider: "slack",
+					});
+				}
+			}
+		}
+
+		for (const connector of connectors ?? []) {
+			if (!connector.enabled) {
+				continue;
+			}
+			const sourceId = `connector:${connector.id}`;
+			if (preferenceIndex.disabledSourceIds.has(sourceId)) {
+				continue;
+			}
+			summaries.push({
+				id: `connector:${connector.id}`,
+				displayName: connector.name,
+				detail: "Connector enabled",
+				provider: null,
+			});
+		}
+
+		return summaries;
+	}, [
+		integrationsData?.integrations,
+		slackStatus?.connected,
+		connectors,
+		actionModes,
+		preferenceIndex,
+	]);
 
 	const canSubmit = !disabled && !isLoading && prompt.trim();
 
@@ -48,75 +157,14 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 		}
 	};
 
-	const handleAttachClick = () => {
-		fileInputRef.current?.click();
-	};
-
-	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const file = e.target.files?.[0];
-		if (file?.type.startsWith("image/")) {
-			const reader = new FileReader();
-			reader.onloadend = () => {
-				setAttachments((prev) => [...prev, { file, preview: reader.result as string }]);
-			};
-			reader.readAsDataURL(file);
-		}
-		// Reset input so same file can be selected again
-		e.target.value = "";
-	};
-
-	const removeAttachment = (index: number) => {
-		setAttachments((prev) => prev.filter((_, i) => i !== index));
-	};
-
-	const toggleRecording = () => {
-		if (listening) {
-			SpeechRecognition.stopListening();
-		} else {
-			SpeechRecognition.startListening({ continuous: true });
-		}
-	};
-
 	return (
 		<form onSubmit={handleSubmit} className="w-full max-w-2xl mx-auto">
-			{/* Hidden file input */}
-			<Input
-				ref={fileInputRef}
-				type="file"
-				accept="image/*"
-				onChange={handleFileChange}
-				className="hidden"
-			/>
-
 			<div
 				className={cn(
 					"rounded-2xl border border-border bg-card dark:bg-chat-input shadow-sm transition-all overflow-hidden",
 					"has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:border-transparent",
 				)}
 			>
-				{/* Attachment previews */}
-				{attachments.length > 0 && (
-					<div className="flex gap-2 p-3 pb-0">
-						{attachments.map((attachment, index) => (
-							<div key={attachment.preview} className="relative group">
-								<img
-									src={attachment.preview}
-									alt={`Attachment ${index + 1}`}
-									className="h-16 w-16 object-cover rounded-lg border border-border"
-								/>
-								<Button
-									type="button"
-									variant="ghost"
-									onClick={() => removeAttachment(index)}
-									className="absolute -top-1.5 -right-1.5 h-5 w-5 p-0 rounded-full bg-destructive text-destructive-foreground text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/90"
-								>
-									×
-								</Button>
-							</div>
-						))}
-					</div>
-				)}
-
 				{/* Text input area */}
 				<Textarea
 					value={prompt}
@@ -148,36 +196,10 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 							onChange={setReasoningEffort}
 							disabled={isLoading}
 						/>
-						<EnvironmentPicker disabled={isLoading} />
 					</div>
 
 					{/* Right side - Actions & Submit */}
 					<div className="flex items-center gap-1">
-						<Button
-							type="button"
-							variant="ghost"
-							size="icon"
-							className="h-8 w-8 text-muted-foreground hover:text-foreground"
-							onClick={handleAttachClick}
-							disabled={isLoading}
-						>
-							<Paperclip className="h-4 w-4" />
-						</Button>
-						<Button
-							type="button"
-							variant="ghost"
-							size="icon"
-							className={cn(
-								"h-8 w-8",
-								listening
-									? "text-destructive hover:text-destructive/80"
-									: "text-muted-foreground hover:text-foreground",
-							)}
-							onClick={toggleRecording}
-							disabled={isLoading || !browserSupportsSpeechRecognition}
-						>
-							<Mic className={cn("h-4 w-4", listening && "animate-pulse")} />
-						</Button>
 						<Button
 							type="submit"
 							size="icon"
@@ -191,6 +213,39 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 						</Button>
 					</div>
 				</div>
+				{enabledIntegrationSummaries.length > 0 && (
+					<div className="flex items-center justify-between border-t border-border/60 px-3 py-2">
+						<div className="flex items-center -space-x-1">
+							{enabledIntegrationSummaries.slice(0, 3).map((entry) => (
+								<div
+									key={entry.id}
+									className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-foreground"
+									title={`${entry.displayName}: ${entry.detail}`}
+								>
+									{entry.provider ? (
+										<ProviderIcon provider={entry.provider} size="sm" />
+									) : (
+										<BlocksIcon className="h-3.5 w-3.5" />
+									)}
+								</div>
+							))}
+							{enabledIntegrationSummaries.length > 3 && (
+								<Link
+									href="/dashboard/integrations"
+									className="ml-1 inline-flex h-6 items-center rounded-full border border-border bg-background px-2 text-[11px] text-muted-foreground hover:text-foreground"
+								>
+									+{enabledIntegrationSummaries.length - 3}
+								</Link>
+							)}
+						</div>
+						<Link
+							href="/dashboard/integrations"
+							className="text-xs text-primary hover:text-primary/80"
+						>
+							Integration settings
+						</Link>
+					</div>
+				)}
 			</div>
 		</form>
 	);

@@ -1,4 +1,4 @@
-export type AdapterProvider = "linear" | "sentry" | "jira";
+export type AdapterProvider = "linear" | "sentry" | "jira" | "slack";
 
 export interface ActionMeta {
 	name: string;
@@ -16,9 +16,8 @@ export interface AdapterMeta {
 /**
  * Static frontend metadata for built-in action adapters.
  *
- * Mirrors the backend definitions in packages/services/src/actions/adapters/
- * but without execute logic. Only two adapters exist and their action lists
- * are stable, so the duplication cost is negligible.
+ * Mirrors provider action surfaces in packages/providers/src/providers/*
+ * without execute logic.
  */
 export const ACTION_ADAPTERS: AdapterMeta[] = [
 	{
@@ -26,6 +25,18 @@ export const ACTION_ADAPTERS: AdapterMeta[] = [
 		displayName: "Linear",
 		description: "Create, read, and update Linear issues from sessions",
 		actions: [
+			{ name: "list_teams", description: "List teams and team IDs", riskLevel: "read" },
+			{
+				name: "list_projects",
+				description: "List projects and project IDs, optionally by team",
+				riskLevel: "read",
+			},
+			{
+				name: "list_workflow_states",
+				description: "List workflow states and state IDs",
+				riskLevel: "read",
+			},
+			{ name: "list_users", description: "List users and assignee IDs", riskLevel: "read" },
 			{
 				name: "list_issues",
 				description: "List issues, optionally filtered by team or project",
@@ -46,6 +57,16 @@ export const ACTION_ADAPTERS: AdapterMeta[] = [
 		displayName: "Sentry",
 		description: "Query and manage Sentry issues from sessions",
 		actions: [
+			{
+				name: "list_organizations",
+				description: "List organizations available to your account",
+				riskLevel: "read",
+			},
+			{
+				name: "list_projects",
+				description: "List projects globally or by organization",
+				riskLevel: "read",
+			},
 			{ name: "list_issues", description: "List issues for a project", riskLevel: "read" },
 			{ name: "get_issue", description: "Get details of a specific issue", riskLevel: "read" },
 			{
@@ -62,6 +83,23 @@ export const ACTION_ADAPTERS: AdapterMeta[] = [
 		],
 	},
 	{
+		integration: "slack",
+		displayName: "Slack",
+		description: "Post messages to connected Slack channels from sessions",
+		actions: [
+			{
+				name: "list_channels",
+				description: "List available Slack channels and channel IDs",
+				riskLevel: "read",
+			},
+			{
+				name: "post_message",
+				description: "Post a message to a Slack channel",
+				riskLevel: "write",
+			},
+		],
+	},
+	{
 		integration: "jira",
 		displayName: "Jira",
 		description: "Create, read, and update Jira issues from sessions",
@@ -69,6 +107,21 @@ export const ACTION_ADAPTERS: AdapterMeta[] = [
 			{
 				name: "list_sites",
 				description: "List accessible Jira Cloud sites",
+				riskLevel: "read",
+			},
+			{
+				name: "list_projects",
+				description: "List projects for a Jira site",
+				riskLevel: "read",
+			},
+			{
+				name: "list_issue_types",
+				description: "List issue types, optionally scoped to a project",
+				riskLevel: "read",
+			},
+			{
+				name: "list_users",
+				description: "Search users in a Jira site",
 				riskLevel: "read",
 			},
 			{ name: "list_issues", description: "Search issues using JQL", riskLevel: "read" },
