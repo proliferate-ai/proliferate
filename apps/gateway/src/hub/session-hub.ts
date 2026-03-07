@@ -1577,6 +1577,10 @@ export class SessionHub {
 			collectOutputs: () => this.runtime.collectOutputs(),
 			buildCompletedAutomationFallbackMessages: () =>
 				this.buildCompletedAutomationFallbackMessages(),
+			getDurableRuntimeFacts: async () => {
+				const events = await sessions.getSessionEvents(this.sessionId);
+				return events.filter((event) => event.eventType.startsWith("runtime_"));
+			},
 			log: (message, data) => this.log(message, data),
 			logError: (message, error) => this.logError(message, error),
 			reconnectGeneration: this.reconnectGeneration,
