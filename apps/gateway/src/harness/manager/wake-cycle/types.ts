@@ -1,3 +1,5 @@
+import type { ManagerControlFacade } from "../control-facade";
+
 /**
  * Manager harness wake-cycle types.
  */
@@ -35,6 +37,8 @@ export interface RunContext {
 	wakePayload: unknown;
 	workerObjective: string | null;
 	workerName: string;
+	managerMemoryDir: string;
+	managerMemoryIndexPath: string;
 }
 
 export interface WakeCycleResult {
@@ -53,4 +57,5 @@ export interface ManagerToolContext {
 	workerRunId: string;
 	gatewayUrl: string;
 	serviceToken: string;
+	controlFacade?: ManagerControlFacade;
 }
