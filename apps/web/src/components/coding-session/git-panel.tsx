@@ -183,6 +183,8 @@ export function GitPanel({
 		}
 		diffTimeouts.current.clear();
 		diffRequestWorkspaceRef.current = {};
+		diffCacheRef.current = {};
+		loadingDiffsRef.current = {};
 		setExpandedFiles({});
 		setDiffCache({});
 		setDiffErrors({});

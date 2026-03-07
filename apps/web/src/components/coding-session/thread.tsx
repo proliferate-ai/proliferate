@@ -15,6 +15,7 @@ import {
 	ComposerPrimitive,
 	MessagePrimitive,
 	ThreadPrimitive,
+	useComposer,
 	useComposerRuntime,
 } from "@assistant-ui/react";
 import type { ActionApprovalRequestMessage } from "@proliferate/shared";
@@ -596,7 +597,7 @@ const Composer: FC<ComposerProps> = ({ sessionState, sessionId, token }) => {
 		}
 	};
 
-	const hasContent = composerRuntime.getState().text.trim();
+	const hasContent = useComposer((s) => !!s.text.trim());
 
 	return (
 		<ComposerPrimitive.Root className="max-w-2xl mx-auto w-full">
@@ -640,7 +641,7 @@ const Composer: FC<ComposerProps> = ({ sessionState, sessionId, token }) => {
 							</Button>
 						)}
 						<ComposerActionsRight
-							hasContent={!!hasContent}
+							hasContent={hasContent}
 							isTerminal={isTerminal}
 							onTerminalSend={handleTerminalSend}
 						/>
