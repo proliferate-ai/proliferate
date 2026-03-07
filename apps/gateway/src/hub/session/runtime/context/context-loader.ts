@@ -36,6 +36,8 @@ function buildSessionLiveState(context: SessionContext): SessionLiveState {
 			typeof parsedExpiresAt === "number" && Number.isFinite(parsedExpiresAt)
 				? parsedExpiresAt
 				: null,
+		runtimeBindingId: null,
+		lastRuntimeSourceSeq: null,
 		eventStreamConnected: false,
 	};
 }

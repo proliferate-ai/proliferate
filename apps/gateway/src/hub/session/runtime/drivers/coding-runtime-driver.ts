@@ -1,14 +1,18 @@
+import { randomUUID } from "crypto";
 import type {
 	AutoStartOutputEntry,
 	ConfigurationServiceCommand,
 	Message,
 	SandboxProvider,
+	ServerMessage,
 } from "@proliferate/shared";
-import { OpenCodeCodingHarnessAdapter } from "../../../../harness/coding/opencode/adapter";
+import type { DaemonStreamEnvelope } from "@proliferate/shared/contracts/harness";
+import { SandboxAgentV1CodingHarnessAdapter } from "../../../../harness/coding/sandbox-agent-v1/adapter";
 import type {
 	CodingHarnessEventStreamHandle,
 	CodingHarnessPromptImage,
 } from "../../../../harness/contracts/coding";
+import { deriveSandboxMcpToken } from "../../../../server/middleware/auth";
 import type {
 	RuntimeDriver,
 	RuntimeDriverActivationInput,
@@ -21,10 +25,52 @@ import type { SessionLiveState } from "../state/session-live-state";
 import { withStepTiming } from "../timing";
 import { persistCodingSessionId } from "../write-authority/runtime-writers";
 
+function broadcastDaemonEnvelope(
+	onBroadcast: RuntimeDriverActivationInput["onBroadcast"],
+	envelope: DaemonStreamEnvelope,
+): void {
+	if (!onBroadcast) {
+		return;
+	}
+	if (envelope.stream !== "agent_event") {
+		onBroadcast({ type: "daemon_stream", payload: envelope } as ServerMessage);
+	}
+
+	if (envelope.stream === "port_opened" || envelope.stream === "port_closed") {
+		const payload = envelope.payload as { port?: unknown; host?: unknown };
+		if (typeof payload.port === "number") {
+			onBroadcast({
+				type: "port_event",
+				payload: {
+					action: envelope.stream === "port_opened" ? "opened" : "closed",
+					port: payload.port,
+					host: typeof payload.host === "string" ? payload.host : undefined,
+				},
+			} as ServerMessage);
+		}
+	}
+
+	if (envelope.stream === "fs_change") {
+		const payload = envelope.payload as { action?: unknown; path?: unknown; size?: unknown };
+		if (typeof payload.action === "string" && typeof payload.path === "string") {
+			onBroadcast({
+				type: "fs_change",
+				payload: {
+					action: payload.action as "write" | "delete" | "rename" | "create",
+					path: payload.path,
+					size: typeof payload.size === "number" ? payload.size : undefined,
+				},
+			} as ServerMessage);
+		}
+	}
+}
+
 export class CodingRuntimeDriver implements RuntimeDriver {
-	private readonly codingHarness = new OpenCodeCodingHarnessAdapter();
-	private openCodeUrl: string | null = null;
+	private readonly codingHarness = new SandboxAgentV1CodingHarnessAdapter();
+	private runtimeBaseUrl: string | null = null;
+	private runtimeAuthToken: string | null = null;
 	private openCodeSessionId: string | null = null;
+	private runtimeBindingId: string | null = null;
 	private eventStreamHandle: CodingHarnessEventStreamHandle | null = null;
 	private provider: SandboxProvider | null = null;
 	private live: SessionLiveState | null = null;
@@ -32,7 +78,7 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 
 	isReady(input: RuntimeDriverExecutionInput): boolean {
 		return Boolean(
-			input.live.openCodeUrl && input.live.openCodeSessionId && input.live.eventStreamConnected,
+			input.live.previewUrl && input.live.openCodeSessionId && input.live.eventStreamConnected,
 		);
 	}
 
@@ -40,14 +86,21 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 		this.provider = input.provider;
 		this.live = input.live;
 		this.serviceCommands = input.config.serviceCommands;
-		this.openCodeUrl = input.live.openCodeUrl;
-		if (!this.openCodeUrl) {
-			throw new Error("Missing agent tunnel URL");
+		this.runtimeBaseUrl = input.live.previewUrl;
+		this.runtimeAuthToken = deriveSandboxMcpToken(input.env.serviceToken, input.sessionId);
+		if (!this.runtimeBaseUrl || !this.runtimeAuthToken) {
+			throw new Error("Missing sandbox runtime daemon endpoint");
 		}
+		const openCodeUrl = input.live.openCodeUrl;
+		if (!openCodeUrl) {
+			throw new Error("Missing coding runtime URL");
+		}
+		this.runtimeBindingId = randomUUID();
+		input.setRuntimeBindingId(this.runtimeBindingId);
 
 		await withStepTiming("runtime.ensure_ready.opencode_ready", input.logLatency, async () => {
 			await waitForOpenCodeReady({
-				openCodeUrl: this.openCodeUrl as string,
+				openCodeUrl,
 				log: input.log,
 				logError: input.logError,
 				loggerWarn: (data, message) => input.logger.warn(data, message),
@@ -68,7 +121,10 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 			() =>
 				connectCodingEventStream({
 					codingHarness: this.codingHarness,
-					openCodeUrl: this.openCodeUrl as string,
+					runtimeBaseUrl: this.runtimeBaseUrl as string,
+					authToken: this.runtimeAuthToken as string,
+					afterSeq: input.live.lastRuntimeSourceSeq ?? undefined,
+					bindingId: this.runtimeBindingId as string,
 					env: input.env,
 					logger: input.logger,
 					onDisconnect: (reason) => {
@@ -76,21 +132,30 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 						input.setEventStreamHandle(null);
 						input.onDisconnect(reason);
 					},
-					onEvent: input.onRuntimeEvent,
+					onEvent: (event) => {
+						if (typeof event.sourceSeq === "number") {
+							input.live.lastRuntimeSourceSeq = event.sourceSeq;
+						}
+						input.onRuntimeEvent(event);
+					},
+					onDaemonEnvelope: (envelope) => {
+						broadcastDaemonEnvelope(input.onBroadcast, envelope);
+					},
 					onLog: input.log,
 				}),
 		);
 		input.setEventStreamHandle(this.eventStreamHandle);
 		input.live.eventStreamConnected = true;
-		return { driverKind: "coding-opencode" };
+		return { driverKind: "coding-opencode", runtimeBindingId: this.runtimeBindingId };
 	}
 
 	async sendPrompt(content: string, images?: CodingHarnessPromptImage[]): Promise<void> {
-		if (!this.openCodeUrl || !this.openCodeSessionId) {
+		if (!this.runtimeBaseUrl || !this.runtimeAuthToken || !this.openCodeSessionId) {
 			throw new Error("Agent session unavailable");
 		}
 		await this.codingHarness.sendPrompt({
-			baseUrl: this.openCodeUrl,
+			baseUrl: this.runtimeBaseUrl,
+			authToken: this.runtimeAuthToken,
 			sessionId: this.openCodeSessionId,
 			content,
 			images,
@@ -98,21 +163,23 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 	}
 
 	async interrupt(): Promise<void> {
-		if (!this.openCodeUrl || !this.openCodeSessionId) {
+		if (!this.runtimeBaseUrl || !this.runtimeAuthToken || !this.openCodeSessionId) {
 			return;
 		}
 		await this.codingHarness.interrupt({
-			baseUrl: this.openCodeUrl,
+			baseUrl: this.runtimeBaseUrl,
+			authToken: this.runtimeAuthToken,
 			sessionId: this.openCodeSessionId,
 		});
 	}
 
 	async collectOutputs(): Promise<Message[]> {
-		if (!this.openCodeUrl || !this.openCodeSessionId) {
+		if (!this.runtimeBaseUrl || !this.runtimeAuthToken || !this.openCodeSessionId) {
 			throw new Error("Missing agent session info");
 		}
 		const result = await this.codingHarness.collectOutputs({
-			baseUrl: this.openCodeUrl,
+			baseUrl: this.runtimeBaseUrl,
+			authToken: this.runtimeAuthToken,
 			sessionId: this.openCodeSessionId,
 		});
 		return result.messages;
@@ -128,6 +195,10 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 
 	getOpenCodeSessionId(): string | null {
 		return this.openCodeSessionId;
+	}
+
+	getBindingId(): string | null {
+		return this.runtimeBindingId;
 	}
 
 	async testAutoStartCommands(
@@ -155,12 +226,13 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 		sessionId: string,
 		live: RuntimeDriverExecutionInput["live"],
 	): Promise<void> {
-		if (!this.openCodeUrl) {
+		if (!this.runtimeBaseUrl || !this.runtimeAuthToken) {
 			throw new Error("Agent URL missing");
 		}
 		const storedId = live.openCodeSessionId ?? live.session.coding_agent_session_id;
 		const resumed = await this.codingHarness.resume({
-			baseUrl: this.openCodeUrl,
+			baseUrl: this.runtimeBaseUrl,
+			authToken: this.runtimeAuthToken,
 			sessionId: storedId,
 		});
 		this.openCodeSessionId = resumed.sessionId;
@@ -173,8 +245,10 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 
 	resetState(): void {
 		this.disconnectStream();
-		this.openCodeUrl = null;
+		this.runtimeBaseUrl = null;
+		this.runtimeAuthToken = null;
 		this.openCodeSessionId = null;
+		this.runtimeBindingId = null;
 		this.provider = null;
 		this.live = null;
 		this.serviceCommands = undefined;

@@ -14,6 +14,7 @@
 - sandbox-mcp sidecar (`api-server`, terminal WS, service manager, in-sandbox CLI)
 - Sandbox auth token wiring (`SANDBOX_MCP_AUTH_TOKEN`)
 - Caddy preview/proxy integration (`/_proliferate/mcp/*`, `/_proliferate/vscode/*`)
+- sandbox-daemon runtime bridge endpoints (`/_proliferate/v1/runtime/session/*`) used by gateway coding runtime
 
 ### Out of Scope
 - Session lifecycle orchestration, hub ownership, SSE runtime state machine — see `sessions-gateway.md`
