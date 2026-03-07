@@ -92,8 +92,10 @@ export class SandboxAgentV2CodingHarnessAdapter implements CodingHarnessAdapter 
 		if (!input.authToken) {
 			throw new Error("Missing sandbox runtime auth token");
 		}
-		// ACP interrupt: delete the server to stop the agent
+		// ACP interrupt: delete the server to stop the agent.
+		// Clear currentServerId so the next resume() creates a fresh server.
 		await deleteAcpServer(input.baseUrl, input.authToken, input.sessionId);
+		this.currentServerId = null;
 	}
 
 	async shutdown(input: CodingHarnessShutdownInput): Promise<void> {
@@ -151,11 +153,10 @@ export class SandboxAgentV2CodingHarnessAdapter implements CodingHarnessAdapter 
 			);
 		}
 
-		const afterSeqQuery =
-			typeof input.afterSeq === "number" && input.afterSeq > 0
-				? `?last_seq=${encodeURIComponent(String(input.afterSeq))}`
-				: "";
-		const eventPath = `/_proliferate/events${afterSeqQuery}`;
+		// Daemon platform events have their own sequence space (independent of
+		// agent ACP sequences tracked by lastRuntimeSourceSeq). Always start
+		// from the beginning on reconnect — daemon events are lightweight.
+		const eventPath = "/_proliferate/events";
 
 		const sseClient = new SseClient<DaemonSseEvent>({
 			env: input.env,

@@ -12,12 +12,7 @@
  *   DELETE /v1/acp/{serverId}   — Terminate and clean up the server
  */
 
-import { createLogger } from "@proliferate/logger";
-import type { Message, MessagePart, ToolCall, ToolPart } from "@proliferate/shared";
-
-const logger = createLogger({ service: "gateway" }).child({
-	module: "sandbox-agent-v2-runtime",
-});
+const ACP_TIMEOUT_MS = 10_000;
 
 function withAuthHeaders(authToken: string): HeadersInit {
 	return {
@@ -45,6 +40,7 @@ export async function createAcpServer(
 		method: "POST",
 		headers: withAuthHeaders(authToken),
 		body: JSON.stringify({ agent }),
+		signal: AbortSignal.timeout(ACP_TIMEOUT_MS),
 	});
 	if (!response.ok) {
 		const text = await response.text();
@@ -86,6 +82,7 @@ export async function sendAcpEnvelope(
 		method: "POST",
 		headers: withAuthHeaders(authToken),
 		body: JSON.stringify({ parts }),
+		signal: AbortSignal.timeout(ACP_TIMEOUT_MS),
 	});
 	if (!response.ok && response.status !== 204) {
 		const text = await response.text();
@@ -101,6 +98,7 @@ export async function deleteAcpServer(
 	const response = await fetch(`${baseUrl}/v1/acp/${encodeURIComponent(serverId)}`, {
 		method: "DELETE",
 		headers: { Authorization: `Bearer ${authToken}` },
+		signal: AbortSignal.timeout(ACP_TIMEOUT_MS),
 	});
 	if (!response.ok && response.status !== 404) {
 		const text = await response.text();
@@ -108,104 +106,3 @@ export async function deleteAcpServer(
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Message collection (fetches from ACP state endpoint)
-// ---------------------------------------------------------------------------
-
-export interface AcpMessagePart {
-	type: string;
-	text?: string;
-	toolCallId?: string;
-	toolName?: string;
-	args?: Record<string, unknown>;
-	result?: string;
-	status?: string;
-	url?: string;
-	mime?: string;
-}
-
-export interface AcpMessage {
-	id: string;
-	role: "user" | "assistant";
-	parts: AcpMessagePart[];
-	createdAt?: number;
-	completedAt?: number;
-	error?: string;
-}
-
-function mapToolStatus(status?: string): "pending" | "running" | "completed" | "error" {
-	if (status === "completed" || status === "error" || status === "running") {
-		return status;
-	}
-	return "pending";
-}
-
-export function mapAcpMessages(messages: AcpMessage[]): Message[] {
-	return messages.map((message) => {
-		const createdAt = message.createdAt ?? Date.now();
-		const isComplete =
-			message.role === "user" ? true : Boolean(message.completedAt || message.error);
-
-		const parts: MessagePart[] = [];
-		const toolCalls: ToolCall[] = [];
-		let content = "";
-
-		for (const part of message.parts) {
-			if (part.type === "text" && part.text) {
-				parts.push({ type: "text", text: part.text });
-				content += part.text;
-				continue;
-			}
-			if (part.type === "image" && part.url) {
-				parts.push({ type: "image", image: part.url });
-				continue;
-			}
-			if (part.toolCallId && part.toolName) {
-				const status = mapToolStatus(part.status);
-				const toolPart: ToolPart = {
-					type: "tool",
-					toolCallId: part.toolCallId,
-					toolName: part.toolName,
-					args: part.args ?? {},
-					result: part.result,
-					status,
-				};
-				parts.push(toolPart);
-				toolCalls.push({
-					id: part.toolCallId,
-					tool: part.toolName,
-					args: part.args ?? {},
-					result: part.result,
-					status,
-					startedAt: Date.now(),
-					completedAt: status === "completed" || status === "error" ? Date.now() : undefined,
-				});
-			}
-		}
-
-		if (message.role === "assistant" && parts.length === 0 && !content && message.error) {
-			parts.push({ type: "text", text: message.error });
-			content = message.error;
-		}
-
-		return {
-			id: message.id,
-			role: message.role,
-			content,
-			isComplete,
-			createdAt,
-			toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-			parts: parts.length > 0 ? parts : undefined,
-		};
-	});
-}
-
-export function logRuntimeLookupError(error: unknown, context: Record<string, unknown>): void {
-	logger.debug(
-		{
-			...context,
-			error: error instanceof Error ? error.message : String(error),
-		},
-		"runtime.lookup.error",
-	);
-}

@@ -93,6 +93,8 @@ export function mapUniversalEventToRuntimeDaemonEvent(
 		occurredAt: event.time,
 	};
 
+	// Payloads are shaped as OpenCodeEvent `properties` so that
+	// handleRuntimeDaemonEvent can bridge them directly into the EventProcessor.
 	switch (event.event_type) {
 		case "session.started":
 			return {
@@ -100,7 +102,7 @@ export function mapUniversalEventToRuntimeDaemonEvent(
 				channel: "server",
 				type: "server.connected",
 				isTerminal: false,
-				payload: { sessionId: event.session_id },
+				payload: {},
 			};
 
 		case "session.ended":
@@ -109,7 +111,7 @@ export function mapUniversalEventToRuntimeDaemonEvent(
 				channel: "session",
 				type: "session.idle",
 				isTerminal: true,
-				payload: { sessionId: event.session_id },
+				payload: {},
 			};
 
 		case "turn.started":
@@ -118,7 +120,7 @@ export function mapUniversalEventToRuntimeDaemonEvent(
 				channel: "session",
 				type: "session.status",
 				isTerminal: false,
-				payload: { status: "busy", role: event.data.role },
+				payload: { status: { type: "busy" } },
 			};
 
 		case "turn.ended":
@@ -126,8 +128,8 @@ export function mapUniversalEventToRuntimeDaemonEvent(
 				...base,
 				channel: "session",
 				type: "session.idle",
-				isTerminal: true,
-				payload: { status: "idle" },
+				isTerminal: false,
+				payload: {},
 			};
 
 		case "item.started": {
@@ -140,9 +142,11 @@ export function mapUniversalEventToRuntimeDaemonEvent(
 					isTerminal: false,
 					itemId: event.data.itemId,
 					payload: {
-						id: event.data.itemId,
-						role: event.data.role ?? "assistant",
-						parts: mapContentParts(event.data.content),
+						info: {
+							id: event.data.itemId,
+							role: event.data.role ?? "assistant",
+							sessionId: event.session_id,
+						},
 					},
 				};
 			}
@@ -155,15 +159,11 @@ export function mapUniversalEventToRuntimeDaemonEvent(
 				itemId: event.data.itemId,
 				parentItemId: event.data.parentItemId,
 				toolCallId: extractToolCallId(event.data.content),
-				payload: {
-					id: event.data.itemId,
-					kind,
-					parts: mapContentParts(event.data.content),
-				},
+				payload: buildPartUpdatePayload(event),
 			};
 		}
 
-		case "item.delta": {
+		case "item.delta":
 			return {
 				...base,
 				channel: "message",
@@ -171,16 +171,10 @@ export function mapUniversalEventToRuntimeDaemonEvent(
 				isTerminal: false,
 				itemId: event.data.itemId,
 				toolCallId: event.data.delta?.toolCallId,
-				payload: {
-					id: event.data.itemId,
-					delta: event.data.delta
-						? mapContentPart(event.data.delta)
-						: undefined,
-				},
+				payload: buildDeltaPartPayload(event),
 			};
-		}
 
-		case "item.completed": {
+		case "item.completed":
 			return {
 				...base,
 				channel: "message",
@@ -190,12 +184,14 @@ export function mapUniversalEventToRuntimeDaemonEvent(
 				parentItemId: event.data.parentItemId,
 				toolCallId: extractToolCallId(event.data.content),
 				payload: {
-					id: event.data.itemId,
-					status: event.data.status ?? "completed",
-					parts: mapContentParts(event.data.content),
+					info: {
+						id: event.data.itemId,
+						role: "assistant",
+						sessionId: event.session_id,
+						time: { completed: Date.now() },
+					},
 				},
 			};
-		}
 
 		case "error":
 			return {
@@ -204,8 +200,10 @@ export function mapUniversalEventToRuntimeDaemonEvent(
 				type: "session.error",
 				isTerminal: true,
 				payload: {
-					message: event.data.message ?? "Unknown error",
-					code: event.data.code,
+					error: {
+						name: event.data.code ?? "agent_error",
+						data: { message: event.data.message ?? "Unknown error" },
+					},
 				},
 			};
 
@@ -216,11 +214,7 @@ export function mapUniversalEventToRuntimeDaemonEvent(
 				type: "session.status",
 				isTerminal: false,
 				approvalId: event.data.itemId,
-				payload: {
-					status: "paused_for_approval",
-					kind: "permission",
-					itemId: event.data.itemId,
-				},
+				payload: { status: { type: "paused_for_approval" } },
 			};
 
 		case "permission.resolved":
@@ -230,11 +224,7 @@ export function mapUniversalEventToRuntimeDaemonEvent(
 				type: "session.status",
 				isTerminal: false,
 				approvalId: event.data.itemId,
-				payload: {
-					status: "busy",
-					kind: "permission_resolved",
-					itemId: event.data.itemId,
-				},
+				payload: { status: { type: "busy" } },
 			};
 
 		// Unparsed agent events and questions are passed through as-is
@@ -254,36 +244,71 @@ export function mapUniversalEventToRuntimeDaemonEvent(
 	}
 }
 
-function mapContentParts(parts?: UniversalContentPart[]): unknown[] | undefined {
-	if (!parts?.length) return undefined;
-	return parts.map(mapContentPart);
+// ---------------------------------------------------------------------------
+// Payload builders — produce shapes matching OpenCodeEvent property types
+// so the gateway EventProcessor can consume them directly.
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a PartUpdateProperties-shaped payload for item.started (tool_call/tool_result).
+ */
+function buildPartUpdatePayload(event: UniversalEvent): unknown {
+	const firstPart = event.data.content?.[0];
+	const partType = event.data.kind === "tool_call" ? "tool-use" : "tool-result";
+	return {
+		part: {
+			id: event.data.itemId ?? "",
+			sessionID: event.session_id,
+			messageID: event.data.parentItemId ?? "",
+			type: partType,
+			callID: firstPart?.toolCallId,
+			tool: firstPart?.toolName,
+			state: firstPart
+				? {
+						status: firstPart.status ?? "running",
+						input: firstPart.args,
+						output: firstPart.result,
+					}
+				: undefined,
+		},
+	};
 }
 
-function mapContentPart(part: UniversalContentPart): unknown {
-	switch (part.type) {
-		case "text":
-			return { type: "text", text: part.text ?? "" };
-		case "tool_call":
-			return {
-				type: "tool",
-				toolCallId: part.toolCallId,
-				toolName: part.toolName,
-				args: part.args ?? {},
-				status: part.status ?? "running",
-			};
-		case "tool_result":
-			return {
-				type: "tool",
-				toolCallId: part.toolCallId,
-				toolName: part.toolName,
-				result: part.result,
-				status: part.status ?? "completed",
-			};
-		case "image":
-			return { type: "image", image: part.url };
-		default:
-			return part;
+/**
+ * Build a PartUpdateProperties-shaped payload for item.delta.
+ */
+function buildDeltaPartPayload(event: UniversalEvent): unknown {
+	const delta = event.data.delta;
+	if (!delta) {
+		return { part: { id: event.data.itemId ?? "", sessionID: event.session_id, messageID: "", type: "text" } };
 	}
+	if (delta.type === "text") {
+		return {
+			part: {
+				id: event.data.itemId ?? "",
+				sessionID: event.session_id,
+				messageID: event.data.parentItemId ?? "",
+				type: "text",
+			},
+			delta: delta.text ?? "",
+		};
+	}
+	// Tool delta
+	return {
+		part: {
+			id: event.data.itemId ?? "",
+			sessionID: event.session_id,
+			messageID: event.data.parentItemId ?? "",
+			type: "tool-use",
+			callID: delta.toolCallId,
+			tool: delta.toolName,
+			state: {
+				status: delta.status ?? "running",
+				input: delta.args,
+				output: delta.result,
+			},
+		},
+	};
 }
 
 function extractToolCallId(parts?: UniversalContentPart[]): string | undefined {

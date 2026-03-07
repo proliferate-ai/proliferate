@@ -84,13 +84,7 @@ interface HubDependencies {
 
 /** Renewal interval: ~1/3 of owner lease TTL. */
 const LEASE_RENEW_INTERVAL_MS = Math.floor(OWNER_LEASE_TTL_MS / 3);
-function isOpenCodeEvent(value: unknown): value is OpenCodeEvent {
-	if (!value || typeof value !== "object") {
-		return false;
-	}
-	const candidate = value as { type?: unknown };
-	return typeof candidate.type === "string";
-}
+
 
 export class SessionHub {
 	private readonly env: GatewayEnv;
@@ -1268,11 +1262,13 @@ export class SessionHub {
 			},
 		});
 
-		const rawEvent = event.payload;
-		if (!isOpenCodeEvent(rawEvent)) {
-			this.logger.warn({ eventType: event.type }, "Ignoring unsupported daemon event payload");
-			return;
-		}
+		// Bridge RuntimeDaemonEvent into OpenCodeEvent shape for the EventProcessor.
+		// The event mapper produces payloads matching OpenCodeEvent property shapes,
+		// so we just wrap { type, properties } around the existing data.
+		const rawEvent = {
+			type: event.type,
+			properties: (event.payload ?? {}) as Record<string, unknown>,
+		} as OpenCodeEvent;
 
 		this.touchActivity();
 		const wasBusy = this.eventProcessor.getCurrentAssistantMessageId() !== null;

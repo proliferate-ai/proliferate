@@ -31,9 +31,7 @@ function broadcastDaemonEnvelope(
 	if (!onBroadcast) {
 		return;
 	}
-	if (envelope.stream !== "agent_event") {
-		onBroadcast({ type: "daemon_stream", payload: envelope } as ServerMessage);
-	}
+	onBroadcast({ type: "daemon_stream", payload: envelope } as ServerMessage);
 
 	if (envelope.stream === "port_opened" || envelope.stream === "port_closed") {
 		const payload = envelope.payload as { port?: unknown; host?: unknown };
@@ -157,6 +155,9 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 			authToken: this.runtimeAuthToken,
 			sessionId: this.openCodeSessionId,
 		});
+		// ACP interrupt deletes the server — clear the session ID so the next
+		// activate() cycle creates a fresh one via resume().
+		this.openCodeSessionId = null;
 	}
 
 	async collectOutputs(): Promise<Message[]> {
