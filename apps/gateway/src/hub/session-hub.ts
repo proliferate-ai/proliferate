@@ -25,6 +25,7 @@ import { getSandboxProvider } from "@proliferate/shared/providers";
 import type { WebSocket } from "ws";
 import type { RuntimeDaemonEvent } from "../harness/contracts/coding";
 import type { GatewayEnv } from "../lib/env";
+import { EventSequencer } from "./session/runtime/event-sequencer";
 import { uploadVerificationFiles } from "../lib/s3";
 import { OWNER_LEASE_TTL_MS, setRuntimeLease } from "../lib/session-leases";
 import type { ClientConnection, OpenCodeEvent, SandboxInfo } from "../types";
@@ -83,8 +84,6 @@ interface HubDependencies {
 
 /** Renewal interval: ~1/3 of owner lease TTL. */
 const LEASE_RENEW_INTERVAL_MS = Math.floor(OWNER_LEASE_TTL_MS / 3);
-const MAX_SOURCE_EVENT_KEYS = 10_000;
-
 function isOpenCodeEvent(value: unknown): value is OpenCodeEvent {
 	if (!value || typeof value !== "object") {
 		return false;
@@ -142,11 +141,8 @@ export class SessionHub {
 	private readonly telemetry: SessionTelemetry;
 	private telemetryFlushTimer: ReturnType<typeof setInterval> | null = null;
 
-	// Canonical runtime event sequencing + stale stream fencing
-	private runtimeEventSeq = 0;
-	private activeRuntimeBindingId: string | null = null;
-	private readonly seenRuntimeSourceEventKeys = new Set<string>();
-	private readonly runtimeSourceEventKeyOrder: string[] = [];
+	// Canonical runtime event sequencing + stale stream fencing + dedupe
+	private readonly eventSequencer = new EventSequencer();
 
 	// Phase 1 invariant: only one active prompt/run at a time
 	private activePromptRunId: string | null = null;
@@ -239,23 +235,6 @@ export class SessionHub {
 		}
 
 		return 0;
-	}
-
-	private resetRuntimeBindingState(bindingId: string | null): void {
-		this.activeRuntimeBindingId = bindingId;
-		this.seenRuntimeSourceEventKeys.clear();
-		this.runtimeSourceEventKeyOrder.length = 0;
-	}
-
-	private rememberSourceEventKey(sourceEventKey: string): void {
-		this.seenRuntimeSourceEventKeys.add(sourceEventKey);
-		this.runtimeSourceEventKeyOrder.push(sourceEventKey);
-		if (this.runtimeSourceEventKeyOrder.length > MAX_SOURCE_EVENT_KEYS) {
-			const oldest = this.runtimeSourceEventKeyOrder.shift();
-			if (oldest) {
-				this.seenRuntimeSourceEventKeys.delete(oldest);
-			}
-		}
 	}
 
 	private isRunActive(): boolean {
@@ -837,10 +816,6 @@ export class SessionHub {
 			this.stopLeaseRenewal();
 			throw err;
 		}
-		const runtimeBindingId = this.runtime.getRuntimeBindingId();
-		if (runtimeBindingId !== this.activeRuntimeBindingId) {
-			this.resetRuntimeBindingState(runtimeBindingId);
-		}
 		clearAgentIdle(this.getIdleControllerState()); // fresh sandbox, agent state unknown
 		this.telemetry.startRunning(); // idempotent: only sets if not already running
 		this.startMigrationMonitor();
@@ -1265,45 +1240,26 @@ export class SessionHub {
 
 	private handleRuntimeDaemonEvent(event: RuntimeDaemonEvent): void {
 		const runtimeBindingId = this.runtime.getRuntimeBindingId();
-		if (runtimeBindingId !== this.activeRuntimeBindingId) {
-			this.resetRuntimeBindingState(runtimeBindingId);
-		}
-
-		const resolvedBindingId = event.bindingId ?? runtimeBindingId;
-		if (runtimeBindingId && resolvedBindingId && resolvedBindingId !== runtimeBindingId) {
+		const result = this.eventSequencer.process(event, runtimeBindingId);
+		if (!result.accepted) {
 			this.logger.debug(
 				{
-					incomingBindingId: resolvedBindingId,
-					activeBindingId: runtimeBindingId,
+					reason: result.reason,
 					eventType: event.type,
+					bindingId: event.bindingId,
+					sourceEventKey: event.sourceEventKey,
 				},
-				"Dropping stale runtime event from superseded binding",
+				`Dropping runtime event: ${result.reason}`,
 			);
 			return;
 		}
-		if (resolvedBindingId) {
-			event.bindingId = resolvedBindingId;
-		}
-		const sourceEventKey =
-			event.sourceEventKey ??
-			`${resolvedBindingId ?? "legacy"}:${event.sourceSeq ?? "na"}:${event.type}:${event.occurredAt}`;
-		if (this.seenRuntimeSourceEventKeys.has(sourceEventKey)) {
-			this.logger.debug(
-				{ sourceEventKey, eventType: event.type },
-				"Dropping duplicate runtime event",
-			);
-			return;
-		}
-		event.sourceEventKey = sourceEventKey;
-		this.rememberSourceEventKey(sourceEventKey);
-		event.eventSeq = ++this.runtimeEventSeq;
 
 		this.broadcast({
 			type: "daemon_stream",
 			payload: {
 				v: "1",
 				stream: "agent_event",
-				seq: event.sourceSeq ?? event.eventSeq,
+				seq: event.sourceSeq ?? result.eventSeq ?? 0,
 				event: "data",
 				payload: event,
 				ts: Number.isFinite(Date.parse(event.occurredAt))
