@@ -28,9 +28,15 @@ export type {
 
 export interface CodingHarnessStreamInput {
 	baseUrl: string;
+	authToken?: string;
+	afterSeq?: number;
+	bindingId: string;
 	env: GatewayEnv;
 	logger: Logger;
 	onEvent: (event: RuntimeDaemonEvent) => void;
+	onDaemonEnvelope?: (
+		event: import("@proliferate/shared/contracts/harness").DaemonStreamEnvelope,
+	) => void;
 	onDisconnect: (reason: string) => void;
 }
 

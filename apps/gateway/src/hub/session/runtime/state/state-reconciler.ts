@@ -8,6 +8,8 @@ export function reconcileRuntimePointers(
 		openCodeSessionId?: string | null;
 		sandboxId?: string | null;
 		sandboxExpiresAt?: number | null;
+		runtimeBindingId?: string | null;
+		lastRuntimeSourceSeq?: number | null;
 	},
 ): void {
 	if (values.openCodeUrl !== undefined) {
@@ -31,6 +33,12 @@ export function reconcileRuntimePointers(
 			? new Date(values.sandboxExpiresAt).toISOString()
 			: null;
 	}
+	if (values.runtimeBindingId !== undefined) {
+		live.runtimeBindingId = values.runtimeBindingId;
+	}
+	if (values.lastRuntimeSourceSeq !== undefined) {
+		live.lastRuntimeSourceSeq = values.lastRuntimeSourceSeq;
+	}
 }
 
 export function clearRuntimePointers(live: SessionLiveState): void {
@@ -40,6 +48,8 @@ export function clearRuntimePointers(live: SessionLiveState): void {
 		openCodeSessionId: null,
 		sandboxId: null,
 		sandboxExpiresAt: null,
+		runtimeBindingId: null,
+		lastRuntimeSourceSeq: null,
 	});
 	live.eventStreamConnected = false;
 }

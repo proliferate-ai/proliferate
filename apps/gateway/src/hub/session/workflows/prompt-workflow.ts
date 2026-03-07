@@ -6,6 +6,9 @@ import type { PromptOptions } from "../../shared/types";
 export interface PromptWorkflowDeps {
 	sessionId: string;
 	isCompletedAutomationSession: () => boolean;
+	isRunActive: () => boolean;
+	markRunStarted: (runId: string) => void;
+	clearRunState: () => void;
 	getMigrationState: () => "normal" | "migrating";
 	touchActivity: () => void;
 	getLastKnownAgentIdleAt: () => number | null;
@@ -32,6 +35,9 @@ export async function runPromptWorkflow(
 ): Promise<void> {
 	if (deps.isCompletedAutomationSession()) {
 		throw new Error("Cannot send messages to a completed automation session.");
+	}
+	if (deps.isRunActive()) {
+		throw new Error("A run is already active for this session.");
 	}
 
 	const migrationState = deps.getMigrationState();
@@ -100,6 +106,13 @@ export async function runPromptWorkflow(
 
 	deps.resetEventProcessorForNewPrompt();
 	deps.log("Sending prompt to OpenCode...");
-	await deps.sendPromptToRuntime(content, options?.images);
-	deps.log("Prompt sent to OpenCode");
+	const runId = randomUUID();
+	deps.markRunStarted(runId);
+	try {
+		await deps.sendPromptToRuntime(content, options?.images);
+		deps.log("Prompt sent to OpenCode", { runId });
+	} catch (error) {
+		deps.clearRunState();
+		throw error;
+	}
 }

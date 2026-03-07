@@ -28,6 +28,14 @@ import {
 } from "./auth.js";
 import type { EventBus } from "./event-bus.js";
 import { FsSecurityError, type FsTransport } from "./fs.js";
+import {
+	createSession as createOpenCodeSession,
+	hasSession as hasOpenCodeSession,
+	interrupt as interruptOpenCodeSession,
+	listMessages as listOpenCodeMessages,
+	listSessions as listOpenCodeSessions,
+	sendPrompt as sendOpenCodePrompt,
+} from "./opencode-runtime.js";
 import type { PortWatcher } from "./ports.js";
 import type { PreviewProxy } from "./preview-proxy.js";
 import type { PtyTransport } from "./pty.js";
@@ -168,6 +176,42 @@ export class Router {
 					return;
 				}
 				break;
+			case "/_proliferate/v1/runtime/session/create":
+				if (req.method === "POST") {
+					this.handleRuntimeSessionCreate(req, res);
+					return;
+				}
+				break;
+			case "/_proliferate/v1/runtime/session/list":
+				if (req.method === "GET") {
+					this.handleRuntimeSessionList(res);
+					return;
+				}
+				break;
+			case "/_proliferate/v1/runtime/session/get":
+				if (req.method === "GET") {
+					this.handleRuntimeSessionGet(res, query);
+					return;
+				}
+				break;
+			case "/_proliferate/v1/runtime/session/messages":
+				if (req.method === "GET") {
+					this.handleRuntimeSessionMessages(res, query);
+					return;
+				}
+				break;
+			case "/_proliferate/v1/runtime/session/prompt":
+				if (req.method === "POST") {
+					this.handleRuntimeSessionPrompt(req, res);
+					return;
+				}
+				break;
+			case "/_proliferate/v1/runtime/session/interrupt":
+				if (req.method === "POST") {
+					this.handleRuntimeSessionInterrupt(req, res);
+					return;
+				}
+				break;
 			case "/_proliferate/pty/list":
 				if (req.method === "GET") {
 					this.handlePtyList(res);
@@ -281,6 +325,111 @@ export class Router {
 
 		req.on("close", cleanup);
 		req.on("error", cleanup);
+	}
+
+	// -----------------------------------------------------------------------
+	// Runtime session bridge (sandbox-agent v1 substrate for OpenCode)
+	// -----------------------------------------------------------------------
+
+	private handleRuntimeSessionCreate(req: IncomingMessage, res: ServerResponse): void {
+		const preRead = (req as IncomingMessage & { _body?: string })._body;
+		(preRead !== undefined ? Promise.resolve(preRead) : readBody(req))
+			.then(async (body) => {
+				const parsed = JSON.parse(body) as { title?: string };
+				const id = await createOpenCodeSession(
+					typeof parsed.title === "string" ? parsed.title : undefined,
+				);
+				sendJson(res, 200, { id });
+			})
+			.catch((err) => {
+				sendJson(res, 500, { error: err instanceof Error ? err.message : "Runtime create failed" });
+			});
+	}
+
+	private handleRuntimeSessionList(res: ServerResponse): void {
+		listOpenCodeSessions()
+			.then((sessions) => {
+				sendJson(res, 200, { sessions });
+			})
+			.catch((err) => {
+				sendJson(res, 500, { error: err instanceof Error ? err.message : "Runtime list failed" });
+			});
+	}
+
+	private handleRuntimeSessionGet(res: ServerResponse, query: URLSearchParams): void {
+		const sessionId = query.get("session_id");
+		if (!sessionId) {
+			sendJson(res, 400, { error: "session_id query parameter is required" });
+			return;
+		}
+		hasOpenCodeSession(sessionId)
+			.then((exists) => {
+				if (!exists) {
+					sendJson(res, 404, { exists: false });
+					return;
+				}
+				sendJson(res, 200, { exists: true });
+			})
+			.catch((err) => {
+				sendJson(res, 500, { error: err instanceof Error ? err.message : "Runtime get failed" });
+			});
+	}
+
+	private handleRuntimeSessionMessages(res: ServerResponse, query: URLSearchParams): void {
+		const sessionId = query.get("session_id");
+		if (!sessionId) {
+			sendJson(res, 400, { error: "session_id query parameter is required" });
+			return;
+		}
+		listOpenCodeMessages(sessionId)
+			.then((messages) => {
+				sendJson(res, 200, { messages });
+			})
+			.catch((err) => {
+				sendJson(res, 500, {
+					error: err instanceof Error ? err.message : "Runtime messages failed",
+				});
+			});
+	}
+
+	private handleRuntimeSessionPrompt(req: IncomingMessage, res: ServerResponse): void {
+		const preRead = (req as IncomingMessage & { _body?: string })._body;
+		(preRead !== undefined ? Promise.resolve(preRead) : readBody(req))
+			.then(async (body) => {
+				const parsed = JSON.parse(body) as {
+					sessionId?: string;
+					content?: string;
+					images?: Array<{ data: string; mediaType: string }>;
+				};
+				if (!parsed.sessionId || typeof parsed.content !== "string") {
+					sendJson(res, 400, { error: "sessionId and content are required" });
+					return;
+				}
+				await sendOpenCodePrompt(parsed.sessionId, parsed.content, parsed.images);
+				sendJson(res, 200, { ok: true });
+			})
+			.catch((err) => {
+				sendJson(res, 500, { error: err instanceof Error ? err.message : "Runtime prompt failed" });
+			});
+	}
+
+	private handleRuntimeSessionInterrupt(req: IncomingMessage, res: ServerResponse): void {
+		const preRead = (req as IncomingMessage & { _body?: string })._body;
+		(preRead !== undefined ? Promise.resolve(preRead) : readBody(req))
+			.then(async (body) => {
+				const parsed = JSON.parse(body) as { sessionId?: string };
+				if (!parsed.sessionId) {
+					sendJson(res, 400, { error: "sessionId is required" });
+					return;
+				}
+				await interruptOpenCodeSession(parsed.sessionId);
+				sendJson(res, 200, { ok: true });
+			})
+			.catch((err) => {
+				sendJson(res, 500, {
+					error: err instanceof Error ? err.message : "Runtime interrupt failed",
+				});
+			});
 	}
 
 	// -----------------------------------------------------------------------
