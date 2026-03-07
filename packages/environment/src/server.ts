@@ -7,13 +7,14 @@ import { nextPhase } from "./runtime";
 import { createPublicSchema, createServerSchema } from "./schema";
 
 // Load .env files for non-Next.js contexts (worker, db migrations, scripts).
-// Next.js handles this automatically; dotenv.config() is a no-op when vars already exist.
+// Neither call uses `override`, so shell/CI/Next.js vars always win.
+// Load .env.local first so its values take precedence over .env defaults.
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "../../..");
-const envPath = resolve(root, ".env");
 const envLocalPath = resolve(root, ".env.local");
+const envPath = resolve(root, ".env");
+if (existsSync(envLocalPath)) config({ path: envLocalPath });
 if (existsSync(envPath)) config({ path: envPath });
-if (existsSync(envLocalPath)) config({ path: envLocalPath, override: true });
 
 const rawEnv = createEnv({
 	server: createServerSchema(process.env),
