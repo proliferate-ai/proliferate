@@ -12,6 +12,7 @@ import type {
 	ManagerHarnessState,
 } from "@proliferate/shared/contracts";
 import { callClaudeWithRetry, createAnthropicClient } from "./client";
+import type { ManagerControlFacade } from "./control-facade";
 import { MANAGER_TOOLS, filterToolsByCapabilities } from "./tools";
 import { runWakeCyclePhase } from "./wake-cycle/engine";
 import { BudgetExhaustedError, PhaseTimeoutError } from "./wake-cycle/errors";
@@ -29,8 +30,10 @@ import type {
 
 export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 	readonly name = "claude-manager";
+	private static readonly defaultMemoryDir = "/workspace/.proliferate/manager-memory";
 
 	private readonly logger: Logger;
+	private readonly managerControlFacade?: ManagerControlFacade;
 	private client: Anthropic | null = null;
 	private abortController: AbortController | null = null;
 	private conversationHistory: Anthropic.MessageParam[] = [];
@@ -38,8 +41,9 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 	private currentRunId: string | null = null;
 	private filteredTools: Anthropic.Tool[] = MANAGER_TOOLS;
 
-	constructor(logger: Logger) {
+	constructor(logger: Logger, managerControlFacade?: ManagerControlFacade) {
 		this.logger = logger.child({ module: "manager-harness" });
+		this.managerControlFacade = managerControlFacade;
 	}
 
 	async start(input: ManagerHarnessStartInput): Promise<ManagerHarnessState> {
@@ -133,6 +137,14 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 		}
 
 		const worker = await workers.findWorkerById(input.workerId, input.organizationId);
+		const managerMemoryDir =
+			input.managerMemoryDir && input.managerMemoryDir.trim().length > 0
+				? input.managerMemoryDir.trim()
+				: ClaudeManagerHarnessAdapter.defaultMemoryDir;
+		const managerMemoryIndexPath =
+			input.managerMemoryIndexPath && input.managerMemoryIndexPath.trim().length > 0
+				? input.managerMemoryIndexPath.trim()
+				: `${managerMemoryDir}/memory.md`;
 
 		const ctx: RunContext = {
 			workerRunId: activeRun.id,
@@ -144,6 +156,8 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 			wakePayload: wakeEvent.payloadJson,
 			workerObjective: worker?.objective ?? null,
 			workerName: worker?.name ?? "coworker",
+			managerMemoryDir,
+			managerMemoryIndexPath,
 		};
 
 		try {
@@ -151,6 +165,22 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 		} catch (err) {
 			runLog.error({ err }, "Failed to transition run to running");
 			return;
+		}
+
+		try {
+			await workers.appendWorkerRunEvent({
+				workerRunId: ctx.workerRunId,
+				workerId: ctx.workerId,
+				eventType: "manager_note",
+				summaryText: "Manager memory contract active",
+				payloadJson: {
+					managerMemoryDir: ctx.managerMemoryDir,
+					managerMemoryIndexPath: ctx.managerMemoryIndexPath,
+				},
+				dedupeKey: `manager-memory:${ctx.managerMemoryDir}:${ctx.managerMemoryIndexPath}`,
+			});
+		} catch (err) {
+			runLog.warn({ err }, "Failed to append manager memory contract event");
 		}
 
 		try {
@@ -449,6 +479,7 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 			workerRunId: ctx.workerRunId,
 			gatewayUrl: input.gatewayUrl,
 			serviceToken: input.serviceToken,
+			controlFacade: this.managerControlFacade,
 		};
 	}
 

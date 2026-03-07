@@ -224,6 +224,8 @@ export interface ManagerHarnessStartInput {
 	serviceToken: string;
 	anthropicApiKey: string;
 	llmProxyUrl?: string;
+	managerMemoryDir?: string;
+	managerMemoryIndexPath?: string;
 }
 
 export interface ManagerHarnessState {

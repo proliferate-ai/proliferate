@@ -20,6 +20,7 @@ import type {
 	CodingHarnessPromptImage,
 } from "../harness/contracts/coding";
 import { ClaudeManagerHarnessAdapter } from "../harness/manager/adapter";
+import type { ManagerControlFacade } from "../harness/manager/control-facade";
 import type { GatewayEnv } from "../lib/env";
 import { scheduleSessionExpiry } from "../operations/expiry/queue";
 import { deriveSandboxMcpToken } from "../server/middleware/auth";
@@ -38,6 +39,7 @@ import type { RuntimeFacade } from "./session/runtime/contracts/runtime-facade";
 import { CodingRuntimeDriver } from "./session/runtime/drivers/coding-runtime-driver";
 import { selectRuntimeDriver } from "./session/runtime/drivers/driver-selector";
 import { ManagerRuntimeDriver } from "./session/runtime/drivers/manager-runtime-driver";
+import { ManagerRuntimeService } from "./session/runtime/manager/manager-runtime-service";
 import { type SessionContext, loadSessionContext } from "./session/runtime/session-context-store";
 import { clearRuntimePointers } from "./session/runtime/state/state-reconciler";
 import { persistRuntimeReady } from "./session/runtime/write-authority/runtime-writers";
@@ -68,6 +70,7 @@ export interface SessionRuntimeOptions {
 	onDisconnect: DisconnectCallback;
 	onStatus: HubStatusCallback;
 	onBroadcast?: BroadcastServerMessageCallback;
+	managerControlFacade?: ManagerControlFacade;
 }
 
 export class SessionRuntime implements RuntimeFacade {
@@ -77,6 +80,7 @@ export class SessionRuntime implements RuntimeFacade {
 	private readonly logger: Logger;
 
 	private readonly managerHarness: ClaudeManagerHarnessAdapter;
+	private readonly managerRuntimeService: ManagerRuntimeService;
 	private readonly codingDriver: CodingRuntimeDriver;
 	private readonly managerDriver: ManagerRuntimeDriver;
 	private runtimeDriver: RuntimeDriver;
@@ -103,9 +107,13 @@ export class SessionRuntime implements RuntimeFacade {
 		this.onStatus = options.onStatus;
 		this.onBroadcast = options.onBroadcast;
 		this.onDisconnect = options.onDisconnect;
-		this.managerHarness = new ClaudeManagerHarnessAdapter(this.logger);
+		this.managerHarness = new ClaudeManagerHarnessAdapter(
+			this.logger,
+			options.managerControlFacade,
+		);
+		this.managerRuntimeService = new ManagerRuntimeService(this.managerHarness);
 		this.codingDriver = new CodingRuntimeDriver();
-		this.managerDriver = new ManagerRuntimeDriver(this.managerHarness);
+		this.managerDriver = new ManagerRuntimeDriver(this.managerRuntimeService);
 		this.runtimeDriver = selectRuntimeDriver(this.runtimeContext.config, {
 			coding: this.codingDriver,
 			manager: this.managerDriver,
