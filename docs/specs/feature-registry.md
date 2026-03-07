@@ -88,6 +88,22 @@
 
 ---
 
+## 3A. Manager Agent Runtime (`manager-agent-runtime.md`)
+
+| Feature | Status | Evidence | Notes |
+|---------|--------|----------|-------|
+| Pi-based manager runtime identity (`engine="pi"`, `profile="manager"`) | Planned | `docs/specs/manager-agent-runtime.md` | Manager-only runtime, distinct from coding engines |
+| Manager runtime inside sandbox-agent `/v1` | Planned | `docs/specs/manager-agent-runtime.md`, `apps/gateway/src/hub/session/runtime/drivers/manager-runtime-driver.ts` | Current implementation remains gateway-local and transitional |
+| Hidden runtime-private manager transcript | Planned | `docs/specs/manager-agent-runtime.md` | Separate from manager memory root; runtime transcript authority is not DB-owned |
+| Separate `$MANAGER_MEMORY_DIR` + `memory.md` contract | Planned | `docs/specs/manager-agent-runtime.md`, `apps/gateway/src/harness/manager/wake-cycle/prompts.ts` | Root memory index and long-horizon artifacts |
+| Manager inbox input kinds (`user_prompt`, `scheduler_wake`) | Planned | `docs/specs/manager-agent-runtime.md` | `approval_result` and `child_update` excluded in v1 |
+| User-only preemption of active manager runs | Planned | `docs/specs/manager-agent-runtime.md` | Scheduler wakes queue/coalesce |
+| Coding-child-only topology | Planned | `docs/specs/manager-agent-runtime.md` | Child coding work must run in independent child sessions |
+| Manager general workspace tools + orchestration tools | Planned | `docs/specs/manager-agent-runtime.md` | Same class of general tools as coding, subject to policy |
+| Manager canonical stream compatibility with coding sessions | Planned | `docs/specs/manager-agent-runtime.md`, `apps/web/src/components/coding-session/coding-session.tsx` | Workspace/session UI should not need a parallel transport/view stack |
+
+---
+
 ## 4. Automations & Runs (`automations-runs.md`)
 
 | Feature | Status | Evidence | Notes |
