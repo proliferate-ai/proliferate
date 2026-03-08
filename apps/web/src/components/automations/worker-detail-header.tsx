@@ -13,20 +13,16 @@ interface WorkerDetailHeaderProps {
 	};
 	onPause: () => void;
 	onResume: () => void;
-	onRunNow: () => void;
 	isPausing: boolean;
 	isResuming: boolean;
-	isRunningNow: boolean;
 }
 
 export function WorkerDetailHeader({
 	worker,
 	onPause,
 	onResume,
-	onRunNow,
 	isPausing,
 	isResuming,
-	isRunningNow,
 }: WorkerDetailHeaderProps) {
 	const status = worker.status as "active" | "paused" | "degraded" | "failed";
 
@@ -47,32 +43,20 @@ export function WorkerDetailHeader({
 			</div>
 			<div className="flex items-center gap-1.5 shrink-0">
 				{status === "active" && (
-					<>
-						<Button
-							size="sm"
-							variant="outline"
-							className="h-7 gap-1.5 text-xs"
-							onClick={onRunNow}
-							disabled={isRunningNow}
-						>
-							{isRunningNow ? (
-								<Loader2 className="h-3 w-3 animate-spin" />
-							) : (
-								<Play className="h-3 w-3" />
-							)}
-							Run now
-						</Button>
-						<Button
-							size="sm"
-							variant="ghost"
-							className="h-7 gap-1.5 text-xs"
-							onClick={onPause}
-							disabled={isPausing}
-						>
+					<Button
+						size="sm"
+						variant="ghost"
+						className="h-7 gap-1.5 text-xs"
+						onClick={onPause}
+						disabled={isPausing}
+					>
+						{isPausing ? (
+							<Loader2 className="h-3 w-3 animate-spin" />
+						) : (
 							<Pause className="h-3 w-3" />
-							Pause
-						</Button>
-					</>
+						)}
+						Pause
+					</Button>
 				)}
 				{status === "paused" && (
 					<Button
@@ -82,7 +66,11 @@ export function WorkerDetailHeader({
 						onClick={onResume}
 						disabled={isResuming}
 					>
-						<Play className="h-3 w-3" />
+						{isResuming ? (
+							<Loader2 className="h-3 w-3 animate-spin" />
+						) : (
+							<Play className="h-3 w-3" />
+						)}
 						Resume
 					</Button>
 				)}
