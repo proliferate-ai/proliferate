@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for every product feature, its implementation status, and which spec owns it.
 > **Status key:** `Implemented` | `Partial` | `Planned` | `Deprecated`
-> **Updated:** 2026-02-19. Session UI overhaul + billing Phase 1.2 + Slack config UX + notification destinations + config selection strategy.
+> **Updated:** 2026-03-07. Manager agent runtime spec freeze.
 > **Evidence convention:** `Planned` entries may cite RFC/spec files until code exists; once implemented, update evidence to concrete code paths.
 
 ---
@@ -85,6 +85,22 @@
 | Shared run status display | Implemented | `apps/web/src/lib/run-status.ts` | Consolidated getRunStatusDisplay used by inbox, activity, my-work |
 | Activity run titles | Implemented | `apps/web/src/app/(command-center)/dashboard/activity/page.tsx` | Shows session title or trigger name instead of generic label |
 | My-work run enrichment | Implemented | `apps/web/src/app/(command-center)/dashboard/my-work/page.tsx` | Claimed runs show session title, consistent status display |
+
+---
+
+## 3A. Manager Agent Runtime (`manager-agent-runtime.md`)
+
+| Feature | Status | Evidence | Notes |
+|---------|--------|----------|-------|
+| Pi-based manager runtime identity (`engine="pi"`, `profile="manager"`) | Planned | `docs/specs/manager-agent-runtime.md` | Manager-only runtime, distinct from coding engines |
+| Manager runtime inside sandbox-agent `/v1` | Planned | `docs/specs/manager-agent-runtime.md`, `apps/gateway/src/hub/session/runtime/drivers/manager-runtime-driver.ts` | Current implementation remains gateway-local and transitional |
+| Hidden runtime-private manager transcript | Planned | `docs/specs/manager-agent-runtime.md` | Separate from manager memory root; runtime transcript authority is not DB-owned |
+| Separate `$MANAGER_MEMORY_DIR` + `memory.md` contract | Partial | `docs/specs/manager-agent-runtime.md`, `apps/gateway/src/harness/manager/wake-cycle/prompts.ts` | Root memory index and long-horizon artifacts |
+| Manager inbox input kinds (`user_prompt`, `scheduler_wake`) | Planned | `docs/specs/manager-agent-runtime.md` | `approval_result` and `child_update` excluded in v1 |
+| User-only preemption of active manager runs | Planned | `docs/specs/manager-agent-runtime.md` | Scheduler wakes queue/coalesce |
+| Coding-child-only topology | Partial | `docs/specs/manager-agent-runtime.md` | Child coding work must run in independent child sessions |
+| Manager general workspace tools + orchestration tools | Partial | `docs/specs/manager-agent-runtime.md` | Same class of general tools as coding, subject to policy |
+| Manager canonical stream compatibility with coding sessions | Planned | `docs/specs/manager-agent-runtime.md`, `apps/web/src/components/coding-session/coding-session.tsx` | Workspace/session UI should not need a parallel transport/view stack |
 
 ---
 

@@ -19,6 +19,7 @@
 		"test": "vitest run"
 	},
 	"dependencies": {
+		"@anthropic-ai/sdk": "^0.71.2",
 		"@proliferate/logger": "workspace:*",
 		"@proliferate/shared": "workspace:*"
 	},

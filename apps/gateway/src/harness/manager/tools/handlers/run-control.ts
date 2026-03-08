@@ -1,6 +1,6 @@
 import type { Logger } from "@proliferate/logger";
 import { workers } from "@proliferate/services";
-import type { ManagerToolContext } from "../../wake-cycle/types";
+import type { ManagerToolContext } from "../types";
 
 export async function handleSendNotification(
 	args: Record<string, unknown>,
@@ -60,17 +60,42 @@ export async function handleSkipRun(
 		payloadJson: { decision: "skip", reason },
 	});
 
+	await workers.completeWorkerRun({
+		workerRunId: ctx.workerRunId,
+		organizationId: ctx.organizationId,
+		summary: `Skipped: ${reason}`,
+		result: "skipped",
+	});
+
+	// Consume pending directives so they don't remain in the queue
+	const consumed = await workers.consumePendingDirectives(ctx.managerSessionId);
+	if (consumed > 0) {
+		log.info({ consumed }, "Consumed pending directives after skip_run");
+	}
+
 	log.info({ reason }, "Run skipped");
 	return JSON.stringify({ ok: true, outcome: "skipped", reason });
 }
 
 export async function handleCompleteRun(
 	args: Record<string, unknown>,
-	_ctx: ManagerToolContext,
+	ctx: ManagerToolContext,
 	log: Logger,
 ): Promise<string> {
-	const summary = args.summary as string;
+	const summary = typeof args.summary === "string" ? args.summary : undefined;
 
-	log.info({ summaryLength: summary.length }, "Run completed");
+	await workers.completeWorkerRun({
+		workerRunId: ctx.workerRunId,
+		organizationId: ctx.organizationId,
+		summary,
+	});
+
+	// Consume pending directives so they don't remain in the queue
+	const consumed = await workers.consumePendingDirectives(ctx.managerSessionId);
+	if (consumed > 0) {
+		log.info({ consumed }, "Consumed pending directives after complete_run");
+	}
+
+	log.info({ summaryLength: summary?.length ?? 0 }, "Run completed");
 	return JSON.stringify({ ok: true, outcome: "completed", summary });
 }

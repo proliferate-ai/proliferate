@@ -8,7 +8,6 @@ import type { Logger } from "@proliferate/logger";
 import { notifications, sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
-import { abortOpenCodeSession } from "../../../harness/coding/opencode/client";
 import type { GatewayEnv } from "../../../lib/env";
 import { cancelSessionExpiry } from "../../../operations/expiry/queue";
 import type { BroadcastServerMessageCallback } from "../../shared/callbacks";
@@ -568,7 +567,7 @@ export class MigrationController {
 		if (this.options.eventProcessor.getCurrentAssistantMessageId()) {
 			this.logger.info("Aborting OpenCode session before snapshot");
 			try {
-				await abortOpenCodeSession(openCodeUrl, openCodeSessionId);
+				await this.options.runtime.interruptCurrentRun();
 
 				const messageId = this.options.eventProcessor.getCurrentAssistantMessageId();
 				this.options.broadcast({

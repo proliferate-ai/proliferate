@@ -7,24 +7,14 @@
 import { truncateJson } from "@proliferate/providers/helpers/truncation";
 import type { ActionInvocationStatus, CapabilityMode } from "@proliferate/shared/contracts/actions";
 import { getServicesLogger } from "../logger";
+import { getDisabledPreferences } from "../user-action-preferences";
 import type {
 	ActionInvocationRow,
 	ActionInvocationWithSession,
 	CreateInvocationInput,
 	ResumeIntentRow,
 } from "./db";
-
-// Re-exported DB row types (service DTO boundary)
-export type { ActionInvocationRow, ActionInvocationWithSession, CreateInvocationInput };
 import * as actionsDb from "./db";
-export {
-	ActionConflictError,
-	ActionExpiredError,
-	ActionNotFoundError,
-	ApprovalAuthorityError,
-	PendingLimitError,
-} from "./errors";
-import { getDisabledPreferences } from "../user-action-preferences";
 import {
 	ActionConflictError,
 	ActionExpiredError,
@@ -33,6 +23,18 @@ import {
 	PendingLimitError,
 } from "./errors";
 import { resolveMode } from "./modes";
+
+// Re-exported DB row types (service DTO boundary)
+export type { ActionInvocationRow, ActionInvocationWithSession, CreateInvocationInput };
+
+// Re-exported domain errors
+export {
+	ActionConflictError,
+	ActionExpiredError,
+	ActionNotFoundError,
+	ApprovalAuthorityError,
+	PendingLimitError,
+} from "./errors";
 
 const PENDING_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes for approval timeout
 const MAX_PENDING_PER_SESSION = 10;
@@ -493,7 +495,7 @@ export async function isActionDeniedForSession(input: {
 /**
  * Filter action catalog visibility for a session.
  *
- * Applies user disabled-source preferences first, then policy filtering.
+ * Applies user disabled source/action preferences first, then policy filtering.
  */
 export async function filterAvailableActionsForSession<
 	TAction extends AvailableActionCatalogAction,
@@ -528,7 +530,6 @@ export async function filterAvailableActionsForSession<
 			if (disabledActions?.has(actionEntry.name)) {
 				continue;
 			}
-
 			const denied = await isActionDeniedForSession({
 				sessionId: input.sessionId,
 				organizationId: input.organizationId,

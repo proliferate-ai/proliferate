@@ -19,6 +19,7 @@ import {
 	XAIIcon,
 } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { PROVIDER_LABELS } from "@/config/automations";
 import { cn } from "@/lib/display/utils";
 import {
 	DEFAULT_AGENT_TYPE,
@@ -40,15 +41,6 @@ interface ModelSelectorProps {
 	/** Extra classes for the trigger button (e.g. borderless when embedded in a stacked list) */
 	triggerClassName?: string;
 }
-
-const PROVIDER_LABELS: Record<ModelProvider, string> = {
-	anthropic: "Anthropic",
-	openai: "OpenAI",
-	google: "Google",
-	deepseek: "DeepSeek",
-	xai: "xAI",
-	mistral: "Mistral",
-};
 
 const ProviderIcon: FC<{ provider: ModelProvider; className?: string }> = ({
 	provider,

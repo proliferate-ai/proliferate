@@ -5,7 +5,11 @@ import type { PromptOptions } from "../../shared/types";
 
 export interface PromptWorkflowDeps {
 	sessionId: string;
+	isManagerSession: () => boolean;
 	isCompletedAutomationSession: () => boolean;
+	isRunActive: () => boolean;
+	markRunStarted: (runId: string) => void;
+	clearRunState: () => void;
 	getMigrationState: () => "normal" | "migrating";
 	touchActivity: () => void;
 	getLastKnownAgentIdleAt: () => number | null;
@@ -33,6 +37,9 @@ export async function runPromptWorkflow(
 	if (deps.isCompletedAutomationSession()) {
 		throw new Error("Cannot send messages to a completed automation session.");
 	}
+	if (deps.isRunActive()) {
+		throw new Error("A run is already active for this session.");
+	}
 
 	const migrationState = deps.getMigrationState();
 	if (migrationState !== "normal") {
@@ -56,10 +63,12 @@ export async function runPromptWorkflow(
 	deps.setLastPromptSenderUserId(userId);
 
 	await deps.ensureRuntimeReady();
-	const openCodeSessionId = deps.getOpenCodeSessionId();
-	const openCodeUrl = deps.getOpenCodeUrl();
-	if (!openCodeSessionId || !openCodeUrl) {
-		throw new Error("Agent session unavailable");
+	if (!deps.isManagerSession()) {
+		const openCodeSessionId = deps.getOpenCodeSessionId();
+		const openCodeUrl = deps.getOpenCodeUrl();
+		if (!openCodeSessionId || !openCodeUrl) {
+			throw new Error("Agent session unavailable");
+		}
 	}
 
 	const parts: Message["parts"] = [];
@@ -100,6 +109,13 @@ export async function runPromptWorkflow(
 
 	deps.resetEventProcessorForNewPrompt();
 	deps.log("Sending prompt to OpenCode...");
-	await deps.sendPromptToRuntime(content, options?.images);
-	deps.log("Prompt sent to OpenCode");
+	const runId = randomUUID();
+	deps.markRunStarted(runId);
+	try {
+		await deps.sendPromptToRuntime(content, options?.images);
+		deps.log("Prompt sent to OpenCode", { runId });
+	} catch (error) {
+		deps.clearRunState();
+		throw error;
+	}
 }

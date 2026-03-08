@@ -483,11 +483,30 @@ export async function listPendingDirectives(
 	}));
 }
 
+/**
+ * Mark all pending directives for a manager session as consumed.
+ * Called after a wake cycle processes the directives (skip_run / complete_run).
+ */
+export async function consumePendingDirectives(managerSessionId: string): Promise<number> {
+	const pending = await workersDb.listPendingDirectives(managerSessionId);
+	const now = new Date();
+	let consumed = 0;
+	for (const msg of pending) {
+		await sessionsDb.updateSessionMessageDeliveryState(msg.id, "consumed", {
+			consumedAt: now,
+		});
+		consumed++;
+	}
+	return consumed;
+}
+
 export async function sendDirectiveToWorker(input: {
 	workerId: string;
 	organizationId: string;
 	senderUserId: string;
 	content: string;
+	gatewayUrl?: string;
+	serviceToken?: string;
 }): Promise<{ messageId: string }> {
 	const worker = await getWorkerForOrg(input.workerId, input.organizationId);
 	const { messageId } = await sendDirective({
@@ -506,6 +525,11 @@ export async function sendDirectiveToWorker(input: {
 			});
 		} catch {
 			// Best effort: directive remains queued even if wake creation fails.
+		}
+
+		// Notify gateway to process the directive immediately
+		if (input.gatewayUrl && input.serviceToken) {
+			eagerStartManagerSession(worker.managerSessionId, input.gatewayUrl, input.serviceToken);
 		}
 	}
 

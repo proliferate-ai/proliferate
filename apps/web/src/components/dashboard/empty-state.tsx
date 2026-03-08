@@ -214,10 +214,24 @@ export function EmptyDashboard() {
 				configurationId = configurationResult.configurationId;
 			}
 
-			await createSession.mutateAsync({
-				...sessionOptions,
-				...(configurationId ? { configurationId } : {}),
-			});
+			try {
+				await createSession.mutateAsync({
+					...sessionOptions,
+					...(configurationId ? { configurationId } : {}),
+				});
+			} catch (sessionError) {
+				// If configuration is stale/deleted, retry without it
+				const isConfigError =
+					configurationId &&
+					sessionError instanceof Error &&
+					/configuration not found/i.test(sessionError.message);
+				if (isConfigError) {
+					useDashboardStore.getState().setSelectedSnapshot(null);
+					await createSession.mutateAsync(sessionOptions);
+				} else {
+					throw sessionError;
+				}
+			}
 
 			setPendingPrompt(null);
 		} catch (error) {

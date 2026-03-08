@@ -1,7 +1,7 @@
 import { env } from "@proliferate/environment/server";
 import { Sandbox } from "e2b";
 import { getSharedLogger } from "../logger";
-import { SandboxProviderError, capOutput, shellEscape, waitForOpenCodeReady } from "../sandbox";
+import { SandboxProviderError, capOutput, shellEscape } from "../sandbox";
 import { setupAdditionalDependencies } from "./e2b/bootstrap/background";
 import { setupEssentialDependencies } from "./e2b/bootstrap/essential";
 import { findRunningSandbox, initializeSandbox } from "./e2b/create/initialize";
@@ -28,7 +28,7 @@ import type {
 
 /** Kills stale listeners/processes that can conflict with restored snapshots. */
 const CLEAR_STALE_PROCESSES_COMMAND =
-	"fuser -k 4096/tcp 4000/tcp 8470/tcp 2>/dev/null || true; pkill -9 caddy || true; sleep 0.5";
+	"fuser -k -9 4096/tcp 4000/tcp 8470/tcp 2468/tcp 2>/dev/null || true; pkill -9 caddy || true; pkill -9 sandbox-daemon || true; pkill -9 sandbox-agent || true; pkill -9 sandbox-mcp || true; sleep 2";
 
 const log = getSharedLogger().child({ module: "e2b" });
 
@@ -67,24 +67,18 @@ export class E2BProvider implements SandboxProvider {
 		);
 
 		// 5. Non-blocking bootstrap: sidecars, preview proxy, git freshness, service commands
-		setupAdditionalDependencies(sandbox, opts, sessionLog, log).catch((err) => {
+		setupAdditionalDependencies(sandbox, opts, sessionLog, log, {
+			llmProxyBaseUrl: preparedEnv.llmProxyBaseUrl,
+			llmProxyApiKey: preparedEnv.llmProxyApiKey,
+		}).catch((err) => {
 			sessionLog.warn({ err }, "Additional dependencies setup failed");
 		});
 
-		// 6. Resolve tunnel URLs for OpenCode and preview
-		const tunnelHost = sandbox.getHost(4096);
+		// 6. Resolve tunnel URLs for preview (sandbox-agent starts agents on demand via ACP)
 		const previewHost = sandbox.getHost(20000);
-		const tunnelUrl = tunnelHost ? `https://${tunnelHost}` : "";
 		const previewUrl = previewHost ? `https://${previewHost}` : "";
-
-		// 7. Wait for OpenCode to be serving before returning
-		if (tunnelUrl) {
-			try {
-				await waitForOpenCodeReady(tunnelUrl, 30000, (msg) => sessionLog.debug(msg));
-			} catch (err) {
-				sessionLog.warn({ err }, "OpenCode readiness check failed");
-			}
-		}
+		// tunnelUrl points to sandbox-agent ACP via Caddy /v1/* route (same host as preview)
+		const tunnelUrl = previewUrl;
 
 		sessionLog.info({ sandboxId: sandbox.sandboxId, isSnapshot }, "Sandbox created");
 

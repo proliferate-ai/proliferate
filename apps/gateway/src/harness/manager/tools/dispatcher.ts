@@ -1,5 +1,4 @@
 import type { Logger } from "@proliferate/logger";
-import type { ManagerToolContext } from "../wake-cycle/types";
 import { handleInvokeAction, handleListCapabilities } from "./handlers/actions";
 import {
 	handleCancelChild,
@@ -19,6 +18,7 @@ import {
 	handleListSourceBindings,
 	handleReadSource,
 } from "./handlers/source-reads";
+import type { ManagerToolContext } from "./types";
 
 export async function executeManagerTool(
 	name: string,

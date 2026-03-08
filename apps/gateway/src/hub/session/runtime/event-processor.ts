@@ -190,11 +190,13 @@ export class EventProcessor {
 	}
 
 	/**
-	 * Reset state for a new prompt
+	 * Reset state for a new prompt.
+	 * @param skipUserEcho If true, marks user echo as already consumed.
+	 *   Use this for adapters (like ACP) that don't echo the user message.
 	 */
-	resetForNewPrompt(): void {
+	resetForNewPrompt(skipUserEcho = false): void {
 		this.currentAssistantMessageId = null;
-		this.currentOpenCodeUserMessageId = null;
+		this.currentOpenCodeUserMessageId = skipUserEcho ? "__acp_no_user_echo__" : null;
 		this.toolStates.clear();
 		this.runningToolWatch.clear();
 		this.sentToolEvents.clear();

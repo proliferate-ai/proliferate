@@ -16,6 +16,7 @@
 
 ### Out of Scope
 - Sandbox provider internals (Modal/E2B implementation details, image contents, provider deployment) — see `sandbox-providers.md`.
+- Manager-specific runtime semantics (Pi manager identity, hidden transcript storage, inbox kinds, memory contract) — see `manager-agent-runtime.md`.
 - Tool schemas/prompt contract and capability policy — see `agent-contract.md`.
 - Automation run DAG, scheduling, and notification fanout — see `automations-runs.md`.
 - Repo/configuration CRUD and prebuild policy — see `repos-prebuilds.md`.
@@ -87,6 +88,8 @@ Reference: `apps/gateway/src/hub/session-hub.ts`
 - Runtime waits migration lock release (unless skip flag during controlled migration re-init).
 - Runtime always goes through provider abstraction (`ensureSandbox`) instead of direct create calls.
 - Harness behavior is delegated through runtime drivers (`CodingRuntimeDriver`, `ManagerRuntimeDriver`) selected from session kind.
+
+> **Manager runtime contract**: See `manager-agent-runtime.md` for placement, storage, inbox, and preemption semantics.
 - Durable runtime-owned writes flow through write-authority helpers in `session/runtime/write-authority/`.
 
 Reference: `apps/gateway/src/hub/session-runtime.ts`
@@ -102,7 +105,8 @@ References: `apps/gateway/src/api/proliferate/http/sessions/routes.ts`, `apps/ga
 ### SSE Bridge
 SSE is transport-only and unidirectional.
 
-- Gateway connects to sandbox `GET /event` and parses events with `eventsource-parser`.
+- Gateway coding runtime connects to sandbox daemon `GET /_proliferate/events` and parses events with `eventsource-parser`.
+- Runtime control calls (`resume`, `prompt`, `interrupt`, `messages`) flow through sandbox daemon `/_proliferate/v1/runtime/session/*` endpoints.
 - Hub owns reconnect strategy and policy; `SseClient` does not reconnect on its own.
 - Heartbeat/read timeout failures map to disconnect reasons that drive hub reconnect logic.
 

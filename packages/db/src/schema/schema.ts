@@ -1373,11 +1373,13 @@ export const sessions = pgTable(
 		createdBy: text("created_by"),
 		sessionType: text("session_type").default("coding"),
 		status: text().default("starting"),
-		sandboxState: text("sandbox_state").default("provisioning"),
-		agentState: text("agent_state").default("iterating"),
+		sandboxState: text("sandbox_state").default("provisioning").notNull(),
+		agentState: text("agent_state").default("iterating").notNull(),
 		terminalState: text("terminal_state"),
 		stateReason: text("state_reason"),
-		stateUpdatedAt: timestamp("state_updated_at", { withTimezone: true, mode: "date" }),
+		stateUpdatedAt: timestamp("state_updated_at", { withTimezone: true, mode: "date" })
+			.defaultNow()
+			.notNull(),
 		sandboxId: text("sandbox_id"),
 		snapshotId: text("snapshot_id"),
 		branchName: text("branch_name"),
@@ -2499,7 +2501,7 @@ export const sessionEvents = pgTable(
 		),
 		check(
 			"session_events_type_check",
-			sql`event_type = ANY (ARRAY['session_created'::text, 'session_started'::text, 'session_paused'::text, 'session_resumed'::text, 'session_completed'::text, 'session_failed'::text, 'session_cancelled'::text, 'session_outcome_persisted'::text])`,
+			sql`event_type = ANY (ARRAY['session_created'::text, 'session_started'::text, 'session_paused'::text, 'session_resumed'::text, 'session_completed'::text, 'session_failed'::text, 'session_cancelled'::text, 'session_outcome_persisted'::text, 'runtime_tool_started'::text, 'runtime_tool_finished'::text, 'runtime_approval_requested'::text, 'runtime_approval_resolved'::text, 'runtime_action_completed'::text, 'runtime_error'::text])`,
 		),
 		foreignKey({
 			columns: [table.sessionId],

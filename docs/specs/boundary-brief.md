@@ -22,6 +22,7 @@
 | 11 | `integrations.md` | OAuth connection lifecycle for GitHub/Sentry/Linear/Jira/Slack via provider-native routes and service token resolution. Connection binding to repos/automations/sessions. | 3 |
 | 12 | `auth-orgs.md` | better-auth, user/org/member model, invitations, onboarding/trial activation, API keys, admin/impersonation. | 3 |
 | 13 | `billing-metering.md` | Usage metering, credit gating, trial credits, reconciliation, org pause, Autumn integration. Owns charging/gating policy. | 3 |
+| 14 | `manager-agent-runtime.md` | Pi-based manager runtime identity, memory model, inbox semantics, child coding-session topology, and manager-specific execution rules. | 3 |
 
 ### Phase ordering
 
@@ -44,6 +45,9 @@ These boundaries resolve the most likely overlaps. Follow them exactly.
 | **LLM Proxy vs Billing** | `llm-proxy.md` owns key generation, routing, and spend *events*. `billing-metering.md` owns charging policy, credit gating, and balance enforcement. |
 | **Triggers vs Automations** | `triggers.md` owns event ingestion, matching, and dispatch. Once a trigger fires, the resulting automation run belongs to `automations-runs.md`. The handoff point is the `AUTOMATION_ENRICH` queue enqueue. |
 | **Sessions vs Sandbox Providers** | `sessions-gateway.md` owns the session lifecycle and gateway runtime. `sandbox-providers.md` owns the provider interface and sandbox boot mechanics. Sessions *calls* the provider interface; the provider spec defines the contract. |
+| **Sessions vs Manager Runtime** | `sessions-gateway.md` owns generic session/hub/runtime control-plane behavior. `manager-agent-runtime.md` owns the manager-specific runtime contract: transcript authority, memory root, inbox kinds, preemption, and child-session topology. |
+| **Manager Runtime vs Agent Contract** | `agent-contract.md` owns tool schemas and sandbox injection mechanics. `manager-agent-runtime.md` owns how the manager uses those tools, its quality rules, and its long-horizon memory/compaction contract. |
+| **Manager Runtime vs Sandbox Providers** | `sandbox-providers.md` owns sandbox boot/storage mechanics. `manager-agent-runtime.md` owns why the manager needs hidden transcript storage and a separate `$MANAGER_MEMORY_DIR`, but not how providers implement that. |
 | **Repos/Configurations vs Sessions** | `repos-prebuilds.md` owns repo records, configuration configs, and snapshot *builds*. `sandbox-providers.md` owns snapshot *resolution* (`resolveSnapshotId()` in `packages/shared/src/snapshot-resolution.ts`). `sessions-gateway.md` owns the configuration *resolver* (`apps/gateway/src/lib/configuration-resolver.ts`) which determines which configuration to use at session start. |
 | **Secrets vs Sandbox Providers** | `secrets-environment.md` owns secret CRUD and bundle management. How secrets get deployed into a running sandbox is `sandbox-providers.md` (env injection at boot) + `agent-contract.md` (the `save_env_files` tool). |
 | **Auth/Orgs vs Billing** | `auth-orgs.md` owns user/org model, membership, and onboarding flow. `billing-metering.md` owns trial credit provisioning, plan management, and checkout. Onboarding *triggers* trial activation but billing *owns* the credit grant. |

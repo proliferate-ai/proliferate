@@ -2,6 +2,7 @@
 
 import { PreviewSession } from "@/components/preview-session/preview-session";
 import { useOrgSwitch } from "@/hooks/org/use-org-switch";
+import { buildPreviewRedirectUrl } from "@/lib/display/urls";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
@@ -11,7 +12,10 @@ export default function PreviewSessionPage() {
 	const searchParams = useSearchParams();
 	const targetOrgId = searchParams.get("orgId");
 
-	const buildRedirectUrl = useCallback((orgId: string) => `/preview/${id}?orgId=${orgId}`, [id]);
+	const buildRedirectUrl = useCallback(
+		(orgId: string) => buildPreviewRedirectUrl(id as string, orgId),
+		[id],
+	);
 
 	const { isSwitching, isOrgPending, shouldSwitchOrg, switchError } = useOrgSwitch({
 		targetOrgId,

@@ -28,9 +28,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { getIntegrationScopeMeta } from "@/config/integration-scopes";
 import { CORE_ENTRIES, CORE_PLATFORM_NOTES } from "@/config/integrations";
 import { useIntegrationsPage } from "@/hooks/integrations/use-integrations-page";
+import { getIntegrationScopeMeta } from "@/lib/integrations/scopes";
 import { CheckCircle2, Plus, Search } from "lucide-react";
 
 export default function IntegrationsPage() {

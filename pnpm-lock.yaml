@@ -657,6 +657,9 @@ importers:
 
   packages/sandbox-daemon:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.71.2
+        version: 0.71.2(zod@3.25.76)
       '@proliferate/logger':
         specifier: workspace:*
         version: link:../logger
@@ -8885,7 +8888,7 @@ packages:
       '@vitest/spy': 4.0.18
       estree-walker: 3.0.3
       magic-string: 0.30.21
-      vite: 7.3.1(@types/node@22.19.7)(tsx@4.21.0)
+      vite: 7.3.1(@types/node@25.1.0)
     dev: true
 
   /@vitest/pretty-format@2.1.9:

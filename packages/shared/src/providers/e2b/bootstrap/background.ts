@@ -14,6 +14,7 @@ export async function setupAdditionalDependencies(
 	opts: CreateSandboxOpts,
 	log: Logger,
 	providerLogger: Logger,
+	llmConfig?: { llmProxyBaseUrl?: string; llmProxyApiKey?: string },
 ): Promise<void> {
 	await pullOnRestore(sandbox, opts, log);
 
@@ -59,12 +60,45 @@ export async function setupAdditionalDependencies(
 		daemonEnvs.PROLIFERATE_SESSION_TOKEN = opts.envVars.SANDBOX_MCP_AUTH_TOKEN;
 	}
 	sandbox.commands
-		.run("sandbox-daemon --mode=worker > /tmp/sandbox-daemon.log 2>&1", {
+		.run("sandbox-daemon > /tmp/sandbox-daemon.log 2>&1", {
 			timeoutMs: 3600000,
 			envs: daemonEnvs,
 		})
 		.catch((err: unknown) => {
 			providerLogger.warn({ err }, "sandbox-daemon process failed");
+		});
+
+	log.debug("Starting sandbox-agent (async)");
+	const sandboxAgentEnvs: Record<string, string> = {
+		HOME: "/home/user",
+		SESSION_ID: opts.sessionId,
+		OPENCODE_DISABLE_DEFAULT_PLUGINS: "true",
+	};
+	if (llmConfig?.llmProxyApiKey) {
+		sandboxAgentEnvs.ANTHROPIC_API_KEY = llmConfig.llmProxyApiKey;
+		if (llmConfig.llmProxyBaseUrl) {
+			sandboxAgentEnvs.ANTHROPIC_BASE_URL = llmConfig.llmProxyBaseUrl;
+		}
+	} else if (opts.envVars.ANTHROPIC_API_KEY) {
+		sandboxAgentEnvs.ANTHROPIC_API_KEY = opts.envVars.ANTHROPIC_API_KEY;
+	}
+	// Manager sessions: Pi extension needs gateway connection info to call control-plane API
+	if (opts.sessionKind === "manager") {
+		if (opts.envVars.PROLIFERATE_GATEWAY_URL) {
+			sandboxAgentEnvs.PROLIFERATE_GATEWAY_URL = opts.envVars.PROLIFERATE_GATEWAY_URL;
+		}
+		if (opts.envVars.SANDBOX_MCP_AUTH_TOKEN) {
+			sandboxAgentEnvs.PROLIFERATE_GATEWAY_AUTH_TOKEN = opts.envVars.SANDBOX_MCP_AUTH_TOKEN;
+		}
+		sandboxAgentEnvs.PROLIFERATE_MANAGER_SESSION_ID = opts.sessionId;
+	}
+	sandbox.commands
+		.run(
+			"sandbox-agent server --host 0.0.0.0 --port 2468 --no-token > /tmp/sandbox-agent.log 2>&1",
+			{ timeoutMs: 3600000, envs: sandboxAgentEnvs },
+		)
+		.catch((err: unknown) => {
+			providerLogger.warn({ err }, "sandbox-agent process failed");
 		});
 
 	void bootServices(sandbox, opts, log);

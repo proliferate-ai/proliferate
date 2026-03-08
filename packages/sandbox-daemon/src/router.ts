@@ -75,7 +75,6 @@ export interface RouterOptions {
 	portWatcher: PortWatcher;
 	previewProxy: PreviewProxy;
 	logger: Logger;
-	opencodeBridgeConnected: () => boolean;
 }
 
 export class Router {
@@ -85,7 +84,6 @@ export class Router {
 	private readonly portWatcher: PortWatcher;
 	private readonly preview: PreviewProxy;
 	private readonly logger: Logger;
-	private readonly opencodeBridgeConnected: () => boolean;
 
 	constructor(options: RouterOptions) {
 		this.eventBus = options.eventBus;
@@ -94,7 +92,6 @@ export class Router {
 		this.portWatcher = options.portWatcher;
 		this.preview = options.previewProxy;
 		this.logger = options.logger.child({ module: "router" });
-		this.opencodeBridgeConnected = options.opencodeBridgeConnected;
 	}
 
 	/**
@@ -127,6 +124,13 @@ export class Router {
 			return;
 		}
 
+		// Token refresh does NOT require auth — only accessible from inside the
+		// sandbox (localhost) and needed to rotate the token after snapshot resume.
+		if (pathname === "/_proliferate/token/refresh" && req.method === "POST") {
+			this.handleTokenRefresh(req, res);
+			return;
+		}
+
 		// All other platform routes require auth
 		if (!authenticateRequest(req, res)) {
 			return;
@@ -137,8 +141,6 @@ export class Router {
 		if (sigHeader) {
 			const components = parseSignatureHeader(sigHeader);
 			if (components) {
-				// For requests with bodies, read and hash the actual body.
-				// For bodyless methods, hash empty string.
 				const hasBody = req.method === "POST" || req.method === "PUT" || req.method === "PATCH";
 				if (hasBody) {
 					const body = await readBody(req);
@@ -147,7 +149,6 @@ export class Router {
 						sendJson(res, 403, { error: "Invalid signature" });
 						return;
 					}
-					// Store body for downstream handlers to avoid re-reading
 					(req as IncomingMessage & { _body?: string })._body = body;
 				} else {
 					const bodyHash = createHash("sha256").update("").digest("hex");
@@ -210,12 +211,7 @@ export class Router {
 					return;
 				}
 				break;
-			case "/_proliferate/token/refresh":
-				if (req.method === "POST") {
-					this.handleTokenRefresh(req, res);
-					return;
-				}
-				break;
+			// token/refresh handled before auth check above
 		}
 
 		this.logger.debug({ pathname, method: req.method }, "Unmatched platform route");
@@ -229,7 +225,6 @@ export class Router {
 	private handleHealth(res: ServerResponse): void {
 		sendJson(res, 200, {
 			status: "ok",
-			opencode: this.opencodeBridgeConnected(),
 			ports: this.portWatcher.getActivePorts(),
 			seq: this.eventBus.getSeq(),
 		});
@@ -259,7 +254,6 @@ export class Router {
 			type: "init",
 			seq: this.eventBus.getSeq(),
 			ports: this.portWatcher.getActivePorts(),
-			opencode: this.opencodeBridgeConnected(),
 		};
 		res.write(`data: ${JSON.stringify(initialPayload)}\n\n`);
 

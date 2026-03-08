@@ -1,7 +1,7 @@
 import type { Logger } from "@proliferate/logger";
 import { sessions, workers } from "@proliferate/services";
-import type { ManagerToolContext } from "../../wake-cycle/types";
 import { getServiceJwt } from "../auth";
+import type { ManagerToolContext } from "../types";
 
 export async function handleSpawnChildTask(
 	args: Record<string, unknown>,
@@ -42,22 +42,38 @@ export async function handleSpawnChildTask(
 
 	log.info({ childSessionId: childSession.id, title }, "Spawned child task session");
 
+	// Fire-and-forget: kick off the child session boot in the background.
+	// Sandbox creation + agent startup can take 20-30s; Pi should not block on it.
 	try {
-		const jwt = await getServiceJwt(ctx);
-		const res = await fetch(`${ctx.gatewayUrl}/proliferate/${childSession.id}/eager-start`, {
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${jwt}`,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({ organizationId: ctx.organizationId }),
-		});
-		if (!res.ok) {
-			const body = await res.text().catch(() => "");
-			log.warn({ childSessionId: childSession.id }, `Eager-start returned ${res.status}: ${body}`);
+		if (ctx.controlFacade) {
+			ctx.controlFacade.eagerStartSession(childSession.id).catch((err) => {
+				log.warn({ err, childSessionId: childSession.id }, "Eager-start failed (background)");
+			});
+		} else {
+			const jwt = await getServiceJwt(ctx);
+			fetch(`${ctx.gatewayUrl}/proliferate/${childSession.id}/eager-start`, {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${jwt}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ organizationId: ctx.organizationId }),
+			})
+				.then(async (res) => {
+					if (!res.ok) {
+						const body = await res.text().catch(() => "");
+						log.warn(
+							{ childSessionId: childSession.id },
+							`Eager-start returned ${res.status}: ${body}`,
+						);
+					}
+				})
+				.catch((err) => {
+					log.warn({ err, childSessionId: childSession.id }, "Eager-start request failed");
+				});
 		}
 	} catch (err) {
-		log.warn({ err, childSessionId: childSession.id }, "Eager-start request failed");
+		log.warn({ err, childSessionId: childSession.id }, "Eager-start setup failed");
 	}
 
 	return JSON.stringify({ session_id: childSession.id, title, status: "starting" });
@@ -132,6 +148,16 @@ export async function handleMessageChild(
 	}
 
 	try {
+		if (ctx.controlFacade) {
+			await ctx.controlFacade.sendPromptToSession({
+				sessionId,
+				content,
+				userId: "manager",
+				source: "automation",
+			});
+			log.info({ sessionId, contentLength: content.length }, "Sent message to child session");
+			return JSON.stringify({ ok: true });
+		}
 		const jwt = await getServiceJwt(ctx);
 		const res = await fetch(`${ctx.gatewayUrl}/proliferate/${sessionId}/message`, {
 			method: "POST",
@@ -174,6 +200,11 @@ export async function handleCancelChild(
 	}
 
 	try {
+		if (ctx.controlFacade) {
+			await ctx.controlFacade.cancelSession(sessionId);
+			log.info({ sessionId }, "Cancelled child session");
+			return JSON.stringify({ ok: true, session_id: sessionId });
+		}
 		const jwt = await getServiceJwt(ctx);
 		const res = await fetch(`${ctx.gatewayUrl}/proliferate/${sessionId}/cancel`, {
 			method: "POST",

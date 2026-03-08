@@ -1,6 +1,7 @@
 "use client";
 
 import "xterm/css/xterm.css";
+import { type ConnectionStatus, STATUS_LABELS } from "@/config/terminal";
 import { useWsToken } from "@/hooks/sessions/use-ws-token";
 import { cn } from "@/lib/display/utils";
 import { GATEWAY_URL } from "@/lib/infra/gateway";
@@ -12,8 +13,6 @@ interface TerminalPanelProps {
 	sessionId: string;
 }
 
-type ConnectionStatus = "connecting" | "connected" | "error" | "closed";
-
 function buildTerminalWsUrl(sessionId: string, token: string): string {
 	const base = GATEWAY_URL.replace(/^http/, "ws");
 	return `${base}/proxy/${sessionId}/${token}/devtools/terminal`;
@@ -24,13 +23,6 @@ function getCssColor(property: string): string {
 	const value = getComputedStyle(document.documentElement).getPropertyValue(property).trim();
 	return value ? `hsl(${value})` : "";
 }
-
-const STATUS_LABELS: Record<ConnectionStatus, string> = {
-	connecting: "Connecting",
-	connected: "Connected",
-	error: "Error",
-	closed: "Disconnected",
-};
 
 function TerminalStatus({ status }: { status: ConnectionStatus }) {
 	return (

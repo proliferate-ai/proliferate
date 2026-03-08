@@ -28,6 +28,8 @@ export interface SessionLiveState {
 	previewUrl: string | null;
 	openCodeSessionId: string | null;
 	sandboxExpiresAt: number | null;
+	runtimeBindingId: string | null;
+	lastRuntimeSourceSeq: number | null;
 	eventStreamConnected: boolean;
 }
 

@@ -1,6 +1,6 @@
 import type { Logger } from "@proliferate/logger";
 import { sourceReads, workers } from "@proliferate/services";
-import type { ManagerToolContext } from "../../wake-cycle/types";
+import type { ManagerToolContext } from "../types";
 
 export async function handleReadSource(
 	args: Record<string, unknown>,

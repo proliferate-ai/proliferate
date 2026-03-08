@@ -4,7 +4,7 @@
  * Handles automation CRUD, triggers, schedules, and events.
  */
 
-import { GATEWAY_URL } from "@/lib/infra/gateway";
+import { GATEWAY_INTERNAL_URL, GATEWAY_URL } from "@/lib/infra/gateway";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
 import { automations, orgs, runs, schedules, workers } from "@proliferate/services";
@@ -1169,6 +1169,8 @@ export const automationsRouter = {
 					organizationId: context.orgId,
 					senderUserId: context.user.id,
 					content: input.content,
+					gatewayUrl: GATEWAY_INTERNAL_URL,
+					serviceToken: env.SERVICE_TO_SERVICE_AUTH_TOKEN,
 				});
 				return { success: true, messageId };
 			} catch (err) {
@@ -1270,7 +1272,7 @@ export const automationsRouter = {
 				return await workers.runWorkerNow({
 					workerId: input.workerId,
 					organizationId: context.orgId,
-					gatewayUrl: GATEWAY_URL,
+					gatewayUrl: GATEWAY_INTERNAL_URL,
 					serviceToken: env.SERVICE_TO_SERVICE_AUTH_TOKEN,
 				});
 			} catch (err) {

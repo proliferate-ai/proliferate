@@ -1,4 +1,5 @@
 import { GithubIcon, LinearIcon, PostHogIcon, SentryIcon, SlackIcon } from "@/components/ui/icons";
+import { ICON_SIZE_CLASSES } from "@/config/icons";
 import { cn } from "@/lib/display/utils";
 
 export type Provider =
@@ -18,14 +19,8 @@ interface ProviderIconProps {
 	size?: "sm" | "md" | "lg";
 }
 
-const sizeClasses = {
-	sm: "h-4 w-4",
-	md: "h-5 w-5",
-	lg: "h-6 w-6",
-};
-
 export function ProviderIcon({ provider, className, size = "md" }: ProviderIconProps) {
-	const iconClass = cn(sizeClasses[size], className);
+	const iconClass = cn(ICON_SIZE_CLASSES[size], className);
 
 	switch (provider) {
 		case "github":

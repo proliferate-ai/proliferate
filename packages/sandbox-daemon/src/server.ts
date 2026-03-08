@@ -41,7 +41,7 @@ export function createDaemonServer(options: DaemonServerOptions): Server {
 	});
 
 	server.listen(config.port, "0.0.0.0", () => {
-		log.info({ port: config.port, mode: config.mode }, "Daemon server listening");
+		log.info({ port: config.port }, "Daemon server listening");
 	});
 
 	return server;

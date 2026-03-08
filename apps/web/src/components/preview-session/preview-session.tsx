@@ -5,46 +5,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { SelectableItem } from "@/components/ui/selectable-item";
 import { useSessionData } from "@/hooks/sessions/use-sessions";
 import { getSessionGatewayUrl } from "@/lib/infra/gateway";
+import { type TerminalEntry, fetchPreviewServices } from "@/lib/infra/preview";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { TerminalView } from "./terminal-view";
-
-interface HttpService {
-	port: number;
-	process?: string | null;
-	pid?: number | null;
-	type: "http";
-	url: string;
-}
-
-interface TcpService {
-	port: number;
-	process?: string | null;
-	pid?: number | null;
-	type: "tcp";
-}
-
-interface TerminalEntry {
-	socket: string;
-	session: string;
-	window: string;
-	pane: string;
-	pane_id?: string | null;
-	pane_pid?: number | null;
-	pane_tty?: string | null;
-	command?: string | null;
-	title?: string | null;
-	active?: boolean;
-	window_name?: string | null;
-	target?: string | null;
-}
-
-interface ServicesResponse {
-	services: HttpService[];
-	tcp: TcpService[];
-	terminals: TerminalEntry[];
-	tmux?: { sockets: string[] };
-}
 
 interface PreviewSessionProps {
 	sessionId: string;
@@ -60,11 +24,7 @@ export function PreviewSession({ sessionId }: PreviewSessionProps) {
 
 	const { data, isLoading, error, refetch } = useQuery({
 		queryKey: ["preview-services", doUrl],
-		queryFn: async () => {
-			const res = await fetch(`${doUrl}/api/services`);
-			if (!res.ok) throw new Error(`Failed: ${res.status}`);
-			return (await res.json()) as ServicesResponse;
-		},
+		queryFn: ({ signal }) => fetchPreviewServices(doUrl, signal),
 		enabled: !!doUrl,
 		refetchInterval: 5000,
 	});
