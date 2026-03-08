@@ -8,6 +8,11 @@ export async function handleListCapabilities(
 	log: Logger,
 ): Promise<string> {
 	try {
+		if (ctx.controlFacade?.listCapabilities) {
+			const data = await ctx.controlFacade.listCapabilities(ctx.managerSessionId);
+			log.debug("Listed capabilities");
+			return JSON.stringify(data);
+		}
 		const jwt = await getServiceJwt(ctx);
 		const res = await fetch(
 			`${ctx.gatewayUrl}/proliferate/${ctx.managerSessionId}/actions/available`,
@@ -38,6 +43,30 @@ export async function handleInvokeAction(
 	const params = (args.params as Record<string, unknown>) ?? {};
 
 	try {
+		if (ctx.controlFacade?.invokeAction) {
+			const result = await ctx.controlFacade.invokeAction({
+				sessionId: ctx.managerSessionId,
+				integration,
+				action,
+				params,
+			});
+			const eventType =
+				result.status === 202
+					? "action_pending_approval"
+					: result.status >= 200 && result.status < 300
+						? "action_completed"
+						: "action_failed";
+			await workers.appendWorkerRunEvent({
+				workerRunId: ctx.workerRunId,
+				workerId: ctx.workerId,
+				eventType,
+				summaryText: `${integration}:${action}`,
+				payloadJson: { integration, action, status: result.status },
+			});
+			log.info({ integration, action, status: result.status }, "Action invocation result");
+			return JSON.stringify(result.body);
+		}
+
 		const jwt = await getServiceJwt(ctx);
 		const res = await fetch(
 			`${ctx.gatewayUrl}/proliferate/${ctx.managerSessionId}/actions/invoke`,

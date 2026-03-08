@@ -1,5 +1,15 @@
 import type { RunContext } from "./types";
 
+function buildMemoryPolicyDirective(ctx: RunContext): string {
+	return [
+		"Memory policy (mandatory):",
+		`- Treat $MANAGER_MEMORY_DIR as "${ctx.managerMemoryDir}".`,
+		`- Ensure the root index exists at "${ctx.managerMemoryIndexPath}".`,
+		"- Keep durable plans/checklists/notes under this root only.",
+		"- Update memory.md whenever you add, rename, or archive memory files.",
+	].join("\n");
+}
+
 export function buildTriageSystemPrompt(ctx: RunContext): string {
 	return `You are ${ctx.workerName}, an autonomous coworker that processes events and takes action.
 
@@ -9,6 +19,8 @@ Your job is to triage incoming wake events and decide what to do:
 - If you need to spawn coding tasks, describe your plan (you will execute it next).
 
 ${ctx.workerObjective ? `Your standing objective: ${ctx.workerObjective}` : ""}
+
+${buildMemoryPolicyDirective(ctx)}
 
 Be concise and decisive. Analyze the context and make a clear decision.`;
 }
@@ -27,6 +39,8 @@ Do NOT wait for children to finish. Spawn all needed tasks, check them once,
 then call complete_run immediately. The next wake cycle will check results.
 
 ${ctx.workerObjective ? `Your standing objective: ${ctx.workerObjective}` : ""}
+
+${buildMemoryPolicyDirective(ctx)}
 
 You MUST call complete_run before your turn budget runs out.`;
 }
