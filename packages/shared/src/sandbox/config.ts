@@ -195,6 +195,8 @@ export const SANDBOX_PATHS = {
 export const SANDBOX_PORTS = {
 	/** OpenCode API server */
 	opencode: 4096,
+	/** Sandbox Agent ACP (Rivet) */
+	sandboxAgentAcp: 2468,
 	/** Caddy preview proxy */
 	preview: 20000,
 	/** SSH (for terminal sessions) */

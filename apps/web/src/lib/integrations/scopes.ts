@@ -8,7 +8,7 @@ interface IntegrationScopeInput {
 	category: IntegrationCategory;
 }
 
-const ORG_SCOPED_ONLY_KEYS = new Set(["slack", "custom-mcp"]);
+const ORG_SCOPED_ONLY_KEYS = new Set(["slack"]);
 
 export function getIntegrationScopeMeta(input: IntegrationScopeInput): IntegrationScopeMeta {
 	if (ORG_SCOPED_ONLY_KEYS.has(input.key)) {
@@ -18,7 +18,7 @@ export function getIntegrationScopeMeta(input: IntegrationScopeInput): Integrati
 		};
 	}
 
-	if (input.type === "mcp-preset") {
+	if (input.type === "mcp-preset" || input.type === "custom-mcp") {
 		return {
 			label: "Org scope",
 			description: "Only admins can set this up for the organization.",

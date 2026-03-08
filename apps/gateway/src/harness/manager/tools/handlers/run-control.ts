@@ -82,7 +82,7 @@ export async function handleCompleteRun(
 	ctx: ManagerToolContext,
 	log: Logger,
 ): Promise<string> {
-	const summary = args.summary as string;
+	const summary = typeof args.summary === "string" ? args.summary : undefined;
 
 	await workers.completeWorkerRun({
 		workerRunId: ctx.workerRunId,
@@ -96,6 +96,6 @@ export async function handleCompleteRun(
 		log.info({ consumed }, "Consumed pending directives after complete_run");
 	}
 
-	log.info({ summaryLength: summary.length }, "Run completed");
+	log.info({ summaryLength: summary?.length ?? 0 }, "Run completed");
 	return JSON.stringify({ ok: true, outcome: "completed", summary });
 }

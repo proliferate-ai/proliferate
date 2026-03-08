@@ -15,5 +15,6 @@ export function buildWorkspaceRedirectUrl(
  * Build a redirect URL for the preview session page, preserving orgId.
  */
 export function buildPreviewRedirectUrl(sessionId: string, orgId: string): string {
-	return `/preview/${sessionId}?orgId=${orgId}`;
+	const params = new URLSearchParams({ orgId });
+	return `/preview/${sessionId}?${params.toString()}`;
 }

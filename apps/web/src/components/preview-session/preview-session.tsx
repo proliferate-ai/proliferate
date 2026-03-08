@@ -24,7 +24,7 @@ export function PreviewSession({ sessionId }: PreviewSessionProps) {
 
 	const { data, isLoading, error, refetch } = useQuery({
 		queryKey: ["preview-services", doUrl],
-		queryFn: () => fetchPreviewServices(doUrl),
+		queryFn: ({ signal }) => fetchPreviewServices(doUrl, signal),
 		enabled: !!doUrl,
 		refetchInterval: 5000,
 	});

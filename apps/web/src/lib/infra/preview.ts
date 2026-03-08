@@ -38,8 +38,11 @@ export interface ServicesResponse {
 export type { HttpService, TcpService, TerminalEntry };
 
 /** Fetch sandbox service discovery data from the gateway proxy. */
-export async function fetchPreviewServices(gatewayUrl: string): Promise<ServicesResponse> {
-	const res = await fetch(`${gatewayUrl}/api/services`);
+export async function fetchPreviewServices(
+	gatewayUrl: string,
+	signal?: AbortSignal,
+): Promise<ServicesResponse> {
+	const res = await fetch(`${gatewayUrl}/api/services`, { signal });
 	if (!res.ok) throw new Error(`Failed: ${res.status}`);
 	return (await res.json()) as ServicesResponse;
 }

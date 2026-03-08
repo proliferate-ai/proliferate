@@ -104,10 +104,7 @@ export async function buildInitMessages(
 			if (!isCompletedAutomationSession && durableFacts.length === 0) {
 				throw err;
 			}
-			deps.logError(
-				"Harness output fetch failed for completed automation; using fallback transcript",
-				err,
-			);
+			deps.logError("Harness output fetch failed; using fallback transcript", err);
 		}
 	} else if (deps.isManagerSession()) {
 		// Manager sessions have no openCodeSessionId but may have in-memory

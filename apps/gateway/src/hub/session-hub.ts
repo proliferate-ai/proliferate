@@ -1617,6 +1617,10 @@ export class SessionHub {
 					for (let i = this.messageHistory.length - 1; i >= 0; i--) {
 						if (this.messageHistory[i].role === "assistant") {
 							msg = this.messageHistory[i];
+							this.logger.debug(
+								{ toolCallId: payload.toolCallId, inferredMessageId: msg.id },
+								"tool_start missing messageId, inferred from last assistant message",
+							);
 							break;
 						}
 					}
