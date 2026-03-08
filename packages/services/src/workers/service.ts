@@ -488,6 +488,8 @@ export async function sendDirectiveToWorker(input: {
 	organizationId: string;
 	senderUserId: string;
 	content: string;
+	gatewayUrl?: string;
+	serviceToken?: string;
 }): Promise<{ messageId: string }> {
 	const worker = await getWorkerForOrg(input.workerId, input.organizationId);
 	const { messageId } = await sendDirective({
@@ -506,6 +508,11 @@ export async function sendDirectiveToWorker(input: {
 			});
 		} catch {
 			// Best effort: directive remains queued even if wake creation fails.
+		}
+
+		// Notify gateway to process the directive immediately
+		if (input.gatewayUrl && input.serviceToken) {
+			eagerStartManagerSession(worker.managerSessionId, input.gatewayUrl, input.serviceToken);
 		}
 	}
 

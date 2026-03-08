@@ -1169,6 +1169,8 @@ export const automationsRouter = {
 					organizationId: context.orgId,
 					senderUserId: context.user.id,
 					content: input.content,
+					gatewayUrl: GATEWAY_URL,
+					serviceToken: env.SERVICE_TO_SERVICE_AUTH_TOKEN,
 				});
 				return { success: true, messageId };
 			} catch (err) {
