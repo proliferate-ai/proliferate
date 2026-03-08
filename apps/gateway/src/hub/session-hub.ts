@@ -156,6 +156,9 @@ export class SessionHub {
 	// Phase 1 invariant: only one active prompt/run at a time
 	private activePromptRunId: string | null = null;
 
+	// In-memory message history (accumulates from broadcast events for collectOutputs fallback)
+	private readonly messageHistory: Message[] = [];
+
 	constructor(deps: HubDependencies) {
 		this.env = deps.env;
 		this.sessionId = deps.sessionId;
@@ -1084,6 +1087,7 @@ export class SessionHub {
 		await runPromptWorkflow(
 			{
 				sessionId: this.sessionId,
+				isManagerSession: () => this.runtime.getContext().session.kind === "manager",
 				isCompletedAutomationSession: () => this.isCompletedAutomationSession(),
 				isRunActive: () => this.isRunActive(),
 				markRunStarted: (runId) => {
@@ -1118,7 +1122,7 @@ export class SessionHub {
 					this.lastPromptSenderUserId = promptUserId;
 				},
 				getSessionClientType: () => this.runtime.getContext().session.client_type ?? null,
-				resetEventProcessorForNewPrompt: () => this.eventProcessor.resetForNewPrompt(),
+				resetEventProcessorForNewPrompt: () => this.eventProcessor.resetForNewPrompt(true),
 				sendPromptToRuntime: (promptContent, images) =>
 					this.runtime.sendPrompt(userId, promptContent, images),
 			},
@@ -1477,6 +1481,7 @@ export class SessionHub {
 	// ============================================
 
 	private broadcast(message: ServerMessage): void {
+		this.accumulateMessage(message);
 		this.persistDurableFact(message);
 
 		if (
@@ -1528,6 +1533,129 @@ export class SessionHub {
 			} catch {
 				// Ignore send failures
 			}
+		}
+	}
+
+	/**
+	 * Accumulate message state from broadcast events so that collectOutputs
+	 * can return message history on client reconnect (page reload).
+	 */
+	private accumulateMessage(message: ServerMessage): void {
+		switch (message.type) {
+			case "message": {
+				const msg = message.payload as Message;
+				this.messageHistory.push({
+					id: msg.id,
+					role: msg.role,
+					content: msg.content ?? "",
+					isComplete: msg.isComplete ?? false,
+					createdAt: msg.createdAt ?? Date.now(),
+					senderId: msg.senderId,
+					source: msg.source,
+					parts: msg.parts ? [...msg.parts] : undefined,
+				});
+				break;
+			}
+			case "token": {
+				const { messageId, token } = message.payload as {
+					messageId: string;
+					token: string;
+				};
+				const msg = this.messageHistory.find((m) => m.id === messageId);
+				if (msg) {
+					msg.content += token;
+				}
+				break;
+			}
+			case "text_part_complete": {
+				const { messageId, text } = message.payload as {
+					messageId: string;
+					partId: string;
+					text: string;
+				};
+				const msg = this.messageHistory.find((m) => m.id === messageId);
+				if (msg) {
+					// Overwrite accumulated token content with the finalized text
+					// since text_part_complete carries the full text of the part.
+					if (!msg.parts) {
+						msg.parts = [];
+					}
+					// Only add if not already present
+					const exists = msg.parts.some((p) => p.type === "text" && p.text === text);
+					if (!exists) {
+						msg.parts.push({ type: "text", text });
+					}
+				}
+				break;
+			}
+			case "tool_start": {
+				const payload = message.payload as {
+					messageId?: string;
+					toolCallId: string;
+					tool: string;
+					args: unknown;
+				};
+				let msg: Message | undefined;
+				if (payload.messageId) {
+					msg = this.messageHistory.find((m) => m.id === payload.messageId);
+				} else {
+					// Find last assistant message
+					for (let i = this.messageHistory.length - 1; i >= 0; i--) {
+						if (this.messageHistory[i].role === "assistant") {
+							msg = this.messageHistory[i];
+							break;
+						}
+					}
+				}
+				if (msg) {
+					if (!msg.toolCalls) {
+						msg.toolCalls = [];
+					}
+					msg.toolCalls.push({
+						id: payload.toolCallId,
+						tool: payload.tool,
+						args: payload.args,
+						status: "running",
+						startedAt: Date.now(),
+					});
+				}
+				break;
+			}
+			case "tool_end": {
+				const payload = message.payload as {
+					toolCallId: string;
+					tool: string;
+					result: unknown;
+				};
+				for (const msg of this.messageHistory) {
+					const tc = msg.toolCalls?.find((t) => t.id === payload.toolCallId);
+					if (tc) {
+						tc.result = payload.result;
+						tc.status = "completed";
+						tc.completedAt = Date.now();
+						break;
+					}
+				}
+				break;
+			}
+			case "message_complete": {
+				const { messageId } = message.payload as { messageId: string };
+				const msg = this.messageHistory.find((m) => m.id === messageId);
+				if (msg) {
+					msg.isComplete = true;
+				}
+				break;
+			}
+			case "message_cancelled": {
+				const { messageId } = message.payload as { messageId: string };
+				const msg = this.messageHistory.find((m) => m.id === messageId);
+				if (msg) {
+					msg.isComplete = true;
+				}
+				break;
+			}
+			default:
+				break;
 		}
 	}
 
@@ -1678,7 +1806,16 @@ export class SessionHub {
 			getOpenCodeSessionId: () => this.runtime.getOpenCodeSessionId(),
 			getPreviewUrl: () => this.runtime.getPreviewUrl(),
 			isCompletedAutomationSession: () => this.isCompletedAutomationSession(),
-			collectOutputs: () => this.runtime.collectOutputs(),
+			isManagerSession: () => this.runtime.getContext().session.kind === "manager",
+			collectOutputs: async () => {
+				const driverMessages = await this.runtime.collectOutputs();
+				if (driverMessages.length > 0) {
+					return driverMessages;
+				}
+				// Fallback: return in-memory accumulated messages (e.g. when the
+				// adapter cannot fetch history from the agent, like sandbox-agent-v2).
+				return this.messageHistory.map((m) => ({ ...m, isComplete: true }));
+			},
 			buildCompletedAutomationFallbackMessages: () =>
 				this.buildCompletedAutomationFallbackMessages(),
 			getDurableRuntimeFacts: async () => {
