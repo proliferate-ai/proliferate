@@ -21,18 +21,20 @@ const log = logger.child({ handler: "secret-files" });
 // ============================================
 
 function throwMappedSecretFileError(err: unknown, fallbackMessage: string): never {
-	if (err instanceof Error) {
-		switch (err.name) {
-			case "SecretFileForbiddenError":
-				throw new ORPCError("FORBIDDEN", { message: err.message });
-			case "SecretFileConfigurationNotFoundError":
-			case "SecretFileNotFoundError":
-				throw new ORPCError("NOT_FOUND", { message: err.message });
-			case "SecretFilePathValidationError":
-				throw new ORPCError("BAD_REQUEST", { message: err.message });
-			case "SecretFileApplyError":
-				throw new ORPCError("INTERNAL_SERVER_ERROR", { message: err.message });
-		}
+	if (err instanceof secretFiles.SecretFileForbiddenError) {
+		throw new ORPCError("FORBIDDEN", { message: err.message });
+	}
+	if (
+		err instanceof secretFiles.SecretFileConfigurationNotFoundError ||
+		err instanceof secretFiles.SecretFileNotFoundError
+	) {
+		throw new ORPCError("NOT_FOUND", { message: err.message });
+	}
+	if (err instanceof secretFiles.SecretFilePathValidationError) {
+		throw new ORPCError("BAD_REQUEST", { message: err.message });
+	}
+	if (err instanceof secretFiles.SecretFileApplyError) {
+		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: err.message });
 	}
 	throw new ORPCError("INTERNAL_SERVER_ERROR", { message: fallbackMessage });
 }

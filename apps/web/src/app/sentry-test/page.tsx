@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { orpc } from "@/lib/infra/orpc";
 import * as Sentry from "@sentry/nextjs";
+import { toast } from "sonner";
 
 export default function SentryTestPage() {
 	const throwClientError = () => {
@@ -11,14 +12,14 @@ export default function SentryTestPage() {
 
 	const captureManualError = () => {
 		Sentry.captureException(new Error("Sentry Test: Manually captured exception!"));
-		alert("Error captured and sent to Sentry!");
+		toast.success("Error captured and sent to Sentry!");
 	};
 
 	const triggerServerError = async () => {
 		try {
 			await orpc.admin.sentryTestError.call({});
 		} catch (e) {
-			alert("Server error triggered - check Sentry!");
+			toast.success("Server error triggered - check Sentry!");
 		}
 	};
 

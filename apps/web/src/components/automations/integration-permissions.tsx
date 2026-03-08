@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
+import { INTEGRATION_ICONS } from "@/config/integrations";
 import { useAutomationIntegrationActions } from "@/hooks/automations/use-automations";
 import { cn } from "@/lib/display/utils";
 import { ChevronDown, ChevronRight, Plug } from "lucide-react";
@@ -41,12 +42,6 @@ interface EnabledTools {
 // ============================================
 // Icon resolver
 // ============================================
-
-const INTEGRATION_ICONS: Record<string, React.ElementType> = {
-	linear: LinearIcon,
-	sentry: SentryIcon,
-	slack: SlackIcon,
-};
 
 function getIntegrationIcon(sourceId: string): React.ElementType {
 	return INTEGRATION_ICONS[sourceId] ?? Plug;

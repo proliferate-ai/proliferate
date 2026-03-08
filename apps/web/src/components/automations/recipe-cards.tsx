@@ -1,50 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { RECIPES, type Recipe } from "@/config/automations";
 import { cn } from "@/lib/display/utils";
-import { Bug, Clock, GitPullRequest, Plus } from "lucide-react";
-import type { ComponentType } from "react";
-
-export interface Recipe {
-	name: string;
-	agentInstructions: string;
-	icon: string;
-	description: string;
-}
-
-const RECIPES: (Recipe & { Icon: ComponentType<{ className?: string }> })[] = [
-	{
-		name: "Sentry Auto-Fixer",
-		description: "Auto-fix Sentry issues when they occur",
-		icon: "bug",
-		agentInstructions:
-			"When a Sentry issue is received, analyze the error stacktrace and source code to identify the root cause. Then create a pull request with a fix and link it to the Sentry issue.",
-		Icon: Bug,
-	},
-	{
-		name: "Linear PR Drafter",
-		description: "Draft PRs when Linear issues move to In Progress",
-		icon: "git-pull-request",
-		agentInstructions:
-			"When a Linear issue moves to In Progress, read the issue description and acceptance criteria. Then draft a pull request with an implementation plan and initial code changes.",
-		Icon: GitPullRequest,
-	},
-	{
-		name: "Scheduled Code Review",
-		description: "Run weekly code reviews on your repos",
-		icon: "clock",
-		agentInstructions:
-			"Run a weekly code review on recent commits. Identify potential bugs, security issues, and areas for improvement. Summarize findings and suggest actionable fixes.",
-		Icon: Clock,
-	},
-	{
-		name: "Custom Automation",
-		description: "Build from scratch",
-		icon: "plus",
-		agentInstructions: "",
-		Icon: Plus,
-	},
-];
 
 interface RecipeCardsProps {
 	onSelect: (recipe: Recipe) => void;

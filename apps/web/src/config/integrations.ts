@@ -1,5 +1,6 @@
 import type { CatalogEntry } from "@/components/integrations/integration-picker-dialog";
 import type { Provider } from "@/components/integrations/provider-icon";
+import { LinearIcon, SentryIcon, SlackIcon } from "@/components/ui/icons";
 import type { IntegrationCategory } from "@proliferate/shared";
 import { CONNECTOR_PRESETS } from "@proliferate/shared";
 
@@ -158,3 +159,9 @@ export const PERMISSION_MODES: {
 		tooltip: "Agent is blocked from using this action",
 	},
 ];
+
+export const INTEGRATION_ICONS: Record<string, React.ElementType> = {
+	linear: LinearIcon,
+	sentry: SentryIcon,
+	slack: SlackIcon,
+};

@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/display/utils";
 import { ChevronRight } from "lucide-react";
@@ -128,9 +129,9 @@ export function FilesGlobalSearch({
 						const expanded = expandedFilePaths.has(result.path);
 						return (
 							<div key={result.path} className="border-b border-border/50">
-								<button
-									type="button"
-									className="flex w-full items-center gap-1 px-2 py-1.5 text-left text-xs hover:bg-muted/50"
+								<Button
+									variant="ghost"
+									className="flex w-full items-center gap-1 px-2 py-1.5 h-auto rounded-none text-left text-xs hover:bg-muted/50"
 									onClick={() => onToggleExpanded(result.path)}
 								>
 									<ChevronRight
@@ -143,7 +144,7 @@ export function FilesGlobalSearch({
 									<span className="ml-auto text-[10px] text-muted-foreground">
 										{result.matches.length}
 									</span>
-								</button>
+								</Button>
 								{expanded &&
 									result.matches.map((match, index) => {
 										const highlighted = highlightSlice(
@@ -152,10 +153,10 @@ export function FilesGlobalSearch({
 											match.matchEnd,
 										);
 										return (
-											<button
-												type="button"
+											<Button
+												variant="ghost"
 												key={`${result.path}:${match.line}:${match.column}:${index}`}
-												className="flex w-full items-start gap-2 px-6 py-1 text-left hover:bg-muted/40"
+												className="flex w-full items-start gap-2 px-6 py-1 h-auto rounded-none text-left hover:bg-muted/40"
 												onClick={() => onOpenResult(result.path, match.line)}
 											>
 												<span className="w-8 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
@@ -166,7 +167,7 @@ export function FilesGlobalSearch({
 													<span className="bg-accent/70 px-0.5">{highlighted.match}</span>
 													{highlighted.after}
 												</span>
-											</button>
+											</Button>
 										);
 									})}
 							</div>

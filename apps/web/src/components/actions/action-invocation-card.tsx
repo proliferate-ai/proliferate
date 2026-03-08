@@ -18,19 +18,10 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { riskColors, statusConfig } from "@/config/actions";
 import type { ActionInvocation } from "@/hooks/actions/use-actions";
 import { cn } from "@/lib/display/utils";
-import {
-	AlertTriangle,
-	Check,
-	CheckCircle,
-	ChevronDown,
-	Clock,
-	Loader2,
-	Timer,
-	X,
-	XCircle,
-} from "lucide-react";
+import { Check, ChevronDown, Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 export interface GrantConfig {
@@ -47,29 +38,6 @@ interface ActionInvocationCardProps {
 	onDeny?: () => Promise<void>;
 	onSessionClick?: () => void;
 }
-
-const statusConfig: Record<
-	string,
-	{
-		label: string;
-		variant: "default" | "secondary" | "destructive" | "outline";
-		icon: typeof Check;
-	}
-> = {
-	pending: { label: "Pending", variant: "outline", icon: Clock },
-	approved: { label: "Approved", variant: "secondary", icon: Check },
-	executing: { label: "Executing", variant: "secondary", icon: Loader2 },
-	completed: { label: "Completed", variant: "default", icon: CheckCircle },
-	denied: { label: "Denied", variant: "destructive", icon: XCircle },
-	failed: { label: "Failed", variant: "destructive", icon: AlertTriangle },
-	expired: { label: "Expired", variant: "outline", icon: Timer },
-};
-
-const riskColors: Record<string, string> = {
-	read: "text-muted-foreground border-muted-foreground/30",
-	write: "text-warning border-warning/30",
-	danger: "text-destructive border-destructive/30",
-};
 
 export function ActionInvocationCard({
 	invocation,

@@ -5,10 +5,10 @@ import { type Provider, ProviderIcon } from "@/components/integrations/provider-
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { getIntegrationScopeMeta } from "@/config/integration-scopes";
 import { INTEGRATION_CATEGORY_LABELS, INTEGRATION_CATEGORY_ORDER } from "@/config/integrations";
 import { cn } from "@/lib/display/utils";
 import { orpc } from "@/lib/infra/orpc";
+import { getIntegrationScopeMeta } from "@/lib/integrations/scopes";
 import type { IntegrationCategory } from "@proliferate/shared";
 import { CheckCircle2, Loader2, Search, Send } from "lucide-react";
 import { useMemo, useState } from "react";

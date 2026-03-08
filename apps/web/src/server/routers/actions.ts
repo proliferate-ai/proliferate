@@ -9,6 +9,31 @@ import { actions } from "@proliferate/services";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 
+/** Transport-safe action invocation schema (ISO string timestamps). */
+const ActionInvocationTransportSchema = z.object({
+	id: z.string().uuid(),
+	sessionId: z.string().uuid(),
+	organizationId: z.string(),
+	integrationId: z.string().uuid().nullable(),
+	integration: z.string(),
+	action: z.string(),
+	riskLevel: z.string(),
+	mode: z.string().nullable(),
+	modeSource: z.string().nullable(),
+	params: z.unknown().nullable(),
+	status: z.string(),
+	result: z.unknown().nullable(),
+	error: z.string().nullable(),
+	deniedReason: z.string().nullable(),
+	durationMs: z.number().nullable(),
+	approvedBy: z.string().nullable(),
+	approvedAt: z.string().nullable(),
+	completedAt: z.string().nullable(),
+	expiresAt: z.string().nullable(),
+	createdAt: z.string().nullable(),
+	sessionTitle: z.string().nullable(),
+});
+
 export const actionsRouter = {
 	/**
 	 * List action invocations for the current org.
@@ -26,7 +51,7 @@ export const actionsRouter = {
 		)
 		.output(
 			z.object({
-				invocations: z.array(z.any()),
+				invocations: z.array(ActionInvocationTransportSchema),
 				total: z.number(),
 				limit: z.number(),
 				offset: z.number(),

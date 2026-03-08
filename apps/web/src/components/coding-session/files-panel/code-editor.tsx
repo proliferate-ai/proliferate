@@ -1,10 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { baseExtensions } from "@/config/code-editor";
 import type { TargetFileLineRange } from "@/hooks/sessions/files-panel/state";
 import { cn } from "@/lib/display/utils";
-import { html } from "@codemirror/lang-html";
-import { javascript } from "@codemirror/lang-javascript";
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import CodeMirror from "@uiw/react-codemirror";
@@ -12,18 +11,7 @@ import { Loader2, X } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { FileRenderKind } from "./file-types";
-import {
-	clearLineRangeHighlight,
-	filesEditorLineHighlightExtension,
-	highlightLineRangeAndScroll,
-} from "./line-highlight";
-
-const baseExtensions: Extension[] = [
-	javascript({ jsx: true, typescript: true }),
-	html({ autoCloseTags: true }),
-	EditorView.lineWrapping,
-	filesEditorLineHighlightExtension,
-];
+import { clearLineRangeHighlight, highlightLineRangeAndScroll } from "./line-highlight";
 
 function editorTheme(isDark: boolean): Extension {
 	return EditorView.theme({

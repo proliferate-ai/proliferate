@@ -17,7 +17,7 @@ import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getIntegrationScopeMeta } from "@/config/integration-scopes";
+import { getIntegrationScopeMeta } from "@/lib/integrations/scopes";
 import type { ConnectorConfig, ConnectorPreset } from "@proliferate/shared";
 import { CONNECTOR_PRESETS } from "@proliferate/shared";
 import { CheckCircle2, ExternalLink, Loader2 } from "lucide-react";

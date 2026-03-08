@@ -14,6 +14,7 @@ import {
 	SupabaseIcon,
 	ZapierIcon,
 } from "@/components/ui/icons";
+import { ICON_SIZE_CLASSES } from "@/config/icons";
 import { cn } from "@/lib/display/utils";
 import type { ConnectorConfig } from "@proliferate/shared";
 import { CONNECTOR_PRESETS } from "@proliferate/shared";
@@ -30,14 +31,8 @@ interface ConnectorIconProps {
 	size?: "sm" | "md" | "lg";
 }
 
-const sizeClasses = {
-	sm: "h-4 w-4",
-	md: "h-5 w-5",
-	lg: "h-6 w-6",
-};
-
 export function ConnectorIcon({ presetKey, className, size = "md" }: ConnectorIconProps) {
-	const iconClass = cn(sizeClasses[size], className);
+	const iconClass = cn(ICON_SIZE_CLASSES[size], className);
 
 	switch (presetKey) {
 		case "context7":

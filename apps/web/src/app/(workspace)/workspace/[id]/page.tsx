@@ -6,6 +6,7 @@ import { CodingSession } from "@/components/coding-session/coding-session";
 import { Button } from "@/components/ui/button";
 import { useOrgSwitch } from "@/hooks/org/use-org-switch";
 import { useMarkSessionViewed, useSessionData } from "@/hooks/sessions/use-sessions";
+import { buildWorkspaceRedirectUrl } from "@/lib/display/urls";
 import { useDashboardStore } from "@/stores/dashboard";
 import { X, Zap } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -29,11 +30,7 @@ export default function SessionDetailPage({
 	const [showCoworkerBanner, setShowCoworkerBanner] = useState(fromCoworker && !runId);
 
 	const buildRedirectUrl = useCallback(
-		(orgId: string) => {
-			const params = new URLSearchParams({ orgId });
-			if (runId) params.set("runId", runId);
-			return `/workspace/${id}?${params.toString()}`;
-		},
+		(orgId: string) => buildWorkspaceRedirectUrl(id, orgId, runId),
 		[id, runId],
 	);
 
