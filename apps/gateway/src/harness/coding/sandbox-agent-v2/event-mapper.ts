@@ -399,10 +399,15 @@ function mapSessionUpdate(
 
 		// Pi: tool_call — initial tool invocation (equivalent to tool_call_start)
 		case "tool_call": {
-			const callId = (update.toolCallId as string) ?? `tc-${Date.now()}`;
-			const toolName = (update.title as string) ?? "unknown";
+			const callId =
+				(update.toolCallId as string) ??
+				(update.callId as string) ??
+				(update.call_id as string) ??
+				`tc-${Date.now()}`;
+			const toolName =
+				(update.title as string) ?? (update.name as string) ?? (update.kind as string) ?? "unknown";
 			toolNamesByCallId.set(callId, toolName);
-			const rawInput = update.rawInput;
+			const input = extractToolInput(update);
 			const msgId = ensureAssistantMessage(bindingId);
 			return {
 				...base,
@@ -422,10 +427,7 @@ function mapSessionUpdate(
 							tool: toolName,
 							state: {
 								status: "running",
-								input:
-									typeof rawInput === "object" && rawInput !== null
-										? (rawInput as Record<string, unknown>)
-										: {},
+								input,
 							},
 						},
 					},
@@ -435,21 +437,21 @@ function mapSessionUpdate(
 
 		// Pi: tool_call_update — tool progress/completion
 		case "tool_call_update": {
-			const callId = (update.toolCallId as string) ?? "";
+			const callId =
+				(update.toolCallId as string) ??
+				(update.callId as string) ??
+				(update.call_id as string) ??
+				"";
 			const status = update.status as string;
 			const isFinal = status === "completed" || status === "failed";
-			const rawOutput = update.rawOutput as Record<string, unknown> | undefined;
-			let output = "";
-			if (rawOutput?.content && Array.isArray(rawOutput.content)) {
-				output = rawOutput.content
-					.map((c: Record<string, unknown>) => (c.text as string) ?? "")
-					.join("");
-			}
-			const toolName = toolNamesByCallId.get(callId) ?? "unknown";
+			const input = extractToolInput(update);
+			const output = extractToolOutput(update);
+			const toolName = toolNamesByCallId.get(callId) || (update.title as string) || "unknown";
 			if (isFinal) {
 				toolNamesByCallId.delete(callId);
 			}
 			const msgId = ensureAssistantMessage(bindingId);
+			const hasInput = Object.keys(input).length > 0;
 			return {
 				...base,
 				channel: "message",
@@ -468,6 +470,7 @@ function mapSessionUpdate(
 							tool: toolName,
 							state: {
 								status: isFinal ? "completed" : "running",
+								...(hasInput ? { input } : {}),
 								...(output ? { output } : {}),
 							},
 						},
@@ -540,6 +543,56 @@ function mapSessionUpdate(
 		default:
 			return null;
 	}
+}
+
+/**
+ * Extract tool input arguments from a tool_call update.
+ * sandbox-agent may use rawInput, input, or arguments depending on the agent/version.
+ */
+function extractToolInput(update: Record<string, unknown>): Record<string, unknown> {
+	// Object forms: rawInput, input
+	for (const key of ["rawInput", "input"] as const) {
+		const val = update[key];
+		if (typeof val === "object" && val !== null && !Array.isArray(val)) {
+			return val as Record<string, unknown>;
+		}
+	}
+	// JSON-string form: arguments
+	if (typeof update.arguments === "string") {
+		return safeParseJson(update.arguments);
+	}
+	return {};
+}
+
+/**
+ * Extract tool output from a tool_call_update.
+ * sandbox-agent may use rawOutput (with content array), output, or result.
+ */
+function extractToolOutput(update: Record<string, unknown>): string {
+	const rawOutput = update.rawOutput as Record<string, unknown> | undefined;
+	// rawOutput.content[].text (MCP-style content array)
+	if (rawOutput?.content && Array.isArray(rawOutput.content)) {
+		const text = rawOutput.content
+			.map((c: Record<string, unknown>) => (c.text as string) ?? "")
+			.join("");
+		if (text) return text;
+	}
+	// rawOutput.output (Pi/sandbox-agent string form)
+	if (typeof rawOutput?.output === "string" && rawOutput.output) return rawOutput.output;
+	// update.content[].content.text (Pi nested content array)
+	if (Array.isArray(update.content)) {
+		const text = (update.content as Array<Record<string, unknown>>)
+			.map((item) => {
+				const inner = item.content as Record<string, unknown> | undefined;
+				return (inner?.text as string) ?? "";
+			})
+			.join("");
+		if (text) return text;
+	}
+	// Direct string forms: output, result
+	if (typeof update.output === "string" && update.output) return update.output;
+	if (typeof update.result === "string" && update.result) return update.result;
+	return "";
 }
 
 function safeParseJson(value: string): Record<string, unknown> {
