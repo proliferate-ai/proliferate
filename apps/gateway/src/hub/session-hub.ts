@@ -58,6 +58,7 @@ import {
 } from "./session/reconnect/reconnect-controller";
 import type { RuntimeFacade } from "./session/runtime/contracts/runtime-facade";
 import { EventProcessor } from "./session/runtime/event-processor";
+import { EventSequencer } from "./session/runtime/event-sequencer";
 import type { SessionContext, SessionRecord } from "./session/runtime/session-context-store";
 import { SessionTelemetry, extractPrUrls } from "./session/runtime/session-telemetry";
 import {
@@ -83,14 +84,6 @@ interface HubDependencies {
 
 /** Renewal interval: ~1/3 of owner lease TTL. */
 const LEASE_RENEW_INTERVAL_MS = Math.floor(OWNER_LEASE_TTL_MS / 3);
-
-function isOpenCodeEvent(value: unknown): value is OpenCodeEvent {
-	if (!value || typeof value !== "object") {
-		return false;
-	}
-	const candidate = value as { type?: unknown };
-	return typeof candidate.type === "string";
-}
 
 export class SessionHub {
 	private readonly env: GatewayEnv;
@@ -141,6 +134,12 @@ export class SessionHub {
 	private readonly telemetry: SessionTelemetry;
 	private telemetryFlushTimer: ReturnType<typeof setInterval> | null = null;
 
+	// Canonical runtime event sequencing + stale stream fencing + dedupe
+	private readonly eventSequencer = new EventSequencer();
+
+	// Phase 1 invariant: only one active prompt/run at a time
+	private activePromptRunId: string | null = null;
+
 	constructor(deps: HubDependencies) {
 		this.env = deps.env;
 		this.sessionId = deps.sessionId;
@@ -158,6 +157,7 @@ export class SessionHub {
 				getOpenCodeSessionId: () => this.runtime.getOpenCodeSessionId(),
 				onToolStart: (toolCallId) => this.telemetry.recordToolCall(toolCallId),
 				onMessageComplete: () => {
+					this.activePromptRunId = null;
 					this.telemetry.recordMessageComplete();
 					// K3: Update lastVisibleUpdateAt on new assistant output
 					touchLastVisibleUpdate(this.sessionId, this.logger);
@@ -228,6 +228,14 @@ export class SessionHub {
 		}
 
 		return 0;
+	}
+
+	private isRunActive(): boolean {
+		return Boolean(
+			this.activePromptRunId ||
+				this.eventProcessor.getCurrentAssistantMessageId() ||
+				this.eventProcessor.hasRunningTools(),
+		);
 	}
 
 	private isCompletedAutomationSession(): boolean {
@@ -456,7 +464,10 @@ export class SessionHub {
 						this.logError("Failed to handle prompt", err);
 						this.broadcast({
 							type: "error",
-							payload: { message: "Failed to send prompt" },
+							payload: {
+								message:
+									err instanceof Error && err.message ? err.message : "Failed to send prompt",
+							},
 						});
 					},
 				);
@@ -1030,6 +1041,16 @@ export class SessionHub {
 			{
 				sessionId: this.sessionId,
 				isCompletedAutomationSession: () => this.isCompletedAutomationSession(),
+				tryStartRun: (runId) => {
+					if (this.isRunActive()) {
+						return false;
+					}
+					this.activePromptRunId = runId;
+					return true;
+				},
+				clearRunState: () => {
+					this.activePromptRunId = null;
+				},
 				getMigrationState: () => this.migrationController.getState(),
 				touchActivity: () => this.touchActivity(),
 				getLastKnownAgentIdleAt: () => this.lastKnownAgentIdleAt,
@@ -1100,6 +1121,7 @@ export class SessionHub {
 			logError: (message, error) => this.logError(message, error),
 			isMigrationInProgressError: (error) => error instanceof MigrationInProgressError,
 		});
+		this.activePromptRunId = null;
 	}
 
 	private handleGetStatus(ws: WebSocket): void {
@@ -1213,11 +1235,42 @@ export class SessionHub {
 	// ============================================
 
 	private handleRuntimeDaemonEvent(event: RuntimeDaemonEvent): void {
-		const rawEvent = event.payload;
-		if (!isOpenCodeEvent(rawEvent)) {
-			this.logger.warn({ eventType: event.type }, "Ignoring unsupported daemon event payload");
+		const runtimeBindingId = this.runtime.getRuntimeBindingId();
+		const result = this.eventSequencer.process(event, runtimeBindingId);
+		if (!result.accepted) {
+			this.logger.debug(
+				{
+					reason: result.reason,
+					eventType: event.type,
+					bindingId: event.bindingId,
+					sourceEventKey: event.sourceEventKey,
+				},
+				`Dropping runtime event: ${result.reason}`,
+			);
 			return;
 		}
+
+		this.broadcast({
+			type: "daemon_stream",
+			payload: {
+				v: "1",
+				stream: "agent_event",
+				seq: event.sourceSeq ?? result.eventSeq ?? 0,
+				event: "data",
+				payload: event,
+				ts: Number.isFinite(Date.parse(event.occurredAt))
+					? Date.parse(event.occurredAt)
+					: Date.now(),
+			},
+		});
+
+		// Bridge RuntimeDaemonEvent into OpenCodeEvent shape for the EventProcessor.
+		// The event mapper produces payloads matching OpenCodeEvent property shapes,
+		// so we just wrap { type, properties } around the existing data.
+		const rawEvent = {
+			type: event.type,
+			properties: (event.payload ?? {}) as Record<string, unknown>,
+		} as OpenCodeEvent;
 
 		this.touchActivity();
 		const wasBusy = this.eventProcessor.getCurrentAssistantMessageId() !== null;
@@ -1237,6 +1290,9 @@ export class SessionHub {
 		if (reportedIdle) {
 			// Text-only completions can retain assistant message id for de-dup; treat explicit idle as done.
 			markAgentIdle(this.getIdleControllerState());
+		}
+		if (becameIdle || event.type === "session.error") {
+			this.activePromptRunId = null;
 		}
 
 		// K4: Project needs_input when agent becomes idle

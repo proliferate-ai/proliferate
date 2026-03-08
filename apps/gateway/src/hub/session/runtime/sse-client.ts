@@ -11,14 +11,18 @@ import { createParser } from "eventsource-parser";
 import type { GatewayEnv } from "../../../lib/env";
 import type { OpenCodeEvent } from "../../../types";
 
-export interface SseClientOptions {
-	onEvent: (event: OpenCodeEvent) => void;
+export interface SseClientOptions<TEvent = OpenCodeEvent> {
+	onEvent: (event: TEvent) => void;
 	onDisconnect: (reason: string) => void;
 	env: GatewayEnv;
 	logger: Logger;
+	eventPath?: string;
+	headers?: HeadersInit;
+	parseEventData?: (data: string) => TEvent | null;
+	logSummary?: (event: TEvent) => Record<string, unknown> | null;
 }
 
-export class SseClient {
+export class SseClient<TEvent = OpenCodeEvent> {
 	private abortController: AbortController | null = null;
 	private connected = false;
 	private connectingPromise: Promise<void> | null = null;
@@ -28,7 +32,7 @@ export class SseClient {
 	private connectStartTime = 0;
 	private readonly logger: Logger;
 
-	constructor(private readonly options: SseClientOptions) {
+	constructor(private readonly options: SseClientOptions<TEvent>) {
 		this.logger = options.logger.child({ module: "sse-client" });
 	}
 
@@ -87,13 +91,15 @@ export class SseClient {
 
 		const controller = new AbortController();
 		this.abortController = controller;
-		const sseUrl = `${url}/event`;
+		const sseUrl = `${url}${this.options.eventPath ?? "/event"}`;
 		this.currentUrl = sseUrl;
 		this.connectStartTime = Date.now();
 		this.logLatency("sse.connect.start", { url: sseUrl });
 
+		const headers = new Headers(this.options.headers);
+		headers.set("Accept", "text/event-stream");
 		const response = await fetch(sseUrl, {
-			headers: { Accept: "text/event-stream" },
+			headers,
 			signal: controller.signal,
 		});
 
@@ -127,9 +133,12 @@ export class SseClient {
 					return;
 				}
 				try {
-					const parsed = JSON.parse(event.data) as OpenCodeEvent;
+					const parsed = this.parseEventData(event.data);
+					if (parsed === null) {
+						return;
+					}
 					this.lastEventTime = Date.now();
-					const summary = summarizeOpenCodeEvent(parsed);
+					const summary = this.summarizeEvent(parsed);
 					if (summary) {
 						this.logger.debug(summary, "SSE event received");
 					}
@@ -280,6 +289,21 @@ export class SseClient {
 			causeMessage: cause?.message,
 			socket: socketInfo || undefined,
 		};
+	}
+
+	private parseEventData(data: string): TEvent | null {
+		if (this.options.parseEventData) {
+			return this.options.parseEventData(data);
+		}
+		return JSON.parse(data) as TEvent;
+	}
+
+	private summarizeEvent(event: TEvent): Record<string, unknown> | null {
+		if (this.options.logSummary) {
+			return this.options.logSummary(event);
+		}
+		// Preserve current OpenCode-specific summaries by default.
+		return summarizeOpenCodeEvent(event as OpenCodeEvent);
 	}
 }
 

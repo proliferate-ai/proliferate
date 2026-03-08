@@ -165,6 +165,10 @@ export class SessionRuntime implements RuntimeFacade {
 		return this.runtimeContext.live.openCodeSessionId;
 	}
 
+	getRuntimeBindingId(): string | null {
+		return this.runtimeContext.live.runtimeBindingId;
+	}
+
 	async sendPrompt(content: string, images?: CodingHarnessPromptImage[]): Promise<void> {
 		await this.runtimeDriver.sendPrompt(content, images);
 	}
@@ -501,6 +505,9 @@ export class SessionRuntime implements RuntimeFacade {
 				onDisconnect: (reason) => this.handleSseDisconnect(reason),
 				setEventStreamHandle: (handle) => {
 					this.eventStreamHandle = handle;
+				},
+				setRuntimeBindingId: (bindingId) => {
+					this.runtimeContext.live.runtimeBindingId = bindingId;
 				},
 				onBroadcast: this.onBroadcast,
 			});

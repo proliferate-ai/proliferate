@@ -6,6 +6,8 @@ import type { PromptOptions } from "../../shared/types";
 export interface PromptWorkflowDeps {
 	sessionId: string;
 	isCompletedAutomationSession: () => boolean;
+	tryStartRun: (runId: string) => boolean;
+	clearRunState: () => void;
 	getMigrationState: () => "normal" | "migrating";
 	touchActivity: () => void;
 	getLastKnownAgentIdleAt: () => number | null;
@@ -34,72 +36,83 @@ export async function runPromptWorkflow(
 		throw new Error("Cannot send messages to a completed automation session.");
 	}
 
-	const migrationState = deps.getMigrationState();
-	if (migrationState !== "normal") {
-		deps.log("Dropping prompt during migration", { migrationState });
-		return;
+	const runId = randomUUID();
+	if (!deps.tryStartRun(runId)) {
+		throw new Error("A run is already active for this session.");
 	}
 
-	deps.touchActivity();
-	const wasIdle = deps.getLastKnownAgentIdleAt() !== null;
-	deps.clearAgentIdle();
-	if (wasIdle) {
-		deps.projectActiveStatusFromIdle();
-	}
-
-	deps.log("Handling prompt", {
-		userId,
-		contentLength: content.length,
-		source: options?.source,
-		imageCount: options?.images?.length,
-	});
-	deps.setLastPromptSenderUserId(userId);
-
-	await deps.ensureRuntimeReady();
-	const openCodeSessionId = deps.getOpenCodeSessionId();
-	const openCodeUrl = deps.getOpenCodeUrl();
-	if (!openCodeSessionId || !openCodeUrl) {
-		throw new Error("Agent session unavailable");
-	}
-
-	const parts: Message["parts"] = [];
-	if (options?.images && options.images.length > 0) {
-		for (const img of options.images) {
-			parts.push({ type: "image", image: `data:${img.mediaType};base64,${img.data}` });
+	try {
+		const migrationState = deps.getMigrationState();
+		if (migrationState !== "normal") {
+			deps.log("Dropping prompt during migration", { migrationState });
+			deps.clearRunState();
+			return;
 		}
-	}
-	parts.push({ type: "text", text: content });
 
-	const userMessage: Message = {
-		id: randomUUID(),
-		role: "user",
-		content,
-		isComplete: true,
-		createdAt: Date.now(),
-		senderId: userId,
-		source: options?.source,
-		parts,
-	};
-	deps.broadcast({ type: "message", payload: userMessage });
-	deps.recordUserPromptTelemetry();
-	deps.log("User message broadcast", { messageId: userMessage.id });
+		deps.touchActivity();
+		const wasIdle = deps.getLastKnownAgentIdleAt() !== null;
+		deps.clearAgentIdle();
+		if (wasIdle) {
+			deps.projectActiveStatusFromIdle();
+		}
 
-	if (deps.getSessionClientType()) {
-		const event: SessionEventMessage = {
-			type: "user_message",
-			sessionId: deps.sessionId,
-			source: options?.source || "web",
-			timestamp: Date.now(),
-			content,
+		deps.log("Handling prompt", {
 			userId,
-		};
-		publishSessionEvent(event).catch((err) => {
-			deps.logError("Failed to publish session event", err);
+			contentLength: content.length,
+			source: options?.source,
+			imageCount: options?.images?.length,
 		});
-	}
+		deps.setLastPromptSenderUserId(userId);
 
-	deps.resetEventProcessorForNewPrompt();
-	deps.log("Sending prompt to OpenCode...");
-	await deps.sendPromptToRuntime(content, options?.images);
-	deps.log("Prompt sent to OpenCode");
+		await deps.ensureRuntimeReady();
+		const openCodeSessionId = deps.getOpenCodeSessionId();
+		const openCodeUrl = deps.getOpenCodeUrl();
+		if (!openCodeSessionId || !openCodeUrl) {
+			throw new Error("Agent session unavailable");
+		}
+
+		const parts: Message["parts"] = [];
+		if (options?.images && options.images.length > 0) {
+			for (const img of options.images) {
+				parts.push({ type: "image", image: `data:${img.mediaType};base64,${img.data}` });
+			}
+		}
+		parts.push({ type: "text", text: content });
+
+		const userMessage: Message = {
+			id: randomUUID(),
+			role: "user",
+			content,
+			isComplete: true,
+			createdAt: Date.now(),
+			senderId: userId,
+			source: options?.source,
+			parts,
+		};
+		deps.broadcast({ type: "message", payload: userMessage });
+		deps.recordUserPromptTelemetry();
+		deps.log("User message broadcast", { messageId: userMessage.id });
+
+		if (deps.getSessionClientType()) {
+			const event: SessionEventMessage = {
+				type: "user_message",
+				sessionId: deps.sessionId,
+				source: options?.source || "web",
+				timestamp: Date.now(),
+				content,
+				userId,
+			};
+			publishSessionEvent(event).catch((err) => {
+				deps.logError("Failed to publish session event", err);
+			});
+		}
+
+		deps.resetEventProcessorForNewPrompt();
+		deps.log("Sending prompt to OpenCode...");
+		await deps.sendPromptToRuntime(content, options?.images);
+		deps.log("Prompt sent to OpenCode", { runId });
+	} catch (error) {
+		deps.clearRunState();
+		throw error;
+	}
 }

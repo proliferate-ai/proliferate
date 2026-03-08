@@ -64,6 +64,13 @@ RUN npm install -g opencode-ai@latest proliferate-sandbox-mcp@0.1.19
 COPY sandbox-daemon.cjs /usr/local/bin/sandbox-daemon
 RUN chmod +x /usr/local/bin/sandbox-daemon
 
+# Install Sandbox Agent (Rivet) — manages agent sessions (coding + manager)
+# Serves ACP protocol on port 2468, proxied via Caddy at /v1/*
+RUN SANDBOX_AGENT_VERSION="latest" \
+    && curl -fsSL "https://github.com/rivet-gg/rivet/releases/${SANDBOX_AGENT_VERSION}/download/sandbox-agent-linux-x86_64" \
+    -o /usr/local/bin/sandbox-agent \
+    && chmod +x /usr/local/bin/sandbox-agent
+
 # Install Python tools
 RUN pip install httpx uv playwright psycopg2-binary redis
 
