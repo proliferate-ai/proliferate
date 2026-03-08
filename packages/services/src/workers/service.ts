@@ -483,6 +483,23 @@ export async function listPendingDirectives(
 	}));
 }
 
+/**
+ * Mark all pending directives for a manager session as consumed.
+ * Called after a wake cycle processes the directives (skip_run / complete_run).
+ */
+export async function consumePendingDirectives(managerSessionId: string): Promise<number> {
+	const pending = await workersDb.listPendingDirectives(managerSessionId);
+	const now = new Date();
+	let consumed = 0;
+	for (const msg of pending) {
+		await sessionsDb.updateSessionMessageDeliveryState(msg.id, "consumed", {
+			consumedAt: now,
+		});
+		consumed++;
+	}
+	return consumed;
+}
+
 export async function sendDirectiveToWorker(input: {
 	workerId: string;
 	organizationId: string;

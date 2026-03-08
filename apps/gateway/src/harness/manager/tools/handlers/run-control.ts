@@ -67,6 +67,12 @@ export async function handleSkipRun(
 		result: "skipped",
 	});
 
+	// Consume pending directives so they don't remain in the queue
+	const consumed = await workers.consumePendingDirectives(ctx.managerSessionId);
+	if (consumed > 0) {
+		log.info({ consumed }, "Consumed pending directives after skip_run");
+	}
+
 	log.info({ reason }, "Run skipped");
 	return JSON.stringify({ ok: true, outcome: "skipped", reason });
 }
@@ -83,6 +89,12 @@ export async function handleCompleteRun(
 		organizationId: ctx.organizationId,
 		summary,
 	});
+
+	// Consume pending directives so they don't remain in the queue
+	const consumed = await workers.consumePendingDirectives(ctx.managerSessionId);
+	if (consumed > 0) {
+		log.info({ consumed }, "Consumed pending directives after complete_run");
+	}
 
 	log.info({ summaryLength: summary.length }, "Run completed");
 	return JSON.stringify({ ok: true, outcome: "completed", summary });
