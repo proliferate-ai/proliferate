@@ -25,7 +25,6 @@ import { getSandboxProvider } from "@proliferate/shared/providers";
 import type { WebSocket } from "ws";
 import type { RuntimeDaemonEvent } from "../harness/contracts/coding";
 import type { GatewayEnv } from "../lib/env";
-import { EventSequencer } from "./session/runtime/event-sequencer";
 import { uploadVerificationFiles } from "../lib/s3";
 import { OWNER_LEASE_TTL_MS, setRuntimeLease } from "../lib/session-leases";
 import type { ClientConnection, OpenCodeEvent, SandboxInfo } from "../types";
@@ -59,6 +58,7 @@ import {
 } from "./session/reconnect/reconnect-controller";
 import type { RuntimeFacade } from "./session/runtime/contracts/runtime-facade";
 import { EventProcessor } from "./session/runtime/event-processor";
+import { EventSequencer } from "./session/runtime/event-sequencer";
 import type { SessionContext, SessionRecord } from "./session/runtime/session-context-store";
 import { SessionTelemetry, extractPrUrls } from "./session/runtime/session-telemetry";
 import {
@@ -84,7 +84,6 @@ interface HubDependencies {
 
 /** Renewal interval: ~1/3 of owner lease TTL. */
 const LEASE_RENEW_INTERVAL_MS = Math.floor(OWNER_LEASE_TTL_MS / 3);
-
 
 export class SessionHub {
 	private readonly env: GatewayEnv;

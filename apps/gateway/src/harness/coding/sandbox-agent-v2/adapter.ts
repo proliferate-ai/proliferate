@@ -25,16 +25,8 @@ import type {
 	CodingHarnessStartResult,
 	CodingHarnessStreamInput,
 } from "../../contracts/coding";
-import {
-	type AcpAgent,
-	createAcpServer,
-	deleteAcpServer,
-	sendAcpEnvelope,
-} from "./client";
-import {
-	type UniversalEvent,
-	mapUniversalEventToRuntimeDaemonEvent,
-} from "./event-mapper";
+import { type AcpAgent, createAcpServer, deleteAcpServer, sendAcpEnvelope } from "./client";
+import { type UniversalEvent, mapUniversalEventToRuntimeDaemonEvent } from "./event-mapper";
 
 /**
  * Adapter for coding sessions via Sandbox Agent ACP protocol.

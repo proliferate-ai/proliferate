@@ -1,6 +1,6 @@
+import { describe, expect, it } from "vitest";
 import type { RuntimeDaemonEvent } from "../../../harness/contracts/coding";
 import { EventSequencer } from "./event-sequencer";
-import { describe, expect, it } from "vitest";
 
 function makeEvent(overrides: Partial<RuntimeDaemonEvent> = {}): RuntimeDaemonEvent {
 	return {

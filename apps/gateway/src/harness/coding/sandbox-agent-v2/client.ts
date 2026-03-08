@@ -105,4 +105,3 @@ export async function deleteAcpServer(
 		throw new Error(`ACP server delete failed (${response.status}): ${text}`);
 	}
 }
-

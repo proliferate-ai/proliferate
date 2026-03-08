@@ -280,7 +280,14 @@ function buildPartUpdatePayload(event: UniversalEvent): unknown {
 function buildDeltaPartPayload(event: UniversalEvent): unknown {
 	const delta = event.data.delta;
 	if (!delta) {
-		return { part: { id: event.data.itemId ?? "", sessionID: event.session_id, messageID: "", type: "text" } };
+		return {
+			part: {
+				id: event.data.itemId ?? "",
+				sessionID: event.session_id,
+				messageID: "",
+				type: "text",
+			},
+		};
 	}
 	if (delta.type === "text") {
 		return {
