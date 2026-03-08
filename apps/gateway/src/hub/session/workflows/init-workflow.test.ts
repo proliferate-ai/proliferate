@@ -26,6 +26,7 @@ function createDeps(overrides: Partial<InitWorkflowDeps> = {}): InitWorkflowDeps
 		getOpenCodeSessionId: () => "coding-session",
 		getPreviewUrl: () => "http://preview",
 		isCompletedAutomationSession: () => false,
+		isManagerSession: () => false,
 		collectOutputs: async () =>
 			[
 				{

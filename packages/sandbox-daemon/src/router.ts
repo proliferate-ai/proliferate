@@ -124,6 +124,13 @@ export class Router {
 			return;
 		}
 
+		// Token refresh does NOT require auth — only accessible from inside the
+		// sandbox (localhost) and needed to rotate the token after snapshot resume.
+		if (pathname === "/_proliferate/token/refresh" && req.method === "POST") {
+			this.handleTokenRefresh(req, res);
+			return;
+		}
+
 		// All other platform routes require auth
 		if (!authenticateRequest(req, res)) {
 			return;
@@ -204,12 +211,7 @@ export class Router {
 					return;
 				}
 				break;
-			case "/_proliferate/token/refresh":
-				if (req.method === "POST") {
-					this.handleTokenRefresh(req, res);
-					return;
-				}
-				break;
+			// token/refresh handled before auth check above
 		}
 
 		this.logger.debug({ pathname, method: req.method }, "Unmatched platform route");

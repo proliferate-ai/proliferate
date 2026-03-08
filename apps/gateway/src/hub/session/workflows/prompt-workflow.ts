@@ -5,6 +5,7 @@ import type { PromptOptions } from "../../shared/types";
 
 export interface PromptWorkflowDeps {
 	sessionId: string;
+	isManagerSession: () => boolean;
 	isCompletedAutomationSession: () => boolean;
 	isRunActive: () => boolean;
 	markRunStarted: (runId: string) => void;
@@ -62,10 +63,12 @@ export async function runPromptWorkflow(
 	deps.setLastPromptSenderUserId(userId);
 
 	await deps.ensureRuntimeReady();
-	const openCodeSessionId = deps.getOpenCodeSessionId();
-	const openCodeUrl = deps.getOpenCodeUrl();
-	if (!openCodeSessionId || !openCodeUrl) {
-		throw new Error("Agent session unavailable");
+	if (!deps.isManagerSession()) {
+		const openCodeSessionId = deps.getOpenCodeSessionId();
+		const openCodeUrl = deps.getOpenCodeUrl();
+		if (!openCodeSessionId || !openCodeUrl) {
+			throw new Error("Agent session unavailable");
+		}
 	}
 
 	const parts: Message["parts"] = [];

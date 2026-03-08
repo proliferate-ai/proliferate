@@ -23,7 +23,7 @@ import {
 	sendAcpPrompt,
 	waitForAcpReady,
 } from "./client";
-import { type UniversalEvent, mapUniversalEvent } from "./event-mapper";
+import { type AcpJsonRpcEvent, mapAcpJsonRpcEvent } from "./event-mapper";
 
 // ---------------------------------------------------------------------------
 // Daemon SSE envelope (platform events from /_proliferate/events)
@@ -54,14 +54,22 @@ function isDaemonEnvelope(value: DaemonSseEvent): value is DaemonStreamEnvelope 
 
 const DEFAULT_AGENT = "opencode";
 
+/**
+ * Module-level map from ACP serverId → agent-internal session ID.
+ * Populated during start/resume/streamEvents. Needed because the
+ * CodingHarnessAdapter contract only passes a single "sessionId"
+ * which we use as the ACP serverId (URL path), while the agent's
+ * internal session ID is different and required for JSON-RPC params.
+ */
+const agentSessionIds = new Map<string, string>();
+
 export class SandboxAgentV2CodingHarnessAdapter implements CodingHarnessAdapter {
 	readonly name = "sandbox-agent-v2-acp";
 
 	async start(input: CodingHarnessStartInput): Promise<CodingHarnessStartResult> {
 		const serverId = generateServerId();
-		// createAcpSession returns the agent-internal session ID, but for coding
-		// sessions we use the serverId as the binding identifier.
-		await createAcpSession(input.baseUrl, serverId, DEFAULT_AGENT);
+		const agentSessionId = await createAcpSession(input.baseUrl, serverId, DEFAULT_AGENT);
+		agentSessionIds.set(serverId, agentSessionId);
 		return { sessionId: serverId };
 	}
 
@@ -104,7 +112,14 @@ export class SandboxAgentV2CodingHarnessAdapter implements CodingHarnessAdapter 
 	}
 
 	async sendPrompt(input: CodingHarnessSendPromptInput): Promise<void> {
-		await sendAcpPrompt(input.baseUrl, input.sessionId, input.content, undefined, input.images);
+		const agentSessionId = agentSessionIds.get(input.sessionId);
+		await sendAcpPrompt(
+			input.baseUrl,
+			input.sessionId,
+			input.content,
+			agentSessionId,
+			input.images,
+		);
 	}
 
 	async interrupt(input: CodingHarnessInterruptInput): Promise<void> {
@@ -119,32 +134,52 @@ export class SandboxAgentV2CodingHarnessAdapter implements CodingHarnessAdapter 
 		const disconnectors: Array<() => void> = [];
 
 		// ------------------------------------------------------------------
-		// SSE 1: ACP agent event stream (UniversalEvents)
+		// SSE 1: ACP agent event stream (JSON-RPC messages from sandbox-agent)
 		// GET /v1/acp/{serverId}
 		// ------------------------------------------------------------------
-		const acpSessionId = input.bindingId;
-		const acpSseClient = new SseClient<UniversalEvent>({
+		const serverId = input.bindingId;
+		const acpSseClient = new SseClient<AcpJsonRpcEvent>({
 			env: input.env,
 			logger: input.logger.child({ stream: "acp" }),
-			// SseClient appends eventPath to the base URL
-			eventPath: `/v1/acp/${encodeURIComponent(acpSessionId)}`,
+			eventPath: `/v1/acp/${encodeURIComponent(serverId)}`,
 			headers: {
 				Accept: "text/event-stream",
 			},
-			parseEventData: (data) => JSON.parse(data) as UniversalEvent,
+			parseEventData: (data) => JSON.parse(data) as AcpJsonRpcEvent,
 			logSummary: (event) => ({
 				type: "acp.event",
-				eventType: event.type,
-				eventId: event.event_id,
-				sequence: event.sequence,
+				method: event.method ?? null,
+				id: event.id ?? null,
+				hasError: !!event.error,
 			}),
 			onDisconnect: input.onDisconnect,
 			onEvent: (event) => {
-				const runtimeEvent = mapUniversalEvent(event, input.bindingId);
-				if (!runtimeEvent) {
+				// Extract agent session ID from session/new response
+				const maybeSessionId = event.result?.sessionId;
+				if (event.id && typeof maybeSessionId === "string") {
+					agentSessionIds.set(serverId, maybeSessionId);
+					input.logger.info(
+						{ serverId, agentSessionId: maybeSessionId },
+						"Captured agent session ID from SSE",
+					);
+				}
+
+				const runtimeResult = mapAcpJsonRpcEvent(event, serverId);
+				if (!runtimeResult) {
+					input.logger.debug(
+						{ method: event.method ?? null, id: event.id ?? null },
+						"ACP event not mapped (skipped)",
+					);
 					return;
 				}
-				input.onEvent(runtimeEvent);
+				const events = Array.isArray(runtimeResult) ? runtimeResult : [runtimeResult];
+				for (const runtimeEvent of events) {
+					input.logger.debug(
+						{ channel: runtimeEvent.channel, type: runtimeEvent.type },
+						"ACP event mapped → forwarding",
+					);
+					input.onEvent(runtimeEvent);
+				}
 			},
 		});
 
@@ -188,22 +223,34 @@ export class SandboxAgentV2CodingHarnessAdapter implements CodingHarnessAdapter 
 			},
 		});
 
-		// Retry platform SSE connection — daemon may still be starting
+		// Retry platform SSE connection — daemon may still be starting or
+		// token refresh may be in flight after snapshot resume (401).
+		// Platform SSE is non-critical: PTY/FS/port events are nice-to-have
+		// but not required for the agent chat to work (ACP SSE handles that).
+		let platformConnected = false;
 		for (let attempt = 1; attempt <= 10; attempt++) {
 			try {
 				await platformSseClient.connect(input.baseUrl);
+				platformConnected = true;
 				break;
 			} catch (err) {
 				const status = err instanceof Error ? err.message : "";
-				if (attempt < 10 && /50[23]/.test(status)) {
-					input.logger.debug({ attempt }, "Platform SSE not ready, retrying");
+				if (attempt < 10 && /40[13]|50[23]/.test(status)) {
+					input.logger.debug({ attempt, status }, "Platform SSE not ready, retrying");
 					await new Promise((r) => setTimeout(r, 1000));
 					continue;
 				}
-				throw err;
+				// Don't throw — platform SSE is optional for chat functionality
+				input.logger.warn(
+					{ err },
+					"Platform SSE connection failed after retries, continuing without platform events",
+				);
+				break;
 			}
 		}
-		disconnectors.push(() => platformSseClient.disconnect());
+		if (platformConnected) {
+			disconnectors.push(() => platformSseClient.disconnect());
+		}
 
 		return {
 			disconnect: () => {

@@ -411,6 +411,7 @@ export class SessionHub {
 		this.log("Eager start requested");
 		if (this.runtime.isReady() && this.runtime.getContext().session.kind === "manager") {
 			this.log("Manager runtime already ready — triggering new wake cycle");
+			this.eventProcessor.resetForNewPrompt(true);
 			await this.runtime.triggerManagerWakeCycle();
 			this.log("Manager wake cycle triggered");
 			return;
@@ -418,6 +419,7 @@ export class SessionHub {
 		await this.ensureRuntimeReady();
 		if (this.runtime.getContext().session.kind === "manager") {
 			this.log("Manager runtime first boot — triggering initial wake cycle");
+			this.eventProcessor.resetForNewPrompt(true);
 			await this.runtime.triggerManagerWakeCycle();
 			this.log("Manager initial wake cycle triggered");
 		} else {
@@ -1544,16 +1546,28 @@ export class SessionHub {
 		switch (message.type) {
 			case "message": {
 				const msg = message.payload as Message;
-				this.messageHistory.push({
-					id: msg.id,
-					role: msg.role,
-					content: msg.content ?? "",
-					isComplete: msg.isComplete ?? false,
-					createdAt: msg.createdAt ?? Date.now(),
-					senderId: msg.senderId,
-					source: msg.source,
-					parts: msg.parts ? [...msg.parts] : undefined,
-				});
+				const existing = this.messageHistory.find((m) => m.id === msg.id);
+				if (existing) {
+					existing.role = msg.role;
+					existing.content = msg.content ?? existing.content;
+					existing.isComplete = msg.isComplete ?? existing.isComplete;
+					existing.senderId = msg.senderId ?? existing.senderId;
+					existing.source = msg.source ?? existing.source;
+					if (msg.parts) {
+						existing.parts = [...msg.parts];
+					}
+				} else {
+					this.messageHistory.push({
+						id: msg.id,
+						role: msg.role,
+						content: msg.content ?? "",
+						isComplete: msg.isComplete ?? false,
+						createdAt: msg.createdAt ?? Date.now(),
+						senderId: msg.senderId,
+						source: msg.source,
+						parts: msg.parts ? [...msg.parts] : undefined,
+					});
+				}
 				break;
 			}
 			case "token": {

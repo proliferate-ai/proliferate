@@ -28,7 +28,7 @@ import type {
 
 /** Kills stale listeners/processes that can conflict with restored snapshots. */
 const CLEAR_STALE_PROCESSES_COMMAND =
-	"fuser -k 4096/tcp 4000/tcp 8470/tcp 2468/tcp 2>/dev/null || true; pkill -9 caddy || true; sleep 0.5";
+	"fuser -k -9 4096/tcp 4000/tcp 8470/tcp 2468/tcp 2>/dev/null || true; pkill -9 caddy || true; pkill -9 sandbox-daemon || true; pkill -9 sandbox-agent || true; pkill -9 sandbox-mcp || true; sleep 2";
 
 const log = getSharedLogger().child({ module: "e2b" });
 

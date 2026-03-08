@@ -89,7 +89,10 @@ export async function sendAcpPrompt(
 ): Promise<void> {
 	const url = withAcpUrl(baseUrl, `/v1/acp/${encodeURIComponent(serverId)}`);
 	const promptBlocks: Array<{ type: string; text: string }> = [{ type: "text", text: content }];
-	const response = await fetch(url, {
+	// ACP session/prompt blocks until the agent turn completes, which can take
+	// minutes. We fire the request and don't await the response — all progress
+	// comes via the SSE stream. We only check the initial HTTP status.
+	const promptPromise = fetch(url, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
@@ -101,12 +104,20 @@ export async function sendAcpPrompt(
 				prompt: promptBlocks,
 			},
 		}),
-		signal: AbortSignal.timeout(mutationTimeoutMs),
 	});
-	if (!response.ok && response.status !== 202) {
-		const text = await response.text();
-		throw new Error(`ACP prompt failed (${response.status}): ${text}`);
-	}
+	// Log errors in the background but don't block the caller
+	promptPromise
+		.then((response) => {
+			if (!response.ok && response.status !== 202) {
+				logger.error(
+					{ status: response.status, serverId },
+					"ACP prompt response indicated failure",
+				);
+			}
+		})
+		.catch((err) => {
+			logger.error({ err, serverId }, "ACP prompt request failed");
+		});
 }
 
 /**

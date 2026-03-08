@@ -135,10 +135,10 @@ export class ManagerRuntimeDriver implements RuntimeDriver {
 
 	async sendPrompt(
 		_userId: string,
-		_content: string,
+		content: string,
 		_images?: CodingHarnessPromptImage[],
 	): Promise<void> {
-		throw new Error("Prompting is not supported for manager runtime driver");
+		await this.managerRuntimeService.wake(content);
 	}
 
 	async interrupt(): Promise<void> {

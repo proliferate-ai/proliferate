@@ -42,26 +42,38 @@ export async function handleSpawnChildTask(
 
 	log.info({ childSessionId: childSession.id, title }, "Spawned child task session");
 
+	// Fire-and-forget: kick off the child session boot in the background.
+	// Sandbox creation + agent startup can take 20-30s; Pi should not block on it.
 	try {
 		if (ctx.controlFacade) {
-			await ctx.controlFacade.eagerStartSession(childSession.id);
-			return JSON.stringify({ session_id: childSession.id, title, status: "starting" });
-		}
-		const jwt = await getServiceJwt(ctx);
-		const res = await fetch(`${ctx.gatewayUrl}/proliferate/${childSession.id}/eager-start`, {
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${jwt}`,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({ organizationId: ctx.organizationId }),
-		});
-		if (!res.ok) {
-			const body = await res.text().catch(() => "");
-			log.warn({ childSessionId: childSession.id }, `Eager-start returned ${res.status}: ${body}`);
+			ctx.controlFacade.eagerStartSession(childSession.id).catch((err) => {
+				log.warn({ err, childSessionId: childSession.id }, "Eager-start failed (background)");
+			});
+		} else {
+			const jwt = await getServiceJwt(ctx);
+			fetch(`${ctx.gatewayUrl}/proliferate/${childSession.id}/eager-start`, {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${jwt}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ organizationId: ctx.organizationId }),
+			})
+				.then(async (res) => {
+					if (!res.ok) {
+						const body = await res.text().catch(() => "");
+						log.warn(
+							{ childSessionId: childSession.id },
+							`Eager-start returned ${res.status}: ${body}`,
+						);
+					}
+				})
+				.catch((err) => {
+					log.warn({ err, childSessionId: childSession.id }, "Eager-start request failed");
+				});
 		}
 	} catch (err) {
-		log.warn({ err, childSessionId: childSession.id }, "Eager-start request failed");
+		log.warn({ err, childSessionId: childSession.id }, "Eager-start setup failed");
 	}
 
 	return JSON.stringify({ session_id: childSession.id, title, status: "starting" });

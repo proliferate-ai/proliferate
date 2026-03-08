@@ -1,153 +1,78 @@
 import type { RuntimeDaemonEvent } from "@proliferate/shared/contracts/harness";
 
 // ---------------------------------------------------------------------------
-// UniversalEvent types (mirrors sandbox-agent Rust structs)
+// ACP JSON-RPC event types (actual format from sandbox-agent SSE)
 // ---------------------------------------------------------------------------
 
-export type UniversalEventSource = "agent" | "user" | "system";
-
-export type UniversalEventType =
-	| "session.started"
-	| "session.ended"
-	| "turn.started"
-	| "turn.ended"
-	| "item.started"
-	| "item.delta"
-	| "item.completed"
-	| "error";
-
-export type ContentPartType = "text" | "toolCall" | "toolResult";
-
-export interface TextContentPart {
-	type: "text";
-	text: string;
+export interface AcpJsonRpcEvent {
+	jsonrpc: "2.0";
+	id?: string | number;
+	method?: string;
+	params?: Record<string, unknown>;
+	result?: Record<string, unknown>;
+	error?: { code: number; message: string; data?: unknown };
 }
 
-export interface ToolCallContentPart {
-	type: "toolCall";
-	name: string;
-	arguments: string;
-	call_id: string;
-}
+// Session update types from sandbox-agent's session/update notifications
+// OpenCode uses: agent_message_start/chunk/complete, tool_call_start/delta/complete, tool_result, busy, idle
+// Pi uses: agent_message_chunk, tool_call, tool_call_update, session_info_update
+type SessionUpdateType =
+	| "agent_message_chunk"
+	| "agent_message_start"
+	| "agent_message_complete"
+	| "tool_call_start"
+	| "tool_call_delta"
+	| "tool_call_complete"
+	| "tool_result"
+	| "tool_call"
+	| "tool_call_update"
+	| "session_info_update"
+	| "usage_update"
+	| "available_commands_update"
+	| "title_update"
+	| "mode_update"
+	| "busy"
+	| "idle";
 
-export interface ToolResultContentPart {
-	type: "toolResult";
-	call_id: string;
-	output: string;
-}
-
-export type ContentPart = TextContentPart | ToolCallContentPart | ToolResultContentPart;
-
-export type ItemKind = "message" | "toolCall" | "toolResult" | "status";
-export type ItemStatus = "inProgress" | "completed" | "failed";
-
-export interface UniversalItem {
-	id: string;
-	kind: ItemKind;
-	role?: "user" | "assistant" | "tool";
-	status: ItemStatus;
-	content: ContentPart[];
-}
-
-export interface SessionStartedData {
-	metadata: Record<string, unknown>;
-}
-
-export interface SessionEndedData {
-	reason: string;
-	terminated_by?: string;
-}
-
-export interface TurnStartedData {
-	phase: "started";
-	turn_id?: string;
-}
-
-export interface TurnEndedData {
-	phase: "ended";
-}
-
-export interface ItemStartedData {
-	item: UniversalItem;
-}
-
-export interface ItemDeltaData {
-	item_id: string;
-	delta: string;
-}
-
-export interface ItemCompletedData {
-	item: UniversalItem;
-}
-
-export interface ErrorData {
-	message: string;
-	code?: string;
-	details?: Record<string, unknown>;
-}
-
-export interface UniversalEvent {
-	event_id: string;
-	sequence: number;
-	time: string;
-	session_id: string;
-	native_session_id?: string | null;
-	synthetic: boolean;
-	source: UniversalEventSource;
-	type: UniversalEventType;
-	data: unknown;
-}
-
-// ---------------------------------------------------------------------------
-// Mapping helpers
-// ---------------------------------------------------------------------------
-
-function buildToolUsePartFromContentPart(
-	cp: ToolCallContentPart,
-	itemId: string,
-): Record<string, unknown> {
-	return {
-		id: itemId,
-		sessionID: "",
-		messageID: "",
-		type: "tool",
-		callID: cp.call_id,
-		tool: cp.name,
-		state: {
-			status: "running",
-			input: safeParseJson(cp.arguments),
-		},
+interface SessionUpdate {
+	sessionId: string;
+	update: {
+		sessionUpdate: SessionUpdateType;
+		content?: { type: string; text: string };
+		toolCall?: { id: string; name: string; arguments?: string };
+		delta?: string;
+		result?: string;
+		cost?: { amount: number; currency: string };
+		[key: string]: unknown;
 	};
 }
 
-function buildToolResultPartFromContentPart(
-	cp: ToolResultContentPart,
-	itemId: string,
-): Record<string, unknown> {
-	return {
-		id: itemId,
-		sessionID: "",
-		messageID: "",
-		type: "tool",
-		callID: cp.call_id,
-		tool: "",
-		state: {
-			status: "completed",
-			output: cp.output,
-		},
-	};
+// ---------------------------------------------------------------------------
+// Sequence counter (since JSON-RPC events don't have a sequence field)
+// ---------------------------------------------------------------------------
+
+let seqCounter = 0;
+function nextSeq(): number {
+	return ++seqCounter;
 }
 
-function safeParseJson(value: string): Record<string, unknown> {
-	try {
-		const parsed = JSON.parse(value);
-		if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-			return parsed as Record<string, unknown>;
-		}
-		return { value: parsed };
-	} catch {
-		return { value };
+// ---------------------------------------------------------------------------
+// Track current assistant message ID per binding
+// ---------------------------------------------------------------------------
+
+const currentAssistantMessageIds = new Map<string, string>();
+
+/** Track tool names by callId so updates can carry the name. */
+const toolNamesByCallId = new Map<string, string>();
+
+/** Get or create an assistant message ID for tool events that need one. */
+function ensureAssistantMessage(bindingId: string): string {
+	let messageId = currentAssistantMessageIds.get(bindingId);
+	if (!messageId) {
+		messageId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+		currentAssistantMessageIds.set(bindingId, messageId);
 	}
+	return messageId;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,51 +80,297 @@ function safeParseJson(value: string): Record<string, unknown> {
 // ---------------------------------------------------------------------------
 
 /**
- * Map a sandbox-agent UniversalEvent to a RuntimeDaemonEvent that the
- * gateway EventProcessor can consume.
- *
- * Returns null for events that have no meaningful mapping.
+ * Map an ACP JSON-RPC SSE event to one or more RuntimeDaemonEvents.
+ * Returns null for events that have no meaningful mapping (init, errors, etc).
  */
-export function mapUniversalEvent(
-	event: UniversalEvent,
+export function mapAcpJsonRpcEvent(
+	event: AcpJsonRpcEvent,
 	bindingId: string,
-): RuntimeDaemonEvent | null {
+): RuntimeDaemonEvent | RuntimeDaemonEvent[] | null {
+	const seq = nextSeq();
 	const base = {
 		source: "daemon" as const,
 		bindingId,
-		sourceSeq: event.sequence,
-		sourceEventKey: `${bindingId}:${event.sequence}`,
-		occurredAt: event.time,
+		sourceSeq: seq,
+		sourceEventKey: `${bindingId}:${seq}`,
+		occurredAt: new Date().toISOString(),
 		isTerminal: false,
 	};
 
-	switch (event.type) {
-		case "session.started": {
-			return {
-				...base,
-				channel: "server",
-				type: "server.connected",
-				payload: {
-					type: "server.connected",
-					properties: {},
+	// Handle JSON-RPC errors
+	if (event.error) {
+		return {
+			...base,
+			channel: "session",
+			type: "session.error",
+			isTerminal: false,
+			payload: {
+				type: "session.error",
+				properties: {
+					error: {
+						name: `JsonRpcError_${event.error.code}`,
+						data: {
+							message: event.error.message,
+						},
+					},
 				},
-			};
-		}
+			},
+		};
+	}
 
-		case "session.ended": {
+	// Handle JSON-RPC responses (to our requests)
+	if (event.id !== undefined && event.result) {
+		// Response to session/prompt — contains stopReason
+		if (event.result.stopReason) {
+			currentAssistantMessageIds.delete(bindingId);
 			return {
 				...base,
 				channel: "session",
 				type: "session.idle",
-				isTerminal: true,
 				payload: {
 					type: "session.idle",
 					properties: {},
 				},
 			};
 		}
+		// Other responses (initialize, session/new) — ignore
+		return null;
+	}
 
-		case "turn.started": {
+	// Handle JSON-RPC notifications (method calls from agent)
+	if (!event.method || !event.params) {
+		return null;
+	}
+
+	// Ignore adapter noise (console.log from agent process)
+	if (event.method === "_adapter/invalid_stdout") {
+		return null;
+	}
+
+	if (event.method === "session/update") {
+		return mapSessionUpdate(event.params as unknown as SessionUpdate, bindingId, base);
+	}
+
+	return null;
+}
+
+function mapSessionUpdate(
+	params: SessionUpdate,
+	bindingId: string,
+	base: Omit<RuntimeDaemonEvent, "channel" | "type" | "payload">,
+): RuntimeDaemonEvent | RuntimeDaemonEvent[] | null {
+	const update = params.update;
+	if (!update?.sessionUpdate) {
+		return null;
+	}
+
+	switch (update.sessionUpdate) {
+		case "agent_message_start": {
+			const messageId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+			currentAssistantMessageIds.set(bindingId, messageId);
+			return {
+				...base,
+				channel: "message",
+				type: "message.updated",
+				itemId: messageId,
+				payload: {
+					type: "message.updated",
+					properties: {
+						info: {
+							id: messageId,
+							sessionID: bindingId,
+							role: "assistant",
+							time: {},
+						},
+					},
+				},
+			};
+		}
+
+		case "agent_message_chunk": {
+			const text = update.content?.text ?? "";
+			let messageId = currentAssistantMessageIds.get(bindingId);
+
+			const deltaEvent: RuntimeDaemonEvent = {
+				...base,
+				channel: "message",
+				type: "message.part.updated",
+				itemId: messageId ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+				payload: {
+					type: "message.part.updated",
+					properties: {
+						part: {
+							id: messageId ?? "",
+							sessionID: bindingId,
+							messageID: messageId ?? "",
+							type: "text",
+						},
+						delta: text,
+					},
+				},
+			};
+
+			// Auto-create message if we haven't seen agent_message_start
+			if (!messageId) {
+				messageId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+				currentAssistantMessageIds.set(bindingId, messageId);
+				// Update delta event IDs to use the generated messageId
+				deltaEvent.itemId = messageId;
+				(
+					deltaEvent.payload as { properties: { part: { id: string; messageID: string } } }
+				).properties.part.id = messageId;
+				(
+					deltaEvent.payload as { properties: { part: { id: string; messageID: string } } }
+				).properties.part.messageID = messageId;
+
+				const startEvent: RuntimeDaemonEvent = {
+					...base,
+					sourceEventKey: `${bindingId}:${base.sourceSeq}-start`,
+					channel: "message",
+					type: "message.updated",
+					itemId: messageId,
+					payload: {
+						type: "message.updated",
+						properties: {
+							info: {
+								id: messageId,
+								sessionID: bindingId,
+								role: "assistant",
+								time: {},
+							},
+						},
+					},
+				};
+				return [startEvent, deltaEvent];
+			}
+
+			return deltaEvent;
+		}
+
+		case "agent_message_complete": {
+			const messageId = currentAssistantMessageIds.get(bindingId);
+			if (!messageId) {
+				return null;
+			}
+			currentAssistantMessageIds.delete(bindingId);
+			return {
+				...base,
+				channel: "message",
+				type: "message.updated",
+				itemId: messageId,
+				payload: {
+					type: "message.updated",
+					properties: {
+						info: {
+							id: messageId,
+							sessionID: bindingId,
+							role: "assistant",
+							time: { completed: Date.now() },
+						},
+					},
+				},
+			};
+		}
+
+		case "tool_call_start": {
+			const toolCall = update.toolCall ?? (update as Record<string, unknown>);
+			const callId = (toolCall.id as string) ?? `tc-${Date.now()}`;
+			const toolName = (toolCall.name as string) ?? "unknown";
+			toolNamesByCallId.set(callId, toolName);
+			const args = (toolCall.arguments as string) ?? "{}";
+			const msgId = ensureAssistantMessage(bindingId);
+			return {
+				...base,
+				channel: "message",
+				type: "message.part.updated",
+				itemId: callId,
+				toolCallId: callId,
+				payload: {
+					type: "message.part.updated",
+					properties: {
+						part: {
+							id: callId,
+							sessionID: bindingId,
+							messageID: msgId,
+							type: "tool",
+							callID: callId,
+							tool: toolName,
+							state: {
+								status: "running",
+								input: safeParseJson(args),
+							},
+						},
+					},
+				},
+			};
+		}
+
+		case "tool_call_complete": {
+			const toolCall = update.toolCall ?? (update as Record<string, unknown>);
+			const callId = (toolCall.id as string) ?? "";
+			const toolName = (toolCall.name as string) || toolNamesByCallId.get(callId) || "unknown";
+			toolNamesByCallId.delete(callId);
+			const args = (toolCall.arguments as string) ?? "{}";
+			const msgId = ensureAssistantMessage(bindingId);
+			return {
+				...base,
+				channel: "message",
+				type: "message.part.updated",
+				itemId: callId,
+				toolCallId: callId,
+				payload: {
+					type: "message.part.updated",
+					properties: {
+						part: {
+							id: callId,
+							sessionID: bindingId,
+							messageID: msgId,
+							type: "tool",
+							callID: callId,
+							tool: toolName,
+							state: {
+								status: "completed",
+								input: safeParseJson(args),
+							},
+						},
+					},
+				},
+			};
+		}
+
+		case "tool_result": {
+			const callId = ((update as Record<string, unknown>).callId as string) ?? "";
+			const output = ((update as Record<string, unknown>).result as string) ?? "";
+			const toolName = toolNamesByCallId.get(callId) || "unknown";
+			toolNamesByCallId.delete(callId);
+			const msgId = ensureAssistantMessage(bindingId);
+			return {
+				...base,
+				channel: "message",
+				type: "message.part.updated",
+				itemId: callId,
+				toolCallId: callId,
+				payload: {
+					type: "message.part.updated",
+					properties: {
+						part: {
+							id: callId,
+							sessionID: bindingId,
+							messageID: msgId,
+							type: "tool",
+							callID: callId,
+							tool: toolName,
+							state: {
+								status: "completed",
+								output,
+							},
+						},
+					},
+				},
+			};
+		}
+
+		case "busy": {
 			return {
 				...base,
 				channel: "session",
@@ -213,7 +384,8 @@ export function mapUniversalEvent(
 			};
 		}
 
-		case "turn.ended": {
+		case "idle": {
+			currentAssistantMessageIds.delete(bindingId);
 			return {
 				...base,
 				channel: "session",
@@ -225,61 +397,35 @@ export function mapUniversalEvent(
 			};
 		}
 
-		case "item.started": {
-			const data = event.data as ItemStartedData;
-			if (!data?.item) {
-				return null;
-			}
-			return mapItemStarted(data.item, event, base);
-		}
-
-		case "item.delta": {
-			const data = event.data as ItemDeltaData;
-			if (!data?.item_id || typeof data.delta !== "string") {
-				return null;
-			}
+		// Pi: tool_call — initial tool invocation (equivalent to tool_call_start)
+		case "tool_call": {
+			const callId = (update.toolCallId as string) ?? `tc-${Date.now()}`;
+			const toolName = (update.title as string) ?? "unknown";
+			toolNamesByCallId.set(callId, toolName);
+			const rawInput = update.rawInput;
+			const msgId = ensureAssistantMessage(bindingId);
 			return {
 				...base,
 				channel: "message",
 				type: "message.part.updated",
-				itemId: data.item_id,
+				itemId: callId,
+				toolCallId: callId,
 				payload: {
 					type: "message.part.updated",
 					properties: {
 						part: {
-							id: data.item_id,
-							sessionID: event.session_id,
-							messageID: data.item_id,
-							type: "text",
-						},
-						delta: data.delta,
-					},
-				},
-			};
-		}
-
-		case "item.completed": {
-			const data = event.data as ItemCompletedData;
-			if (!data?.item) {
-				return null;
-			}
-			return mapItemCompleted(data.item, event, base);
-		}
-
-		case "error": {
-			const data = event.data as ErrorData;
-			return {
-				...base,
-				channel: "session",
-				type: "session.error",
-				isTerminal: true,
-				payload: {
-					type: "session.error",
-					properties: {
-						error: {
-							name: data?.code ?? "UniversalEventError",
-							data: {
-								message: data?.message ?? "Unknown error",
+							id: callId,
+							sessionID: bindingId,
+							messageID: msgId,
+							type: "tool",
+							callID: callId,
+							tool: toolName,
+							state: {
+								status: "running",
+								input:
+									typeof rawInput === "object" && rawInput !== null
+										? (rawInput as Record<string, unknown>)
+										: {},
 							},
 						},
 					},
@@ -287,207 +433,123 @@ export function mapUniversalEvent(
 			};
 		}
 
+		// Pi: tool_call_update — tool progress/completion
+		case "tool_call_update": {
+			const callId = (update.toolCallId as string) ?? "";
+			const status = update.status as string;
+			const isFinal = status === "completed" || status === "failed";
+			const rawOutput = update.rawOutput as Record<string, unknown> | undefined;
+			let output = "";
+			if (rawOutput?.content && Array.isArray(rawOutput.content)) {
+				output = rawOutput.content
+					.map((c: Record<string, unknown>) => (c.text as string) ?? "")
+					.join("");
+			}
+			const toolName = toolNamesByCallId.get(callId) ?? "unknown";
+			if (isFinal) {
+				toolNamesByCallId.delete(callId);
+			}
+			const msgId = ensureAssistantMessage(bindingId);
+			return {
+				...base,
+				channel: "message",
+				type: "message.part.updated",
+				itemId: callId,
+				toolCallId: callId,
+				payload: {
+					type: "message.part.updated",
+					properties: {
+						part: {
+							id: callId,
+							sessionID: bindingId,
+							messageID: msgId,
+							type: "tool",
+							callID: callId,
+							tool: toolName,
+							state: {
+								status: isFinal ? "completed" : "running",
+								...(output ? { output } : {}),
+							},
+						},
+					},
+				},
+			};
+		}
+
+		// Pi: session_info_update — maps to busy/idle based on _meta.piAcp.running
+		case "session_info_update": {
+			const meta = update._meta as Record<string, unknown> | undefined;
+			const piAcp = meta?.piAcp as Record<string, unknown> | undefined;
+			const running = piAcp?.running;
+
+			if (running === true) {
+				return {
+					...base,
+					channel: "session",
+					type: "session.status",
+					payload: {
+						type: "session.status",
+						properties: {
+							status: { type: "busy" },
+						},
+					},
+				};
+			}
+
+			if (running === false) {
+				// Complete the current message if one is in progress
+				const messageId = currentAssistantMessageIds.get(bindingId);
+				const events: RuntimeDaemonEvent[] = [];
+				if (messageId) {
+					currentAssistantMessageIds.delete(bindingId);
+					events.push({
+						...base,
+						sourceEventKey: `${bindingId}:${base.sourceSeq}-complete`,
+						channel: "message",
+						type: "message.updated",
+						itemId: messageId,
+						payload: {
+							type: "message.updated",
+							properties: {
+								info: {
+									id: messageId,
+									sessionID: bindingId,
+									role: "assistant",
+									time: { completed: Date.now() },
+								},
+							},
+						},
+					});
+				}
+				events.push({
+					...base,
+					channel: "session",
+					type: "session.idle",
+					payload: {
+						type: "session.idle",
+						properties: {},
+					},
+				});
+				return events;
+			}
+
+			return null;
+		}
+
+		// usage_update, available_commands_update, title_update, mode_update — ignore
 		default:
 			return null;
 	}
 }
 
-function mapItemStarted(
-	item: UniversalItem,
-	event: UniversalEvent,
-	base: Omit<RuntimeDaemonEvent, "channel" | "type" | "payload">,
-): RuntimeDaemonEvent | null {
-	switch (item.kind) {
-		case "message": {
-			if (item.role === "assistant") {
-				// Emit a message.updated to create the assistant message
-				return {
-					...base,
-					channel: "message",
-					type: "message.updated",
-					itemId: item.id,
-					payload: {
-						type: "message.updated",
-						properties: {
-							info: {
-								id: item.id,
-								sessionID: event.session_id,
-								role: "assistant",
-								time: {},
-							},
-						},
-					},
-				};
-			}
-			if (item.role === "user") {
-				return {
-					...base,
-					channel: "message",
-					type: "message.updated",
-					itemId: item.id,
-					payload: {
-						type: "message.updated",
-						properties: {
-							info: {
-								id: item.id,
-								sessionID: event.session_id,
-								role: "user",
-								time: {},
-							},
-						},
-					},
-				};
-			}
-			return null;
+function safeParseJson(value: string): Record<string, unknown> {
+	try {
+		const parsed = JSON.parse(value);
+		if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+			return parsed as Record<string, unknown>;
 		}
-
-		case "toolCall": {
-			const toolCallPart = item.content.find(
-				(cp): cp is ToolCallContentPart => cp.type === "toolCall",
-			);
-			if (!toolCallPart) {
-				return null;
-			}
-			return {
-				...base,
-				channel: "message",
-				type: "message.part.updated",
-				itemId: item.id,
-				toolCallId: toolCallPart.call_id,
-				payload: {
-					type: "message.part.updated",
-					properties: {
-						part: buildToolUsePartFromContentPart(toolCallPart, item.id),
-					},
-				},
-			};
-		}
-
-		case "toolResult": {
-			const toolResultPart = item.content.find(
-				(cp): cp is ToolResultContentPart => cp.type === "toolResult",
-			);
-			if (!toolResultPart) {
-				return null;
-			}
-			return {
-				...base,
-				channel: "message",
-				type: "message.part.updated",
-				itemId: item.id,
-				toolCallId: toolResultPart.call_id,
-				payload: {
-					type: "message.part.updated",
-					properties: {
-						part: buildToolResultPartFromContentPart(toolResultPart, item.id),
-					},
-				},
-			};
-		}
-
-		default:
-			return null;
-	}
-}
-
-function mapItemCompleted(
-	item: UniversalItem,
-	event: UniversalEvent,
-	base: Omit<RuntimeDaemonEvent, "channel" | "type" | "payload">,
-): RuntimeDaemonEvent | null {
-	switch (item.kind) {
-		case "message": {
-			if (item.role !== "assistant") {
-				return null;
-			}
-			return {
-				...base,
-				channel: "message",
-				type: "message.updated",
-				itemId: item.id,
-				payload: {
-					type: "message.updated",
-					properties: {
-						info: {
-							id: item.id,
-							sessionID: event.session_id,
-							role: "assistant",
-							time: { completed: Date.now() },
-							...(item.status === "failed" ? { error: { name: "ItemFailed" } } : {}),
-						},
-					},
-				},
-			};
-		}
-
-		case "toolCall": {
-			const toolCallPart = item.content.find(
-				(cp): cp is ToolCallContentPart => cp.type === "toolCall",
-			);
-			if (!toolCallPart) {
-				return null;
-			}
-			const completedStatus = item.status === "failed" ? "error" : "completed";
-			return {
-				...base,
-				channel: "message",
-				type: "message.part.updated",
-				itemId: item.id,
-				toolCallId: toolCallPart.call_id,
-				payload: {
-					type: "message.part.updated",
-					properties: {
-						part: {
-							id: item.id,
-							sessionID: event.session_id,
-							messageID: "",
-							type: "tool",
-							callID: toolCallPart.call_id,
-							tool: toolCallPart.name,
-							state: {
-								status: completedStatus,
-								input: safeParseJson(toolCallPart.arguments),
-							},
-						},
-					},
-				},
-			};
-		}
-
-		case "toolResult": {
-			const toolResultPart = item.content.find(
-				(cp): cp is ToolResultContentPart => cp.type === "toolResult",
-			);
-			if (!toolResultPart) {
-				return null;
-			}
-			return {
-				...base,
-				channel: "message",
-				type: "message.part.updated",
-				itemId: item.id,
-				toolCallId: toolResultPart.call_id,
-				payload: {
-					type: "message.part.updated",
-					properties: {
-						part: {
-							id: item.id,
-							sessionID: event.session_id,
-							messageID: "",
-							type: "tool",
-							callID: toolResultPart.call_id,
-							tool: "",
-							state: {
-								status: "completed",
-								output: toolResultPart.output,
-							},
-						},
-					},
-				},
-			};
-		}
-
-		default:
-			return null;
+		return { value: parsed };
+	} catch {
+		return { value };
 	}
 }
