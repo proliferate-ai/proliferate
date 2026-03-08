@@ -156,11 +156,7 @@ export function createManagerRoutes(hubManager: HubManager): RouterType {
 			});
 			res.status(201).json({ event });
 		} catch (error) {
-			try {
-				mapWorkerMutationError(error);
-			} catch (mapped) {
-				next(mapped);
-			}
+			next(mapWorkerMutationError(error));
 		}
 	});
 
@@ -196,11 +192,7 @@ export function createManagerRoutes(hubManager: HubManager): RouterType {
 			});
 			res.json({ workerRun });
 		} catch (error) {
-			try {
-				mapWorkerMutationError(error);
-			} catch (mapped) {
-				next(mapped);
-			}
+			next(mapWorkerMutationError(error));
 		}
 	});
 
@@ -241,29 +233,25 @@ export function createManagerRoutes(hubManager: HubManager): RouterType {
 			});
 			res.json({ workerRun });
 		} catch (error) {
-			try {
-				mapWorkerMutationError(error);
-			} catch (mapped) {
-				next(mapped);
-			}
+			next(mapWorkerMutationError(error));
 		}
 	});
 
 	return router;
 }
 
-function mapWorkerMutationError(error: unknown): never {
+function mapWorkerMutationError(error: unknown): unknown {
 	if (error instanceof ApiError) {
-		throw error;
+		return error;
 	}
 	if (error instanceof workers.WorkerRunEventTypeError) {
-		throw new ApiError(400, error.message);
+		return new ApiError(400, error.message);
 	}
 	if (error instanceof workers.WorkerRunNotFoundError) {
-		throw new ApiError(404, error.message);
+		return new ApiError(404, error.message);
 	}
 	if (error instanceof workers.WorkerRunTransitionError) {
-		throw new ApiError(409, error.message);
+		return new ApiError(409, error.message);
 	}
-	throw error;
+	return error;
 }

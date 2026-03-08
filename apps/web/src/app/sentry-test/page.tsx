@@ -19,7 +19,11 @@ export default function SentryTestPage() {
 		try {
 			await orpc.admin.sentryTestError.call({});
 		} catch (e) {
-			toast.success("Server error triggered - check Sentry!");
+			if (e instanceof Error && e.message.includes("INTERNAL_SERVER_ERROR")) {
+				toast.success("Server error triggered - check Sentry!");
+			} else {
+				toast.error(`Unexpected error: ${e instanceof Error ? e.message : String(e)}`);
+			}
 		}
 	};
 

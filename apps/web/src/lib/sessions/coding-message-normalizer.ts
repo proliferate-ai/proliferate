@@ -63,6 +63,10 @@ export function normalizeServerMessages(message: ServerMessage): ServerMessage[]
 		return [message];
 	}
 
+	if (!isRecord(message.payload)) {
+		return [message];
+	}
+
 	const workspaceStateMessage = toWorkspaceStateMessage(message.payload as DaemonStreamEnvelope);
 	if (workspaceStateMessage) {
 		return [workspaceStateMessage];

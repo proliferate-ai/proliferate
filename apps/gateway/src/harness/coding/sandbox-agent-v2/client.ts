@@ -195,6 +195,7 @@ export async function waitForAcpReady(
 	initialDelayMs = 500,
 ): Promise<void> {
 	let delay = initialDelayMs;
+	const startedAt = Date.now();
 	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
 		try {
 			const url = withAcpUrl(baseUrl, "/v1/acp");
@@ -203,7 +204,7 @@ export async function waitForAcpReady(
 			});
 			if (response.ok) {
 				if (attempt > 1) {
-					logger.info({ attempt, totalMs: delay }, "sandbox-agent became ready");
+					logger.info({ attempt, elapsedMs: Date.now() - startedAt }, "sandbox-agent became ready");
 				}
 				return;
 			}
