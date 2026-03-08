@@ -1,8 +1,11 @@
 /**
- * HTTP router — B1: unified in-sandbox router.
+ * HTTP router — platform transport APIs.
  *
- * /_proliferate/* -> platform transport APIs
+ * /_proliferate/* -> platform transport APIs (PTY, FS, ports, health, events)
  * /*              -> dynamic reverse proxy to preview app
+ *
+ * Agent session routes are handled by Sandbox Agent on port 2468,
+ * proxied via Caddy at /v1/*.
  *
  * Routes:
  *   GET  /_proliferate/health          -> health check
@@ -14,7 +17,7 @@
  *   GET  /_proliferate/fs/read         -> read file
  *   POST /_proliferate/fs/write        -> write file
  *   GET  /_proliferate/ports           -> list active preview ports
- *   POST /_proliferate/token/refresh   -> token refresh (B7)
+ *   POST /_proliferate/token/refresh   -> token refresh
  */
 
 import { createHash } from "node:crypto";
@@ -136,7 +139,7 @@ export class Router {
 			return;
 		}
 
-		// Validate signature if present (B8: gateway-signed requests)
+		// Validate signature if present (gateway-signed requests)
 		const sigHeader = req.headers["x-proliferate-sandbox-signature"] as string | undefined;
 		if (sigHeader) {
 			const components = parseSignatureHeader(sigHeader);
@@ -391,7 +394,7 @@ export class Router {
 	}
 
 	// -----------------------------------------------------------------------
-	// Token refresh (B7)
+	// Token refresh
 	// -----------------------------------------------------------------------
 
 	private handleTokenRefresh(req: IncomingMessage, res: ServerResponse): void {

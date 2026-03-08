@@ -6,7 +6,7 @@ describe("Port policy", () => {
 		expect(DENYLISTED_PORTS.has(22)).toBe(true); // SSH
 		expect(DENYLISTED_PORTS.has(2375)).toBe(true); // Docker
 		expect(DENYLISTED_PORTS.has(2376)).toBe(true); // Docker TLS
-		expect(DENYLISTED_PORTS.has(4096)).toBe(true); // OpenCode
+		expect(DENYLISTED_PORTS.has(2468)).toBe(true); // Sandbox Agent
 		expect(DENYLISTED_PORTS.has(26500)).toBe(true); // Internal
 	});
 
