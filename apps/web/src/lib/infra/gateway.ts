@@ -7,6 +7,16 @@ import { env } from "@proliferate/environment/public";
 export const GATEWAY_URL = env.NEXT_PUBLIC_GATEWAY_URL;
 
 /**
+ * Internal gateway URL for server-to-server calls (e.g. eager-start).
+ * Falls back to the public URL. In local dev the public URL may be an
+ * ngrok tunnel that isn't always running, so prefer the direct address.
+ */
+export const GATEWAY_INTERNAL_URL =
+	process.env.GATEWAY_INTERNAL_URL ||
+	(process.env.GATEWAY_PORT ? `http://localhost:${process.env.GATEWAY_PORT}` : null) ||
+	GATEWAY_URL;
+
+/**
  * Get the gateway URL for a session
  */
 export function getSessionGatewayUrl(sessionId: string): string {
