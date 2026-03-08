@@ -20,7 +20,7 @@ export const PREVIEW_PORT_MIN = 3000;
 export const PREVIEW_PORT_MAX = 9999;
 
 /** Infrastructure ports that must never be proxied, even if in range. */
-export const DENYLISTED_PORTS = new Set([22, 2375, 2376, 4096, 26500, DAEMON_PORT]);
+export const DENYLISTED_PORTS = new Set([22, 2375, 2376, 2468, 26500, DAEMON_PORT]);
 
 /** How often to poll `ss -tln` for listening ports (ms). */
 export const PORT_POLL_INTERVAL_MS = 500;
