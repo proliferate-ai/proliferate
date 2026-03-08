@@ -1,11 +1,11 @@
 "use client";
 
+import type { WorkerSession } from "@/components/automations/worker-sessions-tab";
 import type {
 	ChildSession,
 	PendingDirective,
 	WorkerRunWithEvents,
-} from "@/components/automations/worker-activity-tab";
-import type { WorkerSession } from "@/components/automations/worker-sessions-tab";
+} from "@/hooks/automations/types";
 import {
 	usePendingDirectives,
 	useWorker,

@@ -1,6 +1,7 @@
 "use client";
 
-import { WorkerActivityTab } from "@/components/automations/worker-activity-tab";
+import type { ChatEvent } from "@/components/automations/worker-chat-tab";
+import { WorkerChatTab } from "@/components/automations/worker-chat-tab";
 import { WorkerDetailHeader } from "@/components/automations/worker-detail-header";
 import { WorkerFailureBanner } from "@/components/automations/worker-failure-banner";
 import { WorkerSessionsTab } from "@/components/automations/worker-sessions-tab";
@@ -11,7 +12,7 @@ import { DETAIL_TABS, type DetailTab } from "@/config/coworkers";
 import { useWorkerActions } from "@/hooks/automations/use-worker-actions";
 import { useWorkerDetail } from "@/hooks/automations/use-worker-detail";
 import { cn } from "@/lib/display/utils";
-import { use, useState } from "react";
+import { use, useMemo, useState } from "react";
 
 export default function CoworkerDetailPage({
 	params,
@@ -19,18 +20,38 @@ export default function CoworkerDetailPage({
 	params: Promise<{ id: string }>;
 }) {
 	const { id } = use(params);
-	const [activeTab, setActiveTab] = useState<DetailTab>("activity");
-	const {
-		worker,
-		isLoading,
-		runs,
-		sessions,
-		directives,
-		activeTaskCount,
-		isLoadingRuns,
-		isLoadingSessions,
-	} = useWorkerDetail(id);
+	const [activeTab, setActiveTab] = useState<DetailTab>("sessions");
+	const { worker, isLoading, runs, sessions, directives, isLoadingRuns, isLoadingSessions } =
+		useWorkerDetail(id);
 	const actions = useWorkerActions(id);
+
+	// Flatten all run events into a chronological chat stream
+	const chatEvents: ChatEvent[] = useMemo(() => {
+		const allEvents: ChatEvent[] = [];
+		for (const run of runs) {
+			const wakeStarted = run.events.find((e) => e.eventType === "wake_started");
+			const payload = wakeStarted?.payloadJson as Record<string, unknown> | null;
+			const runSource = (payload?.source as string) ?? null;
+
+			for (const event of run.events) {
+				allEvents.push({
+					id: event.id,
+					eventType: event.eventType,
+					summaryText: event.summaryText,
+					payloadJson: event.payloadJson,
+					sessionId: event.sessionId,
+					actionInvocationId: event.actionInvocationId,
+					createdAt: event.createdAt,
+					runSource,
+					runId: run.id,
+					runStatus: run.status,
+				});
+			}
+		}
+		// Sort oldest first for chat view
+		allEvents.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+		return allEvents;
+	}, [runs]);
 
 	if (isLoading) {
 		return (
@@ -69,10 +90,8 @@ export default function CoworkerDetailPage({
 					worker={worker}
 					onPause={actions.handlePause}
 					onResume={actions.handleResume}
-					onRunNow={actions.handleRunNow}
 					isPausing={actions.isPausing}
 					isResuming={actions.isResuming}
-					isRunningNow={actions.isRunningNow}
 				/>
 
 				{isManagerFailed && (
@@ -106,27 +125,25 @@ export default function CoworkerDetailPage({
 					))}
 				</div>
 
-				{activeTab === "activity" && (
-					<WorkerActivityTab
-						workerId={id}
-						worker={{
-							status: worker.status,
-							managerSessionId: worker.managerSessionId,
-							lastWakeAt: worker.lastWakeAt?.toISOString() ?? null,
-							lastErrorCode: worker.lastErrorCode,
-						}}
-						runs={runs}
-						pendingDirectives={directives}
-						activeTaskCount={activeTaskCount}
-						pendingApprovalCount={0}
-						isLoadingRuns={isLoadingRuns}
-						onSendDirective={actions.handleSendDirective}
-						isSendingDirective={actions.isSendingDirective}
-					/>
-				)}
-
 				{activeTab === "sessions" && (
 					<WorkerSessionsTab sessions={sessions} isLoading={isLoadingSessions} />
+				)}
+
+				{activeTab === "chat" && (
+					<WorkerChatTab
+						events={chatEvents}
+						pendingDirectives={directives.map((d) => ({
+							id: d.id,
+							messageType: d.messageType,
+							payloadJson: d.payloadJson,
+							queuedAt: d.queuedAt,
+							senderUserId: d.senderUserId,
+						}))}
+						isLoading={isLoadingRuns}
+						onSendDirective={actions.handleSendDirective}
+						isSendingDirective={actions.isSendingDirective}
+						workerStatus={worker.status}
+					/>
 				)}
 
 				{activeTab === "settings" && (
@@ -147,7 +164,7 @@ export default function CoworkerDetailPage({
 					/>
 				)}
 
-				<div className="h-12" />
+				{activeTab !== "chat" && <div className="h-12" />}
 			</div>
 		</div>
 	);

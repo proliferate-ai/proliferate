@@ -4,7 +4,7 @@ import type {
 	ChildSession,
 	PendingDirective,
 	WorkerRunWithEvents,
-} from "@/components/automations/worker-activity-tab";
+} from "@/hooks/automations/types";
 import {
 	useDeleteWorker,
 	usePauseWorker,

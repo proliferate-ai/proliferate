@@ -22,11 +22,11 @@ export const SUGGESTED_CAPABILITIES: CapabilitySuggestion[] = [
 	{ capabilityKey: "source.sentry.read", provider: "sentry" },
 ];
 
-export type DetailTab = "activity" | "sessions" | "settings";
+export type DetailTab = "sessions" | "chat" | "settings";
 
 export const DETAIL_TABS: { value: DetailTab; label: string }[] = [
-	{ value: "activity", label: "Activity" },
 	{ value: "sessions", label: "Sessions" },
+	{ value: "chat", label: "Chat" },
 	{ value: "settings", label: "Settings" },
 ];
 
