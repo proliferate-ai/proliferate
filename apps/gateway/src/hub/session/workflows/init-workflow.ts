@@ -16,6 +16,7 @@ export interface InitWorkflowDeps {
 	getOpenCodeSessionId: () => string | null;
 	getPreviewUrl: () => string | null;
 	isCompletedAutomationSession: () => boolean;
+	isManagerSession: () => boolean;
 	collectOutputs: () => Promise<Message[]>;
 	buildCompletedAutomationFallbackMessages: () => Message[];
 	getDurableRuntimeFacts: () => Promise<DurableRuntimeFact[]>;
@@ -107,6 +108,15 @@ export async function buildInitMessages(
 				"Harness output fetch failed for completed automation; using fallback transcript",
 				err,
 			);
+		}
+	} else if (deps.isManagerSession()) {
+		// Manager sessions have no openCodeSessionId but may have in-memory
+		// accumulated messages from wake cycles. Try collectOutputs for those.
+		try {
+			transformed = await deps.collectOutputs();
+			deps.log("Fetched manager session outputs", { messageCount: transformed.length });
+		} catch {
+			// Best effort — fall through to durable facts
 		}
 	} else if (!isCompletedAutomationSession && durableFacts.length === 0) {
 		throw new Error("Missing agent session info");
