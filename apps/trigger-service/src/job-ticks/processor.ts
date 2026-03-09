@@ -14,9 +14,6 @@ import { CronExpressionParser } from "cron-parser";
 
 import { logger as rootLogger } from "../lib/logger.js";
 
-/** Must match SYSTEM_JOB_TICK_USER_ID in @proliferate/shared/contracts/workers */
-const SYSTEM_JOB_TICK_USER_ID = "system:job-tick";
-
 const logger = rootLogger.child({ module: "job-tick-processor" });
 
 export async function processJobTick(job: Job<WorkerJobTickPayload>): Promise<void> {
@@ -24,11 +21,16 @@ export async function processJobTick(job: Job<WorkerJobTickPayload>): Promise<vo
 
 	const log = logger.child({ jobId, workerId, managerSessionId });
 
-	// 1. Load the worker job — verify still enabled
-	const workerJob = await workerJobs.findJobById(jobId, organizationId);
-	if (!workerJob) {
-		log.debug("Worker job not found, skipping tick");
-		return;
+	// 1. Load the worker job — verify still exists and enabled
+	let workerJob: Awaited<ReturnType<typeof workerJobs.findJobById>>;
+	try {
+		workerJob = await workerJobs.findJobById(jobId, organizationId);
+	} catch (err) {
+		if (err instanceof workerJobs.WorkerJobNotFoundError) {
+			log.debug("Worker job not found, skipping tick");
+			return;
+		}
+		throw err;
 	}
 	if (!workerJob.enabled) {
 		log.debug("Worker job disabled, skipping tick");
@@ -69,7 +71,7 @@ export async function processJobTick(job: Job<WorkerJobTickPayload>): Promise<vo
 	try {
 		await gateway.postMessage(managerSessionId, {
 			content: workerJob.checkInPrompt,
-			userId: SYSTEM_JOB_TICK_USER_ID,
+			userId: workerJobs.SYSTEM_JOB_TICK_USER_ID,
 			skipIfBusy: true,
 			idempotencyKey: `worker-job-tick:${jobId}:${job.id}`,
 		});

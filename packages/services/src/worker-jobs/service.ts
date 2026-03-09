@@ -11,6 +11,7 @@ import * as workerJobsDb from "./db";
 import { WorkerJobNotFoundError, WorkerJobValidationError } from "./errors";
 
 export { WorkerJobNotFoundError, WorkerJobValidationError } from "./errors";
+export { SYSTEM_JOB_TICK_USER_ID } from "@proliferate/shared/contracts/workers";
 
 const logger = getServicesLogger().child({ module: "worker-jobs" });
 
@@ -104,21 +105,25 @@ function validateCronExpression(expr: string): void {
 		for (const seg of segments) {
 			const stepParts = seg.split("/");
 			const rangePart = stepParts[0];
-			if (rangePart === "*") continue;
+
+			// Validate step value regardless of whether range is "*" or explicit
+			if (stepParts[1] !== undefined) {
+				const step = Number(stepParts[1]);
+				if (!Number.isInteger(step) || step < 1) {
+					throw new WorkerJobValidationError(
+						`Invalid cron field '${name}': step value '${stepParts[1]}' must be a positive integer`,
+					);
+				}
+			}
+
+			if (rangePart === "*") continue; // bounds check not needed for wildcard
+
 			const bounds = rangePart.split("-");
 			for (const bound of bounds) {
 				const num = Number(bound);
 				if (!Number.isInteger(num) || num < min || num > max) {
 					throw new WorkerJobValidationError(
 						`Invalid cron field '${name}': value '${bound}' is out of range (${min}-${max})`,
-					);
-				}
-			}
-			if (stepParts[1] !== undefined) {
-				const step = Number(stepParts[1]);
-				if (!Number.isInteger(step) || step < 1) {
-					throw new WorkerJobValidationError(
-						`Invalid cron field '${name}': step value '${stepParts[1]}' must be a positive integer`,
 					);
 				}
 			}
@@ -232,6 +237,7 @@ export const updateJobTickTimestamps = updateLastTick;
  * List all enabled jobs across all organizations.
  * Used by the tick scheduler to sync BullMQ repeatable jobs.
  */
-export async function listAllEnabledJobs(): Promise<WorkerJobRow[]> {
-	return workerJobsDb.listAllEnabledJobs();
+export async function listAllEnabledJobs(): Promise<WorkerJobDetail[]> {
+	const rows = await workerJobsDb.listAllEnabledJobs();
+	return rows.map(toJobDetail);
 }
