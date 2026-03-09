@@ -2020,7 +2020,10 @@ export async function listSessionEvents(sessionId: string): Promise<
  * List chat-specific session events for a manager session.
  * Returns only chat_user_message, chat_agent_response, chat_job_tick, chat_system events.
  */
-export async function listChatEvents(sessionId: string): Promise<
+export async function listChatEvents(
+	sessionId: string,
+	options?: { limit?: number },
+): Promise<
 	Array<{
 		id: string;
 		sessionId: string;
@@ -2045,7 +2048,8 @@ export async function listChatEvents(sessionId: string): Promise<
 				]),
 			),
 		)
-		.orderBy(asc(sessionEvents.createdAt));
+		.orderBy(asc(sessionEvents.createdAt))
+		.limit(options?.limit ?? 500);
 }
 
 // ============================================

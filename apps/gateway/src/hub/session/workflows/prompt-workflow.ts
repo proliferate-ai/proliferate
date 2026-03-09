@@ -43,10 +43,47 @@ export async function runPromptWorkflow(
 			deps.log("Job tick skipped (busy)");
 			return;
 		}
-		// For manager sessions, ACP handles message ordering — don't block
-		if (!deps.isManagerSession()) {
-			throw new Error("A run is already active for this session.");
+		if (deps.isManagerSession()) {
+			// Manager sessions: ACP handles message ordering. Forward the prompt
+			// without resetting event processor or overwriting the active run ID,
+			// which would corrupt the in-flight prompt's state.
+			deps.log("Manager concurrent prompt (run active)", {
+				userId,
+				contentLength: content.length,
+			});
+			await deps.ensureRuntimeReady();
+			await deps.sendPromptToRuntime(content, options?.images);
+
+			const eventType = options?.metadata?.jobId ? "chat_job_tick" : "chat_user_message";
+			const msgId = randomUUID();
+			const payload = options?.metadata?.jobId
+				? {
+						content,
+						jobId: options.metadata.jobId,
+						jobName: options.metadata.jobName,
+						userId,
+						messageId: msgId,
+					}
+				: { content, userId, source: options?.source, messageId: msgId };
+			deps.persistChatEvent(eventType, payload);
+
+			const parts: Message["parts"] = [{ type: "text", text: content }];
+			deps.broadcast({
+				type: "message",
+				payload: {
+					id: msgId,
+					role: "user",
+					content,
+					isComplete: true,
+					createdAt: Date.now(),
+					senderId: userId,
+					source: options?.source,
+					parts,
+				},
+			});
+			return;
 		}
+		throw new Error("A run is already active for this session.");
 	}
 
 	const migrationState = deps.getMigrationState();
