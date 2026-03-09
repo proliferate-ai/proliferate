@@ -386,6 +386,55 @@ export async function upsertOAuthAppIntegration(input: {
 }
 
 /**
+ * Upsert a direct-credential integration (e.g., MySQL connection URL).
+ * Uses connectionId + organizationId as the conflict target.
+ */
+export async function upsertDirectIntegration(input: {
+	organizationId: string;
+	integrationId: string;
+	connectionId: string;
+	displayName: string;
+	createdBy: string;
+	encryptedAccessToken: string;
+}): Promise<IntegrationRow> {
+	const db = getDb();
+	const now = new Date();
+	const [result] = await db
+		.insert(integrations)
+		.values({
+			id: randomUUID(),
+			organizationId: input.organizationId,
+			provider: "direct",
+			integrationId: input.integrationId,
+			connectionId: input.connectionId,
+			displayName: input.displayName,
+			scopes: null,
+			status: "active",
+			visibility: "org",
+			createdBy: input.createdBy,
+			encryptedAccessToken: input.encryptedAccessToken,
+			encryptedRefreshToken: null,
+			tokenExpiresAt: null,
+			tokenType: null,
+			connectionMetadata: null,
+			updatedAt: now,
+		})
+		.onConflictDoUpdate({
+			target: [integrations.connectionId, integrations.organizationId],
+			set: {
+				displayName: input.displayName,
+				status: "active",
+				createdBy: input.createdBy,
+				encryptedAccessToken: input.encryptedAccessToken,
+				updatedAt: now,
+			},
+		})
+		.returning();
+
+	return result;
+}
+
+/**
  * Update encrypted OAuth credentials for an integration.
  */
 export async function updateOAuthCredentials(

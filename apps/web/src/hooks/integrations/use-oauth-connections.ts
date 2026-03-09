@@ -124,6 +124,7 @@ export function useOAuthConnections() {
 		loadingProvider,
 		integrationsLoading,
 		integrationsByProvider,
+		allIntegrations: integrations,
 		slackStatus,
 		slackDisconnect,
 		slackConnect,

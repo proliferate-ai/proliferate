@@ -459,6 +459,49 @@ export const integrationsRouter = {
 			}
 		}),
 
+	// ----------------------------------------
+	// Direct integrations (e.g., MySQL)
+	// ----------------------------------------
+
+	/**
+	 * Save a direct-credential integration (e.g., MySQL connection URL).
+	 */
+	saveDirectIntegration: orgProcedure
+		.input(
+			z.object({
+				integrationId: z.enum(["mysql"]),
+				displayName: z.string().min(1),
+				connectionString: z.string().min(1),
+			}),
+		)
+		.output(z.object({ success: z.boolean(), id: z.string() }))
+		.handler(async ({ input, context }) => {
+			try {
+				await integrations.assertIntegrationAdmin(context.user.id, context.orgId);
+			} catch (err) {
+				throwAsORPC(err);
+			}
+
+			if (
+				!input.connectionString.startsWith("mysql://") &&
+				!input.connectionString.startsWith("mysql2://")
+			) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "Connection string must start with mysql:// or mysql2://",
+				});
+			}
+
+			const result = await integrations.saveDirectIntegration({
+				organizationId: context.orgId,
+				userId: context.user.id,
+				integrationId: input.integrationId,
+				displayName: input.displayName,
+				connectionString: input.connectionString,
+			});
+
+			return { success: true, id: result.id };
+		}),
+
 	// ============================================
 	// Org-Scoped MCP Connectors
 	// ============================================

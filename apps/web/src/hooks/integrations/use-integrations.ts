@@ -210,6 +210,21 @@ export function useUpdateSlackConfig() {
 	});
 }
 
+// ============================================
+// Direct Integration Hooks (MySQL, etc.)
+// ============================================
+
+export function useSaveDirectIntegration() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		...orpc.integrations.saveDirectIntegration.mutationOptions(),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: orpc.integrations.list.key() });
+		},
+	});
+}
+
 export function useSlackDisconnect() {
 	const queryClient = useQueryClient();
 

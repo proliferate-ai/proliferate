@@ -15,6 +15,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"mysql2": "^3.19.1",
 		"zod": "^3.22.3"
 	},
 	"devDependencies": {
