@@ -815,6 +815,8 @@ export const automationsRouter = {
 			}),
 		)
 		.handler(async ({ context }) => {
+			// Connector tools are session-scoped (bound at runtime), not org-scoped,
+			// so they're intentionally excluded from this org-level action selector.
 			const activeIntegrations = await integrations.listActiveIntegrationsForOrganization(
 				context.orgId,
 			);
