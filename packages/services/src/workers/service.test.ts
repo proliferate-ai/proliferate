@@ -50,7 +50,6 @@ vi.mock("./db", () => ({
 	updateWakeEventPayload: vi.fn(),
 	insertWorkerRun: vi.fn(),
 	consumeWakeEvent: vi.fn(),
-	touchWorkerLastWake: vi.fn(),
 	insertWakeStartedEvent: vi.fn(),
 	COALESCEABLE_WAKE_SOURCES: ["tick", "webhook"],
 }));

@@ -2,6 +2,9 @@
  * V1 worker and wake contracts.
  */
 
+/** Synthetic user ID used as the sender for job-tick prompts. */
+export const SYSTEM_JOB_TICK_USER_ID = "system:job-tick";
+
 export const WORKER_STATUSES = [
 	"active",
 	"automations_paused",

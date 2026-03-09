@@ -5,6 +5,8 @@ import {
 	type WorkerCapabilityDraft,
 	WorkerCapabilityEditor,
 } from "@/components/automations/worker-capability-editor";
+import { WorkerJobForm } from "@/components/automations/worker-job-form";
+import { describeCron } from "@/components/automations/worker-job-utils";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -19,10 +21,18 @@ import { Button } from "@/components/ui/button";
 import { InlineEdit } from "@/components/ui/inline-edit";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+	useCreateWorkerJob,
+	useDeleteWorkerJob,
+	useToggleWorkerJob,
+	useUpdateWorkerJob,
+	useWorkerJobs,
+} from "@/hooks/automations/use-worker-jobs";
 import { useIntegrations, useSlackInstallations } from "@/hooks/integrations/use-integrations";
 import { cn } from "@/lib/display/utils";
 import type { ModelId } from "@proliferate/shared";
-import { Trash2 } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 
@@ -57,9 +67,17 @@ export function WorkerSettingsTab({
 }: WorkerSettingsTabProps) {
 	const [objectiveValue, setObjectiveValue] = useState(worker.systemPrompt || "");
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+	const [deleteJobId, setDeleteJobId] = useState<string | null>(null);
 	const [hasPendingChanges, setHasPendingChanges] = useState(false);
+	const [showJobForm, setShowJobForm] = useState(false);
+	const [editingJobId, setEditingJobId] = useState<string | null>(null);
 	const { data: integrationsData } = useIntegrations();
 	const { data: slackInstallations } = useSlackInstallations();
+	const { data: jobs, isLoading: isLoadingJobs } = useWorkerJobs(worker.id);
+	const createJob = useCreateWorkerJob(worker.id);
+	const updateJob = useUpdateWorkerJob(worker.id);
+	const deleteJob = useDeleteWorkerJob(worker.id);
+	const toggleJob = useToggleWorkerJob(worker.id);
 	const [capabilitiesValue, setCapabilitiesValue] = useState<WorkerCapabilityDraft[]>(
 		worker.capabilities ?? [],
 	);
@@ -165,6 +183,135 @@ export function WorkerSettingsTab({
 				/>
 			</div>
 
+			{/* Scheduled Jobs */}
+			<div>
+				<div className="flex items-center justify-between mb-2">
+					<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+						Scheduled Jobs
+					</p>
+					{!showJobForm && (
+						<Button
+							variant="ghost"
+							size="sm"
+							className="h-6 px-2 text-xs"
+							onClick={() => {
+								setShowJobForm(true);
+								setEditingJobId(null);
+							}}
+						>
+							<Plus className="h-3 w-3 mr-1" />
+							Add Job
+						</Button>
+					)}
+				</div>
+
+				{showJobForm && !editingJobId && (
+					<div className="mb-3">
+						<WorkerJobForm
+							onSubmit={(values) => {
+								createJob.mutate(
+									{ workerId: worker.id, ...values },
+									{ onSuccess: () => setShowJobForm(false) },
+								);
+							}}
+							onCancel={() => setShowJobForm(false)}
+							isSubmitting={createJob.isPending}
+						/>
+					</div>
+				)}
+
+				{isLoadingJobs ? (
+					<div className="rounded-lg border border-border px-4 py-3">
+						<div className="h-4 w-32 bg-muted rounded animate-pulse" />
+					</div>
+				) : !jobs || jobs.length === 0 ? (
+					!showJobForm && (
+						<div className="rounded-lg border border-border px-4 py-4">
+							<p className="text-sm text-muted-foreground">
+								No scheduled jobs. Add a job to have this coworker check in on a schedule.
+							</p>
+						</div>
+					)
+				) : (
+					<div className="rounded-lg border border-border divide-y divide-border">
+						{jobs.map((job) =>
+							editingJobId === job.id ? (
+								<div key={job.id} className="p-3">
+									<WorkerJobForm
+										initialValues={{
+											name: job.name,
+											checkInPrompt: job.checkInPrompt,
+											cronExpression: job.cronExpression,
+											description: job.description ?? undefined,
+											enabled: job.enabled,
+										}}
+										onSubmit={(values) => {
+											updateJob.mutate(
+												{ jobId: job.id, ...values },
+												{ onSuccess: () => setEditingJobId(null) },
+											);
+										}}
+										onCancel={() => setEditingJobId(null)}
+										isSubmitting={updateJob.isPending}
+									/>
+								</div>
+							) : (
+								<div key={job.id} className="flex items-center gap-3 px-4 py-2.5">
+									<div className="flex-1 min-w-0">
+										<div className="flex items-center gap-2">
+											<span className="text-sm font-medium text-foreground truncate">
+												{job.name}
+											</span>
+											<span className="text-xs text-muted-foreground shrink-0">
+												{describeCron(job.cronExpression)}
+											</span>
+										</div>
+										{job.lastTickAt && (
+											<p className="text-xs text-muted-foreground mt-0.5">
+												Last run{" "}
+												{formatDistanceToNow(new Date(job.lastTickAt), {
+													addSuffix: true,
+												})}
+											</p>
+										)}
+									</div>
+									<div className="flex items-center gap-2 shrink-0">
+										<Switch
+											checked={job.enabled}
+											onCheckedChange={(checked) => {
+												toggleJob.mutate({
+													jobId: job.id,
+													enabled: checked,
+												});
+											}}
+										/>
+										<Button
+											variant="ghost"
+											size="sm"
+											className="h-7 w-7 p-0"
+											onClick={() => {
+												setEditingJobId(job.id);
+												setShowJobForm(false);
+											}}
+										>
+											<Pencil className="h-3.5 w-3.5" />
+										</Button>
+										<Button
+											variant="ghost"
+											size="sm"
+											className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+											onClick={() => setDeleteJobId(job.id)}
+										>
+											<Trash2 className="h-3.5 w-3.5" />
+										</Button>
+									</div>
+								</div>
+							),
+						)}
+					</div>
+				)}
+			</div>
+
 			{/* Status toggle */}
 			<div>
 				<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
@@ -224,6 +371,33 @@ export function WorkerSettingsTab({
 						<AlertDialogCancel>Cancel</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={onDelete}
+							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+						>
+							Delete
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+
+			<AlertDialog open={!!deleteJobId} onOpenChange={(open) => !open && setDeleteJobId(null)}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Delete Job</AlertDialogTitle>
+						<AlertDialogDescription>
+							This will permanently delete this scheduled job. This action cannot be undone.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={() => {
+								if (deleteJobId) {
+									deleteJob.mutate(
+										{ jobId: deleteJobId },
+										{ onSuccess: () => setDeleteJobId(null) },
+									);
+								}
+							}}
 							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
 						>
 							Delete
