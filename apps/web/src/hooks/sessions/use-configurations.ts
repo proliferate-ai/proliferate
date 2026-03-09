@@ -102,14 +102,6 @@ export function useDeleteConfiguration() {
 	};
 }
 
-export function useConfigurationEnvFiles(configurationId: string, enabled = true) {
-	return useQuery({
-		...orpc.configurations.getEnvFiles.queryOptions({ input: { configurationId } }),
-		enabled: enabled && !!configurationId,
-		select: (data) => data.envFiles,
-	});
-}
-
 export function useConfigurationServiceCommands(configurationId: string, enabled = true) {
 	return useQuery({
 		...orpc.configurations.getServiceCommands.queryOptions({ input: { configurationId } }),

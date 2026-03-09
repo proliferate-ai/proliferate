@@ -15,6 +15,7 @@ import {
 	inArray,
 	isNull,
 	or,
+	repos,
 	secrets,
 } from "../db/client";
 import { getServicesLogger } from "../logger";
@@ -406,4 +407,91 @@ export async function getScopedSecretsForConfiguration(
 			),
 		);
 	return rows;
+}
+
+// ============================================
+// Multi-repo secret assignment
+// ============================================
+
+export interface GroupedSecretRow {
+	key: string;
+	secretType: string | null;
+	repos: Array<{ repoId: string | null; repoName: string | null }>;
+}
+
+/**
+ * List secrets grouped by key with their assigned repos.
+ */
+export async function listGroupedByKey(orgId: string): Promise<GroupedSecretRow[]> {
+	const db = getDb();
+	const rows = await db
+		.select({
+			key: secrets.key,
+			secretType: secrets.secretType,
+			repoId: secrets.repoId,
+			repoName: repos.githubRepoName,
+		})
+		.from(secrets)
+		.leftJoin(repos, eq(secrets.repoId, repos.id))
+		.where(and(eq(secrets.organizationId, orgId), isNull(secrets.configurationId)))
+		.orderBy(secrets.key);
+
+	const grouped = new Map<string, GroupedSecretRow>();
+	for (const row of rows) {
+		const existing = grouped.get(row.key);
+		if (existing) {
+			existing.repos.push({ repoId: row.repoId, repoName: row.repoName });
+		} else {
+			grouped.set(row.key, {
+				key: row.key,
+				secretType: row.secretType,
+				repos: [{ repoId: row.repoId, repoName: row.repoName }],
+			});
+		}
+	}
+	return [...grouped.values()];
+}
+
+/**
+ * Delete secret rows for specific repo assignments.
+ */
+export async function deleteByKeyAndRepos(
+	orgId: string,
+	key: string,
+	repoIds: string[],
+): Promise<void> {
+	const db = getDb();
+	await db
+		.delete(secrets)
+		.where(
+			and(
+				eq(secrets.organizationId, orgId),
+				eq(secrets.key, key),
+				inArray(secrets.repoId, repoIds),
+				isNull(secrets.configurationId),
+			),
+		);
+}
+
+/**
+ * Batch update encrypted value for specific repo assignments.
+ */
+export async function updateValueByKeyAndRepos(
+	orgId: string,
+	key: string,
+	encryptedValue: string,
+	repoIds: string[],
+): Promise<void> {
+	const db = getDb();
+	await db
+		.update(secrets)
+		.set({ encryptedValue, updatedAt: new Date() })
+		.where(
+			and(
+				eq(secrets.organizationId, orgId),
+				eq(secrets.key, key),
+				inArray(secrets.repoId, repoIds),
+				isNull(secrets.configurationId),
+			),
+		);
 }

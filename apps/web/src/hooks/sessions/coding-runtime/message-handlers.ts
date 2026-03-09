@@ -4,7 +4,6 @@ import type {
 	MessagePart,
 	TaskToolMetadata,
 } from "@/lib/sessions/coding-message-converter";
-import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { useSetupProgressStore } from "@/stores/setup-progress";
 import type {
 	ToolEndMessage,
@@ -230,20 +229,6 @@ export function handleToolStart(data: ToolStartMessage, ctx: MessageHandlerConte
 	});
 	useSetupProgressStore.getState().onToolStart(ctx.sessionId, payload.tool);
 	const messageId = payload.messageId || ctx.getLastAssistantMessageId();
-
-	// Detect env request tool
-	const toolArgs = payload.args as Record<string, unknown> | undefined;
-	if (payload.tool === "request_env_variables" && toolArgs?.keys) {
-		ctx.setEnvRequest({
-			toolCallId: payload.toolCallId,
-			keys: toolArgs.keys as EnvRequest["keys"],
-		});
-
-		const panelStore = usePreviewPanelStore.getState();
-		if (panelStore.mode.type !== "environment") {
-			panelStore.togglePanel("environment");
-		}
-	}
 
 	if (!messageId) return;
 

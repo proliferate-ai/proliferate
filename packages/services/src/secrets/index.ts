@@ -13,3 +13,4 @@ export type {
 	CheckSecretsFilter,
 } from "../types/secrets";
 export { EncryptionError, DuplicateSecretError } from "./service";
+export type { GroupedSecretRow } from "./db";

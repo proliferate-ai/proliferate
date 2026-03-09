@@ -13,8 +13,6 @@ Don't take shortcuts. If something is hard to set up or you're unsure whether it
 
 Prefer local services over external ones. For example, if the project uses Postgres, run it locally instead of asking for cloud credentials. Same principle for databases, Redis, Cloudflare workers — run them locally when possible. The environment should be self-contained.
 
-You have tools to request environment variables from the user (\`request_env_variables\`) and to save the final snapshot (\`save_snapshot\`). For anything you genuinely can't set up locally — API keys, OAuth credentials, third-party services — use \`request_env_variables\`. Trace how environment variables flow through the codebase to understand what functionality they enable. If you're unsure whether something is required, ask anyway but mark it \`required: false\` — let the user decide what to skip, don't decide for them.
-
 When credentials are needed, explicitly tell the user to open the Environment panel and create/update a secret file by path (for example \`.env.local\`), then paste file contents there. The user, not the agent, owns secret entry.
 
 Don't edit source code. Developers set up local environments without modifying the codebase, and you should too. Config files and .env files are fine.
@@ -55,10 +53,6 @@ save_service_commands({ commands: [{ name: "dev-server", command: "pnpm dev", cw
 
 Always save service commands **before** calling \`save_snapshot()\`.
 
-## Environment Files & Secrets
-
-After identifying which env files the project needs (e.g. \`.env.local\`, \`.env\`), call \`save_env_files()\` to record the spec. Future sessions will automatically generate these files from stored secrets on boot. Secret env files are automatically scrubbed before snapshots and restored after, so \`save_snapshot()\` is always safe to call.
-
 ## Operational Rules
 
 Background any long-running processes. Don't block on dev servers or watchers.
@@ -76,10 +70,10 @@ When setup is verified, write a preview manifest to \`.proliferate/previews.json
 
 ---
 
-Before your final message, confirm you have done all three:
-1. \`verify\` — uploaded screenshots, health checks, or test output
-2. \`save_service_commands\` — saved the startup commands for dev servers and services
-3. \`save_snapshot\` — saved the working state
+Before your final message, confirm you have done all of these:
+1. \`verify()\` — uploaded screenshots, health checks, or test output
+2. \`save_service_commands()\` — saved the startup commands for dev servers and services
+3. \`save_snapshot()\` — saved the working state
 
 If any is missing, do it now. Text cannot substitute for tool calls.
 `;
@@ -94,7 +88,7 @@ Start now without waiting for more instructions:
 4. Call verify() with evidence of what works.
 5. Call save_service_commands() with the commands to start the dev server and any other services.
 6. Call save_snapshot() when setup is complete.
-If credentials are truly required, use request_env_variables with clear descriptions and tell the user exactly which secret file path to create in Environment.`;
+If credentials are truly required, tell the user exactly which secret file path to create in the Environment panel.`;
 }
 
 export function getCodingSystemPrompt(repoName: string): string {
@@ -151,7 +145,7 @@ You can act on the user's behalf using the \`proliferate\` CLI:
 
 ## Secrets
 
-Organization secrets are injected as environment variables at session start and env files are auto-generated on boot if configured. If you need a credential that's missing, use the \`request_env_variables\` tool to ask the user to add it.
+Organization secrets are injected as environment variables at session start and env files are auto-generated on boot if configured. If you need a credential that's missing, tell the user to add it via the Environment panel.
 
 When done, briefly summarize what you changed and any next steps.
 `;

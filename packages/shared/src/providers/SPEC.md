@@ -132,7 +132,7 @@ Both providers use two-phase boot:
 - start Caddy preview proxy
 - start sandbox-mcp
 - optionally run git freshness pull on restore
-- apply env files / secret file writes
+- apply secret file writes
 - optionally start configured service commands
 
 This split keeps session readiness fast while preserving ergonomics.
@@ -163,14 +163,12 @@ Default ports:
 Core tools are always injected:
 
 - `verify`
-- `request_env_variables`
 - `save_snapshot`
 - `automation_complete`
 
 Setup-only tools are session-type gated:
 
 - `save_service_commands`
-- `save_env_files`
 
 For non-setup sessions, providers actively remove setup-only tools during restore to avoid leakage from setup snapshots.
 

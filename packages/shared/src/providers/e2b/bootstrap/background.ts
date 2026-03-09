@@ -137,26 +137,6 @@ async function bootServices(sandbox: Sandbox, opts: CreateSandboxOpts, log: Logg
 		}
 	}
 
-	if (opts.envFiles) {
-		try {
-			const specJson = JSON.stringify(opts.envFiles);
-			const result = await sandbox.commands.run(
-				`proliferate env apply --spec ${shellEscape(specJson)}`,
-				{ timeoutMs: 30000 },
-			);
-			if (result.exitCode !== 0) {
-				log.error(
-					{ exitCode: result.exitCode, stderr: result.stderr },
-					"proliferate env apply failed",
-				);
-			} else {
-				log.info("Env files applied");
-			}
-		} catch (err) {
-			log.error({ err }, "proliferate env apply failed");
-		}
-	}
-
 	if (!opts.snapshotHasDeps || !opts.serviceCommands?.length) return;
 
 	for (const cmd of opts.serviceCommands) {

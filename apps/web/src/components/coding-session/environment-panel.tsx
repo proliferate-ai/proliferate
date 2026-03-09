@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useCheckSecrets } from "@/hooks/org/use-repos";
 import { useCreateSecret, useDeleteSecret, useSecrets } from "@/hooks/org/use-secrets";
-import { useConfiguration, useConfigurationEnvFiles } from "@/hooks/sessions/use-configurations";
+import { useConfiguration } from "@/hooks/sessions/use-configurations";
 import { orpc } from "@/lib/infra/orpc";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -444,11 +444,9 @@ export function EnvironmentPanel({
 	const { data: secrets, isLoading: secretsLoading } = useSecrets();
 	const deleteSecret = useDeleteSecret();
 
-	// Env file spec from configuration
-	const { data: envFiles, isLoading: specLoading } = useConfigurationEnvFiles(
-		configurationId ?? "",
-		!!configurationId,
-	);
+	// Env file spec removed — secrets are now user-managed env vars
+	const envFiles = null;
+	const specLoading = false;
 	const shouldLoadConfiguration =
 		!!configurationId && !(workspaceOptionsProp && workspaceOptionsProp.length > 0);
 	const { data: configuration } = useConfiguration(configurationId ?? "", shouldLoadConfiguration);

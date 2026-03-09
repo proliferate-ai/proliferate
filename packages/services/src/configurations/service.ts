@@ -374,15 +374,6 @@ export async function getConfigurationServiceCommandsForOrg(
 	return parseConfigurationServiceCommands(row?.serviceCommands);
 }
 
-export async function getConfigurationEnvFilesForOrg(
-	configurationId: string,
-	orgId: string,
-): Promise<unknown | null> {
-	await assertConfigurationBelongsToOrg(configurationId, orgId);
-	const envFiles = await configurationsDb.getConfigurationEnvFiles(configurationId);
-	return envFiles ?? null;
-}
-
 export async function updateConfigurationServiceCommandsForOrg(input: {
 	configurationId: string;
 	orgId: string;
@@ -462,6 +453,7 @@ export type {
 	RepoWithNameRow,
 	ConfigurationSnapshotBuildInfoRow,
 	ConfigurationCandidateRow,
+	ReadyConfigurationRow,
 } from "./db";
 
 // Re-export input types
@@ -490,24 +482,6 @@ export async function findByIdForSession(id: string) {
  */
 export async function getConfigurationReposWithDetails(configurationId: string) {
 	return configurationsDb.getConfigurationReposWithDetails(configurationId);
-}
-
-/**
- * Get configuration env file spec.
- */
-export async function getConfigurationEnvFiles(configurationId: string) {
-	return configurationsDb.getConfigurationEnvFiles(configurationId);
-}
-
-/**
- * Update configuration-level env file spec.
- */
-export async function updateConfigurationEnvFiles(input: {
-	configurationId: string;
-	envFiles: unknown;
-	updatedBy: string;
-}) {
-	return configurationsDb.updateConfigurationEnvFiles(input);
 }
 
 /**
@@ -591,6 +565,13 @@ export async function listByRepoId(repoId: string) {
  */
 export async function getConfigurationReposWithConfigurations(repoId: string) {
 	return configurationsDb.getConfigurationReposWithConfigurations(repoId);
+}
+
+/**
+ * List ready configurations with snapshots for a specific repo.
+ */
+export async function listReadyConfigurationsForRepo(repoId: string) {
+	return configurationsDb.listReadyConfigurations(repoId);
 }
 
 /**

@@ -152,6 +152,13 @@ export interface RepoConfigurationRow {
 	snapshotId: string | null;
 }
 
+/** Ready configuration row for snapshot listing */
+export interface ReadyConfigurationRow {
+	id: string;
+	snapshotId: string;
+	createdAt: Date | null;
+}
+
 /** Configuration snapshot build info (for worker) */
 export interface ConfigurationSnapshotBuildInfoRow {
 	id: string;
@@ -441,37 +448,6 @@ export async function updateConfigurationServiceCommands(input: {
 }
 
 /**
- * Update configuration-level env file spec.
- */
-export async function updateConfigurationEnvFiles(input: {
-	configurationId: string;
-	envFiles: unknown;
-	updatedBy: string;
-}): Promise<void> {
-	const db = getDb();
-	await db
-		.update(configurations)
-		.set({
-			envFiles: input.envFiles,
-			envFilesUpdatedAt: new Date(),
-			envFilesUpdatedBy: input.updatedBy,
-		})
-		.where(eq(configurations.id, input.configurationId));
-}
-
-/**
- * Get configuration env file spec.
- */
-export async function getConfigurationEnvFiles(configurationId: string): Promise<unknown | null> {
-	const db = getDb();
-	const result = await db.query.configurations.findFirst({
-		where: eq(configurations.id, configurationId),
-		columns: { envFiles: true },
-	});
-	return result?.envFiles ?? null;
-}
-
-/**
  * Update configuration snapshot_id only if currently null.
  * Returns true if updated, false if already had a snapshot.
  */
@@ -589,6 +565,44 @@ export async function listByRepoId(repoId: string): Promise<RepoConfigurationRow
 	return results
 		.map((r) => r.configuration)
 		.filter((p): p is NonNullable<typeof p> => p !== null)
+		.sort((a, b) => {
+			const aTime = a.createdAt?.getTime() ?? 0;
+			const bTime = b.createdAt?.getTime() ?? 0;
+			return bTime - aTime;
+		});
+}
+
+/**
+ * List ready configurations with snapshots for a specific repo.
+ */
+export async function listReadyConfigurations(repoId: string): Promise<ReadyConfigurationRow[]> {
+	const db = getDb();
+
+	const results = await db.query.configurationRepos.findMany({
+		where: eq(configurationRepos.repoId, repoId),
+		with: {
+			configuration: {
+				columns: {
+					id: true,
+					snapshotId: true,
+					status: true,
+					createdAt: true,
+				},
+			},
+		},
+	});
+
+	return results
+		.map((r) => r.configuration)
+		.filter(
+			(c): c is NonNullable<typeof c> & { snapshotId: string } =>
+				c !== null && c.status === "ready" && c.snapshotId !== null,
+		)
+		.map((c) => ({
+			id: c.id,
+			snapshotId: c.snapshotId,
+			createdAt: c.createdAt,
+		}))
 		.sort((a, b) => {
 			const aTime = a.createdAt?.getTime() ?? 0;
 			const bTime = b.createdAt?.getTime() ?? 0;

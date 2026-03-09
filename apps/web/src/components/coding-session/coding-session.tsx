@@ -26,11 +26,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SessionPanelProps } from "./right-panel";
 import { RightPanel } from "./right-panel";
+import { SessionContext } from "./session-context";
 import { SessionHeader } from "./session-header";
 import { SessionLoadingShell } from "./session-loading-shell";
 import { SetupSessionChrome } from "./setup-session-chrome";
 import { Thread } from "./thread";
-import { SessionContext } from "./tool-ui/env-request-tool";
 import { WorkspaceStateBanner, deriveWorkspaceState } from "./workspace-state-banner";
 
 interface CodingSessionProps {

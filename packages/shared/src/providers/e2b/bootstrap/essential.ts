@@ -10,10 +10,6 @@ import {
 import {
 	AUTOMATION_COMPLETE_DESCRIPTION,
 	AUTOMATION_COMPLETE_TOOL,
-	REQUEST_ENV_VARIABLES_DESCRIPTION,
-	REQUEST_ENV_VARIABLES_TOOL,
-	SAVE_ENV_FILES_DESCRIPTION,
-	SAVE_ENV_FILES_TOOL,
 	SAVE_SERVICE_COMMANDS_DESCRIPTION,
 	SAVE_SERVICE_COMMANDS_TOOL,
 	SAVE_SNAPSHOT_DESCRIPTION,
@@ -114,8 +110,6 @@ export async function setupEssentialDependencies(
 		writeFile(`${globalPluginDir}/proliferate.mjs`, PLUGIN_MJS),
 		writeFile(`${localToolDir}/verify.ts`, VERIFY_TOOL),
 		writeFile(`${localToolDir}/verify.txt`, VERIFY_TOOL_DESCRIPTION),
-		writeFile(`${localToolDir}/request_env_variables.ts`, REQUEST_ENV_VARIABLES_TOOL),
-		writeFile(`${localToolDir}/request_env_variables.txt`, REQUEST_ENV_VARIABLES_DESCRIPTION),
 		writeFile(`${localToolDir}/save_snapshot.ts`, SAVE_SNAPSHOT_TOOL),
 		writeFile(`${localToolDir}/save_snapshot.txt`, SAVE_SNAPSHOT_DESCRIPTION),
 		writeFile(`${localToolDir}/automation_complete.ts`, AUTOMATION_COMPLETE_TOOL),
@@ -138,14 +132,12 @@ export async function setupEssentialDependencies(
 		writePromises.push(
 			writeFile(`${localToolDir}/save_service_commands.ts`, SAVE_SERVICE_COMMANDS_TOOL),
 			writeFile(`${localToolDir}/save_service_commands.txt`, SAVE_SERVICE_COMMANDS_DESCRIPTION),
-			writeFile(`${localToolDir}/save_env_files.ts`, SAVE_ENV_FILES_TOOL),
-			writeFile(`${localToolDir}/save_env_files.txt`, SAVE_ENV_FILES_DESCRIPTION),
 		);
 	} else {
 		writePromises.push(
 			(async () => {
 				await sandbox.commands.run(
-					`rm -f ${localToolDir}/save_service_commands.ts ${localToolDir}/save_service_commands.txt ${localToolDir}/save_env_files.ts ${localToolDir}/save_env_files.txt`,
+					`rm -f ${localToolDir}/save_service_commands.ts ${localToolDir}/save_service_commands.txt`,
 					{ timeoutMs: 10000 },
 				);
 			})(),

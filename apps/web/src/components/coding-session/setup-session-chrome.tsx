@@ -12,9 +12,8 @@ import {
 	useUnsubscribeNotifications,
 } from "@/hooks/sessions/use-sessions";
 import { startSnapshotProgressToast } from "@/lib/display/snapshot-progress-toast";
-import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { useSetupProgressStore } from "@/stores/setup-progress";
-import { Bell, BellOff, Check, KeyRound, Loader2, MessageSquare, Settings } from "lucide-react";
+import { Bell, BellOff, Check, Loader2, MessageSquare, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -37,12 +36,7 @@ export function SetupSessionChrome({
 }: SetupSessionChromeProps) {
 	const router = useRouter();
 	const finalizeSetupMutation = useFinalizeSetup();
-	const mode = usePreviewPanelStore((s) => s.mode);
-	const togglePanel = usePreviewPanelStore((s) => s.togglePanel);
-
-	const { hasActivity, envRequested, verified, snapshotSaved } = useSetupProgressStore(
-		(s) => s.progress,
-	);
+	const { hasActivity, verified, snapshotSaved } = useSetupProgressStore((s) => s.progress);
 	const setActiveSession = useSetupProgressStore((s) => s.setActiveSession);
 	const resetProgress = useSetupProgressStore((s) => s.reset);
 
@@ -63,12 +57,6 @@ export function SetupSessionChrome({
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Failed to update notifications";
 			toast.error(message);
-		}
-	};
-
-	const openEnvironmentPanel = () => {
-		if (mode.type !== "environment") {
-			togglePanel("environment");
 		}
 	};
 
@@ -108,11 +96,9 @@ export function SetupSessionChrome({
 			? "Setup complete \u2014 save the snapshot to finish"
 			: verified
 				? "Environment verified \u2014 ready to save"
-				: envRequested
-					? "Secrets requested \u2014 open Environment and create secret files"
-					: hasActivity
-						? "Installing dependencies and configuring services\u2026"
-						: "The agent is starting setup\u2026";
+				: hasActivity
+					? "Installing dependencies and configuring services\u2026"
+					: "The agent is starting setup\u2026";
 
 	return (
 		<>
@@ -160,21 +146,6 @@ export function SetupSessionChrome({
 							? "Agent setup and verification complete"
 							: "Iterate with the agent until setup and verification finish"}
 					</span>
-					<span className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2 py-1">
-						<KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
-						{envRequested
-							? "Action needed: create/update secret files"
-							: "If credentials are needed, configure them in Environment"}
-					</span>
-					<Button
-						variant="outline"
-						size="sm"
-						className="h-7 gap-1.5 text-xs"
-						onClick={openEnvironmentPanel}
-					>
-						<KeyRound className="h-3.5 w-3.5" />
-						Open Environment
-					</Button>
 					{hasSlack ? (
 						<Button
 							type="button"

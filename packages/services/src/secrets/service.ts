@@ -260,3 +260,68 @@ export async function resolveSecretValue(orgId: string, key: string): Promise<st
 		return null;
 	}
 }
+
+// ============================================
+// Multi-repo secret assignment
+// ============================================
+
+/**
+ * Assign a secret to multiple repos (upsert per repo).
+ */
+export async function assignSecretToRepos(input: {
+	orgId: string;
+	key: string;
+	value: string;
+	repoIds: string[];
+}): Promise<void> {
+	let encryptedValue: string;
+	try {
+		encryptedValue = encrypt(input.value, getEncryptionKey());
+	} catch {
+		throw new EncryptionError("Encryption not configured");
+	}
+	for (const repoId of input.repoIds) {
+		await secretsDb.upsertByRepoAndKey({
+			organizationId: input.orgId,
+			repoId,
+			key: input.key,
+			encryptedValue,
+		});
+	}
+}
+
+/**
+ * Update encrypted value for a secret across specific repos.
+ */
+export async function updateSecretValue(input: {
+	orgId: string;
+	key: string;
+	newValue: string;
+	repoIds: string[];
+}): Promise<void> {
+	let encryptedValue: string;
+	try {
+		encryptedValue = encrypt(input.newValue, getEncryptionKey());
+	} catch {
+		throw new EncryptionError("Encryption not configured");
+	}
+	await secretsDb.updateValueByKeyAndRepos(input.orgId, input.key, encryptedValue, input.repoIds);
+}
+
+/**
+ * Remove a secret from specific repos.
+ */
+export async function removeSecretFromRepos(input: {
+	orgId: string;
+	key: string;
+	repoIds: string[];
+}): Promise<void> {
+	await secretsDb.deleteByKeyAndRepos(input.orgId, input.key, input.repoIds);
+}
+
+/**
+ * List secrets grouped by key with repo assignments.
+ */
+export async function listSecretsGrouped(orgId: string): Promise<secretsDb.GroupedSecretRow[]> {
+	return secretsDb.listGroupedByKey(orgId);
+}

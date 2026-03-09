@@ -81,8 +81,6 @@ export interface CreateSandboxOpts {
 	snapshotHasDeps?: boolean;
 	/** Resolved service commands (configuration-level or fallback from repos). Cross-repo aware. */
 	serviceCommands?: ConfigurationServiceCommand[];
-	/** Env file generation spec from configuration config. Applied on boot before service autostart. */
-	envFiles?: unknown;
 	/** Decrypted secret file writes to materialize inside /home/user/workspace at boot. */
 	secretFileWrites?: Array<{ filePath: string; content: string }>;
 }

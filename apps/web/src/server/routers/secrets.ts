@@ -112,4 +112,40 @@ export const secretsRouter = {
 				throw err;
 			}
 		}),
+
+	/**
+	 * List secrets grouped by key with repo assignments.
+	 */
+	listGrouped: orgProcedure
+		.output(
+			z.object({
+				secrets: z.array(
+					z.object({
+						key: z.string(),
+						secretType: z.string().nullable(),
+						repos: z.array(
+							z.object({
+								repoId: z.string().nullable(),
+								repoName: z.string().nullable(),
+							}),
+						),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ context }) => {
+			const grouped = await secrets.listSecretsGrouped(context.orgId);
+			return { secrets: grouped };
+		}),
+
+	/**
+	 * Sync secrets to a running sandbox (stub — to be implemented when sandbox sync is ready).
+	 */
+	syncSecrets: orgProcedure
+		.input(z.object({ sessionId: z.string().uuid() }))
+		.output(z.object({ success: z.boolean() }))
+		.handler(async () => {
+			// TODO: Implement sandbox env var sync
+			return { success: true };
+		}),
 };
