@@ -1,22 +1,10 @@
 "use client";
 
-import { HelpLink } from "@/components/help/help-link";
-import { SetupIntroModal } from "@/components/sessions/setup-intro-modal";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useHasSlackInstallation } from "@/hooks/integrations/use-integrations";
-import {
-	useFinalizeSetup,
-	useSessionNotificationSubscription,
-	useSubscribeNotifications,
-	useUnsubscribeNotifications,
-} from "@/hooks/sessions/use-sessions";
+import { useFinalizeSetup } from "@/hooks/sessions/use-sessions";
 import { startSnapshotProgressToast } from "@/lib/display/snapshot-progress-toast";
-import { useSetupProgressStore } from "@/stores/setup-progress";
-import { Bell, BellOff, Check, Loader2, MessageSquare, Settings } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { toast } from "sonner";
 
 interface SetupSessionChromeProps {
 	sessionId: string;
@@ -24,7 +12,9 @@ interface SetupSessionChromeProps {
 	repoId?: string;
 	/** Whether the session is in a runnable state (running + has sandbox) */
 	canFinalize: boolean;
-	/** Show SetupIntroModal (first-time user education) */
+	/** Display name for the repo (e.g. "org/repo-name") */
+	repoName?: string;
+	/** @deprecated No longer used — kept for caller compatibility */
 	showIntro?: boolean;
 }
 
@@ -32,41 +22,12 @@ export function SetupSessionChrome({
 	sessionId,
 	repoId,
 	canFinalize,
-	showIntro = false,
+	repoName,
 }: SetupSessionChromeProps) {
 	const router = useRouter();
 	const finalizeSetupMutation = useFinalizeSetup();
-	const { hasActivity, verified, snapshotSaved } = useSetupProgressStore((s) => s.progress);
-	const setActiveSession = useSetupProgressStore((s) => s.setActiveSession);
-	const resetProgress = useSetupProgressStore((s) => s.reset);
 
-	const { hasSlack } = useHasSlackInstallation();
-	const { data: isSubscribed } = useSessionNotificationSubscription(sessionId);
-	const subscribeNotifications = useSubscribeNotifications();
-	const unsubscribeNotifications = useUnsubscribeNotifications();
-
-	const handleToggleNotifications = async () => {
-		try {
-			if (isSubscribed) {
-				await unsubscribeNotifications.mutateAsync({ sessionId });
-				toast.success("Notifications turned off");
-			} else {
-				await subscribeNotifications.mutateAsync({ sessionId });
-				toast.success("You'll be notified on Slack when this session needs attention");
-			}
-		} catch (err) {
-			const message = err instanceof Error ? err.message : "Failed to update notifications";
-			toast.error(message);
-		}
-	};
-
-	// Register this session as the active one for progress tracking
-	useEffect(() => {
-		setActiveSession(sessionId);
-		return () => resetProgress(sessionId);
-	}, [sessionId, setActiveSession, resetProgress]);
-
-	const handleFinalize = async () => {
+	const handleSaveSnapshot = async () => {
 		const progressToast = startSnapshotProgressToast({
 			initialMessage: "Saving setup snapshot...",
 		});
@@ -90,88 +51,25 @@ export function SetupSessionChrome({
 		}
 	};
 
-	const progressText = finalizeSetupMutation.isPending
-		? "Saving snapshot. This can take around a minute."
-		: snapshotSaved
-			? "Setup complete \u2014 save the snapshot to finish"
-			: verified
-				? "Environment verified \u2014 ready to save"
-				: hasActivity
-					? "Installing dependencies and configuring services\u2026"
-					: "The agent is starting setup\u2026";
+	const isSaving = finalizeSetupMutation.isPending;
 
 	return (
-		<>
-			{showIntro && <SetupIntroModal />}
-			<div className="border-b border-border bg-muted/50 px-5 py-2.5 shrink-0">
-				<div className="flex items-center gap-3">
-					<Settings className="h-4 w-4 text-muted-foreground shrink-0" />
-					<div className="flex-1 min-w-0">
-						<div className="flex items-center gap-1.5">
-							<span className="text-sm font-medium">Setup Session</span>
-							<HelpLink topic="setup-sessions" iconOnly />
-						</div>
-						<span className="text-xs text-muted-foreground block">{progressText}</span>
-					</div>
-					<TooltipProvider>
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<Button
-									onClick={handleFinalize}
-									disabled={!canFinalize || finalizeSetupMutation.isPending}
-									size="sm"
-									className="gap-1.5 shrink-0"
-								>
-									{finalizeSetupMutation.isPending ? (
-										<Loader2 className="h-3.5 w-3.5 animate-spin" />
-									) : (
-										<Check className="h-3.5 w-3.5" />
-									)}
-									{finalizeSetupMutation.isPending
-										? "Saving snapshot..."
-										: "Done \u2014 Save Snapshot"}
-								</Button>
-							</TooltipTrigger>
-							<TooltipContent side="bottom" align="end" className="max-w-[240px]">
-								Saves this environment as a reusable snapshot. Future coding sessions will boot from
-								this state. Larger workspaces can take around a minute.
-							</TooltipContent>
-						</Tooltip>
-					</TooltipProvider>
-				</div>
-				<div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-					<span className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2 py-1">
-						<MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
-						{verified
-							? "Agent setup and verification complete"
-							: "Iterate with the agent until setup and verification finish"}
-					</span>
-					{hasSlack ? (
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							className="inline-flex items-center gap-1.5 rounded-md border-border/70 bg-background px-2 py-1 hover:text-foreground h-auto"
-							onClick={handleToggleNotifications}
-						>
-							{isSubscribed ? (
-								<BellOff className="h-3.5 w-3.5 text-muted-foreground" />
-							) : (
-								<Bell className="h-3.5 w-3.5 text-muted-foreground" />
-							)}
-							{isSubscribed ? "Slack notifications on" : "Notify me on Slack"}
-						</Button>
-					) : (
-						<a
-							href="/settings/connections"
-							className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2 py-1 hover:text-foreground transition-colors"
-						>
-							<Bell className="h-3.5 w-3.5 text-muted-foreground" />
-							Connect Slack to get notified
-						</a>
-					)}
-				</div>
+		<div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card">
+			<div className="flex items-center gap-2 min-w-0">
+				<span className="text-sm font-medium truncate">Setup{repoName ? `: ${repoName}` : ""}</span>
+				{isSaving && <span className="text-xs text-muted-foreground">Saving snapshot…</span>}
 			</div>
-		</>
+			<div className="flex items-center gap-2">
+				<Button
+					size="sm"
+					className="h-7"
+					onClick={handleSaveSnapshot}
+					disabled={!canFinalize || isSaving}
+				>
+					{isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+					Save Snapshot
+				</Button>
+			</div>
+		</div>
 	);
 }

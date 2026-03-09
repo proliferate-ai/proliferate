@@ -8,9 +8,8 @@ export const PAGE_TITLES: Record<string, string> = {
 	"/settings/profile": "Profile",
 	"/settings/general": "General",
 	"/settings/members": "Members",
-	"/settings/secrets": "Secrets",
+	"/settings/environments": "Environments",
 	"/settings/billing": "Billing",
 	"/settings/connections": "Connections",
-	"/settings/repositories": "Repositories",
 	"/settings/tools": "Tools",
 };

@@ -18,7 +18,6 @@ import {
 	CreditCard,
 	FolderGit2,
 	Home,
-	Key,
 	LifeBuoy,
 	LogOut,
 	Menu,
@@ -465,8 +464,9 @@ function SettingsNav({ onNavigate }: { onNavigate?: () => void }) {
 	const isProfilePage = pathname === "/settings/profile";
 	const isGeneralPage = pathname === "/settings/general";
 	const isMembersPage = pathname === "/settings/members";
-	const isRepositoriesPage = pathname === "/settings/repositories";
-	const isSecretsPage = pathname === "/settings/secrets";
+	const isEnvironmentsPage =
+		pathname?.startsWith("/settings/environments") ||
+		pathname?.startsWith("/settings/repositories");
 	const isBillingPage = pathname === "/settings/billing";
 
 	const handleNavigate = (path: string) => {
@@ -514,15 +514,9 @@ function SettingsNav({ onNavigate }: { onNavigate?: () => void }) {
 				/>
 				<NavItem
 					icon={FolderGit2}
-					label="Repositories"
-					active={!!isRepositoriesPage}
-					onClick={() => handleNavigate("/settings/repositories")}
-				/>
-				<NavItem
-					icon={Key}
-					label="Secrets"
-					active={!!isSecretsPage}
-					onClick={() => handleNavigate("/settings/secrets")}
+					label="Environments"
+					active={!!isEnvironmentsPage}
+					onClick={() => handleNavigate("/settings/environments")}
 				/>
 				{BILLING_ENABLED && (
 					<NavItem

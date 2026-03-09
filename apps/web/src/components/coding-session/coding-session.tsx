@@ -685,7 +685,7 @@ export function CodingSession({
 						sessionId={sessionId}
 						repoId={sessionData.repoId ?? undefined}
 						canFinalize={canSnapshot}
-						showIntro
+						repoName={repoData?.githubRepoName || sessionData.repo?.githubRepoName}
 					/>
 				)}
 				<div className="flex-1 min-h-0">
