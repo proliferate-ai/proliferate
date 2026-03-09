@@ -97,17 +97,17 @@ export function WorkerDetailHeader({
 						className="h-6 text-xs mt-0.5 px-1 py-0 border-border/50"
 					/>
 				) : (
-					<button
-						type="button"
+					<Button
+						variant="ghost"
 						onClick={() => onUpdateDescription && setIsEditing(true)}
-						className={`text-xs mt-0.5 truncate text-left max-w-full block ${
+						className={`h-auto p-0 font-normal text-xs mt-0.5 truncate text-left max-w-full block hover:bg-transparent ${
 							worker.description
 								? "text-muted-foreground hover:text-foreground"
 								: "text-muted-foreground/50 italic hover:text-muted-foreground"
 						} transition-colors ${onUpdateDescription ? "cursor-text" : "cursor-default"}`}
 					>
 						{worker.description || "No description"}
-					</button>
+					</Button>
 				)}
 			</div>
 			<div className="flex items-center gap-1.5 shrink-0">

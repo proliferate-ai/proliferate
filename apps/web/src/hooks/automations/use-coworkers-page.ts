@@ -45,7 +45,7 @@ export function useCoworkersPage() {
 	// Create dialog state
 	const [createDialogOpen, setCreateDialogOpen] = useState(false);
 	const [createName, setCreateName] = useState("");
-	const [createObjective, setCreateObjective] = useState("");
+	const [createSystemPrompt, setCreateSystemPrompt] = useState("");
 	const [createCapabilities, setCreateCapabilities] = useState<WorkerCapabilityDraft[]>([]);
 
 	// Determine if we have V1 workers — show worker table when present, legacy automation list otherwise
@@ -118,12 +118,12 @@ export function useCoworkersPage() {
 		try {
 			const result = await createWorker.mutateAsync({
 				...(createName.trim() ? { name: createName.trim() } : {}),
-				...(createObjective.trim() ? { systemPrompt: createObjective.trim() } : {}),
+				...(createSystemPrompt.trim() ? { systemPrompt: createSystemPrompt.trim() } : {}),
 				...(createCapabilities.length > 0 ? { capabilities: createCapabilities } : {}),
 			});
 			setCreateDialogOpen(false);
 			setCreateName("");
-			setCreateObjective("");
+			setCreateSystemPrompt("");
 			setCreateCapabilities([]);
 			startTransition(() => {
 				router.push(`/coworkers/${result.worker.id}`);
@@ -195,8 +195,8 @@ export function useCoworkersPage() {
 		setCreateDialogOpen,
 		createName,
 		setCreateName,
-		createObjective,
-		setCreateObjective,
+		createSystemPrompt,
+		setCreateSystemPrompt,
 		createCapabilities,
 		setCreateCapabilities,
 		createError,

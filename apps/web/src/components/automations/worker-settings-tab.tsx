@@ -73,7 +73,7 @@ export function WorkerSettingsTab({
 	const [editingJobId, setEditingJobId] = useState<string | null>(null);
 	const { data: integrationsData } = useIntegrations();
 	const { data: slackInstallations } = useSlackInstallations();
-	const { data: jobs, isLoading: isLoadingJobs } = useWorkerJobs(worker.id);
+	const { data: jobs, isLoading: isLoadingJobs, isError: isJobsError } = useWorkerJobs(worker.id);
 	const createJob = useCreateWorkerJob(worker.id);
 	const updateJob = useUpdateWorkerJob(worker.id);
 	const deleteJob = useDeleteWorkerJob(worker.id);
@@ -223,6 +223,10 @@ export function WorkerSettingsTab({
 				{isLoadingJobs ? (
 					<div className="rounded-lg border border-border px-4 py-3">
 						<div className="h-4 w-32 bg-muted rounded animate-pulse" />
+					</div>
+				) : isJobsError ? (
+					<div className="rounded-lg border border-destructive/20 px-4 py-4">
+						<p className="text-sm text-destructive">Failed to load scheduled jobs.</p>
 					</div>
 				) : !jobs || jobs.length === 0 ? (
 					!showJobForm && (

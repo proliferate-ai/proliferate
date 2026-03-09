@@ -1,0 +1,1175 @@
+[
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907356465",
+		"pull_request_review_id": 3917567456,
+		"id": 2907356465,
+		"node_id": "PRRC_kwDORKXxLM6tSr0x",
+		"diff_hunk": "@@ -1348,6 +1360,182 @@ export const automationsRouter = {\n \t\t\t}\n \t\t\treturn { success: true };\n \t\t}),\n+\n+\t// ============================================\n+\t// Worker Jobs (Scheduled Check-Ins)\n+\t// ============================================\n+\n+\t/**\n+\t * List all jobs for a worker.\n+\t */\n+\tlistWorkerJobs: orgProcedure\n+\t\t.input(z.object({ workerId: z.string().uuid() }))\n+\t\t.output(\n+\t\t\tz.object({\n+\t\t\t\tjobs: z.array(\n+\t\t\t\t\tz.object({\n+\t\t\t\t\t\tid: z.string().uuid(),\n+\t\t\t\t\t\tworkerId: z.string().uuid(),\n+\t\t\t\t\t\tname: z.string(),\n+\t\t\t\t\t\tdescription: z.string().nullable(),\n+\t\t\t\t\t\tcheckInPrompt: z.string(),\n+\t\t\t\t\t\tcronExpression: z.string(),\n+\t\t\t\t\t\tenabled: z.boolean(),\n+\t\t\t\t\t\tlastTickAt: z.coerce.date().nullable(),\n+\t\t\t\t\t\tnextTickAt: z.coerce.date().nullable(),\n+\t\t\t\t\t\tcreatedAt: z.coerce.date(),\n+\t\t\t\t\t\tupdatedAt: z.coerce.date(),\n+\t\t\t\t\t}),\n+\t\t\t\t),\n+\t\t\t}),\n+\t\t)\n+\t\t.handler(async ({ input, context }) => {\n+\t\t\ttry {\n+\t\t\t\tconst jobs = await workerJobs.listJobsForWorker(input.workerId, context.orgId);\n+\t\t\t\treturn { jobs };\n+\t\t\t} catch (err) {\n+\t\t\t\tthrowAutomationORPCError(err, \"Failed to list worker jobs\");\n+\t\t\t}\n+\t\t}),\n+\n+\t/**\n+\t * Get a single worker job by ID.\n+\t */\n+\tgetWorkerJob: orgProcedure\n+\t\t.input(z.object({ jobId: z.string().uuid() }))\n+\t\t.output(\n+\t\t\tz.object({\n+\t\t\t\tjob: z.object({\n+\t\t\t\t\tid: z.string().uuid(),\n+\t\t\t\t\tworkerId: z.string().uuid(),\n+\t\t\t\t\tname: z.string(),\n+\t\t\t\t\tdescription: z.string().nullable(),\n+\t\t\t\t\tcheckInPrompt: z.string(),\n+\t\t\t\t\tcronExpression: z.string(),\n+\t\t\t\t\tenabled: z.boolean(),\n+\t\t\t\t\tlastTickAt: z.coerce.date().nullable(),\n+\t\t\t\t\tnextTickAt: z.coerce.date().nullable(),\n+\t\t\t\t\tcreatedAt: z.coerce.date(),\n+\t\t\t\t\tupdatedAt: z.coerce.date(),\n+\t\t\t\t}),\n+\t\t\t}),\n+\t\t)\n+\t\t.handler(async ({ input, context }) => {\n+\t\t\ttry {\n+\t\t\t\tconst job = await workerJobs.findJobById(input.jobId, context.orgId);\n+\t\t\t\treturn { job };\n+\t\t\t} catch (err) {\n+\t\t\t\tthrowAutomationORPCError(err, \"Failed to get worker job\");\n+\t\t\t}\n+\t\t}),",
+		"path": "apps/web/src/server/routers/automations.ts",
+		"commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"original_commit_id": "82b7cc7c704e4ca6f78dfc4fafed02934f715734",
+		"user": {
+			"login": "greptile-apps[bot]",
+			"id": 165735046,
+			"node_id": "BOT_kgDOCeDqhg",
+			"avatar_url": "https://avatars.githubusercontent.com/in/867647?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/greptile-apps%5Bbot%5D",
+			"html_url": "https://github.com/apps/greptile-apps",
+			"followers_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "`workerJobs.findJobById` can return `null` when no job exists (confirmed by the explicit null check in `processor.ts`). When that happens, this handler returns `{ job: null }`, which violates the declared output schema (`job: z.object({...})` — not nullable) and will cause a runtime Zod validation error for callers.\n\nThe handler should check for a null result and throw an explicit NOT_FOUND error:\n\n```typescript\n.handler(async ({ input, context }) => {\n\ttry {\n\t\tconst job = await workerJobs.findJobById(input.jobId, context.orgId);\n\t\tif (!job) {\n\t\t\tthrow new ORPCError(\"NOT_FOUND\", { message: \"Worker job not found\" });\n\t\t}\n\t\treturn { job };\n\t} catch (err) {\n\t\tthrowAutomationORPCError(err, \"Failed to get worker job\");\n\t}\n}),\n```",
+		"created_at": "2026-03-09T18:58:08Z",
+		"updated_at": "2026-03-09T18:58:10Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907356465",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907356465"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907356465"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907356465/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": 1423,
+		"original_start_line": 1423,
+		"start_side": "RIGHT",
+		"line": 1431,
+		"original_line": 1430,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 234,
+		"position": 235,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907356537",
+		"pull_request_review_id": 3917567456,
+		"id": 2907356537,
+		"node_id": "PRRC_kwDORKXxLM6tSr15",
+		"diff_hunk": "@@ -0,0 +1,94 @@\n+/**\n+ * Worker Job Tick Processor\n+ *\n+ * Processes a single BullMQ job tick: verifies the job and worker are still\n+ * eligible, sends the check-in prompt to the manager session via the gateway,\n+ * and updates tick timestamps.\n+ */\n+\n+import { env } from \"@proliferate/environment/server\";\n+import { createSyncClient } from \"@proliferate/gateway-clients\";\n+import type { Job, WorkerJobTickPayload } from \"@proliferate/queue\";\n+import { workerJobs, workers as workersService } from \"@proliferate/services\";\n+import { CronExpressionParser } from \"cron-parser\";\n+\n+const SYSTEM_JOB_TICK_USER_ID = \"system:job-tick\";",
+		"path": "apps/trigger-service/src/job-ticks/processor.ts",
+		"commit_id": "a12a954b5d5cdfc9054eb95efb5482b7ad7c050e",
+		"original_commit_id": "82b7cc7c704e4ca6f78dfc4fafed02934f715734",
+		"user": {
+			"login": "greptile-apps[bot]",
+			"id": 165735046,
+			"node_id": "BOT_kgDOCeDqhg",
+			"avatar_url": "https://avatars.githubusercontent.com/in/867647?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/greptile-apps%5Bbot%5D",
+			"html_url": "https://github.com/apps/greptile-apps",
+			"followers_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "`SYSTEM_JOB_TICK_USER_ID` is defined locally here, but this exact same constant is also exported from `packages/shared/src/contracts/workers.ts` (added in this PR). Keeping two copies risks them drifting out of sync.\n\nImport from the shared package instead:\n\n```suggestion\nimport { SYSTEM_JOB_TICK_USER_ID } from \"@proliferate/shared/contracts/workers\";\n```",
+		"created_at": "2026-03-09T18:58:09Z",
+		"updated_at": "2026-03-09T18:58:10Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907356537",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907356537"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907356537"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907356537/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": null,
+		"original_start_line": null,
+		"start_side": null,
+		"line": null,
+		"original_line": 15,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 15,
+		"position": 1,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383078",
+		"pull_request_review_id": 3917596307,
+		"id": 2907383078,
+		"node_id": "PRRC_kwDORKXxLM6tSyUm",
+		"diff_hunk": "@@ -0,0 +1,94 @@\n+/**\n+ * Worker Job Tick Processor\n+ *\n+ * Processes a single BullMQ job tick: verifies the job and worker are still\n+ * eligible, sends the check-in prompt to the manager session via the gateway,\n+ * and updates tick timestamps.\n+ */\n+\n+import { env } from \"@proliferate/environment/server\";\n+import { createSyncClient } from \"@proliferate/gateway-clients\";\n+import type { Job, WorkerJobTickPayload } from \"@proliferate/queue\";\n+import { workerJobs, workers as workersService } from \"@proliferate/services\";\n+import { CronExpressionParser } from \"cron-parser\";\n+\n+const SYSTEM_JOB_TICK_USER_ID = \"system:job-tick\";\n+import { logger as rootLogger } from \"../lib/logger.js\";\n+\n+const logger = rootLogger.child({ module: \"job-tick-processor\" });\n+\n+export async function processJobTick(job: Job<WorkerJobTickPayload>): Promise<void> {\n+\tconst { jobId, workerId, organizationId, managerSessionId } = job.data;\n+\n+\tconst log = logger.child({ jobId, workerId, managerSessionId });\n+\n+\t// 1. Load the worker job — verify still enabled\n+\tconst workerJob = await workerJobs.findJobById(jobId, organizationId);\n+\tif (!workerJob) {\n+\t\tlog.debug(\"Worker job not found, skipping tick\");\n+\t\treturn;\n+\t}\n+\tif (!workerJob.enabled) {\n+\t\tlog.debug(\"Worker job disabled, skipping tick\");\n+\t\treturn;\n+\t}\n+\n+\t// 2. Load the worker — verify status is active\n+\tconst worker = await workersService.findWorkerById(workerId, organizationId);\n+\tif (!worker) {\n+\t\tlog.debug(\"Worker not found, skipping tick\");\n+\t\treturn;\n+\t}\n+\tif (worker.status !== \"active\") {\n+\t\tlog.debug({ workerStatus: worker.status }, \"Worker not active, skipping tick\");\n+\t\treturn;\n+\t}\n+\n+\tconst gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL;\n+\tconst serviceToken = env.SERVICE_TO_SERVICE_AUTH_TOKEN;\n+\tif (!gatewayUrl || !serviceToken) {\n+\t\tlog.warn(\"Gateway URL or service token not configured, skipping tick\");\n+\t\treturn;\n+\t}\n+\n+\tconst gateway = createSyncClient({\n+\t\tbaseUrl: gatewayUrl,\n+\t\tauth: { type: \"service\", name: \"job-tick-engine\", secret: serviceToken },\n+\t});\n+\n+\t// 3. Eager-start the manager session (wake sandbox if cold)\n+\ttry {\n+\t\tawait gateway.eagerStart(managerSessionId);\n+\t} catch (err) {\n+\t\tlog.warn({ err }, \"Failed to eager-start manager session, continuing with prompt\");\n+\t}\n+\n+\t// 4. Send the check-in prompt with skipIfBusy\n+\ttry {\n+\t\tawait gateway.postMessage(managerSessionId, {\n+\t\t\tcontent: workerJob.checkInPrompt,\n+\t\t\tuserId: SYSTEM_JOB_TICK_USER_ID,\n+\t\t});\n+\t} catch (err) {\n+\t\tlog.error({ err }, \"Failed to send job tick prompt\");\n+\t\tthrow err;\n+\t}",
+		"path": "apps/trigger-service/src/job-ticks/processor.ts",
+		"commit_id": "82b7cc7c704e4ca6f78dfc4fafed02934f715734",
+		"original_commit_id": "82b7cc7c704e4ca6f78dfc4fafed02934f715734",
+		"user": {
+			"login": "coderabbitai[bot]",
+			"id": 136622811,
+			"node_id": "BOT_kgDOCCSy2w",
+			"avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+			"html_url": "https://github.com/apps/coderabbitai",
+			"followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "_⚠️ Potential issue_ | _🔴 Critical_\n\n<details>\n<summary>🧩 Analysis chain</summary>\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\nset -euo pipefail\n\necho \"Processor write path:\"\nrg -n -C3 'postMessage\\(|skipIfBusy|idempotencyKey|updateJobTickTimestamps' apps/trigger-service/src/job-ticks/processor.ts\n\necho\necho \"Worker-job tick queue / retry configuration:\"\nrg -n -C3 'worker-job-ticks|attempts|backoff|stalled|removeOnFail' apps/trigger-service packages\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 50382\n\n---\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\nset -euo pipefail\n\necho \"=== Gateway client postMessage signature ===\"\nrg -n -A10 'postMessage\\s*\\(' packages/gateway-clients/src --type ts | head -100\n\necho\necho \"=== Check for skipIfBusy or idempotencyKey usage elsewhere ===\"\nrg -n 'skipIfBusy|idempotencyKey' packages/gateway-clients --type ts\n\necho\necho \"=== postMessage type definition ===\"\nrg -n -B2 -A8 'postMessage.*\\{' packages/gateway-clients/src/clients --type ts | head -80\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 5065\n\n---\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\nset -euo pipefail\n\necho \"=== Full PostMessageOptions type definition ===\"\nrg -n -A15 'export interface PostMessageOptions' packages/gateway-clients/src/types.ts\n\necho\necho \"=== postMessage HTTP implementation (full) ===\"\nrg -n -A25 'export async function postMessage' packages/gateway-clients/src/clients/sync/http.ts | head -50\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 1422\n\n---\n\n\n\n</details>\n\n**Add `idempotencyKey` and `skipIfBusy` to the `postMessage()` call to prevent duplicate prompts on retry and honor the busy-session safeguard.**\n\nThe `postMessage()` call runs before the timestamp checkpoint at line 91. If `updateJobTickTimestamps()` or any code after it fails, the BullMQ job retries (configured with 2 attempts). Without `idempotencyKey`, the same prompt is sent again. The comment at line 66 promises `skipIfBusy`, but the code omits it, allowing busy sessions to queue extra prompts instead of dropping them. Both options are supported by the gateway client and documented for exactly this use case.\n\n<details>\n<summary>🛠️ Suggested fix</summary>\n\n```diff\n \ttry {\n \t\tawait gateway.postMessage(managerSessionId, {\n \t\t\tcontent: workerJob.checkInPrompt,\n \t\t\tuserId: SYSTEM_JOB_TICK_USER_ID,\n+\t\t\tskipIfBusy: true,\n+\t\t\tidempotencyKey: `worker-job-tick:${String(job.id ?? jobId)}`,\n \t\t});\n \t} catch (err) {\n \t\tlog.error({ err }, \"Failed to send job tick prompt\");\n \t\tthrow err;\n \t}\n```\n</details>\n\n<!-- suggestion_start -->\n\n<details>\n<summary>📝 Committable suggestion</summary>\n\n> ‼️ **IMPORTANT**\n> Carefully review the code before committing. Ensure that it accurately replaces the highlighted code, contains no missing lines, and has no issues with indentation. Thoroughly test & benchmark the code to ensure it meets the requirements.\n\n```suggestion\n\t// 4. Send the check-in prompt with skipIfBusy\n\ttry {\n\t\tawait gateway.postMessage(managerSessionId, {\n\t\t\tcontent: workerJob.checkInPrompt,\n\t\t\tuserId: SYSTEM_JOB_TICK_USER_ID,\n\t\t\tskipIfBusy: true,\n\t\t\tidempotencyKey: `worker-job-tick:${String(job.id ?? jobId)}`,\n\t\t});\n\t} catch (err) {\n\t\tlog.error({ err }, \"Failed to send job tick prompt\");\n\t\tthrow err;\n\t}\n```\n\n</details>\n\n<!-- suggestion_end -->\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against the current code and only fix it if needed.\n\nIn `@apps/trigger-service/src/job-ticks/processor.ts` around lines 66 - 75, The\npostMessage call must include an idempotencyKey and skipIfBusy to avoid\nduplicate prompts on retry and respect the busy-session safeguard; modify the\ngateway.postMessage(managerSessionId, { ... }) call in processor.ts to add\nskipIfBusy: true and an idempotencyKey (for example `idempotencyKey:\n\\`jobTick:${workerJob.id}\\`` or another stable per-tick identifier tied to\nworkerJob) alongside content and userId, leaving the call site and\nupdateJobTickTimestamps() order unchanged.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:medusa:grasshopper -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->",
+		"created_at": "2026-03-09T19:04:17Z",
+		"updated_at": "2026-03-09T19:04:19Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383078",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383078"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383078"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383078/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": null,
+		"original_start_line": 66,
+		"start_side": "RIGHT",
+		"line": null,
+		"original_line": 75,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 75,
+		"position": 1,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383103",
+		"pull_request_review_id": 3917596307,
+		"id": 2907383103,
+		"node_id": "PRRC_kwDORKXxLM6tSyU_",
+		"diff_hunk": "@@ -0,0 +1,162 @@\n+/**\n+ * Worker Job Tick Scheduler\n+ *\n+ * 1. startJobTickWorker() — creates BullMQ worker with the processor\n+ * 2. syncJobTickSchedules() — queries all enabled jobs from DB, syncs BullMQ\n+ *    repeatable jobs. Runs on startup and every 60s.\n+ */\n+\n+import {\n+\ttype Worker,\n+\ttype WorkerJobTickPayload,\n+\tcreateWorkerJobTickQueue,\n+\tcreateWorkerJobTickWorker,\n+} from \"@proliferate/queue\";\n+import { workerJobs, workers as workersService } from \"@proliferate/services\";\n+import { logger as rootLogger } from \"../lib/logger.js\";\n+import { processJobTick } from \"./processor.js\";\n+\n+const logger = rootLogger.child({ module: \"job-tick-scheduler\" });\n+\n+const SYNC_INTERVAL_MS = 60_000;\n+\n+function repeatableKeyPrefix(jobId: string): string {\n+\treturn `job-tick:${jobId}`;\n+}\n+\n+/**\n+ * Create and start the BullMQ worker that processes job ticks.\n+ */\n+export function startJobTickWorker(): Worker<WorkerJobTickPayload> {\n+\tconst worker = createWorkerJobTickWorker(processJobTick);\n+\n+\tworker.on(\"failed\", (job, err) => {\n+\t\tlogger.error({ err, jobId: job?.id }, \"Worker job tick failed\");\n+\t});\n+\n+\tlogger.info(\"Job tick worker started\");\n+\treturn worker;\n+}\n+\n+/**\n+ * Sync BullMQ repeatable jobs with enabled worker jobs from the database.\n+ *\n+ * - Adds repeatables for new/changed enabled jobs\n+ * - Removes repeatables for deleted/disabled jobs\n+ */\n+export async function syncJobTickSchedules(): Promise<void> {\n+\tconst queue = createWorkerJobTickQueue();\n+\ttry {\n+\t\t// Fetch all enabled jobs from DB\n+\t\tconst enabledJobs = await workerJobs.listAllEnabledJobs();\n+\n+\t\t// Build a map of desired repeatable jobs (jobId -> job)\n+\t\tconst desiredMap = new Map<string, (typeof enabledJobs)[number]>();\n+\t\tfor (const job of enabledJobs) {\n+\t\t\tdesiredMap.set(job.id, job);\n+\t\t}\n+\n+\t\t// Load active workers for eligibility filtering\n+\t\tconst activeWorkers = await workersService.listActiveWorkers();\n+\n+\t\t// Get existing repeatable jobs in BullMQ\n+\t\tconst existingRepeatables = await queue.getRepeatableJobs();\n+\n+\t\t// Build a set of existing job-tick repeatable keys\n+\t\tconst existingKeyMap = new Map<string, { key: string; pattern: string | null }>();\n+\t\tfor (const rep of existingRepeatables) {\n+\t\t\tif (rep.name.startsWith(\"job-tick:\")) {\n+\t\t\t\t// Extract the jobId from the name (format: \"job-tick:{jobId}\")\n+\t\t\t\tconst jobId = rep.name.slice(\"job-tick:\".length);\n+\t\t\t\texistingKeyMap.set(jobId, { key: rep.key, pattern: rep.pattern ?? null });\n+\t\t\t}\n+\t\t}\n+\n+\t\t// Build a lookup from workerId -> managerSessionId\n+\t\tconst workerSessionMap = new Map<string, string>();\n+\t\tfor (const worker of activeWorkers) {\n+\t\t\tworkerSessionMap.set(worker.id, worker.managerSessionId);\n+\t\t}\n+\n+\t\t// Add or update repeatables for enabled jobs with active workers\n+\t\tlet added = 0;\n+\t\tlet removed = 0;\n+\n+\t\tfor (const [jobId, workerJob] of desiredMap) {\n+\t\t\tconst managerSessionId = workerSessionMap.get(workerJob.workerId);\n+\t\t\tif (!managerSessionId) {\n+\t\t\t\t// Worker not active — remove if exists\n+\t\t\t\tconst existing = existingKeyMap.get(jobId);\n+\t\t\t\tif (existing) {\n+\t\t\t\t\tawait queue.removeRepeatableByKey(existing.key);\n+\t\t\t\t\texistingKeyMap.delete(jobId);\n+\t\t\t\t\tremoved++;\n+\t\t\t\t}\n+\t\t\t\tcontinue;\n+\t\t\t}\n+\n+\t\t\tconst existing = existingKeyMap.get(jobId);\n+\t\t\tif (existing && existing.pattern === workerJob.cronExpression) {\n+\t\t\t\t// Already scheduled with the correct cron — skip\n+\t\t\t\texistingKeyMap.delete(jobId);\n+\t\t\t\tcontinue;\n+\t\t\t}\n+\n+\t\t\t// Remove stale schedule if cron changed\n+\t\t\tif (existing) {\n+\t\t\t\tawait queue.removeRepeatableByKey(existing.key);\n+\t\t\t\texistingKeyMap.delete(jobId);\n+\t\t\t}\n+\n+\t\t\t// Add new repeatable\n+\t\t\tconst name = repeatableKeyPrefix(jobId);\n+\t\t\tawait queue.add(\n+\t\t\t\tname,\n+\t\t\t\t{\n+\t\t\t\t\tjobId,\n+\t\t\t\t\tworkerId: workerJob.workerId,\n+\t\t\t\t\torganizationId: workerJob.organizationId,\n+\t\t\t\t\tmanagerSessionId,\n+\t\t\t\t} satisfies WorkerJobTickPayload,\n+\t\t\t\t{\n+\t\t\t\t\trepeat: { pattern: workerJob.cronExpression },\n+\t\t\t\t\tjobId: name,\n+\t\t\t\t},\n+\t\t\t);\n+\t\t\tadded++;\n+\t\t}\n+\n+\t\t// Remove stale repeatables (jobs that were deleted or disabled)\n+\t\tfor (const [, stale] of existingKeyMap) {\n+\t\t\tawait queue.removeRepeatableByKey(stale.key);\n+\t\t\tremoved++;\n+\t\t}\n+\n+\t\tif (added > 0 || removed > 0) {\n+\t\t\tlogger.info({ enabledJobs: enabledJobs.length, added, removed }, \"Job tick schedules synced\");\n+\t\t}\n+\t} finally {\n+\t\tawait queue.close();\n+\t}\n+}\n+\n+/**\n+ * Start the sync loop: run once immediately, then every 60s.\n+ * Returns a cleanup function to stop the interval.\n+ */\n+export function startJobTickScheduleSync(): { stop: () => void } {\n+\t// Initial sync\n+\tsyncJobTickSchedules().catch((err) => {\n+\t\tlogger.error({ err }, \"Initial job tick schedule sync failed\");\n+\t});\n+\n+\tconst intervalId = setInterval(() => {\n+\t\tsyncJobTickSchedules().catch((err) => {\n+\t\t\tlogger.error({ err }, \"Periodic job tick schedule sync failed\");\n+\t\t});\n+\t}, SYNC_INTERVAL_MS);\n+\n+\treturn {\n+\t\tstop: () => clearInterval(intervalId),",
+		"path": "apps/trigger-service/src/job-ticks/scheduler.ts",
+		"commit_id": "82b7cc7c704e4ca6f78dfc4fafed02934f715734",
+		"original_commit_id": "82b7cc7c704e4ca6f78dfc4fafed02934f715734",
+		"user": {
+			"login": "coderabbitai[bot]",
+			"id": 136622811,
+			"node_id": "BOT_kgDOCCSy2w",
+			"avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+			"html_url": "https://github.com/apps/coderabbitai",
+			"followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "_⚠️ Potential issue_ | _🟠 Major_\n\n**Serialize the sync loop to avoid overlapping reconciliations.**\n\n`setInterval()` does not wait for the previous `syncJobTickSchedules()` run to finish. If Redis or DB is slow and one run exceeds 60s, two reconciliations can interleave `removeRepeatableByKey()` and `add()` calls and churn the schedule state.\n\n\n<details>\n<summary>Suggested fix</summary>\n\n```diff\n export function startJobTickScheduleSync(): { stop: () => void } {\n-\t// Initial sync\n-\tsyncJobTickSchedules().catch((err) => {\n-\t\tlogger.error({ err }, \"Initial job tick schedule sync failed\");\n-\t});\n-\n-\tconst intervalId = setInterval(() => {\n-\t\tsyncJobTickSchedules().catch((err) => {\n-\t\t\tlogger.error({ err }, \"Periodic job tick schedule sync failed\");\n-\t\t});\n-\t}, SYNC_INTERVAL_MS);\n+\tlet stopped = false;\n+\tlet timeoutId: ReturnType<typeof setTimeout> | undefined;\n+\n+\tconst runSync = async () => {\n+\t\tif (stopped) {\n+\t\t\treturn;\n+\t\t}\n+\n+\t\ttry {\n+\t\t\tawait syncJobTickSchedules();\n+\t\t} catch (err) {\n+\t\t\tlogger.error({ err }, \"Job tick schedule sync failed\");\n+\t\t} finally {\n+\t\t\tif (!stopped) {\n+\t\t\t\ttimeoutId = setTimeout(runSync, SYNC_INTERVAL_MS);\n+\t\t\t}\n+\t\t}\n+\t};\n+\n+\tvoid runSync();\n \n \treturn {\n-\t\tstop: () => clearInterval(intervalId),\n+\t\tstop: () => {\n+\t\t\tstopped = true;\n+\t\t\tif (timeoutId) {\n+\t\t\t\tclearTimeout(timeoutId);\n+\t\t\t}\n+\t\t},\n \t};\n }\n```\n</details>\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against the current code and only fix it if needed.\n\nIn `@apps/trigger-service/src/job-ticks/scheduler.ts` around lines 147 - 160, The\ncurrent startJobTickScheduleSync uses setInterval and can start a new\nsyncJobTickSchedules() before the prior one finishes, causing overlapping\nreconciliations and race conditions between removeRepeatableByKey() and add();\nchange the loop to serialize runs by implementing a single async loop (e.g.,\nself-scheduling with setTimeout or awaiting each run) inside\nstartJobTickScheduleSync that awaits syncJobTickSchedules() before scheduling\nthe next tick, ensures errors from syncJobTickSchedules() are caught and logged\nwithout blocking future runs, and prevents concurrent execution (you can also\nguard with an inProgress flag or short-circuit if already running) so\nremoveRepeatableByKey() and add() never interleave.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:poseidon:grasshopper -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->",
+		"created_at": "2026-03-09T19:04:17Z",
+		"updated_at": "2026-03-09T19:04:19Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383103",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383103"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383103"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383103/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": null,
+		"original_start_line": 147,
+		"start_side": "RIGHT",
+		"line": null,
+		"original_line": 160,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 160,
+		"position": 1,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383108",
+		"pull_request_review_id": 3917596307,
+		"id": 2907383108,
+		"node_id": "PRRC_kwDORKXxLM6tSyVE",
+		"diff_hunk": "@@ -32,6 +32,18 @@ export function WorkerChatTab({ managerSessionId, workerStatus }: WorkerChatTabP\n \t\t}\n \t}, [messages]);\n \n+\t// Auto-wake: eager-start the manager session on mount\n+\tuseEffect(() => {\n+\t\tif (!token || !managerSessionId) return;\n+\t\tconst client = createSyncClient({\n+\t\t\tbaseUrl: GATEWAY_URL,\n+\t\t\tauth: { type: \"token\", token },\n+\t\t\tsource: \"web\",\n+\t\t});\n+\t\t// biome-ignore lint/suspicious/noEmptyBlockStatements: intentional fire-and-forget\n+\t\tclient.eagerStart(managerSessionId).catch(() => {});\n+\t}, [token, managerSessionId]);",
+		"path": "apps/web/src/components/automations/worker-chat-tab.tsx",
+		"commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"original_commit_id": "82b7cc7c704e4ca6f78dfc4fafed02934f715734",
+		"user": {
+			"login": "coderabbitai[bot]",
+			"id": 136622811,
+			"node_id": "BOT_kgDOCCSy2w",
+			"avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+			"html_url": "https://github.com/apps/coderabbitai",
+			"followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "_⚠️ Potential issue_ | _🔴 Critical_\n\n<details>\n<summary>🧩 Analysis chain</summary>\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\n# Verify the auth check in the eager-start endpoint\nrg -n -A 5 \"Eager start requires\" apps/gateway/\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 744\n\n---\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\n# Check if there's any service-auth setup available for web clients\nrg -n \"source.*service\" apps/gateway/src/api/\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 1346\n\n---\n\n🏁 Script executed:\n\n```shell\n# Check how auth source is determined from token auth type\nrg -n \"source.*web\\|source.*token\\|auth.*source\" apps/gateway/src/auth/ -A 2\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 132\n\n---\n\n🏁 Script executed:\n\n```shell\n# Check the createSyncClient implementation to understand auth parameter\nrg -n -A 10 \"createSyncClient\" --type ts apps/web/src/components/ | head -50\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 3049\n\n---\n\n🏁 Script executed:\n\n```shell\n# See if there's a service-auth or backend proxy pattern used elsewhere in web app\nrg -n \"eagerStart\\|service.*auth\" apps/web/src/ --type ts\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 52\n\n---\n\n🏁 Script executed:\n\n```shell\n# Find createSyncClient implementation\nrg -n -A 15 \"export.*createSyncClient|function createSyncClient\" --type ts\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 601\n\n---\n\n🏁 Script executed:\n\n```shell\n# Check gateway auth middleware to understand how auth.source is set\nfd -e ts -e js \"auth\" apps/gateway/src/ | head -20\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 523\n\n---\n\n🏁 Script executed:\n\n```shell\n# Look for where auth.source is actually assigned in gateway\nrg -n \"auth\\.source\\s*=\" apps/gateway/src/ --type ts | head -20\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 421\n\n---\n\n🏁 Script executed:\n\n```shell\n# Check SyncClientImpl implementation and eagerStart method\nsed -n '1,161p' packages/gateway-clients/src/clients/sync/index.ts | tail -80\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 2329\n\n---\n\n🏁 Script executed:\n\n```shell\n# Look at the full SyncClientImpl class to understand how source is used\nrg -n -B 5 -A 30 \"class SyncClientImpl\" packages/gateway-clients/src/clients/sync/index.ts\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 1199\n\n---\n\n🏁 Script executed:\n\n```shell\n# Check the gateway auth middleware to see how auth.source is set\ncat -n apps/gateway/src/server/middleware/auth/require-auth.ts\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 2001\n\n---\n\n🏁 Script executed:\n\n```shell\n# Find the eagerStart function implementation\nrg -n -A 15 \"async function eagerStart|export.*eagerStart\" packages/gateway-clients/src/clients/sync/\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 1435\n\n---\n\n🏁 Script executed:\n\n```shell\n# Find verifyToken to understand what auth.source is set to for user tokens\nrg -n -A 20 \"async function verifyToken|export.*verifyToken\" apps/gateway/src/server/middleware/auth/\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 2186\n\n---\n\n\n\n</details>\n\n**Remove or refactor the eager-start call—web clients cannot authenticate as services.**\n\nThe `eagerStart` call will always fail with a 403 error because:\n\n1. User tokens from the web app are verified as `source: \"jwt\"` (not `\"service\"`)\n2. The eager-start endpoint explicitly requires `auth.source === \"service\"` and rejects all other sources\n3. The `source: \"web\"` parameter passed to `createSyncClient` is not sent with the request and does not affect authentication\n\nThe error is silently swallowed by `.catch(() => {})`, making this feature completely non-functional.\n\nTo fix, either:\n- Modify the gateway endpoint to accept user token authentication (if web clients should trigger eager-start)\n- Create a backend API route that web clients call, which then authenticates as a service to call the gateway\n- Remove this code if eager-start is only meant for service-to-service calls\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against the current code and only fix it if needed.\n\nIn `@apps/web/src/components/automations/worker-chat-tab.tsx` around lines 35 -\n45, The eagerStart call in the useEffect\n(createSyncClient(...).eagerStart(managerSessionId)) is invalid for web clients\nbecause web tokens are not authenticated as services and the gateway requires\nauth.source === \"service\", and the failure is silently swallowed by .catch(() =>\n{}); fix by removing or relocating this call: either delete the eagerStart\ninvocation from the useEffect in worker-chat-tab.tsx, or replace it with a call\nto a new backend API route that the web client can call (the backend should\nauthenticate as a service and call the gateway's eager-start), and ensure any\ncatch logs errors instead of swallowing them; reference the useEffect,\ncreateSyncClient, eagerStart, and managerSessionId symbols when making the\nchange.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:poseidon:ocelot -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->",
+		"created_at": "2026-03-09T19:04:17Z",
+		"updated_at": "2026-03-09T19:04:19Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383108",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383108"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383108"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383108/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": 35,
+		"original_start_line": 35,
+		"start_side": "RIGHT",
+		"line": 45,
+		"original_line": 45,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 14,
+		"position": 14,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383116",
+		"pull_request_review_id": 3917596307,
+		"id": 2907383116,
+		"node_id": "PRRC_kwDORKXxLM6tSyVM",
+		"diff_hunk": "@@ -4,38 +4,39 @@ import { StatusDot } from \"@/components/ui/status-dot\";\n import { formatRelativeTime } from \"@/lib/display/utils\";\n import Link from \"next/link\";\n \n-type WorkerStatus = \"active\" | \"automations_paused\" | \"degraded\" | \"failed\" | \"archived\";\n+type WorkerStatus = \"active\" | \"paused\" | \"degraded\" | \"failed\";\n \n interface WorkerListRowProps {\n \tid: string;\n \tname: string;\n \tstatus: WorkerStatus;\n-\tobjective: string | null;\n+\tdescription: string | null;\n+\tlastWakeAt: string | null;\n \tactiveTaskCount: number;\n \tpendingApprovalCount: number;\n \tupdatedAt: string;\n }\n \n const statusDotMap: Record<WorkerStatus, \"active\" | \"paused\" | \"error\"> = {\n \tactive: \"active\",\n-\tautomations_paused: \"paused\",\n+\tpaused: \"paused\",\n \tdegraded: \"error\",\n \tfailed: \"error\",\n-\tarchived: \"paused\",\n };\n \n const statusLabels: Record<WorkerStatus, string> = {\n \tactive: \"Active\",\n-\tautomations_paused: \"Paused\",\n+\tpaused: \"Paused\",\n \tdegraded: \"Degraded\",\n \tfailed: \"Failed\",\n-\tarchived: \"Archived\",\n };",
+		"path": "apps/web/src/components/automations/worker-list-row.tsx",
+		"commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"original_commit_id": "82b7cc7c704e4ca6f78dfc4fafed02934f715734",
+		"user": {
+			"login": "coderabbitai[bot]",
+			"id": 136622811,
+			"node_id": "BOT_kgDOCCSy2w",
+			"avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+			"html_url": "https://github.com/apps/coderabbitai",
+			"followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "_⚠️ Potential issue_ | _🟠 Major_\n\n**Keep the status values aligned with the shared worker contract.**\n\nThe backend still emits `\"automations_paused\"` and `\"archived\"`, but this local union renamed pause to `\"paused\"` and dropped archived entirely. Those rows will miss both `statusDotMap[status]` and `statusLabels[status]` at runtime. Reuse the shared status values and only translate them in the label map.\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against the current code and only fix it if needed.\n\nIn `@apps/web/src/components/automations/worker-list-row.tsx` around lines 7 - 32,\nWorkerStatus, statusDotMap, and statusLabels are out of sync with the shared\nbackend contract (backend emits \"automations_paused\" and \"archived\"); update\nWorkerStatus to use the shared status union (include \"automations_paused\" and\n\"archived\" instead of renaming to \"paused\" and dropping \"archived\"), update\nstatusDotMap to include entries for \"automations_paused\" and \"archived\" mapping\nto the appropriate dot types (e.g., \"paused\" or \"error\"), and keep statusLabels\nas the place that translates those shared keys into human-friendly strings\n(e.g., map \"automations_paused\" -> \"Paused\", \"archived\" -> \"Archived\") so\nlookups like statusDotMap[status] and statusLabels[status] never miss at\nruntime.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:medusa:grasshopper -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->",
+		"created_at": "2026-03-09T19:04:17Z",
+		"updated_at": "2026-03-09T19:04:19Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383116",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383116"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383116"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383116/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": 7,
+		"original_start_line": 7,
+		"start_side": "RIGHT",
+		"line": 32,
+		"original_line": 32,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 35,
+		"position": 35,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383119",
+		"pull_request_review_id": 3917596307,
+		"id": 2907383119,
+		"node_id": "PRRC_kwDORKXxLM6tSyVP",
+		"diff_hunk": "@@ -165,6 +183,135 @@ export function WorkerSettingsTab({\n \t\t\t\t/>\n \t\t\t</div>\n \n+\t\t\t{/* Scheduled Jobs */}\n+\t\t\t<div>\n+\t\t\t\t<div className=\"flex items-center justify-between mb-2\">\n+\t\t\t\t\t<p className=\"text-xs font-medium text-muted-foreground uppercase tracking-wider\">\n+\t\t\t\t\t\tScheduled Jobs\n+\t\t\t\t\t</p>\n+\t\t\t\t\t{!showJobForm && (\n+\t\t\t\t\t\t<Button\n+\t\t\t\t\t\t\tvariant=\"ghost\"\n+\t\t\t\t\t\t\tsize=\"sm\"\n+\t\t\t\t\t\t\tclassName=\"h-6 px-2 text-xs\"\n+\t\t\t\t\t\t\tonClick={() => {\n+\t\t\t\t\t\t\t\tsetShowJobForm(true);\n+\t\t\t\t\t\t\t\tsetEditingJobId(null);\n+\t\t\t\t\t\t\t}}\n+\t\t\t\t\t\t>\n+\t\t\t\t\t\t\t<Plus className=\"h-3 w-3 mr-1\" />\n+\t\t\t\t\t\t\tAdd Job\n+\t\t\t\t\t\t</Button>\n+\t\t\t\t\t)}\n+\t\t\t\t</div>\n+\n+\t\t\t\t{showJobForm && !editingJobId && (\n+\t\t\t\t\t<div className=\"mb-3\">\n+\t\t\t\t\t\t<WorkerJobForm\n+\t\t\t\t\t\t\tonSubmit={(values) => {\n+\t\t\t\t\t\t\t\tcreateJob.mutate(\n+\t\t\t\t\t\t\t\t\t{ workerId: worker.id, ...values },\n+\t\t\t\t\t\t\t\t\t{ onSuccess: () => setShowJobForm(false) },\n+\t\t\t\t\t\t\t\t);\n+\t\t\t\t\t\t\t}}\n+\t\t\t\t\t\t\tonCancel={() => setShowJobForm(false)}\n+\t\t\t\t\t\t\tisSubmitting={createJob.isPending}\n+\t\t\t\t\t\t/>\n+\t\t\t\t\t</div>\n+\t\t\t\t)}\n+\n+\t\t\t\t{isLoadingJobs ? (\n+\t\t\t\t\t<div className=\"rounded-lg border border-border px-4 py-3\">\n+\t\t\t\t\t\t<div className=\"h-4 w-32 bg-muted rounded animate-pulse\" />\n+\t\t\t\t\t</div>\n+\t\t\t\t) : !jobs || jobs.length === 0 ? (\n+\t\t\t\t\t!showJobForm && (\n+\t\t\t\t\t\t<div className=\"rounded-lg border border-border px-4 py-4\">\n+\t\t\t\t\t\t\t<p className=\"text-sm text-muted-foreground\">\n+\t\t\t\t\t\t\t\tNo scheduled jobs. Add a job to have this coworker check in on a schedule.\n+\t\t\t\t\t\t\t</p>\n+\t\t\t\t\t\t</div>\n+\t\t\t\t\t)\n+\t\t\t\t) : (",
+		"path": "apps/web/src/components/automations/worker-settings-tab.tsx",
+		"commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"original_commit_id": "82b7cc7c704e4ca6f78dfc4fafed02934f715734",
+		"user": {
+			"login": "coderabbitai[bot]",
+			"id": 136622811,
+			"node_id": "BOT_kgDOCCSy2w",
+			"avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+			"html_url": "https://github.com/apps/coderabbitai",
+			"followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "_⚠️ Potential issue_ | _🟠 Major_\n\n**Don't collapse failed loads into the empty state.**\n\nThis branch treats `jobs === undefined` the same as `jobs.length === 0`, so a failed load renders as “No scheduled jobs”. That makes an outage indistinguishable from an empty list and can push users to recreate schedules that already exist.\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against the current code and only fix it if needed.\n\nIn `@apps/web/src/components/automations/worker-settings-tab.tsx` around lines 223\n- 235, The current render collapses a failed load (jobs === undefined) into the\nempty-list UI; update the conditional logic in the worker-settings-tab component\nso you treat undefined separately from an empty array: keep using isLoadingJobs\nfor the loading state, then if jobs === undefined render a distinct\nerror/failed-load UI (or a retry/placeholding message) instead of the \"No\nscheduled jobs\" block, and only use jobs.length === 0 (or jobs?.length === 0) to\nshow the empty-list message; adjust the conditional that currently checks !jobs\n|| jobs.length === 0 (and reference isLoadingJobs, jobs, showJobForm)\naccordingly.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:medusa:grasshopper -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->",
+		"created_at": "2026-03-09T19:04:17Z",
+		"updated_at": "2026-03-09T19:04:19Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383119",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383119"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383119"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383119/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": 223,
+		"original_start_line": 223,
+		"start_side": "RIGHT",
+		"line": 235,
+		"original_line": 235,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 100,
+		"position": 100,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383125",
+		"pull_request_review_id": 3917596307,
+		"id": 2907383125,
+		"node_id": "PRRC_kwDORKXxLM6tSyVV",
+		"diff_hunk": "@@ -165,6 +183,135 @@ export function WorkerSettingsTab({\n \t\t\t\t/>\n \t\t\t</div>\n \n+\t\t\t{/* Scheduled Jobs */}\n+\t\t\t<div>\n+\t\t\t\t<div className=\"flex items-center justify-between mb-2\">\n+\t\t\t\t\t<p className=\"text-xs font-medium text-muted-foreground uppercase tracking-wider\">\n+\t\t\t\t\t\tScheduled Jobs\n+\t\t\t\t\t</p>\n+\t\t\t\t\t{!showJobForm && (\n+\t\t\t\t\t\t<Button\n+\t\t\t\t\t\t\tvariant=\"ghost\"\n+\t\t\t\t\t\t\tsize=\"sm\"\n+\t\t\t\t\t\t\tclassName=\"h-6 px-2 text-xs\"\n+\t\t\t\t\t\t\tonClick={() => {\n+\t\t\t\t\t\t\t\tsetShowJobForm(true);\n+\t\t\t\t\t\t\t\tsetEditingJobId(null);\n+\t\t\t\t\t\t\t}}\n+\t\t\t\t\t\t>\n+\t\t\t\t\t\t\t<Plus className=\"h-3 w-3 mr-1\" />\n+\t\t\t\t\t\t\tAdd Job\n+\t\t\t\t\t\t</Button>\n+\t\t\t\t\t)}\n+\t\t\t\t</div>\n+\n+\t\t\t\t{showJobForm && !editingJobId && (\n+\t\t\t\t\t<div className=\"mb-3\">\n+\t\t\t\t\t\t<WorkerJobForm\n+\t\t\t\t\t\t\tonSubmit={(values) => {\n+\t\t\t\t\t\t\t\tcreateJob.mutate(\n+\t\t\t\t\t\t\t\t\t{ workerId: worker.id, ...values },\n+\t\t\t\t\t\t\t\t\t{ onSuccess: () => setShowJobForm(false) },\n+\t\t\t\t\t\t\t\t);\n+\t\t\t\t\t\t\t}}\n+\t\t\t\t\t\t\tonCancel={() => setShowJobForm(false)}\n+\t\t\t\t\t\t\tisSubmitting={createJob.isPending}\n+\t\t\t\t\t\t/>\n+\t\t\t\t\t</div>\n+\t\t\t\t)}\n+\n+\t\t\t\t{isLoadingJobs ? (\n+\t\t\t\t\t<div className=\"rounded-lg border border-border px-4 py-3\">\n+\t\t\t\t\t\t<div className=\"h-4 w-32 bg-muted rounded animate-pulse\" />\n+\t\t\t\t\t</div>\n+\t\t\t\t) : !jobs || jobs.length === 0 ? (\n+\t\t\t\t\t!showJobForm && (\n+\t\t\t\t\t\t<div className=\"rounded-lg border border-border px-4 py-4\">\n+\t\t\t\t\t\t\t<p className=\"text-sm text-muted-foreground\">\n+\t\t\t\t\t\t\t\tNo scheduled jobs. Add a job to have this coworker check in on a schedule.\n+\t\t\t\t\t\t\t</p>\n+\t\t\t\t\t\t</div>\n+\t\t\t\t\t)\n+\t\t\t\t) : (\n+\t\t\t\t\t<div className=\"rounded-lg border border-border divide-y divide-border\">\n+\t\t\t\t\t\t{jobs.map((job) =>\n+\t\t\t\t\t\t\teditingJobId === job.id ? (\n+\t\t\t\t\t\t\t\t<div key={job.id} className=\"p-3\">\n+\t\t\t\t\t\t\t\t\t<WorkerJobForm\n+\t\t\t\t\t\t\t\t\t\tinitialValues={{\n+\t\t\t\t\t\t\t\t\t\t\tname: job.name,\n+\t\t\t\t\t\t\t\t\t\t\tcheckInPrompt: job.checkInPrompt,\n+\t\t\t\t\t\t\t\t\t\t\tcronExpression: job.cronExpression,\n+\t\t\t\t\t\t\t\t\t\t\tdescription: job.description ?? undefined,\n+\t\t\t\t\t\t\t\t\t\t\tenabled: job.enabled,\n+\t\t\t\t\t\t\t\t\t\t}}\n+\t\t\t\t\t\t\t\t\t\tonSubmit={(values) => {\n+\t\t\t\t\t\t\t\t\t\t\tupdateJob.mutate(\n+\t\t\t\t\t\t\t\t\t\t\t\t{ jobId: job.id, ...values },\n+\t\t\t\t\t\t\t\t\t\t\t\t{ onSuccess: () => setEditingJobId(null) },\n+\t\t\t\t\t\t\t\t\t\t\t);\n+\t\t\t\t\t\t\t\t\t\t}}\n+\t\t\t\t\t\t\t\t\t\tonCancel={() => setEditingJobId(null)}\n+\t\t\t\t\t\t\t\t\t\tisSubmitting={updateJob.isPending}\n+\t\t\t\t\t\t\t\t\t/>\n+\t\t\t\t\t\t\t\t</div>\n+\t\t\t\t\t\t\t) : (\n+\t\t\t\t\t\t\t\t<div key={job.id} className=\"flex items-center gap-3 px-4 py-2.5\">\n+\t\t\t\t\t\t\t\t\t<div className=\"flex-1 min-w-0\">\n+\t\t\t\t\t\t\t\t\t\t<div className=\"flex items-center gap-2\">\n+\t\t\t\t\t\t\t\t\t\t\t<span className=\"text-sm font-medium text-foreground truncate\">\n+\t\t\t\t\t\t\t\t\t\t\t\t{job.name}\n+\t\t\t\t\t\t\t\t\t\t\t</span>\n+\t\t\t\t\t\t\t\t\t\t\t<span className=\"text-xs text-muted-foreground shrink-0\">\n+\t\t\t\t\t\t\t\t\t\t\t\t{describeCron(job.cronExpression)}\n+\t\t\t\t\t\t\t\t\t\t\t</span>\n+\t\t\t\t\t\t\t\t\t\t</div>\n+\t\t\t\t\t\t\t\t\t\t{job.lastTickAt && (\n+\t\t\t\t\t\t\t\t\t\t\t<p className=\"text-xs text-muted-foreground mt-0.5\">\n+\t\t\t\t\t\t\t\t\t\t\t\tLast run{\" \"}\n+\t\t\t\t\t\t\t\t\t\t\t\t{formatDistanceToNow(new Date(job.lastTickAt), {\n+\t\t\t\t\t\t\t\t\t\t\t\t\taddSuffix: true,\n+\t\t\t\t\t\t\t\t\t\t\t\t})}\n+\t\t\t\t\t\t\t\t\t\t\t</p>\n+\t\t\t\t\t\t\t\t\t\t)}\n+\t\t\t\t\t\t\t\t\t</div>\n+\t\t\t\t\t\t\t\t\t<div className=\"flex items-center gap-2 shrink-0\">\n+\t\t\t\t\t\t\t\t\t\t<Switch\n+\t\t\t\t\t\t\t\t\t\t\tchecked={job.enabled}\n+\t\t\t\t\t\t\t\t\t\t\tonCheckedChange={(checked) => {\n+\t\t\t\t\t\t\t\t\t\t\t\ttoggleJob.mutate({\n+\t\t\t\t\t\t\t\t\t\t\t\t\tjobId: job.id,\n+\t\t\t\t\t\t\t\t\t\t\t\t\tenabled: checked,\n+\t\t\t\t\t\t\t\t\t\t\t\t});\n+\t\t\t\t\t\t\t\t\t\t\t}}\n+\t\t\t\t\t\t\t\t\t\t/>\n+\t\t\t\t\t\t\t\t\t\t<Button\n+\t\t\t\t\t\t\t\t\t\t\tvariant=\"ghost\"\n+\t\t\t\t\t\t\t\t\t\t\tsize=\"sm\"\n+\t\t\t\t\t\t\t\t\t\t\tclassName=\"h-7 w-7 p-0\"\n+\t\t\t\t\t\t\t\t\t\t\tonClick={() => {\n+\t\t\t\t\t\t\t\t\t\t\t\tsetEditingJobId(job.id);\n+\t\t\t\t\t\t\t\t\t\t\t\tsetShowJobForm(false);\n+\t\t\t\t\t\t\t\t\t\t\t}}\n+\t\t\t\t\t\t\t\t\t\t>\n+\t\t\t\t\t\t\t\t\t\t\t<Pencil className=\"h-3.5 w-3.5\" />\n+\t\t\t\t\t\t\t\t\t\t</Button>\n+\t\t\t\t\t\t\t\t\t\t<Button\n+\t\t\t\t\t\t\t\t\t\t\tvariant=\"ghost\"\n+\t\t\t\t\t\t\t\t\t\t\tsize=\"sm\"\n+\t\t\t\t\t\t\t\t\t\t\tclassName=\"h-7 w-7 p-0 text-destructive hover:text-destructive\"\n+\t\t\t\t\t\t\t\t\t\t\tonClick={() => setDeleteJobId(job.id)}\n+\t\t\t\t\t\t\t\t\t\t>\n+\t\t\t\t\t\t\t\t\t\t\t<Trash2 className=\"h-3.5 w-3.5\" />",
+		"path": "apps/web/src/components/automations/worker-settings-tab.tsx",
+		"commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"original_commit_id": "82b7cc7c704e4ca6f78dfc4fafed02934f715734",
+		"user": {
+			"login": "coderabbitai[bot]",
+			"id": 136622811,
+			"node_id": "BOT_kgDOCCSy2w",
+			"avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+			"html_url": "https://github.com/apps/coderabbitai",
+			"followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "_⚠️ Potential issue_ | _🟠 Major_\n\n**Add accessible names to the job row actions.**\n\nThe switch and the icon-only edit/delete buttons do not expose a label, so assistive tech cannot tell which job each control operates on or what the icons do. Add `aria-label`s or `aria-labelledby` values that include `job.name`.\n\n<details>\n<summary>♿ Suggested labels</summary>\n\n```diff\n \t\t\t\t\t\t\t\t\t\t<Switch\n+\t\t\t\t\t\t\t\t\t\t\taria-label={`${job.enabled ? \"Disable\" : \"Enable\"} ${job.name}`}\n \t\t\t\t\t\t\t\t\t\t\tchecked={job.enabled}\n \t\t\t\t\t\t\t\t\t\t\tonCheckedChange={(checked) => {\n \t\t\t\t\t\t\t\t\t\t\t\ttoggleJob.mutate({\n \t\t\t\t\t\t\t\t\t\t\t\t\tjobId: job.id,\n \t\t\t\t\t\t\t\t\t\t\t\t\tenabled: checked,\n \t\t\t\t\t\t\t\t\t\t\t\t});\n \t\t\t\t\t\t\t\t\t\t\t}}\n \t\t\t\t\t\t\t\t\t\t/>\n \t\t\t\t\t\t\t\t\t\t<Button\n+\t\t\t\t\t\t\t\t\t\t\taria-label={`Edit ${job.name}`}\n \t\t\t\t\t\t\t\t\t\t\tvariant=\"ghost\"\n \t\t\t\t\t\t\t\t\t\t\tsize=\"sm\"\n \t\t\t\t\t\t\t\t\t\t\tclassName=\"h-7 w-7 p-0\"\n \t\t\t\t\t\t\t\t\t\t\tonClick={() => {\n \t\t\t\t\t\t\t\t\t\t\t\tsetEditingJobId(job.id);\n \t\t\t\t\t\t\t\t\t\t\t\tsetShowJobForm(false);\n \t\t\t\t\t\t\t\t\t\t\t}}\n \t\t\t\t\t\t\t\t\t\t>\n \t\t\t\t\t\t\t\t\t\t\t<Pencil className=\"h-3.5 w-3.5\" />\n \t\t\t\t\t\t\t\t\t\t</Button>\n \t\t\t\t\t\t\t\t\t\t<Button\n+\t\t\t\t\t\t\t\t\t\t\taria-label={`Delete ${job.name}`}\n \t\t\t\t\t\t\t\t\t\t\tvariant=\"ghost\"\n \t\t\t\t\t\t\t\t\t\t\tsize=\"sm\"\n \t\t\t\t\t\t\t\t\t\t\tclassName=\"h-7 w-7 p-0 text-destructive hover:text-destructive\"\n \t\t\t\t\t\t\t\t\t\t\tonClick={() => setDeleteJobId(job.id)}\n \t\t\t\t\t\t\t\t\t\t>\n```\n</details>\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against the current code and only fix it if needed.\n\nIn `@apps/web/src/components/automations/worker-settings-tab.tsx` around lines 259\n- 305, Add accessible labels to the job row controls so screen readers know\nwhich job they act on: update the Switch (checked prop using job.enabled and\nonCheckedChange -> toggleJob.mutate) to include aria-label or aria-labelledby\nthat includes job.name (e.g., `Toggle <job.name> job`), and add aria-labels to\nthe two icon-only Buttons that call setEditingJobId(job.id) and\nsetDeleteJobId(job.id) (e.g., `Edit <job.name>` and `Delete <job.name>`); ensure\nthe labels dynamically reference job.name so each row’s controls are uniquely\nannounced.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:medusa:grasshopper -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->",
+		"created_at": "2026-03-09T19:04:17Z",
+		"updated_at": "2026-03-09T19:04:20Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383125",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383125"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383125"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383125/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": 259,
+		"original_start_line": 259,
+		"start_side": "RIGHT",
+		"line": 305,
+		"original_line": 305,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 170,
+		"position": 170,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383132",
+		"pull_request_review_id": 3917596307,
+		"id": 2907383132,
+		"node_id": "PRRC_kwDORKXxLM6tSyVc",
+		"diff_hunk": "@@ -1348,6 +1360,182 @@ export const automationsRouter = {\n \t\t\t}\n \t\t\treturn { success: true };\n \t\t}),\n+\n+\t// ============================================\n+\t// Worker Jobs (Scheduled Check-Ins)\n+\t// ============================================\n+\n+\t/**\n+\t * List all jobs for a worker.\n+\t */\n+\tlistWorkerJobs: orgProcedure\n+\t\t.input(z.object({ workerId: z.string().uuid() }))\n+\t\t.output(\n+\t\t\tz.object({\n+\t\t\t\tjobs: z.array(\n+\t\t\t\t\tz.object({\n+\t\t\t\t\t\tid: z.string().uuid(),\n+\t\t\t\t\t\tworkerId: z.string().uuid(),\n+\t\t\t\t\t\tname: z.string(),\n+\t\t\t\t\t\tdescription: z.string().nullable(),\n+\t\t\t\t\t\tcheckInPrompt: z.string(),\n+\t\t\t\t\t\tcronExpression: z.string(),\n+\t\t\t\t\t\tenabled: z.boolean(),\n+\t\t\t\t\t\tlastTickAt: z.coerce.date().nullable(),\n+\t\t\t\t\t\tnextTickAt: z.coerce.date().nullable(),\n+\t\t\t\t\t\tcreatedAt: z.coerce.date(),\n+\t\t\t\t\t\tupdatedAt: z.coerce.date(),\n+\t\t\t\t\t}),\n+\t\t\t\t),\n+\t\t\t}),\n+\t\t)\n+\t\t.handler(async ({ input, context }) => {\n+\t\t\ttry {\n+\t\t\t\tconst jobs = await workerJobs.listJobsForWorker(input.workerId, context.orgId);\n+\t\t\t\treturn { jobs };\n+\t\t\t} catch (err) {\n+\t\t\t\tthrowAutomationORPCError(err, \"Failed to list worker jobs\");\n+\t\t\t}\n+\t\t}),\n+\n+\t/**\n+\t * Get a single worker job by ID.\n+\t */\n+\tgetWorkerJob: orgProcedure\n+\t\t.input(z.object({ jobId: z.string().uuid() }))\n+\t\t.output(\n+\t\t\tz.object({\n+\t\t\t\tjob: z.object({\n+\t\t\t\t\tid: z.string().uuid(),\n+\t\t\t\t\tworkerId: z.string().uuid(),\n+\t\t\t\t\tname: z.string(),\n+\t\t\t\t\tdescription: z.string().nullable(),\n+\t\t\t\t\tcheckInPrompt: z.string(),\n+\t\t\t\t\tcronExpression: z.string(),\n+\t\t\t\t\tenabled: z.boolean(),\n+\t\t\t\t\tlastTickAt: z.coerce.date().nullable(),\n+\t\t\t\t\tnextTickAt: z.coerce.date().nullable(),\n+\t\t\t\t\tcreatedAt: z.coerce.date(),\n+\t\t\t\t\tupdatedAt: z.coerce.date(),\n+\t\t\t\t}),\n+\t\t\t}),\n+\t\t)\n+\t\t.handler(async ({ input, context }) => {\n+\t\t\ttry {\n+\t\t\t\tconst job = await workerJobs.findJobById(input.jobId, context.orgId);\n+\t\t\t\treturn { job };\n+\t\t\t} catch (err) {\n+\t\t\t\tthrowAutomationORPCError(err, \"Failed to get worker job\");\n+\t\t\t}",
+		"path": "apps/web/src/server/routers/automations.ts",
+		"commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"original_commit_id": "82b7cc7c704e4ca6f78dfc4fafed02934f715734",
+		"user": {
+			"login": "coderabbitai[bot]",
+			"id": 136622811,
+			"node_id": "BOT_kgDOCCSy2w",
+			"avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+			"html_url": "https://github.com/apps/coderabbitai",
+			"followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "_⚠️ Potential issue_ | _🟠 Major_\n\n**Handle the missing-job path before returning.**\n\n`workerJobs.findJobById()` is null-checked in `apps/trigger-service/src/job-ticks/processor.ts`, so this route cannot assume it always throws. Returning a null `job` into this non-null output schema will bubble out as a 500/output-validation error instead of the expected 404.\n\n<details>\n<summary>🛠️ Suggested fix</summary>\n\n```diff\n \t\t.handler(async ({ input, context }) => {\n \t\t\ttry {\n \t\t\t\tconst job = await workerJobs.findJobById(input.jobId, context.orgId);\n+\t\t\t\tif (!job) {\n+\t\t\t\t\tthrow new ORPCError(\"NOT_FOUND\", { message: \"Worker job not found\" });\n+\t\t\t\t}\n \t\t\t\treturn { job };\n \t\t\t} catch (err) {\n \t\t\t\tthrowAutomationORPCError(err, \"Failed to get worker job\");\n \t\t\t}\n \t\t}),\n```\n</details>\n\n<!-- suggestion_start -->\n\n<details>\n<summary>📝 Committable suggestion</summary>\n\n> ‼️ **IMPORTANT**\n> Carefully review the code before committing. Ensure that it accurately replaces the highlighted code, contains no missing lines, and has no issues with indentation. Thoroughly test & benchmark the code to ensure it meets the requirements.\n\n```suggestion\n\t\t.handler(async ({ input, context }) => {\n\t\t\ttry {\n\t\t\t\tconst job = await workerJobs.findJobById(input.jobId, context.orgId);\n\t\t\t\tif (!job) {\n\t\t\t\t\tthrow new ORPCError(\"NOT_FOUND\", { message: \"Worker job not found\" });\n\t\t\t\t}\n\t\t\t\treturn { job };\n\t\t\t} catch (err) {\n\t\t\t\tthrowAutomationORPCError(err, \"Failed to get worker job\");\n\t\t\t}\n\t\t}),\n```\n\n</details>\n\n<!-- suggestion_end -->\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against the current code and only fix it if needed.\n\nIn `@apps/web/src/server/routers/automations.ts` around lines 1423 - 1429, The\nhandler for this route must handle the case where workerJobs.findJobById returns\nnull before returning into a non-null output schema; update the .handler(async\n({ input, context }) => { ... }) block to check if the returned job is falsy\n(const job = await workerJobs.findJobById(input.jobId, context.orgId); if (!job)\n...) and then raise a not-found error (e.g., throwAutomationORPCError or a\nTRPCError/NOT_FOUND with a message like \"Worker job not found\" and include\ninput.jobId/context.orgId for context) instead of returning null; only return {\njob } when job is present.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:medusa:grasshopper -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->",
+		"created_at": "2026-03-09T19:04:17Z",
+		"updated_at": "2026-03-09T19:04:20Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383132",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383132"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383132"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383132/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": 1423,
+		"original_start_line": 1423,
+		"start_side": "RIGHT",
+		"line": 1430,
+		"original_line": 1429,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 243,
+		"position": 234,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383153",
+		"pull_request_review_id": 3917596307,
+		"id": 2907383153,
+		"node_id": "PRRC_kwDORKXxLM6tSyVx",
+		"diff_hunk": "@@ -317,6 +328,22 @@ const scheduledJobOptions: JobsOptions = {\n \t},\n };\n \n+const workerJobTickJobOptions: JobsOptions = {\n+\tattempts: 2,\n+\tbackoff: {\n+\t\ttype: \"fixed\",\n+\t\tdelay: 5000,\n+\t},\n+\tremoveOnComplete: {\n+\t\tage: 3600, // 1 hour\n+\t\tcount: 500,\n+\t},\n+\tremoveOnFail: {\n+\t\tage: 86400, // 24 hours\n+\t\tcount: 500,\n+\t},\n+};",
+		"path": "packages/queue/src/index.ts",
+		"commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"original_commit_id": "82b7cc7c704e4ca6f78dfc4fafed02934f715734",
+		"user": {
+			"login": "coderabbitai[bot]",
+			"id": 136622811,
+			"node_id": "BOT_kgDOCCSy2w",
+			"avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+			"html_url": "https://github.com/apps/coderabbitai",
+			"followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "_⚠️ Potential issue_ | _🟠 Major_\n\n<details>\n<summary>🧩 Analysis chain</summary>\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\n# Verify the processor order: does it send prompt before or after updating timestamps?\nast-grep --pattern $'await gateway.postMessage($$$)\n$$$\nawait workerJobs.updateJobTickTimestamps($$$)'\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 52\n\n---\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\n# First, find the processor implementation for worker job tick\nrg -A 30 \"createWorkerJobTickWorker\" packages/queue/src/index.ts\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 748\n\n---\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\n# Search for gateway.postMessage calls in the queue file\nrg -B 5 -A 5 \"gateway\\.postMessage\" packages/queue/src/index.ts\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 52\n\n---\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\n# Search for updateJobTickTimestamps calls\nrg -B 5 -A 5 \"updateJobTickTimestamps\" packages/queue/src/index.ts\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 52\n\n---\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\n# Find where createWorkerJobTickWorker is instantiated\nrg -B 2 -A 5 \"createWorkerJobTickWorker\" --type ts --type tsx\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 97\n\n---\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\n# Search for gateway.postMessage across the entire codebase\nrg \"gateway\\.postMessage\" --type ts --type tsx\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 97\n\n---\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\n# Find where createWorkerJobTickWorker is instantiated\nrg \"createWorkerJobTickWorker\" --include=\"*.ts\" --include=\"*.tsx\" -B 2 -A 5\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 511\n\n---\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\n# Search for gateway.postMessage across the codebase\nrg \"gateway\\.postMessage\" --include=\"*.ts\" --include=\"*.tsx\"\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 511\n\n---\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\n# Find where createWorkerJobTickWorker is instantiated\nrg \"createWorkerJobTickWorker\" -g \"*.ts\" -g \"*.tsx\" -B 2 -A 5\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 1976\n\n---\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\n# Search for gateway.postMessage across the codebase\nrg \"gateway\\.postMessage\" -g \"*.ts\" -g \"*.tsx\"\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 165\n\n---\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\n# Read the processor file\ncat -n apps/trigger-service/src/job-ticks/processor.ts\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 3756\n\n---\n\n🏁 Script executed:\n\n```shell\n#!/bin/bash\n# Verify the workerJobTickJobOptions configuration\nsed -n '331,345p' packages/queue/src/index.ts\n```\n\nRepository: proliferate-ai/proliferate\n\nLength of output: 304\n\n---\n\n\n\n</details>\n\n**Potential duplicate check-in prompts on retry with `attempts: 2`.**\n\nThe processor sends the check-in prompt via `gateway.postMessage()` (line 68 of `processor.ts`) before updating tick timestamps via `updateJobTickTimestamps()` (line 91). If any failure occurs between these calls—including the cron parsing or the timestamp update itself—the retry will send the prompt again, as there's no idempotency check on `jobId`.\n\nConsider either:\n1. Setting `attempts: 1` (best-effort, like the tick queue)\n2. Adding idempotency tracking in the processor (e.g., check `lastTickAt` before sending)\n3. Reordering to update timestamps before sending (accepting potential missed ticks on failure)\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against the current code and only fix it if needed.\n\nIn `@packages/queue/src/index.ts` around lines 331 - 345, The job is configured\nwith workerJobTickJobOptions.attempts = 2 which can cause duplicate check-in\nprompts because gateway.postMessage() is called before updateJobTickTimestamps()\nin the processor; change the config to attempts: 1 to make it best-effort, or\ninstead implement idempotency in the processor by checking stored lastTickAt for\nthe jobId (via the same store/update used by updateJobTickTimestamps()) before\ncalling gateway.postMessage(), or reorder the processor to call\nupdateJobTickTimestamps() before gateway.postMessage() if you accept potential\nmissed ticks—pick one approach and apply it to workerJobTickJobOptions and the\nprocessor function that calls gateway.postMessage() and\nupdateJobTickTimestamps().\n```\n\n</details>\n\n<!-- fingerprinting:phantom:poseidon:ocelot -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->",
+		"created_at": "2026-03-09T19:04:17Z",
+		"updated_at": "2026-03-09T19:04:20Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383153",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383153"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383153"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383153/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": 331,
+		"original_start_line": 331,
+		"start_side": "RIGHT",
+		"line": 345,
+		"original_line": 345,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 43,
+		"position": 43,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383165",
+		"pull_request_review_id": 3917596307,
+		"id": 2907383165,
+		"node_id": "PRRC_kwDORKXxLM6tSyV9",
+		"diff_hunk": "@@ -745,18 +731,12 @@ export async function listPendingDirectives(\n export async function updateWorker(\n \tid: string,\n \torgId: string,\n-\tfields: {\n-\t\tname?: string;\n-\t\tdescription?: string | null;\n-\t\tsystemPrompt?: string | null;\n-\t\tmodelId?: string;\n-\t},\n+\tfields: { name?: string; objective?: string; modelId?: string },\n ): Promise<WorkerRow | undefined> {\n \tconst db = getDb();\n \tconst setFields: Record<string, unknown> = { updatedAt: new Date() };\n \tif (fields.name !== undefined) setFields.name = fields.name;\n-\tif (fields.description !== undefined) setFields.description = fields.description;\n-\tif (fields.systemPrompt !== undefined) setFields.systemPrompt = fields.systemPrompt;\n+\tif (fields.objective !== undefined) setFields.objective = fields.objective;\n \tif (fields.modelId !== undefined) setFields.modelId = fields.modelId;",
+		"path": "packages/services/src/workers/db.ts",
+		"commit_id": "82b7cc7c704e4ca6f78dfc4fafed02934f715734",
+		"original_commit_id": "82b7cc7c704e4ca6f78dfc4fafed02934f715734",
+		"user": {
+			"login": "coderabbitai[bot]",
+			"id": 136622811,
+			"node_id": "BOT_kgDOCCSy2w",
+			"avatar_url": "https://avatars.githubusercontent.com/in/347564?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/coderabbitai%5Bbot%5D",
+			"html_url": "https://github.com/apps/coderabbitai",
+			"followers_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/coderabbitai%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "_⚠️ Potential issue_ | _🔴 Critical_\n\n**Restore `description`/`systemPrompt` in `updateWorker`.**\n\n`packages/services/src/workers/service.ts:512-522` still calls this with `description` and `systemPrompt`, but this DB method now only accepts `objective` and only writes `objective`. That makes those edits silently no-op. `createWorker()` in this file still uses `description`/`systemPrompt`, so this looks like an accidental contract regression.\n\n\n<details>\n<summary>Suggested fix</summary>\n\n```diff\n export async function updateWorker(\n \tid: string,\n \torgId: string,\n-\tfields: { name?: string; objective?: string; modelId?: string },\n+\tfields: {\n+\t\tname?: string;\n+\t\tdescription?: string;\n+\t\tsystemPrompt?: string;\n+\t\tmodelId?: string;\n+\t},\n ): Promise<WorkerRow | undefined> {\n \tconst db = getDb();\n \tconst setFields: Record<string, unknown> = { updatedAt: new Date() };\n \tif (fields.name !== undefined) setFields.name = fields.name;\n-\tif (fields.objective !== undefined) setFields.objective = fields.objective;\n+\tif (fields.description !== undefined) setFields.description = fields.description;\n+\tif (fields.systemPrompt !== undefined) setFields.systemPrompt = fields.systemPrompt;\n \tif (fields.modelId !== undefined) setFields.modelId = fields.modelId;\n```\n</details>\n\n<details>\n<summary>🤖 Prompt for AI Agents</summary>\n\n```\nVerify each finding against the current code and only fix it if needed.\n\nIn `@packages/services/src/workers/db.ts` around lines 731 - 740, The updateWorker\nfunction currently accepts only { name?, objective?, modelId? } and only writes\nobjective, causing calls from service.ts that pass description and systemPrompt\nto be silently ignored; update updateWorker (the function signature and body) to\naccept description?: string and systemPrompt?: string in the fields parameter\nand, when those are !== undefined, add setFields.description =\nfields.description and setFields.systemPrompt = fields.systemPrompt (similar to\nhow name/objective/modelId are handled) so that updates coming from\ncreateWorker/service.ts are persisted.\n```\n\n</details>\n\n<!-- fingerprinting:phantom:poseidon:grasshopper -->\n\n<!-- This is an auto-generated comment by CodeRabbit -->",
+		"created_at": "2026-03-09T19:04:17Z",
+		"updated_at": "2026-03-09T19:04:20Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383165",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383165"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907383165"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907383165/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": 731,
+		"original_start_line": 731,
+		"start_side": "RIGHT",
+		"line": 746,
+		"original_line": 740,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 61,
+		"position": 1,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907410927",
+		"pull_request_review_id": 3917625586,
+		"id": 2907410927,
+		"node_id": "PRRC_kwDORKXxLM6tS5Hv",
+		"diff_hunk": "@@ -0,0 +1,96 @@\n+/**\n+ * Worker Job Tick Processor\n+ *\n+ * Processes a single BullMQ job tick: verifies the job and worker are still\n+ * eligible, sends the check-in prompt to the manager session via the gateway,\n+ * and updates tick timestamps.\n+ */\n+\n+import { env } from \"@proliferate/environment/server\";\n+import { createSyncClient } from \"@proliferate/gateway-clients\";\n+import type { Job, WorkerJobTickPayload } from \"@proliferate/queue\";\n+import { workerJobs, workers as workersService } from \"@proliferate/services\";\n+import { CronExpressionParser } from \"cron-parser\";\n+\n+import { logger as rootLogger } from \"../lib/logger.js\";\n+\n+/** Must match SYSTEM_JOB_TICK_USER_ID in @proliferate/shared/contracts/workers */\n+const SYSTEM_JOB_TICK_USER_ID = \"system:job-tick\";\n+\n+const logger = rootLogger.child({ module: \"job-tick-processor\" });\n+\n+export async function processJobTick(job: Job<WorkerJobTickPayload>): Promise<void> {\n+\tconst { jobId, workerId, organizationId, managerSessionId } = job.data;\n+\n+\tconst log = logger.child({ jobId, workerId, managerSessionId });\n+\n+\t// 1. Load the worker job — verify still enabled\n+\tconst workerJob = await workerJobs.findJobById(jobId, organizationId);\n+\tif (!workerJob) {\n+\t\tlog.debug(\"Worker job not found, skipping tick\");\n+\t\treturn;\n+\t}\n+\tif (!workerJob.enabled) {\n+\t\tlog.debug(\"Worker job disabled, skipping tick\");\n+\t\treturn;\n+\t}",
+		"path": "apps/trigger-service/src/job-ticks/processor.ts",
+		"commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"original_commit_id": "a1126721fde8fac93d0084fc0052d5d4984c3e16",
+		"user": {
+			"login": "greptile-apps[bot]",
+			"id": 165735046,
+			"node_id": "BOT_kgDOCeDqhg",
+			"avatar_url": "https://avatars.githubusercontent.com/in/867647?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/greptile-apps%5Bbot%5D",
+			"html_url": "https://github.com/apps/greptile-apps",
+			"followers_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "**Dead null-check causes unexpected job failures on deletion**\n\n`workerJobs.findJobById` is the **service-level** function (imported from `@proliferate/services`), which throws `WorkerJobNotFoundError` when the job doesn't exist — it never returns `null`. The `if (!workerJob)` guard is therefore unreachable dead code.\n\nThe practical consequence is the opposite of the intended \"skip silently\" behaviour: if a tick fires just before the scheduler removes its BullMQ repeatable (e.g. during the 60s sync window after a job is deleted), `WorkerJobNotFoundError` propagates uncaught to BullMQ, the job is marked as **failed**, and the retry logic kicks in unnecessarily.\n\nWrap the call in a try/catch to preserve the intended graceful-skip semantics:\n\n```suggestion\nlet workerJob: Awaited<ReturnType<typeof workerJobs.findJobById>>;\ntry {\n\tworkerJob = await workerJobs.findJobById(jobId, organizationId);\n} catch (err) {\n\tif (err instanceof WorkerJobNotFoundError) {\n\t\tlog.debug(\"Worker job not found, skipping tick\");\n\t\treturn;\n\t}\n\tthrow err;\n}\nif (!workerJob.enabled) {\n\tlog.debug(\"Worker job disabled, skipping tick\");\n\treturn;\n}\n```\n\nYou'll need to import `WorkerJobNotFoundError` at the top.",
+		"created_at": "2026-03-09T19:10:31Z",
+		"updated_at": "2026-03-09T19:10:34Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907410927",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907410927"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907410927"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907410927/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": 28,
+		"original_start_line": 28,
+		"start_side": "RIGHT",
+		"line": 36,
+		"original_line": 36,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 36,
+		"position": 36,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907410993",
+		"pull_request_review_id": 3917625586,
+		"id": 2907410993,
+		"node_id": "PRRC_kwDORKXxLM6tS5Ix",
+		"diff_hunk": "@@ -0,0 +1,162 @@\n+/**\n+ * Worker Job Tick Scheduler\n+ *\n+ * 1. startJobTickWorker() — creates BullMQ worker with the processor\n+ * 2. syncJobTickSchedules() — queries all enabled jobs from DB, syncs BullMQ\n+ *    repeatable jobs. Runs on startup and every 60s.\n+ */\n+\n+import {\n+\ttype Worker,\n+\ttype WorkerJobTickPayload,\n+\tcreateWorkerJobTickQueue,\n+\tcreateWorkerJobTickWorker,\n+} from \"@proliferate/queue\";\n+import { workerJobs, workers as workersService } from \"@proliferate/services\";\n+import { logger as rootLogger } from \"../lib/logger.js\";\n+import { processJobTick } from \"./processor.js\";\n+\n+const logger = rootLogger.child({ module: \"job-tick-scheduler\" });\n+\n+const SYNC_INTERVAL_MS = 60_000;\n+\n+function repeatableKeyPrefix(jobId: string): string {\n+\treturn `job-tick:${jobId}`;\n+}\n+\n+/**\n+ * Create and start the BullMQ worker that processes job ticks.\n+ */\n+export function startJobTickWorker(): Worker<WorkerJobTickPayload> {\n+\tconst worker = createWorkerJobTickWorker(processJobTick);\n+\n+\tworker.on(\"failed\", (job, err) => {\n+\t\tlogger.error({ err, jobId: job?.id }, \"Worker job tick failed\");\n+\t});\n+\n+\tlogger.info(\"Job tick worker started\");\n+\treturn worker;\n+}\n+\n+/**\n+ * Sync BullMQ repeatable jobs with enabled worker jobs from the database.\n+ *\n+ * - Adds repeatables for new/changed enabled jobs\n+ * - Removes repeatables for deleted/disabled jobs\n+ */\n+export async function syncJobTickSchedules(): Promise<void> {\n+\tconst queue = createWorkerJobTickQueue();\n+\ttry {\n+\t\t// Fetch all enabled jobs from DB\n+\t\tconst enabledJobs = await workerJobs.listAllEnabledJobs();\n+\n+\t\t// Build a map of desired repeatable jobs (jobId -> job)\n+\t\tconst desiredMap = new Map<string, (typeof enabledJobs)[number]>();\n+\t\tfor (const job of enabledJobs) {\n+\t\t\tdesiredMap.set(job.id, job);\n+\t\t}\n+\n+\t\t// Load active workers for eligibility filtering\n+\t\tconst activeWorkers = await workersService.listActiveWorkers();\n+\n+\t\t// Get existing repeatable jobs in BullMQ\n+\t\tconst existingRepeatables = await queue.getRepeatableJobs();\n+\n+\t\t// Build a set of existing job-tick repeatable keys\n+\t\tconst existingKeyMap = new Map<string, { key: string; pattern: string | null }>();\n+\t\tfor (const rep of existingRepeatables) {\n+\t\t\tif (rep.name.startsWith(\"job-tick:\")) {\n+\t\t\t\t// Extract the jobId from the name (format: \"job-tick:{jobId}\")\n+\t\t\t\tconst jobId = rep.name.slice(\"job-tick:\".length);\n+\t\t\t\texistingKeyMap.set(jobId, { key: rep.key, pattern: rep.pattern ?? null });\n+\t\t\t}\n+\t\t}\n+\n+\t\t// Build a lookup from workerId -> managerSessionId\n+\t\tconst workerSessionMap = new Map<string, string>();\n+\t\tfor (const worker of activeWorkers) {\n+\t\t\tworkerSessionMap.set(worker.id, worker.managerSessionId);\n+\t\t}\n+\n+\t\t// Add or update repeatables for enabled jobs with active workers\n+\t\tlet added = 0;\n+\t\tlet removed = 0;\n+\n+\t\tfor (const [jobId, workerJob] of desiredMap) {\n+\t\t\tconst managerSessionId = workerSessionMap.get(workerJob.workerId);\n+\t\t\tif (!managerSessionId) {\n+\t\t\t\t// Worker not active — remove if exists\n+\t\t\t\tconst existing = existingKeyMap.get(jobId);\n+\t\t\t\tif (existing) {\n+\t\t\t\t\tawait queue.removeRepeatableByKey(existing.key);\n+\t\t\t\t\texistingKeyMap.delete(jobId);\n+\t\t\t\t\tremoved++;\n+\t\t\t\t}\n+\t\t\t\tcontinue;\n+\t\t\t}\n+\n+\t\t\tconst existing = existingKeyMap.get(jobId);\n+\t\t\tif (existing && existing.pattern === workerJob.cronExpression) {\n+\t\t\t\t// Already scheduled with the correct cron — skip\n+\t\t\t\texistingKeyMap.delete(jobId);\n+\t\t\t\tcontinue;\n+\t\t\t}",
+		"path": "apps/trigger-service/src/job-ticks/scheduler.ts",
+		"commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"original_commit_id": "a1126721fde8fac93d0084fc0052d5d4984c3e16",
+		"user": {
+			"login": "greptile-apps[bot]",
+			"id": 165735046,
+			"node_id": "BOT_kgDOCeDqhg",
+			"avatar_url": "https://avatars.githubusercontent.com/in/867647?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/greptile-apps%5Bbot%5D",
+			"html_url": "https://github.com/apps/greptile-apps",
+			"followers_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "**Schedule not re-synced when `managerSessionId` changes**\n\nThe sync logic only re-adds a BullMQ repeatable job when `cronExpression` changes. If a worker's `managerSessionId` is updated (e.g., session recreation or worker reset) but the cron schedule stays the same, the existing repeatable job retains the stale `managerSessionId` in its payload indefinitely. Every subsequent tick will then post the check-in prompt to a dead or wrong session.\n\nThe comparison should also include the `managerSessionId` from the payload of the existing BullMQ job:\n\n```suggestion\nconst existing = existingKeyMap.get(jobId);\nif (existing && existing.pattern === workerJob.cronExpression && existing.managerSessionId === managerSessionId) {\n\t// Already scheduled with the correct cron and session — skip\n\texistingKeyMap.delete(jobId);\n\tcontinue;\n}\n```\n\nNote: BullMQ's `getRepeatableJobs()` returns metadata but not the job payload. You may need to query the job data separately (e.g., via `queue.getJob(name)`) or store the `managerSessionId` in the repeatable key/name to detect staleness.",
+		"created_at": "2026-03-09T19:10:32Z",
+		"updated_at": "2026-03-09T19:10:34Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907410993",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907410993"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907410993"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907410993/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": 98,
+		"original_start_line": 98,
+		"start_side": "RIGHT",
+		"line": 103,
+		"original_line": 103,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 103,
+		"position": 103,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907411054",
+		"pull_request_review_id": 3917625586,
+		"id": 2907411054,
+		"node_id": "PRRC_kwDORKXxLM6tS5Ju",
+		"diff_hunk": "@@ -187,3 +224,14 @@ export async function updateLastTick(\n \t}\n \treturn toJobDetail(row);\n }\n+\n+/** Alias for tick processor compatibility. */\n+export const updateJobTickTimestamps = updateLastTick;\n+\n+/**\n+ * List all enabled jobs across all organizations.\n+ * Used by the tick scheduler to sync BullMQ repeatable jobs.\n+ */\n+export async function listAllEnabledJobs(): Promise<WorkerJobRow[]> {\n+\treturn workerJobsDb.listAllEnabledJobs();\n+}",
+		"path": "packages/services/src/worker-jobs/service.ts",
+		"commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"original_commit_id": "a1126721fde8fac93d0084fc0052d5d4984c3e16",
+		"user": {
+			"login": "greptile-apps[bot]",
+			"id": 165735046,
+			"node_id": "BOT_kgDOCeDqhg",
+			"avatar_url": "https://avatars.githubusercontent.com/in/867647?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/greptile-apps%5Bbot%5D",
+			"html_url": "https://github.com/apps/greptile-apps",
+			"followers_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "**`listAllEnabledJobs` leaks the raw DB row type**\n\n`listAllEnabledJobs` returns `WorkerJobRow[]` (the raw Drizzle model) rather than `WorkerJobDetail[]` (the mapped service type). Every other public service function returns the mapped `WorkerJobDetail` type to maintain the service abstraction layer. \n\nThe scheduler only uses a few fields today (`id`, `workerId`, `organizationId`, `cronExpression`), but exposing the raw row type to the calling layer bypasses the abstraction and could cause drift if the schema changes.\n\nConsider mapping through `toJobDetail` for consistency:\n\n```suggestion\nexport async function listAllEnabledJobs(): Promise<WorkerJobDetail[]> {\n\tconst rows = await workerJobsDb.listAllEnabledJobs();\n\treturn rows.map(toJobDetail);\n}\n```",
+		"created_at": "2026-03-09T19:10:33Z",
+		"updated_at": "2026-03-09T19:10:34Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907411054",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907411054"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907411054"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907411054/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": 235,
+		"original_start_line": 235,
+		"start_side": "RIGHT",
+		"line": 237,
+		"original_line": 237,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 77,
+		"position": 77,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907522765",
+		"pull_request_review_id": 3917749505,
+		"id": 2907522765,
+		"node_id": "PRRC_kwDORKXxLM6tTUbN",
+		"diff_hunk": "@@ -4,38 +4,39 @@ import { StatusDot } from \"@/components/ui/status-dot\";\n import { formatRelativeTime } from \"@/lib/display/utils\";\n import Link from \"next/link\";\n \n-type WorkerStatus = \"active\" | \"automations_paused\" | \"degraded\" | \"failed\" | \"archived\";\n+type WorkerStatus = \"active\" | \"paused\" | \"degraded\" | \"failed\";",
+		"path": "apps/web/src/components/automations/worker-list-row.tsx",
+		"commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"original_commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"user": {
+			"login": "greptile-apps[bot]",
+			"id": 165735046,
+			"node_id": "BOT_kgDOCeDqhg",
+			"avatar_url": "https://avatars.githubusercontent.com/in/867647?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/greptile-apps%5Bbot%5D",
+			"html_url": "https://github.com/apps/greptile-apps",
+			"followers_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "**`\"automations_paused\"` status not handled, renders as undefined**\n\nThe local `WorkerStatus` type uses `\"paused\"` instead of the canonical `\"automations_paused\"` from `@proliferate/shared/contracts/workers`. In `coworkers/page.tsx` the worker status is passed with an `as WorkerStatus` cast, so TypeScript doesn't catch the mismatch at the call site.\n\nAt runtime, when a worker's status is `\"automations_paused\"`, both `statusDotMap[\"automations_paused\"]` and `statusLabels[\"automations_paused\"]` will be `undefined`, which will cause `<StatusDot>` to receive an `undefined` status prop and the label badge to render nothing.\n\n```suggestion\ntype WorkerStatus = \"active\" | \"automations_paused\" | \"degraded\" | \"failed\";\n```\n\nAnd update the maps accordingly:\n\n```typescript\nconst statusDotMap: Record<WorkerStatus, \"active\" | \"paused\" | \"error\"> = {\n\tactive: \"active\",\n\tautomations_paused: \"paused\",\n\tdegraded: \"error\",\n\tfailed: \"error\",\n};\n\nconst statusLabels: Record<WorkerStatus, string> = {\n\tactive: \"Active\",\n\tautomations_paused: \"Paused\",\n\tdegraded: \"Degraded\",\n\tfailed: \"Failed\",\n};\n```\n",
+		"created_at": "2026-03-09T19:34:30Z",
+		"updated_at": "2026-03-09T19:34:33Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907522765",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907522765"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907522765"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907522765/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": null,
+		"original_start_line": null,
+		"start_side": null,
+		"line": 7,
+		"original_line": 7,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 5,
+		"position": 5,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907522833",
+		"pull_request_review_id": 3917749505,
+		"id": 2907522833,
+		"node_id": "PRRC_kwDORKXxLM6tTUcR",
+		"diff_hunk": "@@ -0,0 +1,121 @@\n+\"use client\";\n+\n+import { describeCron } from \"@/components/automations/worker-job-utils\";\n+import { Button } from \"@/components/ui/button\";\n+import { Input } from \"@/components/ui/input\";\n+import { Label } from \"@/components/ui/label\";\n+import { Switch } from \"@/components/ui/switch\";\n+import { Textarea } from \"@/components/ui/textarea\";\n+import { useState } from \"react\";\n+\n+interface WorkerJobFormValues {\n+\tname: string;\n+\tcheckInPrompt: string;\n+\tcronExpression: string;\n+\tdescription?: string;\n+\tenabled?: boolean;\n+}\n+\n+interface WorkerJobFormProps {\n+\tinitialValues?: WorkerJobFormValues;\n+\tonSubmit: (values: WorkerJobFormValues) => void;\n+\tonCancel: () => void;\n+\tisSubmitting?: boolean;\n+}\n+\n+export function WorkerJobForm({\n+\tinitialValues,\n+\tonSubmit,\n+\tonCancel,\n+\tisSubmitting,\n+}: WorkerJobFormProps) {\n+\tconst [name, setName] = useState(initialValues?.name ?? \"\");\n+\tconst [checkInPrompt, setCheckInPrompt] = useState(initialValues?.checkInPrompt ?? \"\");\n+\tconst [cronExpression, setCronExpression] = useState(initialValues?.cronExpression ?? \"\");\n+\tconst [description, setDescription] = useState(initialValues?.description ?? \"\");\n+\tconst [enabled, setEnabled] = useState(initialValues?.enabled ?? true);\n+\n+\tconst cronDescription = cronExpression ? describeCron(cronExpression) : null;\n+\tconst isValid =\n+\t\tname.trim().length > 0 && checkInPrompt.trim().length > 0 && cronExpression.trim().length > 0;",
+		"path": "apps/web/src/components/automations/worker-job-form.tsx",
+		"commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"original_commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"user": {
+			"login": "greptile-apps[bot]",
+			"id": 165735046,
+			"node_id": "BOT_kgDOCeDqhg",
+			"avatar_url": "https://avatars.githubusercontent.com/in/867647?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/greptile-apps%5Bbot%5D",
+			"html_url": "https://github.com/apps/greptile-apps",
+			"followers_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "**No client-side cron expression validation**\n\n`isValid` only checks that `cronExpression` is non-empty. An invalid expression like `99 99 * * *` will pass client-side validation, the form will be submitted, and the user will only see an error after the server rejects it with `WorkerJobValidationError`.\n\nSince `describeCron` falls back to returning the raw expression (not an error message) for unrecognized-but-valid patterns, users have no visual feedback that an expression is malformed until the network round-trip completes.\n\nConsider adding a lightweight parse check here — the same `validateCronExpression` logic from the service layer (or a simpler regex) could be inlined into `isValid` to give immediate inline feedback alongside the `cronDescription` text:\n\n```typescript\nconst isCronValid = cronExpression.trim().length > 0 && isValidCron(cronExpression);\nconst isValid = name.trim().length > 0 && checkInPrompt.trim().length > 0 && isCronValid;\n```\n",
+		"created_at": "2026-03-09T19:34:31Z",
+		"updated_at": "2026-03-09T19:34:33Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907522833",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907522833"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907522833"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907522833/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": 39,
+		"original_start_line": 39,
+		"start_side": "RIGHT",
+		"line": 40,
+		"original_line": 40,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 40,
+		"position": 40,
+		"subject_type": "line"
+	},
+	{
+		"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907522919",
+		"pull_request_review_id": 3917749505,
+		"id": 2907522919,
+		"node_id": "PRRC_kwDORKXxLM6tTUdn",
+		"diff_hunk": "@@ -0,0 +1,98 @@\n+/**\n+ * Worker Job Tick Processor\n+ *\n+ * Processes a single BullMQ job tick: verifies the job and worker are still\n+ * eligible, sends the check-in prompt to the manager session via the gateway,\n+ * and updates tick timestamps.\n+ */\n+\n+import { env } from \"@proliferate/environment/server\";\n+import { createSyncClient } from \"@proliferate/gateway-clients\";\n+import type { Job, WorkerJobTickPayload } from \"@proliferate/queue\";\n+import { workerJobs, workers as workersService } from \"@proliferate/services\";\n+import { CronExpressionParser } from \"cron-parser\";\n+\n+import { logger as rootLogger } from \"../lib/logger.js\";\n+\n+/** Must match SYSTEM_JOB_TICK_USER_ID in @proliferate/shared/contracts/workers */\n+const SYSTEM_JOB_TICK_USER_ID = \"system:job-tick\";\n+\n+const logger = rootLogger.child({ module: \"job-tick-processor\" });\n+\n+export async function processJobTick(job: Job<WorkerJobTickPayload>): Promise<void> {\n+\tconst { jobId, workerId, organizationId, managerSessionId } = job.data;\n+\n+\tconst log = logger.child({ jobId, workerId, managerSessionId });\n+\n+\t// 1. Load the worker job — verify still enabled\n+\tconst workerJob = await workerJobs.findJobById(jobId, organizationId);\n+\tif (!workerJob) {\n+\t\tlog.debug(\"Worker job not found, skipping tick\");\n+\t\treturn;\n+\t}\n+\tif (!workerJob.enabled) {\n+\t\tlog.debug(\"Worker job disabled, skipping tick\");\n+\t\treturn;\n+\t}\n+\n+\t// 2. Load the worker — verify status is active\n+\tconst worker = await workersService.findWorkerById(workerId, organizationId);\n+\tif (!worker) {\n+\t\tlog.debug(\"Worker not found, skipping tick\");\n+\t\treturn;\n+\t}\n+\tif (worker.status !== \"active\") {\n+\t\tlog.debug({ workerStatus: worker.status }, \"Worker not active, skipping tick\");\n+\t\treturn;\n+\t}\n+\n+\tconst gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL;\n+\tconst serviceToken = env.SERVICE_TO_SERVICE_AUTH_TOKEN;\n+\tif (!gatewayUrl || !serviceToken) {\n+\t\tlog.warn(\"Gateway URL or service token not configured, skipping tick\");\n+\t\treturn;\n+\t}\n+\n+\tconst gateway = createSyncClient({\n+\t\tbaseUrl: gatewayUrl,\n+\t\tauth: { type: \"service\", name: \"job-tick-engine\", secret: serviceToken },\n+\t});\n+\n+\t// 3. Eager-start the manager session (wake sandbox if cold)\n+\ttry {\n+\t\tawait gateway.eagerStart(managerSessionId);\n+\t} catch (err) {\n+\t\tlog.warn({ err }, \"Failed to eager-start manager session, continuing with prompt\");\n+\t}\n+\n+\t// 4. Send the check-in prompt (skipIfBusy + idempotency for safe retries)\n+\ttry {\n+\t\tawait gateway.postMessage(managerSessionId, {\n+\t\t\tcontent: workerJob.checkInPrompt,\n+\t\t\tuserId: SYSTEM_JOB_TICK_USER_ID,\n+\t\t\tskipIfBusy: true,\n+\t\t\tidempotencyKey: `worker-job-tick:${jobId}`,\n+\t\t});",
+		"path": "apps/trigger-service/src/job-ticks/processor.ts",
+		"commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"original_commit_id": "a549071802b4d8767efc92d7e5d74e041e46ce2b",
+		"user": {
+			"login": "greptile-apps[bot]",
+			"id": 165735046,
+			"node_id": "BOT_kgDOCeDqhg",
+			"avatar_url": "https://avatars.githubusercontent.com/in/867647?v=4",
+			"gravatar_id": "",
+			"url": "https://api.github.com/users/greptile-apps%5Bbot%5D",
+			"html_url": "https://github.com/apps/greptile-apps",
+			"followers_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/followers",
+			"following_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/following{/other_user}",
+			"gists_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/gists{/gist_id}",
+			"starred_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/starred{/owner}{/repo}",
+			"subscriptions_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/subscriptions",
+			"organizations_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/orgs",
+			"repos_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/repos",
+			"events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/events{/privacy}",
+			"received_events_url": "https://api.github.com/users/greptile-apps%5Bbot%5D/received_events",
+			"type": "Bot",
+			"user_view_type": "public",
+			"site_admin": false
+		},
+		"body": "**Static idempotency key silently drops all ticks after the first**\n\nThe `idempotencyKey` is `worker-job-tick:${jobId}`, which is **identical on every tick for the same job**. If the gateway's idempotency deduplication window outlives the cron interval (e.g. a 24-hour TTL for a job that fires hourly), every tick after the very first one will be silently swallowed and no check-in prompt will ever be sent.\n\nThe fix is to include a per-execution identifier in the key. The BullMQ job instance exposes a unique `id` for each individual dequeued job, which is already available via the `job` parameter passed into `processJobTick`. Appending that to the key ensures each tick is treated as a distinct request by the gateway.\n",
+		"created_at": "2026-03-09T19:34:32Z",
+		"updated_at": "2026-03-09T19:34:33Z",
+		"html_url": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907522919",
+		"pull_request_url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306",
+		"_links": {
+			"self": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907522919"
+			},
+			"html": {
+				"href": "https://github.com/proliferate-ai/proliferate/pull/306#discussion_r2907522919"
+			},
+			"pull_request": {
+				"href": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/306"
+			}
+		},
+		"reactions": {
+			"url": "https://api.github.com/repos/proliferate-ai/proliferate/pulls/comments/2907522919/reactions",
+			"total_count": 0,
+			"+1": 0,
+			"-1": 0,
+			"laugh": 0,
+			"hooray": 0,
+			"confused": 0,
+			"heart": 0,
+			"rocket": 0,
+			"eyes": 0
+		},
+		"start_line": 70,
+		"original_start_line": 70,
+		"start_side": "RIGHT",
+		"line": 75,
+		"original_line": 75,
+		"side": "RIGHT",
+		"author_association": "NONE",
+		"original_position": 75,
+		"position": 75,
+		"subject_type": "line"
+	}
+]
