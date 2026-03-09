@@ -1,4 +1,5 @@
 FROM node:20-slim
+LABEL org.opencontainers.image.source="https://github.com/proliferate-ai/proliferate"
 
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@8.15.1 --activate
