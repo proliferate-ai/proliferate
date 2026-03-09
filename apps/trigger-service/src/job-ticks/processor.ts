@@ -12,8 +12,10 @@ import type { Job, WorkerJobTickPayload } from "@proliferate/queue";
 import { workerJobs, workers as workersService } from "@proliferate/services";
 import { CronExpressionParser } from "cron-parser";
 
-const SYSTEM_JOB_TICK_USER_ID = "system:job-tick";
 import { logger as rootLogger } from "../lib/logger.js";
+
+/** Must match SYSTEM_JOB_TICK_USER_ID in @proliferate/shared/contracts/workers */
+const SYSTEM_JOB_TICK_USER_ID = "system:job-tick";
 
 const logger = rootLogger.child({ module: "job-tick-processor" });
 
