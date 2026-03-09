@@ -3,26 +3,15 @@ import { watch } from "chokidar";
 interface WatcherParams {
 	memoryDir: string;
 	onChange: () => void;
-	debounceMs?: number;
 }
 
 /**
  * Watch memoryDir for .md file changes using chokidar.
- * Debounces change events and calls onChange callback.
+ * Sets dirty flag immediately so the next search() call re-syncs the index.
  */
 export function createMemoryWatcher(params: WatcherParams): {
 	close: () => Promise<void>;
 } {
-	const debounceMs = params.debounceMs ?? 1500;
-	let timer: ReturnType<typeof setTimeout> | null = null;
-
-	const debouncedOnChange = () => {
-		if (timer) clearTimeout(timer);
-		timer = setTimeout(() => {
-			params.onChange();
-		}, debounceMs);
-	};
-
 	const watcher = watch("**/*.md", {
 		cwd: params.memoryDir,
 		ignored: ["**/node_modules/**", "**/.git/**", "**/.memory.db", "**/.memory.db-*"],
@@ -30,13 +19,14 @@ export function createMemoryWatcher(params: WatcherParams): {
 		persistent: true,
 	});
 
-	watcher.on("add", debouncedOnChange);
-	watcher.on("change", debouncedOnChange);
-	watcher.on("unlink", debouncedOnChange);
+	// Set dirty immediately — search() handles sync lazily, so debouncing
+	// the flag just causes stale results when write + search happen close together.
+	watcher.on("add", () => params.onChange());
+	watcher.on("change", () => params.onChange());
+	watcher.on("unlink", () => params.onChange());
 
 	return {
 		close: async () => {
-			if (timer) clearTimeout(timer);
 			await watcher.close();
 		},
 	};
