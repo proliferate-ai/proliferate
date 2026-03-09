@@ -1422,6 +1422,7 @@ export const automationsRouter = {
 		)
 		.handler(async ({ input, context }) => {
 			try {
+				// findJobById throws WorkerJobNotFoundError if not found
 				const job = await workerJobs.findJobById(input.jobId, context.orgId);
 				return { job };
 			} catch (err) {
