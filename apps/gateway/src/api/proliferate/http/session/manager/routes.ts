@@ -22,6 +22,9 @@ export function createManagerRoutes(hubManager: HubManager): RouterType {
 				throw new ApiError(400, "Missing session ID");
 			}
 
+			if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+				throw new ApiError(400, "Body must be a JSON object");
+			}
 			const { toolName, args } = req.body as {
 				toolName?: string;
 				args?: Record<string, unknown>;

@@ -1291,8 +1291,8 @@ export const automationsRouter = {
 			z.object({
 				id: z.string().uuid(),
 				name: z.string().optional(),
-				description: z.string().optional(),
-				systemPrompt: z.string().optional(),
+				description: z.string().nullable().optional(),
+				systemPrompt: z.string().max(5000).nullable().optional(),
 				modelId: z.string().optional(),
 				repoId: z.string().uuid().nullable().optional(),
 				configurationId: z.string().uuid().nullable().optional(),

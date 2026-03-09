@@ -1715,6 +1715,7 @@ export class SessionHub {
 				if (this.runtime.getContext().session.kind !== "manager") return;
 				const msg = message.payload as Message;
 				if (msg.role !== "assistant") return;
+				if (!msg.isComplete) return;
 				eventType = "chat_agent_response";
 				payloadJson = { content: msg.content, messageId: msg.id };
 				break;

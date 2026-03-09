@@ -104,8 +104,14 @@ export async function runPromptWorkflow(
 	if (deps.isManagerSession()) {
 		const eventType = options?.metadata?.jobId ? "chat_job_tick" : "chat_user_message";
 		const payload = options?.metadata?.jobId
-			? { content, jobId: options.metadata.jobId, jobName: options.metadata.jobName, userId }
-			: { content, userId, source: options?.source };
+			? {
+					content,
+					jobId: options.metadata.jobId,
+					jobName: options.metadata.jobName,
+					userId,
+					messageId: userMessage.id,
+				}
+			: { content, userId, source: options?.source, messageId: userMessage.id };
 		deps.persistChatEvent(eventType, payload);
 	}
 

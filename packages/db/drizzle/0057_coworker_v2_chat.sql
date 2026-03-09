@@ -8,6 +8,7 @@ ALTER TABLE "workers" ADD COLUMN "description" text;--> statement-breakpoint
 ALTER TABLE "workers" RENAME COLUMN "objective" TO "system_prompt";--> statement-breakpoint
 ALTER TABLE "workers" DROP COLUMN "last_wake_at";--> statement-breakpoint
 ALTER TABLE "workers" DROP COLUMN "last_completed_run_at";--> statement-breakpoint
+UPDATE "workers" SET "status" = 'automations_paused' WHERE "status" = 'paused';--> statement-breakpoint
 ALTER TABLE "workers" DROP CONSTRAINT "workers_status_check";--> statement-breakpoint
 ALTER TABLE "workers" ADD CONSTRAINT "workers_status_check"
   CHECK (status = ANY (ARRAY['active'::text, 'automations_paused'::text, 'degraded'::text, 'failed'::text, 'archived'::text]));--> statement-breakpoint

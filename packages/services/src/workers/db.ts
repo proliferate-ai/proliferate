@@ -745,7 +745,12 @@ export async function listPendingDirectives(
 export async function updateWorker(
 	id: string,
 	orgId: string,
-	fields: { name?: string; description?: string; systemPrompt?: string; modelId?: string },
+	fields: {
+		name?: string;
+		description?: string | null;
+		systemPrompt?: string | null;
+		modelId?: string;
+	},
 ): Promise<WorkerRow | undefined> {
 	const db = getDb();
 	const setFields: Record<string, unknown> = { updatedAt: new Date() };

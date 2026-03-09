@@ -511,8 +511,8 @@ export async function updateWorkerForOrg(input: {
 	organizationId: string;
 	fields: {
 		name?: string;
-		description?: string;
-		systemPrompt?: string;
+		description?: string | null;
+		systemPrompt?: string | null;
 		modelId?: string;
 	};
 	repoId?: string | null;
