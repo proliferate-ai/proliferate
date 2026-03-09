@@ -4,6 +4,7 @@
 # No custom wrapper needed - all auth and spend tracking is handled by LiteLLM.
 
 FROM ghcr.io/berriai/litellm:main-v1.81.9-stable.gemini.3.1-pro
+LABEL org.opencontainers.image.source="https://github.com/proliferate-ai/proliferate"
 
 WORKDIR /app
 
