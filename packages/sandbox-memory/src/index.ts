@@ -104,6 +104,9 @@ export class MemoryManager {
 	private async sync(): Promise<void> {
 		if (!this.store) return;
 
+		// Clear before sync so watcher events during sync will re-set the flag
+		this.dirty = false;
+
 		const apiKey = this.openaiApiKey;
 		const embedFn = apiKey
 			? (texts: string[]) => embedBatch(texts, apiKey)
@@ -114,7 +117,5 @@ export class MemoryManager {
 			store: this.store,
 			embedFn,
 		});
-
-		this.dirty = false;
 	}
 }

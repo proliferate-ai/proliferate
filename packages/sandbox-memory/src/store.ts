@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import Database from "better-sqlite3";
 import { ensureSchema } from "./schema.js";
 import type { Chunk, FileRecord } from "./types.js";
@@ -47,7 +48,16 @@ export class Store {
 			this.db.loadExtension("vec0");
 			this.vectorAvailable = true;
 		} catch {
-			// sqlite-vec not available
+			// Bare name failed — try resolving from pip-installed sqlite-vec
+			try {
+				const vecPath = resolveVecExtensionPath();
+				if (vecPath) {
+					this.db.loadExtension(vecPath);
+					this.vectorAvailable = true;
+				}
+			} catch {
+				// sqlite-vec not available, vector search disabled
+			}
 		}
 
 		const { ftsAvailable } = ensureSchema(this.db);
@@ -275,6 +285,25 @@ function rowToChunk(row: ChunkRow): Chunk {
 		text: row.text,
 		embedding: JSON.parse(row.embedding) as number[],
 	};
+}
+
+/**
+ * Resolve the sqlite-vec extension path from pip-installed package.
+ * Returns the path without platform suffix (SQLite adds it automatically).
+ */
+function resolveVecExtensionPath(): string | null {
+	try {
+		const result = execSync('python3 -c "import sqlite_vec; print(sqlite_vec.loadable_path())"', {
+			encoding: "utf-8",
+			timeout: 5000,
+			stdio: ["ignore", "pipe", "ignore"],
+		}).trim();
+		if (!result) return null;
+		// Strip platform extension suffix — SQLite adds it automatically
+		return result.replace(/\.(so|dylib|dll)$/, "");
+	} catch {
+		return null;
+	}
 }
 
 /** Tokenize input, quote each token, join with AND for FTS5 */

@@ -31,15 +31,20 @@ export const PI_MEMORY_EXTENSION = [
 	"async function getManager() {",
 	"	if (!managerPromise) {",
 	"		managerPromise = (async () => {",
-	"			const { MemoryManager } = require('/home/user/.proliferate/sandbox-memory.cjs');",
-	"			const mgr = new MemoryManager({",
-	"				memoryDir: MEMORY_DIR,",
-	"				dbPath: DB_PATH,",
-	"				openaiApiKey: OPENAI_KEY,",
-	"			});",
-	"			await mgr.init();",
-	"			mgr.startWatching();",
-	"			return mgr;",
+	"			try {",
+	"				const { MemoryManager } = require('/home/user/.proliferate/sandbox-memory.cjs');",
+	"				const mgr = new MemoryManager({",
+	"					memoryDir: MEMORY_DIR,",
+	"					dbPath: DB_PATH,",
+	"					openaiApiKey: OPENAI_KEY,",
+	"				});",
+	"				await mgr.init();",
+	"				mgr.startWatching();",
+	"				return mgr;",
+	"			} catch (err) {",
+	"				managerPromise = null;",
+	"				throw err;",
+	"			}",
 	"		})();",
 	"	}",
 	"	return managerPromise;",
@@ -164,7 +169,7 @@ This is your long-term memory. Keep it concise (<200 lines), organized by topic.
 - Add entries under topic headings as you learn important information
 - Link to detailed topic files: \`See memory/topic-name.md\`
 - Review and prune regularly — remove outdated entries
-- This file is loaded at the start of every session
+- Use memory_search and memory_get to recall from this file
 
 ## User Preferences
 
