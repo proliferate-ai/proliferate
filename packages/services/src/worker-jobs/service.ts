@@ -4,6 +4,7 @@
  * Business rules around scheduled check-in prompts for coworkers.
  */
 
+import { CronExpressionParser } from "cron-parser";
 import { getServicesLogger } from "../logger";
 import * as workersDb from "../workers/db";
 import type { WorkerJobRow } from "./db";
@@ -77,15 +78,14 @@ function toJobDetail(row: WorkerJobRow): WorkerJobDetail {
 }
 
 /**
- * Basic cron expression validation.
+ * Validates a cron expression using cron-parser.
  * Accepts standard 5-field cron expressions (minute hour dom month dow).
  */
 function validateCronExpression(expr: string): void {
-	const parts = expr.trim().split(/\s+/);
-	if (parts.length !== 5) {
-		throw new WorkerJobValidationError(
-			`Invalid cron expression: expected 5 fields, got ${parts.length}`,
-		);
+	try {
+		CronExpressionParser.parse(expr);
+	} catch {
+		throw new WorkerJobValidationError(`Invalid cron expression: "${expr}"`);
 	}
 }
 

@@ -101,20 +101,6 @@ export async function runPromptWorkflow(
 	deps.recordUserPromptTelemetry();
 	deps.log("User message broadcast", { messageId: userMessage.id });
 
-	if (deps.isManagerSession()) {
-		const eventType = options?.metadata?.jobId ? "chat_job_tick" : "chat_user_message";
-		const payload = options?.metadata?.jobId
-			? {
-					content,
-					jobId: options.metadata.jobId,
-					jobName: options.metadata.jobName,
-					userId,
-					messageId: userMessage.id,
-				}
-			: { content, userId, source: options?.source, messageId: userMessage.id };
-		deps.persistChatEvent(eventType, payload);
-	}
-
 	if (deps.getSessionClientType()) {
 		const event: SessionEventMessage = {
 			type: "user_message",
@@ -136,6 +122,20 @@ export async function runPromptWorkflow(
 	try {
 		await deps.sendPromptToRuntime(content, options?.images);
 		deps.log("Prompt sent to OpenCode", { runId });
+
+		if (deps.isManagerSession()) {
+			const eventType = options?.metadata?.jobId ? "chat_job_tick" : "chat_user_message";
+			const payload = options?.metadata?.jobId
+				? {
+						content,
+						jobId: options.metadata.jobId,
+						jobName: options.metadata.jobName,
+						userId,
+						messageId: userMessage.id,
+					}
+				: { content, userId, source: options?.source, messageId: userMessage.id };
+			deps.persistChatEvent(eventType, payload);
+		}
 	} catch (error) {
 		deps.clearRunState();
 		throw error;

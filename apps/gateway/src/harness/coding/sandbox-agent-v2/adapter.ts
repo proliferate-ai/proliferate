@@ -260,6 +260,7 @@ export class SandboxAgentV2CodingHarnessAdapter implements CodingHarnessAdapter 
 				for (const disconnect of disconnectors) {
 					disconnect();
 				}
+				agentSessionIds.delete(serverId);
 			},
 		};
 	}

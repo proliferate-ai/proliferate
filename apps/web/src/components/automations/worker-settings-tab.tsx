@@ -182,7 +182,11 @@ export function WorkerSettingsTab({
 									if (checked) onResume();
 									else onPause();
 								}}
-								disabled={worker.status === "degraded" || worker.status === "failed"}
+								disabled={
+									worker.status === "degraded" ||
+									worker.status === "failed" ||
+									worker.status === "archived"
+								}
 							/>
 							<span className="text-sm capitalize">{worker.status}</span>
 						</div>

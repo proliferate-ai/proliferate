@@ -214,7 +214,7 @@ describe("workers service", () => {
 		await updateWorkerForOrg({
 			workerId: "worker-3",
 			organizationId: "org-1",
-			fields: { objective: "Handle high priority bugs" },
+			fields: { systemPrompt: "Handle high priority bugs" },
 			capabilities: [{ capabilityKey: "source.linear.read", mode: "deny" }],
 		});
 
