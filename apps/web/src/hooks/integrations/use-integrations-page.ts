@@ -35,6 +35,7 @@ export function useIntegrationsPage() {
 		loadingProvider,
 		integrationsLoading,
 		integrationsByProvider,
+		allIntegrations,
 		slackStatus,
 		slackDisconnect,
 		slackConnect,
@@ -67,6 +68,7 @@ export function useIntegrationsPage() {
 	const { getConnectionStatus, getLoadingStatus, getConnectedMeta, connectedEntries } =
 		useIntegrationStatus({
 			integrationsByProvider,
+			allIntegrations,
 			slackStatus,
 			loadingProvider,
 			slackDisconnectIsPending: slackDisconnect.isPending,

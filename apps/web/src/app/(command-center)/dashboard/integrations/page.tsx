@@ -31,7 +31,7 @@ import { Switch } from "@/components/ui/switch";
 import { CORE_ENTRIES, CORE_PLATFORM_NOTES } from "@/config/integrations";
 import { useIntegrationsPage } from "@/hooks/integrations/use-integrations-page";
 import { getIntegrationScopeMeta } from "@/lib/integrations/scopes";
-import { CheckCircle2, Plus, Search } from "lucide-react";
+import { CheckCircle2, Database, Plus, Search } from "lucide-react";
 
 export default function IntegrationsPage() {
 	const {
@@ -226,6 +226,8 @@ export default function IntegrationsPage() {
 											<ConnectorIcon presetKey={entry.presetKey} size="md" />
 										) : entry.provider ? (
 											<ProviderIcon provider={entry.provider} size="md" />
+										) : entry.type === "direct" ? (
+											<Database className="h-5 w-5 text-muted-foreground" />
 										) : null}
 									</div>
 

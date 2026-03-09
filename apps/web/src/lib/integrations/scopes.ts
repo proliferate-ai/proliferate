@@ -4,7 +4,7 @@ import type { IntegrationScopeMeta } from "@/config/integration-scopes";
 
 interface IntegrationScopeInput {
 	key: string;
-	type: "oauth" | "slack" | "mcp-preset" | "custom-mcp";
+	type: "oauth" | "slack" | "mcp-preset" | "custom-mcp" | "direct";
 	category: IntegrationCategory;
 }
 

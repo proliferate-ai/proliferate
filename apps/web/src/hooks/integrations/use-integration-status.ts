@@ -8,6 +8,7 @@ import { useCallback, useMemo } from "react";
 
 interface UseIntegrationStatusOptions {
 	integrationsByProvider: Record<Provider, IntegrationWithCreator[]>;
+	allIntegrations?: IntegrationWithCreator[];
 	slackStatus:
 		| {
 				connected: boolean;
@@ -22,6 +23,7 @@ interface UseIntegrationStatusOptions {
 
 export function useIntegrationStatus({
 	integrationsByProvider,
+	allIntegrations,
 	slackStatus,
 	loadingProvider,
 	slackDisconnectIsPending,
@@ -34,13 +36,17 @@ export function useIntegrationStatus({
 					return entry.provider ? (integrationsByProvider[entry.provider]?.length ?? 0) > 0 : false;
 				case "slack":
 					return slackStatus?.connected ?? false;
+				case "direct":
+					return (allIntegrations ?? []).some(
+						(i) => i.integration_id === entry.key && i.status === "active",
+					);
 				case "mcp-preset":
 					return false;
 				default:
 					return false;
 			}
 		},
-		[integrationsByProvider, slackStatus],
+		[integrationsByProvider, slackStatus, allIntegrations],
 	);
 
 	const getLoadingStatus = useCallback(
@@ -71,9 +77,15 @@ export function useIntegrationStatus({
 			if (entry.type === "slack" && slackStatus?.connected) {
 				return slackStatus.teamName || null;
 			}
+			if (entry.type === "direct") {
+				const match = (allIntegrations ?? []).find(
+					(i) => i.integration_id === entry.key && i.status === "active",
+				);
+				return match?.creator?.name || match?.display_name || null;
+			}
 			return null;
 		},
-		[integrationsByProvider, slackStatus],
+		[integrationsByProvider, slackStatus, allIntegrations],
 	);
 
 	const connectedEntries = useMemo(() => {
