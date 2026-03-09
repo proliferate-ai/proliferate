@@ -38,26 +38,21 @@ let managerPromise: Promise<MemoryManagerLike> | null = null;
 async function getManager() {
 	if (!managerPromise) {
 		managerPromise = (async () => {
-			try {
-				const mod = require("/home/user/.proliferate/sandbox-memory.cjs") as {
-					MemoryManager: new (opts: {
-						memoryDir: string;
-						dbPath: string;
-						openaiApiKey: string;
-					}) => MemoryManagerLike & { init(): Promise<void>; startWatching(): void };
-				};
-				const mgr = new mod.MemoryManager({
-					memoryDir: MEMORY_DIR,
-					dbPath: DB_PATH,
-					openaiApiKey: OPENAI_KEY,
-				});
-				await mgr.init();
-				mgr.startWatching();
-				return mgr;
-			} catch (err) {
-				managerPromise = null;
-				throw err;
-			}
+			const mod = require("/home/user/.proliferate/sandbox-memory.cjs") as {
+				MemoryManager: new (opts: {
+					memoryDir: string;
+					dbPath: string;
+					openaiApiKey: string;
+				}) => MemoryManagerLike & { init(): Promise<void>; startWatching(): void };
+			};
+			const mgr = new mod.MemoryManager({
+				memoryDir: MEMORY_DIR,
+				dbPath: DB_PATH,
+				openaiApiKey: OPENAI_KEY,
+			});
+			await mgr.init();
+			mgr.startWatching();
+			return mgr;
 		})();
 	}
 	return managerPromise;

@@ -3,7 +3,7 @@
 	"version": "0.0.1",
 	"private": true,
 	"type": "module",
-	"main": "src/manager-tools.ts",
+	"main": "dist/manager-tools.mjs",
 	"exports": {
 		"./dist/manager-tools.mjs": "./dist/manager-tools.mjs",
 		"./dist/memory-tools.mjs": "./dist/memory-tools.mjs"

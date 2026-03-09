@@ -166,7 +166,7 @@ export async function setupEssentialDependencies(
 				),
 			);
 		} else {
-			log.warn("pi-extensions manager-tools bundle not found, manager tools will be unavailable");
+			log.error("pi-extensions manager-tools bundle not found, manager tools will be unavailable");
 		}
 		// Memory system extension (memory_search, memory_get) — bundled .mjs
 		const memoryToolsBundle = resolveLocalBundle("pi-extensions/dist/memory-tools.mjs");
@@ -175,7 +175,7 @@ export async function setupEssentialDependencies(
 				writeFile("/home/user/.pi/agent/extensions/memory-system-extension.mjs", memoryToolsBundle),
 			);
 		} else {
-			log.warn("pi-extensions memory-tools bundle not found, memory tools will be unavailable");
+			log.error("pi-extensions memory-tools bundle not found, memory tools will be unavailable");
 		}
 		// Write sandbox-memory bundle if not already in the template
 		// In prod, the Dockerfile COPYs it; in dev, we write it from the local build
