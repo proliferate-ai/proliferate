@@ -167,13 +167,21 @@ export function WorkerChatTab({ managerSessionId, workerStatus }: WorkerChatTabP
 							const updated = [...prev];
 							const msg = updated[idx];
 							const parts = [...(msg.parts || [])];
-							parts.push({
-								type: "tool",
-								toolCallId: payload.toolCallId,
-								toolName: payload.tool,
-								args: payload.args,
-								isComplete: false,
-							});
+							// Check if this is an args update for an existing tool part
+							const existingIdx = parts.findIndex(
+								(p) => p.type === "tool" && p.toolCallId === payload.toolCallId,
+							);
+							if (existingIdx >= 0 && payload.args && parts[existingIdx].type === "tool") {
+								parts[existingIdx] = { ...parts[existingIdx], args: payload.args };
+							} else if (existingIdx < 0) {
+								parts.push({
+									type: "tool",
+									toolCallId: payload.toolCallId,
+									toolName: payload.tool,
+									args: payload.args,
+									isComplete: false,
+								});
+							}
 							updated[idx] = { ...msg, parts };
 							return updated;
 						});
