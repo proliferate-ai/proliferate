@@ -4,7 +4,7 @@ import { StatusDot } from "@/components/ui/status-dot";
 import { formatRelativeTime } from "@/lib/display/utils";
 import Link from "next/link";
 
-type WorkerStatus = "active" | "automations_paused" | "degraded" | "failed" | "archived";
+type WorkerStatus = "active" | "paused" | "degraded" | "failed";
 
 interface WorkerListRowProps {
 	id: string;
@@ -19,18 +19,16 @@ interface WorkerListRowProps {
 
 const statusDotMap: Record<WorkerStatus, "active" | "paused" | "error"> = {
 	active: "active",
-	automations_paused: "paused",
+	paused: "paused",
 	degraded: "error",
 	failed: "error",
-	archived: "paused",
 };
 
 const statusLabels: Record<WorkerStatus, string> = {
 	active: "Active",
-	automations_paused: "Paused",
+	paused: "Paused",
 	degraded: "Degraded",
 	failed: "Failed",
-	archived: "Archived",
 };
 
 export function WorkerListRow({
