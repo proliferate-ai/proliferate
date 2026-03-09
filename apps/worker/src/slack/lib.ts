@@ -77,17 +77,21 @@ export async function postToSlack(
 ): Promise<void> {
 	const botToken = decrypt(encryptedBotToken, getEncryptionKey());
 
+	const body: Record<string, unknown> = {
+		channel: channelId,
+		text,
+	};
+	if (threadTs) {
+		body.thread_ts = threadTs;
+	}
+
 	const response = await fetch("https://slack.com/api/chat.postMessage", {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
 			Authorization: `Bearer ${botToken}`,
 		},
-		body: JSON.stringify({
-			channel: channelId,
-			thread_ts: threadTs,
-			text,
-		}),
+		body: JSON.stringify(body),
 	});
 
 	const result = await response.json();

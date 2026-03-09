@@ -119,6 +119,8 @@ export default function CoworkerDetailPage({
 							modelId: worker.modelId,
 							capabilities: worker.capabilities ?? [],
 							managerSessionId: worker.managerSessionId ?? null,
+							slackChannelId: worker.slackChannelId ?? null,
+							slackInstallationId: worker.slackInstallationId ?? null,
 						}}
 						onUpdate={actions.handleUpdate}
 						onPause={actions.handlePause}

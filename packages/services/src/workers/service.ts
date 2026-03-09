@@ -8,12 +8,14 @@ import { createSyncClient } from "@proliferate/gateway-clients";
 import type { CapabilityMode } from "@proliferate/shared/contracts/actions";
 import type { CoworkerCapabilityInput } from "@proliferate/shared/contracts/automations";
 import { type WorkerStatus, isValidWorkerTransition } from "@proliferate/shared/contracts/workers";
+import { decrypt, getEncryptionKey } from "@proliferate/shared/crypto";
 import {
 	TemplateIntegrationBindingMismatchError,
 	TemplateIntegrationInactiveError,
 	TemplateIntegrationNotFoundError,
 	TemplateNotFoundError,
 } from "../automations/errors";
+import * as integrationsDb from "../integrations/db";
 import { findForBindingValidation } from "../integrations/service";
 import { getServicesLogger } from "../logger";
 import * as sessionsDb from "../sessions/db";
@@ -67,6 +69,8 @@ export interface WorkerDetail {
 	createdBy: string | null;
 	computeProfile: string | null;
 	pausedBy: string | null;
+	slackChannelId: string | null;
+	slackInstallationId: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 }
@@ -178,6 +182,8 @@ function toWorkerDetail(worker: WorkerRow): WorkerDetail {
 		createdBy: worker.createdBy,
 		computeProfile: worker.computeProfile,
 		pausedBy: worker.pausedBy,
+		slackChannelId: worker.slackChannelId,
+		slackInstallationId: worker.slackInstallationId,
 		createdAt: worker.createdAt,
 		updatedAt: worker.updatedAt,
 	};
@@ -185,20 +191,7 @@ function toWorkerDetail(worker: WorkerRow): WorkerDetail {
 
 function toWorkerWithCounts(worker: workersDb.WorkerRowWithCounts): WorkerListEntry {
 	return {
-		id: worker.id,
-		name: worker.name,
-		description: worker.description,
-		status: worker.status,
-		systemPrompt: worker.systemPrompt,
-		modelId: worker.modelId,
-		managerSessionId: worker.managerSessionId,
-		lastErrorCode: worker.lastErrorCode,
-		pausedAt: worker.pausedAt,
-		createdBy: worker.createdBy,
-		computeProfile: worker.computeProfile,
-		pausedBy: worker.pausedBy,
-		createdAt: worker.createdAt,
-		updatedAt: worker.updatedAt,
+		...toWorkerDetail(worker),
 		activeTaskCount: worker.activeTaskCount,
 		pendingApprovalCount: worker.pendingApprovalCount,
 	};
@@ -668,4 +661,151 @@ export async function sendDirective(input: {
 		senderUserId: input.senderUserId,
 	});
 	return { messageId: message.id };
+}
+
+// ============================================
+// Slack Channel Binding
+// ============================================
+
+export async function findWorkerBySlackChannel(
+	installationId: string,
+	channelId: string,
+): Promise<WorkerRow | undefined> {
+	return workersDb.findWorkerBySlackChannel(installationId, channelId);
+}
+
+export async function linkWorkerSlackChannel(
+	workerId: string,
+	organizationId: string,
+	slackInstallationId: string,
+	slackChannelId: string,
+): Promise<WorkerDetail> {
+	const worker = await workersDb.findWorkerById(workerId, organizationId);
+	if (!worker) {
+		throw new WorkerNotFoundError(workerId);
+	}
+	const updated = await workersDb.setWorkerSlackChannel(
+		workerId,
+		organizationId,
+		slackInstallationId,
+		slackChannelId,
+	);
+	if (!updated) {
+		throw new WorkerNotFoundError(workerId);
+	}
+	return toWorkerDetail(updated);
+}
+
+export async function unlinkWorkerSlackChannel(
+	workerId: string,
+	organizationId: string,
+): Promise<WorkerDetail> {
+	const worker = await workersDb.findWorkerById(workerId, organizationId);
+	if (!worker) {
+		throw new WorkerNotFoundError(workerId);
+	}
+	const updated = await workersDb.clearWorkerSlackChannel(workerId, organizationId);
+	if (!updated) {
+		throw new WorkerNotFoundError(workerId);
+	}
+	return toWorkerDetail(updated);
+}
+
+const SLACK_API_BASE = "https://slack.com/api";
+
+/**
+ * Create a dedicated Slack channel for a coworker and bind it.
+ * Uses the org's Slack installation bot token.
+ */
+export async function createSlackChannelForWorker(
+	workerId: string,
+	organizationId: string,
+	channelName?: string,
+): Promise<{ channelId: string; channelName: string }> {
+	const worker = await workersDb.findWorkerById(workerId, organizationId);
+	if (!worker) {
+		throw new WorkerNotFoundError(workerId);
+	}
+
+	if (worker.slackChannelId) {
+		throw new Error("Worker already has a Slack channel");
+	}
+
+	const installation = await integrationsDb.getActiveSlackInstallation(organizationId);
+	if (!installation) {
+		throw new Error("No active Slack installation for this organization");
+	}
+
+	const botToken = decrypt(installation.encryptedBotToken, getEncryptionKey());
+
+	// Sanitize channel name
+	const rawName = channelName || `coworker-${worker.name}`;
+	const sanitizedName = rawName
+		.toLowerCase()
+		.replace(/[^a-z0-9-]+/g, "-")
+		.replace(/^-|-$/g, "")
+		.slice(0, 80);
+
+	// Create channel
+	const createResponse = await fetch(`${SLACK_API_BASE}/conversations.create`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${botToken}`,
+		},
+		body: JSON.stringify({ name: sanitizedName, is_private: false }),
+	});
+
+	const createResult = (await createResponse.json()) as {
+		ok: boolean;
+		error?: string;
+		channel?: { id: string; name: string };
+	};
+
+	if (!createResult.ok) {
+		logger.error(
+			{ error: createResult.error, channelName: sanitizedName },
+			"Failed to create Slack channel",
+		);
+		throw new Error(`Failed to create Slack channel: ${createResult.error}`);
+	}
+
+	const slackChannelId = createResult.channel!.id;
+	const finalName = createResult.channel!.name;
+
+	// Set channel topic
+	if (worker.description || worker.systemPrompt) {
+		const topic = worker.description || worker.systemPrompt?.slice(0, 250) || "";
+		await fetch(`${SLACK_API_BASE}/conversations.setTopic`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${botToken}`,
+			},
+			body: JSON.stringify({ channel: slackChannelId, topic }),
+		});
+	}
+
+	// Save binding
+	await workersDb.setWorkerSlackChannel(workerId, organizationId, installation.id, slackChannelId);
+
+	// Post intro message
+	await fetch(`${SLACK_API_BASE}/chat.postMessage`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${botToken}`,
+		},
+		body: JSON.stringify({
+			channel: slackChannelId,
+			text: `I'm *${worker.name}*. Send me messages here and I'll respond.`,
+		}),
+	});
+
+	logger.info(
+		{ workerId, channelId: slackChannelId, channelName: finalName },
+		"Created Slack channel for worker",
+	);
+
+	return { channelId: slackChannelId, channelName: finalName };
 }

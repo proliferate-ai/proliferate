@@ -753,6 +753,65 @@ export async function updateWorker(
 	return row;
 }
 
+// ============================================
+// Workers — Slack Channel Binding
+// ============================================
+
+export async function findWorkerBySlackChannel(
+	installationId: string,
+	channelId: string,
+): Promise<WorkerRow | undefined> {
+	const db = getDb();
+	const [row] = await db
+		.select()
+		.from(workers)
+		.where(
+			and(eq(workers.slackInstallationId, installationId), eq(workers.slackChannelId, channelId)),
+		)
+		.limit(1);
+	return row;
+}
+
+export async function setWorkerSlackChannel(
+	id: string,
+	orgId: string,
+	slackInstallationId: string,
+	slackChannelId: string,
+): Promise<WorkerRow | undefined> {
+	const db = getDb();
+	const [row] = await db
+		.update(workers)
+		.set({
+			slackInstallationId,
+			slackChannelId,
+			updatedAt: new Date(),
+		})
+		.where(and(eq(workers.id, id), eq(workers.organizationId, orgId)))
+		.returning();
+	return row;
+}
+
+export async function clearWorkerSlackChannel(
+	id: string,
+	orgId: string,
+): Promise<WorkerRow | undefined> {
+	const db = getDb();
+	const [row] = await db
+		.update(workers)
+		.set({
+			slackInstallationId: null,
+			slackChannelId: null,
+			updatedAt: new Date(),
+		})
+		.where(and(eq(workers.id, id), eq(workers.organizationId, orgId)))
+		.returning();
+	return row;
+}
+
+// ============================================
+// Workers — Deletion
+// ============================================
+
 export async function deleteWorker(id: string, orgId: string): Promise<boolean> {
 	const db = getDb();
 	return db.transaction(async (tx) => {

@@ -12,7 +12,7 @@ import type { AsyncClientDeps } from "@proliferate/gateway-clients/server";
 import type { Logger } from "@proliferate/logger";
 import { ensureSlackReceiver } from "@proliferate/queue";
 import type { SlackMessageJob, SlackReceiverJob } from "@proliferate/queue";
-import { integrations, sessions } from "@proliferate/services";
+import { integrations, sessions, workers } from "@proliferate/services";
 import type { ClientSource, WakeOptions } from "@proliferate/shared";
 import {
 	buildSlackMessageContext,
@@ -153,7 +153,14 @@ export class SlackClient extends AsyncClient<
 			slackUserId,
 			organizationId,
 			imageUrls,
+			workerId,
 		} = job;
+
+		// Route to coworker's manager session if this is a dedicated channel message
+		if (workerId) {
+			await this.processCoworkerChannelMessage(job);
+			return;
+		}
 
 		this.logger.info({ threadTs }, "Processing inbound message");
 
@@ -339,6 +346,72 @@ export class SlackClient extends AsyncClient<
 		});
 
 		this.logger.info({ sessionId }, "Posted prompt to Gateway");
+	}
+
+	/**
+	 * Process a message from a coworker's dedicated Slack channel.
+	 * Routes the message to the worker's persistent manager session.
+	 */
+	private async processCoworkerChannelMessage(job: SlackMessageJob): Promise<void> {
+		const {
+			workerId,
+			installationId,
+			channelId,
+			content,
+			encryptedBotToken,
+			slackUserId,
+			organizationId,
+			imageUrls,
+		} = job;
+
+		this.logger.info({ workerId, channelId }, "Processing coworker channel message");
+
+		const worker = await workers.findWorkerById(workerId!, organizationId);
+		if (!worker) {
+			this.logger.error({ workerId }, "Worker not found for channel message");
+			await postToSlack(
+				encryptedBotToken,
+				channelId,
+				"",
+				"This channel is no longer linked to a coworker.",
+				this.logger,
+			);
+			return;
+		}
+
+		const sessionId = worker.managerSessionId;
+
+		// Ensure receiver job (posts responses back to the channel, no threadTs)
+		const receiverJob: SlackReceiverJob = {
+			sessionId,
+			installationId,
+			channelId,
+			threadTs: "",
+			encryptedBotToken,
+		};
+		await ensureSlackReceiver(this.receiverQueue, receiverJob);
+
+		// Download images if any
+		const images: string[] = [];
+		if (imageUrls && imageUrls.length > 0) {
+			this.logger.info({ count: imageUrls.length }, "Downloading images");
+			for (const url of imageUrls) {
+				const img = await downloadSlackImageAsBase64(url, encryptedBotToken, this.logger);
+				if (img) {
+					images.push(`data:${img.mediaType};base64,${img.data}`);
+				}
+			}
+		}
+
+		// Cancel any in-progress operation, then post prompt to Gateway
+		await this.syncClient.postCancel(sessionId, slackUserId);
+		await this.syncClient.postMessage(sessionId, {
+			content,
+			userId: slackUserId,
+			images: images.length > 0 ? images : undefined,
+		});
+
+		this.logger.info({ sessionId, workerId }, "Posted coworker channel prompt to Gateway");
 	}
 
 	/**

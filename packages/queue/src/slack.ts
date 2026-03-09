@@ -53,6 +53,8 @@ export interface SlackMessageJob {
 	organizationId: string;
 	/** Image URLs attached to the message (Slack private URLs) */
 	imageUrls?: string[];
+	/** Worker ID if this message is for a coworker's dedicated channel */
+	workerId?: string;
 }
 
 /**

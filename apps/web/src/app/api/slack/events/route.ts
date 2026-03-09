@@ -15,7 +15,7 @@ import {
 	createSlackMessagesQueue,
 	queueSlackMessage,
 } from "@proliferate/queue";
-import { integrations } from "@proliferate/services";
+import { integrations, workers } from "@proliferate/services";
 
 const SLACK_SIGNING_SECRET = env.SLACK_SIGNING_SECRET;
 
@@ -127,12 +127,53 @@ export async function POST(request: Request): Promise<Response> {
 	}
 
 	// For message events (not app_mention), only respond if:
-	// 1. It's in a thread (has thread_ts)
-	// 2. There's an existing session for that thread (meaning Proliferate was previously tagged)
-	// This allows follow-up messages without requiring @mention each time
+	// 1. It's in a dedicated coworker channel, OR
+	// 2. It's in a thread (has thread_ts) with an existing session
 	if (event.type === "message") {
 		if (!event.thread_ts) {
-			// Not in a thread - skip (user should @mention to start a conversation)
+			// Not in a thread — check if this channel is a coworker's dedicated channel
+			const worker = await workers.findWorkerBySlackChannel(installation.id, event.channel);
+			if (worker) {
+				log.info({ workerId: worker.id, channelId: event.channel }, "Routing to coworker channel");
+
+				const prompt = extractPrompt(event.text);
+				if (!prompt) {
+					log.info("Skipping: empty prompt in coworker channel");
+					return new Response("OK");
+				}
+
+				const imageUrls =
+					event.files
+						?.filter((f) => f.mimetype?.startsWith("image/"))
+						?.map((f) => f.url_private_download) || [];
+
+				const jobData: SlackMessageJob = {
+					installationId: installation.id,
+					channelId: event.channel,
+					threadTs: event.ts,
+					content: prompt,
+					encryptedBotToken: installation.encryptedBotToken,
+					messageTs: event.ts,
+					slackUserId: event.user,
+					organizationId: installation.organizationId,
+					imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+					workerId: worker.id,
+				};
+
+				try {
+					const queue = createSlackMessagesQueue();
+					await queueSlackMessage(queue, jobData);
+					await queue.close();
+					log.info({ workerId: worker.id }, "Queued coworker channel message");
+				} catch (err) {
+					log.error({ err }, "Failed to queue coworker channel message");
+					return new Response("Failed to queue message", { status: 500 });
+				}
+
+				return new Response("OK");
+			}
+
+			// Not a coworker channel - skip (user should @mention to start a conversation)
 			log.info("Skipping: message event not in a thread");
 			return new Response("OK");
 		}

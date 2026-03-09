@@ -2088,6 +2088,8 @@ export const workers = pgTable(
 		pausedAt: timestamp("paused_at", { withTimezone: true, mode: "date" }),
 		pausedBy: text("paused_by"),
 		createdBy: text("created_by"),
+		slackChannelId: text("slack_channel_id"),
+		slackInstallationId: uuid("slack_installation_id"),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 	},
@@ -2118,6 +2120,11 @@ export const workers = pgTable(
 			foreignColumns: [sessions.id],
 			name: "workers_manager_session_id_fkey",
 		}),
+		foreignKey({
+			columns: [table.slackInstallationId],
+			foreignColumns: [slackInstallations.id],
+			name: "workers_slack_installation_id_fkey",
+		}).onDelete("set null"),
 	],
 );
 

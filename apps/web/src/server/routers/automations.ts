@@ -981,6 +981,8 @@ export const automationsRouter = {
 					createdBy: z.string().nullable(),
 					computeProfile: z.string().nullable(),
 					pausedBy: z.string().nullable(),
+					slackChannelId: z.string().nullable(),
+					slackInstallationId: z.string().uuid().nullable(),
 					createdAt: z.coerce.date(),
 					updatedAt: z.coerce.date(),
 					activeTaskCount: z.number(),
@@ -1015,6 +1017,8 @@ export const automationsRouter = {
 					createdBy: worker.createdBy,
 					computeProfile: worker.computeProfile,
 					pausedBy: worker.pausedBy,
+					slackChannelId: worker.slackChannelId,
+					slackInstallationId: worker.slackInstallationId,
 					createdAt: worker.createdAt,
 					updatedAt: worker.updatedAt,
 					activeTaskCount: worker.activeTaskCount,
@@ -1535,6 +1539,39 @@ export const automationsRouter = {
 				return { success: true };
 			} catch (err) {
 				throwAutomationORPCError(err, "Failed to delete worker job");
+			}
+		}),
+
+	/**
+	 * Create a dedicated Slack channel for a coworker.
+	 */
+	createWorkerSlackChannel: orgProcedure
+		.input(z.object({ workerId: z.string().uuid(), channelName: z.string().optional() }))
+		.output(z.object({ channelId: z.string(), channelName: z.string() }))
+		.handler(async ({ input, context }) => {
+			try {
+				return await workers.createSlackChannelForWorker(
+					input.workerId,
+					context.orgId,
+					input.channelName,
+				);
+			} catch (err) {
+				throwAutomationORPCError(err, "Failed to create Slack channel");
+			}
+		}),
+
+	/**
+	 * Remove the Slack channel binding from a coworker.
+	 */
+	removeWorkerSlackChannel: orgProcedure
+		.input(z.object({ workerId: z.string().uuid() }))
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			try {
+				await workers.unlinkWorkerSlackChannel(input.workerId, context.orgId);
+				return { success: true };
+			} catch (err) {
+				throwAutomationORPCError(err, "Failed to remove Slack channel");
 			}
 		}),
 };

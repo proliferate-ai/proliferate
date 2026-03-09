@@ -29,11 +29,16 @@ import {
 	useUpdateWorkerJob,
 	useWorkerJobs,
 } from "@/hooks/automations/use-worker-jobs";
+import {
+	useCreateWorkerSlackChannel,
+	useRemoveWorkerSlackChannel,
+} from "@/hooks/automations/use-worker-slack";
+import { useSlackInstallations } from "@/hooks/integrations/use-integrations";
 import { useWsToken } from "@/hooks/sessions/use-ws-token";
 import { cn } from "@/lib/display/utils";
 import type { ModelId } from "@proliferate/shared";
 import { formatDistanceToNow } from "date-fns";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Hash, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 
@@ -46,6 +51,8 @@ interface WorkerSettingsTabProps {
 		modelId: string | null;
 		capabilities?: WorkerCapabilityDraft[];
 		managerSessionId: string | null;
+		slackChannelId?: string | null;
+		slackInstallationId?: string | null;
 	};
 	onUpdate: (fields: {
 		name?: string;
@@ -83,6 +90,10 @@ export function WorkerSettingsTab({
 	const updateJob = useUpdateWorkerJob(worker.id);
 	const deleteJob = useDeleteWorkerJob(worker.id);
 	const toggleJob = useToggleWorkerJob(worker.id);
+	const createSlackChannel = useCreateWorkerSlackChannel(worker.id);
+	const removeSlackChannel = useRemoveWorkerSlackChannel(worker.id);
+	const { data: slackInstallations } = useSlackInstallations();
+	const hasSlackInstallation = slackInstallations && slackInstallations.length > 0;
 	const [capabilitiesValue, setCapabilitiesValue] = useState<WorkerCapabilityDraft[]>(
 		worker.capabilities ?? [],
 	);
@@ -175,6 +186,52 @@ export function WorkerSettingsTab({
 						onUpdate({ capabilities: next });
 					}}
 				/>
+			</div>
+
+			{/* Slack Channel */}
+			<div>
+				<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+					Slack Channel
+				</p>
+				{worker.slackChannelId ? (
+					<div className="rounded-lg border border-border">
+						<div className="flex items-center justify-between px-4 py-2.5">
+							<div className="flex items-center gap-2">
+								<Hash className="h-4 w-4 text-muted-foreground" />
+								<span className="text-sm text-foreground">Channel connected</span>
+							</div>
+							<Button
+								variant="outline"
+								size="sm"
+								className="h-7 text-xs"
+								onClick={() => removeSlackChannel.mutate({ workerId: worker.id })}
+								disabled={removeSlackChannel.isPending}
+							>
+								Disconnect
+							</Button>
+						</div>
+					</div>
+				) : hasSlackInstallation ? (
+					<div className="rounded-lg border border-border px-4 py-4">
+						<p className="text-sm text-muted-foreground mb-3">
+							Create a dedicated Slack channel for this coworker. Messages in the channel will be
+							routed here.
+						</p>
+						<Button
+							size="sm"
+							onClick={() => createSlackChannel.mutate({ workerId: worker.id })}
+							disabled={createSlackChannel.isPending}
+						>
+							{createSlackChannel.isPending ? "Creating..." : "Create Slack Channel"}
+						</Button>
+					</div>
+				) : (
+					<div className="rounded-lg border border-border px-4 py-4">
+						<p className="text-sm text-muted-foreground">
+							Connect Slack in Settings to enable a dedicated channel for this coworker.
+						</p>
+					</div>
+				)}
 			</div>
 
 			{/* Scheduled Jobs */}

@@ -27,13 +27,18 @@ export interface PostMessageOptions {
 export class SlackApiClient {
 	private readonly botToken: string;
 	private readonly channelId: string;
-	private readonly threadTs: string;
+	private readonly threadTs?: string;
 	private readonly logger: Logger;
 
-	constructor(encryptedBotToken: string, channelId: string, threadTs: string, logger: Logger) {
+	constructor(
+		encryptedBotToken: string,
+		channelId: string,
+		threadTs: string | undefined,
+		logger: Logger,
+	) {
 		this.botToken = decrypt(encryptedBotToken, getEncryptionKey());
 		this.channelId = channelId;
-		this.threadTs = threadTs;
+		this.threadTs = threadTs || undefined;
 		this.logger = logger;
 	}
 
@@ -92,17 +97,20 @@ export class SlackApiClient {
 			}
 
 			// Step 3: Complete the upload and share to channel/thread
+			const completeBody: Record<string, unknown> = {
+				files: [{ id: urlResult.file_id, title: filename }],
+				channel_id: this.channelId,
+			};
+			if (this.threadTs) {
+				completeBody.thread_ts = this.threadTs;
+			}
 			const completeResponse = await fetch("https://slack.com/api/files.completeUploadExternal", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 					Authorization: `Bearer ${this.botToken}`,
 				},
-				body: JSON.stringify({
-					files: [{ id: urlResult.file_id, title: filename }],
-					channel_id: this.channelId,
-					thread_ts: this.threadTs,
-				}),
+				body: JSON.stringify(completeBody),
 			});
 
 			const completeResult = (await completeResponse.json()) as { ok: boolean; error?: string };
@@ -179,17 +187,20 @@ export class SlackApiClient {
 		if (uploadedFiles.length === 0) return 0;
 
 		// Step 3: Complete all uploads in a single call - files appear as one message
+		const completeBody: Record<string, unknown> = {
+			files: uploadedFiles.map((f) => ({ id: f.file_id, title: f.filename })),
+			channel_id: this.channelId,
+		};
+		if (this.threadTs) {
+			completeBody.thread_ts = this.threadTs;
+		}
 		const completeResponse = await fetch("https://slack.com/api/files.completeUploadExternal", {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${this.botToken}`,
 			},
-			body: JSON.stringify({
-				files: uploadedFiles.map((f) => ({ id: f.file_id, title: f.filename })),
-				channel_id: this.channelId,
-				thread_ts: this.threadTs,
-			}),
+			body: JSON.stringify(completeBody),
 		});
 
 		const completeResult = (await completeResponse.json()) as { ok: boolean; error?: string };
@@ -202,18 +213,22 @@ export class SlackApiClient {
 	}
 
 	private async post(options: PostMessageOptions): Promise<boolean> {
+		const body: Record<string, unknown> = {
+			channel: this.channelId,
+			text: options.text,
+			...(options.blocks && { blocks: options.blocks }),
+		};
+		if (this.threadTs) {
+			body.thread_ts = this.threadTs;
+		}
+
 		const response = await fetch("https://slack.com/api/chat.postMessage", {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${this.botToken}`,
 			},
-			body: JSON.stringify({
-				channel: this.channelId,
-				thread_ts: this.threadTs,
-				text: options.text,
-				...(options.blocks && { blocks: options.blocks }),
-			}),
+			body: JSON.stringify(body),
 		});
 
 		const result = (await response.json()) as { ok: boolean; error?: string };
