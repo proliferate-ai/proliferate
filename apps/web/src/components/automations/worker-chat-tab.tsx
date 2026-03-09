@@ -467,9 +467,10 @@ function SpawnChildCard({ tool }: { tool: ToolPart }) {
 
 function ActionCard({ tool }: { tool: ToolPart }) {
 	const args = tool.args as { integration?: string; action?: string } | undefined;
-	const label = args
-		? `${args.integration || "action"}.${args.action || "unknown"}`
-		: "Action invocation";
+	const integration = args?.integration || "action";
+	// Pi only sends `integration` in the streaming args — `action` is not available.
+	// Show integration name as the label; the specific action is visible in the text response.
+	const label = args?.action ? `${integration}.${args.action}` : integration;
 
 	return (
 		<div className="rounded-md border border-border bg-card px-3 py-2 flex items-center gap-3">
