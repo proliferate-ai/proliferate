@@ -203,3 +203,43 @@ Do not update docs unless explicitly asked. **Exception:** spec files in `docs/s
 - Raw `fetch("/api/..." )` in components
 - API calls inside `components/ui/`
 - Server state in Zustand
+
+## Cursor Cloud specific instructions
+
+### Services overview
+
+| Service | How to start | Port | Notes |
+|---------|-------------|------|-------|
+| PostgreSQL | `sudo docker compose up -d postgres` | 5432 | Required. Runs via Docker. |
+| Redis | `sudo docker compose up -d redis` | 6379 | Required. Runs via Docker. |
+| Web (Next.js) | `pnpm dev:web` | 3000 | Main frontend + API. Use `WATCHPACK_POLLING=true` in Docker/VM environments. |
+| Gateway | `pnpm dev:gateway` | 8787 | WebSocket server. Optional for most dev tasks. |
+| Worker | `pnpm dev:worker` | — | BullMQ job processor. Optional for most dev tasks. |
+| LLM Proxy | `sudo docker compose up -d llm-proxy` | 4000 | Optional (`LLM_PROXY_REQUIRED=false` by default). |
+
+### Starting the dev environment
+
+1. Start infrastructure: `sudo docker compose up -d postgres redis`
+2. Run migrations: `DATABASE_URL="postgresql://postgres:postgres@localhost:5432/proliferate" SKIP_ENV_VALIDATION=true pnpm -C packages/db db:migrate`
+3. Start the web app: `pnpm dev:web` (or `pnpm dev` for all services via Turbo)
+
+Docker must be running before starting services. In this environment, start dockerd with `sudo dockerd &>/tmp/dockerd.log &` if not already running.
+
+### Environment configuration
+
+- Dev env vars are read from `.env.local` (not `.env`). See `.env.example` for all keys.
+- `docker compose` reads from `.env` (not `.env.local`), so env warnings from compose about missing vars are expected when using `.env.local` for app dev.
+- Required secrets (`BETTER_AUTH_SECRET`, `SERVICE_TO_SERVICE_AUTH_TOKEN`, `GATEWAY_JWT_SECRET`, `USER_SECRETS_ENCRYPTION_KEY`) can be any random hex strings for local dev.
+
+### Checks (see `CONTRIBUTING.md` for full details)
+
+- `pnpm lint` — Biome + custom lint scripts
+- `pnpm typecheck` — TypeScript across all packages
+- `pnpm test` — Vitest across all packages
+- `pnpm build` — Production build
+
+### Known pre-existing issues
+
+- `pnpm typecheck` and `pnpm build` fail on `apps/web` due to TS errors in `coworkers/page.tsx` (references to `createObjective`/`setCreateObjective` that don't exist on the hook return type).
+- `pnpm test` fails for `sandbox-memory` package (no test files found).
+- `pnpm lint` (biome) reports duplicate property warnings in tailwind config.
