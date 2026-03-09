@@ -3,6 +3,7 @@
 import { ConfigurationSelector } from "@/components/automations/configuration-selector";
 import { ConnectorForm } from "@/components/integrations/connector-form";
 import { ConnectorIcon } from "@/components/integrations/connector-icon";
+import { DirectSetupForm } from "@/components/integrations/direct-setup-form";
 import type { CatalogEntry } from "@/components/integrations/integration-picker-dialog";
 import { CATEGORY_LABELS } from "@/components/integrations/integration-picker-dialog";
 import { PermissionsTab } from "@/components/integrations/permissions-tab";
@@ -20,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getIntegrationScopeMeta } from "@/lib/integrations/scopes";
 import type { ConnectorConfig, ConnectorPreset } from "@proliferate/shared";
 import { CONNECTOR_PRESETS } from "@proliferate/shared";
-import { CheckCircle2, ExternalLink, Loader2 } from "lucide-react";
+import { CheckCircle2, Database, ExternalLink, Loader2 } from "lucide-react";
 
 // ====================================================================
 // Detail dialog
@@ -145,6 +146,8 @@ export function IntegrationDetailDialog({
 							<ConnectorIcon presetKey={entry.presetKey} size="md" />
 						) : entry.provider ? (
 							<ProviderIcon provider={entry.provider} size="md" />
+						) : entry.type === "direct" ? (
+							<Database className="h-5 w-5 text-muted-foreground" />
 						) : (
 							<ConnectorIcon presetKey="custom" size="md" />
 						)}
@@ -358,6 +361,36 @@ function ConnectTabContent({
 	// MCP preset — always use quick setup (API key only)
 	if (entry.type === "mcp-preset" && preset) {
 		return <QuickSetupForm preset={preset} onClose={onClose} />;
+	}
+
+	// Direct credential integrations (MySQL, etc.)
+	if (entry.type === "direct") {
+		if (isConnected) {
+			return (
+				<div className="space-y-4">
+					<p className="text-sm text-muted-foreground">{entry.description}</p>
+					<div className="flex items-center gap-2 p-3 rounded-lg bg-muted/30">
+						<CheckCircle2 className="h-4 w-4 text-foreground shrink-0" />
+						<span className="text-sm">
+							Connected{connectedMeta ? ` \u00b7 ${connectedMeta}` : ""}
+						</span>
+					</div>
+					<div className="flex items-center gap-2 pt-2">
+						<Button
+							variant="outline"
+							size="sm"
+							className="text-destructive hover:text-destructive"
+							onClick={onDisconnect}
+						>
+							Disconnect
+						</Button>
+					</div>
+				</div>
+			);
+		}
+		return (
+			<DirectSetupForm integrationId={entry.key as "mysql"} name={entry.name} onClose={onClose} />
+		);
 	}
 
 	// OAuth / Slack

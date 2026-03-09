@@ -63,6 +63,14 @@ export async function getToken(integration: IntegrationForToken): Promise<string
 		return getInstallationToken(integration.githubInstallationId);
 	}
 
+	// Direct credentials (e.g., MySQL connection URL) — no refresh logic
+	if (integration.provider === "direct") {
+		if (!integration.encryptedAccessToken) {
+			throw new Error(`Missing encrypted credential for integration ${integration.id}`);
+		}
+		return decrypt(integration.encryptedAccessToken, getEncryptionKey());
+	}
+
 	if (integration.provider === "oauth-app") {
 		return getOAuthAppToken(integration);
 	}

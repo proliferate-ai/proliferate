@@ -10,7 +10,7 @@ import { cn } from "@/lib/display/utils";
 import { orpc } from "@/lib/infra/orpc";
 import { getIntegrationScopeMeta } from "@/lib/integrations/scopes";
 import type { IntegrationCategory } from "@proliferate/shared";
-import { CheckCircle2, Loader2, Search, Send } from "lucide-react";
+import { CheckCircle2, Database, Loader2, Search, Send } from "lucide-react";
 import { useMemo, useState } from "react";
 
 // ====================================================================
@@ -24,7 +24,7 @@ export interface CatalogEntry {
 	name: string;
 	description: string;
 	category: IntegrationCategory;
-	type: "oauth" | "slack" | "mcp-preset" | "custom-mcp";
+	type: "oauth" | "slack" | "mcp-preset" | "custom-mcp" | "direct";
 	provider?: Provider;
 	presetKey?: string;
 }
@@ -163,6 +163,8 @@ export function IntegrationPickerDialog({
 															<ConnectorIcon presetKey={entry.presetKey} size="md" />
 														) : entry.provider ? (
 															<ProviderIcon provider={entry.provider} size="md" />
+														) : entry.type === "direct" ? (
+															<Database className="h-5 w-5 text-muted-foreground" />
 														) : (
 															<ConnectorIcon presetKey="custom" size="md" />
 														)}
