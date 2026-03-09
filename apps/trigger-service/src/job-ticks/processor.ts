@@ -65,11 +65,13 @@ export async function processJobTick(job: Job<WorkerJobTickPayload>): Promise<vo
 		log.warn({ err }, "Failed to eager-start manager session, continuing with prompt");
 	}
 
-	// 4. Send the check-in prompt with skipIfBusy
+	// 4. Send the check-in prompt (skipIfBusy + idempotency for safe retries)
 	try {
 		await gateway.postMessage(managerSessionId, {
 			content: workerJob.checkInPrompt,
 			userId: SYSTEM_JOB_TICK_USER_ID,
+			skipIfBusy: true,
+			idempotencyKey: `worker-job-tick:${jobId}`,
 		});
 	} catch (err) {
 		log.error({ err }, "Failed to send job tick prompt");

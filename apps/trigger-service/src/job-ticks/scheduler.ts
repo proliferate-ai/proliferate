@@ -145,18 +145,28 @@ export async function syncJobTickSchedules(): Promise<void> {
  * Returns a cleanup function to stop the interval.
  */
 export function startJobTickScheduleSync(): { stop: () => void } {
-	// Initial sync
-	syncJobTickSchedules().catch((err) => {
-		logger.error({ err }, "Initial job tick schedule sync failed");
-	});
+	let stopped = false;
+	let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-	const intervalId = setInterval(() => {
-		syncJobTickSchedules().catch((err) => {
-			logger.error({ err }, "Periodic job tick schedule sync failed");
-		});
-	}, SYNC_INTERVAL_MS);
+	const runSync = async () => {
+		if (stopped) return;
+		try {
+			await syncJobTickSchedules();
+		} catch (err) {
+			logger.error({ err }, "Job tick schedule sync failed");
+		} finally {
+			if (!stopped) {
+				timeoutId = setTimeout(runSync, SYNC_INTERVAL_MS);
+			}
+		}
+	};
+
+	void runSync();
 
 	return {
-		stop: () => clearInterval(intervalId),
+		stop: () => {
+			stopped = true;
+			if (timeoutId) clearTimeout(timeoutId);
+		},
 	};
 }
