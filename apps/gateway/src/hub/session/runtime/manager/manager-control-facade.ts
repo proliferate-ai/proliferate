@@ -233,8 +233,9 @@ export function createInProcessManagerControlFacade(
 				if (error instanceof ApiError) {
 					return { status: error.statusCode, body: { error: error.message } };
 				}
+				const message = error instanceof Error ? error.message : String(error);
 				logger.error({ err: error, sessionId: input.sessionId }, "Failed to invoke manager action");
-				return { status: 500, body: { error: "Internal action invocation error" } };
+				return { status: 500, body: { error: `Action failed: ${message}` } };
 			}
 		},
 	};
