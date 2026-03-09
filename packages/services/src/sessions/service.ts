@@ -1127,6 +1127,10 @@ export async function getSessionEvents(sessionId: string) {
 	return sessionsDb.listSessionEvents(sessionId);
 }
 
+export async function listChatEvents(sessionId: string) {
+	return sessionsDb.listChatEvents(sessionId);
+}
+
 export interface SessionLifecycleEvent {
 	id: string;
 	eventType: string;

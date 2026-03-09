@@ -1,4 +1,4 @@
-import type { Message, ServerMessage } from "@proliferate/shared";
+import type { ClientSource, Message, ServerMessage } from "@proliferate/shared";
 import { buildControlPlaneSnapshot, buildInitConfig } from "../control-plane";
 import type { SessionRecord } from "../runtime/session-context-store";
 
@@ -20,6 +20,9 @@ export interface InitWorkflowDeps {
 	collectOutputs: () => Promise<Message[]>;
 	buildCompletedAutomationFallbackMessages: () => Message[];
 	getDurableRuntimeFacts: () => Promise<DurableRuntimeFact[]>;
+	getChatHistory: () => Promise<
+		Array<{ eventType: string; payloadJson: unknown; createdAt: Date }>
+	>;
 	log: (message: string, data?: Record<string, unknown>) => void;
 	logError: (message: string, error?: unknown) => void;
 	reconnectGeneration: number;
@@ -95,6 +98,51 @@ export async function buildInitMessages(
 	});
 
 	let transformed: Message[] = [];
+
+	// Manager sessions: load chat history from Postgres
+	if (deps.isManagerSession()) {
+		const chatEvents = await deps.getChatHistory();
+		if (chatEvents.length > 0) {
+			transformed = chatEvents.map((event) => {
+				const payload = event.payloadJson as Record<string, unknown>;
+				const isAgent = event.eventType === "chat_agent_response";
+				const isJobTick = event.eventType === "chat_job_tick";
+				const content = (payload.content as string) ?? "";
+				return {
+					id: (payload.messageId as string) ?? `chat-${event.createdAt.getTime()}`,
+					role: isAgent ? ("assistant" as const) : ("user" as const),
+					content,
+					isComplete: true,
+					createdAt: event.createdAt.getTime(),
+					senderId: isJobTick ? undefined : (payload.userId as string | undefined),
+					source: isJobTick
+						? ("job" as ClientSource)
+						: (payload.source as ClientSource | undefined),
+					parts: [{ type: "text" as const, text: content }],
+				};
+			});
+			deps.log("Loaded chat history from Postgres", { messageCount: transformed.length });
+		}
+		// Return early — skip sandbox-based transcript for manager sessions
+		return {
+			initPayload: {
+				type: "init",
+				payload: {
+					messages: transformed,
+					config: buildInitConfig(previewUrl),
+				},
+			},
+			snapshotPayload: {
+				type: "control_plane_snapshot",
+				payload: buildControlPlaneSnapshot(
+					snapshotSession,
+					deps.reconnectGeneration,
+					deps.mapHubStatusToControlPlaneRuntime(),
+				),
+			},
+		};
+	}
+
 	if (openCodeUrl && openCodeSessionId) {
 		try {
 			deps.log("Fetching harness outputs for init...", { openCodeSessionId });
@@ -105,15 +153,6 @@ export async function buildInitMessages(
 				throw err;
 			}
 			deps.logError("Harness output fetch failed; using fallback transcript", err);
-		}
-	} else if (deps.isManagerSession()) {
-		// Manager sessions have no openCodeSessionId but may have in-memory
-		// accumulated messages from wake cycles. Try collectOutputs for those.
-		try {
-			transformed = await deps.collectOutputs();
-			deps.log("Fetched manager session outputs", { messageCount: transformed.length });
-		} catch {
-			// Best effort — fall through to durable facts
 		}
 	} else if (!isCompletedAutomationSession && durableFacts.length === 0) {
 		throw new Error("Missing agent session info");

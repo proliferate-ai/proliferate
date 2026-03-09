@@ -12,6 +12,8 @@ import type { ClientSource } from "@proliferate/shared";
 export interface PromptOptions {
 	images?: Array<{ data: string; mediaType: string }>;
 	source?: ClientSource;
+	skipIfBusy?: boolean;
+	metadata?: { jobId?: string; jobName?: string };
 }
 
 /**

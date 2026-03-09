@@ -389,6 +389,13 @@
       "when": 1772800000000,
       "tag": "0056_expand_session_events_type_check",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1772886400000,
+      "tag": "0057_coworker_v2_chat",
+      "breakpoints": true
     }
   ]
 }

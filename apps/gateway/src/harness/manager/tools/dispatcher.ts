@@ -6,18 +6,9 @@ import {
 	handleListChildren,
 	handleMessageChild,
 	handleSpawnChildTask,
+	handleWakeChild,
 } from "./handlers/child-sessions";
-import {
-	handleCompleteRun,
-	handleRequestApproval,
-	handleSendNotification,
-	handleSkipRun,
-} from "./handlers/run-control";
-import {
-	handleGetSourceItem,
-	handleListSourceBindings,
-	handleReadSource,
-} from "./handlers/source-reads";
+import { handleListRepos } from "./handlers/repos";
 import type { ManagerToolContext } from "./types";
 
 export async function executeManagerTool(
@@ -37,24 +28,14 @@ export async function executeManagerTool(
 			return handleMessageChild(args, ctx, log);
 		case "cancel_child":
 			return handleCancelChild(args, ctx, log);
-		case "read_source":
-			return handleReadSource(args, ctx, log);
-		case "get_source_item":
-			return handleGetSourceItem(args, ctx, log);
-		case "list_source_bindings":
-			return handleListSourceBindings(ctx, log);
+		case "wake_child":
+			return handleWakeChild(args, ctx, log);
+		case "list_repos":
+			return handleListRepos(ctx, log);
 		case "list_capabilities":
 			return handleListCapabilities(ctx, log);
 		case "invoke_action":
 			return handleInvokeAction(args, ctx, log);
-		case "send_notification":
-			return handleSendNotification(args, ctx, log);
-		case "request_approval":
-			return handleRequestApproval(args, ctx, log);
-		case "skip_run":
-			return handleSkipRun(args, ctx, log);
-		case "complete_run":
-			return handleCompleteRun(args, ctx, log);
 		default:
 			return JSON.stringify({ error: `Unknown tool: ${name}` });
 	}

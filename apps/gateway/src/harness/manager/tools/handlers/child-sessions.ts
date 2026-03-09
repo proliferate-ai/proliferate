@@ -1,5 +1,5 @@
 import type { Logger } from "@proliferate/logger";
-import { sessions, workers } from "@proliferate/services";
+import { sessions } from "@proliferate/services";
 import { getServiceJwt } from "../auth";
 import type { ManagerToolContext } from "../types";
 
@@ -23,21 +23,11 @@ export async function handleSpawnChildTask(
 		repoBaselineId: managerSession.repoBaselineId ?? null,
 		repoBaselineTargetId: managerSession.repoBaselineTargetId ?? null,
 		workerId: ctx.workerId,
-		workerRunId: ctx.workerRunId,
 		parentSessionId: ctx.managerSessionId,
 		configurationId: managerSession.configurationId ?? null,
 		visibility: (managerSession.visibility as "private" | "shared" | "org") ?? "private",
 		initialPrompt: instructions,
 		title,
-	});
-
-	await workers.appendWorkerRunEvent({
-		workerRunId: ctx.workerRunId,
-		workerId: ctx.workerId,
-		eventType: "task_spawned",
-		summaryText: title,
-		sessionId: childSession.id,
-		payloadJson: { title, childSessionId: childSession.id },
 	});
 
 	log.info({ childSessionId: childSession.id, title }, "Spawned child task session");
@@ -80,11 +70,7 @@ export async function handleSpawnChildTask(
 }
 
 export async function handleListChildren(ctx: ManagerToolContext, log: Logger): Promise<string> {
-	const children = await sessions.listChildSessionsByRun(
-		ctx.managerSessionId,
-		ctx.workerRunId,
-		ctx.organizationId,
-	);
+	const children = await sessions.listAllChildSessions(ctx.managerSessionId, ctx.organizationId);
 
 	const result = children.map((session) => ({
 		session_id: session.id,
@@ -113,6 +99,12 @@ export async function handleInspectChild(
 
 	if (session.parentSessionId !== ctx.managerSessionId) {
 		return JSON.stringify({ error: "Session is not a child of this manager" });
+	}
+
+	if (session.runtimeStatus !== "running") {
+		return JSON.stringify({
+			error: `Child sandbox is not running (status: ${session.runtimeStatus}). Use wake_child first to start it.`,
+		});
 	}
 
 	log.debug({ sessionId }, "Inspected child session");
@@ -145,6 +137,12 @@ export async function handleMessageChild(
 	}
 	if (session.parentSessionId !== ctx.managerSessionId) {
 		return JSON.stringify({ error: "Session is not a child of this manager" });
+	}
+
+	if (session.runtimeStatus !== "running") {
+		return JSON.stringify({
+			error: `Child sandbox is not running (status: ${session.runtimeStatus}). Use wake_child first to start it.`,
+		});
 	}
 
 	try {
@@ -222,4 +220,46 @@ export async function handleCancelChild(
 
 	log.info({ sessionId }, "Cancelled child session");
 	return JSON.stringify({ ok: true, session_id: sessionId });
+}
+
+export async function handleWakeChild(
+	args: Record<string, unknown>,
+	ctx: ManagerToolContext,
+	log: Logger,
+): Promise<string> {
+	const sessionId = args.session_id as string;
+
+	const session = await sessions.findSessionById(sessionId, ctx.organizationId);
+	if (!session) {
+		return JSON.stringify({ error: `Session not found: ${sessionId}` });
+	}
+	if (session.parentSessionId !== ctx.managerSessionId) {
+		return JSON.stringify({ error: "Session is not a child of this manager" });
+	}
+
+	try {
+		if (ctx.controlFacade) {
+			await ctx.controlFacade.eagerStartSession(sessionId);
+			log.info({ sessionId }, "Woke child session");
+			return JSON.stringify({ ok: true, session_id: sessionId, status: "starting" });
+		}
+		const jwt = await getServiceJwt(ctx);
+		const res = await fetch(`${ctx.gatewayUrl}/proliferate/${sessionId}/eager-start`, {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${jwt}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ organizationId: ctx.organizationId }),
+		});
+		if (!res.ok) {
+			const body = await res.text().catch(() => "");
+			return JSON.stringify({ error: `Wake failed: ${res.status} ${body}` });
+		}
+	} catch (err) {
+		return JSON.stringify({ error: `Wake request failed: ${String(err)}` });
+	}
+
+	log.info({ sessionId }, "Woke child session");
+	return JSON.stringify({ ok: true, session_id: sessionId, status: "starting" });
 }

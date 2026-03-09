@@ -7,7 +7,6 @@ import {
 	WORKER_STATUS_LABELS,
 	type WorkerStatus,
 } from "@/config/coworkers";
-import { formatRelativeTime } from "@/lib/display/utils";
 import Link from "next/link";
 
 interface WorkerCardProps {
@@ -15,7 +14,6 @@ interface WorkerCardProps {
 	name: string;
 	status: WorkerStatus;
 	objective: string | null;
-	lastWakeAt: string | null;
 	activeTaskCount: number;
 	pendingApprovalCount: number;
 }
@@ -68,7 +66,6 @@ export function WorkerCard({
 	name,
 	status,
 	objective,
-	lastWakeAt,
 	activeTaskCount,
 	pendingApprovalCount,
 }: WorkerCardProps) {
@@ -77,7 +74,6 @@ export function WorkerCard({
 	if (activeTaskCount > 0)
 		metaParts.push(`${activeTaskCount} task${activeTaskCount !== 1 ? "s" : ""}`);
 	if (pendingApprovalCount > 0) metaParts.push(`${pendingApprovalCount} pending`);
-	if (lastWakeAt) metaParts.push(formatRelativeTime(lastWakeAt));
 
 	return (
 		<Link

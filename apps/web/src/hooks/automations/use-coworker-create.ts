@@ -106,7 +106,7 @@ export function useCoworkerListFilters(
 		() => ({
 			all: workersList.length,
 			active: workersList.filter((w) => w.status === "active").length,
-			paused: workersList.filter((w) => w.status === "paused").length,
+			paused: workersList.filter((w) => w.status === "automations_paused").length,
 		}),
 		[workersList],
 	);
@@ -125,7 +125,8 @@ export function useCoworkerListFilters(
 	const filteredWorkers = useMemo(() => {
 		let result = workersList;
 		if (activeTab === "active") result = result.filter((w) => w.status === "active");
-		else if (activeTab === "paused") result = result.filter((w) => w.status === "paused");
+		else if (activeTab === "paused")
+			result = result.filter((w) => w.status === "automations_paused");
 		if (searchQuery.trim()) {
 			const q = searchQuery.toLowerCase().trim();
 			result = result.filter((w) => w.name.toLowerCase().includes(q));

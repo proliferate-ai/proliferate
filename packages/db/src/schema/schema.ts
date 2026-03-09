@@ -21,7 +21,7 @@ import {
 // Typed status unions for V1 worker tables.
 // These mirror the canonical types in @proliferate/shared/contracts/entities.ts.
 // Defined inline because @proliferate/db cannot depend on @proliferate/shared.
-type WorkerStatus = "active" | "paused" | "degraded" | "failed";
+type WorkerStatus = "active" | "automations_paused" | "degraded" | "failed" | "archived";
 type WakeEventSource = "tick" | "webhook" | "manual" | "manual_message";
 type WakeEventStatus = "queued" | "claimed" | "consumed" | "coalesced" | "cancelled" | "failed";
 type WorkerRunStatus =
@@ -2078,13 +2078,12 @@ export const workers = pgTable(
 		id: uuid().defaultRandom().primaryKey().notNull(),
 		organizationId: text("organization_id").notNull(),
 		name: text("name").notNull(),
-		objective: text("objective"),
+		description: text("description"),
+		systemPrompt: text("system_prompt"),
 		status: text("status").$type<WorkerStatus>().notNull().default("active"),
 		managerSessionId: uuid("manager_session_id").notNull(),
 		modelId: text("model_id"),
 		computeProfile: text("compute_profile"),
-		lastWakeAt: timestamp("last_wake_at", { withTimezone: true, mode: "date" }),
-		lastCompletedRunAt: timestamp("last_completed_run_at", { withTimezone: true, mode: "date" }),
 		lastErrorCode: text("last_error_code"),
 		pausedAt: timestamp("paused_at", { withTimezone: true, mode: "date" }),
 		pausedBy: text("paused_by"),
@@ -2102,7 +2101,7 @@ export const workers = pgTable(
 		unique("uq_workers_manager_session").on(table.managerSessionId),
 		check(
 			"workers_status_check",
-			sql`status = ANY (ARRAY['active'::text, 'paused'::text, 'degraded'::text, 'failed'::text])`,
+			sql`status = ANY (ARRAY['active'::text, 'automations_paused'::text, 'degraded'::text, 'failed'::text, 'archived'::text])`,
 		),
 		foreignKey({
 			columns: [table.organizationId],
@@ -2119,6 +2118,45 @@ export const workers = pgTable(
 			foreignColumns: [sessions.id],
 			name: "workers_manager_session_id_fkey",
 		}),
+	],
+);
+
+// ============================================
+// V2: Worker Jobs (scheduled check-in prompts)
+// ============================================
+
+export const workerJobs = pgTable(
+	"worker_jobs",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		workerId: uuid("worker_id").notNull(),
+		organizationId: text("organization_id").notNull(),
+		name: text("name").notNull(),
+		description: text("description"),
+		checkInPrompt: text("check_in_prompt").notNull(),
+		cronExpression: text("cron_expression").notNull(),
+		enabled: boolean("enabled").notNull().default(true),
+		lastTickAt: timestamp("last_tick_at", { withTimezone: true, mode: "date" }),
+		nextTickAt: timestamp("next_tick_at", { withTimezone: true, mode: "date" }),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_worker_jobs_worker").using("btree", table.workerId.asc().nullsLast().op("uuid_ops")),
+		index("idx_worker_jobs_org").using(
+			"btree",
+			table.organizationId.asc().nullsLast().op("text_ops"),
+		),
+		foreignKey({
+			columns: [table.workerId],
+			foreignColumns: [workers.id],
+			name: "worker_jobs_worker_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "worker_jobs_organization_id_fkey",
+		}).onDelete("cascade"),
 	],
 );
 
@@ -2499,9 +2537,15 @@ export const sessionEvents = pgTable(
 			"btree",
 			table.eventType.asc().nullsLast().op("text_ops"),
 		),
+		index("idx_session_events_chat_history").using(
+			"btree",
+			table.sessionId.asc().nullsLast().op("uuid_ops"),
+			table.eventType.asc().nullsLast().op("text_ops"),
+			table.createdAt.asc().nullsLast(),
+		),
 		check(
 			"session_events_type_check",
-			sql`event_type = ANY (ARRAY['session_created'::text, 'session_started'::text, 'session_paused'::text, 'session_resumed'::text, 'session_completed'::text, 'session_failed'::text, 'session_cancelled'::text, 'session_outcome_persisted'::text, 'runtime_tool_started'::text, 'runtime_tool_finished'::text, 'runtime_approval_requested'::text, 'runtime_approval_resolved'::text, 'runtime_action_completed'::text, 'runtime_error'::text])`,
+			sql`event_type = ANY (ARRAY['session_created'::text, 'session_started'::text, 'session_paused'::text, 'session_resumed'::text, 'session_completed'::text, 'session_failed'::text, 'session_cancelled'::text, 'session_outcome_persisted'::text, 'runtime_tool_started'::text, 'runtime_tool_finished'::text, 'runtime_approval_requested'::text, 'runtime_approval_resolved'::text, 'runtime_action_completed'::text, 'runtime_error'::text, 'chat_user_message'::text, 'chat_agent_response'::text, 'chat_job_tick'::text, 'chat_system'::text])`,
 		),
 		foreignKey({
 			columns: [table.sessionId],

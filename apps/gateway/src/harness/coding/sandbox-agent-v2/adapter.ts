@@ -52,8 +52,6 @@ function isDaemonEnvelope(value: DaemonSseEvent): value is DaemonStreamEnvelope 
 // Adapter
 // ---------------------------------------------------------------------------
 
-const DEFAULT_AGENT = "opencode";
-
 /**
  * Module-level map from ACP serverId → agent-internal session ID.
  * Populated during start/resume/streamEvents. Needed because the
@@ -65,10 +63,15 @@ const agentSessionIds = new Map<string, string>();
 
 export class SandboxAgentV2CodingHarnessAdapter implements CodingHarnessAdapter {
 	readonly name = "sandbox-agent-v2-acp";
+	private readonly agentName: string;
+
+	constructor(agentName = "opencode") {
+		this.agentName = agentName;
+	}
 
 	async start(input: CodingHarnessStartInput): Promise<CodingHarnessStartResult> {
 		const serverId = generateServerId();
-		const agentSessionId = await createAcpSession(input.baseUrl, serverId, DEFAULT_AGENT);
+		const agentSessionId = await createAcpSession(input.baseUrl, serverId, this.agentName);
 		agentSessionIds.set(serverId, agentSessionId);
 		return { sessionId: serverId };
 	}
@@ -257,6 +260,7 @@ export class SandboxAgentV2CodingHarnessAdapter implements CodingHarnessAdapter 
 				for (const disconnect of disconnectors) {
 					disconnect();
 				}
+				agentSessionIds.delete(serverId);
 			},
 		};
 	}

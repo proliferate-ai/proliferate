@@ -18,6 +18,8 @@ interface MessageBody {
 	userId?: string;
 	source?: ClientSource;
 	images?: string[];
+	skipIfBusy?: boolean;
+	metadata?: { jobId?: string; jobName?: string };
 }
 
 router.post("/message", async (req, res, next) => {
@@ -79,6 +81,20 @@ router.post("/message", async (req, res, next) => {
 				);
 			}
 
+			if (body.skipIfBusy !== undefined && typeof body.skipIfBusy !== "boolean") {
+				throw new ApiError(400, "skipIfBusy must be a boolean");
+			}
+			if (
+				body.metadata !== undefined &&
+				(typeof body.metadata !== "object" ||
+					body.metadata === null ||
+					(body.metadata.jobId !== undefined && typeof body.metadata.jobId !== "string") ||
+					(body.metadata.jobName !== undefined && typeof body.metadata.jobName !== "string"))
+			) {
+				throw new ApiError(400, "metadata.jobId and metadata.jobName must be strings");
+			}
+			const metadata = auth.source === "service" ? body.metadata : undefined;
+
 			logger.info(
 				{
 					sessionId,
@@ -90,7 +106,10 @@ router.post("/message", async (req, res, next) => {
 				"message.request.dispatching_prompt",
 			);
 
-			await req.hub!.postPrompt(body.content, userId, body.source, body.images);
+			await req.hub!.postPrompt(body.content, userId, body.source, body.images, {
+				skipIfBusy: body.skipIfBusy,
+				metadata,
+			});
 			const response = { ok: true };
 			if (idempotencyState) {
 				await storeIdempotencyResponse(idempotencyState.orgId, idempotencyState.key, response);

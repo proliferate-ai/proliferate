@@ -7,7 +7,7 @@ import { WorkerOrb } from "./worker-card";
 interface WorkerDetailHeaderProps {
 	worker: {
 		name: string;
-		objective: string | null;
+		systemPrompt: string | null;
 		status: string;
 		managerSessionId: string;
 	};
@@ -24,7 +24,12 @@ export function WorkerDetailHeader({
 	isPausing,
 	isResuming,
 }: WorkerDetailHeaderProps) {
-	const status = worker.status as "active" | "paused" | "degraded" | "failed";
+	const status = worker.status as
+		| "active"
+		| "automations_paused"
+		| "degraded"
+		| "failed"
+		| "archived";
 
 	return (
 		<div className="flex items-center gap-4 mb-5">
@@ -33,12 +38,14 @@ export function WorkerDetailHeader({
 				<div className="flex items-center gap-2">
 					<h1 className="text-base font-semibold text-foreground truncate">{worker.name}</h1>
 					<StatusDot
-						status={status === "active" ? "active" : status === "paused" ? "paused" : "error"}
+						status={
+							status === "active" ? "active" : status === "automations_paused" ? "paused" : "error"
+						}
 						size="sm"
 					/>
 				</div>
-				{worker.objective && (
-					<p className="text-xs text-muted-foreground mt-0.5 truncate">{worker.objective}</p>
+				{worker.systemPrompt && (
+					<p className="text-xs text-muted-foreground mt-0.5 truncate">{worker.systemPrompt}</p>
 				)}
 			</div>
 			<div className="flex items-center gap-1.5 shrink-0">
@@ -58,7 +65,7 @@ export function WorkerDetailHeader({
 						Pause
 					</Button>
 				)}
-				{status === "paused" && (
+				{status === "automations_paused" && (
 					<Button
 						size="sm"
 						variant="outline"

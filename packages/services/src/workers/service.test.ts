@@ -76,12 +76,8 @@ vi.mock("../wakes/db", () => ({
 const {
 	WorkerNotActiveError,
 	WorkerResumeRequiredError,
-	WorkerRunTransitionError,
 	pauseWorker,
 	runNow,
-	startWorkerRun,
-	completeWorkerRun,
-	appendWorkerRunEvent,
 	createWorkerWithManagerSession,
 	updateWorkerForOrg,
 } = await import("./service");
@@ -108,22 +104,6 @@ function makeWorker(overrides: Record<string, unknown> = {}) {
 	};
 }
 
-function makeWorkerRun(overrides: Record<string, unknown> = {}) {
-	return {
-		id: "run-1",
-		workerId: "worker-1",
-		organizationId: "org-1",
-		managerSessionId: "session-manager-1",
-		wakeEventId: "wake-1",
-		status: "queued",
-		summary: null,
-		createdAt: new Date(),
-		startedAt: null,
-		completedAt: null,
-		...overrides,
-	};
-}
-
 describe("workers service", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -132,16 +112,16 @@ describe("workers service", () => {
 
 	it("pauses active workers", async () => {
 		mockFindWorkerById.mockResolvedValue(makeWorker({ status: "active" }));
-		mockTransitionWorkerStatus.mockResolvedValue(makeWorker({ status: "paused" }));
+		mockTransitionWorkerStatus.mockResolvedValue(makeWorker({ status: "automations_paused" }));
 
 		const updated = await pauseWorker("worker-1", "org-1", "user-1");
 
-		expect(updated.status).toBe("paused");
+		expect(updated.status).toBe("automations_paused");
 		expect(mockTransitionWorkerStatus).toHaveBeenCalledWith(
 			"worker-1",
 			"org-1",
 			["active"],
-			"paused",
+			"automations_paused",
 			expect.objectContaining({
 				pausedBy: "user-1",
 				pausedAt: expect.any(Date),
@@ -150,7 +130,7 @@ describe("workers service", () => {
 	});
 
 	it("runNow returns resume_required for paused workers", async () => {
-		mockFindWorkerById.mockResolvedValue(makeWorker({ status: "paused" }));
+		mockFindWorkerById.mockResolvedValue(makeWorker({ status: "automations_paused" }));
 
 		await expect(runNow("worker-1", "org-1")).rejects.toBeInstanceOf(WorkerResumeRequiredError);
 		expect(mockCreateWakeEvent).not.toHaveBeenCalled();
@@ -182,83 +162,6 @@ describe("workers service", () => {
 			source: "manual",
 			payloadJson: { note: "run now" },
 		});
-	});
-
-	it("rejects invalid run transition completed -> running", async () => {
-		mockFindWorkerRunById.mockResolvedValue(makeWorkerRun({ status: "completed" }));
-
-		await expect(startWorkerRun("run-1", "org-1")).rejects.toBeInstanceOf(WorkerRunTransitionError);
-		expect(mockTransitionWorkerRunStatus).not.toHaveBeenCalled();
-	});
-
-	it("completes running worker run and writes wake_completed event", async () => {
-		mockFindWorkerRunById.mockResolvedValue(makeWorkerRun({ status: "running" }));
-		mockTransitionWorkerRunWithTerminalEvent.mockResolvedValue({
-			workerRun: makeWorkerRun({ status: "completed" }),
-			event: {
-				id: "event-1",
-				workerRunId: "run-1",
-				workerId: "worker-1",
-				eventIndex: 1,
-				eventType: "wake_completed",
-				summaryText: "done",
-				payloadJson: { result: "completed" },
-				payloadVersion: 1,
-				sessionId: null,
-				actionInvocationId: null,
-				dedupeKey: null,
-				createdAt: new Date(),
-			},
-		});
-
-		const result = await completeWorkerRun({
-			workerRunId: "run-1",
-			organizationId: "org-1",
-			summary: "done",
-			result: "completed",
-		});
-
-		expect(result.status).toBe("completed");
-		expect(mockTransitionWorkerRunWithTerminalEvent).toHaveBeenCalledWith(
-			expect.objectContaining({
-				workerRunId: "run-1",
-				toStatus: "completed",
-				eventType: "wake_completed",
-			}),
-		);
-	});
-
-	it("appendWorkerRunEvent reuses deduped event when dedupeKey exists", async () => {
-		const existing = {
-			id: "event-existing",
-			workerRunId: "run-1",
-			workerId: "worker-1",
-			eventIndex: 2,
-			eventType: "manager_note",
-			summaryText: null,
-			payloadJson: null,
-			payloadVersion: 1,
-			sessionId: null,
-			actionInvocationId: null,
-			dedupeKey: "note-1",
-			createdAt: new Date(),
-		};
-		mockAppendWorkerRunEventAtomic.mockResolvedValue(existing);
-
-		const row = await appendWorkerRunEvent({
-			workerRunId: "run-1",
-			workerId: "worker-1",
-			eventType: "manager_note",
-			dedupeKey: "note-1",
-		});
-
-		expect(row.id).toBe("event-existing");
-		expect(mockAppendWorkerRunEventAtomic).toHaveBeenCalledWith(
-			expect.objectContaining({
-				workerRunId: "run-1",
-				dedupeKey: "note-1",
-			}),
-		);
 	});
 
 	it("runNow rejects degraded worker as not active", async () => {
@@ -311,7 +214,7 @@ describe("workers service", () => {
 		await updateWorkerForOrg({
 			workerId: "worker-3",
 			organizationId: "org-1",
-			fields: { objective: "Handle high priority bugs" },
+			fields: { systemPrompt: "Handle high priority bugs" },
 			capabilities: [{ capabilityKey: "source.linear.read", mode: "deny" }],
 		});
 

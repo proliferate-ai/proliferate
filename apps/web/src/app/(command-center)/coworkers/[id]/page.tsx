@@ -1,6 +1,5 @@
 "use client";
 
-import type { ChatEvent } from "@/components/automations/worker-chat-tab";
 import { WorkerChatTab } from "@/components/automations/worker-chat-tab";
 import { WorkerDetailHeader } from "@/components/automations/worker-detail-header";
 import { WorkerFailureBanner } from "@/components/automations/worker-failure-banner";
@@ -12,7 +11,7 @@ import { DETAIL_TABS, type DetailTab } from "@/config/coworkers";
 import { useWorkerActions } from "@/hooks/automations/use-worker-actions";
 import { useWorkerDetail } from "@/hooks/automations/use-worker-detail";
 import { cn } from "@/lib/display/utils";
-import { use, useMemo, useState } from "react";
+import { use, useState } from "react";
 
 export default function CoworkerDetailPage({
 	params,
@@ -21,37 +20,8 @@ export default function CoworkerDetailPage({
 }) {
 	const { id } = use(params);
 	const [activeTab, setActiveTab] = useState<DetailTab>("sessions");
-	const { worker, isLoading, runs, sessions, directives, isLoadingRuns, isLoadingSessions } =
-		useWorkerDetail(id);
+	const { worker, isLoading, sessions, isLoadingSessions } = useWorkerDetail(id);
 	const actions = useWorkerActions(id);
-
-	// Flatten all run events into a chronological chat stream
-	const chatEvents: ChatEvent[] = useMemo(() => {
-		const allEvents: ChatEvent[] = [];
-		for (const run of runs) {
-			const wakeStarted = run.events.find((e) => e.eventType === "wake_started");
-			const payload = wakeStarted?.payloadJson as Record<string, unknown> | null;
-			const runSource = (payload?.source as string) ?? null;
-
-			for (const event of run.events) {
-				allEvents.push({
-					id: event.id,
-					eventType: event.eventType,
-					summaryText: event.summaryText,
-					payloadJson: event.payloadJson,
-					sessionId: event.sessionId,
-					actionInvocationId: event.actionInvocationId,
-					createdAt: event.createdAt,
-					runSource,
-					runId: run.id,
-					runStatus: run.status,
-				});
-			}
-		}
-		// Sort oldest first for chat view
-		allEvents.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-		return allEvents;
-	}, [runs]);
 
 	if (isLoading) {
 		return (
@@ -78,7 +48,12 @@ export default function CoworkerDetailPage({
 		);
 	}
 
-	const workerStatus = worker.status as "active" | "paused" | "degraded" | "failed";
+	const workerStatus = worker.status as
+		| "active"
+		| "automations_paused"
+		| "degraded"
+		| "failed"
+		| "archived";
 	const isManagerFailed = workerStatus === "degraded" || workerStatus === "failed";
 
 	return (
@@ -129,21 +104,8 @@ export default function CoworkerDetailPage({
 					<WorkerSessionsTab sessions={sessions} isLoading={isLoadingSessions} />
 				)}
 
-				{activeTab === "chat" && (
-					<WorkerChatTab
-						events={chatEvents}
-						pendingDirectives={directives.map((d) => ({
-							id: d.id,
-							messageType: d.messageType,
-							payloadJson: d.payloadJson,
-							queuedAt: d.queuedAt,
-							senderUserId: d.senderUserId,
-						}))}
-						isLoading={isLoadingRuns}
-						onSendDirective={actions.handleSendDirective}
-						isSendingDirective={actions.isSendingDirective}
-						workerStatus={worker.status}
-					/>
+				{activeTab === "chat" && worker.managerSessionId && (
+					<WorkerChatTab managerSessionId={worker.managerSessionId} workerStatus={worker.status} />
 				)}
 
 				{activeTab === "settings" && (
@@ -151,7 +113,7 @@ export default function CoworkerDetailPage({
 						worker={{
 							id: worker.id,
 							name: worker.name,
-							objective: worker.objective,
+							systemPrompt: worker.systemPrompt,
 							status: worker.status,
 							modelId: worker.modelId,
 							capabilities: worker.capabilities ?? [],
