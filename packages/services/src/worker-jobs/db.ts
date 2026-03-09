@@ -36,6 +36,15 @@ export async function findJobById(
 	return row;
 }
 
+/**
+ * List all enabled jobs across all organizations.
+ * Used by the tick scheduler to sync BullMQ repeatable jobs.
+ */
+export async function listAllEnabledJobs(): Promise<WorkerJobRow[]> {
+	const db = getDb();
+	return db.select().from(workerJobs).where(eq(workerJobs.enabled, true));
+}
+
 export async function listJobsForWorker(workerId: string): Promise<WorkerJobRow[]> {
 	const db = getDb();
 	return db

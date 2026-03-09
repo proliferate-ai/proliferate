@@ -7,7 +7,7 @@
 import { GATEWAY_INTERNAL_URL, GATEWAY_URL } from "@/lib/infra/gateway";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
-import { automations, orgs, runs, schedules, workers } from "@proliferate/services";
+import { automations, orgs, runs, schedules, workerJobs, workers } from "@proliferate/services";
 import {
 	AutomationConnectionSchema,
 	AutomationEventDetailSchema,
@@ -81,6 +81,12 @@ function throwAutomationORPCError(err: unknown, fallbackMessage: string): never 
 		err instanceof workers.WorkerNotActiveError
 	) {
 		throw new ORPCError("CONFLICT", { message: err.message });
+	}
+	if (err instanceof workerJobs.WorkerJobNotFoundError) {
+		throw new ORPCError("NOT_FOUND", { message: err.message });
+	}
+	if (err instanceof workerJobs.WorkerJobValidationError) {
+		throw new ORPCError("BAD_REQUEST", { message: err.message });
 	}
 
 	throw new ORPCError("INTERNAL_SERVER_ERROR", {
@@ -159,6 +165,7 @@ export const automationsRouter = {
 					id: z.string().uuid(),
 					name: z.string(),
 					status: z.string(),
+					description: z.string().nullable(),
 					systemPrompt: z.string().nullable(),
 					modelId: z.string().nullable(),
 					managerSessionId: z.string().uuid(),
@@ -178,6 +185,7 @@ export const automationsRouter = {
 						id: worker.id,
 						name: worker.name,
 						status: worker.status,
+						description: worker.description,
 						systemPrompt: worker.systemPrompt,
 						modelId: worker.modelId,
 						managerSessionId: worker.managerSessionId,
@@ -861,6 +869,7 @@ export const automationsRouter = {
 		.input(
 			z.object({
 				name: z.string().min(1).max(200).optional(),
+				description: z.string().max(1000).optional(),
 				systemPrompt: z.string().max(5000).optional(),
 				modelId: z.string().optional(),
 				repoId: z.string().uuid().optional(),
@@ -874,6 +883,7 @@ export const automationsRouter = {
 					id: z.string().uuid(),
 					name: z.string(),
 					status: z.string(),
+					description: z.string().nullable(),
 					systemPrompt: z.string().nullable(),
 					modelId: z.string().nullable(),
 					managerSessionId: z.string().uuid(),
@@ -885,6 +895,7 @@ export const automationsRouter = {
 				organizationId: context.orgId,
 				createdBy: context.user.id,
 				name: input?.name,
+				description: input?.description,
 				systemPrompt: input?.systemPrompt,
 				modelId: input?.modelId,
 				repoId: input?.repoId,
@@ -896,6 +907,7 @@ export const automationsRouter = {
 					id: worker.id,
 					name: worker.name,
 					status: worker.status,
+					description: worker.description,
 					systemPrompt: worker.systemPrompt,
 					modelId: worker.modelId,
 					managerSessionId: worker.managerSessionId,
@@ -914,10 +926,10 @@ export const automationsRouter = {
 						id: z.string().uuid(),
 						name: z.string(),
 						status: z.string(),
+						description: z.string().nullable(),
 						systemPrompt: z.string().nullable(),
 						modelId: z.string().nullable(),
 						managerSessionId: z.string().uuid(),
-						description: z.string().nullable().optional(),
 						lastErrorCode: z.string().nullable(),
 						pausedAt: z.coerce.date().nullable(),
 						createdAt: z.coerce.date(),
@@ -935,10 +947,10 @@ export const automationsRouter = {
 					id: w.id,
 					name: w.name,
 					status: w.status,
+					description: w.description,
 					systemPrompt: w.systemPrompt,
 					modelId: w.modelId,
 					managerSessionId: w.managerSessionId,
-					description: w.description,
 					lastErrorCode: w.lastErrorCode,
 					pausedAt: w.pausedAt,
 					createdAt: w.createdAt,
@@ -960,10 +972,10 @@ export const automationsRouter = {
 					id: z.string().uuid(),
 					name: z.string(),
 					status: z.string(),
+					description: z.string().nullable(),
 					systemPrompt: z.string().nullable(),
 					modelId: z.string().nullable(),
 					managerSessionId: z.string().uuid(),
-					description: z.string().nullable().optional(),
 					lastErrorCode: z.string().nullable(),
 					pausedAt: z.coerce.date().nullable(),
 					createdBy: z.string().nullable(),
@@ -994,10 +1006,10 @@ export const automationsRouter = {
 					id: worker.id,
 					name: worker.name,
 					status: worker.status,
+					description: worker.description,
 					systemPrompt: worker.systemPrompt,
 					modelId: worker.modelId,
 					managerSessionId: worker.managerSessionId,
-					description: worker.description,
 					lastErrorCode: worker.lastErrorCode,
 					pausedAt: worker.pausedAt,
 					createdBy: worker.createdBy,
@@ -1188,10 +1200,10 @@ export const automationsRouter = {
 					id: z.string().uuid(),
 					name: z.string(),
 					status: z.string(),
+					description: z.string().nullable(),
 					systemPrompt: z.string().nullable(),
 					modelId: z.string().nullable(),
 					managerSessionId: z.string().uuid(),
-					description: z.string().nullable().optional(),
 					lastErrorCode: z.string().nullable(),
 					pausedAt: z.coerce.date().nullable(),
 					createdBy: z.string().nullable(),
@@ -1229,10 +1241,10 @@ export const automationsRouter = {
 					id: z.string().uuid(),
 					name: z.string(),
 					status: z.string(),
+					description: z.string().nullable(),
 					systemPrompt: z.string().nullable(),
 					modelId: z.string().nullable(),
 					managerSessionId: z.string().uuid(),
-					description: z.string().nullable().optional(),
 					lastErrorCode: z.string().nullable(),
 					pausedAt: z.coerce.date().nullable(),
 					createdBy: z.string().nullable(),
@@ -1284,7 +1296,7 @@ export const automationsRouter = {
 		}),
 
 	/**
-	 * Update worker name, systemPrompt, or modelId.
+	 * Update worker fields.
 	 */
 	updateWorker: orgProcedure
 		.input(
@@ -1305,10 +1317,10 @@ export const automationsRouter = {
 					id: z.string().uuid(),
 					name: z.string(),
 					status: z.string(),
+					description: z.string().nullable(),
 					systemPrompt: z.string().nullable(),
 					modelId: z.string().nullable(),
 					managerSessionId: z.string().uuid(),
-					description: z.string().nullable().optional(),
 					lastErrorCode: z.string().nullable(),
 					pausedAt: z.coerce.date().nullable(),
 					createdBy: z.string().nullable(),
@@ -1347,6 +1359,182 @@ export const automationsRouter = {
 				throw new ORPCError("NOT_FOUND", { message: "Worker not found" });
 			}
 			return { success: true };
+		}),
+
+	// ============================================
+	// Worker Jobs (Scheduled Check-Ins)
+	// ============================================
+
+	/**
+	 * List all jobs for a worker.
+	 */
+	listWorkerJobs: orgProcedure
+		.input(z.object({ workerId: z.string().uuid() }))
+		.output(
+			z.object({
+				jobs: z.array(
+					z.object({
+						id: z.string().uuid(),
+						workerId: z.string().uuid(),
+						name: z.string(),
+						description: z.string().nullable(),
+						checkInPrompt: z.string(),
+						cronExpression: z.string(),
+						enabled: z.boolean(),
+						lastTickAt: z.coerce.date().nullable(),
+						nextTickAt: z.coerce.date().nullable(),
+						createdAt: z.coerce.date(),
+						updatedAt: z.coerce.date(),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			try {
+				const jobs = await workerJobs.listJobsForWorker(input.workerId, context.orgId);
+				return { jobs };
+			} catch (err) {
+				throwAutomationORPCError(err, "Failed to list worker jobs");
+			}
+		}),
+
+	/**
+	 * Get a single worker job by ID.
+	 */
+	getWorkerJob: orgProcedure
+		.input(z.object({ jobId: z.string().uuid() }))
+		.output(
+			z.object({
+				job: z.object({
+					id: z.string().uuid(),
+					workerId: z.string().uuid(),
+					name: z.string(),
+					description: z.string().nullable(),
+					checkInPrompt: z.string(),
+					cronExpression: z.string(),
+					enabled: z.boolean(),
+					lastTickAt: z.coerce.date().nullable(),
+					nextTickAt: z.coerce.date().nullable(),
+					createdAt: z.coerce.date(),
+					updatedAt: z.coerce.date(),
+				}),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			try {
+				const job = await workerJobs.findJobById(input.jobId, context.orgId);
+				return { job };
+			} catch (err) {
+				throwAutomationORPCError(err, "Failed to get worker job");
+			}
+		}),
+
+	/**
+	 * Create a new scheduled job for a worker.
+	 */
+	createWorkerJob: orgProcedure
+		.input(
+			z.object({
+				workerId: z.string().uuid(),
+				name: z.string().min(1).max(200),
+				checkInPrompt: z.string().min(1).max(5000),
+				cronExpression: z.string().min(1),
+				description: z.string().max(2000).optional(),
+				enabled: z.boolean().optional(),
+			}),
+		)
+		.output(
+			z.object({
+				job: z.object({
+					id: z.string().uuid(),
+					workerId: z.string().uuid(),
+					name: z.string(),
+					description: z.string().nullable(),
+					checkInPrompt: z.string(),
+					cronExpression: z.string(),
+					enabled: z.boolean(),
+					lastTickAt: z.coerce.date().nullable(),
+					nextTickAt: z.coerce.date().nullable(),
+					createdAt: z.coerce.date(),
+					updatedAt: z.coerce.date(),
+				}),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			try {
+				const job = await workerJobs.createWorkerJob({
+					workerId: input.workerId,
+					organizationId: context.orgId,
+					name: input.name,
+					checkInPrompt: input.checkInPrompt,
+					cronExpression: input.cronExpression,
+					description: input.description,
+					enabled: input.enabled,
+				});
+				return { job };
+			} catch (err) {
+				throwAutomationORPCError(err, "Failed to create worker job");
+			}
+		}),
+
+	/**
+	 * Update an existing worker job.
+	 */
+	updateWorkerJob: orgProcedure
+		.input(
+			z.object({
+				jobId: z.string().uuid(),
+				name: z.string().min(1).max(200).optional(),
+				checkInPrompt: z.string().min(1).max(5000).optional(),
+				cronExpression: z.string().min(1).optional(),
+				description: z.string().max(2000).nullable().optional(),
+				enabled: z.boolean().optional(),
+			}),
+		)
+		.output(
+			z.object({
+				job: z.object({
+					id: z.string().uuid(),
+					workerId: z.string().uuid(),
+					name: z.string(),
+					description: z.string().nullable(),
+					checkInPrompt: z.string(),
+					cronExpression: z.string(),
+					enabled: z.boolean(),
+					lastTickAt: z.coerce.date().nullable(),
+					nextTickAt: z.coerce.date().nullable(),
+					createdAt: z.coerce.date(),
+					updatedAt: z.coerce.date(),
+				}),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const { jobId, ...fields } = input;
+			try {
+				const job = await workerJobs.updateWorkerJob({
+					jobId,
+					organizationId: context.orgId,
+					fields,
+				});
+				return { job };
+			} catch (err) {
+				throwAutomationORPCError(err, "Failed to update worker job");
+			}
+		}),
+
+	/**
+	 * Delete a worker job.
+	 */
+	deleteWorkerJob: orgProcedure
+		.input(z.object({ jobId: z.string().uuid() }))
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			try {
+				await workerJobs.deleteWorkerJob(input.jobId, context.orgId);
+				return { success: true };
+			} catch (err) {
+				throwAutomationORPCError(err, "Failed to delete worker job");
+			}
 		}),
 };
 

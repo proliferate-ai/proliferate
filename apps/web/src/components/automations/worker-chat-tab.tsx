@@ -32,6 +32,18 @@ export function WorkerChatTab({ managerSessionId, workerStatus }: WorkerChatTabP
 		}
 	}, [messages]);
 
+	// Auto-wake: eager-start the manager session on mount
+	useEffect(() => {
+		if (!token || !managerSessionId) return;
+		const client = createSyncClient({
+			baseUrl: GATEWAY_URL,
+			auth: { type: "token", token },
+			source: "web",
+		});
+		// biome-ignore lint/suspicious/noEmptyBlockStatements: intentional fire-and-forget
+		client.eagerStart(managerSessionId).catch(() => {});
+	}, [token, managerSessionId]);
+
 	// WebSocket connection
 	useEffect(() => {
 		if (!token || !managerSessionId) return;

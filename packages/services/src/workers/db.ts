@@ -124,6 +124,8 @@ export async function transitionWorkerStatus(
 	fromStatuses: WorkerStatus[],
 	toStatus: WorkerStatus,
 	fields?: {
+		lastWakeAt?: Date;
+		lastCompletedRunAt?: Date;
 		lastErrorCode?: string | null;
 		pausedAt?: Date | null;
 		pausedBy?: string | null;
@@ -442,6 +444,8 @@ export async function consumeWakeEvent(
 	return row;
 }
 
+// touchWorkerLastWake removed — lastWakeAt column dropped in Coworker V2
+
 export async function insertWakeStartedEvent(
 	tx: DbTransaction,
 	workerRunId: string,
@@ -707,24 +711,6 @@ export async function listSessionsByWorker(
 		.limit(limit);
 }
 
-export async function listChildSessionsByWorkerRun(
-	workerRunId: string,
-	orgId: string,
-): Promise<SessionRow[]> {
-	const db = getDb();
-	return db
-		.select()
-		.from(sessions)
-		.where(
-			and(
-				eq(sessions.workerRunId, workerRunId),
-				eq(sessions.organizationId, orgId),
-				eq(sessions.kind, "task"),
-			),
-		)
-		.orderBy(desc(sessions.startedAt));
-}
-
 export async function listPendingDirectives(
 	managerSessionId: string,
 ): Promise<SessionMessageRow[]> {
@@ -755,8 +741,7 @@ export async function updateWorker(
 	const db = getDb();
 	const setFields: Record<string, unknown> = { updatedAt: new Date() };
 	if (fields.name !== undefined) setFields.name = fields.name;
-	if (fields.description !== undefined) setFields.description = fields.description;
-	if (fields.systemPrompt !== undefined) setFields.systemPrompt = fields.systemPrompt;
+	if (fields.objective !== undefined) setFields.objective = fields.objective;
 	if (fields.modelId !== undefined) setFields.modelId = fields.modelId;
 
 	const [row] = await db

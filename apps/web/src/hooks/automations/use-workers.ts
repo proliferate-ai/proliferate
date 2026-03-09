@@ -176,6 +176,7 @@ export function useUpdateWorker(workerId: string) {
 
 	const mutateAsync = async (fields: {
 		name?: string;
+		description?: string;
 		systemPrompt?: string;
 		modelId?: string;
 		capabilities?: CoworkerCapabilityInput[];
@@ -189,6 +190,7 @@ export function useUpdateWorker(workerId: string) {
 		mutateAsync,
 		mutate: (fields: {
 			name?: string;
+			description?: string;
 			systemPrompt?: string;
 			modelId?: string;
 			capabilities?: CoworkerCapabilityInput[];

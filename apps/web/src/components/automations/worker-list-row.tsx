@@ -4,13 +4,14 @@ import { StatusDot } from "@/components/ui/status-dot";
 import { formatRelativeTime } from "@/lib/display/utils";
 import Link from "next/link";
 
-type WorkerStatus = "active" | "automations_paused" | "degraded" | "failed" | "archived";
+type WorkerStatus = "active" | "paused" | "degraded" | "failed";
 
 interface WorkerListRowProps {
 	id: string;
 	name: string;
 	status: WorkerStatus;
-	objective: string | null;
+	description: string | null;
+	lastWakeAt: string | null;
 	activeTaskCount: number;
 	pendingApprovalCount: number;
 	updatedAt: string;
@@ -18,24 +19,24 @@ interface WorkerListRowProps {
 
 const statusDotMap: Record<WorkerStatus, "active" | "paused" | "error"> = {
 	active: "active",
-	automations_paused: "paused",
+	paused: "paused",
 	degraded: "error",
 	failed: "error",
-	archived: "paused",
 };
 
 const statusLabels: Record<WorkerStatus, string> = {
 	active: "Active",
-	automations_paused: "Paused",
+	paused: "Paused",
 	degraded: "Degraded",
 	failed: "Failed",
-	archived: "Archived",
 };
 
 export function WorkerListRow({
 	id,
 	name,
 	status,
+	description,
+	lastWakeAt,
 	activeTaskCount,
 	pendingApprovalCount,
 	updatedAt,
@@ -48,9 +49,14 @@ export function WorkerListRow({
 			{/* Status + Name */}
 			<div className="flex items-center gap-2.5 min-w-0 flex-1">
 				<StatusDot status={statusDotMap[status]} size="sm" className="shrink-0" />
-				<span className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
-					{name}
-				</span>
+				<div className="min-w-0">
+					<span className="font-medium text-foreground truncate block group-hover:text-primary transition-colors">
+						{name}
+					</span>
+					{description && (
+						<span className="text-xs text-muted-foreground truncate block">{description}</span>
+					)}
+				</div>
 			</div>
 
 			{/* Status badge */}
@@ -60,10 +66,17 @@ export function WorkerListRow({
 				</span>
 			</div>
 
+			{/* Last wake */}
+			<div className="hidden md:block w-24 shrink-0">
+				<span className="text-xs text-muted-foreground">
+					{lastWakeAt ? formatRelativeTime(lastWakeAt) : "Never"}
+				</span>
+			</div>
+
 			{/* Active tasks */}
 			<div className="hidden md:block w-16 shrink-0">
 				<span className="text-xs text-muted-foreground">
-					{activeTaskCount > 0 ? `${activeTaskCount} tasks` : "\u2014"}
+					{activeTaskCount > 0 ? `${activeTaskCount} tasks` : "—"}
 				</span>
 			</div>
 
@@ -76,7 +89,7 @@ export function WorkerListRow({
 							: "text-xs text-muted-foreground"
 					}
 				>
-					{pendingApprovalCount > 0 ? `${pendingApprovalCount} pending` : "\u2014"}
+					{pendingApprovalCount > 0 ? `${pendingApprovalCount} pending` : "—"}
 				</span>
 			</div>
 

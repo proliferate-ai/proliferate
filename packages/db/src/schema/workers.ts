@@ -7,6 +7,7 @@
 
 export {
 	wakeEvents,
+	workerJobs,
 	workerRunEvents,
 	workerRuns,
 	workerSourceBindings,
@@ -15,6 +16,7 @@ export {
 } from "./schema";
 export {
 	wakeEventsRelations,
+	workerJobsRelations,
 	workerRunEventsRelations,
 	workerRunsRelations,
 	workerSourceBindingsRelations,

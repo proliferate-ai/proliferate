@@ -187,3 +187,14 @@ export async function updateLastTick(
 	}
 	return toJobDetail(row);
 }
+
+/** Alias for tick processor compatibility. */
+export const updateJobTickTimestamps = updateLastTick;
+
+/**
+ * List all enabled jobs across all organizations.
+ * Used by the tick scheduler to sync BullMQ repeatable jobs.
+ */
+export async function listAllEnabledJobs(): Promise<WorkerJobRow[]> {
+	return workerJobsDb.listAllEnabledJobs();
+}

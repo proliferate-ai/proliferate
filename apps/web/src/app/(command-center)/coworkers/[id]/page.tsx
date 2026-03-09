@@ -65,6 +65,7 @@ export default function CoworkerDetailPage({
 					worker={worker}
 					onPause={actions.handlePause}
 					onResume={actions.handleResume}
+					onUpdateDescription={(description) => actions.handleUpdate({ description })}
 					isPausing={actions.isPausing}
 					isResuming={actions.isResuming}
 				/>

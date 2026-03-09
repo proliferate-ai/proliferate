@@ -26,6 +26,7 @@ export const QUEUE_NAMES = {
 	BILLING_PARTITION_MAINTENANCE: "billing-partition-maintenance",
 	SESSION_TITLE_GENERATION: "session-title-generation",
 	TICK: "tick",
+	WORKER_JOB_TICKS: "worker-job-ticks",
 } as const;
 
 // ============================================
@@ -123,6 +124,16 @@ export interface InboxGcJob {
  * Runs on a repeatable schedule (e.g. every 60s).
  */
 export type TickJob = Record<string, never>;
+
+/**
+ * Job to send a scheduled check-in prompt to a coworker's manager session.
+ */
+export interface WorkerJobTickPayload {
+	jobId: string;
+	workerId: string;
+	organizationId: string;
+	managerSessionId: string;
+}
 
 /**
  * Result of adding a scheduled job.
@@ -314,6 +325,22 @@ const scheduledJobOptions: JobsOptions = {
 	removeOnFail: {
 		age: 604800, // 7 days
 		count: 1000,
+	},
+};
+
+const workerJobTickJobOptions: JobsOptions = {
+	attempts: 2,
+	backoff: {
+		type: "fixed",
+		delay: 5000,
+	},
+	removeOnComplete: {
+		age: 3600, // 1 hour
+		count: 500,
+	},
+	removeOnFail: {
+		age: 86400, // 24 hours
+		count: 500,
 	},
 };
 
@@ -1134,6 +1161,35 @@ export async function queueBaseSnapshotBuild(
 ): Promise<void> {
 	const jobId = `base-snapshot:${input.provider}:${input.modalAppName}:${input.versionKey.slice(0, 16)}`;
 	await queue.add(jobId, input, { jobId });
+}
+
+// ============================================
+// Worker Job Tick Queue & Worker
+// ============================================
+
+/**
+ * Create the worker job tick queue (for V2 coworker cron check-ins)
+ */
+export function createWorkerJobTickQueue(
+	connection?: ConnectionOptions,
+): Queue<WorkerJobTickPayload> {
+	return new Queue<WorkerJobTickPayload>(QUEUE_NAMES.WORKER_JOB_TICKS, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: workerJobTickJobOptions,
+	});
+}
+
+/**
+ * Create a worker for processing worker job tick jobs
+ */
+export function createWorkerJobTickWorker(
+	processor: (job: Job<WorkerJobTickPayload>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<WorkerJobTickPayload> {
+	return new Worker<WorkerJobTickPayload>(QUEUE_NAMES.WORKER_JOB_TICKS, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 5,
+	});
 }
 
 // ============================================
