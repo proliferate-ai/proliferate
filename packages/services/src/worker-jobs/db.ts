@@ -45,12 +45,15 @@ export async function listAllEnabledJobs(): Promise<WorkerJobRow[]> {
 	return db.select().from(workerJobs).where(eq(workerJobs.enabled, true));
 }
 
-export async function listJobsForWorker(workerId: string): Promise<WorkerJobRow[]> {
+export async function listJobsForWorker(
+	workerId: string,
+	organizationId: string,
+): Promise<WorkerJobRow[]> {
 	const db = getDb();
 	return db
 		.select()
 		.from(workerJobs)
-		.where(eq(workerJobs.workerId, workerId))
+		.where(and(eq(workerJobs.workerId, workerId), eq(workerJobs.organizationId, organizationId)))
 		.orderBy(desc(workerJobs.createdAt));
 }
 

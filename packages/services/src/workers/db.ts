@@ -741,7 +741,8 @@ export async function updateWorker(
 	const db = getDb();
 	const setFields: Record<string, unknown> = { updatedAt: new Date() };
 	if (fields.name !== undefined) setFields.name = fields.name;
-	if (fields.objective !== undefined) setFields.objective = fields.objective;
+	if (fields.description !== undefined) setFields.description = fields.description;
+	if (fields.systemPrompt !== undefined) setFields.systemPrompt = fields.systemPrompt;
 	if (fields.modelId !== undefined) setFields.modelId = fields.modelId;
 
 	const [row] = await db
