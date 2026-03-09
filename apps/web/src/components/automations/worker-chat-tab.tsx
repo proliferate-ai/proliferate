@@ -131,7 +131,7 @@ export function WorkerChatTab({ managerSessionId, workerStatus }: WorkerChatTabP
 							if (idx < 0) return prev;
 							const updated = [...prev];
 							const msg = updated[idx];
-							const newContent = msg.content + tokenText;
+							const newContent = (msg.content ?? "") + tokenText;
 							// Update or append the last text part
 							const parts = [...(msg.parts || [])];
 							const lastPart = parts[parts.length - 1];

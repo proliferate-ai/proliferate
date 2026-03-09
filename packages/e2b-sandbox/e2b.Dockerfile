@@ -76,7 +76,8 @@ RUN pip install httpx uv playwright psycopg2-binary redis
 # Memory system: better-sqlite3 + sqlite-vec for durable agent memory
 # better-sqlite3: installed near the bundle so require() resolution works from sandbox-memory.cjs
 # sqlite-vec: vector search extension (.so) loaded at runtime; falls back to FTS-only if unavailable
-RUN cd /home/user/.proliferate && \
+RUN mkdir -p /home/user/.proliferate && \
+    cd /home/user/.proliferate && \
     printf '%s' '{"name":"sandbox-memory-deps","private":true}' > package.json && \
     npm install better-sqlite3@11 && \
     chown -R user:user /home/user/.proliferate

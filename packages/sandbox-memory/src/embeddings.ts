@@ -48,6 +48,7 @@ async function fetchEmbeddings(
 			input: texts,
 			dimensions: EMBEDDING_DIMENSIONS,
 		}),
+		signal: AbortSignal.timeout(30_000),
 	});
 
 	if (response.status === 429 && !retried) {
