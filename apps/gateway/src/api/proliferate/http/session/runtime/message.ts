@@ -18,6 +18,8 @@ interface MessageBody {
 	userId?: string;
 	source?: ClientSource;
 	images?: string[];
+	skipIfBusy?: boolean;
+	metadata?: { jobId?: string; jobName?: string };
 }
 
 router.post("/message", async (req, res, next) => {
@@ -90,7 +92,10 @@ router.post("/message", async (req, res, next) => {
 				"message.request.dispatching_prompt",
 			);
 
-			await req.hub!.postPrompt(body.content, userId, body.source, body.images);
+			await req.hub!.postPrompt(body.content, userId, body.source, body.images, {
+				skipIfBusy: body.skipIfBusy,
+				metadata: body.metadata,
+			});
 			const response = { ok: true };
 			if (idempotencyState) {
 				await storeIdempotencyResponse(idempotencyState.orgId, idempotencyState.key, response);

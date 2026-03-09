@@ -2016,6 +2016,38 @@ export async function listSessionEvents(sessionId: string): Promise<
 		.orderBy(asc(sessionEvents.createdAt));
 }
 
+/**
+ * List chat-specific session events for a manager session.
+ * Returns only chat_user_message, chat_agent_response, chat_job_tick, chat_system events.
+ */
+export async function listChatEvents(sessionId: string): Promise<
+	Array<{
+		id: string;
+		sessionId: string;
+		eventType: string;
+		actorUserId: string | null;
+		payloadJson: unknown;
+		createdAt: Date;
+	}>
+> {
+	const db = getDb();
+	return db
+		.select()
+		.from(sessionEvents)
+		.where(
+			and(
+				eq(sessionEvents.sessionId, sessionId),
+				inArray(sessionEvents.eventType, [
+					"chat_user_message",
+					"chat_agent_response",
+					"chat_job_tick",
+					"chat_system",
+				]),
+			),
+		)
+		.orderBy(asc(sessionEvents.createdAt));
+}
+
 // ============================================
 // K2: Session ACL
 // ============================================

@@ -1,17 +1,7 @@
 "use client";
 
 import type { WorkerSession } from "@/components/automations/worker-sessions-tab";
-import type {
-	ChildSession,
-	PendingDirective,
-	WorkerRunWithEvents,
-} from "@/hooks/automations/types";
-import {
-	usePendingDirectives,
-	useWorker,
-	useWorkerRuns,
-	useWorkerSessions,
-} from "@/hooks/automations/use-workers";
+import { useWorker, useWorkerSessions } from "@/hooks/automations/use-workers";
 import { useMemo } from "react";
 
 export function useWorkerDetail(id: string) {
@@ -19,40 +9,9 @@ export function useWorkerDetail(id: string) {
 
 	const isWorkerActive = worker?.status === "active";
 
-	const { data: runs = [], isLoading: isLoadingRuns } = useWorkerRuns(id, {
-		limit: 10,
-		pollingEnabled: isWorkerActive,
-	});
 	const { data: rawSessions = [], isLoading: isLoadingSessions } = useWorkerSessions(id, {
 		pollingEnabled: isWorkerActive,
 	});
-	const { data: rawDirectives = [] } = usePendingDirectives(id);
-
-	const mappedRuns: WorkerRunWithEvents[] = useMemo(
-		() =>
-			runs.map((run) => ({
-				id: run.id,
-				workerId: run.workerId,
-				status: run.status,
-				summary: run.summary,
-				wakeEventId: run.wakeEventId,
-				createdAt: run.createdAt.toISOString(),
-				startedAt: run.startedAt?.toISOString() ?? null,
-				completedAt: run.completedAt?.toISOString() ?? null,
-				events: run.events.map((e) => ({
-					id: e.id,
-					eventIndex: e.eventIndex,
-					eventType: e.eventType,
-					summaryText: e.summaryText,
-					payloadJson: e.payloadJson,
-					sessionId: e.sessionId,
-					actionInvocationId: e.actionInvocationId,
-					createdAt: e.createdAt.toISOString(),
-				})),
-				childSessions: [] as ChildSession[],
-			})),
-		[runs],
-	);
 
 	const mappedSessions: WorkerSession[] = useMemo(
 		() =>
@@ -69,35 +28,11 @@ export function useWorkerDetail(id: string) {
 		[rawSessions],
 	);
 
-	const mappedDirectives: PendingDirective[] = useMemo(
-		() =>
-			rawDirectives.map((d) => ({
-				id: d.id,
-				messageType: d.messageType,
-				payloadJson: d.payloadJson,
-				queuedAt: d.queuedAt.toISOString(),
-				senderUserId: d.senderUserId,
-			})),
-		[rawDirectives],
-	);
-
-	const activeTaskCount = useMemo(
-		() =>
-			rawSessions.filter(
-				(s) => s.status !== "completed" && s.status !== "failed" && s.status !== "cancelled",
-			).length,
-		[rawSessions],
-	);
-
 	return {
 		worker,
 		isLoading,
 		error,
-		runs: mappedRuns,
 		sessions: mappedSessions,
-		directives: mappedDirectives,
-		activeTaskCount,
-		isLoadingRuns,
 		isLoadingSessions,
 	};
 }

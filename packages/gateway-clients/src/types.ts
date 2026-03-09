@@ -53,6 +53,10 @@ export interface PostMessageOptions {
 	source?: ClientSource;
 	/** Optional idempotency key for safe retries */
 	idempotencyKey?: string;
+	/** If true, silently drop the prompt when a run is already active */
+	skipIfBusy?: boolean;
+	/** Optional metadata for job-originated prompts */
+	metadata?: { jobId?: string; jobName?: string };
 }
 
 /**

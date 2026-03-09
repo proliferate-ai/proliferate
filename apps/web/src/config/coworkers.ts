@@ -36,20 +36,22 @@ export const ACTION_TOOLS = [
 	{ key: "create_linear_issue" as const, label: "Linear", Icon: LinearIcon },
 ];
 
-export type WorkerStatus = "active" | "paused" | "degraded" | "failed";
+export type WorkerStatus = "active" | "automations_paused" | "degraded" | "failed" | "archived";
 
 export const WORKER_STATUS_DOT_MAP: Record<WorkerStatus, "active" | "paused" | "error"> = {
 	active: "active",
-	paused: "paused",
+	automations_paused: "paused",
 	degraded: "error",
 	failed: "error",
+	archived: "paused",
 };
 
 export const WORKER_STATUS_LABELS: Record<WorkerStatus, string> = {
 	active: "Active",
-	paused: "Paused",
+	automations_paused: "Paused",
 	degraded: "Degraded",
 	failed: "Failed",
+	archived: "Archived",
 };
 
 // Deterministic color palette derived from name hash

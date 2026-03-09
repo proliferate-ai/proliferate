@@ -2,14 +2,21 @@
  * V1 worker and wake contracts.
  */
 
-export const WORKER_STATUSES = ["active", "paused", "degraded", "failed"] as const;
+export const WORKER_STATUSES = [
+	"active",
+	"automations_paused",
+	"degraded",
+	"failed",
+	"archived",
+] as const;
 export type WorkerStatus = (typeof WORKER_STATUSES)[number];
 
 const WORKER_TRANSITIONS: Record<WorkerStatus, readonly WorkerStatus[]> = {
-	active: ["paused", "degraded", "failed"],
-	paused: ["active", "failed"],
-	degraded: ["active", "failed"],
-	failed: ["active"],
+	active: ["automations_paused", "degraded", "failed", "archived"],
+	automations_paused: ["active", "failed", "archived"],
+	degraded: ["active", "failed", "archived"],
+	failed: ["active", "archived"],
+	archived: [],
 };
 
 export function isValidWorkerTransition(from: WorkerStatus, to: WorkerStatus): boolean {

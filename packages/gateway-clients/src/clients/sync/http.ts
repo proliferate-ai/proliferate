@@ -92,6 +92,8 @@ export async function postMessage(
 			userId: options.userId,
 			images: options.images,
 			source: options.source ?? source,
+			skipIfBusy: options.skipIfBusy,
+			metadata: options.metadata,
 		},
 		{ headers },
 	);

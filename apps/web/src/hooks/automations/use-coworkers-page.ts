@@ -57,7 +57,7 @@ export function useCoworkersPage() {
 		() => ({
 			all: workersList.length,
 			active: workersList.filter((w) => w.status === "active").length,
-			paused: workersList.filter((w) => w.status === "paused").length,
+			paused: workersList.filter((w) => w.status === "automations_paused").length,
 		}),
 		[workersList],
 	);
@@ -77,7 +77,8 @@ export function useCoworkersPage() {
 	const filteredWorkers = useMemo(() => {
 		let result = workersList;
 		if (activeTab === "active") result = result.filter((w) => w.status === "active");
-		else if (activeTab === "paused") result = result.filter((w) => w.status === "paused");
+		else if (activeTab === "paused")
+			result = result.filter((w) => w.status === "automations_paused");
 		if (searchQuery.trim()) {
 			const q = searchQuery.toLowerCase().trim();
 			result = result.filter((w) => w.name.toLowerCase().includes(q));
@@ -117,7 +118,7 @@ export function useCoworkersPage() {
 		try {
 			const result = await createWorker.mutateAsync({
 				...(createName.trim() ? { name: createName.trim() } : {}),
-				...(createObjective.trim() ? { objective: createObjective.trim() } : {}),
+				...(createObjective.trim() ? { systemPrompt: createObjective.trim() } : {}),
 				...(createCapabilities.length > 0 ? { capabilities: createCapabilities } : {}),
 			});
 			setCreateDialogOpen(false);

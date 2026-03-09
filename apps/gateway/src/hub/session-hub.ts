@@ -56,7 +56,6 @@ import {
 	cancelReconnect as cancelReconnectState,
 	scheduleReconnect as scheduleReconnectState,
 } from "./session/reconnect/reconnect-controller";
-import type { RuntimeFacade } from "./session/runtime/contracts/runtime-facade";
 import { EventProcessor } from "./session/runtime/event-processor";
 import {
 	type ManagerControlTarget,
@@ -109,7 +108,7 @@ export class SessionHub {
 
 	// SSE and event processing
 	private readonly eventProcessor: EventProcessor;
-	private readonly runtime: RuntimeFacade;
+	private readonly runtime: SessionRuntime;
 
 	private lifecycleStartTime = 0;
 
@@ -403,26 +402,11 @@ export class SessionHub {
 	/**
 	 * Eager start: boot the sandbox and send the initial prompt without a WebSocket client.
 	 * Called by the eager-start HTTP endpoint to start sessions in the background.
-	 *
-	 * For manager sessions that are already running, this triggers a new wake cycle
-	 * so the manager picks up newly queued wake events (e.g. from tick engine).
 	 */
 	async eagerStart(): Promise<void> {
 		this.log("Eager start requested");
-		if (this.runtime.isReady() && this.runtime.getContext().session.kind === "manager") {
-			this.log("Manager runtime already ready — triggering new wake cycle");
-			this.eventProcessor.resetForNewPrompt(true);
-			await this.runtime.triggerManagerWakeCycle();
-			this.log("Manager wake cycle triggered");
-			return;
-		}
 		await this.ensureRuntimeReady();
-		if (this.runtime.getContext().session.kind === "manager") {
-			this.log("Manager runtime first boot — triggering initial wake cycle");
-			this.eventProcessor.resetForNewPrompt(true);
-			await this.runtime.triggerManagerWakeCycle();
-			this.log("Manager initial wake cycle triggered");
-		} else {
+		if (this.runtime.getContext().session.kind !== "manager") {
 			await this.maybeSendInitialPrompt();
 		}
 		this.log("Eager start complete");
@@ -661,12 +645,18 @@ export class SessionHub {
 		userId: string,
 		source?: ClientSource,
 		images?: string[],
+		options?: { skipIfBusy?: boolean; metadata?: { jobId?: string; jobName?: string } },
 	): Promise<void> {
 		if (this.isCompletedAutomationSession()) {
 			throw new Error("Cannot send messages to a completed automation session.");
 		}
 		const normalizedImages = this.normalizeImages(images);
-		await this.handlePrompt(content, userId, { images: normalizedImages, source });
+		await this.handlePrompt(content, userId, {
+			images: normalizedImages,
+			source,
+			skipIfBusy: options?.skipIfBusy,
+			metadata: options?.metadata,
+		});
 	}
 
 	/**
@@ -1127,6 +1117,21 @@ export class SessionHub {
 				resetEventProcessorForNewPrompt: () => this.eventProcessor.resetForNewPrompt(true),
 				sendPromptToRuntime: (promptContent, images) =>
 					this.runtime.sendPrompt(userId, promptContent, images),
+				persistChatEvent: (eventType, payloadJson) => {
+					void sessions
+						.recordSessionEvent({
+							sessionId: this.sessionId,
+							eventType,
+							payloadJson,
+							actorUserId: userId,
+						})
+						.catch((err) => {
+							this.logger.warn(
+								{ err, sessionId: this.sessionId, eventType },
+								"Failed to persist chat event",
+							);
+						});
+				},
 			},
 			content,
 			userId,
@@ -1706,6 +1711,14 @@ export class SessionHub {
 				eventType = "runtime_error";
 				payloadJson = message.payload;
 				break;
+			case "message": {
+				if (this.runtime.getContext().session.kind !== "manager") return;
+				const msg = message.payload as Message;
+				if (msg.role !== "assistant") return;
+				eventType = "chat_agent_response";
+				payloadJson = { content: msg.content, messageId: msg.id };
+				break;
+			}
 			default:
 				return;
 		}
@@ -1839,6 +1852,9 @@ export class SessionHub {
 			getDurableRuntimeFacts: async () => {
 				const events = await sessions.getSessionEvents(this.sessionId);
 				return events.filter((event) => event.eventType.startsWith("runtime_"));
+			},
+			getChatHistory: async () => {
+				return sessions.listChatEvents(this.sessionId);
 			},
 			log: (message, data) => this.log(message, data),
 			logError: (message, error) => this.logError(message, error),

@@ -1,5 +1,4 @@
 import type { Logger } from "@proliferate/logger";
-import { workers } from "@proliferate/services";
 import { getServiceJwt } from "../auth";
 import type { ManagerToolContext } from "../types";
 
@@ -50,19 +49,6 @@ export async function handleInvokeAction(
 				action,
 				params,
 			});
-			const eventType =
-				result.status === 202
-					? "action_pending_approval"
-					: result.status >= 200 && result.status < 300
-						? "action_completed"
-						: "action_failed";
-			await workers.appendWorkerRunEvent({
-				workerRunId: ctx.workerRunId,
-				workerId: ctx.workerId,
-				eventType,
-				summaryText: `${integration}:${action}`,
-				payloadJson: { integration, action, status: result.status },
-			});
 			log.info({ integration, action, status: result.status }, "Action invocation result");
 			return JSON.stringify(result.body);
 		}
@@ -81,30 +67,9 @@ export async function handleInvokeAction(
 		);
 
 		const data = await res.json();
-		const eventType =
-			res.status === 202
-				? "action_pending_approval"
-				: res.ok
-					? "action_completed"
-					: "action_failed";
-		await workers.appendWorkerRunEvent({
-			workerRunId: ctx.workerRunId,
-			workerId: ctx.workerId,
-			eventType,
-			summaryText: `${integration}:${action}`,
-			payloadJson: { integration, action, status: res.status },
-		});
-
 		log.info({ integration, action, status: res.status }, "Action invocation result");
 		return JSON.stringify(data);
 	} catch (err) {
-		await workers.appendWorkerRunEvent({
-			workerRunId: ctx.workerRunId,
-			workerId: ctx.workerId,
-			eventType: "action_failed",
-			summaryText: `${integration}:${action} - request error`,
-			payloadJson: { integration, action, error: String(err) },
-		});
 		return JSON.stringify({ error: `Action invocation failed: ${String(err)}` });
 	}
 }

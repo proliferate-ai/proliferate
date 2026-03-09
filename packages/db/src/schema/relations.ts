@@ -51,6 +51,7 @@ import {
 	userSshKeys,
 	wakeEvents,
 	webhookInbox,
+	workerJobs,
 	workerRunEvents,
 	workerRuns,
 	workerSourceBindings,
@@ -619,6 +620,7 @@ export const workersRelations = relations(workers, ({ one, many }) => ({
 	}),
 	wakeEvents: many(wakeEvents),
 	runs: many(workerRuns),
+	jobs: many(workerJobs),
 	sourceBindings: many(workerSourceBindings),
 }));
 
@@ -801,5 +803,16 @@ export const workerSourceCursorsRelations = relations(workerSourceCursors, ({ on
 	binding: one(workerSourceBindings, {
 		fields: [workerSourceCursors.bindingId],
 		references: [workerSourceBindings.id],
+	}),
+}));
+
+export const workerJobsRelations = relations(workerJobs, ({ one }) => ({
+	worker: one(workers, {
+		fields: [workerJobs.workerId],
+		references: [workers.id],
+	}),
+	organization: one(organization, {
+		fields: [workerJobs.organizationId],
+		references: [organization.id],
 	}),
 }));

@@ -30,14 +30,14 @@ interface WorkerSettingsTabProps {
 	worker: {
 		id: string;
 		name: string;
-		objective: string | null;
+		systemPrompt: string | null;
 		status: string;
 		modelId: string | null;
 		capabilities?: WorkerCapabilityDraft[];
 	};
 	onUpdate: (fields: {
 		name?: string;
-		objective?: string;
+		systemPrompt?: string;
 		modelId?: string;
 		capabilities?: WorkerCapabilityDraft[];
 	}) => void;
@@ -55,7 +55,7 @@ export function WorkerSettingsTab({
 	onDelete,
 	isUpdating,
 }: WorkerSettingsTabProps) {
-	const [objectiveValue, setObjectiveValue] = useState(worker.objective || "");
+	const [objectiveValue, setObjectiveValue] = useState(worker.systemPrompt || "");
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [hasPendingChanges, setHasPendingChanges] = useState(false);
 	const { data: integrationsData } = useIntegrations();
@@ -81,7 +81,7 @@ export function WorkerSettingsTab({
 	}, [worker.capabilities]);
 
 	const debouncedSaveObjective = useDebouncedCallback((value: string) => {
-		onUpdate({ objective: value || undefined });
+		onUpdate({ systemPrompt: value || undefined });
 		setHasPendingChanges(false);
 	}, 1000);
 
@@ -173,7 +173,7 @@ export function WorkerSettingsTab({
 				<div className="rounded-lg border border-border">
 					<div className="flex items-center justify-between px-4 py-2.5">
 						<span className="text-sm text-muted-foreground">
-							{worker.status === "paused" ? "Coworker is paused" : "Coworker is active"}
+							{worker.status === "automations_paused" ? "Coworker is paused" : "Coworker is active"}
 						</span>
 						<div className="flex items-center gap-2">
 							<Switch

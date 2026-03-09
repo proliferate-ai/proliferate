@@ -69,7 +69,6 @@ interface WorkerActivityTabProps {
 	worker: {
 		status: string;
 		managerSessionId: string;
-		lastWakeAt: string | null;
 		lastErrorCode: string | null;
 	};
 	runs: WorkerRunWithEvents[];
@@ -207,7 +206,6 @@ export function WorkerActivityTab({
 					</>
 				)}
 				<span>·</span>
-				<span>Last wake {worker.lastWakeAt ? formatRelativeTime(worker.lastWakeAt) : "never"}</span>
 				{worker.lastErrorCode && (
 					<>
 						<span>·</span>

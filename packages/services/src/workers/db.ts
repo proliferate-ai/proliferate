@@ -89,7 +89,8 @@ export async function listWorkersByOrg(orgId: string): Promise<WorkerRow[]> {
 export interface CreateWorkerInput {
 	organizationId: string;
 	name: string;
-	objective?: string;
+	description?: string;
+	systemPrompt?: string;
 	managerSessionId: string;
 	modelId?: string;
 	computeProfile?: string;
@@ -106,7 +107,8 @@ export async function createWorker(
 		.values({
 			organizationId: input.organizationId,
 			name: input.name,
-			objective: input.objective ?? null,
+			description: input.description ?? null,
+			systemPrompt: input.systemPrompt ?? null,
 			managerSessionId: input.managerSessionId,
 			modelId: input.modelId ?? null,
 			computeProfile: input.computeProfile ?? null,
@@ -122,8 +124,6 @@ export async function transitionWorkerStatus(
 	fromStatuses: WorkerStatus[],
 	toStatus: WorkerStatus,
 	fields?: {
-		lastWakeAt?: Date;
-		lastCompletedRunAt?: Date;
 		lastErrorCode?: string | null;
 		pausedAt?: Date | null;
 		pausedBy?: string | null;
@@ -442,20 +442,6 @@ export async function consumeWakeEvent(
 	return row;
 }
 
-export async function touchWorkerLastWake(
-	tx: DbTransaction,
-	workerId: string,
-	organizationId: string,
-): Promise<void> {
-	await tx
-		.update(workers)
-		.set({
-			lastWakeAt: new Date(),
-			updatedAt: new Date(),
-		})
-		.where(and(eq(workers.id, workerId), eq(workers.organizationId, organizationId)));
-}
-
 export async function insertWakeStartedEvent(
 	tx: DbTransaction,
 	workerRunId: string,
@@ -759,12 +745,13 @@ export async function listPendingDirectives(
 export async function updateWorker(
 	id: string,
 	orgId: string,
-	fields: { name?: string; objective?: string; modelId?: string },
+	fields: { name?: string; description?: string; systemPrompt?: string; modelId?: string },
 ): Promise<WorkerRow | undefined> {
 	const db = getDb();
 	const setFields: Record<string, unknown> = { updatedAt: new Date() };
 	if (fields.name !== undefined) setFields.name = fields.name;
-	if (fields.objective !== undefined) setFields.objective = fields.objective;
+	if (fields.description !== undefined) setFields.description = fields.description;
+	if (fields.systemPrompt !== undefined) setFields.systemPrompt = fields.systemPrompt;
 	if (fields.modelId !== undefined) setFields.modelId = fields.modelId;
 
 	const [row] = await db

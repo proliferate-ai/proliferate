@@ -39,6 +39,7 @@ function createDeps(overrides: Partial<InitWorkflowDeps> = {}): InitWorkflowDeps
 			] satisfies Message[],
 		buildCompletedAutomationFallbackMessages: () => [],
 		getDurableRuntimeFacts: async () => [],
+		getChatHistory: async () => [],
 		log: vi.fn(),
 		logError: vi.fn(),
 		reconnectGeneration: 1,

@@ -7,7 +7,8 @@ import { logger } from "./lib/logger.js";
 import { scheduleEnabledPollGroups, startPollGroupWorker } from "./polling/worker.js";
 import { scheduleEnabledScheduledTriggers, startScheduledWorker } from "./scheduled/worker.js";
 import { createServer } from "./server.js";
-import { scheduleTickJob, startTickWorker } from "./tick/worker.js";
+// V1 tick engine disabled for Coworker V2 — will be deleted in cleanup PR
+// import { scheduleTickJob, startTickWorker } from "./tick/worker.js";
 import { startWebhookInboxWorker } from "./webhook-inbox/worker.js";
 
 setServicesLogger(logger);
@@ -28,7 +29,7 @@ const server = createServer();
 // Start workers
 const pollGroupWorker = startPollGroupWorker();
 const scheduledWorker = startScheduledWorker();
-const tickWorker = startTickWorker();
+// const tickWorker = startTickWorker();
 
 // Start async workers (returns promises)
 const workerCleanups: Array<() => Promise<void>> = [];
@@ -46,8 +47,8 @@ async function startAsyncWorkers() {
 	// Schedule all enabled cron triggers at startup
 	await scheduleEnabledScheduledTriggers();
 
-	// Schedule V1 tick engine
-	await scheduleTickJob();
+	// Schedule V1 tick engine (disabled)
+	// await scheduleTickJob();
 }
 
 startAsyncWorkers()
@@ -64,7 +65,7 @@ startAsyncWorkers()
 async function gracefulShutdown() {
 	await pollGroupWorker.close();
 	await scheduledWorker.close();
-	await tickWorker.close();
+	// await tickWorker.close();
 	for (const cleanup of workerCleanups) {
 		await cleanup();
 	}

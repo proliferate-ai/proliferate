@@ -159,8 +159,7 @@ export default function CoworkersPage() {
 										id={worker.id}
 										name={worker.name}
 										status={worker.status as WorkerStatus}
-										objective={worker.objective}
-										lastWakeAt={worker.lastWakeAt?.toISOString() ?? null}
+										objective={worker.systemPrompt}
 										activeTaskCount={worker.activeTaskCount}
 										pendingApprovalCount={worker.pendingApprovalCount}
 									/>

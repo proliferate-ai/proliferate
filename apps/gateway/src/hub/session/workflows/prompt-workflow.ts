@@ -26,6 +26,7 @@ export interface PromptWorkflowDeps {
 	getSessionClientType: () => string | null;
 	resetEventProcessorForNewPrompt: () => void;
 	sendPromptToRuntime: (content: string, images?: PromptOptions["images"]) => Promise<void>;
+	persistChatEvent: (eventType: string, payloadJson: unknown) => void;
 }
 
 export async function runPromptWorkflow(
@@ -38,7 +39,14 @@ export async function runPromptWorkflow(
 		throw new Error("Cannot send messages to a completed automation session.");
 	}
 	if (deps.isRunActive()) {
-		throw new Error("A run is already active for this session.");
+		if (options?.skipIfBusy) {
+			deps.log("Job tick skipped (busy)");
+			return;
+		}
+		// For manager sessions, ACP handles message ordering — don't block
+		if (!deps.isManagerSession()) {
+			throw new Error("A run is already active for this session.");
+		}
 	}
 
 	const migrationState = deps.getMigrationState();
@@ -92,6 +100,14 @@ export async function runPromptWorkflow(
 	deps.broadcast({ type: "message", payload: userMessage });
 	deps.recordUserPromptTelemetry();
 	deps.log("User message broadcast", { messageId: userMessage.id });
+
+	if (deps.isManagerSession()) {
+		const eventType = options?.metadata?.jobId ? "chat_job_tick" : "chat_user_message";
+		const payload = options?.metadata?.jobId
+			? { content, jobId: options.metadata.jobId, jobName: options.metadata.jobName, userId }
+			: { content, userId, source: options?.source };
+		deps.persistChatEvent(eventType, payload);
+	}
 
 	if (deps.getSessionClientType()) {
 		const event: SessionEventMessage = {

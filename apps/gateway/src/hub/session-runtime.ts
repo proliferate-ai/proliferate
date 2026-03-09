@@ -1,8 +1,12 @@
 /**
  * Session Runtime
  *
- * Owns sandbox lifecycle, OpenCode session lifecycle, and SSE connection.
+ * Owns sandbox lifecycle, agent session lifecycle, and SSE connection.
  * Provides a single ensureRuntimeReady() entry point for hot path callers.
+ *
+ * Both coding (OpenCode) and manager (Pi) sessions flow through the same
+ * SandboxAgentV2CodingHarnessAdapter — the only difference is the agent name
+ * passed during ACP session creation.
  */
 
 import { type Logger, createLogger } from "@proliferate/logger";
@@ -15,6 +19,7 @@ import type {
 	SandboxProviderType,
 } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
+import { SandboxAgentV2CodingHarnessAdapter } from "../harness/coding/sandbox-agent-v2/adapter";
 import type {
 	CodingHarnessEventStreamHandle,
 	CodingHarnessPromptImage,
@@ -33,15 +38,18 @@ import {
 	type SessionRuntimeContext,
 	toLegacySessionContext,
 } from "./session/runtime/context/context-types";
-import type { RuntimeDriver } from "./session/runtime/contracts/runtime-driver";
-import type { RuntimeFacade } from "./session/runtime/contracts/runtime-facade";
-import { CodingRuntimeDriver } from "./session/runtime/drivers/coding-runtime-driver";
-import { selectRuntimeDriver } from "./session/runtime/drivers/driver-selector";
-import { ManagerRuntimeDriver } from "./session/runtime/drivers/manager-runtime-driver";
-import { ManagerRuntimeService } from "./session/runtime/manager/manager-runtime-service";
-import { type SessionContext, loadSessionContext } from "./session/runtime/session-context-store";
+import { connectCodingEventStream } from "./session/runtime/event-stream";
+import type { SessionContext } from "./session/runtime/session-context-store";
+import { loadSessionContext } from "./session/runtime/session-context-store";
+import {
+	type SessionRuntimeSpec,
+	resolveRuntimeSpec,
+} from "./session/runtime/session-runtime-spec";
 import { clearRuntimePointers } from "./session/runtime/state/state-reconciler";
-import { persistRuntimeReady } from "./session/runtime/write-authority/runtime-writers";
+import {
+	persistCodingSessionId,
+	persistRuntimeReady,
+} from "./session/runtime/write-authority/runtime-writers";
 import type {
 	BroadcastServerMessageCallback,
 	DisconnectCallback,
@@ -72,22 +80,24 @@ export interface SessionRuntimeOptions {
 	managerControlFacade?: ManagerControlFacade;
 }
 
-export class SessionRuntime implements RuntimeFacade {
+export class SessionRuntime {
 	private readonly env: GatewayEnv;
 	private readonly sessionId: string;
 	private runtimeContext: SessionRuntimeContext;
 	private readonly logger: Logger;
 
-	private readonly managerRuntimeService: ManagerRuntimeService;
-	private readonly codingDriver: CodingRuntimeDriver;
-	private readonly managerDriver: ManagerRuntimeDriver;
-	private runtimeDriver: RuntimeDriver;
+	private adapter: SandboxAgentV2CodingHarnessAdapter;
+	private spec: SessionRuntimeSpec;
 	private readonly onEvent: SessionRuntimeOptions["onEvent"];
 	private readonly onStatus: SessionRuntimeOptions["onStatus"];
 	private readonly onBroadcast?: SessionRuntimeOptions["onBroadcast"];
 	private readonly onDisconnect: SessionRuntimeOptions["onDisconnect"];
 
 	private provider: SandboxProvider | null = null;
+	private runtimeBaseUrl: string | null = null;
+	private openCodeSessionId: string | null = null;
+	private runtimeBindingId: string | null = null;
+	private serviceCommands: ConfigurationServiceCommand[] | undefined;
 	private eventStreamHandle: CodingHarnessEventStreamHandle | null = null;
 	private lifecycleStartTime = 0;
 
@@ -105,13 +115,8 @@ export class SessionRuntime implements RuntimeFacade {
 		this.onStatus = options.onStatus;
 		this.onBroadcast = options.onBroadcast;
 		this.onDisconnect = options.onDisconnect;
-		this.managerRuntimeService = new ManagerRuntimeService();
-		this.codingDriver = new CodingRuntimeDriver();
-		this.managerDriver = new ManagerRuntimeDriver(this.managerRuntimeService);
-		this.runtimeDriver = selectRuntimeDriver(this.runtimeContext.config, {
-			coding: this.codingDriver,
-			manager: this.managerDriver,
-		});
+		this.spec = resolveRuntimeSpec(this.runtimeContext.config.kind);
+		this.adapter = new SandboxAgentV2CodingHarnessAdapter(this.spec.agentName);
 	}
 
 	private logLatency(event: string, data?: Record<string, unknown>): void {
@@ -172,19 +177,40 @@ export class SessionRuntime implements RuntimeFacade {
 	}
 
 	async sendPrompt(
-		userId: string,
+		_userId: string,
 		content: string,
 		images?: CodingHarnessPromptImage[],
 	): Promise<void> {
-		await this.runtimeDriver.sendPrompt(userId, content, images);
+		if (!this.runtimeBaseUrl || !this.openCodeSessionId) {
+			throw new Error("Agent session unavailable");
+		}
+		await this.adapter.sendPrompt({
+			baseUrl: this.runtimeBaseUrl,
+			sessionId: this.openCodeSessionId,
+			content,
+			images,
+		});
 	}
 
 	async interruptCurrentRun(): Promise<void> {
-		await this.runtimeDriver.interrupt();
+		if (!this.runtimeBaseUrl || !this.openCodeSessionId) {
+			return;
+		}
+		await this.adapter.interrupt({
+			baseUrl: this.runtimeBaseUrl,
+			sessionId: this.openCodeSessionId,
+		});
 	}
 
 	async collectOutputs(): Promise<Message[]> {
-		return this.runtimeDriver.collectOutputs();
+		if (!this.runtimeBaseUrl || !this.openCodeSessionId) {
+			return [];
+		}
+		const result = await this.adapter.collectOutputs({
+			baseUrl: this.runtimeBaseUrl,
+			sessionId: this.openCodeSessionId,
+		});
+		return result.messages;
 	}
 
 	getPreviewUrl(): string | null {
@@ -196,10 +222,8 @@ export class SessionRuntime implements RuntimeFacade {
 	}
 
 	isReady(): boolean {
-		return this.runtimeDriver.isReady({
-			config: this.runtimeContext.config,
-			live: this.runtimeContext.live,
-		});
+		const { live } = this.runtimeContext;
+		return Boolean(live.previewUrl && live.eventStreamConnected && this.openCodeSessionId);
 	}
 
 	isConnecting(): boolean {
@@ -240,14 +264,25 @@ export class SessionRuntime implements RuntimeFacade {
 		runId: string,
 		overrideCommands?: ConfigurationServiceCommand[],
 	): Promise<AutoStartOutputEntry[]> {
-		return this.runtimeDriver.testAutoStartCommands(runId, overrideCommands);
-	}
-
-	async triggerManagerWakeCycle(): Promise<void> {
-		if (!this.isManagerSessionKind()) {
-			return;
+		// Manager sessions do not run service commands
+		if (this.isManagerSessionKind()) {
+			return [];
 		}
-		await this.managerDriver.wake();
+		if (!this.provider) {
+			throw new Error("Runtime not ready");
+		}
+		const sandboxId = this.runtimeContext.live.session.sandbox_id;
+		const commands = overrideCommands !== undefined ? overrideCommands : this.serviceCommands;
+		if (!this.provider.testServiceCommands || !sandboxId) {
+			throw new Error("Runtime not ready");
+		}
+		if (!commands?.length) {
+			return [];
+		}
+		return this.provider.testServiceCommands(sandboxId, commands, {
+			timeoutMs: 10_000,
+			runId,
+		});
 	}
 
 	// ============================================
@@ -255,7 +290,7 @@ export class SessionRuntime implements RuntimeFacade {
 	// ============================================
 
 	/**
-	 * Ensure sandbox, OpenCode session, and SSE are ready.
+	 * Ensure sandbox, agent session, and SSE are ready.
 	 * Single entry point for the hot path.
 	 */
 	async ensureRuntimeReady(options?: EnsureRuntimeOptions): Promise<void> {
@@ -296,12 +331,20 @@ export class SessionRuntime implements RuntimeFacade {
 	}
 
 	disconnectSse(): void {
-		this.runtimeDriver.disconnectStream();
+		this.eventStreamHandle?.disconnect();
 		this.eventStreamHandle = null;
+		if (this.runtimeContext.live) {
+			this.runtimeContext.live.eventStreamConnected = false;
+		}
 	}
 
 	resetSandboxState(): void {
-		this.runtimeDriver.resetState();
+		this.disconnectSse();
+		this.runtimeBaseUrl = null;
+		this.openCodeSessionId = null;
+		this.runtimeBindingId = null;
+		this.provider = null;
+		this.serviceCommands = undefined;
 		this.eventStreamHandle = null;
 		clearRuntimePointers(this.runtimeContext.live);
 	}
@@ -325,10 +368,11 @@ export class SessionRuntime implements RuntimeFacade {
 			this.log("Loading session context...");
 			this.runtimeContext = await loadSessionRuntimeContext(this.env, this.sessionId);
 			const { config, live } = this.runtimeContext;
-			this.runtimeDriver = selectRuntimeDriver(config, {
-				coding: this.codingDriver,
-				manager: this.managerDriver,
-			});
+
+			// Resolve spec and recreate adapter with correct agent name
+			this.spec = resolveRuntimeSpec(config.kind);
+			this.adapter = new SandboxAgentV2CodingHarnessAdapter(this.spec.agentName);
+
 			this.logLatency("runtime.ensure_ready.load_context", {
 				durationMs: Date.now() - contextStartMs,
 				configurationId: live.session.configuration_id,
@@ -350,6 +394,7 @@ export class SessionRuntime implements RuntimeFacade {
 			this.log("Selected harness family", {
 				harnessFamily,
 				sessionKind: config.kind ?? "unknown",
+				agentName: this.spec.agentName,
 			});
 
 			// Abort auto-reconnect when session has transitioned to a terminal/non-running state
@@ -479,30 +524,110 @@ export class SessionRuntime implements RuntimeFacade {
 			if (live.previewUrl && this.onBroadcast) {
 				this.onBroadcast({ type: "preview_url", payload: { url: live.previewUrl } });
 			}
-			await this.runtimeDriver.activate({
-				sessionId: this.sessionId,
+
+			// ------------------------------------------------------------------
+			// Activate: ensure ACP session + connect SSE
+			// ------------------------------------------------------------------
+			this.runtimeBaseUrl = live.previewUrl;
+			this.serviceCommands = config.serviceCommands;
+			if (!this.runtimeBaseUrl) {
+				throw new Error("Missing sandbox runtime endpoint");
+			}
+
+			const ensureAcpStartMs = Date.now();
+			const resumed = await this.adapter.resume({
+				baseUrl: this.runtimeBaseUrl,
+				sessionId: live.openCodeSessionId ?? live.session.coding_agent_session_id,
+			});
+			this.openCodeSessionId = resumed.sessionId;
+			this.logLatency("runtime.ensure_ready.acp_session.ensure", {
+				durationMs: Date.now() - ensureAcpStartMs,
+				mode: resumed.mode,
+				agentName: this.spec.agentName,
+			});
+
+			// Persist ACP session ID for coding sessions (manager sessions don't track it)
+			if (!this.isManagerSessionKind()) {
+				await persistCodingSessionId({
+					sessionId: this.sessionId,
+					live,
+					codingSessionId: resumed.sessionId,
+				});
+			}
+
+			this.runtimeBindingId = this.openCodeSessionId;
+			this.runtimeContext.live.runtimeBindingId = this.runtimeBindingId;
+
+			// Connect SSE streams (ACP agent events + platform events)
+			this.eventStreamHandle?.disconnect();
+			const sseAuthToken = deriveSandboxMcpToken(this.env.serviceToken, this.sessionId);
+			const sseConnectStartMs = Date.now();
+			this.eventStreamHandle = await connectCodingEventStream({
+				codingHarness: this.adapter,
+				runtimeBaseUrl: this.runtimeBaseUrl,
+				authToken: sseAuthToken,
+				afterSeq: live.lastRuntimeSourceSeq ?? undefined,
+				bindingId: this.runtimeBindingId,
 				env: this.env,
 				logger: this.logger,
-				provider,
-				config,
-				live,
-				options,
-				log: (message, data) => this.log(message, data),
-				logError: (message, error) => this.logError(message, error),
-				logLatency: (event, data) => this.logLatency(event, data),
-				onRuntimeEvent: (event) => this.onEvent(event),
 				onDisconnect: (reason) => this.handleSseDisconnect(reason),
-				setEventStreamHandle: (handle) => {
-					this.eventStreamHandle = handle;
+				onEvent: (event) => {
+					if (typeof event.sourceSeq === "number") {
+						live.lastRuntimeSourceSeq = event.sourceSeq;
+					}
+					this.onEvent(event);
 				},
-				setRuntimeBindingId: (bindingId) => {
-					this.runtimeContext.live.runtimeBindingId = bindingId;
+				onDaemonEnvelope: (envelope) => {
+					if (!this.onBroadcast) return;
+					// Forward non-agent platform events to clients
+					if (envelope.stream !== "agent_event") {
+						this.onBroadcast({
+							type: "daemon_stream",
+							payload: envelope,
+						} as import("@proliferate/shared").ServerMessage);
+					}
+					// Port events
+					if (envelope.stream === "port_opened" || envelope.stream === "port_closed") {
+						const payload = envelope.payload as { port?: unknown; host?: unknown };
+						if (typeof payload.port === "number") {
+							this.onBroadcast({
+								type: "port_event",
+								payload: {
+									action: envelope.stream === "port_opened" ? "opened" : "closed",
+									port: payload.port,
+									host: typeof payload.host === "string" ? payload.host : undefined,
+								},
+							} as import("@proliferate/shared").ServerMessage);
+						}
+					}
+					// FS change events
+					if (envelope.stream === "fs_change") {
+						const payload = envelope.payload as {
+							action?: unknown;
+							path?: unknown;
+							size?: unknown;
+						};
+						if (typeof payload.action === "string" && typeof payload.path === "string") {
+							this.onBroadcast({
+								type: "fs_change",
+								payload: {
+									action: payload.action as "write" | "delete" | "rename" | "create",
+									path: payload.path,
+									size: typeof payload.size === "number" ? payload.size : undefined,
+								},
+							} as import("@proliferate/shared").ServerMessage);
+						}
+					}
 				},
-				onBroadcast: this.onBroadcast,
+				onLog: (message, data) => this.log(message, data),
+			});
+			live.eventStreamConnected = true;
+			this.logLatency("runtime.ensure_ready.sse.connect", {
+				durationMs: Date.now() - sseConnectStartMs,
 			});
 
 			this.onStatus("running");
-			this.log("Runtime lifecycle complete - runtime driver active", { harnessFamily });
+			this.log("Runtime lifecycle complete", { harnessFamily, agentName: this.spec.agentName });
 			this.logLatency("runtime.ensure_ready.complete");
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : "Unknown error";
@@ -522,7 +647,7 @@ export class SessionRuntime implements RuntimeFacade {
 		this.eventStreamHandle = null;
 		this.log("SSE disconnected", { reason });
 		this.logLatency("runtime.sse.disconnect", { reason });
-		this.log("SSE disconnected; preserving OpenCode session identity for reconnect", {
+		this.log("SSE disconnected; preserving agent session identity for reconnect", {
 			reason,
 			openCodeUrl: this.runtimeContext.live.openCodeUrl,
 			openCodeSessionId: this.runtimeContext.live.openCodeSessionId,
