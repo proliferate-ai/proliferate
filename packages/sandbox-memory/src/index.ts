@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { embedBatch, embedQuery } from "./embeddings.js";
 import { hybridSearch } from "./search.js";
 import { Store } from "./store.js";
@@ -60,6 +60,11 @@ export class MemoryManager {
 	/** Read a memory file */
 	async get(path: string, from?: number, lines?: number): Promise<{ path: string; text: string }> {
 		const fullPath = join(this.memoryDir, path);
+		const resolved = resolve(fullPath);
+		const base = resolve(this.memoryDir);
+		if (!resolved.startsWith(base + sep) && resolved !== base) {
+			throw new Error("Access denied: path is outside memory directory");
+		}
 		const content = await readFile(fullPath, "utf-8");
 
 		if (from !== undefined || lines !== undefined) {

@@ -138,7 +138,8 @@ export function WorkerChatTab({ managerSessionId, workerStatus }: WorkerChatTabP
 							if (lastPart?.type === "text") {
 								parts[parts.length - 1] = { type: "text", text: newContent };
 							} else {
-								parts.push({ type: "text", text: newContent });
+								// After a tool part, start a new text segment with only the new token
+								parts.push({ type: "text", text: tokenText });
 							}
 							updated[idx] = { ...msg, content: newContent, parts };
 							return updated;
