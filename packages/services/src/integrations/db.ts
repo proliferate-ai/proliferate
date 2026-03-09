@@ -40,7 +40,8 @@ export type OrganizationRow = Pick<InferSelectModel<typeof organization>, "id" |
 
 /**
  * Backward-compatible integration projection for environments that may not
- * have applied OAuth credential column migrations yet.
+ * have applied OAuth credential column migrations yet. Includes OAuth token
+ * columns required for action invocation token resolution.
  */
 const integrationCompatColumns = {
 	id: true,
@@ -56,6 +57,11 @@ const integrationCompatColumns = {
 	createdAt: true,
 	updatedAt: true,
 	githubInstallationId: true,
+	encryptedAccessToken: true,
+	encryptedRefreshToken: true,
+	tokenExpiresAt: true,
+	tokenType: true,
+	connectionMetadata: true,
 } as const;
 
 const integrationCompatReturning = {
@@ -72,6 +78,11 @@ const integrationCompatReturning = {
 	createdAt: integrations.createdAt,
 	updatedAt: integrations.updatedAt,
 	githubInstallationId: integrations.githubInstallationId,
+	encryptedAccessToken: integrations.encryptedAccessToken,
+	encryptedRefreshToken: integrations.encryptedRefreshToken,
+	tokenExpiresAt: integrations.tokenExpiresAt,
+	tokenType: integrations.tokenType,
+	connectionMetadata: integrations.connectionMetadata,
 } as const;
 
 /** Integration with creator info. */

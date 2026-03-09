@@ -1,5 +1,6 @@
 "use client";
 
+import { ConnectorIcon } from "@/components/integrations/connector-icon";
 import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -15,6 +16,7 @@ import type {
 	AvailableSessionIntegration,
 } from "@/hooks/actions/use-actions";
 import { cn } from "@/lib/display/utils";
+import { CONNECTOR_PRESETS } from "@proliferate/shared";
 import { ChevronDown, ChevronRight, Loader2, Plug } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
@@ -67,16 +69,24 @@ function capabilityKey(integration: string, actionName: string): string {
 	return `${integration}.${actionName}`;
 }
 
+const KNOWN_PROVIDERS: Record<string, Provider> = {
+	github: "github",
+	linear: "linear",
+	sentry: "sentry",
+	slack: "slack",
+	jira: "jira",
+	posthog: "posthog",
+	gmail: "gmail",
+};
+
 function providerFromIntegration(integration: string): Provider | undefined {
-	const known: Record<string, Provider> = {
-		github: "github",
-		linear: "linear",
-		sentry: "sentry",
-		slack: "slack",
-		jira: "jira",
-		posthog: "posthog",
-	};
-	return known[integration];
+	return KNOWN_PROVIDERS[integration];
+}
+
+function connectorPresetKey(displayName: string): string {
+	const lower = displayName.toLowerCase();
+	const match = CONNECTOR_PRESETS.find((p) => p.name.toLowerCase() === lower);
+	return match?.key ?? "custom";
 }
 
 // --------------------------------------------------------------------------
@@ -203,7 +213,8 @@ export function WorkerActionSelector({
 			{availableIntegrations.map((integration) => {
 				const isExpanded = expandedIntegrations.has(integration.integration);
 				const enabled = isIntegrationEnabled(integration);
-				const provider = providerFromIntegration(integration.integration);
+				const isConnector = integration.integration.startsWith("connector:");
+				const provider = isConnector ? undefined : providerFromIntegration(integration.integration);
 				const enabledCount = integration.actions.filter((a) => {
 					const key = capabilityKey(integration.integration, a.name);
 					return capabilityMap.get(key) !== "deny";
@@ -224,8 +235,16 @@ export function WorkerActionSelector({
 								) : (
 									<ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
 								)}
-								{provider && (
+								{isConnector ? (
+									<ConnectorIcon
+										presetKey={connectorPresetKey(integration.displayName || "")}
+										size="sm"
+										className="shrink-0"
+									/>
+								) : provider ? (
 									<ProviderIcon provider={provider} size="sm" className="h-4 w-4 shrink-0" />
+								) : (
+									<Plug className="h-4 w-4 text-muted-foreground shrink-0" />
 								)}
 								<span className="text-sm font-medium text-foreground truncate">
 									{integration.displayName || integration.integration}
