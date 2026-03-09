@@ -1,0 +1,166 @@
+name: Nightly Release
+
+on:
+  schedule:
+    # Every day at 06:00 UTC
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.check.outputs.has_changes }}
+      nightly_tag: ${{ steps.check.outputs.nightly_tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for new commits since last nightly
+        id: check
+        run: |
+          set -euo pipefail
+
+          NIGHTLY_TAG="nightly-$(date -u +%Y-%m-%d)"
+          echo "nightly_tag=${NIGHTLY_TAG}" >> "$GITHUB_OUTPUT"
+
+          # Always build on manual dispatch
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Find the most recent nightly tag
+          LAST_NIGHTLY=$(git tag --list 'nightly-*' --sort=-version:refname | head -n1)
+
+          if [[ -z "$LAST_NIGHTLY" ]]; then
+            echo "No previous nightly tag found; building."
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            COMMITS_SINCE=$(git rev-list "${LAST_NIGHTLY}..HEAD" --count)
+            if [[ "$COMMITS_SINCE" -gt 0 ]]; then
+              echo "${COMMITS_SINCE} new commits since ${LAST_NIGHTLY}; building."
+              echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "No new commits since ${LAST_NIGHTLY}; skipping."
+              echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+  build-and-push:
+    needs: check-changes
+    if: needs.check-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    strategy:
+      matrix:
+        include:
+          - name: web
+            dockerfile: apps/web/Dockerfile
+            context: .
+          - name: gateway
+            dockerfile: apps/gateway/Dockerfile
+            context: .
+          - name: worker
+            dockerfile: apps/worker/Dockerfile
+            context: .
+          - name: llm-proxy
+            dockerfile: apps/llm-proxy/Dockerfile
+            context: ./apps/llm-proxy
+          - name: trigger-service
+            dockerfile: apps/trigger-service/Dockerfile
+            context: .
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}:nightly
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}:${{ needs.check-changes.outputs.nightly_tag }}
+          cache-from: type=gha,scope=nightly-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=nightly-${{ matrix.name }}
+
+  create-release:
+    needs: [check-changes, build-and-push]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create nightly tag
+        env:
+          NIGHTLY_TAG: ${{ needs.check-changes.outputs.nightly_tag }}
+        run: |
+          set -euo pipefail
+
+          # Delete existing tag for today if re-running
+          git tag -d "$NIGHTLY_TAG" 2>/dev/null || true
+          git push origin ":refs/tags/$NIGHTLY_TAG" 2>/dev/null || true
+
+          git tag "$NIGHTLY_TAG"
+          git push origin "$NIGHTLY_TAG"
+
+      - name: Generate changelog
+        id: changelog
+        env:
+          NIGHTLY_TAG: ${{ needs.check-changes.outputs.nightly_tag }}
+        run: |
+          set -euo pipefail
+
+          # Find the previous nightly or stable tag
+          PREV_TAG=$(git tag --list --sort=-version:refname | grep -v "$NIGHTLY_TAG" | head -n1)
+
+          if [[ -n "$PREV_TAG" ]]; then
+            CHANGELOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)" --no-merges)
+          else
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges -20)
+          fi
+
+          # Write to file to avoid escaping issues
+          echo "$CHANGELOG" > /tmp/changelog.md
+
+      - name: Create GitHub pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NIGHTLY_TAG: ${{ needs.check-changes.outputs.nightly_tag }}
+        run: |
+          set -euo pipefail
+
+          # Delete existing release for today if re-running
+          gh release delete "$NIGHTLY_TAG" --yes 2>/dev/null || true
+
+          gh release create "$NIGHTLY_TAG" \
+            --title "$NIGHTLY_TAG" \
+            --notes-file /tmp/changelog.md \
+            --prerelease
