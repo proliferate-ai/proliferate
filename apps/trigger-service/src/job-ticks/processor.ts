@@ -71,7 +71,7 @@ export async function processJobTick(job: Job<WorkerJobTickPayload>): Promise<vo
 			content: workerJob.checkInPrompt,
 			userId: SYSTEM_JOB_TICK_USER_ID,
 			skipIfBusy: true,
-			idempotencyKey: `worker-job-tick:${jobId}`,
+			idempotencyKey: `worker-job-tick:${jobId}:${job.id}`,
 		});
 	} catch (err) {
 		log.error({ err }, "Failed to send job tick prompt");
