@@ -91,6 +91,14 @@ export async function setupAdditionalDependencies(
 			sandboxAgentEnvs.PROLIFERATE_GATEWAY_AUTH_TOKEN = opts.envVars.SANDBOX_MCP_AUTH_TOKEN;
 		}
 		sandboxAgentEnvs.PROLIFERATE_MANAGER_SESSION_ID = opts.sessionId;
+		// Memory system env vars
+		sandboxAgentEnvs.MANAGER_MEMORY_DIR = "/home/user/memory";
+		sandboxAgentEnvs.MANAGER_MEMORY_ENABLED = "true";
+		// OPENAI_API_KEY for memory embeddings (text-embedding-3-small)
+		// This is separate from ANTHROPIC_API_KEY — LLM proxy key is for Claude, not OpenAI
+		if (opts.envVars.OPENAI_API_KEY) {
+			sandboxAgentEnvs.OPENAI_API_KEY = opts.envVars.OPENAI_API_KEY;
+		}
 	}
 	sandbox.commands
 		.run(

@@ -1,6 +1,11 @@
 import type { Logger } from "@proliferate/logger";
 import type { Sandbox } from "e2b";
 import { getDefaultAgentConfig, toOpencodeModelId } from "../../../agents";
+import {
+	INITIAL_MEMORY_TEMPLATE,
+	MEMORY_SYSTEM_PROMPT_SECTION,
+	PI_MEMORY_EXTENSION,
+} from "../../../manager/memory-extension";
 import { PI_MANAGER_EXTENSION } from "../../../manager/pi-manager-extension";
 import {
 	AUTOMATION_COMPLETE_DESCRIPTION,
@@ -113,12 +118,36 @@ export async function setupEssentialDependencies(
 		);
 	}
 
-	// For manager sessions, write the Pi extension that registers manager tools.
+	// For manager sessions, write Pi extensions and initialize memory system.
 	// pi-acp auto-discovers extensions from ~/.pi/agent/extensions/
 	const isManagerSession = opts.sessionKind === "manager";
 	if (isManagerSession) {
+		// Manager tools extension (spawn_child, list_repos, invoke_action, etc.)
 		writePromises.push(
 			writeFile("/home/user/.pi/agent/extensions/manager-tools-extension.ts", PI_MANAGER_EXTENSION),
+		);
+		// Memory system extension (memory_search, memory_get)
+		writePromises.push(
+			writeFile("/home/user/.pi/agent/extensions/memory-system-extension.ts", PI_MEMORY_EXTENSION),
+		);
+		// Initialize memory directory and seed MEMORY.md (first boot only — on resume the file already exists)
+		writePromises.push(
+			(async () => {
+				await sandbox.commands.run("mkdir -p /home/user/memory", { timeoutMs: 10000 });
+				const exists = await sandbox.commands.run("test -f /home/user/memory/MEMORY.md", {
+					timeoutMs: 5000,
+				});
+				if (exists.exitCode !== 0) {
+					await sandbox.files.write("/home/user/memory/MEMORY.md", INITIAL_MEMORY_TEMPLATE);
+				}
+			})(),
+		);
+		// Write system prompt with memory guidance appended
+		writePromises.push(
+			writeFile(
+				"/home/user/.proliferate/system-prompt.md",
+				`${opts.systemPrompt || ""}\n\n${MEMORY_SYSTEM_PROMPT_SECTION}`,
+			),
 		);
 	}
 
