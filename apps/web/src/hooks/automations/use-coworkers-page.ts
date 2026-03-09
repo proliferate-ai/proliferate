@@ -1,7 +1,7 @@
 "use client";
 
 import type { TemplateEntry } from "@/components/automations/template-picker-dialog";
-import type { WorkerCapabilityDraft } from "@/components/automations/worker-capability-editor";
+import type { WorkerCapabilityDraft } from "@/components/automations/worker-action-selector";
 import type { CoworkerListTab } from "@/config/coworkers";
 import { useAutomations, useCreateAutomation } from "@/hooks/automations/use-automations";
 import { useCreateWorker, useWorkers } from "@/hooks/automations/use-workers";

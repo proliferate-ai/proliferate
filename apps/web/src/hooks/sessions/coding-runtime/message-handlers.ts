@@ -78,8 +78,16 @@ export function handleInit(payload: any, ctx: MessageHandlerContext) {
 	});
 
 	ctx.streamingTextRef.current = {};
+	// Deduplicate by message ID — reconnects or chat history can produce duplicates
+	const seen = new Set<string>();
+	const uniqueMessages = (payload.messages as any[]).filter((m: any) => {
+		if (!m.id) return true;
+		if (seen.has(m.id)) return false;
+		seen.add(m.id);
+		return true;
+	});
 	ctx.setMessages(
-		payload.messages.map((m: any) => {
+		uniqueMessages.map((m: any) => {
 			if (m.parts && m.parts.length > 0) {
 				const parts = convertServerParts(m.parts as ServerPart[]);
 				return { ...m, parts };

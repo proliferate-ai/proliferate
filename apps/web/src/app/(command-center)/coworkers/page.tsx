@@ -2,7 +2,6 @@
 
 import { AutomationListRow } from "@/components/automations/automation-list-row";
 import { TemplatePickerDialog } from "@/components/automations/template-picker-dialog";
-import { WorkerCapabilityEditor } from "@/components/automations/worker-capability-editor";
 import { WorkerCard } from "@/components/automations/worker-card";
 import {
 	AutomationIllustration,
@@ -40,10 +39,8 @@ export default function CoworkersPage() {
 		setCreateDialogOpen,
 		createName,
 		setCreateName,
-		createSystemPrompt,
-		setCreateSystemPrompt,
-		createCapabilities,
-		setCreateCapabilities,
+		createObjective,
+		setCreateObjective,
 		createError,
 		openBlankCreateDialog,
 		handleBlankCreate,
@@ -236,23 +233,15 @@ export default function CoworkersPage() {
 								Objective
 							</p>
 							<Textarea
-								value={createSystemPrompt}
-								onChange={(event) => setCreateSystemPrompt(event.target.value)}
+								value={createObjective}
+								onChange={(event) => setCreateObjective(event.target.value)}
 								placeholder="Describe what this coworker should own."
 								className="min-h-[100px]"
 							/>
 						</div>
-						<div className="flex flex-col gap-1.5">
-							<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-								Capabilities
-							</p>
-							<WorkerCapabilityEditor
-								value={createCapabilities}
-								onChange={setCreateCapabilities}
-								disabled={isPending}
-								connectedProviders={Array.from(connectedProviders)}
-							/>
-						</div>
+						<p className="text-xs text-muted-foreground">
+							You can configure actions and integrations in settings after creation.
+						</p>
 						{createError && <p className="text-sm text-destructive">{createError}</p>}
 						<div className="flex items-center justify-end gap-2">
 							<Button

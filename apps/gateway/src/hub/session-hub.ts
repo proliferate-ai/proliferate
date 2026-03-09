@@ -157,6 +157,8 @@ export class SessionHub {
 
 	// In-memory message history (accumulates from broadcast events for collectOutputs fallback)
 	private readonly messageHistory: Message[] = [];
+	// Tracks which agent message IDs have already been persisted as chat events (dedup SSE replays)
+	private readonly persistedChatMessageIds = new Set<string>();
 
 	constructor(deps: HubDependencies) {
 		this.env = deps.env;
@@ -1712,17 +1714,40 @@ export class SessionHub {
 				payloadJson = message.payload;
 				break;
 			case "message": {
+				// Skip — for manager sessions, agent content is persisted on message_complete
+				// because the initial message event has empty content (streamed via tokens).
+				break;
+			}
+			case "message_complete": {
 				if (this.runtime.getContext().session.kind !== "manager") return;
-				const msg = message.payload as Message;
-				if (msg.role !== "assistant") return;
-				if (!msg.isComplete) return;
+				const completePayload = message.payload as { messageId?: string };
+				if (!completePayload?.messageId) return;
+				// Deduplicate — SSE reconnects can replay message_complete
+				if (this.persistedChatMessageIds.has(completePayload.messageId)) return;
+				// Look up the accumulated message to get the full content
+				const accumulated = this.messageHistory.find(
+					(m) => m.id === completePayload.messageId && m.role === "assistant",
+				);
+				if (!accumulated) return;
+				// Build content from parts (streaming text was flushed into parts by now)
+				const textContent =
+					accumulated.content ||
+					(accumulated.parts
+						?.filter((p: { type: string }) => p.type === "text")
+						.map((p: { type: string; text?: string }) => p.text ?? "")
+						.join("") ??
+						"");
+				if (!textContent) return;
+				this.persistedChatMessageIds.add(completePayload.messageId);
 				eventType = "chat_agent_response";
-				payloadJson = { content: msg.content, messageId: msg.id };
+				payloadJson = { content: textContent, messageId: accumulated.id };
 				break;
 			}
 			default:
 				return;
 		}
+
+		if (!eventType) return;
 
 		void sessions
 			.recordSessionEvent({
