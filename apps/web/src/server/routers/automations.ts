@@ -7,7 +7,16 @@
 import { GATEWAY_INTERNAL_URL, GATEWAY_URL } from "@/lib/infra/gateway";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
-import { automations, orgs, runs, schedules, workerJobs, workers } from "@proliferate/services";
+import { getProviderActions } from "@proliferate/providers/providers/registry";
+import {
+	automations,
+	integrations,
+	orgs,
+	runs,
+	schedules,
+	workerJobs,
+	workers,
+} from "@proliferate/services";
 import {
 	AutomationConnectionSchema,
 	AutomationEventDetailSchema,
@@ -780,6 +789,54 @@ export const automationsRouter = {
 				context.orgId,
 			);
 			return { integrations: integrationActions };
+		}),
+
+	/**
+	 * Returns available provider actions for the org's connected integrations.
+	 * Used in the create coworker dialog (no session required).
+	 */
+	getOrgAvailableActions: orgProcedure
+		.output(
+			z.object({
+				integrations: z.array(
+					z.object({
+						integrationId: z.string(),
+						integration: z.string(),
+						displayName: z.string(),
+						actions: z.array(
+							z.object({
+								name: z.string(),
+								description: z.string(),
+								riskLevel: z.enum(["read", "write", "danger"]),
+							}),
+						),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ context }) => {
+			const activeIntegrations = await integrations.listActiveIntegrationsForOrganization(
+				context.orgId,
+			);
+
+			const result = activeIntegrations.flatMap((entry) => {
+				const module = getProviderActions(entry.integrationId);
+				if (!module) return [];
+				return [
+					{
+						integrationId: entry.id,
+						integration: entry.integrationId,
+						displayName: entry.displayName ?? entry.integrationId,
+						actions: module.actions.map((a) => ({
+							name: a.id,
+							description: a.description,
+							riskLevel: a.riskLevel,
+						})),
+					},
+				];
+			});
+
+			return { integrations: result };
 		}),
 
 	// ============================================

@@ -102,6 +102,17 @@ export function useSessionAvailableActions(sessionId: string, token: string | nu
 }
 
 // ============================================
+// Org-Level Available Actions (oRPC, for create dialog)
+// ============================================
+
+export function useOrgAvailableActions() {
+	return useQuery({
+		...orpc.automations.getOrgAvailableActions.queryOptions({ input: {} }),
+		staleTime: 60_000,
+	});
+}
+
+// ============================================
 // Approve/Deny via Gateway HTTP
 // ============================================
 

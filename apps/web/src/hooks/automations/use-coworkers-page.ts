@@ -3,6 +3,7 @@
 import type { TemplateEntry } from "@/components/automations/template-picker-dialog";
 import type { WorkerCapabilityDraft } from "@/components/automations/worker-action-selector";
 import type { CoworkerListTab } from "@/config/coworkers";
+import { useOrgAvailableActions } from "@/hooks/actions/use-actions";
 import { useAutomations, useCreateAutomation } from "@/hooks/automations/use-automations";
 import { useCreateWorker, useWorkers } from "@/hooks/automations/use-workers";
 import { useIntegrations, useSlackInstallations } from "@/hooks/integrations/use-integrations";
@@ -22,6 +23,7 @@ export function useCoworkersPage() {
 
 	const { data: integrationsData } = useIntegrations();
 	const { data: slackInstallations } = useSlackInstallations();
+	const { data: orgAvailableActions, isLoading: isLoadingActions } = useOrgAvailableActions();
 
 	const connectedProviders = useMemo(() => {
 		const providers = new Set<string>();
@@ -200,6 +202,8 @@ export function useCoworkersPage() {
 		createCapabilities,
 		setCreateCapabilities,
 		createError,
+		orgAvailableActions: orgAvailableActions?.integrations ?? [],
+		isLoadingActions,
 
 		// Handlers
 		openBlankCreateDialog,
