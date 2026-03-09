@@ -73,6 +73,12 @@ RUN npm install -g @mariozechner/pi-coding-agent@latest pi-acp@latest
 # Install Python tools
 RUN pip install httpx uv playwright psycopg2-binary redis
 
+# Memory system: better-sqlite3 + sqlite-vec for durable agent memory
+# better-sqlite3: native Node.js SQLite binding for sandbox-memory.cjs
+# sqlite-vec: vector search extension (.so) loaded at runtime; falls back to FTS-only if unavailable
+RUN npm install -g better-sqlite3@11
+RUN pip install sqlite-vec
+
 # Create startup script for services
 RUN echo '#!/bin/bash\n\
 echo "[start-services] Starting Docker daemon..."\n\
@@ -101,6 +107,12 @@ RUN mkdir -p /home/user/.opencode-tools && \
 # Create metadata directory for session/repo tracking across pause/resume
 RUN mkdir -p /home/user/.proliferate && \
     chown -R user:user /home/user/.proliferate
+
+# Copy sandbox-memory bundle for agent memory system
+# Built via: pnpm --filter @proliferate/sandbox-memory build
+# Must be built before running `e2b template build`
+COPY packages/sandbox-memory/dist/sandbox-memory.cjs /home/user/.proliferate/sandbox-memory.cjs
+RUN chown user:user /home/user/.proliferate/sandbox-memory.cjs
 
 # Configure SSH for terminal sessions (used by CLI)
 RUN mkdir -p /home/user/.ssh && \

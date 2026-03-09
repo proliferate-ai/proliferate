@@ -6,7 +6,11 @@ export interface SessionRuntimeSpec {
 
 export function resolveRuntimeSpec(kind: string | null): SessionRuntimeSpec {
 	if (kind === "manager") {
-		return { agentName: "pi", extensions: ["manager-tools-extension"], memoryEnabled: false };
+		return {
+			agentName: "pi",
+			extensions: ["manager-tools-extension", "memory-system-extension"],
+			memoryEnabled: true,
+		};
 	}
 	return { agentName: "opencode", extensions: [], memoryEnabled: false };
 }
