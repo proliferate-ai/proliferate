@@ -1,12 +1,12 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { Logger } from "@proliferate/logger";
 import type { Sandbox } from "e2b";
 import { getDefaultAgentConfig, toOpencodeModelId } from "../../../agents";
 import {
 	INITIAL_MEMORY_TEMPLATE,
 	MEMORY_SYSTEM_PROMPT_SECTION,
-	PI_MEMORY_EXTENSION,
-} from "../../../manager/memory-extension";
-import { PI_MANAGER_EXTENSION } from "../../../manager/pi-manager-extension";
+} from "../../../manager/memory-constants";
 import {
 	AUTOMATION_COMPLETE_DESCRIPTION,
 	AUTOMATION_COMPLETE_TOOL,
@@ -29,6 +29,40 @@ import {
 	getOpencodeConfig,
 } from "../../../sandbox";
 import type { CreateSandboxOpts } from "../../types";
+
+const ACTIONS_CLI_PROMPT_SECTION = `
+## External Actions (Integrations)
+
+Use the \`proliferate\` CLI to interact with connected integrations (Linear, Sentry, GitHub, Slack, etc.):
+
+- \`proliferate actions list\` — see available integrations and actions
+- \`proliferate actions guide --integration <name>\` — detailed usage guide for a specific integration
+- \`proliferate actions run --integration <name> --action <action> --params '<json>'\` — invoke an action
+
+Actions may require approval depending on their risk level.
+`.trim();
+
+/**
+ * Resolve a local bundle file by trying multiple candidate paths relative to cwd.
+ * Returns the file content or null if not found.
+ */
+function resolveLocalBundle(relativePath: string): string | null {
+	const cwd = process.cwd();
+	const candidates = [
+		resolve(cwd, `packages/${relativePath}`),
+		resolve(cwd, `../../packages/${relativePath}`),
+		resolve(cwd, `../packages/${relativePath}`),
+		resolve(cwd, `../../../packages/${relativePath}`),
+	];
+	for (const candidate of candidates) {
+		try {
+			return readFileSync(candidate, "utf-8");
+		} catch {
+			// Try next candidate
+		}
+	}
+	return null;
+}
 
 /**
  * Performs blocking sandbox bootstrap required before the session can accept prompts:
@@ -122,14 +156,27 @@ export async function setupEssentialDependencies(
 	// pi-acp auto-discovers extensions from ~/.pi/agent/extensions/
 	const isManagerSession = opts.sessionKind === "manager";
 	if (isManagerSession) {
-		// Manager tools extension (spawn_child, list_repos, invoke_action, etc.)
-		writePromises.push(
-			writeFile("/home/user/.pi/agent/extensions/manager-tools-extension.ts", PI_MANAGER_EXTENSION),
-		);
-		// Memory system extension (memory_search, memory_get)
-		writePromises.push(
-			writeFile("/home/user/.pi/agent/extensions/memory-system-extension.ts", PI_MEMORY_EXTENSION),
-		);
+		// Manager tools extension (spawn_child, list_repos, etc.) — bundled .mjs
+		const managerToolsBundle = resolveLocalBundle("pi-extensions/dist/manager-tools.mjs");
+		if (managerToolsBundle) {
+			writePromises.push(
+				writeFile(
+					"/home/user/.pi/agent/extensions/manager-tools-extension.mjs",
+					managerToolsBundle,
+				),
+			);
+		} else {
+			log.warn("pi-extensions manager-tools bundle not found, manager tools will be unavailable");
+		}
+		// Memory system extension (memory_search, memory_get) — bundled .mjs
+		const memoryToolsBundle = resolveLocalBundle("pi-extensions/dist/memory-tools.mjs");
+		if (memoryToolsBundle) {
+			writePromises.push(
+				writeFile("/home/user/.pi/agent/extensions/memory-system-extension.mjs", memoryToolsBundle),
+			);
+		} else {
+			log.warn("pi-extensions memory-tools bundle not found, memory tools will be unavailable");
+		}
 		// Write sandbox-memory bundle if not already in the template
 		// In prod, the Dockerfile COPYs it; in dev, we write it from the local build
 		writePromises.push(
@@ -139,40 +186,21 @@ export async function setupEssentialDependencies(
 					{ timeoutMs: 5000 },
 				);
 				if (bundleCheck.stdout.trim() === "missing") {
-					try {
-						const { readFileSync } = await import("node:fs");
-						const { resolve } = await import("node:path");
-						// Try multiple possible locations for the bundle
-						// cwd varies: monorepo root (scripts), apps/gateway/ (turbo dev), etc.
-						const cwd = process.cwd();
-						const candidates = [
-							resolve(cwd, "packages/sandbox-memory/dist/sandbox-memory.cjs"),
-							resolve(cwd, "../../packages/sandbox-memory/dist/sandbox-memory.cjs"),
-							resolve(cwd, "../packages/sandbox-memory/dist/sandbox-memory.cjs"),
-							resolve(cwd, "../../../packages/sandbox-memory/dist/sandbox-memory.cjs"),
-						];
-						let bundleContent: string | null = null;
-						for (const candidate of candidates) {
-							try {
-								bundleContent = readFileSync(candidate, "utf-8");
-								break;
-							} catch {
-								// Try next candidate
-							}
-						}
-						if (bundleContent) {
+					const bundleContent = resolveLocalBundle("sandbox-memory/dist/sandbox-memory.cjs");
+					if (bundleContent) {
+						try {
 							await sandbox.files.write(
 								"/home/user/.proliferate/sandbox-memory.cjs",
 								bundleContent,
 							);
 							log.debug("Wrote sandbox-memory.cjs bundle to sandbox");
-						} else {
-							log.debug(
-								"sandbox-memory.cjs bundle not found locally, memory tools will be unavailable",
-							);
+						} catch (err) {
+							log.debug({ err }, "Failed to write sandbox-memory.cjs bundle");
 						}
-					} catch (err) {
-						log.debug({ err }, "Failed to write sandbox-memory.cjs bundle");
+					} else {
+						log.debug(
+							"sandbox-memory.cjs bundle not found locally, memory tools will be unavailable",
+						);
 					}
 				}
 			})(),
@@ -215,11 +243,11 @@ export async function setupEssentialDependencies(
 				}
 			})(),
 		);
-		// Write system prompt with memory guidance appended
+		// Write system prompt with memory guidance and actions CLI instructions
 		writePromises.push(
 			writeFile(
 				"/home/user/.proliferate/system-prompt.md",
-				`${basePrompt}\n\n${MEMORY_SYSTEM_PROMPT_SECTION}`,
+				`${basePrompt}\n\n${MEMORY_SYSTEM_PROMPT_SECTION}\n\n${ACTIONS_CLI_PROMPT_SECTION}`,
 			),
 		);
 	}

@@ -1,5 +1,4 @@
 import type { Logger } from "@proliferate/logger";
-import { handleInvokeAction, handleListCapabilities } from "./handlers/actions";
 import {
 	handleCancelChild,
 	handleInspectChild,
@@ -32,10 +31,6 @@ export async function executeManagerTool(
 			return handleWakeChild(args, ctx, log);
 		case "list_repos":
 			return handleListRepos(ctx, log);
-		case "list_capabilities":
-			return handleListCapabilities(ctx, log);
-		case "invoke_action":
-			return handleInvokeAction(args, ctx, log);
 		default:
 			return JSON.stringify({ error: `Unknown tool: ${name}` });
 	}

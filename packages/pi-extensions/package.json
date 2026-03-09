@@ -1,0 +1,19 @@
+{
+	"name": "@proliferate/pi-extensions",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"main": "src/manager-tools.ts",
+	"exports": {
+		"./dist/manager-tools.mjs": "./dist/manager-tools.mjs",
+		"./dist/memory-tools.mjs": "./dist/memory-tools.mjs"
+	},
+	"scripts": {
+		"bundle": "esbuild src/manager-tools.ts src/memory-tools.ts --bundle --platform=node --target=node20 --outdir=dist --out-extension:.js=.mjs --format=esm --external:@mariozechner/pi-coding-agent",
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"esbuild": "^0.24.0",
+		"typescript": "^5.7.0"
+	}
+}

@@ -39,8 +39,8 @@ export default function CoworkersPage() {
 		setCreateDialogOpen,
 		createName,
 		setCreateName,
-		createObjective,
-		setCreateObjective,
+		createSystemPrompt,
+		setCreateSystemPrompt,
 		createError,
 		openBlankCreateDialog,
 		handleBlankCreate,
@@ -233,8 +233,8 @@ export default function CoworkersPage() {
 								Objective
 							</p>
 							<Textarea
-								value={createObjective}
-								onChange={(event) => setCreateObjective(event.target.value)}
+								value={createSystemPrompt}
+								onChange={(event) => setCreateSystemPrompt(event.target.value)}
 								placeholder="Describe what this coworker should own."
 								className="min-h-[100px]"
 							/>

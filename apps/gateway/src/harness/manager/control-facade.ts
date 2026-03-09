@@ -10,11 +10,4 @@ export interface ManagerControlFacade {
 		images?: string[];
 	}): Promise<void>;
 	cancelSession(sessionId: string): Promise<void>;
-	listCapabilities?(sessionId: string): Promise<Record<string, unknown>>;
-	invokeAction?(input: {
-		sessionId: string;
-		integration: string;
-		action: string;
-		params: Record<string, unknown>;
-	}): Promise<{ status: number; body: Record<string, unknown> }>;
 }
