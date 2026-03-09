@@ -103,7 +103,25 @@ export async function buildInitMessages(
 	if (deps.isManagerSession()) {
 		const chatEvents = await deps.getChatHistory();
 		if (chatEvents.length > 0) {
-			transformed = chatEvents.map((event) => {
+			// Deduplicate by messageId (SSE reconnects can cause duplicate persists)
+			// and filter out agent responses with empty content (pre-fix rows)
+			const seen = new Set<string>();
+			const dedupedEvents = chatEvents.filter((event) => {
+				const payload = event.payloadJson as Record<string, unknown>;
+				const messageId = payload.messageId as string | undefined;
+				// Drop agent responses with no content (persisted before streaming fix)
+				if (event.eventType === "chat_agent_response") {
+					const content = (payload.content as string) ?? "";
+					if (!content) return false;
+				}
+				// Deduplicate by messageId
+				if (messageId) {
+					if (seen.has(messageId)) return false;
+					seen.add(messageId);
+				}
+				return true;
+			});
+			transformed = dedupedEvents.map((event) => {
 				const payload = event.payloadJson as Record<string, unknown>;
 				const isAgent = event.eventType === "chat_agent_response";
 				const isJobTick = event.eventType === "chat_job_tick";
@@ -121,7 +139,10 @@ export async function buildInitMessages(
 					parts: [{ type: "text" as const, text: content }],
 				};
 			});
-			deps.log("Loaded chat history from Postgres", { messageCount: transformed.length });
+			deps.log("Loaded chat history from Postgres", {
+				rawCount: chatEvents.length,
+				messageCount: transformed.length,
+			});
 		}
 		// Return early — skip sandbox-based transcript for manager sessions
 		return {
