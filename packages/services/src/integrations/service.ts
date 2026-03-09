@@ -230,6 +230,39 @@ export async function saveOAuthAppIntegration(
 }
 
 /**
+ * Create or update a direct-credential integration (e.g., MySQL connection URL).
+ * No OAuth, no refresh token, no expiry — the credential is a static connection string.
+ */
+export interface SaveDirectIntegrationInput {
+	organizationId: string;
+	userId: string;
+	integrationId: string;
+	displayName: string;
+	connectionString: string;
+}
+
+export async function saveDirectIntegration(
+	input: SaveDirectIntegrationInput,
+): Promise<IntegrationWithCreator> {
+	const encryptionKey = getEncryptionKey();
+	const encryptedAccessToken = encrypt(input.connectionString, encryptionKey);
+	const shortId = randomUUID().slice(0, 8);
+	const connectionId = `${input.integrationId}:${input.organizationId}:${shortId}`;
+
+	const row = await integrationsDb.upsertDirectIntegration({
+		organizationId: input.organizationId,
+		integrationId: input.integrationId,
+		connectionId,
+		displayName: input.displayName,
+		createdBy: input.userId,
+		encryptedAccessToken,
+	});
+
+	const creator = row.createdBy ? await integrationsDb.getUser(row.createdBy) : null;
+	return toIntegrationWithCreator(row, creator);
+}
+
+/**
  * Delete an integration and handle orphaned repos.
  */
 export async function deleteIntegration(integrationId: string, orgId: string): Promise<void> {
