@@ -75,6 +75,7 @@ export async function syncFiles(params: SyncParams): Promise<SyncResult> {
 		}
 
 		// Embed uncached texts
+		let embeddingFailed = false;
 		if (textsToEmbed.length > 0) {
 			try {
 				const embeddings = await embedFn(textsToEmbed.map((t) => t.text));
@@ -86,6 +87,7 @@ export async function syncFiles(params: SyncParams): Promise<SyncResult> {
 				}
 			} catch (err) {
 				// If embedding fails, use empty vectors (FTS-only search will still work)
+				embeddingFailed = true;
 				console.error(`Failed to embed chunks for ${file.relativePath}:`, err);
 				for (const { index } of textsToEmbed) {
 					chunkEmbeddings[index] = [];
@@ -121,13 +123,17 @@ export async function syncFiles(params: SyncParams): Promise<SyncResult> {
 			}
 		}
 
-		// Update file record
-		store.upsertFileRecord({
-			path: file.relativePath,
-			hash,
-			mtime: fileStat.mtimeMs,
-			size: fileStat.size,
-		});
+		// Only advance the file hash if embeddings succeeded (or weren't needed).
+		// When embedding fails, skipping the hash update causes re-processing on
+		// next sync so vector search can be backfilled once the API recovers.
+		if (!embeddingFailed) {
+			store.upsertFileRecord({
+				path: file.relativePath,
+				hash,
+				mtime: fileStat.mtimeMs,
+				size: fileStat.size,
+			});
+		}
 
 		synced++;
 	}
@@ -144,8 +150,10 @@ async function findMarkdownFiles(dir: string): Promise<MarkdownFile[]> {
 	const results: MarkdownFile[] = [];
 	try {
 		await walkDir(dir, dir, results);
-	} catch {
-		// Directory might not exist yet
+	} catch (err) {
+		// Only swallow "directory doesn't exist" — rethrow other FS errors
+		// to avoid silently treating transient failures as empty file lists
+		if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
 	}
 	return results;
 }

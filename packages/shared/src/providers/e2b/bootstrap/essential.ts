@@ -219,7 +219,7 @@ export async function setupEssentialDependencies(
 		writePromises.push(
 			writeFile(
 				"/home/user/.proliferate/system-prompt.md",
-				`${opts.systemPrompt || ""}\n\n${MEMORY_SYSTEM_PROMPT_SECTION}`,
+				`${basePrompt}\n\n${MEMORY_SYSTEM_PROMPT_SECTION}`,
 			),
 		);
 	}
