@@ -118,6 +118,7 @@ export default function CoworkerDetailPage({
 							status: worker.status,
 							modelId: worker.modelId,
 							capabilities: worker.capabilities ?? [],
+							managerSessionId: worker.managerSessionId ?? null,
 						}}
 						onUpdate={actions.handleUpdate}
 						onPause={actions.handlePause}

@@ -2,9 +2,9 @@
 
 import { ModelSelector } from "@/components/automations/model-selector";
 import {
+	WorkerActionSelector,
 	type WorkerCapabilityDraft,
-	WorkerCapabilityEditor,
-} from "@/components/automations/worker-capability-editor";
+} from "@/components/automations/worker-action-selector";
 import { WorkerJobForm } from "@/components/automations/worker-job-form";
 import { describeCron } from "@/components/automations/worker-job-utils";
 import {
@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { InlineEdit } from "@/components/ui/inline-edit";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useSessionAvailableActions } from "@/hooks/actions/use-actions";
 import {
 	useCreateWorkerJob,
 	useDeleteWorkerJob,
@@ -28,12 +29,12 @@ import {
 	useUpdateWorkerJob,
 	useWorkerJobs,
 } from "@/hooks/automations/use-worker-jobs";
-import { useIntegrations, useSlackInstallations } from "@/hooks/integrations/use-integrations";
+import { useWsToken } from "@/hooks/sessions/use-ws-token";
 import { cn } from "@/lib/display/utils";
 import type { ModelId } from "@proliferate/shared";
 import { formatDistanceToNow } from "date-fns";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 
 interface WorkerSettingsTabProps {
@@ -44,6 +45,7 @@ interface WorkerSettingsTabProps {
 		status: string;
 		modelId: string | null;
 		capabilities?: WorkerCapabilityDraft[];
+		managerSessionId: string | null;
 	};
 	onUpdate: (fields: {
 		name?: string;
@@ -71,9 +73,12 @@ export function WorkerSettingsTab({
 	const [hasPendingChanges, setHasPendingChanges] = useState(false);
 	const [showJobForm, setShowJobForm] = useState(false);
 	const [editingJobId, setEditingJobId] = useState<string | null>(null);
-	const { data: integrationsData } = useIntegrations();
-	const { data: slackInstallations } = useSlackInstallations();
-	const { data: jobs, isLoading: isLoadingJobs, isError: isJobsError } = useWorkerJobs(worker.id);
+	const { token } = useWsToken();
+	const { data: availableIntegrations, isLoading: isLoadingActions } = useSessionAvailableActions(
+		worker.managerSessionId ?? "",
+		token,
+	);
+	const { data: jobs, isLoading: isLoadingJobs } = useWorkerJobs(worker.id);
 	const createJob = useCreateWorkerJob(worker.id);
 	const updateJob = useUpdateWorkerJob(worker.id);
 	const deleteJob = useDeleteWorkerJob(worker.id);
@@ -81,18 +86,6 @@ export function WorkerSettingsTab({
 	const [capabilitiesValue, setCapabilitiesValue] = useState<WorkerCapabilityDraft[]>(
 		worker.capabilities ?? [],
 	);
-	const connectedProviders = useMemo(() => {
-		const providers: string[] = [];
-		if (!integrationsData) return providers;
-
-		if (integrationsData.github.connected) providers.push("github");
-		if (integrationsData.sentry.connected) providers.push("sentry");
-		if (integrationsData.linear.connected) providers.push("linear");
-		if (integrationsData.jira.connected) providers.push("jira");
-		if (slackInstallations && slackInstallations.length > 0) providers.push("slack");
-
-		return providers;
-	}, [integrationsData, slackInstallations]);
 
 	useEffect(() => {
 		setCapabilitiesValue(worker.capabilities ?? []);
@@ -167,15 +160,16 @@ export function WorkerSettingsTab({
 				</div>
 			</div>
 
-			{/* Capabilities */}
+			{/* Actions */}
 			<div>
 				<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-					Capabilities
+					Actions
 				</p>
-				<WorkerCapabilityEditor
+				<WorkerActionSelector
 					value={capabilitiesValue}
+					availableIntegrations={availableIntegrations ?? []}
+					isLoadingActions={isLoadingActions}
 					disabled={isUpdating}
-					connectedProviders={connectedProviders}
 					onChange={(next) => {
 						setCapabilitiesValue(next);
 						onUpdate({ capabilities: next });
@@ -223,10 +217,6 @@ export function WorkerSettingsTab({
 				{isLoadingJobs ? (
 					<div className="rounded-lg border border-border px-4 py-3">
 						<div className="h-4 w-32 bg-muted rounded animate-pulse" />
-					</div>
-				) : isJobsError ? (
-					<div className="rounded-lg border border-destructive/20 px-4 py-4">
-						<p className="text-sm text-destructive">Failed to load scheduled jobs.</p>
 					</div>
 				) : !jobs || jobs.length === 0 ? (
 					!showJobForm && (
@@ -333,11 +323,7 @@ export function WorkerSettingsTab({
 									if (checked) onResume();
 									else onPause();
 								}}
-								disabled={
-									worker.status === "degraded" ||
-									worker.status === "failed" ||
-									worker.status === "archived"
-								}
+								disabled={worker.status === "degraded" || worker.status === "failed"}
 							/>
 							<span className="text-sm capitalize">{worker.status}</span>
 						</div>

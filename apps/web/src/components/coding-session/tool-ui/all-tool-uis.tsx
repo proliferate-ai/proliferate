@@ -11,6 +11,7 @@ import { SaveEnvFilesToolUI } from "./save-env-files-tool";
 import { SaveServiceCommandsToolUI } from "./save-service-commands-tool";
 import { SaveSnapshotToolUI } from "./save-snapshot-tool";
 import { ShellToolUI } from "./shell-tool";
+import { SpawnChildToolUI } from "./spawn-child-tool";
 import { TaskToolUI } from "./task-tool";
 import { TodoWriteToolUI } from "./todo-write-tool";
 import { VerificationToolUI } from "./verification-tool";
@@ -34,4 +35,5 @@ export const allToolUIs = [
 	{ id: "automation_complete", Component: AutomationCompleteToolUIAlias },
 	{ id: "save_service_commands", Component: SaveServiceCommandsToolUI },
 	{ id: "save_env_files", Component: SaveEnvFilesToolUI },
+	{ id: "spawn_child_task", Component: SpawnChildToolUI },
 ];
