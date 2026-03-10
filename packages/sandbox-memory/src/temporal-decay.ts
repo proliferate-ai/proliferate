@@ -104,9 +104,11 @@ export function parseMemoryDateFromPath(path: string): Date | null {
 	const match = name.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 	if (!match) return null;
 	const date = new Date(
-		Number.parseInt(match[1], 10),
-		Number.parseInt(match[2], 10) - 1,
-		Number.parseInt(match[3], 10),
+		Date.UTC(
+			Number.parseInt(match[1], 10),
+			Number.parseInt(match[2], 10) - 1,
+			Number.parseInt(match[3], 10),
+		),
 	);
 	// Validate the parsed date is real
 	if (Number.isNaN(date.getTime())) return null;
