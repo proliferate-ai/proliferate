@@ -286,7 +286,9 @@ export const baselinesRouter = {
 				session: z
 					.object({
 						id: z.string(),
-						runtimeStatus: z.string(),
+						sandboxState: z.string(),
+						agentState: z.string(),
+						terminalState: z.string().nullable(),
 						startedAt: z.string().nullable(),
 					})
 					.nullable(),
@@ -298,7 +300,9 @@ export const baselinesRouter = {
 			return {
 				session: {
 					id: row.id,
-					runtimeStatus: row.runtimeStatus,
+					sandboxState: row.sandboxState,
+					agentState: row.agentState,
+					terminalState: row.terminalState,
 					startedAt: toIso(row.startedAt),
 				},
 			};

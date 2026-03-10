@@ -14,10 +14,12 @@ export async function persistRuntimeReady(input: {
 	await sessions.updateSession(input.sessionId, {
 		sandboxId: input.sandboxId,
 		status: "running",
+		sandboxState: "running",
 		pauseReason: null,
 		openCodeTunnelUrl: input.openCodeTunnelUrl,
 		previewTunnelUrl: input.previewTunnelUrl,
 		sandboxExpiresAt: input.sandboxExpiresAt,
+		stateUpdatedAt: new Date().toISOString(),
 		...(input.autoPauseSnapshotId ? { snapshotId: input.autoPauseSnapshotId } : {}),
 	});
 	reconcileRuntimePointers(input.live, {

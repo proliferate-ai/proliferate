@@ -7,7 +7,13 @@
 
 import type { Logger } from "@proliferate/logger";
 import { sessions } from "@proliferate/services";
-import type { SessionOutcome } from "@proliferate/shared/contracts/sessions";
+import type {
+	SessionAgentState,
+	SessionOutcome,
+	SessionSandboxState,
+	SessionStateReason,
+	SessionTerminalState,
+} from "@proliferate/shared/contracts/sessions";
 import {
 	SESSION_LIFECYCLE_EVENT,
 	type SessionLifecycleEventType,
@@ -91,53 +97,36 @@ export async function touchLastVisibleUpdate(sessionId: string, logger: Logger):
 }
 
 // ============================================
-// K4: Operator status projection
+// K4: Session state projection (V2)
 // ============================================
 
-export async function projectOperatorStatus(input: {
+export async function projectSessionState(input: {
 	sessionId: string;
-	organizationId: string;
-	runtimeStatus: string;
-	hasPendingApproval: boolean;
-	isAgentIdle?: boolean;
+	sandboxState?: SessionSandboxState;
+	agentState?: SessionAgentState;
+	terminalState?: SessionTerminalState | null;
+	stateReason?: SessionStateReason | null;
 	logger: Logger;
-}): Promise<string> {
-	const {
-		sessionId,
-		organizationId,
-		runtimeStatus,
-		hasPendingApproval,
-		isAgentIdle,
-		logger: log,
-	} = input;
-
-	let operatorStatus: string;
-
-	if (runtimeStatus === "completed" || runtimeStatus === "cancelled") {
-		operatorStatus = "ready_for_review";
-	} else if (runtimeStatus === "failed") {
-		operatorStatus = "errored";
-	} else if (hasPendingApproval) {
-		operatorStatus = "waiting_for_approval";
-	} else if (isAgentIdle) {
-		operatorStatus = "needs_input";
-	} else if (runtimeStatus === "running") {
-		operatorStatus = "active";
-	} else {
-		operatorStatus = "active";
-	}
-
+}): Promise<void> {
 	try {
-		await sessions.updateSessionOperatorStatus({
-			sessionId,
-			organizationId,
-			operatorStatus,
+		await sessions.updateSession(input.sessionId, {
+			...(input.sandboxState && { sandboxState: input.sandboxState }),
+			...(input.agentState && { agentState: input.agentState }),
+			...(input.terminalState !== undefined && { terminalState: input.terminalState }),
+			...(input.stateReason !== undefined && { stateReason: input.stateReason }),
+			stateUpdatedAt: new Date().toISOString(),
 		});
 	} catch (err) {
-		log.warn({ err, sessionId, operatorStatus }, "Failed to update operator status");
+		input.logger.warn(
+			{
+				err,
+				sessionId: input.sessionId,
+				sandboxState: input.sandboxState,
+				agentState: input.agentState,
+			},
+			"Failed to project session state",
+		);
 	}
-
-	return operatorStatus;
 }
 
 // ============================================

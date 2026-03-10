@@ -324,9 +324,9 @@ async function transitionInvocationWithEffects(
 
 		let resumeIntent: ResumeIntentRow | undefined;
 		if (input.resumeIntent && invocation.mode === "require_approval") {
-			const operatorStatus = await actionsDb.getSessionOperatorStatusTx(tx, invocation.sessionId);
+			const agentState = await actionsDb.getSessionAgentStateTx(tx, invocation.sessionId);
 
-			if (operatorStatus === "waiting_for_approval") {
+			if (agentState === "waiting_approval") {
 				const existing = await actionsDb.findActiveResumeIntentTx(
 					tx,
 					invocation.sessionId,
@@ -462,9 +462,9 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 					capabilityMode: effective.capabilityMode ?? null,
 				},
 			});
-			await actionsDb.setSessionOperatorStatus({
+			await actionsDb.setSessionAgentState({
 				sessionId: input.sessionId,
-				toStatus: "waiting_for_approval",
+				toStatus: "waiting_approval",
 			});
 			log.info(
 				{ invocationId: invocation.id, action: input.action, modeSource: effective.modeSource },

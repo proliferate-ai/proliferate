@@ -52,6 +52,11 @@ export interface SessionRecord {
 	agent_config?: { modelId?: string; tools?: string[]; reasoningEffort?: string } | null;
 	system_prompt?: string | null;
 	status?: string | null;
+	// V2 state columns
+	sandbox_state: string | null;
+	agent_state: string | null;
+	terminal_state: string | null;
+	// Legacy — kept for backward compat in control-plane snapshot
 	runtime_status: SessionRuntimeStatus | null;
 	operator_status: SessionOperatorStatus | null;
 	capabilities_version: number | null;
@@ -152,6 +157,9 @@ export async function loadSessionContext(
 		agent_config: sessionRow.agentConfig as SessionRecord["agent_config"],
 		system_prompt: sessionRow.systemPrompt,
 		status: sessionRow.status,
+		sandbox_state: sessionRow.sandboxState ?? null,
+		agent_state: sessionRow.agentState ?? null,
+		terminal_state: sessionRow.terminalState ?? null,
 		runtime_status: (sessionRow.runtimeStatus as SessionRuntimeStatus | null) ?? null,
 		operator_status: (sessionRow.operatorStatus as SessionOperatorStatus | null) ?? null,
 		capabilities_version: sessionRow.capabilitiesVersion ?? null,

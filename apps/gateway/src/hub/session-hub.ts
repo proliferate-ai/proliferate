@@ -64,7 +64,7 @@ import {
 import type { SessionContext, SessionRecord } from "./session/runtime/session-context-store";
 import { SessionTelemetry, extractPrUrls } from "./session/runtime/session-telemetry";
 import {
-	projectOperatorStatus,
+	projectSessionState,
 	recordLifecycleEvent,
 	touchLastVisibleUpdate,
 } from "./session/session-lifecycle";
@@ -856,15 +856,13 @@ export class SessionHub {
 		await setRuntimeLease(this.sessionId);
 
 		// K5: Record session started event
-		const orgId = this.runtime.getContext().session.organization_id;
 		recordLifecycleEvent(this.sessionId, SESSION_LIFECYCLE_EVENT.STARTED, this.logger);
 
-		// K4: Project operator status to "active"
-		projectOperatorStatus({
+		// K4: Project V2 session state — sandbox running, agent iterating
+		projectSessionState({
 			sessionId: this.sessionId,
-			organizationId: orgId,
-			runtimeStatus: "running",
-			hasPendingApproval: false,
+			sandboxState: "running",
+			agentState: "iterating",
 			logger: this.logger,
 		});
 	}
@@ -1095,13 +1093,9 @@ export class SessionHub {
 				getLastKnownAgentIdleAt: () => this.lastKnownAgentIdleAt,
 				clearAgentIdle: () => clearAgentIdle(this.getIdleControllerState()),
 				projectActiveStatusFromIdle: () => {
-					const orgId = this.runtime.getContext().session.organization_id;
-					void projectOperatorStatus({
+					void projectSessionState({
 						sessionId: this.sessionId,
-						organizationId: orgId,
-						runtimeStatus: "running",
-						hasPendingApproval: false,
-						isAgentIdle: false,
+						agentState: "iterating",
 						logger: this.logger,
 					});
 				},
@@ -1372,15 +1366,11 @@ export class SessionHub {
 			this.activePromptRunId = null;
 		}
 
-		// K4: Project needs_input when agent becomes idle
+		// K4: Project waiting_input when agent becomes idle
 		if (becameIdle) {
-			const orgId = this.runtime.getContext().session.organization_id;
-			void projectOperatorStatus({
+			void projectSessionState({
 				sessionId: this.sessionId,
-				organizationId: orgId,
-				runtimeStatus: "running",
-				hasPendingApproval: false,
-				isAgentIdle: true,
+				agentState: "waiting_input",
 				logger: this.logger,
 			});
 		}
@@ -1406,13 +1396,9 @@ export class SessionHub {
 		) {
 			markAgentIdle(this.getIdleControllerState());
 			this.activePromptRunId = null;
-			const orgId = this.runtime.getContext().session.organization_id;
-			void projectOperatorStatus({
+			void projectSessionState({
 				sessionId: this.sessionId,
-				organizationId: orgId,
-				runtimeStatus: "running",
-				hasPendingApproval: false,
-				isAgentIdle: true,
+				agentState: "waiting_input",
 				logger: this.logger,
 			});
 		}
@@ -1795,8 +1781,6 @@ export class SessionHub {
 	 * K3: lastVisibleUpdateAt, K4: operator status, K5: session events.
 	 */
 	private handleStatusLifecycle(status: HubStatus): void {
-		const orgId = this.runtime.getContext().session.organization_id;
-
 		if (status === "paused") {
 			// K5: Record session paused event
 			recordLifecycleEvent(this.sessionId, SESSION_LIFECYCLE_EVENT.PAUSED, this.logger);
@@ -1805,12 +1789,12 @@ export class SessionHub {
 		} else if (status === "stopped") {
 			// K3: Touch visible update on terminal state
 			touchLastVisibleUpdate(this.sessionId, this.logger);
-			// K4: Project terminal operator status (ready_for_review)
-			projectOperatorStatus({
+			// K4: Project V2 terminal state — done + succeeded
+			projectSessionState({
 				sessionId: this.sessionId,
-				organizationId: orgId,
-				runtimeStatus: "completed",
-				hasPendingApproval: false,
+				agentState: "done",
+				terminalState: "succeeded",
+				stateReason: null,
 				logger: this.logger,
 			});
 			// K5: Record terminal event
@@ -1818,12 +1802,12 @@ export class SessionHub {
 		} else if (status === "error") {
 			// K3: Touch visible update on error
 			touchLastVisibleUpdate(this.sessionId, this.logger);
-			// K4: Project errored operator status
-			projectOperatorStatus({
+			// K4: Project V2 terminal state — errored + failed
+			projectSessionState({
 				sessionId: this.sessionId,
-				organizationId: orgId,
-				runtimeStatus: "failed",
-				hasPendingApproval: false,
+				agentState: "errored",
+				terminalState: "failed",
+				stateReason: "runtime_error",
 				logger: this.logger,
 			});
 			// K5: Record failure event

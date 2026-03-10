@@ -1,16 +1,15 @@
 import type { Logger } from "@proliferate/logger";
-import { projectOperatorStatus } from "../../session-lifecycle";
+import { projectSessionState } from "../../session-lifecycle";
 
 export function projectRuntimeRunning(input: {
 	sessionId: string;
 	organizationId: string;
 	logger: Logger;
-}): Promise<string> {
-	return projectOperatorStatus({
+}): Promise<void> {
+	return projectSessionState({
 		sessionId: input.sessionId,
-		organizationId: input.organizationId,
-		runtimeStatus: "running",
-		hasPendingApproval: false,
+		sandboxState: "running",
+		agentState: "iterating",
 		logger: input.logger,
 	});
 }

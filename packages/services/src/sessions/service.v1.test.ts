@@ -82,6 +82,9 @@ function makeTaskSession(overrides: Record<string, unknown> = {}) {
 		status: "running",
 		runtimeStatus: "running",
 		operatorStatus: "active",
+		sandboxState: "running",
+		agentState: "iterating",
+		terminalState: null,
 		visibility: "private",
 		repoId: "repo-1",
 		repoBaselineId: "baseline-1",
@@ -152,7 +155,9 @@ describe("sessions service", () => {
 	});
 
 	it("creates ad-hoc continuation follow-up for terminal completed task", async () => {
-		mockFindSessionById.mockResolvedValue(makeTaskSession({ runtimeStatus: "completed" }));
+		mockFindSessionById.mockResolvedValue(
+			makeTaskSession({ runtimeStatus: "completed", terminalState: "succeeded" }),
+		);
 		mockCreateTaskSession.mockResolvedValue(
 			makeTaskSession({ id: "task-2", workerId: null, workerRunId: null }),
 		);
@@ -179,7 +184,9 @@ describe("sessions service", () => {
 	});
 
 	it("creates ad-hoc continuation follow-up for terminal failed task by default", async () => {
-		mockFindSessionById.mockResolvedValue(makeTaskSession({ runtimeStatus: "failed" }));
+		mockFindSessionById.mockResolvedValue(
+			makeTaskSession({ runtimeStatus: "failed", terminalState: "failed" }),
+		);
 		mockCreateTaskSession.mockResolvedValue(
 			makeTaskSession({ id: "task-3", workerId: null, workerRunId: null }),
 		);
@@ -206,7 +213,9 @@ describe("sessions service", () => {
 	});
 
 	it("creates ad-hoc rerun follow-up only when explicitly requested", async () => {
-		mockFindSessionById.mockResolvedValue(makeTaskSession({ runtimeStatus: "failed" }));
+		mockFindSessionById.mockResolvedValue(
+			makeTaskSession({ runtimeStatus: "failed", terminalState: "failed" }),
+		);
 		mockCreateTaskSession.mockResolvedValue(
 			makeTaskSession({ id: "task-4", workerId: null, workerRunId: null }),
 		);
@@ -232,7 +241,9 @@ describe("sessions service", () => {
 	});
 
 	it("reuses existing terminal follow-up delivery when dedupe key matches", async () => {
-		mockFindSessionById.mockResolvedValue(makeTaskSession({ runtimeStatus: "completed" }));
+		mockFindSessionById.mockResolvedValue(
+			makeTaskSession({ runtimeStatus: "completed", terminalState: "succeeded" }),
+		);
 		mockFindTerminalFollowupMessageByDedupe.mockResolvedValue({
 			deliverySessionId: "task-2",
 			sessionMessage: makeSessionMessage({ id: "msg-dedupe", sessionId: "task-2" }),
@@ -255,7 +266,9 @@ describe("sessions service", () => {
 	});
 
 	it("reuses existing terminal follow-up session before creating another child", async () => {
-		mockFindSessionById.mockResolvedValue(makeTaskSession({ runtimeStatus: "completed" }));
+		mockFindSessionById.mockResolvedValue(
+			makeTaskSession({ runtimeStatus: "completed", terminalState: "succeeded" }),
+		);
 		mockFindLatestTerminalFollowupSession.mockResolvedValue(
 			makeTaskSession({ id: "task-existing", workerId: null, workerRunId: null }),
 		);
@@ -298,7 +311,9 @@ describe("sessions service", () => {
 	});
 
 	it("persists terminal task outcome for completed sessions", async () => {
-		mockFindSessionById.mockResolvedValue(makeTaskSession({ runtimeStatus: "completed" }));
+		mockFindSessionById.mockResolvedValue(
+			makeTaskSession({ runtimeStatus: "completed", terminalState: "succeeded" }),
+		);
 		mockPersistSessionOutcome.mockResolvedValue({
 			outcomeJson: { summary: "done" },
 			outcomeVersion: 2,

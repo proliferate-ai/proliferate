@@ -53,7 +53,7 @@ vi.mock("./db", () => ({
 	listByOrg: vi.fn().mockResolvedValue([]),
 	countByOrg: vi.fn().mockResolvedValue(0),
 	getSessionCapabilityMode: mockGetSessionCapabilityMode,
-	setSessionOperatorStatus: mockSetSessionOperatorStatus,
+	setSessionAgentState: mockSetSessionOperatorStatus,
 	createActionInvocationEvent: mockCreateActionInvocationEvent,
 	getSessionApprovalContext: mockGetSessionApprovalContext,
 	createOrGetActiveResumeIntent: vi.fn(),
@@ -64,7 +64,7 @@ vi.mock("./db", () => ({
 	touchSessionLastVisibleUpdate: mockTouchSessionLastVisibleUpdate,
 	findActiveResumeIntentTx: mockFindActiveResumeIntentTx,
 	insertResumeIntentTx: mockInsertResumeIntentTx,
-	getSessionOperatorStatusTx: mockGetSessionOperatorStatusTx,
+	getSessionAgentStateTx: mockGetSessionOperatorStatusTx,
 	isDuplicateActiveResumeIntentError: (error: unknown) =>
 		error instanceof Error &&
 		(error.message.includes("uq_resume_intents_one_active") ||
@@ -181,7 +181,7 @@ describe("actions v1 service", () => {
 		expect(mockSetSessionOperatorStatus).not.toHaveBeenCalledWith(
 			expect.objectContaining({
 				sessionId: "session-1",
-				toStatus: "waiting_for_approval",
+				toStatus: "waiting_approval",
 			}),
 		);
 	});
@@ -221,14 +221,14 @@ describe("actions v1 service", () => {
 			id: "session-1",
 			organizationId: "org-1",
 			automationId: null,
-			operatorStatus: "waiting_for_approval",
+			agentState: "waiting_approval",
 			visibility: "private",
 			createdBy: "user-1",
 			repoId: "repo-1",
 		});
 		const deniedRow = makeInvocationRow({ status: "denied", mode: "require_approval" });
 		mockTransitionInvocationStatusTx.mockResolvedValue(deniedRow);
-		mockGetSessionOperatorStatusTx.mockResolvedValue("waiting_for_approval");
+		mockGetSessionOperatorStatusTx.mockResolvedValue("waiting_approval");
 		mockInsertResumeIntentTx.mockResolvedValue({ id: "resume-1" });
 
 		await denyAction("inv-1", "org-1", "user-1");
@@ -259,14 +259,14 @@ describe("actions v1 service", () => {
 			id: "session-1",
 			organizationId: "org-1",
 			automationId: null,
-			operatorStatus: "waiting_for_approval",
+			agentState: "waiting_approval",
 			visibility: "private",
 			createdBy: "user-1",
 			repoId: "repo-1",
 		});
 		const completedRow = makeInvocationRow({ status: "completed", mode: "require_approval" });
 		mockTransitionInvocationStatusTx.mockResolvedValue(completedRow);
-		mockGetSessionOperatorStatusTx.mockResolvedValue("waiting_for_approval");
+		mockGetSessionOperatorStatusTx.mockResolvedValue("waiting_approval");
 		mockInsertResumeIntentTx.mockResolvedValue({ id: "resume-1" });
 
 		await markCompleted("inv-1", { ok: true }, 12);
@@ -296,7 +296,7 @@ describe("actions v1 service", () => {
 			id: "session-1",
 			organizationId: "org-1",
 			automationId: null,
-			operatorStatus: "waiting_for_approval",
+			agentState: "waiting_approval",
 			visibility: "private",
 			createdBy: "user-1",
 			repoId: "repo-1",
@@ -304,7 +304,7 @@ describe("actions v1 service", () => {
 		mockResolveMode.mockResolvedValue({ mode: "deny", source: "org_default" });
 		const deniedRow = makeInvocationRow({ status: "denied", mode: "require_approval" });
 		mockTransitionInvocationStatusTx.mockResolvedValue(deniedRow);
-		mockGetSessionOperatorStatusTx.mockResolvedValue("waiting_for_approval");
+		mockGetSessionOperatorStatusTx.mockResolvedValue("waiting_approval");
 		mockInsertResumeIntentTx.mockResolvedValue({ id: "resume-1" });
 
 		await expect(approveAction("inv-1", "org-1", "approver-1")).rejects.toBeInstanceOf(

@@ -107,7 +107,8 @@ export interface WorkerSessionListItem {
 	status: string | null;
 	repoId: string | null;
 	branchName: string | null;
-	operatorStatus: string;
+	agentState: string;
+	terminalState: string | null;
 	updatedAt: Date | null;
 	startedAt: Date | null;
 }
@@ -406,7 +407,8 @@ export async function listWorkerSessionsForOrg(
 		status: session.status,
 		repoId: session.repoId,
 		branchName: session.branchName,
-		operatorStatus: session.operatorStatus,
+		agentState: session.agentState,
+		terminalState: session.terminalState,
 		updatedAt: session.lastActivityAt,
 		startedAt: session.startedAt,
 	}));

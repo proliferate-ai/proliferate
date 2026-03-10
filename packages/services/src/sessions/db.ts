@@ -243,12 +243,12 @@ export async function listByOrganizationEnriched(
 		.leftJoin(pendingApprovalCount, eq(pendingApprovalCount.sessionId, sessions.id))
 		.where(and(...conditions))
 		.orderBy(
-			// Operator status priority: waiting_for_approval/needs_input first, then running, then failed, then others
+			// V2 agent state priority: approval/input first, then iterating, then errored, then terminal
 			sql`CASE
-				WHEN ${sessions.operatorStatus} IN ('waiting_for_approval', 'needs_input') THEN 0
-				WHEN ${sessions.status} IN ('starting', 'running') THEN 1
-				WHEN ${sessions.operatorStatus} = 'errored' THEN 2
-				WHEN ${sessions.status} IN ('paused') THEN 3
+				WHEN ${sessions.agentState} IN ('waiting_approval', 'waiting_input') THEN 0
+				WHEN ${sessions.agentState} = 'iterating' AND ${sessions.terminalState} IS NULL THEN 1
+				WHEN ${sessions.agentState} = 'errored' THEN 2
+				WHEN ${sessions.sandboxState} = 'paused' THEN 3
 				ELSE 4
 			END`,
 			desc(sessions.lastActivityAt),
@@ -473,6 +473,12 @@ export async function update(id: string, input: UpdateSessionInput): Promise<voi
 	if (input.summary !== undefined) updates.summary = input.summary;
 	if (input.prUrls !== undefined) updates.prUrls = input.prUrls;
 	if (input.metrics !== undefined) updates.metrics = input.metrics;
+	if (input.sandboxState !== undefined) updates.sandboxState = input.sandboxState;
+	if (input.agentState !== undefined) updates.agentState = input.agentState;
+	if (input.terminalState !== undefined) updates.terminalState = input.terminalState;
+	if (input.stateReason !== undefined) updates.stateReason = input.stateReason;
+	if (input.stateUpdatedAt !== undefined && input.stateUpdatedAt !== null)
+		updates.stateUpdatedAt = new Date(input.stateUpdatedAt);
 
 	await db.update(sessions).set(updates).where(eq(sessions.id, id));
 }
@@ -509,6 +515,12 @@ export async function updateWithOrgCheck(
 	if (input.summary !== undefined) updates.summary = input.summary;
 	if (input.prUrls !== undefined) updates.prUrls = input.prUrls;
 	if (input.metrics !== undefined) updates.metrics = input.metrics;
+	if (input.sandboxState !== undefined) updates.sandboxState = input.sandboxState;
+	if (input.agentState !== undefined) updates.agentState = input.agentState;
+	if (input.terminalState !== undefined) updates.terminalState = input.terminalState;
+	if (input.stateReason !== undefined) updates.stateReason = input.stateReason;
+	if (input.stateUpdatedAt !== undefined && input.stateUpdatedAt !== null)
+		updates.stateUpdatedAt = new Date(input.stateUpdatedAt);
 
 	await db
 		.update(sessions)
@@ -535,6 +547,12 @@ export async function updateWhereSandboxIdMatches(
 		updates.pausedAt = input.pausedAt ? new Date(input.pausedAt) : null;
 	if (input.pauseReason !== undefined) updates.pauseReason = input.pauseReason;
 	if (input.latestTask !== undefined) updates.latestTask = input.latestTask;
+	if (input.sandboxState !== undefined) updates.sandboxState = input.sandboxState;
+	if (input.agentState !== undefined) updates.agentState = input.agentState;
+	if (input.terminalState !== undefined) updates.terminalState = input.terminalState;
+	if (input.stateReason !== undefined) updates.stateReason = input.stateReason;
+	if (input.stateUpdatedAt !== undefined && input.stateUpdatedAt !== null)
+		updates.stateUpdatedAt = new Date(input.stateUpdatedAt);
 
 	const rows = await db
 		.update(sessions)
@@ -1963,18 +1981,6 @@ export async function updateLastVisibleUpdateAt(sessionId: string): Promise<void
 		.update(sessions)
 		.set({ lastVisibleUpdateAt: new Date() })
 		.where(eq(sessions.id, sessionId));
-}
-
-// ============================================
-// K4: Operator status projection
-// ============================================
-
-export async function updateOperatorStatus(
-	sessionId: string,
-	operatorStatus: string,
-): Promise<void> {
-	const db = getDb();
-	await db.update(sessions).set({ operatorStatus }).where(eq(sessions.id, sessionId));
 }
 
 // ============================================

@@ -379,6 +379,12 @@ export async function getTargetCount(baselineId: string): Promise<number> {
 export async function getLatestSetupSession(
 	repoId: string,
 	orgId: string,
-): Promise<{ id: string; runtimeStatus: string; startedAt: Date | null } | null> {
+): Promise<{
+	id: string;
+	sandboxState: string;
+	agentState: string;
+	terminalState: string | null;
+	startedAt: Date | null;
+} | null> {
 	return baselinesDb.findLatestSetupSession(repoId, orgId);
 }

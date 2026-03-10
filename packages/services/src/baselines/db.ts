@@ -277,7 +277,7 @@ export async function findNonTerminalSetupSession(
 			eq(sessions.repoId, repoId),
 			eq(sessions.organizationId, orgId),
 			eq(sessions.kind, "setup"),
-			sql`${sessions.runtimeStatus} NOT IN ('completed', 'failed', 'cancelled')`,
+			sql`${sessions.terminalState} IS NULL`,
 		),
 		columns: { id: true },
 	});
@@ -302,7 +302,13 @@ export async function countTargetsByBaseline(baselineId: string): Promise<number
 export async function findLatestSetupSession(
 	repoId: string,
 	orgId: string,
-): Promise<{ id: string; runtimeStatus: string; startedAt: Date | null } | null> {
+): Promise<{
+	id: string;
+	sandboxState: string;
+	agentState: string;
+	terminalState: string | null;
+	startedAt: Date | null;
+} | null> {
 	const db = getDb();
 	const row = await db.query.sessions.findFirst({
 		where: and(
@@ -310,7 +316,13 @@ export async function findLatestSetupSession(
 			eq(sessions.organizationId, orgId),
 			eq(sessions.kind, "setup"),
 		),
-		columns: { id: true, runtimeStatus: true, startedAt: true },
+		columns: {
+			id: true,
+			sandboxState: true,
+			agentState: true,
+			terminalState: true,
+			startedAt: true,
+		},
 		orderBy: [desc(sessions.startedAt)],
 	});
 	return row ?? null;

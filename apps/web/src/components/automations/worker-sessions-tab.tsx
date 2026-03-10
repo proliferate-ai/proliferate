@@ -15,7 +15,8 @@ export interface WorkerSession {
 	status: string;
 	repoId: string | null;
 	branchName: string | null;
-	operatorStatus: string | null;
+	agentState: string | null;
+	terminalState: string | null;
 	updatedAt: string;
 	startedAt: string | null;
 }

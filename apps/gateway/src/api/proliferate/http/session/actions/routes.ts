@@ -5,7 +5,7 @@ import { actions, sessions, userActionPreferences } from "@proliferate/services"
 import { Router, type Router as RouterType } from "express";
 import type { HubManager } from "../../../../../hub";
 import {
-	projectOperatorStatus,
+	projectSessionState,
 	touchLastVisibleUpdate,
 } from "../../../../../hub/session/session-lifecycle";
 import { ApiError } from "../../../../../server/middleware/errors";
@@ -319,11 +319,10 @@ export function createActionsRoutes(hubManager: HubManager): RouterType {
 					},
 				});
 
-				void projectOperatorStatus({
+				void projectSessionState({
 					sessionId,
-					organizationId: session.organizationId,
-					runtimeStatus: "running",
-					hasPendingApproval: true,
+					agentState: "waiting_approval",
+					stateReason: "approval_required",
 					logger,
 				});
 				void touchLastVisibleUpdate(sessionId, logger);
@@ -427,11 +426,10 @@ export function createActionsRoutes(hubManager: HubManager): RouterType {
 				});
 
 				void touchLastVisibleUpdate(invocation.sessionId, logger);
-				void projectOperatorStatus({
+				void projectSessionState({
 					sessionId: invocation.sessionId,
-					organizationId: session.organizationId,
-					runtimeStatus: "running",
-					hasPendingApproval: false,
+					agentState: "iterating",
+					stateReason: null,
 					logger,
 				});
 			} catch (error) {
@@ -447,11 +445,10 @@ export function createActionsRoutes(hubManager: HubManager): RouterType {
 				});
 
 				void touchLastVisibleUpdate(invocation.sessionId, logger);
-				void projectOperatorStatus({
+				void projectSessionState({
 					sessionId: invocation.sessionId,
-					organizationId: session.organizationId,
-					runtimeStatus: "running",
-					hasPendingApproval: false,
+					agentState: "iterating",
+					stateReason: null,
 					logger,
 				});
 
@@ -505,11 +502,10 @@ export function createActionsRoutes(hubManager: HubManager): RouterType {
 			});
 
 			void touchLastVisibleUpdate(invocation.sessionId, logger);
-			void projectOperatorStatus({
+			void projectSessionState({
 				sessionId: invocation.sessionId,
-				organizationId: session.organizationId,
-				runtimeStatus: "running",
-				hasPendingApproval: false,
+				agentState: "iterating",
+				stateReason: null,
 				logger,
 			});
 

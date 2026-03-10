@@ -43,13 +43,13 @@ export interface SessionApprovalContext {
 	id: string;
 	organizationId: string;
 	automationId: string | null;
-	operatorStatus: string | null;
+	agentState: string | null;
 	visibility: string | null;
 	createdBy: string | null;
 	repoId: string | null;
 }
 
-const ATTENTION_OPERATOR_STATUSES = new Set(["waiting_for_approval", "needs_input", "errored"]);
+const ATTENTION_AGENT_STATES = new Set(["waiting_approval", "waiting_input", "errored"]);
 const APPROVAL_RESOLUTION_STATUSES = new Set<ActionInvocationStatus>([
 	"approved",
 	"denied",
@@ -191,7 +191,7 @@ export async function getSessionApprovalContext(
 			id: sessions.id,
 			organizationId: sessions.organizationId,
 			automationId: sessions.automationId,
-			operatorStatus: sessions.operatorStatus,
+			agentState: sessions.agentState,
 			visibility: sessions.visibility,
 			createdBy: sessions.createdBy,
 			repoId: sessions.repoId,
@@ -220,21 +220,22 @@ export async function getSessionAclRole(
 	return undefined;
 }
 
-export async function setSessionOperatorStatus(input: {
+export async function setSessionAgentState(input: {
 	sessionId: string;
 	toStatus: string;
 	fromStatuses?: string[];
 }): Promise<boolean> {
 	const db = getDb();
-	const shouldTouchVisibility = ATTENTION_OPERATOR_STATUSES.has(input.toStatus);
+	const shouldTouchVisibility = ATTENTION_AGENT_STATES.has(input.toStatus);
 	const where = input.fromStatuses?.length
-		? and(eq(sessions.id, input.sessionId), inArray(sessions.operatorStatus, input.fromStatuses))
+		? and(eq(sessions.id, input.sessionId), inArray(sessions.agentState, input.fromStatuses))
 		: eq(sessions.id, input.sessionId);
 
 	const rows = await db
 		.update(sessions)
 		.set({
-			operatorStatus: input.toStatus,
+			agentState: input.toStatus,
+			stateUpdatedAt: new Date(),
 			...(shouldTouchVisibility && { lastVisibleUpdateAt: new Date() }),
 		})
 		.where(where)
@@ -388,16 +389,16 @@ export async function insertResumeIntentTx(
 	return row;
 }
 
-export async function getSessionOperatorStatusTx(
+export async function getSessionAgentStateTx(
 	tx: DbTransaction,
 	sessionId: string,
 ): Promise<string | null> {
 	const [row] = await tx
-		.select({ operatorStatus: sessions.operatorStatus })
+		.select({ agentState: sessions.agentState })
 		.from(sessions)
 		.where(eq(sessions.id, sessionId))
 		.limit(1);
-	return row?.operatorStatus ?? null;
+	return row?.agentState ?? null;
 }
 
 export function isDuplicateActiveResumeIntentError(error: unknown): boolean {

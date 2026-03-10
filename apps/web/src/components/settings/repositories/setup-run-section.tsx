@@ -34,7 +34,9 @@ export function SetupRunSection({ repoId }: { repoId: string }) {
 				<div className="flex items-center justify-between text-xs">
 					<div className="flex items-center gap-3">
 						<span className="font-medium">Session</span>
-						<span className="text-muted-foreground">{latestSession.runtimeStatus}</span>
+						<span className="text-muted-foreground">
+							{latestSession.terminalState ?? latestSession.agentState}
+						</span>
 					</div>
 					<span className="text-muted-foreground">
 						{formatDateWithYear(latestSession.startedAt)}

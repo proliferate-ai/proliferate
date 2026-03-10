@@ -12,10 +12,6 @@ import { createSyncClient } from "@proliferate/gateway-clients";
 import type { AgentConfig, SandboxProviderType } from "@proliferate/shared";
 import { getDefaultAgentConfig, isValidModelId, parseModelId } from "@proliferate/shared";
 import type { Session } from "@proliferate/shared/contracts/sessions";
-import {
-	type SessionRuntimeStatus,
-	isTerminalSessionRuntimeStatus,
-} from "@proliferate/shared/contracts/sessions";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import { getBlockedReasonText, sanitizePromptSnippet } from "@proliferate/shared/sessions";
 import * as billing from "../billing";
@@ -816,8 +812,7 @@ export async function sendTaskFollowup(
 		throw new SessionKindError("task", source.kind);
 	}
 
-	const runtimeStatus = (source.runtimeStatus ?? "starting") as SessionRuntimeStatus;
-	if (!isTerminalSessionRuntimeStatus(runtimeStatus)) {
+	if (source.terminalState === null) {
 		const sameSessionMessage = await sessionsDb.enqueueSessionMessage({
 			sessionId: source.id,
 			direction: "user_to_task",
@@ -964,9 +959,9 @@ export async function persistTerminalTaskOutcome(input: {
 	if (session.kind !== "task") {
 		throw new SessionKindError("task", session.kind);
 	}
-	if (!isTerminalSessionRuntimeStatus(session.runtimeStatus as SessionRuntimeStatus)) {
+	if (session.terminalState === null) {
 		throw new SessionRuntimeStatusError(
-			`Session ${input.sessionId} is not terminal (runtimeStatus=${session.runtimeStatus})`,
+			`Session ${input.sessionId} is not terminal (terminalState=null)`,
 		);
 	}
 
@@ -1094,18 +1089,6 @@ export async function markSessionViewed(input: {
 }
 
 // ============================================
-// K4: Operator status projection
-// ============================================
-
-export async function updateSessionOperatorStatus(input: {
-	sessionId: string;
-	organizationId: string;
-	operatorStatus: string;
-}): Promise<void> {
-	await sessionsDb.updateOperatorStatus(input.sessionId, input.operatorStatus);
-}
-
-// ============================================
 // K5: Session lifecycle events
 // ============================================
 
@@ -1229,9 +1212,7 @@ export async function sendBackToCoworker(input: {
 	if (source.kind !== "task") {
 		throw new SessionKindError("task", source.kind);
 	}
-	if (
-		!isTerminalSessionRuntimeStatus((source.runtimeStatus ?? "starting") as SessionRuntimeStatus)
-	) {
+	if (source.terminalState === null) {
 		throw new SessionRuntimeStatusError(
 			`Session ${input.sessionId} is not terminal — cannot send back to coworker`,
 		);
