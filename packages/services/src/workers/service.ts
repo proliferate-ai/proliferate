@@ -835,8 +835,29 @@ export async function createSlackChannelForWorker(
 		}
 	}
 
-	// Save binding
-	await workersDb.setWorkerSlackChannel(workerId, organizationId, installation.id, slackChannelId);
+	// Save binding — handle race where a concurrent request already bound a channel.
+	// The UNIQUE partial index on (slack_installation_id, slack_channel_id) will reject duplicates.
+	try {
+		await workersDb.setWorkerSlackChannel(
+			workerId,
+			organizationId,
+			installation.id,
+			slackChannelId,
+		);
+	} catch (err: unknown) {
+		const msg = err instanceof Error ? err.message : "";
+		if (msg.includes("unique") || msg.includes("duplicate")) {
+			const existing = await workersDb.findWorkerById(workerId, organizationId);
+			if (existing?.slackChannelId) {
+				logger.info(
+					{ workerId, channelId: existing.slackChannelId },
+					"Worker already bound to Slack channel (concurrent request)",
+				);
+				return { channelId: existing.slackChannelId, channelName: finalName };
+			}
+		}
+		throw err;
+	}
 
 	// Post intro message
 	await fetch(`${SLACK_API_BASE}/chat.postMessage`, {
