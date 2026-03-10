@@ -16,7 +16,6 @@ import {
 } from "@/config/automations";
 import { cn } from "@/lib/display/utils";
 import { Bug, Loader2, Plus, Search } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 // ====================================================================
@@ -77,7 +76,6 @@ export function TemplatePickerDialog({
 	isPending,
 	error,
 }: TemplatePickerDialogProps) {
-	const router = useRouter();
 	const [selectedCategory, setSelectedCategory] = useState<TemplateCategory | "all">("all");
 	const [searchQuery, setSearchQuery] = useState("");
 
@@ -262,12 +260,12 @@ export function TemplatePickerDialog({
 															className="underline hover:text-foreground transition-colors cursor-pointer"
 															onClick={(e) => {
 																e.stopPropagation();
-																router.push("/dashboard/integrations");
+																window.open("/dashboard/integrations", "_blank");
 															}}
 															onKeyDown={(e) => {
 																if (e.key === "Enter") {
 																	e.stopPropagation();
-																	router.push("/dashboard/integrations");
+																	window.open("/dashboard/integrations", "_blank");
 																}
 															}}
 														>

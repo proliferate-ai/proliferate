@@ -19,7 +19,7 @@ export default function CoworkerDetailPage({
 	params: Promise<{ id: string }>;
 }) {
 	const { id } = use(params);
-	const [activeTab, setActiveTab] = useState<DetailTab>("sessions");
+	const [activeTab, setActiveTab] = useState<DetailTab>("chat");
 	const { worker, isLoading, sessions, isLoadingSessions } = useWorkerDetail(id);
 	const actions = useWorkerActions(id);
 
@@ -65,6 +65,7 @@ export default function CoworkerDetailPage({
 					worker={worker}
 					onPause={actions.handlePause}
 					onResume={actions.handleResume}
+					onUpdateName={(name) => actions.handleUpdate({ name })}
 					onUpdateDescription={(description) => actions.handleUpdate({ description })}
 					isPausing={actions.isPausing}
 					isResuming={actions.isResuming}
@@ -109,7 +110,7 @@ export default function CoworkerDetailPage({
 					<WorkerChatTab managerSessionId={worker.managerSessionId} workerStatus={worker.status} />
 				)}
 
-				{activeTab === "settings" && (
+				{activeTab === "configure" && (
 					<WorkerSettingsTab
 						worker={{
 							id: worker.id,

@@ -15,9 +15,8 @@ interface WorkerCardProps {
 	id: string;
 	name: string;
 	status: WorkerStatus;
-	objective: string | null;
-	activeTaskCount: number;
-	pendingApprovalCount: number;
+	description: string | null;
+	capabilities?: string[];
 	updatedAt?: Date | string;
 }
 
@@ -69,34 +68,36 @@ function formatRelativeTime(date: Date | string): string {
 	return formatDistanceToNow(d, { addSuffix: true });
 }
 
+/**
+ * Extract unique integration names from capability keys.
+ * Capability keys look like "github.create_issue" → extract "github".
+ */
+function deriveIntegrationLabels(capabilities: string[]): string[] {
+	const seen = new Set<string>();
+	for (const cap of capabilities) {
+		const dotIdx = cap.indexOf(".");
+		if (dotIdx > 0) {
+			seen.add(cap.slice(0, dotIdx));
+		} else {
+			seen.add(cap);
+		}
+	}
+	return [...seen];
+}
+
 export function WorkerCard({
 	id,
 	name,
 	status,
-	objective,
-	activeTaskCount,
-	pendingApprovalCount,
+	description,
+	capabilities = [],
 	updatedAt,
 }: WorkerCardProps) {
-	// Badges: show task/approval counts as compact badges
-	const badges: { label: string; variant: "secondary" | "outline" }[] = [];
-	if (activeTaskCount > 0) {
-		badges.push({
-			label: `${activeTaskCount} task${activeTaskCount !== 1 ? "s" : ""}`,
-			variant: "secondary",
-		});
-	}
-	if (pendingApprovalCount > 0) {
-		badges.push({
-			label: `${pendingApprovalCount} pending`,
-			variant: "outline",
-		});
-	}
-
-	// Overflow: show up to 3 badges, then "+x"
+	// Capability badges: extract unique integration names
+	const integrationLabels = deriveIntegrationLabels(capabilities);
 	const maxBadges = 3;
-	const visibleBadges = badges.slice(0, maxBadges);
-	const overflowCount = badges.length - maxBadges;
+	const visibleBadges = integrationLabels.slice(0, maxBadges);
+	const overflowCount = integrationLabels.length - maxBadges;
 
 	// Last active
 	const isActive = status === "active";
@@ -117,17 +118,18 @@ export function WorkerCard({
 					<span className="text-sm font-medium text-foreground truncate">{name}</span>
 					<StatusDot status={WORKER_STATUS_DOT_MAP[status]} size="sm" className="shrink-0" />
 				</div>
-				{objective ? (
-					<p className="text-xs text-muted-foreground mt-0.5 truncate">{objective}</p>
-				) : visibleBadges.length > 0 ? (
+				{description && (
+					<p className="text-xs text-muted-foreground mt-0.5 truncate">{description}</p>
+				)}
+				{visibleBadges.length > 0 && (
 					<div className="flex items-center gap-1 mt-0.5">
-						{visibleBadges.map((b) => (
+						{visibleBadges.map((label) => (
 							<Badge
-								key={b.label}
-								variant={b.variant}
-								className="text-[10px] px-1.5 py-0 h-4 font-normal"
+								key={label}
+								variant="secondary"
+								className="text-[10px] px-1.5 py-0 h-4 font-normal capitalize"
 							>
-								{b.label}
+								{label}
 							</Badge>
 						))}
 						{overflowCount > 0 && (
@@ -136,7 +138,7 @@ export function WorkerCard({
 							</Badge>
 						)}
 					</div>
-				) : null}
+				)}
 				<p className="text-[10px] text-muted-foreground/60 mt-0.5">{lastActiveLabel}</p>
 			</div>
 		</Link>

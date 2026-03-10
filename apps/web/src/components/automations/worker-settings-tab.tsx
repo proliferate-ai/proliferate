@@ -18,7 +18,6 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { InlineEdit } from "@/components/ui/inline-edit";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useSessionAvailableActions } from "@/hooks/actions/use-actions";
@@ -74,7 +73,7 @@ export function WorkerSettingsTab({
 	onDelete,
 	isUpdating,
 }: WorkerSettingsTabProps) {
-	const [objectiveValue, setObjectiveValue] = useState(worker.systemPrompt || "");
+	const [systemPromptValue, setSystemPromptValue] = useState(worker.systemPrompt || "");
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [deleteJobId, setDeleteJobId] = useState<string | null>(null);
 	const [hasPendingChanges, setHasPendingChanges] = useState(false);
@@ -102,42 +101,28 @@ export function WorkerSettingsTab({
 		setCapabilitiesValue(worker.capabilities ?? []);
 	}, [worker.capabilities]);
 
-	const debouncedSaveObjective = useDebouncedCallback((value: string) => {
+	const debouncedSavePrompt = useDebouncedCallback((value: string) => {
 		onUpdate({ systemPrompt: value || undefined });
 		setHasPendingChanges(false);
 	}, 1000);
 
-	const handleObjectiveChange = (value: string) => {
-		setObjectiveValue(value);
+	const handlePromptChange = (value: string) => {
+		setSystemPromptValue(value);
 		setHasPendingChanges(true);
-		debouncedSaveObjective(value);
+		debouncedSavePrompt(value);
 	};
 
 	return (
 		<div className="flex flex-col gap-6">
-			{/* Name */}
+			{/* System Prompt */}
 			<div>
 				<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-					Name
-				</p>
-				<InlineEdit
-					value={worker.name}
-					onSave={(name) => onUpdate({ name })}
-					className="min-w-0"
-					displayClassName="text-sm font-medium text-foreground hover:bg-muted/50 rounded px-2 py-1 -mx-2 transition-colors"
-					inputClassName="text-sm font-medium h-auto py-1 px-2 -mx-2 max-w-md"
-				/>
-			</div>
-
-			{/* Objective */}
-			<div>
-				<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-					Objective
+					System Prompt
 				</p>
 				<div className="relative rounded-lg border border-border overflow-hidden focus-within:border-foreground focus-within:ring-[0.5px] focus-within:ring-foreground transition-all">
 					<Textarea
-						value={objectiveValue}
-						onChange={(e) => handleObjectiveChange(e.target.value)}
+						value={systemPromptValue}
+						onChange={(e) => handlePromptChange(e.target.value)}
 						placeholder="Describe what this coworker should do..."
 						className={cn(
 							"w-full text-sm focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 border-none resize-none px-4 py-3 bg-transparent rounded-none min-h-0",

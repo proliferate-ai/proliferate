@@ -164,9 +164,7 @@ export default function CoworkersPage() {
 										id={worker.id}
 										name={worker.name}
 										status={worker.status as WorkerStatus}
-										objective={worker.systemPrompt}
-										activeTaskCount={worker.activeTaskCount}
-										pendingApprovalCount={worker.pendingApprovalCount}
+										description={worker.description}
 										updatedAt={worker.updatedAt}
 									/>
 								))}
@@ -260,12 +258,12 @@ export default function CoworkersPage() {
 						</div>
 						<div className="flex flex-col gap-1.5">
 							<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-								Objective
+								System Prompt
 							</p>
 							<Textarea
 								value={createSystemPrompt}
 								onChange={(event) => setCreateSystemPrompt(event.target.value)}
-								placeholder="Describe what this coworker should own."
+								placeholder="Instructions for this coworker..."
 								className="min-h-[100px]"
 							/>
 						</div>

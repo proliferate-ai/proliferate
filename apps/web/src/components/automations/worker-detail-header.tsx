@@ -20,6 +20,7 @@ interface WorkerDetailHeaderProps {
 	};
 	onPause: () => void;
 	onResume: () => void;
+	onUpdateName?: (name: string) => void;
 	onUpdateDescription?: (description: string) => void;
 	isPausing: boolean;
 	isResuming: boolean;
@@ -29,51 +30,92 @@ export function WorkerDetailHeader({
 	worker,
 	onPause,
 	onResume,
+	onUpdateName,
 	onUpdateDescription,
 	isPausing,
 	isResuming,
 }: WorkerDetailHeaderProps) {
 	const status = worker.status as "active" | "automations_paused" | "degraded" | "failed";
-	const [isEditing, setIsEditing] = useState(false);
-	const [editValue, setEditValue] = useState(worker.description ?? "");
+	const [isEditingDesc, setIsEditingDesc] = useState(false);
+	const [descValue, setDescValue] = useState(worker.description ?? "");
+	const [isEditingName, setIsEditingName] = useState(false);
+	const [nameValue, setNameValue] = useState(worker.name);
 	const [selectedOrbIndex, setSelectedOrbIndex] = useState<number | null>(null);
-	const inputRef = useRef<HTMLInputElement>(null);
+	const descInputRef = useRef<HTMLInputElement>(null);
+	const nameInputRef = useRef<HTMLInputElement>(null);
 
-	// Sync edit value when worker data changes externally
+	// Sync edit values when worker data changes externally
 	useEffect(() => {
-		if (!isEditing) {
-			setEditValue(worker.description ?? "");
+		if (!isEditingDesc) {
+			setDescValue(worker.description ?? "");
 		}
-	}, [worker.description, isEditing]);
+	}, [worker.description, isEditingDesc]);
+
+	useEffect(() => {
+		if (!isEditingName) {
+			setNameValue(worker.name);
+		}
+	}, [worker.name, isEditingName]);
 
 	// Focus input when entering edit mode
 	useEffect(() => {
-		if (isEditing && inputRef.current) {
-			inputRef.current.focus();
-			inputRef.current.select();
+		if (isEditingDesc && descInputRef.current) {
+			descInputRef.current.focus();
+			descInputRef.current.select();
 		}
-	}, [isEditing]);
+	}, [isEditingDesc]);
 
-	const handleSave = useCallback(() => {
-		setIsEditing(false);
-		const trimmed = editValue.trim();
+	useEffect(() => {
+		if (isEditingName && nameInputRef.current) {
+			nameInputRef.current.focus();
+			nameInputRef.current.select();
+		}
+	}, [isEditingName]);
+
+	const handleSaveDesc = useCallback(() => {
+		setIsEditingDesc(false);
+		const trimmed = descValue.trim();
 		if (trimmed !== (worker.description ?? "") && onUpdateDescription) {
 			onUpdateDescription(trimmed);
 		}
-	}, [editValue, worker.description, onUpdateDescription]);
+	}, [descValue, worker.description, onUpdateDescription]);
 
-	const handleKeyDown = useCallback(
+	const handleSaveName = useCallback(() => {
+		setIsEditingName(false);
+		const trimmed = nameValue.trim();
+		if (trimmed && trimmed !== worker.name && onUpdateName) {
+			onUpdateName(trimmed);
+		} else {
+			setNameValue(worker.name);
+		}
+	}, [nameValue, worker.name, onUpdateName]);
+
+	const handleDescKeyDown = useCallback(
 		(e: React.KeyboardEvent) => {
 			if (e.key === "Enter") {
 				e.preventDefault();
-				handleSave();
+				handleSaveDesc();
 			}
 			if (e.key === "Escape") {
-				setIsEditing(false);
-				setEditValue(worker.description ?? "");
+				setIsEditingDesc(false);
+				setDescValue(worker.description ?? "");
 			}
 		},
-		[handleSave, worker.description],
+		[handleSaveDesc, worker.description],
+	);
+
+	const handleNameKeyDown = useCallback(
+		(e: React.KeyboardEvent) => {
+			if (e.key === "Enter") {
+				e.preventDefault();
+				handleSaveName();
+			}
+			if (e.key === "Escape") {
+				setIsEditingName(false);
+				setNameValue(worker.name);
+			}
+		},
+		[handleSaveName, worker.name],
 	);
 
 	const orbName = selectedOrbIndex != null ? PALETTE_PREVIEW_NAMES[selectedOrbIndex] : worker.name;
@@ -90,7 +132,24 @@ export function WorkerDetailHeader({
 			</OrbPicker>
 			<div className="min-w-0 flex-1">
 				<div className="flex items-center gap-2">
-					<h1 className="text-base font-semibold text-foreground truncate">{worker.name}</h1>
+					{isEditingName ? (
+						<Input
+							ref={nameInputRef}
+							value={nameValue}
+							onChange={(e) => setNameValue(e.target.value)}
+							onBlur={handleSaveName}
+							onKeyDown={handleNameKeyDown}
+							className="h-7 text-base font-semibold px-1 py-0 border-border/50 max-w-xs"
+						/>
+					) : (
+						<button
+							type="button"
+							onClick={() => onUpdateName && setIsEditingName(true)}
+							className={`text-base font-semibold text-foreground truncate hover:bg-muted/50 rounded px-1 -mx-1 transition-colors ${onUpdateName ? "cursor-text" : "cursor-default"}`}
+						>
+							{worker.name}
+						</button>
+					)}
 					<StatusDot
 						status={
 							status === "active" ? "active" : status === "automations_paused" ? "paused" : "error"
@@ -98,20 +157,20 @@ export function WorkerDetailHeader({
 						size="sm"
 					/>
 				</div>
-				{isEditing ? (
+				{isEditingDesc ? (
 					<Input
-						ref={inputRef}
-						value={editValue}
-						onChange={(e) => setEditValue(e.target.value)}
-						onBlur={handleSave}
-						onKeyDown={handleKeyDown}
+						ref={descInputRef}
+						value={descValue}
+						onChange={(e) => setDescValue(e.target.value)}
+						onBlur={handleSaveDesc}
+						onKeyDown={handleDescKeyDown}
 						placeholder="Add a description..."
 						className="h-6 text-xs mt-0.5 px-1 py-0 border-border/50"
 					/>
 				) : (
 					<Button
 						variant="ghost"
-						onClick={() => onUpdateDescription && setIsEditing(true)}
+						onClick={() => onUpdateDescription && setIsEditingDesc(true)}
 						className={`h-auto p-0 font-normal text-xs mt-0.5 truncate text-left max-w-full block hover:bg-transparent ${
 							worker.description
 								? "text-muted-foreground hover:text-foreground"
