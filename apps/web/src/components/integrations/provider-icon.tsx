@@ -11,7 +11,10 @@ export type Provider =
 	| "gmail"
 	| "slack"
 	| "webhook"
-	| "scheduled";
+	| "scheduled"
+	| "mysql"
+	| "mongodb"
+	| "grafana";
 
 interface ProviderIconProps {
 	provider: Provider;

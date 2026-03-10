@@ -63,6 +63,7 @@ export const INTEGRATION_CATALOG: CatalogEntry[] = [
 		description: "Query and manage MySQL databases with secure, read-only access by default",
 		category: "data",
 		type: "direct",
+		provider: "mysql",
 	},
 
 	// MCP presets (categorized by preset.category, defaults to "developer-tools")
