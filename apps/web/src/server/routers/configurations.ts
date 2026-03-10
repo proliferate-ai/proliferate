@@ -6,7 +6,7 @@
 
 import { logger } from "@/lib/infra/logger";
 import { ORPCError } from "@orpc/server";
-import { configurations } from "@proliferate/services";
+import { configurations, repos } from "@proliferate/services";
 import {
 	ConfigurationSchema,
 	CreateConfigurationInputSchema,
@@ -280,8 +280,13 @@ export const configurationsRouter = {
 				),
 			}),
 		)
-		.handler(async ({ input }) => {
+		.handler(async ({ input, context }) => {
 			try {
+				// Verify the repo belongs to this org before listing snapshots
+				const repoExists = await repos.repoExists(input.repoId, context.orgId);
+				if (!repoExists) {
+					throw new ORPCError("NOT_FOUND", { message: "Repository not found" });
+				}
 				const snapshots = await configurations.listReadyConfigurationsForRepo(input.repoId);
 				return { snapshots };
 			} catch (error) {

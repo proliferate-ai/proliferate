@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { useRepos } from "@/hooks/org/use-repos";
 import { useSecrets } from "@/hooks/org/use-secrets";
+import { useCreateSecret } from "@/hooks/org/use-secrets";
 import { useCreateBaseline } from "@/hooks/sessions/use-baselines";
 import { useCreateConfiguration } from "@/hooks/sessions/use-configurations";
 import { useCreateSession } from "@/hooks/sessions/use-sessions";
@@ -34,6 +35,7 @@ export function OnboardPage() {
 	const createBaseline = useCreateBaseline();
 	const createConfiguration = useCreateConfiguration();
 	const createSession = useCreateSession();
+	const createSecret = useCreateSecret();
 
 	// Secrets that already exist for the selected repo
 	const existingSecrets = (secrets ?? []).filter((s) => !s.repo_id || s.repo_id === selectedRepoId);
@@ -46,7 +48,16 @@ export function OnboardPage() {
 
 		setIsStarting(true);
 		try {
-			// TODO: Upsert new secrets via assignSecretToRepos if any were added
+			// Persist any new secrets the user entered
+			for (const secret of newSecrets) {
+				if (secret.key && secret.value) {
+					await createSecret.mutateAsync({
+						key: secret.key,
+						value: secret.value,
+						repoId: selectedRepoId,
+					});
+				}
+			}
 
 			await createBaseline.mutateAsync({ repoId: selectedRepoId });
 
