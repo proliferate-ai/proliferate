@@ -1,10 +1,10 @@
 "use client";
 
 import { ModelSelector } from "@/components/automations/model-selector";
-import { ReasoningSelector } from "@/components/dashboard/reasoning-selector";
+import { WorkerOrb } from "@/components/automations/worker-card";
 import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
-import { BlocksIcon } from "@/components/ui/icons";
+import { BlocksIcon, OpenCodeIcon } from "@/components/ui/icons";
 import { RoundIconActionButton } from "@/components/ui/round-icon-action-button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSessionAvailableActions } from "@/hooks/actions/use-actions";
@@ -27,6 +27,7 @@ import Link from "next/link";
 import type { FC } from "react";
 import { useCallback, useState } from "react";
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { InboxTray } from "./inbox-tray";
 import { allToolUIs } from "./tool-ui/all-tool-uis";
 import { ProliferateToolCard } from "./tool-ui/proliferate-tool-card";
@@ -146,7 +147,7 @@ const AssistantCommandCard: FC<{
 	</div>
 );
 
-const MarkdownContent: FC<MarkdownContentProps> = ({ text, variant = "assistant" }) => {
+export const MarkdownContent: FC<MarkdownContentProps> = ({ text, variant = "assistant" }) => {
 	const isUser = variant === "user";
 	const assistantSegments = !isUser ? parseAssistantContentSegments(text) : null;
 	const hasAssistantCommand =
@@ -177,6 +178,7 @@ const MarkdownContent: FC<MarkdownContentProps> = ({ text, variant = "assistant"
 
 	return (
 		<Markdown
+			remarkPlugins={[remarkGfm]}
 			components={{
 				p: ({ children }) => (
 					<p className={cn("leading-relaxed", isUser ? "mb-1.5 last:mb-0" : "mb-3 last:mb-0")}>
@@ -248,6 +250,18 @@ const MarkdownContent: FC<MarkdownContentProps> = ({ text, variant = "assistant"
 						{children}
 					</blockquote>
 				),
+				table: ({ children }) => (
+					<div className={cn("overflow-x-auto", isUser ? "my-2" : "my-3")}>
+						<table className="w-full border-collapse text-sm">{children}</table>
+					</div>
+				),
+				thead: ({ children }) => <thead className="border-b border-border">{children}</thead>,
+				tbody: ({ children }) => <tbody>{children}</tbody>,
+				tr: ({ children }) => <tr className="border-b border-border/50">{children}</tr>,
+				th: ({ children }) => (
+					<th className="px-3 py-1.5 text-left font-semibold text-muted-foreground">{children}</th>
+				),
+				td: ({ children }) => <td className="px-3 py-1.5">{children}</td>,
 			}}
 		>
 			{text}
@@ -270,11 +284,12 @@ const ComposerActionsLeft: FC<ComposerActionsLeftProps> = ({
 	onReasoningEffortChange,
 }) => (
 	<div className="flex items-center gap-1">
-		<ModelSelector modelId={selectedModel} onChange={onModelChange} variant="ghost" />
-		<ReasoningSelector
+		<ModelSelector
 			modelId={selectedModel}
-			effort={reasoningEffort}
-			onChange={onReasoningEffortChange}
+			onChange={onModelChange}
+			variant="ghost"
+			reasoningEffort={reasoningEffort}
+			onReasoningChange={onReasoningEffortChange}
 		/>
 	</div>
 );
@@ -324,6 +339,7 @@ interface SessionStateForComposer {
 	overallWorkState: OverallWorkState;
 	outcome?: string | null;
 	workerId?: string | null;
+	automationName?: string | null;
 }
 
 interface ThreadProps {
@@ -362,7 +378,11 @@ export const Thread: FC<ThreadProps> = ({
 				<ThreadPrimitive.Empty>
 					<div className="flex h-full flex-col items-center justify-center p-8 text-center">
 						<div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted mb-4">
-							<BlocksIcon className="h-5 w-5 text-foreground" />
+							{sessionState?.automationName ? (
+								<WorkerOrb name={sessionState.automationName} size={20} />
+							) : (
+								<OpenCodeIcon className="h-5 w-5" />
+							)}
 						</div>
 						<p className="text-lg font-semibold tracking-tight text-foreground">{title}</p>
 						<p className="mt-1.5 text-sm text-muted-foreground max-w-sm">{description}</p>

@@ -32,34 +32,122 @@ function hashName(name: string): number {
 export function WorkerOrb({ name, size = 40 }: { name: string; size?: number }) {
 	const hash = hashName(name);
 	const palette = ORB_PALETTES[hash % ORB_PALETTES.length];
+	const [c0, c1, c2, structure] = palette;
 	const rotation = hash % 360;
-	const id = `orb-${hash % 9999}`;
+	const uid = `orb-${hash}`;
 
 	return (
-		<div
-			className="rounded-xl bg-muted/50 overflow-hidden shrink-0 relative"
-			style={{ width: size, height: size }}
-		>
-			<svg viewBox="0 0 40 40" className="w-full h-full">
-				<defs>
-					<radialGradient id={`${id}-a`} cx="30%" cy="30%" r="70%">
-						<stop offset="0%" stopColor={palette[0]} stopOpacity="0.9" />
-						<stop offset="100%" stopColor={palette[1]} stopOpacity="0.3" />
-					</radialGradient>
-					<radialGradient id={`${id}-b`} cx="70%" cy="70%" r="60%">
-						<stop offset="0%" stopColor={palette[2]} stopOpacity="0.8" />
-						<stop offset="100%" stopColor={palette[1]} stopOpacity="0.1" />
-					</radialGradient>
-					<filter id={`${id}-blur`}>
-						<feGaussianBlur stdDeviation="3" />
-					</filter>
-				</defs>
-				<g filter={`url(#${id}-blur)`} transform={`rotate(${rotation} 20 20)`}>
-					<circle cx="15" cy="14" r="14" fill={`url(#${id}-a)`} />
-					<circle cx="26" cy="26" r="12" fill={`url(#${id}-b)`} />
-				</g>
-			</svg>
-		</div>
+		<svg width={size} height={size} viewBox="0 0 40 40" className="shrink-0" aria-hidden="true">
+			<defs>
+				<clipPath id={`${uid}-clip`}>
+					<circle cx="20" cy="20" r="20" />
+				</clipPath>
+				<filter id={`${uid}-blur`} x="-50%" y="-50%" width="200%" height="200%">
+					<feGaussianBlur stdDeviation="5" />
+				</filter>
+				<radialGradient id={`${uid}-hi`} cx="32%" cy="28%" r="36%">
+					<stop offset="0%" stopColor="white" stopOpacity="0.22" />
+					<stop offset="100%" stopColor="white" stopOpacity="0" />
+				</radialGradient>
+			</defs>
+
+			{/* Structure-specific rendering */}
+			{structure === "nebula" && (
+				<>
+					<circle cx="20" cy="20" r="20" fill={c0} />
+					<g clipPath={`url(#${uid}-clip)`}>
+						<g filter={`url(#${uid}-blur)`}>
+							<circle
+								cx={12 + (hash % 8)}
+								cy={10 + ((hash >> 3) % 8)}
+								r="14"
+								fill={c1}
+								opacity="0.85"
+							/>
+							<circle
+								cx={24 + ((hash >> 5) % 8)}
+								cy={26 + ((hash >> 7) % 6)}
+								r="12"
+								fill={c2}
+								opacity="0.7"
+							/>
+							<circle
+								cx={20 + ((hash >> 9) % 6)}
+								cy={14 + ((hash >> 11) % 6)}
+								r="8"
+								fill={c0}
+								opacity="0.5"
+							/>
+						</g>
+					</g>
+				</>
+			)}
+
+			{structure === "glow" && (
+				<>
+					<defs>
+						<radialGradient
+							id={`${uid}-glow`}
+							cx={`${35 + (hash % 20)}%`}
+							cy={`${30 + ((hash >> 3) % 20)}%`}
+							r="65%"
+						>
+							<stop offset="0%" stopColor={c2} />
+							<stop offset="40%" stopColor={c1} />
+							<stop offset="100%" stopColor={c0} />
+						</radialGradient>
+					</defs>
+					<circle cx="20" cy="20" r="20" fill={`url(#${uid}-glow)`} />
+					<g clipPath={`url(#${uid}-clip)`}>
+						<g filter={`url(#${uid}-blur)`}>
+							<circle
+								cx={16 + (hash % 10)}
+								cy={16 + ((hash >> 4) % 10)}
+								r="10"
+								fill={c2}
+								opacity="0.6"
+							/>
+						</g>
+					</g>
+				</>
+			)}
+
+			{structure === "split" && (
+				<>
+					<defs>
+						<linearGradient
+							id={`${uid}-split`}
+							x1="0"
+							y1="0"
+							x2="1"
+							y2="1"
+							gradientTransform={`rotate(${rotation % 90}, 0.5, 0.5)`}
+						>
+							<stop offset="0%" stopColor={c0} />
+							<stop offset="50%" stopColor={c1} />
+							<stop offset="100%" stopColor={c2} />
+						</linearGradient>
+					</defs>
+					<circle cx="20" cy="20" r="20" fill={`url(#${uid}-split)`} />
+					<g clipPath={`url(#${uid}-clip)`}>
+						<g filter={`url(#${uid}-blur)`}>
+							<ellipse
+								cx={14 + (hash % 6)}
+								cy={14 + ((hash >> 3) % 6)}
+								rx="16"
+								ry="10"
+								fill={c2}
+								opacity="0.5"
+								transform={`rotate(${(rotation % 45) + 20}, 20, 20)`}
+							/>
+						</g>
+					</g>
+				</>
+			)}
+
+			{/* Specular highlight for depth */}
+			<circle cx="20" cy="20" r="20" fill={`url(#${uid}-hi)`} />
+		</svg>
 	);
 }
 

@@ -23,7 +23,7 @@ import { Shield } from "lucide-react";
 import { useMemo, useState } from "react";
 
 interface PermissionsTabProps {
-	isOAuth: boolean;
+	showActions: boolean;
 	provider: Provider | null;
 	connectorId?: string;
 }
@@ -31,7 +31,7 @@ interface PermissionsTabProps {
 type ConfigureContext = "admin" | "user";
 
 function getSourceIdFromProps(props: PermissionsTabProps): string | null {
-	if (props.isOAuth && props.provider) {
+	if (props.showActions && props.provider) {
 		return props.provider;
 	}
 	if (props.connectorId) {
@@ -41,7 +41,7 @@ function getSourceIdFromProps(props: PermissionsTabProps): string | null {
 }
 
 function buildActions(props: PermissionsTabProps) {
-	if (!props.isOAuth || !props.provider) {
+	if (!props.showActions || !props.provider) {
 		return [] as Array<{ key: string; name: string; description: string; riskLevel: string }>;
 	}
 
@@ -58,7 +58,7 @@ function buildActions(props: PermissionsTabProps) {
 	}));
 }
 
-export function PermissionsTab({ isOAuth, provider, connectorId }: PermissionsTabProps) {
+export function PermissionsTab({ showActions, provider, connectorId }: PermissionsTabProps) {
 	const { data: authSession } = useSession();
 	const { data: activeOrg } = useActiveOrganization();
 	const { data: orgData } = useOrgMembersAndInvitations(activeOrg?.id);
@@ -72,18 +72,18 @@ export function PermissionsTab({ isOAuth, provider, connectorId }: PermissionsTa
 	const { data: connectorActionsData, isLoading: connectorActionsLoading } =
 		useConnectorActions(connectorId);
 	const modes = modesData?.modes ?? {};
-	const sourceId = getSourceIdFromProps({ isOAuth, provider, connectorId });
+	const sourceId = getSourceIdFromProps({ showActions, provider, connectorId });
 
 	const actions = useMemo(() => {
-		if (isOAuth) {
-			return buildActions({ isOAuth, provider, connectorId });
+		if (showActions) {
+			return buildActions({ showActions, provider, connectorId });
 		}
 		return mapConnectorToolsToPermissionActions(connectorId, connectorActionsData?.actions);
-	}, [isOAuth, provider, connectorId, connectorActionsData?.actions]);
+	}, [showActions, provider, connectorId, connectorActionsData?.actions]);
 	const [configureContext, setConfigureContext] = useState<ConfigureContext>("admin");
 	const [expandedActionKeys, setExpandedActionKeys] = useState<Record<string, boolean>>({});
 
-	if (!isOAuth && connectorId && connectorActionsLoading) {
+	if (!showActions && connectorId && connectorActionsLoading) {
 		return (
 			<div className="rounded-lg border border-dashed border-border/80 py-8 text-center">
 				<Shield className="h-6 w-6 mx-auto mb-2 text-muted-foreground/40" />

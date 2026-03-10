@@ -85,9 +85,9 @@ async function handleTick(refreshQueue: Queue<SnapshotRefreshJob>, logger: Logge
 
 	for (const config of dueConfigs) {
 		await refreshQueue.add(
-			`refresh:${config.id}`,
+			`refresh-${config.id}`,
 			{ configurationId: config.id },
-			{ jobId: `refresh:${config.id}` },
+			{ jobId: `refresh-${config.id}` },
 		);
 	}
 }

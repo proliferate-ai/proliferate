@@ -18,13 +18,14 @@ export default function NewSessionPage() {
 
 	const { data: repo } = useRepo(repoId || "");
 
-	const { isPending, isSuccess, isError, errorMessage, retry, create } = useCreateSessionFromRepo({
-		repoId,
-		sessionType,
-		modelId: selectedModel,
-	});
+	const { isPending, isSuccess, isError, errorMessage, isReady, retry, create } =
+		useCreateSessionFromRepo({
+			repoId,
+			sessionType,
+			modelId: selectedModel,
+		});
 
-	// Trigger creation once
+	// Trigger creation once repo data is ready
 	useEffect(() => {
 		if (!repoId) {
 			router.replace("/dashboard");
@@ -37,7 +38,7 @@ export default function NewSessionPage() {
 			return;
 		}
 
-		if (isPending || isSuccess) {
+		if (!isReady || isPending || isSuccess) {
 			return;
 		}
 
@@ -47,7 +48,7 @@ export default function NewSessionPage() {
 				router.replace(`/workspace/${sessionId}`);
 			}
 		})();
-	}, [repoId, sessionType, isPending, isSuccess, router, create]);
+	}, [repoId, sessionType, isReady, isPending, isSuccess, router, create]);
 
 	if (isError) {
 		return (

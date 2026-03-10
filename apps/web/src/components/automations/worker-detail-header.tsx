@@ -125,7 +125,7 @@ export function WorkerDetailHeader({
 			<OrbPicker selectedIndex={selectedOrbIndex} onSelect={setSelectedOrbIndex}>
 				<button
 					type="button"
-					className="rounded-xl cursor-pointer shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					className="rounded-full cursor-pointer shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 				>
 					<WorkerOrb name={orbName} size={44} />
 				</button>

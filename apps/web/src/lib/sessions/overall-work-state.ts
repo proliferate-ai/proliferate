@@ -6,6 +6,8 @@ import { type OverallWorkState, deriveOverallWorkState } from "@proliferate/shar
 export interface DerivedSessionState {
 	overallWorkState: OverallWorkState;
 	needsAttention: boolean;
+	/** True only when the session requires direct human action (not just unread). */
+	needsUrgentAttention: boolean;
 	isLive: boolean;
 }
 
@@ -20,6 +22,8 @@ export interface SessionListResult {
 	counts: Record<FilterTab, number>;
 	totalCount: number;
 	visibleHasLive: boolean;
+	/** Whether ANY session (across all tabs) is live — use for polling decisions. */
+	anyHasLive: boolean;
 }
 
 export function getSessionOrigin(
@@ -47,10 +51,12 @@ export function deriveSessionState(
 	const overallWorkState = deriveOverallWorkState(session.status, hasUnreadUpdate(session));
 	const needsAttention =
 		overallWorkState === "needs_input" || session.status.requiresHumanReview || Boolean(pendingRun);
+	const needsUrgentAttention =
+		session.status.agentState === "waiting_approval" || Boolean(pendingRun);
 	const isLive =
 		session.status.terminalState === null &&
 		(session.status.sandboxState === "running" || session.status.sandboxState === "provisioning");
-	return { overallWorkState, needsAttention, isLive };
+	return { overallWorkState, needsAttention, needsUrgentAttention, isLive };
 }
 
 export function sortSessionEntries<T extends SessionListEntry>(items: T[]): T[] {
@@ -173,5 +179,6 @@ export function buildSessionListResult({
 		counts,
 		totalCount: baseSessions.length,
 		visibleHasLive: ranked.some((entry) => entry.derived.isLive),
+		anyHasLive: entries.some((entry) => entry.derived.isLive),
 	};
 }

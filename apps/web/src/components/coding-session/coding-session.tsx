@@ -1,7 +1,9 @@
 "use client";
 
+import { WorkerOrb } from "@/components/automations/worker-card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { OpenCodeIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -350,6 +352,7 @@ export function CodingSession({
 					overallWorkState: overallWorkState ?? "working",
 					outcome: sessionData.outcome,
 					workerId: sessionData.workerId,
+					automationName: sessionData.automation?.name ?? sessionData.workerName,
 				}}
 			/>
 		</SessionContext.Provider>
@@ -473,11 +476,13 @@ export function CodingSession({
 				<TooltipContent side="bottom">Back</TooltipContent>
 			</Tooltip>
 			<div className="h-5 w-px bg-border/60 shrink-0" />
-			<img
-				src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp"
-				alt="Proliferate"
-				className="h-5 w-5 rounded-full shrink-0"
-			/>
+			{sessionData?.automation?.name || sessionData?.workerName ? (
+				<div className="shrink-0">
+					<WorkerOrb name={(sessionData.automation?.name ?? sessionData.workerName)!} size={20} />
+				</div>
+			) : (
+				<OpenCodeIcon className="h-5 w-5 shrink-0" />
+			)}
 			<div className="min-w-0 flex-1">
 				{isEditingTitle ? (
 					<Input

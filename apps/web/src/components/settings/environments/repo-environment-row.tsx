@@ -1,5 +1,6 @@
 "use client";
 
+import { SnapshotRefreshSection } from "@/components/settings/environments/snapshot-refresh-section";
 import { BaselineSection } from "@/components/settings/repositories/baseline-section";
 import { DangerSection } from "@/components/settings/repositories/danger-section";
 import { ServiceCommandsSection } from "@/components/settings/repositories/service-commands-section";
@@ -14,6 +15,8 @@ interface RepoEnvironmentRowProps {
 	repo: {
 		id: string;
 		githubRepoName: string;
+		configurationId?: string | null;
+		configurationStatus?: string | null;
 	};
 	baseline?: {
 		id: string;
@@ -77,6 +80,9 @@ export function RepoEnvironmentRow({ repo, baseline }: RepoEnvironmentRowProps) 
 			{expanded && (
 				<div className="border-t border-border/50 px-4 py-4 pl-11 space-y-6">
 					<BaselineSection repoId={repo.id} />
+					{repo.configurationId && repo.configurationStatus === "ready" && (
+						<SnapshotRefreshSection configurationId={repo.configurationId} />
+					)}
 					<ServiceCommandsSection repoId={repo.id} />
 					<SetupRunSection repoId={repo.id} />
 					<DangerSection repoId={repo.id} repoName={repo.githubRepoName} />

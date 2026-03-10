@@ -6,20 +6,24 @@ import { cn } from "@/lib/display/utils";
 import { useState } from "react";
 import { WorkerOrb } from "./worker-card";
 
-/** Names that deterministically map to each palette index via the hashName function. */
+/** Names that deterministically map to each palette index (0–11) via the hashName function. */
 const PALETTE_PREVIEW_NAMES = [
-	"alpha",
-	"bravo",
-	"charlie",
-	"dev",
-	"echo",
-	"foxtrot",
-	"golf",
-	"hotel",
+	"chip",
+	"atom",
+	"fire",
+	"ace",
+	"beta",
+	"pen",
+	"elm",
+	"cyan",
+	"ivy",
+	"edge",
+	"apex",
+	"aura",
 ];
 
 interface OrbPickerProps {
-	/** Currently selected palette index (0-7), or null for no selection. */
+	/** Currently selected palette index (0–11), or null for no selection. */
 	selectedIndex: number | null;
 	/** Called when the user picks a palette. */
 	onSelect: (index: number) => void;
@@ -28,7 +32,7 @@ interface OrbPickerProps {
 }
 
 /**
- * Popover that displays the 8 orb palettes in a grid and lets users pick one.
+ * Popover that displays the 12 orb palettes in a grid and lets users pick one.
  */
 export function OrbPicker({ selectedIndex, onSelect, children }: OrbPickerProps) {
 	const [open, setOpen] = useState(false);
@@ -39,7 +43,7 @@ export function OrbPicker({ selectedIndex, onSelect, children }: OrbPickerProps)
 				{children ?? (
 					<button
 						type="button"
-						className="rounded-xl cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						className="rounded-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						<WorkerOrb
 							name={selectedIndex != null ? PALETTE_PREVIEW_NAMES[selectedIndex] : "default"}
@@ -60,7 +64,7 @@ export function OrbPicker({ selectedIndex, onSelect, children }: OrbPickerProps)
 								setOpen(false);
 							}}
 							className={cn(
-								"rounded-xl p-0.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+								"rounded-full p-0.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 								selectedIndex === i
 									? "ring-2 ring-foreground"
 									: "ring-1 ring-transparent hover:ring-border",

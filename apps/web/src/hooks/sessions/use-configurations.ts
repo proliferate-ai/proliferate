@@ -159,3 +159,19 @@ export function useDetachRepo() {
 		}),
 	);
 }
+
+export function useUpdateRefreshSettings() {
+	const queryClient = useQueryClient();
+	return useMutation(
+		orpc.configurations.updateRefreshSettings.mutationOptions({
+			onSuccess: (_data, input) => {
+				queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
+				queryClient.invalidateQueries({
+					queryKey: orpc.configurations.get.key({
+						input: { id: input.configurationId },
+					}),
+				});
+			},
+		}),
+	);
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
+import { ProviderIcon } from "@/components/integrations/provider-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { SUGGESTED_CAPABILITIES } from "@/config/coworkers";
+import { inferProviderFromCapabilityKey } from "@/lib/integrations/capability-utils";
 import { X } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -20,27 +21,6 @@ export type WorkerCapabilityDraft = {
 	mode: "allow" | "require_approval" | "deny";
 	origin?: string;
 };
-
-type CapabilityProvider = Extract<Provider, "github" | "linear" | "sentry" | "slack" | "jira">;
-
-function inferProviderFromCapabilityKey(capabilityKey: string): CapabilityProvider | undefined {
-	if (capabilityKey.startsWith("source.github.") || capabilityKey.startsWith("github.")) {
-		return "github";
-	}
-	if (capabilityKey.startsWith("source.linear.") || capabilityKey.startsWith("linear.")) {
-		return "linear";
-	}
-	if (capabilityKey.startsWith("source.sentry.") || capabilityKey.startsWith("sentry.")) {
-		return "sentry";
-	}
-	if (capabilityKey.startsWith("slack.")) {
-		return "slack";
-	}
-	if (capabilityKey.startsWith("jira.")) {
-		return "jira";
-	}
-	return undefined;
-}
 
 interface WorkerCapabilityEditorProps {
 	value: WorkerCapabilityDraft[];

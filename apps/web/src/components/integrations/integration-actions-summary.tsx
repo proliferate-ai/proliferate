@@ -11,7 +11,7 @@ import { resolveUserToggleState } from "@/lib/integrations/action-permissions";
 import { useMemo } from "react";
 
 interface IntegrationActionsSummaryProps {
-	isOAuth: boolean;
+	showActions: boolean;
 	provider: Provider | null;
 	connectorId?: string;
 	context: "admin" | "user";
@@ -19,11 +19,11 @@ interface IntegrationActionsSummaryProps {
 }
 
 function getSourceId(
-	isOAuth: boolean,
+	showActions: boolean,
 	provider: Provider | null,
 	connectorId?: string,
 ): string | null {
-	if (isOAuth && provider) {
+	if (showActions && provider) {
 		return provider;
 	}
 	if (connectorId) {
@@ -33,7 +33,7 @@ function getSourceId(
 }
 
 export function IntegrationActionsSummary({
-	isOAuth,
+	showActions,
 	provider,
 	connectorId,
 	context,
@@ -46,21 +46,21 @@ export function IntegrationActionsSummary({
 	const { data: connectorActionsData, isLoading: connectorActionsLoading } =
 		useConnectorActions(connectorId);
 
-	const sourceId = getSourceId(isOAuth, provider, connectorId);
+	const sourceId = getSourceId(showActions, provider, connectorId);
 
 	const actionIds = useMemo(() => {
-		if (isOAuth && provider) {
+		if (showActions && provider) {
 			const adapter = ACTION_ADAPTERS.find((entry) => entry.integration === provider);
 			return adapter?.actions.map((action) => action.name) ?? [];
 		}
 		return connectorActionsData?.actions?.map((action) => action.name) ?? [];
-	}, [isOAuth, provider, connectorActionsData?.actions]);
+	}, [showActions, provider, connectorActionsData?.actions]);
 
 	if (!sourceId) {
 		return null;
 	}
 
-	if (!isOAuth && connectorActionsLoading) {
+	if (!showActions && connectorActionsLoading) {
 		return (
 			<p className="text-[11px] text-muted-foreground" aria-live="polite">
 				Loading actions...

@@ -1,10 +1,11 @@
 "use client";
 
 import { ModelSelector } from "@/components/automations/model-selector";
-import { ReasoningSelector } from "@/components/dashboard/reasoning-selector";
-import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
+import { CapabilitiesBadges } from "@/components/dashboard/capabilities-badges";
+import { EnvironmentPicker } from "@/components/dashboard/environment-picker";
+import { PersonaPicker } from "@/components/dashboard/persona-picker";
+import type { Provider } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
-import { BlocksIcon } from "@/components/ui/icons";
 import { Textarea } from "@/components/ui/textarea";
 import { useActionModes } from "@/hooks/actions/use-action-modes";
 import { useActionPreferenceIndex } from "@/hooks/actions/use-action-preferences";
@@ -15,8 +16,8 @@ import { cn } from "@/lib/display/utils";
 import { ACTION_ADAPTERS, type AdapterProvider } from "@/lib/integrations/action-adapters";
 import { resolveUserToggleState } from "@/lib/integrations/action-permissions";
 import { useDashboardStore } from "@/stores/dashboard";
+import type { ModelId } from "@proliferate/shared";
 import { ArrowUp } from "lucide-react";
-import Link from "next/link";
 import { useMemo, useState } from "react";
 
 interface PromptInputProps {
@@ -40,7 +41,7 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 	const actionModes = actionModesData?.modes ?? {};
 	const preferenceIndex = useActionPreferenceIndex();
 
-	const { selectedModel, setSelectedModel, reasoningEffort, setReasoningEffort } =
+	const { selectedModel, setSelectedModel, reasoningEffort, setReasoningEffort, selectedPersona } =
 		useDashboardStore();
 
 	const enabledIntegrationSummaries = useMemo(() => {
@@ -147,13 +148,14 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 	]);
 
 	const canSubmit = !disabled && !isLoading && prompt.trim();
+	const isCoworker = selectedPersona.type === "coworker";
+	const displayModelId =
+		isCoworker && selectedPersona.modelId ? (selectedPersona.modelId as ModelId) : selectedModel;
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
 		if (canSubmit) {
 			onSubmit(prompt.trim());
-			// Don't clear prompt - keep it visible during loading
-			// It will be cleared when session becomes active
 		}
 	};
 
@@ -170,7 +172,7 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 					value={prompt}
 					onChange={(e) => setPrompt(e.target.value)}
 					placeholder="How can I help you today?"
-					className="w-full min-h-[60px] p-4 pb-2 bg-transparent resize-none focus:outline-none text-[15px] leading-relaxed border-0 focus-visible:ring-0"
+					className="w-full min-h-[60px] p-4 pb-2 bg-transparent resize-none focus:outline-none text-[15px] leading-relaxed border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
 					disabled={disabled || isLoading}
 					onKeyDown={(e) => {
 						if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -182,24 +184,27 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 
 				{/* Bottom toolbar */}
 				<div className="flex items-center justify-between px-3 py-2 overflow-hidden">
-					{/* Left side - Context selectors */}
+					{/* Left side - Persona, model, environment */}
 					<div className="flex items-center gap-1 min-w-0 overflow-hidden">
+						<PersonaPicker disabled={isLoading} />
 						<ModelSelector
-							modelId={selectedModel}
+							modelId={displayModelId}
 							onChange={setSelectedModel}
-							disabled={isLoading}
+							disabled={isLoading || isCoworker}
 							variant="ghost"
+							reasoningEffort={reasoningEffort}
+							onReasoningChange={setReasoningEffort}
 						/>
-						<ReasoningSelector
-							modelId={selectedModel}
-							effort={reasoningEffort}
-							onChange={setReasoningEffort}
-							disabled={isLoading}
-						/>
+						{!isCoworker && <EnvironmentPicker disabled={isLoading} />}
 					</div>
 
-					{/* Right side - Actions & Submit */}
-					<div className="flex items-center gap-1">
+					{/* Right side - Capabilities + Submit */}
+					<div className="flex items-center gap-2">
+						<CapabilitiesBadges
+							mode={isCoworker ? "coworker" : "opencode"}
+							workerId={isCoworker ? selectedPersona.workerId : undefined}
+							integrationSummaries={enabledIntegrationSummaries}
+						/>
 						<Button
 							type="submit"
 							size="icon"
@@ -213,39 +218,6 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 						</Button>
 					</div>
 				</div>
-				{enabledIntegrationSummaries.length > 0 && (
-					<div className="flex items-center justify-between border-t border-border/60 px-3 py-2">
-						<div className="flex items-center -space-x-1">
-							{enabledIntegrationSummaries.slice(0, 3).map((entry) => (
-								<div
-									key={entry.id}
-									className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-foreground"
-									title={`${entry.displayName}: ${entry.detail}`}
-								>
-									{entry.provider ? (
-										<ProviderIcon provider={entry.provider} size="sm" />
-									) : (
-										<BlocksIcon className="h-3.5 w-3.5" />
-									)}
-								</div>
-							))}
-							{enabledIntegrationSummaries.length > 3 && (
-								<Link
-									href="/dashboard/integrations"
-									className="ml-1 inline-flex h-6 items-center rounded-full border border-border bg-background px-2 text-[11px] text-muted-foreground hover:text-foreground"
-								>
-									+{enabledIntegrationSummaries.length - 3}
-								</Link>
-							)}
-						</div>
-						<Link
-							href="/dashboard/integrations"
-							className="text-xs text-primary hover:text-primary/80"
-						>
-							Integration settings
-						</Link>
-					</div>
-				)}
 			</div>
 		</form>
 	);

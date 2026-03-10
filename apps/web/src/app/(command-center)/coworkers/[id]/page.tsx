@@ -7,7 +7,7 @@ import { WorkerSessionsTab } from "@/components/automations/worker-sessions-tab"
 import { WorkerSettingsTab } from "@/components/automations/worker-settings-tab";
 import { Button } from "@/components/ui/button";
 import { PageBackLink } from "@/components/ui/page-back-link";
-import { DETAIL_TABS, type DetailTab } from "@/config/coworkers";
+import { DETAIL_TABS, type DetailTab, type WorkerStatus } from "@/config/coworkers";
 import { useWorkerActions } from "@/hooks/automations/use-worker-actions";
 import { useWorkerDetail } from "@/hooks/automations/use-worker-detail";
 import { cn } from "@/lib/display/utils";
@@ -48,12 +48,7 @@ export default function CoworkerDetailPage({
 		);
 	}
 
-	const workerStatus = worker.status as
-		| "active"
-		| "automations_paused"
-		| "degraded"
-		| "failed"
-		| "archived";
+	const workerStatus = worker.status as WorkerStatus;
 	const isManagerFailed = workerStatus === "degraded" || workerStatus === "failed";
 
 	return (
@@ -107,7 +102,11 @@ export default function CoworkerDetailPage({
 				)}
 
 				{activeTab === "chat" && worker.managerSessionId && (
-					<WorkerChatTab managerSessionId={worker.managerSessionId} workerStatus={worker.status} />
+					<WorkerChatTab
+						managerSessionId={worker.managerSessionId}
+						workerStatus={worker.status}
+						workerName={worker.name}
+					/>
 				)}
 
 				{activeTab === "configure" && (

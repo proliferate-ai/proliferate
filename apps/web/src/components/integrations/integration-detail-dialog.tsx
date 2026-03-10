@@ -305,7 +305,7 @@ function IntegrationSettingsContent({
 	return (
 		<div className="space-y-4">
 			<PermissionsTab
-				isOAuth={entry.type === "oauth" || entry.type === "slack"}
+				showActions={entry.type === "oauth" || entry.type === "slack" || entry.type === "direct"}
 				provider={entry.provider ?? null}
 				connectorId={
 					entry.type === "mcp-preset" || entry.type === "custom-mcp" ? connectorId : undefined

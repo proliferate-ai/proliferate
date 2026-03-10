@@ -1,4 +1,11 @@
-export type AdapterProvider = "linear" | "sentry" | "jira" | "slack";
+export type AdapterProvider =
+	| "linear"
+	| "sentry"
+	| "jira"
+	| "slack"
+	| "mysql"
+	| "mongodb"
+	| "grafana";
 
 export interface ActionMeta {
 	name: string;
@@ -133,6 +140,123 @@ export const ACTION_ADAPTERS: AdapterMeta[] = [
 			{ name: "create_issue", description: "Create a new issue", riskLevel: "write" },
 			{ name: "update_issue", description: "Update an existing issue", riskLevel: "write" },
 			{ name: "add_comment", description: "Add a comment to an issue", riskLevel: "write" },
+		],
+	},
+	{
+		integration: "mysql",
+		displayName: "MySQL",
+		description: "Query and manage MySQL databases from sessions",
+		actions: [
+			{ name: "list_tables", description: "List all tables in the database", riskLevel: "read" },
+			{
+				name: "describe_table",
+				description: "Show columns, indexes, and sample rows for a table",
+				riskLevel: "read",
+			},
+			{
+				name: "query",
+				description: "Execute a read-only SELECT query",
+				riskLevel: "read",
+			},
+			{
+				name: "explain_query",
+				description: "Show execution plan for a query",
+				riskLevel: "read",
+			},
+			{
+				name: "execute",
+				description: "Execute a mutation (INSERT, UPDATE, DELETE, DDL)",
+				riskLevel: "write",
+			},
+		],
+	},
+	{
+		integration: "mongodb",
+		displayName: "MongoDB",
+		description: "Query and manage MongoDB databases from sessions",
+		actions: [
+			{
+				name: "list_databases",
+				description: "List all databases with size info",
+				riskLevel: "read",
+			},
+			{
+				name: "list_collections",
+				description: "List collections in a database",
+				riskLevel: "read",
+			},
+			{
+				name: "collection_schema",
+				description: "Sample documents to infer field names and types",
+				riskLevel: "read",
+			},
+			{
+				name: "find",
+				description: "Query documents with filter and projection",
+				riskLevel: "read",
+			},
+			{
+				name: "aggregate",
+				description: "Run a read-only aggregation pipeline",
+				riskLevel: "read",
+			},
+			{
+				name: "count",
+				description: "Count documents matching a filter",
+				riskLevel: "read",
+			},
+			{
+				name: "insert_many",
+				description: "Insert documents into a collection",
+				riskLevel: "write",
+			},
+			{
+				name: "update_many",
+				description: "Update documents matching a filter",
+				riskLevel: "write",
+			},
+			{
+				name: "delete_many",
+				description: "Delete documents matching a filter",
+				riskLevel: "write",
+			},
+		],
+	},
+	{
+		integration: "grafana",
+		displayName: "Grafana",
+		description: "Search dashboards and query observability data from sessions",
+		actions: [
+			{
+				name: "search_dashboards",
+				description: "Search dashboards by query or tag",
+				riskLevel: "read",
+			},
+			{
+				name: "get_dashboard",
+				description: "Get a dashboard by UID",
+				riskLevel: "read",
+			},
+			{
+				name: "list_datasources",
+				description: "List available data sources",
+				riskLevel: "read",
+			},
+			{
+				name: "query_prometheus",
+				description: "Run a PromQL query against a Prometheus data source",
+				riskLevel: "read",
+			},
+			{
+				name: "query_loki",
+				description: "Run a LogQL query against a Loki data source",
+				riskLevel: "read",
+			},
+			{
+				name: "list_alerts",
+				description: "List alert rules",
+				riskLevel: "read",
+			},
 		],
 	},
 ];

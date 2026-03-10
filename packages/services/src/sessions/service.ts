@@ -688,7 +688,11 @@ async function createConfigurationSession(input: {
  * Trigger eager session start via the gateway (fire-and-forget).
  * Boots the sandbox and sends the initial prompt in the background.
  */
-function triggerEagerStart(sessionId: string, gatewayUrl: string, serviceToken: string): void {
+export function triggerEagerStart(
+	sessionId: string,
+	gatewayUrl: string,
+	serviceToken: string,
+): void {
 	if (!gatewayUrl || !serviceToken) {
 		logger.warn({ sessionId }, "Skipping eager start: missing gatewayUrl or serviceToken");
 		return;
