@@ -9,7 +9,6 @@ export function projectRuntimeRunning(input: {
 	return projectSessionState({
 		sessionId: input.sessionId,
 		sandboxState: "running",
-		agentState: "iterating",
 		logger: input.logger,
 	});
 }

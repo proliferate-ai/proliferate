@@ -858,11 +858,11 @@ export class SessionHub {
 		// K5: Record session started event
 		recordLifecycleEvent(this.sessionId, SESSION_LIFECYCLE_EVENT.STARTED, this.logger);
 
-		// K4: Project V2 session state — sandbox running, agent iterating
+		// K4: Project V2 session state — sandbox running, clear pause reason
 		projectSessionState({
 			sessionId: this.sessionId,
 			sandboxState: "running",
-			agentState: "iterating",
+			stateReason: null,
 			logger: this.logger,
 		});
 	}
