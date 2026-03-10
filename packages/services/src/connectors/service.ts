@@ -425,25 +425,25 @@ export async function createComposioConnector(
 	// Check if connector already exists (upsert for reconnect / double-click races)
 	const existing = await db.findByComposioToolkit(input.organizationId, input.toolkit);
 	if (existing) {
-		const row = await db.update(existing.id, input.organizationId, {
-			url: input.mcpUrl,
-			enabled: true,
-		});
-		if (row) {
-			// Also update composioAccountId directly
-			const { getDb } = await import("../db/client");
-			const { eq, and } = await import("drizzle-orm");
-			const { orgConnectors } = await import("../db/client");
-			await getDb()
-				.update(orgConnectors)
-				.set({ composioAccountId: input.connectedAccountId, updatedAt: new Date() })
-				.where(
-					and(
-						eq(orgConnectors.id, existing.id),
-						eq(orgConnectors.organizationId, input.organizationId),
-					),
-				);
-		}
+		// Atomic update: url, enabled, and composioAccountId in one write
+		const { getDb } = await import("../db/client");
+		const { eq, and } = await import("drizzle-orm");
+		const { orgConnectors } = await import("../db/client");
+		const [row] = await getDb()
+			.update(orgConnectors)
+			.set({
+				url: input.mcpUrl,
+				enabled: true,
+				composioAccountId: input.connectedAccountId,
+				updatedAt: new Date(),
+			})
+			.where(
+				and(
+					eq(orgConnectors.id, existing.id),
+					eq(orgConnectors.organizationId, input.organizationId),
+				),
+			)
+			.returning();
 		return toConnectorConfig(row ?? existing);
 	}
 
@@ -457,8 +457,8 @@ export async function createComposioConnector(
 	}
 
 	if (composioKeyExists) {
-		// Reuse existing secret
-		const connector = await createConnector({
+		// Reuse existing secret — create connector with composio columns in one INSERT
+		const row = await db.create({
 			organizationId: input.organizationId,
 			name: preset.defaults.name,
 			transport: "remote_http",
@@ -467,33 +467,13 @@ export async function createComposioConnector(
 			riskPolicy: preset.defaults.riskPolicy,
 			enabled: true,
 			createdBy: input.createdBy,
-		});
-
-		// Set composio columns
-		const { getDb } = await import("../db/client");
-		const { eq, and } = await import("drizzle-orm");
-		const { orgConnectors } = await import("../db/client");
-		await getDb()
-			.update(orgConnectors)
-			.set({
-				composioToolkit: input.toolkit,
-				composioAccountId: input.connectedAccountId,
-			})
-			.where(
-				and(
-					eq(orgConnectors.id, connector.id),
-					eq(orgConnectors.organizationId, input.organizationId),
-				),
-			);
-
-		return {
-			...connector,
 			composioToolkit: input.toolkit,
 			composioAccountId: input.connectedAccountId,
-		};
+		});
+		return toConnectorConfig(row);
 	}
 
-	// First Composio connector — atomically create secret + connector
+	// First Composio connector — atomically create secret + connector (with composio columns)
 	let encryptedValue: string;
 	try {
 		encryptedValue = encrypt(apiKey, getEncryptionKey());
@@ -514,26 +494,11 @@ export async function createComposioConnector(
 			riskPolicy: preset.defaults.riskPolicy ?? null,
 		},
 		authConfig: { type: "custom_header", headerName: "x-api-key" },
-	});
-
-	// Set composio columns on the newly created connector
-	const { getDb: getDb2 } = await import("../db/client");
-	const { eq: eq2, and: and2 } = await import("drizzle-orm");
-	const { orgConnectors: oc } = await import("../db/client");
-	await getDb2()
-		.update(oc)
-		.set({
-			composioToolkit: input.toolkit,
-			composioAccountId: input.connectedAccountId,
-		})
-		.where(and2(eq2(oc.id, connectorRow.id), eq2(oc.organizationId, input.organizationId)));
-
-	const config = toConnectorConfig(connectorRow);
-	return {
-		...config,
 		composioToolkit: input.toolkit,
 		composioAccountId: input.connectedAccountId,
-	};
+	});
+
+	return toConnectorConfig(connectorRow);
 }
 
 /**

@@ -184,6 +184,10 @@ export interface CreateConnectorWithSecretDbInput {
 	};
 	/** Auth configuration template — secretKey will be filled with the resolved key. */
 	authConfig: { type: "bearer" } | { type: "custom_header"; headerName: string };
+	/** Optional Composio toolkit (set for managed connectors). */
+	composioToolkit?: string;
+	/** Optional Composio connected account ID (set for managed connectors). */
+	composioAccountId?: string;
 }
 
 export interface CreateConnectorWithSecretDbResult {
@@ -255,6 +259,8 @@ export async function createWithSecret(
 						riskPolicy: input.connector.riskPolicy,
 						enabled: true,
 						createdBy: input.createdBy,
+						composioToolkit: input.composioToolkit ?? null,
+						composioAccountId: input.composioAccountId ?? null,
 					})
 					.returning();
 

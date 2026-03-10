@@ -71,10 +71,13 @@ export async function GET(request: Request) {
 		baseUrl: env.COMPOSIO_BASE_URL,
 	};
 
-	// Verify connected account belongs to this org
+	// Verify connected account belongs to this org AND matches the requested toolkit
 	try {
 		const account = await composio.getConnectedAccount(config, connectedAccountId);
 		if (account.userId && account.userId !== orgId) {
+			return NextResponse.redirect(`${redirectBase}?error=${policy.errors.forbidden}`);
+		}
+		if (account.integrationId && account.integrationId !== toolkit) {
 			return NextResponse.redirect(`${redirectBase}?error=${policy.errors.forbidden}`);
 		}
 	} catch {
