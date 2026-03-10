@@ -131,16 +131,18 @@ export function SecretsEditor({ secrets, onChange, existingCount }: SecretsEdito
 			{/* Existing secrets toggle */}
 			{existingCount > 0 && (
 				<div className="mt-3">
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="sm"
 						onClick={() => setExistingOpen(!existingOpen)}
-						className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+						aria-expanded={existingOpen}
+						className="h-auto p-0 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
 					>
 						<ChevronRight
 							className={cn("h-3 w-3 transition-transform", existingOpen && "rotate-90")}
 						/>
 						Existing Secrets ({existingCount})
-					</button>
+					</Button>
 					{existingOpen && (
 						<div className="mt-2">
 							<p className="text-xs text-muted-foreground">

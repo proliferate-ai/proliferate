@@ -86,22 +86,25 @@ export const useSetupProgressStore = create<SetupProgressState>((set, get) => ({
 		// (init event can arrive before SetupSessionChrome's useEffect runs)
 		if (state.activeSessionId !== null && state.activeSessionId !== sessionId) return;
 
+		let hasActivity = false;
 		let verified = false;
 		let snapshotSaved = false;
 
 		for (const msg of messages) {
 			for (const part of msg.parts || []) {
 				const name = part.toolName;
+				if (name) hasActivity = true;
 				if (name === "verify") verified = true;
 				if (name === "save_snapshot") snapshotSaved = true;
 			}
 			for (const tc of msg.toolCalls || []) {
+				if (tc.tool) hasActivity = true;
 				if (tc.tool === "verify") verified = true;
 				if (tc.tool === "save_snapshot") snapshotSaved = true;
 			}
 		}
 
-		if (verified || snapshotSaved) {
+		if (hasActivity) {
 			set({
 				activeSessionId: sessionId,
 				progress: {

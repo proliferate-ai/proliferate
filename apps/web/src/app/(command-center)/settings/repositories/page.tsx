@@ -1,12 +1,5 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { redirect } from "next/navigation";
 
 export default function RepositoriesRedirect() {
-	const router = useRouter();
-	useEffect(() => {
-		router.replace("/settings/environments");
-	}, [router]);
-	return null;
+	redirect("/settings/environments");
 }
