@@ -456,8 +456,12 @@ export async function addShadowBalance(
 		let stateChanged = false;
 		let newState = currentState;
 
-		if (newBalance > 0 && (currentState === "grace" || currentState === "exhausted")) {
-			// Credits added - transition back to active
+		if (
+			newBalance > 0 &&
+			(currentState === "free" || currentState === "grace" || currentState === "exhausted")
+		) {
+			// Credits added - transition to active (from free on first purchase, or
+			// back to active from grace/exhausted)
 			const transition = processStateTransition(currentState, {
 				type: "credits_added",
 				amount: credits,

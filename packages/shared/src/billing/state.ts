@@ -67,6 +67,7 @@ const VALID_TRANSITIONS: Record<
 > = {
 	free: {
 		balance_depleted: "exhausted", // No grace for free tier
+		credits_added: "active", // First purchase transitions to active
 		plan_attached: "active",
 		manual_suspend: "suspended",
 	},

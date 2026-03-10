@@ -37,7 +37,7 @@ export async function completeOnboarding(orgId: string, userId: string): Promise
 	await orgsService.markOnboardingComplete(orgId, true);
 
 	const org = await orgsService.getBillingInfoV2(orgId);
-	if (org?.billingState === "free") {
+	if (org?.billingState === "free" || org?.billingState === "unconfigured") {
 		await orgsService.initializeBillingState(orgId, "free", FREE_CREDITS);
 	}
 
