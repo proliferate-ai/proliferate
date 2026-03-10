@@ -13,7 +13,6 @@ import { ArrowRight, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { AdvancedSettings } from "./advanced-settings";
 import { RepoPicker } from "./repo-picker";
 import { SecretsEditor } from "./secrets-editor";
 
@@ -28,8 +27,6 @@ export function OnboardPage() {
 
 	const [selectedRepoId, setSelectedRepoId] = useState<string | null>(preSelectedRepoId);
 	const [newSecrets, setNewSecrets] = useState<Array<{ key: string; value: string }>>([]);
-	const [startingBranch, setStartingBranch] = useState("");
-	const [snapshotId, setSnapshotId] = useState<string | null>(null);
 	const [isStarting, setIsStarting] = useState(false);
 
 	const createBaseline = useCreateBaseline();
@@ -134,15 +131,6 @@ export function OnboardPage() {
 							secrets={newSecrets}
 							onChange={setNewSecrets}
 							existingCount={existingSecrets.length}
-						/>
-
-						{/* Advanced settings */}
-						<AdvancedSettings
-							repoId={selectedRepoId}
-							startingBranch={startingBranch}
-							onBranchChange={setStartingBranch}
-							snapshotId={snapshotId}
-							onSnapshotChange={setSnapshotId}
 						/>
 					</div>
 				</div>

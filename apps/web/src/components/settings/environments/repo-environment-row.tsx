@@ -31,9 +31,11 @@ export function RepoEnvironmentRow({ repo, baseline }: RepoEnvironmentRowProps) 
 
 	return (
 		<div className="rounded-lg border border-border bg-card">
-			<div
-				className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
+			<button
+				type="button"
+				className="flex items-center gap-3 px-4 py-3 w-full text-left cursor-pointer hover:bg-muted/30 transition-colors"
 				onClick={() => setExpanded(!expanded)}
+				aria-expanded={expanded}
 			>
 				<ChevronRight
 					className={cn(
@@ -69,10 +71,10 @@ export function RepoEnvironmentRow({ repo, baseline }: RepoEnvironmentRowProps) 
 						asChild
 						onClick={(e) => e.stopPropagation()}
 					>
-						<Link href={`/workspace/setup/${repo.id}`}>Setup environment</Link>
+						<Link href={`/workspace/onboard?repo=${repo.id}`}>Setup environment</Link>
 					</Button>
 				</div>
-			</div>
+			</button>
 
 			{expanded && (
 				<div className="border-t border-border/50 px-4 py-3 pl-11 space-y-4">

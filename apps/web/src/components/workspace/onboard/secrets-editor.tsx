@@ -21,12 +21,20 @@ export function SecretsEditor({ secrets, onChange, existingCount }: SecretsEdito
 	const [inputValue, setInputValue] = useState("");
 	const [existingOpen, setExistingOpen] = useState(false);
 
+	const mergeSecrets = (existing: SecretEntry[], incoming: SecretEntry[]): SecretEntry[] => {
+		const map = new Map(existing.map((s) => [s.key, s]));
+		for (const entry of incoming) {
+			map.set(entry.key, entry); // later entries overwrite earlier ones
+		}
+		return [...map.values()];
+	};
+
 	const handleInputChange = (value: string) => {
 		// Detect .env paste: contains = and newlines
 		if (value.includes("=") && value.includes("\n")) {
 			const parsed = parseEnvText(value);
 			if (parsed.length > 0) {
-				onChange([...secrets, ...parsed]);
+				onChange(mergeSecrets(secrets, parsed));
 				setInputValue("");
 				return;
 			}
@@ -51,7 +59,7 @@ export function SecretsEditor({ secrets, onChange, existingCount }: SecretsEdito
 				e.preventDefault();
 				const parsed = parseEnvText(text);
 				if (parsed.length > 0) {
-					onChange([...secrets, ...parsed]);
+					onChange(mergeSecrets(secrets, parsed));
 				}
 			}
 		},
@@ -86,6 +94,7 @@ export function SecretsEditor({ secrets, onChange, existingCount }: SecretsEdito
 								onChange={(e) => updateSecret(i, "key", e.target.value)}
 								placeholder="KEY"
 								className="h-8 text-sm font-mono"
+								aria-label={`Secret name ${i + 1}`}
 							/>
 							<Input
 								value={secret.value}
@@ -93,12 +102,14 @@ export function SecretsEditor({ secrets, onChange, existingCount }: SecretsEdito
 								placeholder="value"
 								type="password"
 								className="h-8 text-sm"
+								aria-label={`Secret value for ${secret.key || `entry ${i + 1}`}`}
 							/>
 							<Button
 								variant="ghost"
 								size="icon"
 								className="h-7 w-7"
 								onClick={() => removeSecret(i)}
+								aria-label={`Remove ${secret.key || "secret"}`}
 							>
 								<Trash2 className="h-3 w-3" />
 							</Button>

@@ -27,6 +27,7 @@ export function RepoPicker({ repos, selectedRepoId, onSelect }: RepoPickerProps)
 							<Button
 								key={repo.id}
 								variant="outline"
+								aria-pressed={isSelected}
 								className={cn(
 									"w-full justify-start gap-2 h-9 text-sm",
 									isSelected && "border-primary bg-primary/5",

@@ -433,7 +433,14 @@ export async function listGroupedByKey(orgId: string): Promise<GroupedSecretRow[
 		})
 		.from(secrets)
 		.leftJoin(repos, eq(secrets.repoId, repos.id))
-		.where(and(eq(secrets.organizationId, orgId), isNull(secrets.configurationId)))
+		.leftJoin(configurationSecrets, eq(configurationSecrets.secretId, secrets.id))
+		.where(
+			and(
+				eq(secrets.organizationId, orgId),
+				isNull(secrets.configurationId),
+				isNull(configurationSecrets.secretId),
+			),
+		)
 		.orderBy(secrets.key);
 
 	const grouped = new Map<string, GroupedSecretRow>();
@@ -461,16 +468,24 @@ export async function deleteByKeyAndRepos(
 	repoIds: string[],
 ): Promise<void> {
 	const db = getDb();
-	await db
-		.delete(secrets)
+	// Find secret IDs that are NOT linked via the configurationSecrets junction table
+	const matchingSecrets = await db
+		.select({ id: secrets.id })
+		.from(secrets)
+		.leftJoin(configurationSecrets, eq(configurationSecrets.secretId, secrets.id))
 		.where(
 			and(
 				eq(secrets.organizationId, orgId),
 				eq(secrets.key, key),
 				inArray(secrets.repoId, repoIds),
 				isNull(secrets.configurationId),
+				isNull(configurationSecrets.secretId),
 			),
 		);
+	if (matchingSecrets.length === 0) return;
+	await db
+		.delete(secrets)
+		.where(inArray(secrets.id, matchingSecrets.map((s) => s.id)));
 }
 
 /**
@@ -483,15 +498,23 @@ export async function updateValueByKeyAndRepos(
 	repoIds: string[],
 ): Promise<void> {
 	const db = getDb();
-	await db
-		.update(secrets)
-		.set({ encryptedValue, updatedAt: new Date() })
+	// Find secret IDs that are NOT linked via the configurationSecrets junction table
+	const matchingSecrets = await db
+		.select({ id: secrets.id })
+		.from(secrets)
+		.leftJoin(configurationSecrets, eq(configurationSecrets.secretId, secrets.id))
 		.where(
 			and(
 				eq(secrets.organizationId, orgId),
 				eq(secrets.key, key),
 				inArray(secrets.repoId, repoIds),
 				isNull(secrets.configurationId),
+				isNull(configurationSecrets.secretId),
 			),
 		);
+	if (matchingSecrets.length === 0) return;
+	await db
+		.update(secrets)
+		.set({ encryptedValue, updatedAt: new Date() })
+		.where(inArray(secrets.id, matchingSecrets.map((s) => s.id)));
 }

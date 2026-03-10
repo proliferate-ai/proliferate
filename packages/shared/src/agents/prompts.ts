@@ -145,7 +145,7 @@ You can act on the user's behalf using the \`proliferate\` CLI:
 
 ## Secrets
 
-Organization secrets are injected as environment variables at session start and env files are auto-generated on boot if configured. If you need a credential that's missing, tell the user to add it via the Environment panel.
+Organization secrets are injected as environment variables at session start. If you need a credential that's missing, tell the user to add it via the Proliferate dashboard.
 
 When done, briefly summarize what you changed and any next steps.
 `;
