@@ -373,6 +373,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		key: "tavily",
 		name: "Tavily",
 		description: "AI-optimized web search and content extraction",
+		category: "developer-tools",
 		defaults: {
 			name: "Tavily",
 			transport: "remote_http",
@@ -390,6 +391,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		key: "huggingface",
 		name: "Hugging Face",
 		description: "Search and run ML models, datasets, and Spaces",
+		category: "developer-tools",
 		defaults: {
 			name: "Hugging Face",
 			transport: "remote_http",

@@ -65,7 +65,7 @@ export function PersonaPicker({ disabled }: PersonaPickerProps) {
 			<PopoverContent className="w-64 p-0" align="start">
 				<Command>
 					<CommandList>
-						<CommandGroup heading="Default">
+						<CommandGroup heading="Coders">
 							<CommandItem value="opencode" onSelect={() => selectPersona({ type: "opencode" })}>
 								{isOpenCode ? (
 									<Check className="h-4 w-4 text-primary shrink-0" />

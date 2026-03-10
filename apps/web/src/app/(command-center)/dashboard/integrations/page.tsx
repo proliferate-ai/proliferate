@@ -237,7 +237,7 @@ export default function IntegrationsPage() {
 										<p className="text-xs text-muted-foreground truncate">{entry.description}</p>
 										<p className="text-[11px] text-muted-foreground/80">{scopeMeta.label}</p>
 										<IntegrationActionsSummary
-											isOAuth={entry.type === "oauth" || entry.type === "slack"}
+											showActions={entry.type === "oauth" || entry.type === "slack"}
 											provider={entry.provider ?? null}
 											context={isAdmin ? "admin" : "user"}
 											onOpenSettings={() => handleSelectFromRow(entry, "settings")}
@@ -319,7 +319,7 @@ export default function IntegrationsPage() {
 										</div>
 										<p className="text-xs text-muted-foreground truncate">{c.url}</p>
 										<IntegrationActionsSummary
-											isOAuth={false}
+											showActions={false}
 											provider={null}
 											connectorId={c.id}
 											context={isAdmin ? "admin" : "user"}

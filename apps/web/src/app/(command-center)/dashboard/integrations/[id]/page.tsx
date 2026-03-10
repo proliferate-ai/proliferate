@@ -133,7 +133,7 @@ export default function IntegrationDetailPage() {
 						<ConnectorConnectionTab connector={connector} />
 					) : null
 				) : (
-					<PermissionsTab isOAuth={isOAuth} provider={provider} connectorId={connector?.id} />
+					<PermissionsTab showActions={isOAuth} provider={provider} connectorId={connector?.id} />
 				)}
 			</div>
 		</div>

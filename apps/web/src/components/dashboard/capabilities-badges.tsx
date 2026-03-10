@@ -115,7 +115,7 @@ export function CapabilitiesBadges({
 					)}
 				</button>
 			</PopoverTrigger>
-			<PopoverContent className="w-72 p-0" align="start">
+			<PopoverContent className="w-72 p-0" align="end">
 				<div className="px-3 py-2.5 border-b border-border">
 					<p className="text-sm font-medium text-foreground">
 						{mode === "coworker" ? "Coworker capabilities" : "Session integrations"}
