@@ -65,23 +65,7 @@ export function EntitlementStatusSection() {
 					current={data.activeCoworkers.current}
 					max={data.activeCoworkers.max}
 				/>
-				<LimitRow
-					label="Monthly Credits"
-					current={Math.round(data.monthlyUsage.used)}
-					max={data.monthlyUsage.included}
-					warningLevel={data.monthlyUsage.warningLevel}
-				/>
 			</SettingsCard>
-			{data.monthlyUsage.warningLevel !== "none" && (
-				<p className="text-xs text-muted-foreground mt-1">
-					{data.monthlyUsage.warningLevel === "approaching" &&
-						"Approaching monthly credit limit. Consider upgrading or purchasing additional credits."}
-					{data.monthlyUsage.warningLevel === "critical" &&
-						"Nearing monthly credit limit. Sessions may be paused soon."}
-					{data.monthlyUsage.warningLevel === "exhausted" &&
-						"Monthly credit limit reached. Add credits or upgrade your plan."}
-				</p>
-			)}
 		</SettingsSection>
 	);
 }

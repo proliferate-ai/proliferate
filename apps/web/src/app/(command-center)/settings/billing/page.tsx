@@ -5,7 +5,7 @@ import { BuyCreditsSection } from "@/components/settings/billing/buy-credits-sec
 import { CostDriversSection } from "@/components/settings/billing/cost-drivers-section";
 import { CreditUsageSection } from "@/components/settings/billing/credit-usage-section";
 import { EntitlementStatusSection } from "@/components/settings/billing/entitlement-status-section";
-import { OverageSection } from "@/components/settings/billing/overage-section";
+import { AutoRechargeSection } from "@/components/settings/billing/auto-recharge-section";
 import { PlanSection } from "@/components/settings/billing/plan-section";
 import { RecentEventsSection } from "@/components/settings/billing/recent-events-section";
 import { UsageSummarySection } from "@/components/settings/billing/usage-summary-section";
@@ -71,9 +71,8 @@ export default function BillingPage() {
 					isAdmin={isAdmin}
 				/>
 				{isAdmin && (
-					<OverageSection
+					<AutoRechargeSection
 						billingSettings={billing.billingSettings}
-						overage={billing.overage}
 						onUpdate={handleUpdateBillingSettings}
 					/>
 				)}

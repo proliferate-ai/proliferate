@@ -6,7 +6,7 @@
 
 import { env } from "@proliferate/environment/server";
 import { createSyncClient } from "@proliferate/gateway-clients";
-import { TRIAL_CREDITS, autumnAttach, autumnCreateCustomer } from "@proliferate/shared/billing";
+import { FREE_CREDITS } from "@proliferate/shared/billing";
 import type { OnboardingRepo, OnboardingStatus } from "@proliferate/shared/contracts/onboarding";
 import * as configurationsService from "../configurations/service";
 import { toIsoString } from "../db/serialize";
@@ -37,8 +37,8 @@ export async function completeOnboarding(orgId: string, userId: string): Promise
 	await orgsService.markOnboardingComplete(orgId, true);
 
 	const org = await orgsService.getBillingInfoV2(orgId);
-	if (org?.billingState === "unconfigured") {
-		await orgsService.initializeBillingState(orgId, "trial", TRIAL_CREDITS);
+	if (org?.billingState === "free") {
+		await orgsService.initializeBillingState(orgId, "free", FREE_CREDITS);
 	}
 
 	// Also mark all other orgs the user belongs to as onboarding-complete.
@@ -241,13 +241,14 @@ export interface StartTrialResult {
 }
 
 /**
- * Start a credit-based trial for a new organization.
- * Stores the selected plan (dev/pro) and grants trial credits.
+ * Initialize free credits for a new organization.
+ * Grants permanent free credits — no CC required, no external billing setup.
  *
  * If billing is not enabled, just marks onboarding complete.
+ * Kept as `startTrial` for backward compatibility with callers.
  */
 export async function startTrial(input: StartTrialInput): Promise<StartTrialResult> {
-	const { orgId, userEmail, plan: selectedPlan = "dev", billingEnabled, appUrl } = input;
+	const { orgId, plan: selectedPlan = "dev", billingEnabled } = input;
 
 	// If billing not configured, just mark onboarding complete
 	if (!billingEnabled) {
@@ -260,93 +261,16 @@ export async function startTrial(input: StartTrialInput): Promise<StartTrialResu
 
 		return {
 			success: true,
-			message: "Billing not configured - trial started without payment",
+			message: "Billing not configured - free credits initialized without payment",
 		};
-	}
-
-	// Check if org already has a customer ID
-	const org = await orgsService.getBillingInfoV2(orgId);
-
-	if (!org) {
-		throw new Error("Failed to check organization billing state");
 	}
 
 	await orgsService.updateBillingPlan(orgId, selectedPlan);
-
-	let customerId = org.autumnCustomerId ?? orgId;
-	try {
-		const customer = await autumnCreateCustomer({
-			id: customerId,
-			name: org.name,
-			email: userEmail,
-		});
-		customerId = customer.customer?.id ?? customer.data?.id ?? customer.id ?? customerId;
-		if (customerId !== org.autumnCustomerId) {
-			await orgsService.updateAutumnCustomerId(orgId, customerId);
-		}
-	} catch (err) {
-		logger.warn({ err }, "Failed to create Autumn customer");
-	}
-
-	let setup: Awaited<ReturnType<typeof autumnAttach>> | null = null;
-	try {
-		setup = await autumnAttach({
-			customer_id: customerId,
-			product_id: selectedPlan,
-			success_url: `${appUrl}/onboarding/complete`,
-			cancel_url: `${appUrl}/onboarding`,
-			customer_data: {
-				email: userEmail,
-				name: org.name,
-			},
-			force_checkout: true,
-		});
-	} catch (attachErr) {
-		const msg = attachErr instanceof Error ? attachErr.message : "";
-		if (msg.includes("already scheduled") || msg.includes("can't attach again")) {
-			logger.info("Product already attached, skipping autumnAttach");
-		} else if (msg.includes("force_checkout")) {
-			logger.warn("force_checkout rejected, retrying without it");
-			try {
-				setup = await autumnAttach({
-					customer_id: customerId,
-					product_id: selectedPlan,
-					success_url: `${appUrl}/onboarding/complete`,
-					cancel_url: `${appUrl}/onboarding`,
-					customer_data: {
-						email: userEmail,
-						name: org.name,
-					},
-				});
-			} catch (retryErr) {
-				const retryMsg = retryErr instanceof Error ? retryErr.message : "";
-				if (retryMsg.includes("already scheduled") || retryMsg.includes("can't attach again")) {
-					logger.info("Product already attached on retry, skipping");
-				} else {
-					throw retryErr;
-				}
-			}
-		} else {
-			throw attachErr;
-		}
-	}
-
-	const checkoutUrl = setup?.checkout_url ?? setup?.url;
-	if (checkoutUrl) {
-		return {
-			success: true,
-			checkoutUrl,
-			message: "Card required to start trial",
-		};
-	}
-
-	if (org.billingState === "unconfigured") {
-		await orgsService.initializeBillingState(orgId, "trial", TRIAL_CREDITS);
-	}
+	await orgsService.initializeBillingState(orgId, "free", FREE_CREDITS);
 
 	return {
 		success: true,
-		message: "Trial started",
+		message: "Free credits initialized",
 	};
 }
 

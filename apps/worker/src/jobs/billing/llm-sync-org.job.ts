@@ -126,17 +126,13 @@ export async function processLLMSyncOrgJob(
 
 	// 7. Handle state transitions
 	if (result.shouldPauseSessions) {
-		// Check trial auto-activation before pausing (parity with compute metering)
-		const activation = await billing.tryActivatePlanAfterTrial(orgId);
-		if (activation.activated) {
-			log.info("Trial auto-activated via LLM spend; skipping enforcement");
-			return;
-		}
-
-		// Overage auto-top-up: buy more credits if policy allows
-		const topup = await billing.attemptAutoTopUp(orgId, Math.abs(result.newBalance));
-		if (topup.success) {
-			log.info({ creditsAdded: topup.creditsAdded }, "Auto-top-up succeeded; skipping enforcement");
+		// Auto-recharge: buy more credits if enabled
+		const recharge = await billing.attemptAutoRecharge(orgId, Math.abs(result.newBalance));
+		if (recharge.success) {
+			log.info(
+				{ creditsAdded: recharge.creditsAdded },
+				"Auto-recharge succeeded; skipping enforcement",
+			);
 			return;
 		}
 

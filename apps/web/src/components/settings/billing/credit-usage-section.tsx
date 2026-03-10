@@ -68,7 +68,8 @@ export function CreditUsageSection({ credits }: CreditUsageSectionProps) {
 
 					{/* Credit value note */}
 					<p className="text-xs text-muted-foreground">
-						1 credit = $0.01. Usage includes compute time and LLM API calls.
+						1 credit = $1. ~1 hour of compute time per credit. Usage includes compute time and LLM
+						API calls.
 					</p>
 				</div>
 			</SettingsCard>

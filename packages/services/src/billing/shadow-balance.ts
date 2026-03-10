@@ -119,11 +119,10 @@ export async function deductShadowBalance(update: ShadowBalanceUpdate): Promise<
 		const newBalance = previousBalance - update.credits;
 		const currentState = org.billingState as BillingState;
 
-		// Trial/unconfigured orgs have no Autumn customer — mark events "skipped"
+		// Free-tier orgs have no Autumn customer — mark events "skipped"
 		// so the outbox ignores them. The insert is still required for idempotency:
 		// a crash between deduction and checkpoint advancement must not double-deduct.
-		const outboxStatus =
-			currentState === "trial" || currentState === "unconfigured" ? "skipped" : "pending";
+		const outboxStatus = currentState === "free" ? "skipped" : "pending";
 
 		// Global idempotency check via billing_event_keys lookup table.
 		// This preserves exactly-once semantics even when billing_events is partitioned
@@ -167,8 +166,8 @@ export async function deductShadowBalance(update: ShadowBalanceUpdate): Promise<
 		let enforcementReason: string | undefined;
 		let graceExpiresAt = org.graceExpiresAt;
 
-		if (newBalance <= 0 && (currentState === "active" || currentState === "trial")) {
-			// Balance depleted - transition to grace
+		if (newBalance <= 0 && (currentState === "active" || currentState === "free")) {
+			// Balance depleted - transition (active → grace, free → exhausted)
 			const transition = processStateTransition(currentState, { type: "balance_depleted" });
 
 			if (transition.transitioned) {
@@ -298,10 +297,9 @@ export async function bulkDeductShadowBalance(
 		const previousBalance = Number(org.shadowBalance ?? 0);
 		const currentState = org.billingState as BillingState;
 
-		// Trial/unconfigured orgs have no Autumn customer — mark events "skipped"
+		// Free-tier orgs have no Autumn customer — mark events "skipped"
 		// so the outbox ignores them. The insert is still required for idempotency.
-		const outboxStatus =
-			currentState === "trial" || currentState === "unconfigured" ? "skipped" : "pending";
+		const outboxStatus = currentState === "free" ? "skipped" : "pending";
 
 		// 2. Bulk insert idempotency keys — determines which events are new
 		const keysInserted = await tx
@@ -351,7 +349,7 @@ export async function bulkDeductShadowBalance(
 		let enforcementReason: string | undefined;
 		let graceExpiresAt = org.graceExpiresAt;
 
-		if (newBalance <= 0 && (currentState === "active" || currentState === "trial")) {
+		if (newBalance <= 0 && (currentState === "active" || currentState === "free")) {
 			const transition = processStateTransition(currentState, { type: "balance_depleted" });
 			if (transition.transitioned) {
 				stateChanged = true;

@@ -12,7 +12,7 @@ import {
 	autumnDeductCredits,
 } from "@proliferate/shared/billing";
 import { getServicesLogger } from "../logger";
-import { attemptAutoTopUp } from "./auto-topup";
+import { attemptAutoRecharge } from "./auto-topup";
 import {
 	findAutumnCustomerId,
 	findOutboxStatsEvents,
@@ -91,13 +91,13 @@ async function processEvent(event: PendingBillingEvent): Promise<void> {
 			event.idempotencyKey,
 		);
 
-		// If Autumn denies, try auto-top-up before enforcing exhausted state
+		// If Autumn denies, try auto-recharge before enforcing exhausted state
 		if (!result.allowed) {
-			const topup = await attemptAutoTopUp(event.organizationId, Number(event.credits));
-			if (topup.success) {
+			const recharge = await attemptAutoRecharge(event.organizationId, Number(event.credits));
+			if (recharge.success) {
 				logger.info(
-					{ creditsAdded: topup.creditsAdded },
-					"Auto-top-up succeeded after Autumn denial",
+					{ creditsAdded: recharge.creditsAdded },
+					"Auto-recharge succeeded after Autumn denial",
 				);
 				return;
 			}

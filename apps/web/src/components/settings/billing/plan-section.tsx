@@ -44,7 +44,7 @@ export function PlanSection({
 	billingState,
 	isAdmin,
 }: PlanSectionProps) {
-	const isTrial = billingState === "trial";
+	const isFree = billingState === "free";
 	const activatePlan = useActivatePlan();
 	const [confirmPlan, setConfirmPlan] = useState<PlanId | null>(null);
 
@@ -105,15 +105,15 @@ export function PlanSection({
 					<div className="flex items-center justify-between pb-3 border-b border-border/60">
 						<div>
 							<div className="flex items-center gap-2">
-								<p className="font-semibold">{plan.name}</p>
-								{isTrial && (
+								<p className="font-semibold">{isFree ? "Free" : plan.name}</p>
+								{isFree && (
 									<Badge variant="secondary" className="text-xs">
-										Trial
+										Free Tier
 									</Badge>
 								)}
 							</div>
 							<p className="text-sm text-muted-foreground">
-								{formatCurrency(plan.monthlyPriceCents)}/month
+								{isFree ? "5 credits included" : `${formatCurrency(plan.monthlyPriceCents)}/month`}
 							</p>
 						</div>
 					</div>
@@ -141,7 +141,7 @@ export function PlanSection({
 												Current
 											</Badge>
 										)}
-										{isSelected && (
+										{isSelected && !isFree && (
 											<Badge variant="secondary" className="text-[10px]">
 												Selected
 											</Badge>
@@ -244,8 +244,8 @@ export function PlanSection({
 									</>
 								) : (
 									<>
-										Activate your {targetPlan.name} plan at {targetPlan.price}
-										/mo. Your card will be charged when trial credits are used.
+										Activate the {targetPlan.name} plan at {targetPlan.price}
+										/mo with {targetPlan.creditsIncluded.toLocaleString()} monthly credits.
 									</>
 								)}
 							</AlertDialogDescription>

@@ -48,8 +48,8 @@ export interface OrgBillingInfo {
 		maxActiveCoworkers: number;
 		creditsIncluded: number;
 	} | null;
-	/** Overage policy for monthly limit check */
-	overagePolicy?: "pause" | "allow" | null;
+	/** Whether auto-recharge is enabled */
+	autoRechargeEnabled?: boolean;
 }
 
 /**
@@ -68,12 +68,10 @@ export interface GateCheckOptions {
 	operation: GatedOperation;
 	/** Current session counts for the org */
 	sessionCounts: SessionCounts;
-	/** Minimum credits required to start (default: 11) */
+	/** Minimum credits required to start (default: 0.2) */
 	minCreditsRequired?: number;
 	/** Active coworker count for coworker limit check */
 	activeCoworkerCount?: number;
-	/** Monthly usage credits consumed so far */
-	monthlyUsage?: number;
 }
 
 /**
@@ -85,7 +83,6 @@ export interface ExtendedGatingResult extends GatingResult {
 		| "NO_CREDITS"
 		| "CONCURRENT_LIMIT"
 		| "COWORKER_LIMIT"
-		| "MONTHLY_LIMIT"
 		| "STATE_BLOCKED"
 		| "GRACE_EXPIRED";
 	/** Whether this is a terminal error (can't be fixed by waiting) */
@@ -98,9 +95,9 @@ export interface ExtendedGatingResult extends GatingResult {
 
 /**
  * Minimum credits required to start a session.
- * Represents 11 minutes of compute time (10 + 1 buffer for final metering cycle).
+ * At 1 credit/hr, 0.2 credits covers ~12 minutes of compute buffer.
  */
-export const MIN_CREDITS_TO_START = 11;
+export const MIN_CREDITS_TO_START = 0.2;
 
 /**
  * Default plan limits when Autumn data is unavailable.
@@ -162,12 +159,12 @@ export function checkBillingGate(
 		};
 	}
 
-	// Step 3: Check shadow balance for active/trial states
+	// Step 3: Check shadow balance for active/free states
 	// Resume/connect operations skip the credit minimum — the session already exists,
 	// so we only need state-level checks (Steps 1-2) to block truly denied orgs.
 	if (
 		(operation === "session_start" || operation === "automation_trigger") &&
-		(billingState === "active" || billingState === "trial")
+		(billingState === "active" || billingState === "free")
 	) {
 		if (shadowBalance < minCreditsRequired) {
 			return {
@@ -222,29 +219,6 @@ export function checkBillingGate(
 		}
 	}
 
-	// Step 6: Check monthly usage threshold
-	if (
-		options.monthlyUsage !== undefined &&
-		(operation === "session_start" || operation === "automation_trigger")
-	) {
-		const creditsIncluded = planLimits.creditsIncluded;
-		if (creditsIncluded > 0 && options.monthlyUsage >= creditsIncluded) {
-			// Over monthly included credits — only block if overage policy is "pause"
-			// (overage "allow" is handled by shadow balance + auto-top-up)
-			if (!org.overagePolicy || org.overagePolicy === "pause") {
-				return {
-					allowed: false,
-					billingState,
-					shadowBalance,
-					message: `Monthly usage limit reached (${Math.round(options.monthlyUsage)} / ${creditsIncluded} credits). Add credits or upgrade your plan.`,
-					action: "block",
-					errorCode: "MONTHLY_LIMIT",
-					terminal: false,
-				};
-			}
-		}
-	}
-
 	// All checks passed
 	return {
 		allowed: true,
@@ -284,7 +258,7 @@ function getPlanLimitsFromState(
 } {
 	switch (state) {
 		case "active":
-		case "trial": {
+		case "free": {
 			if (planId && PLAN_CONFIGS[planId]) {
 				return {
 					maxConcurrentSessions: PLAN_CONFIGS[planId].maxConcurrentSessions,
@@ -302,7 +276,7 @@ function getPlanLimitsFromState(
  * Get default coworker limit based on billing state and plan.
  */
 function getPlanCoworkerLimit(state: BillingState, planId?: BillingPlan | null): number {
-	if ((state === "active" || state === "trial") && planId && PLAN_CONFIGS[planId]) {
+	if ((state === "active" || state === "free") && planId && PLAN_CONFIGS[planId]) {
 		return PLAN_CONFIGS[planId].maxActiveCoworkers;
 	}
 	return 1; // Conservative default

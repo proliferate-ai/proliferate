@@ -223,8 +223,6 @@ export const AUTUMN_FEATURES = {
 
 /**
  * Autumn product IDs configured in the Autumn dashboard.
- *
- * For credit top-ups, use TOP_UP_PRODUCT instead (one-time purchase product).
  */
 export const AUTUMN_PRODUCTS = {
 	dev: "dev",
@@ -232,12 +230,19 @@ export const AUTUMN_PRODUCTS = {
 } as const;
 
 /**
- * Top-up product configuration.
- * This is the "tiptop" product in Autumn: $5 for 500 credits (one-time purchase).
- * Used by oRPC `billing.buyCredits` procedure.
+ * Top-up pack configurations.
+ * Each pack is a one-time credit purchase at $1/credit.
+ * Product IDs must match Autumn dashboard configuration.
  */
-export const TOP_UP_PRODUCT = {
-	productId: "tiptop",
-	credits: 500,
-	priceCents: 500, // $5.00
-} as const;
+export const TOP_UP_PACKS = [
+	{ productId: "topup_10", name: "Starter", credits: 10, priceCents: 1000 },
+	{ productId: "topup_20", name: "Builder", credits: 20, priceCents: 2000 },
+	{ productId: "topup_50", name: "Growth", credits: 50, priceCents: 5000 },
+	{ productId: "topup_100", name: "Scale", credits: 100, priceCents: 10000 },
+	{ productId: "topup_1000", name: "Enterprise", credits: 1000, priceCents: 100000 },
+] as const;
+
+export type TopUpPackId = (typeof TOP_UP_PACKS)[number]["productId"];
+
+/** Default pack used for auto-recharge. */
+export const DEFAULT_AUTO_RECHARGE_PACK = TOP_UP_PACKS[1]; // Builder ($20/20cr)

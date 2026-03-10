@@ -23,18 +23,11 @@ export interface BillingInfo {
 		snapshotRetentionDays: number;
 	};
 	billingSettings: {
-		overage_policy: "pause" | "allow";
+		auto_recharge_enabled: boolean;
 		overage_cap_cents: number | null;
 	};
-	overage: {
-		usedCents: number;
-		capCents: number | null;
-		cycleMonth: string | null;
-		topupCount: number;
-		circuitBreakerActive: boolean;
-	};
 	state: {
-		billingState: "unconfigured" | "trial" | "active" | "grace" | "exhausted" | "suspended";
+		billingState: "free" | "active" | "grace" | "exhausted" | "suspended";
 		shadowBalance: number;
 		graceExpiresAt: string | null;
 		canStartSession: boolean;

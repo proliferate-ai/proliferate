@@ -9,7 +9,7 @@ import { Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
-	const { ready, session } = useLayoutGate({ requireBilling: true });
+	const { ready, session } = useLayoutGate();
 	const { open: commandSearchOpen, setOpen: setCommandSearchOpen } = useCommandSearch();
 	const pathname = usePathname();
 	const showSidebar = !pathname?.startsWith("/workspace/onboard");

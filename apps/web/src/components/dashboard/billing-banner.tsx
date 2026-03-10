@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
-import { useBillingState, useEntitlementStatus } from "@/hooks/org/use-billing";
+import { useBillingState } from "@/hooks/org/use-billing";
 import { env } from "@proliferate/environment/public";
 import { AlertOctagon, AlertTriangle, Clock, CreditCard, X } from "lucide-react";
 import { useState } from "react";
@@ -15,12 +15,10 @@ export function BillingBanner() {
 		creditBalance,
 		hasActiveSubscription,
 		isNearCreditLimit,
-		overagePolicy,
-		// V2 state fields
+		autoRechargeEnabled,
 		billingState,
 		graceExpiresAt,
 	} = useBillingState();
-	const { data: entitlementStatus } = useEntitlementStatus();
 	const [dismissed, setDismissed] = useState(false);
 
 	// Don't show anything while loading
@@ -28,7 +26,7 @@ export function BillingBanner() {
 		return null;
 	}
 
-	// V2 Priority 1: Suspended - critical, non-dismissable
+	// Priority 1: Suspended - critical, non-dismissable
 	if (billingState === "suspended") {
 		return (
 			<div className="bg-destructive text-destructive-foreground px-4 py-2 flex items-center justify-between">
@@ -50,11 +48,12 @@ export function BillingBanner() {
 		);
 	}
 
-	// V2 Priority 2: Exhausted - critical, non-dismissable
+	// Priority 2: Exhausted - critical, non-dismissable
 	if (billingState === "exhausted") {
-		const message = hasActiveSubscription
-			? "Credits exhausted. Add credits to resume sessions."
-			: "Trial credits exhausted. Activate your plan to continue.";
+		const isFreeExhausted = !hasActiveSubscription;
+		const message = isFreeExhausted
+			? "Free credits used up. Add credits or subscribe to continue."
+			: "Credits exhausted. Add credits to resume sessions.";
 		return (
 			<div className="bg-destructive text-destructive-foreground px-4 py-2 flex items-center justify-between">
 				<div className="flex items-center gap-2">
@@ -71,14 +70,14 @@ export function BillingBanner() {
 				>
 					<a href="/settings/billing">
 						<CreditCard className="h-4 w-4 mr-1" />
-						{hasActiveSubscription ? "Add Credits" : "Activate Plan"}
+						{isFreeExhausted ? "Get Credits" : "Add Credits"}
 					</a>
 				</Button>
 			</div>
 		);
 	}
 
-	// V2 Priority 3: Grace period - urgent warning
+	// Priority 3: Grace period - urgent warning
 	if (billingState === "grace") {
 		const graceExpiryLabel = graceExpiresAt
 			? new Intl.DateTimeFormat(undefined, {
@@ -111,7 +110,7 @@ export function BillingBanner() {
 		);
 	}
 
-	// Priority 4: No credits (legacy check)
+	// Priority 4: No credits (fallback check)
 	if (!hasCredits) {
 		return (
 			<div className="bg-destructive text-destructive-foreground px-4 py-2 flex items-center justify-between">
@@ -136,90 +135,8 @@ export function BillingBanner() {
 		);
 	}
 
-	// Priority 5: Monthly usage nearing limit (from entitlement status)
-	if (
-		entitlementStatus?.monthlyUsage.warningLevel === "critical" &&
-		overagePolicy !== "allow" &&
-		!dismissed
-	) {
-		const { used, included } = entitlementStatus.monthlyUsage;
-		const pct = included > 0 ? Math.round((used / included) * 100) : 0;
-		return (
-			<div className="bg-warning text-warning-foreground px-4 py-2 flex items-center justify-between">
-				<div className="flex items-center gap-2">
-					<AlertTriangle className="h-4 w-4" />
-					<Text variant="small" className="font-medium">
-						{pct}% of monthly credits used ({Math.round(used).toLocaleString()} /{" "}
-						{included.toLocaleString()}). Sessions may be paused soon.
-					</Text>
-				</div>
-				<div className="flex items-center gap-2">
-					<Button
-						variant="ghost"
-						size="sm"
-						asChild
-						className="h-7 px-3 bg-warning/90 hover:bg-warning/80 text-warning-foreground"
-					>
-						<a href="/settings/billing">
-							<CreditCard className="h-4 w-4 mr-1" />
-							Manage Billing
-						</a>
-					</Button>
-					<Button
-						variant="ghost"
-						size="icon"
-						onClick={() => setDismissed(true)}
-						className="h-7 w-7 text-warning-foreground hover:bg-warning/90"
-						aria-label="Dismiss"
-					>
-						<X className="h-4 w-4" />
-					</Button>
-				</div>
-			</div>
-		);
-	}
-
-	// Priority 6: Monthly usage approaching limit
-	if (
-		entitlementStatus?.monthlyUsage.warningLevel === "approaching" &&
-		overagePolicy !== "allow" &&
-		!dismissed
-	) {
-		const { used, included } = entitlementStatus.monthlyUsage;
-		const pct = included > 0 ? Math.round((used / included) * 100) : 0;
-		return (
-			<div className="bg-warning text-warning-foreground px-4 py-2 flex items-center justify-between">
-				<div className="flex items-center gap-2">
-					<AlertTriangle className="h-4 w-4" />
-					<Text variant="small" className="font-medium">
-						{pct}% of monthly credits used. Consider upgrading or adding credits.
-					</Text>
-				</div>
-				<div className="flex items-center gap-2">
-					<Button
-						variant="ghost"
-						size="sm"
-						asChild
-						className="h-7 px-3 bg-warning/90 hover:bg-warning/80 text-warning-foreground"
-					>
-						<a href="/settings/billing">View Usage</a>
-					</Button>
-					<Button
-						variant="ghost"
-						size="icon"
-						onClick={() => setDismissed(true)}
-						className="h-7 w-7 text-warning-foreground hover:bg-warning/90"
-						aria-label="Dismiss"
-					>
-						<X className="h-4 w-4" />
-					</Button>
-				</div>
-			</div>
-		);
-	}
-
-	// Priority 7: Low credits warning (only for subscribed users without auto-reload)
-	if (isNearCreditLimit && hasActiveSubscription && overagePolicy !== "allow") {
+	// Priority 5: Low credits warning (only for subscribed users without auto-recharge)
+	if (isNearCreditLimit && hasActiveSubscription && !autoRechargeEnabled && !dismissed) {
 		return (
 			<div className="bg-warning text-warning-foreground px-4 py-2 flex items-center justify-between">
 				<div className="flex items-center gap-2">

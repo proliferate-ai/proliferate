@@ -12,12 +12,13 @@ import {
 	type BillingState,
 	DEFAULT_BILLING_SETTINGS,
 	PLAN_CONFIGS,
-	TOP_UP_PRODUCT,
-	TRIAL_CREDITS,
+	TOP_UP_PACKS,
+	type TopUpPackId,
 	autumnAttach,
 	autumnGetCustomer,
 	canPossiblyStart,
 	getStateMessage,
+	parseBillingSettings,
 } from "@proliferate/shared/billing";
 import type {
 	ActivatePlanResponse,
@@ -123,10 +124,10 @@ export async function getOrgBillingInfo(orgId: string): Promise<BillingInfo> {
 		graceExpiresAt,
 		shadowBalance,
 	});
-	const isTrial = billingState === "trial";
+	const isFree = billingState === "free";
 	const useShadowBalance = billingState !== "active";
-	const creditsIncluded = isTrial
-		? TRIAL_CREDITS
+	const creditsIncluded = isFree
+		? 0 // Free tier has no "included" credits — they're granted once
 		: (creditsFeature?.included_usage ?? planConfig.creditsIncluded);
 	const creditsBalance = useShadowBalance
 		? shadowBalance
@@ -161,7 +162,7 @@ export async function getOrgBillingInfo(orgId: string): Promise<BillingInfo> {
 		billingSettings: org.billingSettings ?? DEFAULT_BILLING_SETTINGS,
 		overage: {
 			usedCents: org.overageUsedCents,
-			capCents: org.billingSettings?.overage_cap_cents ?? null,
+			capCents: parseBillingSettings(org.billingSettings).overage_cap_cents,
 			cycleMonth: org.overageCycleMonth,
 			topupCount: org.overageTopupCount,
 			circuitBreakerActive: !!org.overageDeclineAt,
@@ -188,7 +189,9 @@ export async function updateOrgBillingSettings(
 	const currentSettings = org.billingSettings ?? DEFAULT_BILLING_SETTINGS;
 	const newSettings = {
 		...currentSettings,
-		...(input.overage_policy !== undefined && { overage_policy: input.overage_policy }),
+		...(input.auto_recharge_enabled !== undefined && {
+			auto_recharge_enabled: input.auto_recharge_enabled,
+		}),
 		...(input.overage_cap_cents !== undefined && { overage_cap_cents: input.overage_cap_cents }),
 	};
 
@@ -260,15 +263,27 @@ export async function activateOrgPlan(input: {
 	};
 }
 
+export class BillingInvalidPackError extends Error {
+	constructor(packId: string) {
+		super(`Invalid top-up pack: ${packId}`);
+		this.name = "BillingInvalidPackError";
+	}
+}
+
 export async function buyOrgCredits(input: {
 	orgId: string;
 	userId: string;
 	userEmail: string;
-	quantity: number;
+	packId: TopUpPackId;
 	appUrl: string;
 }): Promise<BuyCreditsResponse> {
 	if (!isBillingEnabled()) {
 		throw new BillingDisabledError();
+	}
+
+	const pack = TOP_UP_PACKS.find((p) => p.productId === input.packId);
+	if (!pack) {
+		throw new BillingInvalidPackError(input.packId);
 	}
 
 	const org = await getBillingInfo(input.orgId);
@@ -277,13 +292,10 @@ export async function buyOrgCredits(input: {
 	}
 
 	const baseUrl = input.appUrl;
-	const quantity = input.quantity;
-	const totalCredits = TOP_UP_PRODUCT.credits * quantity;
-	const totalPriceCents = TOP_UP_PRODUCT.priceCents * quantity;
 
-	const firstResult = await autumnAttach({
+	const result = await autumnAttach({
 		customer_id: input.orgId,
-		product_id: TOP_UP_PRODUCT.productId,
+		product_id: pack.productId,
 		success_url: `${baseUrl}/settings/billing?success=credits`,
 		cancel_url: `${baseUrl}/settings/billing?canceled=credits`,
 		customer_data: {
@@ -292,32 +304,21 @@ export async function buyOrgCredits(input: {
 		},
 	});
 
-	const checkoutUrl = firstResult.checkout_url ?? firstResult.url;
+	const checkoutUrl = result.checkout_url ?? result.url;
 	if (checkoutUrl) {
 		return {
 			success: true,
 			checkoutUrl,
-			credits: TOP_UP_PRODUCT.credits,
-			priceCents: TOP_UP_PRODUCT.priceCents,
+			credits: pack.credits,
+			priceCents: pack.priceCents,
 		};
-	}
-
-	for (let i = 1; i < quantity; i++) {
-		await autumnAttach({
-			customer_id: input.orgId,
-			product_id: TOP_UP_PRODUCT.productId,
-			customer_data: {
-				email: input.userEmail,
-				name: org.name,
-			},
-		});
 	}
 
 	try {
 		await addShadowBalance(
 			input.orgId,
-			totalCredits,
-			`Credit top-up (${quantity}x pack, payment method on file)`,
+			pack.credits,
+			`Credit top-up (${pack.name} pack, payment method on file)`,
 			input.userId,
 		);
 	} catch (err) {
@@ -328,9 +329,9 @@ export async function buyOrgCredits(input: {
 
 	return {
 		success: true,
-		message: `${totalCredits} credits added to your account`,
-		credits: totalCredits,
-		priceCents: totalPriceCents,
+		message: `${pack.credits} credits added to your account`,
+		credits: pack.credits,
+		priceCents: pack.priceCents,
 	};
 }
 
@@ -446,30 +447,14 @@ export async function getOrgRecentBillingEvents(input: {
 export async function getOrgEntitlementStatus(orgId: string): Promise<{
 	concurrentSessions: { current: number; max: number };
 	activeCoworkers: { current: number; max: number };
-	monthlyUsage: {
-		used: number;
-		included: number;
-		warningLevel: "none" | "approaching" | "critical" | "exhausted";
-	};
 }> {
 	const status = await getEntitlementStatus(orgId);
 	if (!status) {
 		return {
 			concurrentSessions: { current: 0, max: 999 },
 			activeCoworkers: { current: 0, max: 999 },
-			monthlyUsage: { used: 0, included: 0, warningLevel: "none" },
 		};
 	}
 
-	return {
-		...status,
-		monthlyUsage: {
-			...status.monthlyUsage,
-			warningLevel: status.monthlyUsage.warningLevel as
-				| "none"
-				| "approaching"
-				| "critical"
-				| "exhausted",
-		},
-	};
+	return status;
 }

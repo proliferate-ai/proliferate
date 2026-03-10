@@ -10,34 +10,30 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { TOP_UP_PACK_OPTIONS } from "@/config/billing";
 import { useBuyCredits } from "@/hooks/org/use-billing";
-import { CreditCard, Loader2, Minus, Plus } from "lucide-react";
+import { cn } from "@/lib/display/utils";
+import { CreditCard, Loader2, Plus } from "lucide-react";
 import { useState } from "react";
-
-const CREDITS_PER_PACK = 500;
-const PRICE_PER_PACK = 5;
-const MIN_QUANTITY = 1;
-const MAX_QUANTITY = 10;
 
 export function BuyCreditsSection() {
 	const [isOpen, setIsOpen] = useState(false);
-	const [quantity, setQuantity] = useState(1);
+	const [selectedPackId, setSelectedPackId] = useState(TOP_UP_PACK_OPTIONS[1].packId);
 	const [error, setError] = useState<string | null>(null);
 	const buyCredits = useBuyCredits();
 
-	const totalCredits = quantity * CREDITS_PER_PACK;
-	const totalPrice = quantity * PRICE_PER_PACK;
+	const selectedPack =
+		TOP_UP_PACK_OPTIONS.find((p) => p.packId === selectedPackId) ?? TOP_UP_PACK_OPTIONS[1];
 
 	const handleBuyCredits = async () => {
 		setError(null);
 
 		try {
-			const result = await buyCredits.mutateAsync({ quantity });
+			const result = await buyCredits.mutateAsync({ packId: selectedPackId });
 
 			if (result.checkoutUrl) {
 				window.location.href = result.checkoutUrl;
 			} else {
-				// Credits added directly, refresh the page
 				window.location.reload();
 			}
 		} catch (err) {
@@ -53,7 +49,7 @@ export function BuyCreditsSection() {
 						<div>
 							<p className="text-sm font-medium">Need more credits?</p>
 							<p className="text-sm text-muted-foreground">
-								Purchase additional credits anytime. Credits never expire.
+								1 credit = $1 = ~1 hour of compute time. Credits never expire.
 							</p>
 						</div>
 						<Button onClick={() => setIsOpen(true)} variant="outline" size="sm">
@@ -68,74 +64,38 @@ export function BuyCreditsSection() {
 				open={isOpen}
 				onOpenChange={(open) => {
 					setIsOpen(open);
-					if (!open) setQuantity(1);
+					if (!open) setSelectedPackId(TOP_UP_PACK_OPTIONS[1].packId);
 				}}
 			>
 				<DialogContent className="sm:max-w-md">
 					<DialogHeader>
 						<DialogTitle>Buy Credits</DialogTitle>
 						<DialogDescription>
-							Add credits to your account for compute time and AI usage.
+							Choose a credit pack. 1 credit = $1 = ~1 hour of compute time.
 						</DialogDescription>
 					</DialogHeader>
 
-					<div className="py-6">
-						<div className="rounded-lg border border-border bg-muted/30 p-6 text-center">
-							<div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mb-4">
-								<CreditCard className="h-6 w-6 text-primary" />
-							</div>
-							<p className="text-3xl font-bold">{totalCredits.toLocaleString()}</p>
-							<p className="text-sm text-muted-foreground mb-4">credits</p>
-
-							<div className="flex items-center justify-center gap-3 mb-4">
-								<Button
-									variant="outline"
-									size="icon"
-									className="h-8 w-8"
-									onClick={() => setQuantity((q) => Math.max(MIN_QUANTITY, q - 1))}
-									disabled={quantity <= MIN_QUANTITY}
-								>
-									<Minus className="h-4 w-4" />
-								</Button>
-								<span className="text-lg font-medium w-16 text-center tabular-nums">
-									{quantity}x
-								</span>
-								<Button
-									variant="outline"
-									size="icon"
-									className="h-8 w-8"
-									onClick={() => setQuantity((q) => Math.min(MAX_QUANTITY, q + 1))}
-									disabled={quantity >= MAX_QUANTITY}
-								>
-									<Plus className="h-4 w-4" />
-								</Button>
-							</div>
-
-							<p className="text-2xl font-semibold">${totalPrice}</p>
-							<p className="text-xs text-muted-foreground mt-1">
-								{quantity === 1
-									? "one-time purchase"
-									: `${quantity} packs of ${CREDITS_PER_PACK} credits`}
-							</p>
-						</div>
-
-						<div className="mt-4 space-y-2 text-sm text-muted-foreground">
-							<div className="flex items-start gap-2">
-								<span className="text-primary">•</span>
-								<span>1 credit = 1 minute of compute time</span>
-							</div>
-							<div className="flex items-start gap-2">
-								<span className="text-primary">•</span>
-								<span>Credits also cover AI model usage</span>
-							</div>
-							<div className="flex items-start gap-2">
-								<span className="text-primary">•</span>
-								<span>Credits never expire</span>
-							</div>
-						</div>
-
-						{error && <p className="mt-4 text-sm text-destructive text-center">{error}</p>}
+					<div className="py-4 space-y-2">
+						{TOP_UP_PACK_OPTIONS.map((pack) => (
+							<Button
+								key={pack.packId}
+								variant="outline"
+								onClick={() => setSelectedPackId(pack.packId)}
+								className={cn(
+									"w-full h-auto flex items-center justify-between p-3",
+									selectedPackId === pack.packId && "border-primary bg-primary/5",
+								)}
+							>
+								<div className="text-left">
+									<p className="text-sm font-medium">{pack.name}</p>
+									<p className="text-xs text-muted-foreground">{pack.credits} credits</p>
+								</div>
+								<p className="text-sm font-semibold">{pack.price}</p>
+							</Button>
+						))}
 					</div>
+
+					{error && <p className="text-sm text-destructive text-center">{error}</p>}
 
 					<DialogFooter className="gap-2 sm:gap-0">
 						<Button
@@ -154,7 +114,7 @@ export function BuyCreditsSection() {
 							) : (
 								<>
 									<CreditCard className="h-4 w-4 mr-2" />
-									Buy for ${totalPrice}
+									Buy {selectedPack.credits} credits for {selectedPack.price}
 								</>
 							)}
 						</Button>

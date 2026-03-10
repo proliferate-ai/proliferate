@@ -18,12 +18,12 @@ export async function processGraceJob(_job: Job<BillingGraceJob>, logger: Logger
 
 		for (const org of expiredOrgs) {
 			try {
-				// Overage auto-top-up: try to buy credits before enforcing exhausted
-				const topup = await billing.attemptAutoTopUp(org.id, 0);
-				if (topup.success) {
+				// Auto-recharge: try to buy credits before enforcing exhausted
+				const recharge = await billing.attemptAutoRecharge(org.id, 0);
+				if (recharge.success) {
 					graceLog.info(
-						{ orgId: org.id, creditsAdded: topup.creditsAdded },
-						"Auto-top-up succeeded; skipping grace enforcement",
+						{ orgId: org.id, creditsAdded: recharge.creditsAdded },
+						"Auto-recharge succeeded; skipping grace enforcement",
 					);
 					continue;
 				}

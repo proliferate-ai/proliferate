@@ -24,8 +24,8 @@ import { orgProcedure, protectedProcedure } from "./middleware";
 
 export const onboardingRouter = {
 	/**
-	 * Start a credit-based trial for a new organization.
-	 * Stores the selected plan (dev/pro) and grants trial credits.
+	 * Initialize free credits for a new organization.
+	 * Grants free-tier credits and sets billing state to "free".
 	 */
 	startTrial: orgProcedure
 		.input(
@@ -52,9 +52,9 @@ export const onboardingRouter = {
 					appUrl: env.NEXT_PUBLIC_APP_URL,
 				});
 			} catch (err) {
-				log.error({ err }, "Failed to start trial");
+				log.error({ err }, "Failed to initialize free credits");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: "Failed to start trial",
+					message: "Failed to initialize free credits",
 				});
 			}
 		}),

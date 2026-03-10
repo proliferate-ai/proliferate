@@ -11,7 +11,7 @@ interface StepBillingProps {
 }
 
 export function StepBilling({ onComplete }: StepBillingProps) {
-	const startTrialMutation = useMutation({
+	const startMutation = useMutation({
 		...orpc.onboarding.startTrial.mutationOptions(),
 		onSuccess: (result) => {
 			if (result.checkoutUrl) {
@@ -21,26 +21,26 @@ export function StepBilling({ onComplete }: StepBillingProps) {
 			}
 		},
 		onError: (err) => {
-			console.error("Failed to start trial:", err);
+			console.error("Failed to initialize free credits:", err);
 		},
 	});
 
-	const handleStartTrial = () => {
-		startTrialMutation.mutate({ plan: "dev" });
+	const handleStart = () => {
+		startMutation.mutate({ plan: "dev" });
 	};
 
 	return (
 		<div className="w-[480px]">
 			<div className="rounded-2xl overflow-hidden border border-border">
 				{/* Image Area */}
-				<OnboardingCardImage src="/colloseum.png" alt="Start your free trial" label="Trial" />
+				<OnboardingCardImage src="/colloseum.png" alt="Get started for free" label="Free" />
 
 				{/* Content */}
 				<div className="p-6 bg-card">
 					<div className="mb-5 text-center">
-						<h1 className="text-xl font-semibold text-foreground">Start your free trial</h1>
+						<h1 className="text-xl font-semibold text-foreground">Get started for free</h1>
 						<p className="mt-2 text-sm text-muted-foreground">
-							No credit card required. Get started instantly.
+							No credit card required. Start building instantly.
 						</p>
 					</div>
 
@@ -50,9 +50,9 @@ export function StepBilling({ onComplete }: StepBillingProps) {
 								<Coins className="h-4 w-4 text-primary" />
 							</div>
 							<div>
-								<p className="text-sm font-medium text-foreground">1,000 free credits</p>
+								<p className="text-sm font-medium text-foreground">5 free credits</p>
 								<p className="text-xs text-muted-foreground">
-									Enough to explore and build your first projects
+									1 credit = $1 = ~1 hour of compute time
 								</p>
 							</div>
 						</div>
@@ -70,21 +70,21 @@ export function StepBilling({ onComplete }: StepBillingProps) {
 						</div>
 					</div>
 
-					{startTrialMutation.error && (
+					{startMutation.error && (
 						<div className="mt-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm text-center">
-							{startTrialMutation.error instanceof Error
-								? startTrialMutation.error.message
+							{startMutation.error instanceof Error
+								? startMutation.error.message
 								: "Something went wrong. Please try again."}
 						</div>
 					)}
 
 					<Button
 						variant="contrast"
-						onClick={handleStartTrial}
-						disabled={startTrialMutation.isPending}
+						onClick={handleStart}
+						disabled={startMutation.isPending}
 						className="h-11 w-full rounded-lg mt-5"
 					>
-						{startTrialMutation.isPending ? "Starting..." : "Start Free Trial"}
+						{startMutation.isPending ? "Setting up..." : "Get Started"}
 					</Button>
 					<p className="text-center text-xs text-muted-foreground mt-3">
 						No payment needed. You won&apos;t be charged anything.

@@ -23,7 +23,7 @@ import {
 import { getServicesLogger } from "../logger";
 import { expireGraceForOrg, getBillingInfoV2 } from "../orgs/service";
 import { getSessionCountsByOrganization } from "../sessions/service";
-import { getActiveCoworkerCount, getMonthlyUsageTotal } from "./db";
+import { getActiveCoworkerCount } from "./db";
 
 // Re-export types so callers can use `billing.BillingGateError` etc.
 export {
@@ -41,7 +41,7 @@ function deny(error: string): BillingGateResult {
 	return {
 		allowed: false,
 		error,
-		code: "BILLING_NOT_CONFIGURED",
+		code: "STATE_BLOCKED",
 		message: "Unable to verify billing status. Please try again.",
 	};
 }
@@ -94,14 +94,10 @@ export async function checkBillingGateForOrg(
 		return deny("Failed to verify session counts");
 	}
 
-	// Fetch coworker count and monthly usage (fail-closed)
+	// Fetch coworker count (fail-closed)
 	let activeCoworkerCount: number;
-	let monthlyUsage: number;
 	try {
-		[activeCoworkerCount, monthlyUsage] = await Promise.all([
-			getActiveCoworkerCount(orgId),
-			getMonthlyUsageTotal(orgId),
-		]);
+		activeCoworkerCount = await getActiveCoworkerCount(orgId);
 	} catch (err) {
 		log.error({ err }, "FAIL-CLOSED: could not load entitlement metrics");
 		return deny("Failed to verify entitlement limits");
@@ -124,7 +120,7 @@ export async function checkBillingGateForOrg(
 					creditsIncluded: PLAN_CONFIGS[planId].creditsIncluded,
 				}
 			: null,
-		overagePolicy: billingSettings.overage_policy,
+		autoRechargeEnabled: billingSettings.auto_recharge_enabled,
 	};
 
 	const gateResult = checkBillingGate(orgBillingInfo, {
@@ -132,7 +128,6 @@ export async function checkBillingGateForOrg(
 		sessionCounts,
 		minCreditsRequired: MIN_CREDITS_TO_START,
 		activeCoworkerCount,
-		monthlyUsage,
 	});
 
 	if (!gateResult.allowed) {
@@ -181,21 +176,18 @@ export async function assertBillingGateForOrg(
 export async function getEntitlementStatus(orgId: string): Promise<{
 	concurrentSessions: { current: number; max: number };
 	activeCoworkers: { current: number; max: number };
-	monthlyUsage: { used: number; included: number; warningLevel: string };
 } | null> {
 	if (!env.NEXT_PUBLIC_BILLING_ENABLED) {
 		return null;
 	}
 
-	const { computeWarningLevel } = await import("@proliferate/shared/billing");
 	const log = getServicesLogger().child({ module: "billing-gate", orgId });
 
 	try {
-		const [org, sessionCounts, coworkerCount, monthlyUsage] = await Promise.all([
+		const [org, sessionCounts, coworkerCount] = await Promise.all([
 			getBillingInfoV2(orgId),
 			getSessionCountsByOrganization(orgId),
 			getActiveCoworkerCount(orgId),
-			getMonthlyUsageTotal(orgId),
 		]);
 
 		const planId = resolvePlan(org?.billingPlan);
@@ -209,11 +201,6 @@ export async function getEntitlementStatus(orgId: string): Promise<{
 			activeCoworkers: {
 				current: coworkerCount,
 				max: config?.maxActiveCoworkers ?? 1,
-			},
-			monthlyUsage: {
-				used: monthlyUsage,
-				included: config?.creditsIncluded ?? 0,
-				warningLevel: computeWarningLevel(monthlyUsage, config?.creditsIncluded ?? 0),
 			},
 		};
 	} catch (err) {

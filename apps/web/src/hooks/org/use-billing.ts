@@ -22,15 +22,9 @@ export function useBilling() {
 }
 
 /**
- * Billing state types (V2).
+ * Billing state types.
  */
-export type BillingStateType =
-	| "unconfigured"
-	| "trial"
-	| "active"
-	| "grace"
-	| "exhausted"
-	| "suspended";
+export type BillingStateType = "free" | "active" | "grace" | "exhausted" | "suspended";
 
 /**
  * Derived billing state for common checks.
@@ -40,12 +34,11 @@ export interface BillingState {
 	hasCredits: boolean;
 	creditBalance: number;
 	planName: string;
-	isTrialState: boolean;
+	isFreeState: boolean;
 	selectedPlan: "dev" | "pro";
 	hasActiveSubscription: boolean;
 	isNearCreditLimit: boolean;
-	overagePolicy: "pause" | "allow";
-	// V2 state fields
+	autoRechargeEnabled: boolean;
 	billingState: BillingStateType;
 	shadowBalance: number;
 	graceExpiresAt: string | null;
@@ -55,7 +48,6 @@ export interface BillingState {
 
 /**
  * Hook to get simplified billing state for UI components.
- * V2: Includes billing state machine info.
  */
 export function useBillingState(): BillingState {
 	const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
@@ -67,13 +59,12 @@ export function useBillingState(): BillingState {
 			hasCredits: true, // Default to allowing access while loading
 			creditBalance: 0,
 			planName: "Loading...",
-			isTrialState: false,
+			isFreeState: true,
 			selectedPlan: "dev",
 			hasActiveSubscription: false,
 			isNearCreditLimit: false,
-			overagePolicy: "pause",
-			// V2 defaults
-			billingState: "unconfigured",
+			autoRechargeEnabled: false,
+			billingState: "free",
 			shadowBalance: 0,
 			graceExpiresAt: null,
 			canStartSession: true,
@@ -83,21 +74,20 @@ export function useBillingState(): BillingState {
 
 	const creditBalance = Math.round(data.credits.balance);
 	const hasCredits = creditBalance > 0;
-	const isTrialState = data.state.billingState === "trial";
-	// Consider "near limit" when below 2% of included credits or < 20 credits
-	const isNearCreditLimit = creditBalance < Math.max(data.credits.included * 0.02, 20);
+	const isFreeState = data.state.billingState === "free";
+	// Consider "near limit" when below 2% of included credits or < 1 credit
+	const isNearCreditLimit = creditBalance < Math.max(data.credits.included * 0.02, 1);
 
 	return {
 		isLoaded: true,
 		hasCredits,
 		creditBalance,
 		planName: data.plan.name,
-		isTrialState,
+		isFreeState,
 		selectedPlan: data.selectedPlan,
 		hasActiveSubscription: data.hasActiveSubscription,
 		isNearCreditLimit,
-		overagePolicy: data.billingSettings.overage_policy,
-		// V2 state fields
+		autoRechargeEnabled: data.billingSettings.auto_recharge_enabled,
 		billingState: data.state.billingState,
 		shadowBalance: data.state.shadowBalance,
 		graceExpiresAt: data.state.graceExpiresAt,
@@ -123,7 +113,7 @@ export function useBuyCredits() {
 }
 
 /**
- * Hook to update billing settings (overage policy, cap, etc.).
+ * Hook to update billing settings (auto-recharge, cap, etc.).
  * Only admins/owners can update settings.
  */
 export function useUpdateBillingSettings() {
@@ -139,7 +129,7 @@ export function useUpdateBillingSettings() {
 }
 
 /**
- * Hook to activate the selected plan after trial.
+ * Hook to activate the selected plan.
  */
 export function useActivatePlan() {
 	const queryClient = useQueryClient();

@@ -78,7 +78,7 @@ export const billingRouter = {
 	updateSettings: orgProcedure
 		.input(
 			z.object({
-				overage_policy: z.enum(["pause", "allow"]).optional(),
+				auto_recharge_enabled: z.boolean().optional(),
 				overage_cap_cents: z.number().nullable().optional(),
 			}),
 		)
@@ -96,7 +96,7 @@ export const billingRouter = {
 		}),
 
 	/**
-	 * Activate the selected plan (dev/pro) after trial credits are exhausted.
+	 * Activate the selected plan (dev/pro).
 	 * Returns a checkout URL if payment method is required.
 	 */
 	activatePlan: orgProcedure
@@ -124,7 +124,7 @@ export const billingRouter = {
 	 * Returns a Stripe checkout URL or confirms credits added directly.
 	 */
 	buyCredits: orgProcedure
-		.input(z.object({ quantity: z.number().int().min(1).max(10).default(1) }).optional())
+		.input(z.object({ packId: z.string() }))
 		.output(BuyCreditsResponseSchema)
 		.handler(async ({ context, input }) => {
 			try {
@@ -133,7 +133,7 @@ export const billingRouter = {
 					orgId: context.orgId,
 					userId: context.user.id,
 					userEmail: context.user.email,
-					quantity: input?.quantity ?? 1,
+					packId: input.packId as any,
 					appUrl: env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
 				});
 			} catch (err) {
@@ -244,11 +244,6 @@ export const billingRouter = {
 			z.object({
 				concurrentSessions: z.object({ current: z.number(), max: z.number() }),
 				activeCoworkers: z.object({ current: z.number(), max: z.number() }),
-				monthlyUsage: z.object({
-					used: z.number(),
-					included: z.number(),
-					warningLevel: z.enum(["none", "approaching", "critical", "exhausted"]),
-				}),
 			}),
 		)
 		.handler(async ({ context }) => {

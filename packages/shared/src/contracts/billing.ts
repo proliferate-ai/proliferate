@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const BillingSettingsSchema = z.object({
-	overage_policy: z.enum(["pause", "allow"]),
+	auto_recharge_enabled: z.boolean(),
 	overage_cap_cents: z.number().nullable(),
 });
 
@@ -40,7 +40,7 @@ export const BillingInfoSchema = z.object({
 	billingSettings: BillingSettingsSchema,
 	overage: OverageStateSchema,
 	state: z.object({
-		billingState: z.enum(["unconfigured", "trial", "active", "grace", "exhausted", "suspended"]),
+		billingState: z.enum(["free", "active", "grace", "exhausted", "suspended"]),
 		shadowBalance: z.number(),
 		graceExpiresAt: z.string().nullable(),
 		canStartSession: z.boolean(),

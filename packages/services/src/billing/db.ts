@@ -289,7 +289,7 @@ export async function getActiveCoworkerCount(orgId: string): Promise<number> {
 // ============================================
 
 /**
- * List org IDs with an active billing state (active, trial, or grace).
+ * List org IDs with an active billing state (active, free, or grace).
  * These are the orgs that may accumulate LLM spend.
  */
 export async function listBillableOrgIds(): Promise<string[]> {
@@ -297,7 +297,7 @@ export async function listBillableOrgIds(): Promise<string[]> {
 	const rows = await db
 		.select({ id: organization.id })
 		.from(organization)
-		.where(inArray(organization.billingState, ["active", "trial", "grace"]));
+		.where(inArray(organization.billingState, ["active", "free", "grace"]));
 	return rows.map((r) => r.id);
 }
 
@@ -317,7 +317,7 @@ export async function listBillableOrgsWithCustomerId(): Promise<
 		.from(organization)
 		.where(
 			and(
-				inArray(organization.billingState, ["active", "trial", "grace"]),
+				inArray(organization.billingState, ["active", "free", "grace"]),
 				isNotNull(organization.autumnCustomerId),
 			),
 		);
@@ -344,7 +344,7 @@ export async function listStaleReconcileOrgs(
 		.where(
 			and(
 				isNotNull(organization.autumnCustomerId),
-				inArray(organization.billingState, ["active", "trial", "grace"]),
+				inArray(organization.billingState, ["active", "free", "grace"]),
 				or(isNull(organization.lastReconciledAt), lt(organization.lastReconciledAt, threshold)),
 			),
 		);

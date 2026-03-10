@@ -1,9 +1,9 @@
 /**
  * Core billing types for the Proliferate billing system.
  *
- * Credit System: 1 credit = $0.01 (1 cent)
- * - Compute: 1 credit per minute (~4.5x margin on E2B costs)
- * - LLM: Credits calculated from LiteLLM's response_cost × 3x markup
+ * Credit System: 1 credit = $1.00
+ * - Compute: 1 credit per hour (~67% margin on E2B costs)
+ * - LLM: 3x markup on LiteLLM's response_cost
  */
 
 // ============================================
@@ -14,19 +14,18 @@
  * Organization billing states.
  *
  * State transitions:
- * - unconfigured → active (on plan attach)
- * - trial → exhausted (on trial credits depleted)
+ * - free → exhausted (on free credits depleted, no grace)
+ * - free → active (on plan attach)
  * - active → grace (on balance <= 0)
  * - grace → exhausted (on grace expiry)
- * - exhausted → active (on top-up)
+ * - exhausted → active (on credits added)
  * - any → suspended (manual override)
  * - suspended → active (manual override)
  */
 export type BillingState =
-	| "unconfigured" // No billing set up yet
-	| "trial" // Credit-based trial (plan selected, not yet billed)
-	| "active" // Paid plan with positive balance
-	| "grace" // Balance exhausted, grace window active
+	| "free" // Free tier with permanent credits (no CC required)
+	| "active" // Paid plan or purchased credits
+	| "grace" // Balance exhausted, grace window active (paid plans only)
 	| "exhausted" // Credits exhausted, sessions blocked
 	| "suspended"; // Manually suspended (billing issues)
 
@@ -36,10 +35,10 @@ export type BillingState =
 export const GRACE_WINDOW_CONFIG = {
 	/** Default grace window duration in milliseconds (5 minutes) */
 	defaultDurationMs: 5 * 60 * 1000,
-	/** Maximum grace window duration in milliseconds (1 hour) */
-	maxDurationMs: 60 * 60 * 1000,
+	/** Maximum grace window duration in milliseconds (5 minutes) */
+	maxDurationMs: 5 * 60 * 1000,
 	/** Maximum overdraft allowed during grace (credits) */
-	maxOverdraftCredits: 500,
+	maxOverdraftCredits: 5,
 } as const;
 
 // ============================================
@@ -63,8 +62,8 @@ export const PLAN_CONFIGS: Record<BillingPlan, PlanConfig> = {
 	dev: {
 		id: "dev",
 		name: "Developer",
-		monthlyPriceCents: 2000, // $20
-		creditsIncluded: 1000,
+		monthlyPriceCents: 5000, // $50
+		creditsIncluded: 100,
 		maxConcurrentSessions: 10,
 		maxActiveCoworkers: 3,
 		maxSnapshots: 5,
@@ -73,8 +72,8 @@ export const PLAN_CONFIGS: Record<BillingPlan, PlanConfig> = {
 	pro: {
 		id: "pro",
 		name: "Professional",
-		monthlyPriceCents: 50000, // $500
-		creditsIncluded: 7500,
+		monthlyPriceCents: 20000, // $200
+		creditsIncluded: 400,
 		maxConcurrentSessions: 100,
 		maxActiveCoworkers: 25,
 		maxSnapshots: 200,
@@ -83,25 +82,23 @@ export const PLAN_CONFIGS: Record<BillingPlan, PlanConfig> = {
 };
 
 // ============================================
-// Trial Configuration
+// Free Tier Configuration
 // ============================================
 
-/** Credit-based trial amount granted on signup. */
-export const TRIAL_CREDITS = 1000;
+/** Credits granted to free tier orgs (no CC required, no expiry). */
+export const FREE_CREDITS = 5;
 
 // ============================================
 // Billing Settings (stored in organization.billing_settings)
 // ============================================
 
-export type OveragePolicy = "pause" | "allow";
-
 export interface OrgBillingSettings {
-	overage_policy: OveragePolicy;
-	overage_cap_cents: number | null; // null = unlimited (if policy is 'allow')
+	auto_recharge_enabled: boolean;
+	overage_cap_cents: number | null; // null = unlimited
 }
 
 export const DEFAULT_BILLING_SETTINGS: OrgBillingSettings = {
-	overage_policy: "pause",
+	auto_recharge_enabled: false,
 	overage_cap_cents: null,
 };
 
@@ -116,18 +113,26 @@ export function parseBillingSettings(raw: unknown): OrgBillingSettings {
 			return DEFAULT_BILLING_SETTINGS;
 		}
 
-		const candidate = value as Partial<OrgBillingSettings>;
-		const overagePolicy =
-			candidate.overage_policy === "pause" || candidate.overage_policy === "allow"
-				? candidate.overage_policy
-				: DEFAULT_BILLING_SETTINGS.overage_policy;
+		const candidate = value as Record<string, unknown>;
+
+		// Handle migration from old overage_policy shape
+		let autoRechargeEnabled: boolean;
+		if (typeof candidate.auto_recharge_enabled === "boolean") {
+			autoRechargeEnabled = candidate.auto_recharge_enabled;
+		} else if (candidate.overage_policy === "allow") {
+			// Backward compat: old "allow" policy maps to auto-recharge enabled
+			autoRechargeEnabled = true;
+		} else {
+			autoRechargeEnabled = DEFAULT_BILLING_SETTINGS.auto_recharge_enabled;
+		}
+
 		const overageCap =
 			typeof candidate.overage_cap_cents === "number" || candidate.overage_cap_cents === null
-				? candidate.overage_cap_cents
+				? (candidate.overage_cap_cents as number | null)
 				: DEFAULT_BILLING_SETTINGS.overage_cap_cents;
 
 		return {
-			overage_policy: overagePolicy,
+			auto_recharge_enabled: autoRechargeEnabled,
 			overage_cap_cents: overageCap,
 		};
 	} catch {
@@ -178,8 +183,6 @@ export function serializeBillingSettings(settings: OrgBillingSettings): string {
 
 // Standard overage caps
 export const OVERAGE_CAP_OPTIONS = [5000, 10000, 20000, 50000, null] as const; // in cents
-export const OVERAGE_INCREMENT_CENTS = 5000; // $50 per auto-charge
-export const OVERAGE_INCREMENT_CREDITS = 5000; // 5000 credits per $50
 
 // ============================================
 // Credit Rates
@@ -187,10 +190,10 @@ export const OVERAGE_INCREMENT_CREDITS = 5000; // 5000 credits per $50
 
 /**
  * Compute credit rate.
- * E2B costs ~$0.00222/min, we charge 1 credit/min ($0.01) = 4.5x margin
+ * E2B 4vCPU/8GiB costs ~$0.33/hr, we charge 1 credit/hr ($1) = ~67% margin
  */
-export const COMPUTE_CREDITS_PER_MINUTE = 1;
-export const COMPUTE_CREDITS_PER_SECOND = COMPUTE_CREDITS_PER_MINUTE / 60;
+export const COMPUTE_CREDITS_PER_HOUR = 1;
+export const COMPUTE_CREDITS_PER_SECOND = COMPUTE_CREDITS_PER_HOUR / 3600;
 
 /**
  * LLM markup multiplier applied to LiteLLM's response_cost.
@@ -201,7 +204,7 @@ export const LLM_MARKUP_MULTIPLIER = 3;
 /**
  * Credit value in USD.
  */
-export const CREDIT_VALUE_USD = 0.01;
+export const CREDIT_VALUE_USD = 1.0;
 
 /**
  * Calculate credits from LLM cost.
@@ -209,8 +212,7 @@ export const CREDIT_VALUE_USD = 0.01;
  * @returns Credits to charge (with 3x markup applied)
  */
 export function calculateLLMCredits(actualCostUsd: number): number {
-	const costWithMarkup = actualCostUsd * LLM_MARKUP_MULTIPLIER;
-	return costWithMarkup / CREDIT_VALUE_USD;
+	return actualCostUsd * LLM_MARKUP_MULTIPLIER;
 }
 
 /**
@@ -339,7 +341,6 @@ export interface CostDriver {
 export interface EntitlementStatus {
 	concurrentSessions: { current: number; max: number };
 	activeCoworkers: { current: number; max: number };
-	monthlyUsage: { used: number; included: number; warningLevel: BudgetWarningLevel };
 }
 
 // ============================================
@@ -350,9 +351,7 @@ export type BillingErrorCode =
 	| "NO_CREDITS"
 	| "CONCURRENT_LIMIT"
 	| "COWORKER_LIMIT"
-	| "MONTHLY_LIMIT"
 	| "BUDGET_EXHAUSTED"
-	| "BILLING_NOT_CONFIGURED"
 	| "STATE_BLOCKED"
 	| "GRACE_EXPIRED";
 
@@ -413,13 +412,13 @@ export const METERING_CONFIG = {
 	llmSyncLookbackMs: 5 * 60 * 1000,
 
 	/** Drift threshold (credits) that triggers a warning log during reconciliation */
-	reconcileDriftWarnThreshold: 100,
+	reconcileDriftWarnThreshold: 1,
 
 	/** Drift threshold (credits) that triggers an error alert during reconciliation */
-	reconcileDriftAlertThreshold: 500,
+	reconcileDriftAlertThreshold: 5,
 
 	/** Drift threshold (credits) that triggers a critical/paging alert */
-	reconcileDriftCriticalThreshold: 1000,
+	reconcileDriftCriticalThreshold: 10,
 
 	/** Maximum staleness for reconciliation before alerting (ms) — 25 hours */
 	reconcileMaxStalenessMs: 25 * 60 * 60 * 1000,

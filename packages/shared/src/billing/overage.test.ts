@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TOP_UP_PRODUCT } from "./autumn-types";
+import { DEFAULT_AUTO_RECHARGE_PACK, TOP_UP_PACKS } from "./autumn-types";
 import {
-	OVERAGE_INCREMENT_CREDITS,
 	OVERAGE_MAX_TOPUPS_PER_CYCLE,
 	OVERAGE_MIN_TOPUP_INTERVAL_MS,
 	type OverageTopUpResult,
@@ -52,16 +51,23 @@ describe("overage constants", () => {
 		expect(OVERAGE_MIN_TOPUP_INTERVAL_MS).toBe(60_000);
 	});
 
-	it("OVERAGE_INCREMENT_CREDITS is positive", () => {
-		expect(OVERAGE_INCREMENT_CREDITS).toBeGreaterThan(0);
+	it("TOP_UP_PACKS has expected structure", () => {
+		expect(TOP_UP_PACKS.length).toBe(5);
+		for (const pack of TOP_UP_PACKS) {
+			expect(pack).toHaveProperty("productId");
+			expect(pack).toHaveProperty("credits");
+			expect(pack).toHaveProperty("priceCents");
+			expect(pack.credits).toBeGreaterThan(0);
+			expect(pack.priceCents).toBeGreaterThan(0);
+			// All packs are $1/credit
+			expect(pack.priceCents / pack.credits).toBe(100);
+		}
 	});
 
-	it("TOP_UP_PRODUCT has expected structure", () => {
-		expect(TOP_UP_PRODUCT).toHaveProperty("productId");
-		expect(TOP_UP_PRODUCT).toHaveProperty("credits");
-		expect(TOP_UP_PRODUCT).toHaveProperty("priceCents");
-		expect(TOP_UP_PRODUCT.credits).toBeGreaterThan(0);
-		expect(TOP_UP_PRODUCT.priceCents).toBeGreaterThan(0);
+	it("DEFAULT_AUTO_RECHARGE_PACK is the Builder pack", () => {
+		expect(DEFAULT_AUTO_RECHARGE_PACK.productId).toBe("topup_20");
+		expect(DEFAULT_AUTO_RECHARGE_PACK.credits).toBe(20);
+		expect(DEFAULT_AUTO_RECHARGE_PACK.priceCents).toBe(2000);
 	});
 });
 
@@ -80,12 +86,12 @@ describe("OverageTopUpResult type", () => {
 	it("success result has credits info", () => {
 		const result: OverageTopUpResult = {
 			success: true,
-			packsCharged: 3,
-			creditsAdded: 1500,
-			chargedCents: 1500,
+			packsCharged: 1,
+			creditsAdded: 20,
+			chargedCents: 2000,
 		};
 		expect(result.success).toBe(true);
-		expect(result.creditsAdded).toBe(1500);
+		expect(result.creditsAdded).toBe(20);
 	});
 
 	it("circuit breaker result", () => {
@@ -124,42 +130,44 @@ describe("OverageTopUpResult type", () => {
 
 describe("pack sizing math", () => {
 	it("computes correct pack count for small deficit", () => {
-		const deficitCredits = 100;
-		const creditsNeeded = Math.abs(deficitCredits) + OVERAGE_INCREMENT_CREDITS;
-		const packsNeeded = Math.ceil(creditsNeeded / TOP_UP_PRODUCT.credits);
+		const pack = DEFAULT_AUTO_RECHARGE_PACK;
+		const deficitCredits = 2;
+		const packsNeeded = Math.ceil(deficitCredits / pack.credits);
 
 		expect(packsNeeded).toBeGreaterThan(0);
-		expect(packsNeeded * TOP_UP_PRODUCT.credits).toBeGreaterThanOrEqual(creditsNeeded);
+		expect(packsNeeded * pack.credits).toBeGreaterThanOrEqual(deficitCredits);
 	});
 
 	it("computes correct pack count for large deficit", () => {
-		const deficitCredits = 3000;
-		const creditsNeeded = Math.abs(deficitCredits) + OVERAGE_INCREMENT_CREDITS;
-		const packsNeeded = Math.ceil(creditsNeeded / TOP_UP_PRODUCT.credits);
+		const pack = DEFAULT_AUTO_RECHARGE_PACK;
+		const deficitCredits = 50;
+		const packsNeeded = Math.ceil(deficitCredits / pack.credits);
 
-		expect(packsNeeded * TOP_UP_PRODUCT.credits).toBeGreaterThanOrEqual(creditsNeeded);
+		expect(packsNeeded * pack.credits).toBeGreaterThanOrEqual(deficitCredits);
 	});
 
 	it("clamps packs to cap budget", () => {
+		const pack = DEFAULT_AUTO_RECHARGE_PACK;
 		const packsNeeded = 10;
-		const overageCapCents = 2500; // $25 cap
-		const overageUsedCents = 2000; // $20 used
-		const remainingCapCents = overageCapCents - overageUsedCents; // $5 remaining
+		const overageCapCents = 25000; // $250 cap
+		const overageUsedCents = 20000; // $200 used
+		const remainingCapCents = overageCapCents - overageUsedCents; // $50 remaining
 
-		const maxPacksByBudget = Math.floor(remainingCapCents / TOP_UP_PRODUCT.priceCents);
+		const maxPacksByBudget = Math.floor(remainingCapCents / pack.priceCents);
 		const clampedPacks = Math.min(packsNeeded, maxPacksByBudget);
 
 		expect(clampedPacks).toBeLessThanOrEqual(maxPacksByBudget);
-		expect(clampedPacks * TOP_UP_PRODUCT.priceCents).toBeLessThanOrEqual(remainingCapCents);
+		expect(clampedPacks * pack.priceCents).toBeLessThanOrEqual(remainingCapCents);
 	});
 
 	it("returns 0 packs when cap is fully exhausted", () => {
-		const overageCapCents = 2000;
-		const overageUsedCents = 2000;
+		const pack = DEFAULT_AUTO_RECHARGE_PACK;
+		const overageCapCents = 20000;
+		const overageUsedCents = 20000;
 		const remainingCapCents = overageCapCents - overageUsedCents;
 
 		expect(remainingCapCents).toBe(0);
-		const maxPacksByBudget = Math.floor(remainingCapCents / TOP_UP_PRODUCT.priceCents);
+		const maxPacksByBudget = Math.floor(remainingCapCents / pack.priceCents);
 		expect(maxPacksByBudget).toBe(0);
 	});
 });

@@ -1,22 +1,21 @@
 /**
- * Auto-top-up service for overage policy execution.
+ * Auto-recharge service for auto_recharge_enabled orgs.
  *
- * When an org has overage_policy = "allow" and balance goes negative,
- * this module auto-charges in increments to keep sessions running.
+ * When an org has auto_recharge_enabled = true and balance goes negative,
+ * this module auto-charges using the default recharge pack to keep sessions running.
  *
  * Key invariants:
- * - Auto-top-up happens OUTSIDE the shadow balance FOR UPDATE transaction
- * - Uses pg_advisory_xact_lock to prevent concurrent top-ups per org
- * - Circuit breaker trips on card decline → forces pause behavior
+ * - Auto-recharge happens OUTSIDE the shadow balance FOR UPDATE transaction
+ * - Uses pg_advisory_xact_lock to prevent concurrent recharges per org
+ * - Circuit breaker trips on card decline → forces exhausted state directly
  * - Velocity + rate limits prevent runaway charges
  */
 
 import {
-	OVERAGE_INCREMENT_CREDITS,
+	DEFAULT_AUTO_RECHARGE_PACK,
 	OVERAGE_MAX_TOPUPS_PER_CYCLE,
 	OVERAGE_MIN_TOPUP_INTERVAL_MS,
 	type OverageTopUpResult,
-	TOP_UP_PRODUCT,
 	autumnAutoTopUp,
 	getCurrentCycleMonth,
 	parseBillingSettings,
@@ -34,19 +33,19 @@ const emptyResult: OverageTopUpResult = {
 };
 
 /**
- * Attempt an auto-top-up for an org with overage_policy = "allow".
+ * Attempt an auto-recharge for an org with auto_recharge_enabled = true.
  *
  * Called after deductShadowBalance detects enforcement is needed.
  * Returns success=true if credits were added (caller should skip enforcement).
  */
-export async function attemptAutoTopUp(
+export async function attemptAutoRecharge(
 	orgId: string,
 	deficitCredits: number,
 ): Promise<OverageTopUpResult> {
-	const log = getServicesLogger().child({ module: "auto-topup", orgId });
+	const log = getServicesLogger().child({ module: "auto-recharge", orgId });
 	const db = getDb();
 
-	// 1. Load org overage state
+	// 1. Load org recharge state
 	const [org] = await db
 		.select({
 			billingSettings: organization.billingSettings,
@@ -68,29 +67,30 @@ export async function attemptAutoTopUp(
 	const settings = parseBillingSettings(org.billingSettings);
 
 	// 2. Policy check
-	if (settings.overage_policy !== "allow") {
+	if (!settings.auto_recharge_enabled) {
 		return emptyResult;
 	}
 
 	if (!org.autumnCustomerId) {
-		log.warn("No Autumn customer ID — cannot auto-top-up");
+		log.warn("No Autumn customer ID — cannot auto-recharge");
 		return emptyResult;
 	}
 
 	// 3. Circuit breaker check
 	if (org.overageDeclineAt) {
-		log.info("Circuit breaker active — skipping auto-top-up");
+		log.info("Circuit breaker active — skipping auto-recharge");
 		return { ...emptyResult, circuitBreakerTripped: true };
 	}
 
-	// Use advisory lock transaction to prevent concurrent top-ups.
+	// Use advisory lock transaction to prevent concurrent recharges.
 	// Enforcement and shadow balance updates happen AFTER the transaction commits.
 	let shouldEnforce = false;
+	const pack = DEFAULT_AUTO_RECHARGE_PACK;
 	const txResult = await db.transaction(async (tx) => {
 		// 4. Acquire advisory lock (per-org, distinct from shadow balance lock)
 		await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${orgId} || ':auto_topup'))`);
 
-		// 5. Re-read state under lock (another caller may have topped up)
+		// 5. Re-read state under lock (another caller may have recharged)
 		const [fresh] = await tx
 			.select({
 				overageUsedCents: organization.overageUsedCents,
@@ -105,7 +105,7 @@ export async function attemptAutoTopUp(
 
 		if (!fresh) return emptyResult;
 
-		// If balance is now positive (another caller topped up), skip
+		// If balance is now positive (another caller recharged), skip
 		if (Number(fresh.shadowBalance ?? 0) > 0) {
 			log.debug("Balance already positive after lock — skipping");
 			return emptyResult;
@@ -135,7 +135,7 @@ export async function attemptAutoTopUp(
 					overageDeclineAt: null, // Reset circuit breaker on new cycle
 				})
 				.where(eq(organization.id, orgId));
-			log.info({ newCycle: currentCycle }, "Overage cycle reset");
+			log.info({ newCycle: currentCycle }, "Recharge cycle reset");
 		}
 
 		// 7. Velocity check
@@ -157,9 +157,9 @@ export async function attemptAutoTopUp(
 		}
 
 		// 9. Cap check + pack sizing
-		const creditsNeeded = Math.abs(deficitCredits) + OVERAGE_INCREMENT_CREDITS;
-		let packsNeeded = Math.ceil(creditsNeeded / TOP_UP_PRODUCT.credits);
-		let costCents = packsNeeded * TOP_UP_PRODUCT.priceCents;
+		const creditsNeeded = Math.abs(deficitCredits) + pack.credits;
+		let packsNeeded = Math.ceil(creditsNeeded / pack.credits);
+		let costCents = packsNeeded * pack.priceCents;
 
 		const capCents = settings.overage_cap_cents;
 		if (capCents !== null) {
@@ -168,41 +168,43 @@ export async function attemptAutoTopUp(
 				log.info({ used: overageUsedCents, cap: capCents }, "Cap exhausted");
 				return { ...emptyResult, capExhausted: true };
 			}
-			const maxPacksByBudget = Math.floor(remainingCapCents / TOP_UP_PRODUCT.priceCents);
+			const maxPacksByBudget = Math.floor(remainingCapCents / pack.priceCents);
 			if (maxPacksByBudget <= 0) {
 				log.info({ remaining: remainingCapCents }, "Cap too low for even one pack");
 				return { ...emptyResult, capExhausted: true };
 			}
 			if (packsNeeded > maxPacksByBudget) {
 				packsNeeded = maxPacksByBudget;
-				costCents = packsNeeded * TOP_UP_PRODUCT.priceCents;
+				costCents = packsNeeded * pack.priceCents;
 			}
 		}
 
 		// 10. Autumn calls
-		const totalCredits = packsNeeded * TOP_UP_PRODUCT.credits;
-		log.info({ packsNeeded, costCents, totalCredits, deficitCredits }, "Attempting auto-top-up");
+		const totalCredits = packsNeeded * pack.credits;
+		log.info({ packsNeeded, costCents, totalCredits, deficitCredits }, "Attempting auto-recharge");
 
 		try {
 			for (let i = 0; i < packsNeeded; i++) {
-				const result = await autumnAutoTopUp(
-					org.autumnCustomerId!,
-					TOP_UP_PRODUCT.productId,
-					TOP_UP_PRODUCT.credits,
-				);
+				const result = await autumnAutoTopUp(org.autumnCustomerId!, pack.productId, pack.credits);
 				if (result.requiresCheckout) {
 					// No payment method on file — trip circuit breaker
 					log.warn("Payment method required — tripping circuit breaker");
 					await tx
 						.update(organization)
-						.set({ overageDeclineAt: new Date() })
+						.set({
+							overageDeclineAt: new Date(),
+							billingState: "exhausted",
+							graceEnteredAt: null,
+							graceExpiresAt: null,
+						})
 						.where(eq(organization.id, orgId));
+					shouldEnforce = true;
 					return { ...emptyResult, circuitBreakerTripped: true };
 				}
 			}
 		} catch (err) {
-			// Card decline or Autumn error — trip circuit breaker
-			log.error({ err, alert: true }, "Auto-top-up failed — tripping circuit breaker");
+			// Card decline or Autumn error — trip circuit breaker, go straight to exhausted
+			log.error({ err, alert: true }, "Auto-recharge failed — tripping circuit breaker");
 			await tx
 				.update(organization)
 				.set({
@@ -216,7 +218,7 @@ export async function attemptAutoTopUp(
 			return { ...emptyResult, circuitBreakerTripped: true };
 		}
 
-		// 11. Success — update overage accounting
+		// 11. Success — update recharge accounting
 		const newUsedCents = overageUsedCents + costCents;
 		const newTopupCount = overageTopupCount + packsNeeded;
 		await tx
@@ -230,7 +232,7 @@ export async function attemptAutoTopUp(
 
 		log.info(
 			{ packsCharged: packsNeeded, creditsAdded: totalCredits, chargedCents: costCents },
-			"Auto-top-up succeeded",
+			"Auto-recharge succeeded",
 		);
 
 		return {
@@ -256,10 +258,10 @@ export async function attemptAutoTopUp(
 			await addShadowBalance(
 				orgId,
 				txResult.creditsAdded,
-				`Auto-top-up overage (${txResult.packsCharged}x pack)`,
+				`Auto-recharge (${txResult.packsCharged}x pack)`,
 			);
 		} catch (err) {
-			log.error({ err }, "Auto-top-up succeeded but shadow balance credit failed");
+			log.error({ err }, "Auto-recharge succeeded but shadow balance credit failed");
 		}
 	}
 

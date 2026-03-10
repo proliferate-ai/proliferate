@@ -19,10 +19,9 @@ import {
 	updateAliveCheck,
 	updateMeteredThroughAt,
 } from "../sessions/db";
-import { attemptAutoTopUp } from "./auto-topup";
+import { attemptAutoRecharge } from "./auto-topup";
 import { enforceCreditsExhausted } from "./org-pause";
 import { deductShadowBalance } from "./shadow-balance";
-import { tryActivatePlanAfterTrial } from "./trial-activation";
 
 // ============================================
 // Types
@@ -286,17 +285,13 @@ async function billComputeInterval(
 
 	// Handle state transitions
 	if (result.shouldPauseSessions) {
-		if (result.previousState === "trial" && result.newState === "exhausted") {
-			const activation = await tryActivatePlanAfterTrial(session.organizationId);
-			if (activation.activated) {
-				log.info("Trial auto-activated; skipping enforcement");
-				return;
-			}
-		}
-		// Overage auto-top-up: buy more credits if policy allows
-		const topup = await attemptAutoTopUp(session.organizationId, Math.abs(result.newBalance));
-		if (topup.success) {
-			log.info({ creditsAdded: topup.creditsAdded }, "Auto-top-up succeeded; skipping enforcement");
+		// Auto-recharge: buy more credits if enabled
+		const recharge = await attemptAutoRecharge(session.organizationId, Math.abs(result.newBalance));
+		if (recharge.success) {
+			log.info(
+				{ creditsAdded: recharge.creditsAdded },
+				"Auto-recharge succeeded; skipping enforcement",
+			);
 			return;
 		}
 
