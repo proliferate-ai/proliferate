@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
 import { StatusDot } from "@/components/ui/status-dot";
 import {
 	ORB_PALETTES,
@@ -7,6 +8,7 @@ import {
 	WORKER_STATUS_LABELS,
 	type WorkerStatus,
 } from "@/config/coworkers";
+import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 
 interface WorkerCardProps {
@@ -16,6 +18,7 @@ interface WorkerCardProps {
 	objective: string | null;
 	activeTaskCount: number;
 	pendingApprovalCount: number;
+	updatedAt?: Date | string;
 }
 
 function hashName(name: string): number {
@@ -61,6 +64,11 @@ export function WorkerOrb({ name, size = 40 }: { name: string; size?: number }) 
 	);
 }
 
+function formatRelativeTime(date: Date | string): string {
+	const d = typeof date === "string" ? new Date(date) : date;
+	return formatDistanceToNow(d, { addSuffix: true });
+}
+
 export function WorkerCard({
 	id,
 	name,
@@ -68,12 +76,35 @@ export function WorkerCard({
 	objective,
 	activeTaskCount,
 	pendingApprovalCount,
+	updatedAt,
 }: WorkerCardProps) {
-	const metaParts: string[] = [];
-	metaParts.push(WORKER_STATUS_LABELS[status]);
-	if (activeTaskCount > 0)
-		metaParts.push(`${activeTaskCount} task${activeTaskCount !== 1 ? "s" : ""}`);
-	if (pendingApprovalCount > 0) metaParts.push(`${pendingApprovalCount} pending`);
+	// Badges: show task/approval counts as compact badges
+	const badges: { label: string; variant: "secondary" | "outline" }[] = [];
+	if (activeTaskCount > 0) {
+		badges.push({
+			label: `${activeTaskCount} task${activeTaskCount !== 1 ? "s" : ""}`,
+			variant: "secondary",
+		});
+	}
+	if (pendingApprovalCount > 0) {
+		badges.push({
+			label: `${pendingApprovalCount} pending`,
+			variant: "outline",
+		});
+	}
+
+	// Overflow: show up to 3 badges, then "+x"
+	const maxBadges = 3;
+	const visibleBadges = badges.slice(0, maxBadges);
+	const overflowCount = badges.length - maxBadges;
+
+	// Last active
+	const isActive = status === "active";
+	const lastActiveLabel = isActive
+		? "Active now"
+		: updatedAt
+			? formatRelativeTime(updatedAt)
+			: WORKER_STATUS_LABELS[status];
 
 	return (
 		<Link
@@ -88,9 +119,25 @@ export function WorkerCard({
 				</div>
 				{objective ? (
 					<p className="text-xs text-muted-foreground mt-0.5 truncate">{objective}</p>
-				) : (
-					<p className="text-xs text-muted-foreground/60 mt-0.5">{metaParts.join(" · ")}</p>
-				)}
+				) : visibleBadges.length > 0 ? (
+					<div className="flex items-center gap-1 mt-0.5">
+						{visibleBadges.map((b) => (
+							<Badge
+								key={b.label}
+								variant={b.variant}
+								className="text-[10px] px-1.5 py-0 h-4 font-normal"
+							>
+								{b.label}
+							</Badge>
+						))}
+						{overflowCount > 0 && (
+							<Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal">
+								+{overflowCount}
+							</Badge>
+						)}
+					</div>
+				) : null}
+				<p className="text-[10px] text-muted-foreground/60 mt-0.5">{lastActiveLabel}</p>
 			</div>
 		</Link>
 	);

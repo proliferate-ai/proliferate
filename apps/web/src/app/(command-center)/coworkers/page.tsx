@@ -1,9 +1,10 @@
 "use client";
 
 import { AutomationListRow } from "@/components/automations/automation-list-row";
+import { OrbPicker, PALETTE_PREVIEW_NAMES } from "@/components/automations/orb-picker";
 import { TemplatePickerDialog } from "@/components/automations/template-picker-dialog";
 import { WorkerActionSelector } from "@/components/automations/worker-action-selector";
-import { WorkerCard } from "@/components/automations/worker-card";
+import { WorkerCard, WorkerOrb } from "@/components/automations/worker-card";
 import {
 	AutomationIllustration,
 	PageEmptyState,
@@ -18,6 +19,7 @@ import { COWORKER_LIST_TABS, type WorkerStatus } from "@/config/coworkers";
 import { useCoworkersPage } from "@/hooks/automations/use-coworkers-page";
 import { cn } from "@/lib/display/utils";
 import { BookTemplate, Plus, Search } from "lucide-react";
+import { useState } from "react";
 
 export default function CoworkersPage() {
 	const {
@@ -51,6 +53,7 @@ export default function CoworkersPage() {
 		handleBlankCreate,
 		handleTemplateSelect,
 	} = useCoworkersPage();
+	const [selectedOrbIndex, setSelectedOrbIndex] = useState<number | null>(null);
 
 	return (
 		<PageShell
@@ -164,6 +167,7 @@ export default function CoworkersPage() {
 										objective={worker.systemPrompt}
 										activeTaskCount={worker.activeTaskCount}
 										pendingApprovalCount={worker.pendingApprovalCount}
+										updatedAt={worker.updatedAt}
 									/>
 								))}
 							</div>
@@ -227,11 +231,32 @@ export default function CoworkersPage() {
 							<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
 								Name
 							</p>
-							<Input
-								value={createName}
-								onChange={(event) => setCreateName(event.target.value)}
-								placeholder="Untitled coworker"
-							/>
+							<div className="flex items-center gap-3">
+								<OrbPicker selectedIndex={selectedOrbIndex} onSelect={setSelectedOrbIndex}>
+									<button
+										type="button"
+										className="rounded-xl cursor-pointer shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+									>
+										<WorkerOrb
+											name={
+												selectedOrbIndex != null
+													? PALETTE_PREVIEW_NAMES[selectedOrbIndex]
+													: createName || "Untitled"
+											}
+											size={40}
+										/>
+									</button>
+								</OrbPicker>
+								<Input
+									value={createName}
+									onChange={(event) => {
+										setCreateName(event.target.value);
+										setSelectedOrbIndex(null);
+									}}
+									placeholder="Untitled coworker"
+									className="flex-1"
+								/>
+							</div>
 						</div>
 						<div className="flex flex-col gap-1.5">
 							<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">

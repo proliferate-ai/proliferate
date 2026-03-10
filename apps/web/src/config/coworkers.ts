@@ -27,7 +27,7 @@ export type DetailTab = "sessions" | "chat" | "settings";
 export const DETAIL_TABS: { value: DetailTab; label: string }[] = [
 	{ value: "sessions", label: "Sessions" },
 	{ value: "chat", label: "Chat" },
-	{ value: "settings", label: "Settings" },
+	{ value: "settings", label: "Configure" },
 ];
 
 export const ACTION_TOOLS = [

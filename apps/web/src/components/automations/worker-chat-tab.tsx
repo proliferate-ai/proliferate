@@ -349,7 +349,7 @@ export function WorkerChatTab({ managerSessionId, workerStatus }: WorkerChatTabP
 function ChatBubble({ message }: { message: ChatMessage }) {
 	const isUser = message.role === "user";
 	const source = message.source as string | undefined;
-	const isJob = source === "job";
+	const isJob = source === "job" || source === "automation";
 	const parts = message.parts || [];
 	const hasContent = parts.some((p) => p.type === "text" && p.text.trim());
 	const hasTools = parts.some((p) => p.type === "tool");
@@ -397,13 +397,17 @@ function BubbleShell({
 	createdAt,
 	children,
 }: { role: "user" | "agent" | "job"; createdAt?: number; children: React.ReactNode }) {
-	const labels = { user: "You", agent: "Agent", job: "Job" };
+	const labels = { user: "You", agent: "Agent", job: "Scheduled Job" };
 	const initials = { user: "U", agent: "A", job: "J" };
 
 	return (
 		<div className="flex gap-3">
 			<div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 bg-muted">
-				<span className="text-[10px] font-bold text-muted-foreground">{initials[role]}</span>
+				{role === "job" ? (
+					<Clock className="h-3 w-3 text-muted-foreground" />
+				) : (
+					<span className="text-[10px] font-bold text-muted-foreground">{initials[role]}</span>
+				)}
 			</div>
 			<div className="min-w-0 flex-1">
 				<div className="flex items-center gap-2 mb-0.5">
