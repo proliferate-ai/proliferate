@@ -1,0 +1,62 @@
+name: Deploy E2B Template
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "packages/e2b-sandbox/**"
+      - "packages/sandbox-daemon/**"
+      - "packages/sandbox-memory/**"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+      E2B_DOMAIN: ${{ vars.E2B_DOMAIN || '' }}
+      E2B_TEMPLATE_ALIAS: ${{ vars.E2B_TEMPLATE_ALIAS || 'proliferate-base' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Bundle sandbox-daemon
+        run: pnpm --filter @proliferate/sandbox-daemon bundle
+
+      - name: Copy sandbox-daemon bundle
+        run: |
+          set -euo pipefail
+          DAEMON_PATH="packages/sandbox-daemon/dist/daemon.cjs"
+          if [[ ! -f "$DAEMON_PATH" ]]; then
+            echo "ERROR: sandbox-daemon bundle not found at $DAEMON_PATH" >&2
+            exit 1
+          fi
+          cp "$DAEMON_PATH" packages/e2b-sandbox/sandbox-daemon.cjs
+
+      - name: Bundle and copy sandbox-memory
+        run: |
+          set -euo pipefail
+          pnpm --filter @proliferate/sandbox-memory bundle
+          MEMORY_PATH="packages/sandbox-memory/dist/sandbox-memory.cjs"
+          if [[ ! -f "$MEMORY_PATH" ]]; then
+            echo "ERROR: sandbox-memory bundle not found at $MEMORY_PATH" >&2
+            exit 1
+          fi
+          cp "$MEMORY_PATH" packages/e2b-sandbox/sandbox-memory.cjs
+
+      - name: Build and deploy E2B template
+        working-directory: packages/e2b-sandbox
+        run: pnpm build:template

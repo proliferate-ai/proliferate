@@ -37,7 +37,7 @@ Reject these outputs during implementation and review:
 - **Frontend**: Next.js + React + TanStack Query + Zustand + Tailwind + shadcn/ui
 - **API**: Next.js API routes (session lifecycle, repo management, NOT real-time streaming)
 - **Real-Time**: Gateway service (WebSocket connections, message state)
-- **Sandboxes**: Modal (default) or E2B providers + OpenCode (coding agent)
+- **Sandboxes**: E2B (default) or Modal (legacy) providers + OpenCode (coding agent)
 - **Background Jobs**: BullMQ workers in Kubernetes (EKS in prod) + ElastiCache Redis
 - **Database**: PostgreSQL via Drizzle ORM (metadata only)
 - **Auth**: better-auth
@@ -157,10 +157,9 @@ app.use(createHttpLogger({ logger }));
 
 ## Sandboxes
 
-- Providers: Modal (default) and E2B (`packages/shared/src/providers/`).
-- Python only in `packages/modal-sandbox/` (image + `deploy.py`).
-- Deploy Modal: `cd packages/modal-sandbox && modal deploy deploy.py`
-- Modal docs: https://docs.proliferate.com/self-hosting/modal-setup
+- Providers: E2B (default) and Modal (legacy) (`packages/shared/src/providers/`).
+- E2B templates are managed via the E2B CLI and dashboard.
+- Modal is legacy; Python config in `packages/modal-sandbox/` (image + `deploy.py`).
 - OpenCode plugin is **minimal SSE** (no event pushing). See `packages/shared/src/sandbox/config.ts`.
 
 ## Workers & Infra (K8s/EKS)
@@ -199,10 +198,11 @@ Key commands:
 
 - `ci.yml`: lint/typecheck/tests/build
 - `deploy-eks.yml`: manual EKS deploy (ECR build/push + Pulumi + health checks)
+- `deploy-e2b.yml`: E2B template deploy (auto on `packages/e2b-sandbox/**` changes + manual)
 - `deploy-ecs.yml`: manual legacy ECS deploy
-- `deploy-modal.yml`: Modal deploy on changes to `packages/modal-sandbox/**`
 - `docker-publish.yml`: GHCR images on `v*` tags
-- `changesets.yml`: release pipeline
+- `nightly.yml`: nightly release workflow
+- `e2e.yml`: end-to-end tests
 
 ## Makefile Shortcuts
 
