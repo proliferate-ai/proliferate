@@ -704,6 +704,45 @@ export async function unlinkWorkerSlackChannel(
 	if (!worker) {
 		throw new WorkerNotFoundError(workerId);
 	}
+
+	// Archive the Slack channel before clearing the binding
+	if (worker.slackChannelId && worker.slackInstallationId) {
+		try {
+			const installation = await integrationsDb.getActiveSlackInstallation(organizationId);
+			if (installation) {
+				const botToken = decrypt(installation.encryptedBotToken, getEncryptionKey());
+				// Post farewell message before archiving
+				await fetch(`${SLACK_API_BASE}/chat.postMessage`, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${botToken}`,
+					},
+					body: JSON.stringify({
+						channel: worker.slackChannelId,
+						text: "This channel has been disconnected from the coworker and will be archived.",
+					}),
+				});
+				const archiveRes = (await fetch(`${SLACK_API_BASE}/conversations.archive`, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${botToken}`,
+					},
+					body: JSON.stringify({ channel: worker.slackChannelId }),
+				}).then((r) => r.json())) as { ok: boolean; error?: string };
+				if (!archiveRes.ok) {
+					logger.warn(
+						{ error: archiveRes.error, channelId: worker.slackChannelId },
+						"Failed to archive Slack channel",
+					);
+				}
+			}
+		} catch (err) {
+			logger.warn({ err, workerId }, "Failed to archive Slack channel on unlink");
+		}
+	}
+
 	const updated = await workersDb.clearWorkerSlackChannel(workerId, organizationId);
 	if (!updated) {
 		throw new WorkerNotFoundError(workerId);
@@ -729,6 +768,10 @@ export async function createSlackChannelForWorker(
 
 	if (worker.slackChannelId) {
 		throw new Error("Worker already has a Slack channel");
+	}
+
+	if (!worker.managerSessionId) {
+		throw new Error("Worker does not have an active manager session — cannot create Slack channel");
 	}
 
 	const installation = await integrationsDb.getActiveSlackInstallation(organizationId);
@@ -773,17 +816,23 @@ export async function createSlackChannelForWorker(
 	const slackChannelId = createResult.channel!.id;
 	const finalName = createResult.channel!.name;
 
-	// Set channel topic
+	// Set channel topic (Slack enforces 250-char limit)
 	if (worker.description || worker.systemPrompt) {
-		const topic = worker.description || worker.systemPrompt?.slice(0, 250) || "";
-		await fetch(`${SLACK_API_BASE}/conversations.setTopic`, {
+		const topic = (worker.description || worker.systemPrompt || "").slice(0, 250);
+		const topicRes = (await fetch(`${SLACK_API_BASE}/conversations.setTopic`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${botToken}`,
 			},
 			body: JSON.stringify({ channel: slackChannelId, topic }),
-		});
+		}).then((r) => r.json())) as { ok: boolean; error?: string };
+		if (!topicRes.ok) {
+			logger.warn(
+				{ error: topicRes.error, channelId: slackChannelId },
+				"Failed to set channel topic",
+			);
+		}
 	}
 
 	// Save binding
