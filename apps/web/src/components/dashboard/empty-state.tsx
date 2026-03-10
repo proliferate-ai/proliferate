@@ -3,6 +3,7 @@
 import { SessionListRow } from "@/components/sessions/session-card";
 import { useOrgPendingRuns } from "@/hooks/automations/use-automations";
 import { useCreateConfiguration } from "@/hooks/sessions/use-configurations";
+import { useCreateCoworkerTask } from "@/hooks/sessions/use-coworker-task";
 import { useCreateSession, useSessions } from "@/hooks/sessions/use-sessions";
 import { useSession } from "@/lib/auth/client";
 import { cn } from "@/lib/display/utils";
@@ -177,10 +178,17 @@ function RecentActivity() {
 
 export function EmptyDashboard() {
 	const { data: authSession } = useSession();
-	const { selectedRepoId, selectedSnapshotId, selectedModel, reasoningEffort, setPendingPrompt } =
-		useDashboardStore();
+	const {
+		selectedRepoId,
+		selectedSnapshotId,
+		selectedModel,
+		reasoningEffort,
+		selectedPersona,
+		setPendingPrompt,
+	} = useDashboardStore();
 	const createConfiguration = useCreateConfiguration();
 	const createSession = useCreateSession();
+	const createCoworkerTask = useCreateCoworkerTask();
 	const { data: recentSessions } = useSessions({
 		limit: 1,
 		excludeSetup: true,
@@ -196,6 +204,17 @@ export function EmptyDashboard() {
 		setPendingPrompt(prompt);
 
 		try {
+			// Coworker persona: create ad-hoc coworker task
+			if (selectedPersona.type === "coworker") {
+				await createCoworkerTask.mutateAsync({
+					workerId: selectedPersona.workerId,
+					initialPrompt: prompt,
+				});
+				setPendingPrompt(null);
+				return;
+			}
+
+			// OpenCode persona: existing session creation flow
 			const sessionOptions = {
 				modelId: selectedModel,
 				reasoningEffort:
@@ -240,7 +259,8 @@ export function EmptyDashboard() {
 		}
 	};
 
-	const isSubmitting = createConfiguration.isPending || createSession.isPending;
+	const isSubmitting =
+		createConfiguration.isPending || createSession.isPending || createCoworkerTask.isPending;
 
 	return (
 		<div className="h-full flex flex-col overflow-y-auto">

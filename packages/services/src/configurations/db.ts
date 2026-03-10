@@ -931,9 +931,11 @@ export async function markConfigurationSnapshotFailed(
 /** Configuration due for snapshot refresh */
 export interface ConfigurationDueForRefreshRow {
 	id: string;
+	name: string;
 	snapshotId: string;
 	sandboxProvider: string | null;
 	refreshIntervalMinutes: number;
+	lastRefreshedAt: Date | null;
 	configurationRepos: Array<{
 		workspacePath: string;
 		repo: {
@@ -969,9 +971,11 @@ export async function listDueForRefresh(): Promise<ConfigurationDueForRefreshRow
 		),
 		columns: {
 			id: true,
+			name: true,
 			snapshotId: true,
 			sandboxProvider: true,
 			refreshIntervalMinutes: true,
+			lastRefreshedAt: true,
 		},
 		with: {
 			configurationRepos: {
@@ -992,6 +996,23 @@ export async function listDueForRefresh(): Promise<ConfigurationDueForRefreshRow
 	});
 
 	return results as unknown as ConfigurationDueForRefreshRow[];
+}
+
+/**
+ * Update snapshot refresh settings for a configuration.
+ */
+export async function updateRefreshSettings(
+	configurationId: string,
+	input: { refreshEnabled: boolean; refreshIntervalMinutes?: number },
+): Promise<void> {
+	const db = getDb();
+	const updates: Partial<typeof configurations.$inferInsert> = {
+		refreshEnabled: input.refreshEnabled,
+	};
+	if (input.refreshIntervalMinutes !== undefined) {
+		updates.refreshIntervalMinutes = input.refreshIntervalMinutes;
+	}
+	await db.update(configurations).set(updates).where(eq(configurations.id, configurationId));
 }
 
 /**

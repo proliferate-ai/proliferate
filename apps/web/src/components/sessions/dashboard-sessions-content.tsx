@@ -19,17 +19,73 @@ import { useSession } from "@/lib/auth/client";
 import { cn } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { Plus, Search } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+
+const VALID_TABS = new Set<FilterTab>(["needs_attention", "in_progress", "paused", "completed"]);
+const VALID_ORIGINS = new Set<OriginFilter>(["all", "manual", "automation", "slack", "cli"]);
+const VALID_CREATORS = new Set<CreatorFilter>(["all", "mine"]);
 
 export function DashboardSessionsContent() {
 	const router = useRouter();
+	const searchParams = useSearchParams();
 	const { setActiveSession, clearPendingPrompt } = useDashboardStore();
 	const { data: authSession } = useSession();
-	const [activeTab, setActiveTab] = useState<FilterTab>("in_progress");
-	const [searchQuery, setSearchQuery] = useState("");
-	const [originFilter, setOriginFilter] = useState<OriginFilter>("all");
-	const [creatorFilter, setCreatorFilter] = useState<CreatorFilter>("all");
+
+	// Read initial state from URL params, falling back to defaults
+	const tabParam = searchParams.get("tab") as FilterTab | null;
+	const originParam = searchParams.get("origin") as OriginFilter | null;
+	const creatorParam = searchParams.get("creator") as CreatorFilter | null;
+	const queryParam = searchParams.get("q");
+
+	const [activeTab, setActiveTabState] = useState<FilterTab>(
+		tabParam && VALID_TABS.has(tabParam) ? tabParam : "needs_attention",
+	);
+	const [searchQuery, setSearchQuery] = useState(queryParam ?? "");
+	const [originFilter, setOriginFilterState] = useState<OriginFilter>(
+		originParam && VALID_ORIGINS.has(originParam) ? originParam : "all",
+	);
+	const [creatorFilter, setCreatorFilterState] = useState<CreatorFilter>(
+		creatorParam && VALID_CREATORS.has(creatorParam) ? creatorParam : "all",
+	);
+
+	// Sync filter changes to URL query params (replace, not push)
+	const syncParams = useCallback(
+		(tab: FilterTab, origin: OriginFilter, creator: CreatorFilter, q: string) => {
+			const params = new URLSearchParams();
+			if (tab !== "needs_attention") params.set("tab", tab);
+			if (origin !== "all") params.set("origin", origin);
+			if (creator !== "all") params.set("creator", creator);
+			if (q) params.set("q", q);
+			const qs = params.toString();
+			router.replace(`/dashboard/sessions${qs ? `?${qs}` : ""}`, { scroll: false });
+		},
+		[router],
+	);
+
+	const setActiveTab = useCallback(
+		(tab: FilterTab) => {
+			setActiveTabState(tab);
+			syncParams(tab, originFilter, creatorFilter, searchQuery);
+		},
+		[originFilter, creatorFilter, searchQuery, syncParams],
+	);
+
+	const setOriginFilter = useCallback(
+		(origin: OriginFilter) => {
+			setOriginFilterState(origin);
+			syncParams(activeTab, origin, creatorFilter, searchQuery);
+		},
+		[activeTab, creatorFilter, searchQuery, syncParams],
+	);
+
+	const setCreatorFilter = useCallback(
+		(creator: CreatorFilter) => {
+			setCreatorFilterState(creator);
+			syncParams(activeTab, originFilter, creator, searchQuery);
+		},
+		[activeTab, originFilter, searchQuery, syncParams],
+	);
 
 	const currentUserId = authSession?.user?.id;
 
@@ -54,10 +110,11 @@ export function DashboardSessionsContent() {
 		enableSorting: true,
 	});
 
-	// Sync polling state outside of useMemo to avoid side-effects during render
+	// Sync polling state outside of useMemo to avoid side-effects during render.
+	// Use anyHasLive (all tabs) so switching tabs doesn't stop polling.
 	useEffect(() => {
-		setHasLiveSessions(result.visibleHasLive);
-	}, [result.visibleHasLive]);
+		setHasLiveSessions(result.anyHasLive);
+	}, [result.anyHasLive]);
 
 	const handleNewSession = () => {
 		clearPendingPrompt();
@@ -131,8 +188,8 @@ export function DashboardSessionsContent() {
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
-								<SelectItem value="all">All Origins</SelectItem>
-								<SelectItem value="manual">Manual</SelectItem>
+								<SelectItem value="all">All Agents</SelectItem>
+								<SelectItem value="manual">OpenCode</SelectItem>
 								<SelectItem value="automation">Coworker</SelectItem>
 								<SelectItem value="slack">Slack</SelectItem>
 								<SelectItem value="cli">CLI</SelectItem>
@@ -142,7 +199,10 @@ export function DashboardSessionsContent() {
 							<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
 							<Input
 								value={searchQuery}
-								onChange={(e) => setSearchQuery(e.target.value)}
+								onChange={(e) => {
+									setSearchQuery(e.target.value);
+									syncParams(activeTab, originFilter, creatorFilter, e.target.value);
+								}}
 								placeholder="Search sessions..."
 								className="h-8 w-48 pl-8 text-sm"
 							/>
@@ -189,11 +249,10 @@ export function DashboardSessionsContent() {
 				<div className="rounded-lg border border-border bg-card overflow-hidden">
 					{/* Table header */}
 					<div className="flex items-center px-4 py-1.5 border-b border-border/50 bg-muted/20 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-						<span className="w-4 shrink-0" />
-						<span className="flex-1 min-w-0">Session</span>
+						<span className="w-6 shrink-0" />
+						<span className="flex-1 min-w-0 ml-1.5">Session</span>
 						<span className="w-32 shrink-0 hidden md:block">Repo</span>
 						<span className="w-20 shrink-0">Status</span>
-						<span className="w-16 shrink-0 hidden md:block">Origin</span>
 						<span className="w-8 shrink-0 hidden md:block" />
 						<span className="w-14 shrink-0 text-right">Updated</span>
 						<span className="w-5 shrink-0" />

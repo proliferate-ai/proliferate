@@ -653,6 +653,15 @@ export function ProliferateIconDeep({ className }: IconProps) {
 }
 
 /**
+ * OpenCode brand icon (app logo)
+ */
+export function OpenCodeIcon({ className }: IconProps) {
+	return (
+		<img src="/logos/opencode.png" alt="OpenCode" className={cn("h-4 w-4 rounded-sm", className)} />
+	);
+}
+
+/**
  * Claude/Anthropic logo
  */
 export function ClaudeIcon({ className }: IconProps) {
@@ -893,7 +902,7 @@ export function GithubIcon({ className }: IconProps) {
 			className={className}
 			width="128"
 			height="128"
-			viewBox="0 0 128 128"
+			viewBox="12 13 104 101"
 			fill="none"
 			xmlns="http://www.w3.org/2000/svg"
 		>

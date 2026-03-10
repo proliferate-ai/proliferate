@@ -1607,7 +1607,7 @@ export const sessions = pgTable(
 		),
 		check(
 			"sessions_manager_shape_check",
-			sql`(kind != 'manager'::text) OR (worker_id IS NOT NULL AND worker_run_id IS NULL AND continued_from_session_id IS NULL AND rerun_of_session_id IS NULL)`,
+			sql`(kind != 'manager'::text) OR (worker_run_id IS NULL AND continued_from_session_id IS NULL AND rerun_of_session_id IS NULL)`,
 		),
 		check(
 			"sessions_task_linkage_check",

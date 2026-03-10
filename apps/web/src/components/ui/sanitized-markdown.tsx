@@ -4,6 +4,7 @@ import { cn } from "@/lib/display/utils";
 import type { FC } from "react";
 import Markdown from "react-markdown";
 import rehypeSanitize, { type Options } from "rehype-sanitize";
+import remarkGfm from "remark-gfm";
 
 const sanitizeSchema: Options = {
 	strip: ["script"],
@@ -27,6 +28,12 @@ const sanitizeSchema: Options = {
 		"li",
 		"blockquote",
 		"a",
+		"table",
+		"thead",
+		"tbody",
+		"tr",
+		"th",
+		"td",
 	],
 	attributes: {
 		a: ["href"],
@@ -55,6 +62,7 @@ export const SanitizedMarkdown: FC<SanitizedMarkdownProps> = ({
 	return (
 		<div className={cn("text-sm text-foreground", className)}>
 			<Markdown
+				remarkPlugins={[remarkGfm]}
 				rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
 				components={{
 					p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
@@ -85,6 +93,20 @@ export const SanitizedMarkdown: FC<SanitizedMarkdownProps> = ({
 							{children}
 						</blockquote>
 					),
+					table: ({ children }) => (
+						<div className="my-2 overflow-x-auto">
+							<table className="w-full border-collapse text-sm">{children}</table>
+						</div>
+					),
+					thead: ({ children }) => <thead className="border-b border-border">{children}</thead>,
+					tbody: ({ children }) => <tbody>{children}</tbody>,
+					tr: ({ children }) => <tr className="border-b border-border/50">{children}</tr>,
+					th: ({ children }) => (
+						<th className="px-3 py-1.5 text-left font-semibold text-muted-foreground">
+							{children}
+						</th>
+					),
+					td: ({ children }) => <td className="px-3 py-1.5">{children}</td>,
 					a: ({ href, children }) => (
 						<a
 							href={href}

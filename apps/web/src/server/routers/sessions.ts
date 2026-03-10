@@ -7,7 +7,7 @@
  */
 
 import { ORPCError } from "@orpc/server";
-import { notifications, sessions } from "@proliferate/services";
+import { notifications, sessions, workers } from "@proliferate/services";
 import {
 	CreateSessionInputSchema,
 	CreateSessionResponseSchema,
@@ -497,5 +497,41 @@ export const sessionsRouter = {
 				context.user.id,
 			);
 			return { subscribed: !!subscription };
+		}),
+
+	/**
+	 * Create an ad-hoc manager session from a coworker's config.
+	 *
+	 * Clones the worker's system prompt, model, capabilities, and integrations
+	 * into a standalone session that runs independently from the worker's main thread.
+	 */
+	createCoworkerTask: billingGatedProcedure
+		.input(
+			z.object({
+				workerId: z.string().uuid(),
+				initialPrompt: z.string().min(1).max(10000).optional(),
+			}),
+		)
+		.output(
+			z.object({
+				sessionId: z.string().uuid(),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			try {
+				const session = await workers.createAdHocSessionFromWorker({
+					workerId: input.workerId,
+					organizationId: context.orgId,
+					createdBy: context.user.id,
+					initialPrompt: input.initialPrompt,
+				});
+
+				return { sessionId: session.id };
+			} catch (err) {
+				if (err instanceof workers.WorkerNotFoundError) {
+					throw new ORPCError("NOT_FOUND", { message: err.message });
+				}
+				throwMappedSessionError(err, "Failed to create coworker task");
+			}
 		}),
 };

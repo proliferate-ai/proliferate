@@ -239,7 +239,7 @@ export default function CoworkersPage() {
 											name={
 												selectedOrbIndex != null
 													? PALETTE_PREVIEW_NAMES[selectedOrbIndex]
-													: createName || "Untitled"
+													: "Untitled"
 											}
 											size={40}
 										/>
@@ -247,10 +247,7 @@ export default function CoworkersPage() {
 								</OrbPicker>
 								<Input
 									value={createName}
-									onChange={(event) => {
-										setCreateName(event.target.value);
-										setSelectedOrbIndex(null);
-									}}
+									onChange={(event) => setCreateName(event.target.value)}
 									placeholder="Untitled coworker"
 									className="flex-1"
 								/>

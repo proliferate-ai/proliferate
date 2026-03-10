@@ -1,20 +1,15 @@
 "use client";
 
+import { WorkerOrb } from "@/components/automations/worker-card";
+import { MarkdownContent } from "@/components/coding-session/thread";
 import { Button } from "@/components/ui/button";
+import { OpenCodeIcon } from "@/components/ui/icons";
 import { Textarea } from "@/components/ui/textarea";
 import { useWsToken } from "@/hooks/sessions/use-ws-token";
 import { GATEWAY_URL } from "@/lib/infra/gateway";
 import { type SyncWebSocket, createSyncClient } from "@proliferate/gateway-clients";
 import type { Message, ServerMessage } from "@proliferate/shared";
-import {
-	CheckCircle,
-	Clock,
-	ExternalLink,
-	Loader2,
-	MessageSquare,
-	Send,
-	Terminal,
-} from "lucide-react";
+import { CheckCircle, Clock, ExternalLink, Loader2, Send } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -38,13 +33,14 @@ interface ChatMessage extends Omit<Message, "parts"> {
 interface WorkerChatTabProps {
 	managerSessionId: string;
 	workerStatus: string;
+	workerName: string;
 }
 
 // --------------------------------------------------------------------------
 // Main component
 // --------------------------------------------------------------------------
 
-export function WorkerChatTab({ managerSessionId, workerStatus }: WorkerChatTabProps) {
+export function WorkerChatTab({ managerSessionId, workerStatus, workerName }: WorkerChatTabProps) {
 	const { token, isLoading: tokenLoading } = useWsToken();
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [inputContent, setInputContent] = useState("");
@@ -63,9 +59,6 @@ export function WorkerChatTab({ managerSessionId, workerStatus }: WorkerChatTabP
 	}, [messages]);
 
 	// Auto-wake: eager-start the manager session on mount.
-	// Note: eagerStart requires service auth and will fail with a user token.
-	// The session still wakes on WebSocket connect, so this is a best-effort
-	// optimization that is silently ignored if it errors.
 	useEffect(() => {
 		if (!token || !managerSessionId) return;
 		const client = createSyncClient({
@@ -132,13 +125,11 @@ export function WorkerChatTab({ managerSessionId, workerStatus }: WorkerChatTabP
 							const updated = [...prev];
 							const msg = updated[idx];
 							const newContent = (msg.content ?? "") + tokenText;
-							// Update or append the last text part
 							const parts = [...(msg.parts || [])];
 							const lastPart = parts[parts.length - 1];
 							if (lastPart?.type === "text") {
 								parts[parts.length - 1] = { type: "text", text: lastPart.text + tokenText };
 							} else {
-								// After a tool part, start a new text segment with only the new token
 								parts.push({ type: "text", text: tokenText });
 							}
 							updated[idx] = { ...msg, content: newContent, parts };
@@ -154,7 +145,6 @@ export function WorkerChatTab({ managerSessionId, workerStatus }: WorkerChatTabP
 							args?: unknown;
 						};
 						setMessages((prev) => {
-							// Find the target message (by messageId or last assistant)
 							let idx = payload.messageId ? prev.findIndex((m) => m.id === payload.messageId) : -1;
 							if (idx < 0) {
 								for (let i = prev.length - 1; i >= 0; i--) {
@@ -168,7 +158,6 @@ export function WorkerChatTab({ managerSessionId, workerStatus }: WorkerChatTabP
 							const updated = [...prev];
 							const msg = updated[idx];
 							const parts = [...(msg.parts || [])];
-							// Check if this is an args update for an existing tool part
 							const existingIdx = parts.findIndex(
 								(p) => p.type === "tool" && p.toolCallId === payload.toolCallId,
 							);
@@ -273,11 +262,11 @@ export function WorkerChatTab({ managerSessionId, workerStatus }: WorkerChatTabP
 			<div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
 				{messages.length === 0 ? (
 					<div className="flex flex-col items-center justify-center h-full text-center">
-						<MessageSquare className="h-8 w-8 text-muted-foreground/40 mb-3" />
-						<p className="text-sm text-muted-foreground">
-							{isConnected ? "No messages yet" : "Connecting..."}
-						</p>
-						<p className="text-xs text-muted-foreground/60 mt-1">
+						<div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted mb-4">
+							<WorkerOrb name={workerName} size={24} />
+						</div>
+						<p className="text-base font-semibold tracking-tight text-foreground">{workerName}</p>
+						<p className="mt-1.5 text-sm text-muted-foreground max-w-xs">
 							Send a message to start chatting with this coworker
 						</p>
 					</div>
@@ -311,10 +300,10 @@ export function WorkerChatTab({ managerSessionId, workerStatus }: WorkerChatTabP
 						onChange={(e) => setInputContent(e.target.value)}
 						placeholder={
 							isPaused
-								? "Coworker is paused — resume to send messages"
+								? "Coworker is paused \u2014 resume to send messages"
 								: "Send a message to this coworker..."
 						}
-						disabled={isPaused || !isConnected}
+						disabled={isPaused}
 						className="w-full text-sm border-none resize-none px-4 py-3 bg-transparent rounded-none min-h-0 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
 						style={{ minHeight: "52px", maxHeight: "120px" }}
 						onKeyDown={(e) => {
@@ -343,7 +332,7 @@ export function WorkerChatTab({ managerSessionId, workerStatus }: WorkerChatTabP
 }
 
 // --------------------------------------------------------------------------
-// Chat bubble with tool call rendering
+// Chat bubble with markdown rendering
 // --------------------------------------------------------------------------
 
 function ChatBubble({ message }: { message: ChatMessage }) {
@@ -353,14 +342,14 @@ function ChatBubble({ message }: { message: ChatMessage }) {
 	const parts = message.parts || [];
 	const hasContent = parts.some((p) => p.type === "text" && p.text.trim());
 	const hasTools = parts.some((p) => p.type === "tool");
+	const variant = isUser ? "user" : "assistant";
 
-	// If no parts, fall back to content string
 	if (parts.length === 0 && message.content) {
 		return (
 			<BubbleShell role={isUser ? (isJob ? "job" : "user") : "agent"} createdAt={message.createdAt}>
-				<p className="text-sm text-foreground/90 whitespace-pre-wrap break-words">
-					{message.content}
-				</p>
+				<div className="text-sm">
+					<MarkdownContent text={message.content} variant={variant} />
+				</div>
 			</BubbleShell>
 		);
 	}
@@ -370,12 +359,9 @@ function ChatBubble({ message }: { message: ChatMessage }) {
 			{parts.map((part, i) => {
 				if (part.type === "text" && part.text.trim()) {
 					return (
-						<p
-							key={`text-${i}`}
-							className="text-sm text-foreground/90 whitespace-pre-wrap break-words"
-						>
-							{part.text}
-						</p>
+						<div key={`text-${i}`} className="text-sm">
+							<MarkdownContent text={part.text} variant={variant} />
+						</div>
 					);
 				}
 				if (part.type === "tool") {
@@ -384,9 +370,9 @@ function ChatBubble({ message }: { message: ChatMessage }) {
 				return null;
 			})}
 			{!hasContent && !hasTools && message.content && (
-				<p className="text-sm text-foreground/90 whitespace-pre-wrap break-words">
-					{message.content}
-				</p>
+				<div className="text-sm">
+					<MarkdownContent text={message.content} variant={variant} />
+				</div>
 			)}
 		</BubbleShell>
 	);
@@ -446,7 +432,7 @@ function SpawnChildCard({ tool }: { tool: ToolPart }) {
 
 	return (
 		<div className="rounded-md border border-border bg-card px-3 py-2 flex items-center gap-3">
-			<Terminal className="h-4 w-4 text-muted-foreground shrink-0" />
+			<OpenCodeIcon className="h-4 w-4 shrink-0" />
 			<div className="flex-1 min-w-0">
 				<span className="text-xs font-medium text-foreground">{title}</span>
 				{args?.instructions && (
@@ -472,8 +458,6 @@ function SpawnChildCard({ tool }: { tool: ToolPart }) {
 function ActionCard({ tool }: { tool: ToolPart }) {
 	const args = tool.args as { integration?: string; action?: string } | undefined;
 	const integration = args?.integration || "action";
-	// Pi only sends `integration` in the streaming args — `action` is not available.
-	// Show integration name as the label; the specific action is visible in the text response.
 	const label = args?.action ? `${integration}.${args.action}` : integration;
 
 	return (

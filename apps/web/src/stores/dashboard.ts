@@ -5,6 +5,10 @@ import { modelSupportsReasoning } from "@proliferate/shared/agents";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+export type SelectedPersona =
+	| { type: "opencode" }
+	| { type: "coworker"; workerId: string; name: string; modelId: string | null };
+
 interface DashboardState {
 	// Selection state
 	selectedRepoId: string | null;
@@ -15,6 +19,7 @@ interface DashboardState {
 	pendingPrompt: string | null;
 	selectedModel: ModelId;
 	reasoningEffort: ReasoningEffort;
+	selectedPersona: SelectedPersona;
 
 	// UI state
 	sidebarCollapsed: boolean;
@@ -37,6 +42,7 @@ interface DashboardState {
 	setPendingPrompt: (prompt: string | null) => void;
 	setSelectedModel: (model: ModelId) => void;
 	setReasoningEffort: (effort: ReasoningEffort) => void;
+	setSelectedPersona: (persona: SelectedPersona) => void;
 	clearPendingPrompt: () => void;
 	toggleSidebar: () => void;
 	setMobileSidebarOpen: (open: boolean) => void;
@@ -61,6 +67,7 @@ export const useDashboardStore = create<DashboardState>()(
 			pendingPrompt: null,
 			selectedModel: "claude-sonnet-4.6",
 			reasoningEffort: "normal",
+			selectedPersona: { type: "opencode" } as SelectedPersona,
 			sidebarCollapsed: false,
 			mobileSidebarOpen: false,
 			activeModal: null,
@@ -97,6 +104,8 @@ export const useDashboardStore = create<DashboardState>()(
 
 			setReasoningEffort: (effort) => set({ reasoningEffort: effort }),
 
+			setSelectedPersona: (persona) => set({ selectedPersona: persona }),
+
 			clearPendingPrompt: () => set({ pendingPrompt: null }),
 
 			toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
@@ -130,6 +139,7 @@ export const useDashboardStore = create<DashboardState>()(
 					pendingPrompt: null,
 					selectedModel: "claude-sonnet-4.6",
 					reasoningEffort: "normal",
+					selectedPersona: { type: "opencode" },
 					sidebarCollapsed: false,
 					mobileSidebarOpen: false,
 					activeModal: null,
@@ -150,6 +160,7 @@ export const useDashboardStore = create<DashboardState>()(
 				selectedSnapshotId: state.selectedSnapshotId,
 				selectedModel: state.selectedModel,
 				reasoningEffort: state.reasoningEffort,
+				selectedPersona: state.selectedPersona,
 				sidebarCollapsed: state.sidebarCollapsed,
 				dismissedOnboardingCards: state.dismissedOnboardingCards,
 				hasSeenWelcome: state.hasSeenWelcome,

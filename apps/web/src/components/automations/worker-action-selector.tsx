@@ -77,6 +77,9 @@ const KNOWN_PROVIDERS: Record<string, Provider> = {
 	jira: "jira",
 	posthog: "posthog",
 	gmail: "gmail",
+	mysql: "mysql",
+	mongodb: "mongodb",
+	grafana: "grafana",
 };
 
 function providerFromIntegration(integration: string): Provider | undefined {

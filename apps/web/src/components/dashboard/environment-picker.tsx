@@ -10,15 +10,9 @@ import {
 	CommandList,
 	CommandSeparator,
 } from "@/components/ui/command";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-} from "@/components/ui/dialog";
 import { GithubIcon } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useGitHubAppConnect } from "@/hooks/integrations/use-github-app-connect";
 import { useIntegrations } from "@/hooks/integrations/use-integrations";
 import {
@@ -30,19 +24,17 @@ import { useRepos } from "@/hooks/org/use-repos";
 import { useConfigurations } from "@/hooks/sessions/use-configurations";
 import { orpc } from "@/lib/infra/orpc";
 import { useDashboardStore } from "@/stores/dashboard";
-import { getSetupInitialPrompt } from "@proliferate/shared/prompts";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Layers, Pencil, Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Check, Layers, Pencil } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CreateSnapshotContent } from "./snapshot-selector";
 
 interface EnvironmentPickerProps {
 	disabled?: boolean;
 }
 
 /**
- * Split a GitHub repo name (owner/repo) into parts for display.
+ * Display a GitHub repo name (owner/repo) with the owner dimmed.
  */
 function RepoName({ name }: { name: string }) {
 	const slashIndex = name.indexOf("/");
@@ -61,19 +53,12 @@ function RepoName({ name }: { name: string }) {
 
 export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 	const [open, setOpen] = useState(false);
-	const [createOpen, setCreateOpen] = useState(false);
-	const router = useRouter();
 	const queryClient = useQueryClient();
 	const { data: repos } = useRepos();
 	const { data: configurations } = useConfigurations("ready");
 	const { data: integrationsData } = useIntegrations();
-	const {
-		selectedRepoId,
-		selectedSnapshotId,
-		setSelectedRepo,
-		setSelectedSnapshot,
-		setPendingPrompt,
-	} = useDashboardStore();
+	const { selectedRepoId, selectedSnapshotId, setSelectedRepo, setSelectedSnapshot } =
+		useDashboardStore();
 
 	// GitHub connection state
 	const hasGitHub =
@@ -134,10 +119,13 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 	const selectedConfig = multiRepoConfigs.find((c) => c.id === selectedSnapshotId);
 	const hasSelection = Boolean(selectedRepo || selectedConfig);
 	const triggerLabel = selectedRepo
-		? selectedRepo.githubRepoName
+		? (selectedRepo.githubRepoName.split("/").pop() ?? selectedRepo.githubRepoName)
 		: selectedConfig
 			? (selectedConfig.name ?? "Untitled")
 			: "Scratch session";
+
+	// Show "Set up environment?" when a repo is selected but has no ready configuration
+	const needsSetup = selectedRepo && selectedRepo.configurationStatus !== "ready";
 
 	const selectRepo = (repo: (typeof allRepos)[0]) => {
 		setSelectedRepo(repo.id);
@@ -154,7 +142,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 	};
 
 	return (
-		<>
+		<div className="flex items-center gap-1.5">
 			<Popover open={open} onOpenChange={setOpen}>
 				<PopoverTrigger asChild>
 					<Button variant="ghost" size="sm" className="h-8 gap-2 font-normal" disabled={disabled}>
@@ -295,42 +283,31 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 									</CommandGroup>
 								</>
 							)}
-
-							{/* New configuration */}
-							<CommandSeparator />
-							<CommandGroup>
-								<CommandItem
-									value="new-configuration"
-									onSelect={() => {
-										setOpen(false);
-										setCreateOpen(true);
-									}}
-									className="text-muted-foreground"
-								>
-									<Plus className="h-4 w-4 shrink-0" />
-									<span>New configuration</span>
-								</CommandItem>
-							</CommandGroup>
 						</CommandList>
 					</Command>
 				</PopoverContent>
 			</Popover>
 
-			<Dialog open={createOpen} onOpenChange={setCreateOpen}>
-				<DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
-					<DialogHeader className="sr-only">
-						<DialogTitle>New configuration</DialogTitle>
-						<DialogDescription>Group the repositories that make up your project</DialogDescription>
-					</DialogHeader>
-					<CreateSnapshotContent
-						onCreate={(_configurationId, sessionId) => {
-							setCreateOpen(false);
-							setPendingPrompt(getSetupInitialPrompt());
-							router.push(`/workspace/${sessionId}`);
-						}}
-					/>
-				</DialogContent>
-			</Dialog>
-		</>
+			{needsSetup && (
+				<TooltipProvider delayDuration={200}>
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Link
+								href={`/workspace/onboard?repo=${selectedRepo.id}`}
+								className="text-xs text-muted-foreground hover:underline hover:text-foreground transition-colors whitespace-nowrap"
+							>
+								Set up environment?
+							</Link>
+						</TooltipTrigger>
+						<TooltipContent side="bottom" className="max-w-[260px] text-center">
+							<p>
+								Setting up an environment installs dependencies and creates a snapshot so future
+								sessions start instantly with everything pre-configured.
+							</p>
+						</TooltipContent>
+					</Tooltip>
+				</TooltipProvider>
+			)}
+		</div>
 	);
 }

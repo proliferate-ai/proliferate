@@ -31,6 +31,9 @@ export const ConfigurationSchema = z.object({
 	createdAt: z.string().nullable(),
 	createdBy: z.string().nullable(),
 	sandboxProvider: z.string().nullable(),
+	refreshEnabled: z.boolean().optional(),
+	refreshIntervalMinutes: z.number().optional(),
+	lastRefreshedAt: z.string().nullable().optional(),
 	configurationRepos: z.array(ConfigurationRepoSchema).optional(),
 	setupSessions: z.array(SetupSessionSchema).optional(),
 });
@@ -55,4 +58,10 @@ export const UpdateConfigurationInputSchema = z.object({
 	name: z.string().optional(),
 	notes: z.string().optional(),
 	routingDescription: z.string().nullable().optional(),
+});
+
+export const UpdateRefreshSettingsInputSchema = z.object({
+	configurationId: z.string().uuid(),
+	refreshEnabled: z.boolean(),
+	refreshIntervalMinutes: z.number().int().min(30).max(10080).optional(),
 });

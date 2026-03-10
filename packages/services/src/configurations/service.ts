@@ -698,6 +698,18 @@ export async function markRefreshed(configurationId: string, newSnapshotId: stri
 }
 
 /**
+ * Update snapshot refresh settings for a configuration (with org auth).
+ */
+export async function updateRefreshSettingsForOrg(
+	configurationId: string,
+	orgId: string,
+	input: { refreshEnabled: boolean; refreshIntervalMinutes?: number },
+): Promise<void> {
+	await assertConfigurationBelongsToOrg(configurationId, orgId);
+	await configurationsDb.updateRefreshSettings(configurationId, input);
+}
+
+/**
  * Request a configuration snapshot build (fire-and-forget).
  *
  * With E2B, snapshots are created via setup sessions. This enqueues a job

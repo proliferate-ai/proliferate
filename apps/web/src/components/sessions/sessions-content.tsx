@@ -46,10 +46,11 @@ export function SessionsContent() {
 		pendingRuns,
 	});
 
-	// Sync polling state outside of useMemo to avoid side-effects during render
+	// Sync polling state outside of useMemo to avoid side-effects during render.
+	// Use anyHasLive (all tabs) so switching tabs doesn't stop polling.
 	useEffect(() => {
-		setHasLiveSessions(result.visibleHasLive);
-	}, [result.visibleHasLive]);
+		setHasLiveSessions(result.anyHasLive);
+	}, [result.anyHasLive]);
 
 	const handleNewSession = () => {
 		clearPendingPrompt();
