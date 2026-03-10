@@ -2,6 +2,10 @@ import { createEnv } from "@t3-oss/env-core";
 import { nextPhase } from "./runtime";
 import { createPublicSchema, createServerSchema } from "./schema";
 
+// Bootstrap .env files for non-Next.js contexts (worker, db migrations, scripts).
+// Import `@proliferate/environment/bootstrap` at the top of your entrypoint
+// before importing this module. Next.js loads .env files automatically.
+
 const rawEnv = createEnv({
 	server: createServerSchema(process.env),
 	client: createPublicSchema(process.env),

@@ -4,6 +4,7 @@
  * Starts the Express server with WebSocket support.
  */
 
+import "@proliferate/environment/bootstrap";
 import { getEnvStatus } from "@proliferate/environment";
 import { createLogger } from "@proliferate/logger";
 import { setServicesLogger } from "@proliferate/services/logger";

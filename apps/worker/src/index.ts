@@ -11,6 +11,7 @@
 
 import { createServer } from "node:http";
 import type { Server } from "node:http";
+import "@proliferate/environment/bootstrap";
 import { getEnvStatus } from "@proliferate/environment";
 import { env } from "@proliferate/environment/server";
 import { createSyncClient } from "@proliferate/gateway-clients";
