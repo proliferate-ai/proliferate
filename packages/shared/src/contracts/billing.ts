@@ -7,16 +7,6 @@ export const BillingSettingsSchema = z.object({
 
 export type BillingSettings = z.infer<typeof BillingSettingsSchema>;
 
-export const OverageStateSchema = z.object({
-	usedCents: z.number(),
-	capCents: z.number().nullable(),
-	cycleMonth: z.string().nullable(),
-	topupCount: z.number(),
-	circuitBreakerActive: z.boolean(),
-});
-
-export type OverageState = z.infer<typeof OverageStateSchema>;
-
 export const BillingInfoSchema = z.object({
 	plan: z.object({
 		id: z.string(),
@@ -38,7 +28,6 @@ export const BillingInfoSchema = z.object({
 		snapshotRetentionDays: z.number(),
 	}),
 	billingSettings: BillingSettingsSchema,
-	overage: OverageStateSchema,
 	state: z.object({
 		billingState: z.enum(["free", "active", "grace", "exhausted", "suspended"]),
 		shadowBalance: z.number(),

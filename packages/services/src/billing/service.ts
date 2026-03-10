@@ -18,7 +18,6 @@ import {
 	autumnGetCustomer,
 	canPossiblyStart,
 	getStateMessage,
-	parseBillingSettings,
 } from "@proliferate/shared/billing";
 import type {
 	ActivatePlanResponse,
@@ -160,13 +159,6 @@ export async function getOrgBillingInfo(orgId: string): Promise<BillingInfo> {
 			snapshotRetentionDays: planConfig.snapshotRetentionDays,
 		},
 		billingSettings: org.billingSettings ?? DEFAULT_BILLING_SETTINGS,
-		overage: {
-			usedCents: org.overageUsedCents,
-			capCents: parseBillingSettings(org.billingSettings).overage_cap_cents,
-			cycleMonth: org.overageCycleMonth,
-			topupCount: org.overageTopupCount,
-			circuitBreakerActive: !!org.overageDeclineAt,
-		},
 		state: {
 			billingState,
 			shadowBalance,

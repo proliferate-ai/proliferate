@@ -40,7 +40,7 @@ export const PLAN_OPTIONS: PlanOption[] = [
 ];
 
 export interface TopUpPackOption {
-	packId: string;
+	packId: "topup_10" | "topup_20" | "topup_50" | "topup_100" | "topup_1000";
 	name: string;
 	credits: number;
 	price: string;

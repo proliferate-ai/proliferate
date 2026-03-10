@@ -129,21 +129,25 @@ describe("OverageTopUpResult type", () => {
 });
 
 describe("pack sizing math", () => {
-	it("computes correct pack count for small deficit", () => {
+	it("computes correct pack count for small deficit (matches production formula)", () => {
 		const pack = DEFAULT_AUTO_RECHARGE_PACK;
 		const deficitCredits = 2;
-		const packsNeeded = Math.ceil(deficitCredits / pack.credits);
+		// Production formula adds one-pack buffer: creditsNeeded = deficit + pack.credits
+		const creditsNeeded = Math.abs(deficitCredits) + pack.credits;
+		const packsNeeded = Math.ceil(creditsNeeded / pack.credits);
 
-		expect(packsNeeded).toBeGreaterThan(0);
-		expect(packsNeeded * pack.credits).toBeGreaterThanOrEqual(deficitCredits);
+		expect(packsNeeded).toBe(2); // (2 + 20) / 20 = 1.1 → ceil = 2
+		expect(packsNeeded * pack.credits).toBeGreaterThanOrEqual(creditsNeeded);
 	});
 
-	it("computes correct pack count for large deficit", () => {
+	it("computes correct pack count for large deficit (matches production formula)", () => {
 		const pack = DEFAULT_AUTO_RECHARGE_PACK;
 		const deficitCredits = 50;
-		const packsNeeded = Math.ceil(deficitCredits / pack.credits);
+		const creditsNeeded = Math.abs(deficitCredits) + pack.credits;
+		const packsNeeded = Math.ceil(creditsNeeded / pack.credits);
 
-		expect(packsNeeded * pack.credits).toBeGreaterThanOrEqual(deficitCredits);
+		expect(packsNeeded).toBe(4); // (50 + 20) / 20 = 3.5 → ceil = 4
+		expect(packsNeeded * pack.credits).toBeGreaterThanOrEqual(creditsNeeded);
 	});
 
 	it("clamps packs to cap budget", () => {

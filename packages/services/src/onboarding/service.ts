@@ -265,8 +265,13 @@ export async function startTrial(input: StartTrialInput): Promise<StartTrialResu
 		};
 	}
 
+	const org = await orgsService.getBillingInfoV2(orgId);
 	await orgsService.updateBillingPlan(orgId, selectedPlan);
-	await orgsService.initializeBillingState(orgId, "free", FREE_CREDITS);
+
+	// Only initialize free credits if the org isn't already in a paid state
+	if (!org || org.billingState === "free" || org.billingState === "unconfigured") {
+		await orgsService.initializeBillingState(orgId, "free", FREE_CREDITS);
+	}
 
 	return {
 		success: true,

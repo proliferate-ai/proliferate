@@ -8,6 +8,7 @@ import { logger } from "@/lib/infra/logger";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
 import { billing } from "@proliferate/services";
+import { TOP_UP_PACKS, type TopUpPackId } from "@proliferate/shared/billing";
 import {
 	ActivatePlanResponseSchema,
 	BillingInfoSchema,
@@ -124,7 +125,11 @@ export const billingRouter = {
 	 * Returns a Stripe checkout URL or confirms credits added directly.
 	 */
 	buyCredits: orgProcedure
-		.input(z.object({ packId: z.string() }))
+		.input(
+			z.object({
+				packId: z.enum(TOP_UP_PACKS.map((p) => p.productId) as [TopUpPackId, ...TopUpPackId[]]),
+			}),
+		)
 		.output(BuyCreditsResponseSchema)
 		.handler(async ({ context, input }) => {
 			try {
@@ -133,7 +138,7 @@ export const billingRouter = {
 					orgId: context.orgId,
 					userId: context.user.id,
 					userEmail: context.user.email,
-					packId: input.packId as any,
+					packId: input.packId,
 					appUrl: env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
 				});
 			} catch (err) {
