@@ -2,6 +2,7 @@
 
 import type { CatalogEntry } from "@/components/integrations/integration-picker-dialog";
 import { INTEGRATION_CATALOG } from "@/config/integrations";
+import { useDisconnectComposioConnector } from "@/hooks/integrations/use-composio";
 import { useIntegrationActions } from "@/hooks/integrations/use-integration-actions";
 import { useIntegrationDialogs } from "@/hooks/integrations/use-integration-dialogs";
 import { useIntegrationStatus } from "@/hooks/integrations/use-integration-status";
@@ -12,6 +13,7 @@ import { useOrgMembers } from "@/hooks/org/use-orgs";
 import { useConfigurations } from "@/hooks/sessions/use-configurations";
 import { useActiveOrganization, useSession } from "@/lib/auth/client";
 import { type OrgRole, hasRoleOrHigher } from "@/lib/auth/roles";
+import { getConnectorPresetByKey } from "@proliferate/shared";
 import { useCallback, useMemo, useState } from "react";
 
 // TODO: break this hook into smaller, focused hooks (e.g. useSlackConfig, useConnectorManagement, useIntegrationPicker)
@@ -55,6 +57,15 @@ export function useIntegrationsPage() {
 		handleSave,
 	} = useIntegrationActions();
 
+	// ---- Composio disconnect ----
+	const composioDisconnect = useDisconnectComposioConnector();
+	const handleComposioDisconnect = useCallback(
+		async (connectorId: string) => {
+			await composioDisconnect.mutateAsync(connectorId);
+		},
+		[composioDisconnect],
+	);
+
 	// ---- Source preferences ----
 	const {
 		isSourceEnabled,
@@ -69,9 +80,11 @@ export function useIntegrationsPage() {
 		useIntegrationStatus({
 			integrationsByProvider,
 			allIntegrations,
+			connectors,
 			slackStatus,
 			loadingProvider,
 			slackDisconnectIsPending: slackDisconnect.isPending,
+			composioDisconnectIsPending: composioDisconnect.isPending,
 			searchQuery,
 		});
 
@@ -102,6 +115,7 @@ export function useIntegrationsPage() {
 		disconnectOAuth,
 		handleSlackDisconnect,
 		handleRemoveConnector: handleRemove,
+		handleComposioDisconnect,
 	});
 
 	// ---- Slack config ----
@@ -149,15 +163,21 @@ export function useIntegrationsPage() {
 
 	const handleSetDisconnectTargetForEntry = useCallback(
 		(entry: CatalogEntry) => {
-			setDisconnectTarget({
-				entry,
-				integrationId:
-					entry.type === "oauth" && entry.provider
-						? integrationsByProvider[entry.provider]?.[0]?.id
-						: undefined,
-			});
+			let integrationId: string | undefined;
+
+			if (entry.type === "oauth" && entry.provider) {
+				integrationId = integrationsByProvider[entry.provider]?.[0]?.id;
+			} else if (entry.type === "composio-oauth" && entry.presetKey) {
+				const preset = getConnectorPresetByKey(entry.presetKey);
+				const connector = preset?.composioToolkit
+					? (connectors ?? []).find((c) => c.composioToolkit === preset.composioToolkit)
+					: undefined;
+				integrationId = connector?.id;
+			}
+
+			setDisconnectTarget({ entry, integrationId });
 		},
-		[setDisconnectTarget, integrationsByProvider],
+		[setDisconnectTarget, integrationsByProvider, connectors],
 	);
 
 	const handleOpenEntry = useCallback(

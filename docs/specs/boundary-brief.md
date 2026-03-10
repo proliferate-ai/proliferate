@@ -19,7 +19,7 @@
 | 8 | `cli.md` | Device auth flow, local config, file sync, OpenCode launch, CLI-specific API routes. | 2 |
 | 9 | `repos-prebuilds.md` | Repo CRUD, configuration management, base + repo snapshot builds, service commands, env file generation. | 3 |
 | 10 | `secrets-environment.md` | Secret CRUD, bundles, bulk import, env file deployment to sandbox, encryption. | 3 |
-| 11 | `integrations.md` | OAuth connection lifecycle for GitHub/Sentry/Linear/Jira/Slack via provider-native routes and service token resolution. Connection binding to repos/automations/sessions. | 3 |
+| 11 | `integrations.md` | OAuth connection lifecycle for GitHub/Sentry/Linear/Jira/Slack via provider-native routes, Composio-managed MCP connectors, and service token resolution. Connection binding to repos/automations/sessions. | 3 |
 | 12 | `auth-orgs.md` | better-auth, user/org/member model, invitations, onboarding/trial activation, API keys, admin/impersonation. | 3 |
 | 13 | `billing-metering.md` | Usage metering, credit gating, trial credits, reconciliation, org pause, Autumn integration. Owns charging/gating policy. | 3 |
 | 14 | `manager-agent-runtime.md` | Pi-based manager runtime identity, memory model, inbox semantics, child coding-session topology, and manager-specific execution rules. | 3 |
@@ -38,8 +38,8 @@ These boundaries resolve the most likely overlaps. Follow them exactly.
 
 | Boundary | Rule |
 |----------|------|
-| **Integrations vs Actions/Automations/Sessions** | `integrations.md` owns external credential/connectivity lifecycle (OAuth integrations + MCP connector catalog). Runtime behavior that *uses* those records belongs to the consuming spec (Actions, Automations, Sessions). |
-| **Actions vs Integrations (connectors)** | `actions.md` owns action execution, risk, approval, grants, and audit behavior. `integrations.md` owns persistence and scope of org-level connector configuration (target ownership). Current implementation still stores connectors on configurations as a legacy transitional path documented in `repos-prebuilds.md`. |
+| **Integrations vs Actions/Automations/Sessions** | `integrations.md` owns external credential/connectivity lifecycle (OAuth integrations + MCP connector catalog + Composio-managed connectors). Runtime behavior that *uses* those records belongs to the consuming spec (Actions, Automations, Sessions). |
+| **Actions vs Integrations (connectors)** | `actions.md` owns action execution, risk, approval, grants, and audit behavior. `integrations.md` owns persistence and scope of org-level connector configuration (target ownership), including Composio-managed connectors which blur the integration/connector boundary (OAuth flow creating connector rows). Current implementation still stores connectors on configurations as a legacy transitional path documented in `repos-prebuilds.md`. |
 | **Agent Contract vs Sessions/Automations** | `agent-contract.md` owns prompt templates, tool schemas, and capability injection. Runtime behavior that *executes* tools belongs to `sessions-gateway.md` (interactive) or `automations-runs.md` (automated). |
 | **Agent Contract vs Sandbox Providers** | `agent-contract.md` owns what tools exist and their schemas. `sandbox-providers.md` owns how tools are injected into the sandbox environment (plugin config, MCP server). |
 | **LLM Proxy vs Billing** | `llm-proxy.md` owns key generation, routing, and spend *events*. `billing-metering.md` owns charging policy, credit gating, and balance enforcement. |

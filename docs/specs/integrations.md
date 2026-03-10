@@ -12,6 +12,7 @@
 - Slack installation lifecycle (OAuth install, status, disconnect, support-channel setup, config strategy).
 - Sentry/Linear/Jira metadata read APIs used during trigger/action configuration.
 - Org-scoped MCP connector catalog lifecycle (CRUD, atomic secret provisioning, validation preflight).
+- Composio-managed connector lifecycle (OAuth initiation, callback, managed locking, disconnect with Composio cleanup).
 - Integration request intake (`requestIntegration`) and connector/tooling support endpoints (`slackMembers`, `slackChannels`).
 
 ### Out of Scope
@@ -30,6 +31,7 @@
 - Provider modules are declarative capability descriptors (`ConnectionRequirement`), while broker wiring lives in integrations framework code.
 - Webhooks/callbacks are state-reconciliation channels, not the source of runtime business logic.
 - Connector catalog ownership is split intentionally: Integrations owns configuration persistence; Actions owns runtime tool execution policy.
+- Composio-managed connectors blur the integration/connector boundary: they use an OAuth-like flow (integration pattern) but persist as `org_connectors` rows (connector pattern). The `composio_toolkit` column distinguishes managed from generic connectors.
 
 ### Things Agents Get Wrong
 - GitHub does not have a single auth path shared with other providers. GitHub uses GitHub App installation; Sentry/Linear/Jira use provider-native OAuth routes.
@@ -43,6 +45,9 @@
 - Slack disconnect is best-effort upstream revocation: local status is still revoked even if Slack revoke fails.
 - Connector validation is a preflight (`tools/list`) with diagnostics; it is not runtime policy enforcement.
 - `getToken()` is the runtime token boundary for consumers; direct token reads from DB are not a supported pattern.
+- Composio's OAuth callback returns `status` + `connected_account_id`, NOT standard OAuth `code` + `state`. The callback route cannot use `parseOAuthCallbackPreflight()`.
+- Composio connectors are NOT created via `createConnector`/`createConnectorWithSecret` — they use `createComposioConnector` which sets `composio_toolkit`/`composio_account_id`. Generic paths block `COMPOSIO_API_KEY` as secret key.
+- `presetKey` (e.g. `"google-calendar"`) is different from `composioToolkit` (e.g. `"googlecalendar"`). Always resolve via `getConnectorPresetByKey(presetKey)?.composioToolkit`.
 
 ---
 
@@ -83,9 +88,24 @@
 - Preset quick-setup can atomically create an org secret and connector in one DB transaction.
 - Validation preflight resolves secret, calls MCP `tools/list` through Actions connector client, and returns diagnostics.
 - Integrations exposes connector action discovery for permissions UI via `getConnectorActions`, backed by short-lived server caching to avoid repeated `tools/list` calls during settings usage.
+- Composio-managed connectors appear alongside generic connectors in the same `org_connectors` table, distinguished by non-null `composio_toolkit` column. See §2.7 for managed connector semantics.
 - Evidence: `packages/services/src/connectors/service.ts`, `packages/services/src/connectors/db.ts`, `apps/web/src/server/routers/integrations.ts`.
 
-### 2.7 Token Resolution Boundary
+### 2.7 Composio-Managed Connectors
+- Composio is an external MCP gateway that handles OAuth + token refresh for SaaS apps (Gmail, Notion, Salesforce, Google Calendar, Google Drive, HubSpot).
+- Users see per-app integrations ("Gmail", "Notion") — never "Composio." Each toolkit gets its own `org_connectors` row with typed `composio_toolkit` and `composio_account_id` columns.
+- A partial unique index (`org_connectors_composio_toolkit_org_unique`) enforces one connector per toolkit per org.
+- Auth reuses `custom_header` type: `{ type: "custom_header", headerName: "x-api-key", secretKey: "COMPOSIO_API_KEY" }`. All Composio connectors reference a single shared org secret bootstrapped atomically on first connector creation.
+- Managed connector semantics: `url` and `auth` fields are locked — `updateConnector` rejects changes. `enabled`, `name`, and `riskPolicy` remain editable.
+- Disconnect goes through `disconnectComposioConnector` (dedicated service function and oRPC procedure): deletes Composio account (best-effort), then deletes connector row. Generic `deleteConnector` rejects Composio-managed connectors.
+- Generic `createConnector`/`createConnectorWithSecret` reject `COMPOSIO_API_KEY` as secret key to prevent piggybacking on the platform key.
+- OAuth flow: initiation route builds signed state with `extraPayload: { toolkit }`, redirects to Composio. Callback parses Composio's `status` + `connected_account_id` (NOT standard OAuth `code`), verifies signed state, validates account binding, gets MCP URL, and calls `createComposioConnector` (upsert semantics).
+- `composioAvailable` endpoint returns `!!process.env.COMPOSIO_API_KEY` — no API call, for UI gating.
+- Self-hosted fallback: without `COMPOSIO_API_KEY`, UI shows manual `ConnectorForm` (full URL + key entry). These connectors have no `composioToolkit` set and are not "managed."
+- Token refresh is handled by Composio transparently; auth errors surface to the agent like any other connector failure.
+- Evidence: `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/composio/client.ts`, `packages/services/src/connectors/service.ts:createComposioConnector`, `packages/services/src/connectors/service.ts:disconnectComposioConnector`, `apps/web/src/app/api/integrations/composio/oauth/route.ts`, `apps/web/src/app/api/integrations/composio/oauth/callback/route.ts`, `apps/web/src/server/routers/integrations.ts:composioAvailable`.
+
+### 2.8 Token Resolution Boundary
 - `getToken(integration)` chooses provider-specific retrieval:
   - GitHub App installation token (JWT + GitHub API, cached).
   - Provider OAuth token (decrypt + refresh when needed).
@@ -93,7 +113,7 @@
 - `getIntegrationsForTokens` filters to active integrations in the caller org before token resolution.
 - Evidence: `packages/services/src/integrations/tokens.ts`, `packages/services/src/integrations/github-app.ts`.
 
-### 2.8 Visibility and Authorization Model
+### 2.9 Visibility and Authorization Model
 - Integration listing enforces visibility at query layer (`org`/`null` visible to all, `private` only creator).
 - Sensitive mutations (`callback`, session creation, Slack connect/disconnect, connector CRUD) require admin/owner.
 - Disconnect allows creator-or-admin semantics.
@@ -220,7 +240,20 @@ Sections 3 and 4 were intentionally removed in this spec revision. File tree and
 - Non-lifecycle GitHub events must be acknowledged as migrated to trigger-service.
 - Evidence: `apps/web/src/app/api/webhooks/github-app/route.ts`.
 
-### 6.10 Auxiliary Endpoint Invariants — `Implemented`
+### 6.10 Composio-Managed Connector Invariants — `Implemented`
+- Composio OAuth initiation must require authenticated admin/owner caller in active org.
+- Composio OAuth state must be signed, time-bounded, and include toolkit in extra payload.
+- Composio callback must parse `status` + `connected_account_id` (not standard OAuth `code`).
+- Composio callback must verify signed state, validate account binding via `getConnectedAccount`, and reject mismatches.
+- `createComposioConnector` must use upsert semantics: if connector for org+toolkit exists, update it; otherwise create.
+- First Composio connector in an org must atomically create the `COMPOSIO_API_KEY` org secret; subsequent connectors reuse it.
+- `updateConnector` must reject `url` and `auth` changes on connectors where `composioToolkit` is set.
+- `deleteConnector` must reject Composio-managed connectors; disconnect must go through `disconnectComposioConnector`.
+- `disconnectComposioConnector` must delete the Composio account (best-effort) before deleting the connector row.
+- Generic `createConnector`/`createConnectorWithSecret` must reject `COMPOSIO_API_KEY` as secret key.
+- Evidence: `packages/services/src/connectors/service.ts:createComposioConnector`, `packages/services/src/connectors/service.ts:disconnectComposioConnector`, `apps/web/src/app/api/integrations/composio/oauth/callback/route.ts`, `apps/web/src/server/routers/integrations.ts:deleteConnector`.
+
+### 6.11 Auxiliary Endpoint Invariants — `Implemented`
 - `requestIntegration` is best-effort: it returns success even when email provider is missing/failing.
 - `slackMembers` and `slackChannels` must verify installation belongs to caller org before listing data.
 - Slack list endpoints must use decrypted installation bot token and exclude invalid member rows where applicable.

@@ -4,8 +4,11 @@ import { LinearIcon, SentryIcon, SlackIcon } from "@/components/ui/icons";
 import type { IntegrationCategory } from "@proliferate/shared";
 import { CONNECTOR_PRESETS } from "@proliferate/shared";
 
-const quickPresets = CONNECTOR_PRESETS.filter((p) => p.quickSetup);
-const advancedPresets = CONNECTOR_PRESETS.filter((p) => !p.quickSetup && p.key !== "custom");
+const quickPresets = CONNECTOR_PRESETS.filter((p) => p.quickSetup && !p.composioToolkit);
+const advancedPresets = CONNECTOR_PRESETS.filter(
+	(p) => !p.quickSetup && p.key !== "custom" && !p.composioToolkit,
+);
+const composioPresets = CONNECTOR_PRESETS.filter((p) => p.composioToolkit);
 
 export const INTEGRATION_CATALOG: CatalogEntry[] = [
 	// Source Control
@@ -66,6 +69,18 @@ export const INTEGRATION_CATALOG: CatalogEntry[] = [
 		provider: "mysql",
 	},
 
+	// Composio-backed OAuth integrations
+	...composioPresets.map(
+		(preset): CatalogEntry => ({
+			key: preset.key,
+			name: preset.name,
+			description: preset.description,
+			category: preset.category ?? "developer-tools",
+			type: "composio-oauth",
+			presetKey: preset.key,
+		}),
+	),
+
 	// MCP presets (categorized by preset.category, defaults to "developer-tools")
 	...quickPresets.map(
 		(preset): CatalogEntry => ({
@@ -123,6 +138,7 @@ export const INTEGRATION_CATEGORY_ORDER: IntegrationCategory[] = [
 	"monitoring",
 	"project-management",
 	"communication",
+	"productivity",
 	"data",
 	"commerce",
 	"security",
@@ -135,6 +151,7 @@ export const INTEGRATION_CATEGORY_LABELS: Record<IntegrationCategory, string> = 
 	monitoring: "Monitoring",
 	"project-management": "Project Management",
 	communication: "Communication",
+	productivity: "Productivity",
 	data: "Data & Analytics",
 	commerce: "Commerce",
 	security: "Security",

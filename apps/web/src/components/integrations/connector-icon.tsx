@@ -4,11 +4,17 @@ import {
 	Context7Icon,
 	DeepWikiIcon,
 	FirecrawlIcon,
+	GmailIcon,
+	GoogleCalendarIcon,
+	GoogleDriveIcon,
+	HubSpotIcon,
 	McpIcon,
 	NeonIcon,
 	NewRelicIcon,
+	NotionIcon,
 	PlaywrightIcon,
 	PostHogIcon,
+	SalesforceIcon,
 	SemgrepIcon,
 	StripeIcon,
 	SupabaseIcon,
@@ -19,8 +25,12 @@ import { cn } from "@/lib/display/utils";
 import type { ConnectorConfig } from "@proliferate/shared";
 import { CONNECTOR_PRESETS } from "@proliferate/shared";
 
-/** Best-effort preset key lookup for a connected tool (matches by URL). */
+/** Best-effort preset key lookup for a connected tool (matches by composioToolkit or URL). */
 export function findPresetKey(connector: ConnectorConfig): string {
+	if (connector.composioToolkit) {
+		const match = CONNECTOR_PRESETS.find((p) => p.composioToolkit === connector.composioToolkit);
+		if (match) return match.key;
+	}
 	const match = CONNECTOR_PRESETS.find((p) => p.defaults.url && connector.url === p.defaults.url);
 	return match?.key ?? "custom";
 }
@@ -61,6 +71,18 @@ export function ConnectorIcon({ presetKey, className, size = "md" }: ConnectorIc
 			return <NewRelicIcon className={iconClass} />;
 		case "apify":
 			return <ApifyIcon className={iconClass} />;
+		case "gmail":
+			return <GmailIcon className={iconClass} />;
+		case "notion":
+			return <NotionIcon className={iconClass} />;
+		case "salesforce":
+			return <SalesforceIcon className={iconClass} />;
+		case "google-calendar":
+			return <GoogleCalendarIcon className={iconClass} />;
+		case "google-drive":
+			return <GoogleDriveIcon className={iconClass} />;
+		case "hubspot":
+			return <HubSpotIcon className={iconClass} />;
 		default:
 			return <McpIcon className={iconClass} />;
 	}

@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for every product feature, its implementation status, and which spec owns it.
 > **Status key:** `Implemented` | `Partial` | `Planned` | `Deprecated`
-> **Updated:** 2026-03-07. Manager agent runtime spec freeze.
+> **Updated:** 2026-03-10. Composio-managed connectors.
 > **Evidence convention:** `Planned` entries may cite RFC/spec files until code exists; once implemented, update evidence to concrete code paths.
 
 ---
@@ -281,6 +281,13 @@
 | GitHub auth (gateway) | Implemented | `apps/gateway/src/hub/session/runtime/github-auth.ts` | Gateway-side GitHub token resolution |
 | Org-scoped MCP connector catalog | Implemented | `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/` | Org-level connector CRUD with atomic secret provisioning |
 | Org-scoped connector management UI | Implemented | `apps/web/src/app/(command-center)/dashboard/integrations/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools redirects to integrations; connector management on integrations page |
+| Composio-managed connectors | Implemented | `packages/services/src/composio/client.ts`, `packages/services/src/connectors/service.ts:createComposioConnector` | Per-app OAuth connectors (Gmail, Notion, Salesforce, Google Calendar, Google Drive, HubSpot) via Composio MCP gateway |
+| Composio OAuth initiation + callback | Implemented | `apps/web/src/app/api/integrations/composio/oauth/route.ts`, `apps/web/src/app/api/integrations/composio/oauth/callback/route.ts` | Custom callback (not standard OAuth code exchange) |
+| Composio availability check | Implemented | `apps/web/src/server/routers/integrations.ts:composioAvailable` | Runtime gate on `COMPOSIO_API_KEY` env var |
+| Composio connector disconnect | Implemented | `apps/web/src/server/routers/integrations.ts:disconnectComposioConnector`, `packages/services/src/connectors/service.ts:disconnectComposioConnector` | Cleans up Composio account + deletes connector |
+| Composio managed connector locking | Implemented | `packages/services/src/connectors/service.ts:updateConnector` | Rejects url/auth changes on managed connectors |
+| COMPOSIO_API_KEY blocking in generic creation | Implemented | `apps/web/src/server/routers/integrations.ts:createConnector`, `apps/web/src/server/routers/integrations.ts:createConnectorWithSecret` | Prevents piggybacking on platform key |
+| Self-hosted Composio fallback | Implemented | `apps/web/src/components/integrations/composio-connect-tab.tsx` | Manual ConnectorForm when COMPOSIO_API_KEY not set |
 
 ---
 

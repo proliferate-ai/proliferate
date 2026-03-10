@@ -9,6 +9,7 @@ interface UseIntegrationDialogsOptions {
 	disconnectOAuth: (provider: Provider, integrationId: string) => Promise<void>;
 	handleSlackDisconnect: () => Promise<void>;
 	handleRemoveConnector: (id: string) => Promise<void>;
+	handleComposioDisconnect?: (connectorId: string) => Promise<void>;
 }
 
 export type IntegrationDetailTab = "connect" | "about" | "settings";
@@ -19,6 +20,7 @@ export function useIntegrationDialogs({
 	disconnectOAuth,
 	handleSlackDisconnect,
 	handleRemoveConnector,
+	handleComposioDisconnect,
 }: UseIntegrationDialogsOptions) {
 	// ---- Picker / detail dialog state ----
 	const [pickerOpen, setPickerOpen] = useState(false);
@@ -98,9 +100,11 @@ export function useIntegrationDialogs({
 			await disconnectOAuth(entry.provider, integrationId);
 		} else if (entry.type === "slack") {
 			await handleSlackDisconnect();
+		} else if (entry.type === "composio-oauth" && integrationId && handleComposioDisconnect) {
+			await handleComposioDisconnect(integrationId);
 		}
 		setDisconnectTarget(null);
-	}, [disconnectTarget, disconnectOAuth, handleSlackDisconnect]);
+	}, [disconnectTarget, disconnectOAuth, handleSlackDisconnect, handleComposioDisconnect]);
 
 	// ---- Connector delete confirm ----
 	const handleConfirmDeleteConnector = useCallback(async () => {
@@ -109,9 +113,9 @@ export function useIntegrationDialogs({
 		setDeleteConnectorTarget(null);
 	}, [deleteConnectorTarget, handleRemoveConnector]);
 
-	// ---- Filtered connectors ----
+	// ---- Filtered connectors (hide Composio-managed) ----
 	const filteredConnectors = useMemo(() => {
-		let list = connectors ?? [];
+		let list = (connectors ?? []).filter((c) => !c.composioToolkit);
 		if (searchQuery.trim()) {
 			const q = searchQuery.toLowerCase();
 			list = list.filter(

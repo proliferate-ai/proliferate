@@ -18,7 +18,7 @@ interface VerifyOAuthCallbackContextInput {
 	returnUrl: string | undefined;
 }
 
-export type OAuthCallbackProvider = "linear" | "jira" | "sentry" | "slack";
+export type OAuthCallbackProvider = "linear" | "jira" | "sentry" | "slack" | "composio";
 
 export interface OAuthCallbackErrorKeys {
 	denied: string;
@@ -109,6 +109,22 @@ export const OAUTH_CALLBACK_POLICIES: Record<OAuthCallbackProvider, OAuthCallbac
 			tokenFailed: "slack_oauth_token_failed",
 			dbError: "slack_db_error",
 			success: "slack",
+		},
+	},
+	composio: {
+		initialRedirectPath: "/dashboard/integrations",
+		defaultReturnUrl: "/dashboard/integrations",
+		maxAgeMs: 10 * 60 * 1000,
+		errors: {
+			denied: "composio_oauth_denied",
+			missingParams: "composio_oauth_missing_params",
+			invalidState: "composio_oauth_invalid_state",
+			expired: "composio_oauth_expired",
+			unauthorized: "composio_oauth_unauthorized",
+			forbidden: "composio_oauth_forbidden",
+			notConfigured: "composio_not_configured",
+			tokenFailed: "composio_oauth_token_failed",
+			success: "composio",
 		},
 	},
 };

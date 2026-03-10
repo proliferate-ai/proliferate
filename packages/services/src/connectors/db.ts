@@ -21,6 +21,8 @@ export interface CreateOrgConnectorInput {
 	riskPolicy?: unknown;
 	enabled: boolean;
 	createdBy: string;
+	composioToolkit?: string;
+	composioAccountId?: string;
 }
 
 export interface UpdateOrgConnectorInput {
@@ -86,6 +88,8 @@ export async function create(input: CreateOrgConnectorInput): Promise<OrgConnect
 			riskPolicy: input.riskPolicy ?? null,
 			enabled: input.enabled,
 			createdBy: input.createdBy,
+			composioToolkit: input.composioToolkit ?? null,
+			composioAccountId: input.composioAccountId ?? null,
 		})
 		.returning();
 	return row;
@@ -113,6 +117,37 @@ export async function update(
 		.where(and(eq(orgConnectors.id, id), eq(orgConnectors.organizationId, organizationId)))
 		.returning();
 	return row;
+}
+
+/**
+ * Find a connector by Composio toolkit and organization.
+ */
+export async function findByComposioToolkit(
+	organizationId: string,
+	toolkit: string,
+): Promise<OrgConnectorRow | undefined> {
+	const db = getDb();
+	return db.query.orgConnectors.findFirst({
+		where: and(
+			eq(orgConnectors.organizationId, organizationId),
+			eq(orgConnectors.composioToolkit, toolkit),
+		),
+	});
+}
+
+/**
+ * List all Composio-managed connectors for an organization.
+ */
+export async function listComposioByOrg(organizationId: string): Promise<OrgConnectorRow[]> {
+	const db = getDb();
+	const { isNotNull } = await import("drizzle-orm");
+	return db.query.orgConnectors.findMany({
+		where: and(
+			eq(orgConnectors.organizationId, organizationId),
+			isNotNull(orgConnectors.composioToolkit),
+		),
+		orderBy: (t, { asc }) => [asc(t.createdAt)],
+	});
 }
 
 /**
