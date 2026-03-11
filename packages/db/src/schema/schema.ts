@@ -1844,6 +1844,8 @@ export const orgConnectors = pgTable(
 		auth: jsonb().notNull(),
 		riskPolicy: jsonb("risk_policy"),
 		toolRiskOverrides: jsonb("tool_risk_overrides"),
+		composioToolkit: text("composio_toolkit"),
+		composioAccountId: text("composio_account_id"),
 		enabled: boolean().notNull().default(true),
 		createdBy: text("created_by"),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
@@ -1861,6 +1863,14 @@ export const orgConnectors = pgTable(
 			foreignColumns: [user.id],
 			name: "org_connectors_created_by_fkey",
 		}),
+		uniqueIndex("org_connectors_composio_toolkit_org_unique")
+			.on(table.organizationId, table.composioToolkit)
+			.where(sql`composio_toolkit IS NOT NULL`),
+		check(
+			"org_connectors_composio_managed_shape_check",
+			sql`(composio_toolkit IS NULL AND composio_account_id IS NULL)
+				OR (composio_toolkit IS NOT NULL AND composio_account_id IS NOT NULL)`,
+		),
 	],
 );
 

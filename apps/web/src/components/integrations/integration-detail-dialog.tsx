@@ -1,6 +1,7 @@
 "use client";
 
 import { ConfigurationSelector } from "@/components/automations/configuration-selector";
+import { ComposioConnectTab } from "@/components/integrations/composio-connect-tab";
 import { ConnectorForm } from "@/components/integrations/connector-form";
 import { ConnectorIcon } from "@/components/integrations/connector-icon";
 import { DirectSetupForm } from "@/components/integrations/direct-setup-form";
@@ -104,7 +105,7 @@ export function IntegrationDetailDialog({
 	};
 	const proliferateDocsUrl =
 		PROLIFERATE_DOCS[entry.key] ??
-		(entry.type === "mcp-preset" || entry.type === "custom-mcp"
+		(entry.type === "mcp-preset" || entry.type === "custom-mcp" || entry.type === "composio-oauth"
 			? "https://docs.proliferate.com/integrations/mcp-connectors"
 			: null);
 
@@ -128,7 +129,10 @@ export function IntegrationDetailDialog({
 		? initialTab === "settings" && !showSettingsTab
 			? "connect"
 			: initialTab
-		: showSettingsTab && (entry.type === "mcp-preset" || entry.type === "custom-mcp")
+		: showSettingsTab &&
+				(entry.type === "mcp-preset" ||
+					entry.type === "custom-mcp" ||
+					entry.type === "composio-oauth")
 			? "settings"
 			: "connect";
 
@@ -142,7 +146,7 @@ export function IntegrationDetailDialog({
 				{/* Header */}
 				<div className="px-5 pt-4 flex items-center gap-3 shrink-0">
 					<div className="w-8 h-8 rounded-lg border border-border bg-background flex items-center justify-center p-1 shrink-0">
-						{entry.type === "mcp-preset" && entry.presetKey ? (
+						{(entry.type === "composio-oauth" || entry.type === "mcp-preset") && entry.presetKey ? (
 							<ConnectorIcon presetKey={entry.presetKey} size="md" />
 						) : entry.provider ? (
 							<ProviderIcon provider={entry.provider} size="md" />
@@ -308,7 +312,11 @@ function IntegrationSettingsContent({
 				showActions={entry.type === "oauth" || entry.type === "slack" || entry.type === "direct"}
 				provider={entry.provider ?? null}
 				connectorId={
-					entry.type === "mcp-preset" || entry.type === "custom-mcp" ? connectorId : undefined
+					entry.type === "mcp-preset" ||
+					entry.type === "custom-mcp" ||
+					entry.type === "composio-oauth"
+						? connectorId
+						: undefined
 				}
 			/>
 			{isSlack && slackConfig?.installationId && onUpdateSlackConfig && (
@@ -356,6 +364,21 @@ function ConnectTabContent({
 	// Custom MCP — full connector form with URL, transport, auth
 	if (entry.type === "custom-mcp") {
 		return <ConnectorForm isNew onSave={onSaveConnector} onCancel={onClose} />;
+	}
+
+	// Composio OAuth — delegated to dedicated component
+	if (entry.type === "composio-oauth" && preset) {
+		return (
+			<ComposioConnectTab
+				entry={entry}
+				preset={preset}
+				isConnected={isConnected}
+				connectedMeta={connectedMeta}
+				onDisconnect={onDisconnect}
+				onSaveConnector={onSaveConnector}
+				onClose={onClose}
+			/>
+		);
 	}
 
 	// MCP preset — always use quick setup (API key only)

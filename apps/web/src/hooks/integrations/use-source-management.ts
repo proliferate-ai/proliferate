@@ -6,6 +6,7 @@ import {
 	useToggleActionPreference,
 } from "@/hooks/actions/use-action-preferences";
 import type { ConnectorConfig } from "@proliferate/shared";
+import { getConnectorPresetByKey } from "@proliferate/shared";
 import { useCallback } from "react";
 
 export function useSourceManagement(connectors: ConnectorConfig[] | undefined) {
@@ -16,6 +17,13 @@ export function useSourceManagement(connectors: ConnectorConfig[] | undefined) {
 		(entry: CatalogEntry): string | null => {
 			if (entry.type === "oauth" && entry.provider) return entry.provider;
 			if (entry.type === "slack") return "slack";
+			if (entry.type === "composio-oauth" && entry.presetKey) {
+				const preset = getConnectorPresetByKey(entry.presetKey);
+				const connector = preset?.composioToolkit
+					? (connectors ?? []).find((c) => c.composioToolkit === preset.composioToolkit)
+					: undefined;
+				return connector ? `connector:${connector.id}` : null;
+			}
 			if (entry.type === "mcp-preset" && entry.presetKey) {
 				const connector = (connectors ?? []).find(
 					(c: ConnectorConfig) => c.name.toLowerCase() === entry.name.toLowerCase(),

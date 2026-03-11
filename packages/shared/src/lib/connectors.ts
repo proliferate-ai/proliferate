@@ -52,6 +52,10 @@ export interface ConnectorConfig {
 	riskPolicy?: ConnectorRiskPolicy;
 	/** Whether this connector is active. */
 	enabled: boolean;
+	/** Composio toolkit identifier (e.g. "gmail", "notion"). Set only for Composio-managed connectors. */
+	composioToolkit?: string;
+	/** Composio connected account ID. Set only for Composio-managed connectors. */
+	composioAccountId?: string;
 }
 
 // ============================================
@@ -89,6 +93,8 @@ export const ConnectorConfigSchema = z.object({
 	auth: ConnectorAuthSchema,
 	riskPolicy: ConnectorRiskPolicySchema.optional(),
 	enabled: z.boolean(),
+	composioToolkit: z.string().optional(),
+	composioAccountId: z.string().optional(),
 });
 
 export const ConnectorsArraySchema = z.array(ConnectorConfigSchema).max(20);
@@ -121,7 +127,8 @@ export type IntegrationCategory =
 	| "data"
 	| "security"
 	| "commerce"
-	| "automation";
+	| "automation"
+	| "productivity";
 
 export interface ConnectorPreset {
 	/** Preset identifier. */
@@ -144,6 +151,8 @@ export interface ConnectorPreset {
 	recommendedSecretKey?: string;
 	/** Link to provider docs for getting an API key. */
 	docsUrl?: string;
+	/** Composio toolkit identifier for OAuth-managed connectors (e.g. "gmail", "googlecalendar"). */
+	composioToolkit?: string;
 }
 
 /**
@@ -368,6 +377,109 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		secretLabel: "Apify API token",
 		recommendedSecretKey: "APIFY_API_TOKEN",
 		docsUrl: "https://docs.proliferate.com/integrations/apify",
+	},
+	// Composio-managed presets (OAuth on hosted, manual on self-hosted)
+	{
+		key: "gmail",
+		name: "Gmail",
+		description: "Read, search, and send emails via Gmail",
+		category: "communication",
+		defaults: {
+			name: "Gmail",
+			transport: "remote_http",
+			url: "",
+			auth: { type: "custom_header", secretKey: "", headerName: "x-api-key" },
+			riskPolicy: { defaultRisk: "write" },
+			enabled: true,
+		},
+		secretLabel: "Composio API key",
+		recommendedSecretKey: "COMPOSIO_API_KEY",
+		composioToolkit: "gmail",
+	},
+	{
+		key: "notion",
+		name: "Notion",
+		description: "Manage pages and databases in Notion",
+		category: "productivity",
+		defaults: {
+			name: "Notion",
+			transport: "remote_http",
+			url: "",
+			auth: { type: "custom_header", secretKey: "", headerName: "x-api-key" },
+			riskPolicy: { defaultRisk: "write" },
+			enabled: true,
+		},
+		secretLabel: "Composio API key",
+		recommendedSecretKey: "COMPOSIO_API_KEY",
+		composioToolkit: "notion",
+	},
+	{
+		key: "salesforce",
+		name: "Salesforce",
+		description: "Manage leads, contacts, and opportunities in Salesforce",
+		category: "data",
+		defaults: {
+			name: "Salesforce",
+			transport: "remote_http",
+			url: "",
+			auth: { type: "custom_header", secretKey: "", headerName: "x-api-key" },
+			riskPolicy: { defaultRisk: "write" },
+			enabled: true,
+		},
+		secretLabel: "Composio API key",
+		recommendedSecretKey: "COMPOSIO_API_KEY",
+		composioToolkit: "salesforce",
+	},
+	{
+		key: "google-calendar",
+		name: "Google Calendar",
+		description: "Create, update, and manage calendar events",
+		category: "productivity",
+		defaults: {
+			name: "Google Calendar",
+			transport: "remote_http",
+			url: "",
+			auth: { type: "custom_header", secretKey: "", headerName: "x-api-key" },
+			riskPolicy: { defaultRisk: "write" },
+			enabled: true,
+		},
+		secretLabel: "Composio API key",
+		recommendedSecretKey: "COMPOSIO_API_KEY",
+		composioToolkit: "googlecalendar",
+	},
+	{
+		key: "google-drive",
+		name: "Google Drive",
+		description: "Search, read, and manage files in Google Drive",
+		category: "productivity",
+		defaults: {
+			name: "Google Drive",
+			transport: "remote_http",
+			url: "",
+			auth: { type: "custom_header", secretKey: "", headerName: "x-api-key" },
+			riskPolicy: { defaultRisk: "read" },
+			enabled: true,
+		},
+		secretLabel: "Composio API key",
+		recommendedSecretKey: "COMPOSIO_API_KEY",
+		composioToolkit: "googledrive",
+	},
+	{
+		key: "hubspot",
+		name: "HubSpot",
+		description: "Manage contacts, deals, and marketing in HubSpot",
+		category: "data",
+		defaults: {
+			name: "HubSpot",
+			transport: "remote_http",
+			url: "",
+			auth: { type: "custom_header", secretKey: "", headerName: "x-api-key" },
+			riskPolicy: { defaultRisk: "write" },
+			enabled: true,
+		},
+		secretLabel: "Composio API key",
+		recommendedSecretKey: "COMPOSIO_API_KEY",
+		composioToolkit: "hubspot",
 	},
 	{
 		key: "tavily",

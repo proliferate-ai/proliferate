@@ -47,7 +47,7 @@ export function CardMenu({ entry, isLoading, onReconnect, onDisconnect }: CardMe
 				)}
 
 				{/* Reconnect (OAuth / Slack) */}
-				{(entry.type === "oauth" || entry.type === "slack") && (
+				{(entry.type === "oauth" || entry.type === "slack" || entry.type === "composio-oauth") && (
 					<DropdownMenuItem
 						onClick={onReconnect}
 						disabled={isLoading}

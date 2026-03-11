@@ -4,7 +4,7 @@
  * All connector reads/writes go through this module.
  */
 
-import { and, eq, getDb, isNull, orgConnectors, secrets } from "../db/client";
+import { and, eq, getDb, isNotNull, isNull, orgConnectors, secrets } from "../db/client";
 
 // ============================================
 // Types
@@ -21,6 +21,8 @@ export interface CreateOrgConnectorInput {
 	riskPolicy?: unknown;
 	enabled: boolean;
 	createdBy: string;
+	composioToolkit?: string;
+	composioAccountId?: string;
 }
 
 export interface UpdateOrgConnectorInput {
@@ -86,6 +88,8 @@ export async function create(input: CreateOrgConnectorInput): Promise<OrgConnect
 			riskPolicy: input.riskPolicy ?? null,
 			enabled: input.enabled,
 			createdBy: input.createdBy,
+			composioToolkit: input.composioToolkit ?? null,
+			composioAccountId: input.composioAccountId ?? null,
 		})
 		.returning();
 	return row;
@@ -113,6 +117,58 @@ export async function update(
 		.where(and(eq(orgConnectors.id, id), eq(orgConnectors.organizationId, organizationId)))
 		.returning();
 	return row;
+}
+
+/**
+ * Update a Composio-managed connector on reconnect (URL, enabled, account ID).
+ */
+export async function updateComposioReconnect(
+	id: string,
+	organizationId: string,
+	input: { url: string; composioAccountId: string },
+): Promise<OrgConnectorRow | undefined> {
+	const db = getDb();
+	const [row] = await db
+		.update(orgConnectors)
+		.set({
+			url: input.url,
+			enabled: true,
+			composioAccountId: input.composioAccountId,
+			updatedAt: new Date(),
+		})
+		.where(and(eq(orgConnectors.id, id), eq(orgConnectors.organizationId, organizationId)))
+		.returning();
+	return row;
+}
+
+/**
+ * Find a connector by Composio toolkit and organization.
+ */
+export async function findByComposioToolkit(
+	organizationId: string,
+	toolkit: string,
+): Promise<OrgConnectorRow | undefined> {
+	const db = getDb();
+	return db.query.orgConnectors.findFirst({
+		where: and(
+			eq(orgConnectors.organizationId, organizationId),
+			eq(orgConnectors.composioToolkit, toolkit),
+		),
+	});
+}
+
+/**
+ * List all Composio-managed connectors for an organization.
+ */
+export async function listComposioByOrg(organizationId: string): Promise<OrgConnectorRow[]> {
+	const db = getDb();
+	return db.query.orgConnectors.findMany({
+		where: and(
+			eq(orgConnectors.organizationId, organizationId),
+			isNotNull(orgConnectors.composioToolkit),
+		),
+		orderBy: (t, { asc }) => [asc(t.createdAt)],
+	});
 }
 
 /**
@@ -149,6 +205,10 @@ export interface CreateConnectorWithSecretDbInput {
 	};
 	/** Auth configuration template — secretKey will be filled with the resolved key. */
 	authConfig: { type: "bearer" } | { type: "custom_header"; headerName: string };
+	/** Optional Composio toolkit (set for managed connectors). */
+	composioToolkit?: string;
+	/** Optional Composio connected account ID (set for managed connectors). */
+	composioAccountId?: string;
 }
 
 export interface CreateConnectorWithSecretDbResult {
@@ -220,6 +280,8 @@ export async function createWithSecret(
 						riskPolicy: input.connector.riskPolicy,
 						enabled: true,
 						createdBy: input.createdBy,
+						composioToolkit: input.composioToolkit ?? null,
+						composioAccountId: input.composioAccountId ?? null,
 					})
 					.returning();
 
@@ -237,6 +299,30 @@ export async function createWithSecret(
 	}
 
 	throw new Error("Failed to create connector with secret after retries");
+}
+
+/**
+ * Ensure an org-level secret exists. If it already exists, this is a no-op.
+ * Uses INSERT ... ON CONFLICT DO NOTHING for race-safe idempotency.
+ */
+export async function ensureOrgSecret(input: {
+	organizationId: string;
+	key: string;
+	encryptedValue: string;
+	description: string;
+	createdBy: string;
+}): Promise<void> {
+	const db = getDb();
+	await db
+		.insert(secrets)
+		.values({
+			organizationId: input.organizationId,
+			key: input.key,
+			encryptedValue: input.encryptedValue,
+			description: input.description,
+			createdBy: input.createdBy,
+		})
+		.onConflictDoNothing();
 }
 
 /**

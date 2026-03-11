@@ -4,9 +4,11 @@
  * Business logic for org-level MCP connector management.
  */
 
+import { env } from "@proliferate/environment/server";
 import type { ConnectorAuth, ConnectorConfig, ConnectorRiskPolicy } from "@proliferate/shared";
-import { getConnectorPresetByKey } from "@proliferate/shared";
+import { CONNECTOR_PRESETS, getConnectorPresetByKey } from "@proliferate/shared";
 import { listConnectorToolsOrThrow } from "../actions/connectors/client";
+import * as composio from "../composio/client";
 import { encrypt, getEncryptionKey } from "../db/crypto";
 import { resolveSecretValue } from "../secrets/service";
 
@@ -82,6 +84,8 @@ export function toConnectorConfig(row: db.OrgConnectorRow): ConnectorConfig {
 		auth: row.auth as ConnectorAuth,
 		riskPolicy: (row.riskPolicy as ConnectorRiskPolicy) ?? undefined,
 		enabled: row.enabled,
+		composioToolkit: row.composioToolkit ?? undefined,
+		composioAccountId: row.composioAccountId ?? undefined,
 	};
 }
 
@@ -153,6 +157,16 @@ export async function updateConnector(
 	organizationId: string,
 	input: UpdateConnectorInput,
 ): Promise<ConnectorConfig | null> {
+	// Guard: Composio-managed connectors cannot change url or auth
+	const existing = await db.findByIdAndOrg(id, organizationId);
+	if (existing?.composioToolkit) {
+		if (input.url !== undefined || input.auth !== undefined) {
+			throw new ConnectorValidationError(
+				"Composio-managed connector URL and auth cannot be modified. Use disconnect and reconnect instead.",
+			);
+		}
+	}
+
 	const row = await db.update(id, organizationId, {
 		name: input.name,
 		url: input.url,
@@ -167,6 +181,12 @@ export async function updateConnector(
  * Delete an org connector.
  */
 export async function deleteConnector(id: string, organizationId: string): Promise<boolean> {
+	const row = await db.findByIdAndOrg(id, organizationId);
+	if (row?.composioToolkit) {
+		throw new ConnectorValidationError(
+			"Composio-managed connectors must be disconnected, not deleted. Use disconnectComposioConnector instead.",
+		);
+	}
 	return db.deleteById(id, organizationId);
 }
 
@@ -365,6 +385,133 @@ export async function createConnectorWithSecret(
 		connector: toConnectorConfig(connectorRow),
 		resolvedSecretKey,
 	};
+}
+
+// ============================================
+// Composio-managed connectors
+// ============================================
+
+/**
+ * Check if a connector is Composio-managed.
+ */
+export function isComposioManaged(connector: ConnectorConfig): boolean {
+	return !!connector.composioToolkit;
+}
+
+/**
+ * List Composio-managed connectors for an organization.
+ */
+export async function listComposioConnectors(organizationId: string): Promise<ConnectorConfig[]> {
+	const rows = await db.listComposioByOrg(organizationId);
+	return rows.map(toConnectorConfig);
+}
+
+export interface CreateComposioConnectorInput {
+	organizationId: string;
+	createdBy: string;
+	toolkit: string;
+	connectedAccountId: string;
+	mcpUrl: string;
+}
+
+/**
+ * Create or update a Composio-managed connector (upsert semantics).
+ *
+ * For the first Composio connector in an org, atomically creates the COMPOSIO_API_KEY
+ * org secret + connector. Subsequent connectors reuse the existing secret.
+ */
+export async function createComposioConnector(
+	input: CreateComposioConnectorInput,
+): Promise<ConnectorConfig> {
+	const preset = CONNECTOR_PRESETS.find((p) => p.composioToolkit === input.toolkit);
+	if (!preset) {
+		throw new PresetNotFoundError(`composio:${input.toolkit}`);
+	}
+
+	// Check if connector already exists (upsert for reconnect / double-click races)
+	const existing = await db.findByComposioToolkit(input.organizationId, input.toolkit);
+	if (existing) {
+		const row = await db.updateComposioReconnect(existing.id, input.organizationId, {
+			url: input.mcpUrl,
+			composioAccountId: input.connectedAccountId,
+		});
+		return toConnectorConfig(row ?? existing);
+	}
+
+	// Check if COMPOSIO_API_KEY secret already exists in this org
+	const existingSecrets = await db.listOrgSecretKeys(input.organizationId);
+	const composioKeyExists = existingSecrets.includes("COMPOSIO_API_KEY");
+
+	const apiKey = env.COMPOSIO_API_KEY;
+	if (!apiKey) {
+		throw new ConnectorValidationError("COMPOSIO_API_KEY is not configured");
+	}
+
+	if (!composioKeyExists) {
+		// Race-safe: ON CONFLICT DO NOTHING if another flow already created it
+		let encryptedValue: string;
+		try {
+			encryptedValue = encrypt(apiKey, getEncryptionKey());
+		} catch {
+			throw new ConnectorValidationError("Encryption not configured");
+		}
+
+		await db.ensureOrgSecret({
+			organizationId: input.organizationId,
+			key: "COMPOSIO_API_KEY",
+			encryptedValue,
+			description: "Composio API key (auto-created for OAuth integrations)",
+			createdBy: input.createdBy,
+		});
+	}
+
+	// Create connector (secret is guaranteed to exist at this point)
+	const row = await db.create({
+		organizationId: input.organizationId,
+		name: preset.defaults.name,
+		transport: "remote_http",
+		url: input.mcpUrl,
+		auth: { type: "custom_header", secretKey: "COMPOSIO_API_KEY", headerName: "x-api-key" },
+		riskPolicy: preset.defaults.riskPolicy,
+		enabled: true,
+		createdBy: input.createdBy,
+		composioToolkit: input.toolkit,
+		composioAccountId: input.connectedAccountId,
+	});
+	return toConnectorConfig(row);
+}
+
+/**
+ * Disconnect a Composio-managed connector.
+ * Deletes the Composio connected account (best-effort) and removes the connector row.
+ */
+export async function disconnectComposioConnector(
+	id: string,
+	organizationId: string,
+): Promise<boolean> {
+	const row = await db.findByIdAndOrg(id, organizationId);
+	if (!row) return false;
+
+	if (!row.composioToolkit) {
+		throw new ConnectorValidationError(
+			"This connector is not Composio-managed. Use deleteConnector instead.",
+		);
+	}
+
+	// Best-effort Composio account cleanup
+	if (row.composioAccountId && env.COMPOSIO_API_KEY) {
+		try {
+			const config: composio.ComposioClientConfig = {
+				apiKey: env.COMPOSIO_API_KEY,
+				baseUrl: env.COMPOSIO_BASE_URL,
+			};
+			await composio.deleteConnectedAccount(config, row.composioAccountId);
+		} catch {
+			// Best-effort — deleteConnectedAccount already logs internally
+		}
+	}
+
+	return db.deleteById(id, organizationId);
 }
 
 // ============================================

@@ -9,11 +9,13 @@ import { isEmailEnabled, sendIntegrationRequestEmail } from "@/lib/infra/email";
 import { logger } from "@/lib/infra/logger";
 import { sendSlackConnectInvite } from "@/lib/integrations/slack";
 import { ORPCError } from "@orpc/server";
+import { env } from "@proliferate/environment/server";
 import { connectors, integrations } from "@proliferate/services";
 import {
 	ConnectorAuthSchema,
 	ConnectorConfigSchema,
 	ConnectorRiskPolicySchema,
+	getConnectorPresetByKey,
 } from "@proliferate/shared/connectors";
 import {
 	GitHubStatusSchema,
@@ -542,6 +544,17 @@ export const integrationsRouter = {
 			} catch (err) {
 				throwAsORPC(err);
 			}
+
+			// Block piggybacking on the platform Composio key via generic connector creation
+			const preset = getConnectorPresetByKey(input.presetKey);
+			const effectiveSecretKey = input.secretKey || preset?.recommendedSecretKey;
+			if (effectiveSecretKey === "COMPOSIO_API_KEY") {
+				throw new ORPCError("BAD_REQUEST", {
+					message:
+						"COMPOSIO_API_KEY is reserved for managed Composio connectors. Use the Composio OAuth flow instead.",
+				});
+			}
+
 			try {
 				return await connectors.createConnectorWithSecret({
 					organizationId: context.orgId,
@@ -585,6 +598,14 @@ export const integrationsRouter = {
 			} catch (err) {
 				throwAsORPC(err);
 			}
+
+			// Block piggybacking on the platform Composio key via generic connector creation
+			if (input.auth.secretKey === "COMPOSIO_API_KEY") {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "COMPOSIO_API_KEY is reserved for Composio-managed connectors",
+				});
+			}
+
 			const connector = await connectors.createConnector({
 				organizationId: context.orgId,
 				name: input.name,
@@ -619,6 +640,14 @@ export const integrationsRouter = {
 			} catch (err) {
 				throwAsORPC(err);
 			}
+
+			// Block piggybacking on the platform Composio key via connector update
+			if (input.auth?.secretKey === "COMPOSIO_API_KEY") {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "COMPOSIO_API_KEY is reserved for Composio-managed connectors",
+				});
+			}
+
 			const connector = await connectors.updateConnector(input.id, context.orgId, {
 				name: input.name,
 				url: input.url,
@@ -634,6 +663,7 @@ export const integrationsRouter = {
 
 	/**
 	 * Delete an MCP connector.
+	 * Rejects Composio-managed connectors — use disconnectComposioConnector instead.
 	 */
 	deleteConnector: orgProcedure
 		.input(z.object({ id: z.string().uuid() }))
@@ -644,6 +674,15 @@ export const integrationsRouter = {
 			} catch (err) {
 				throwAsORPC(err);
 			}
+
+			// Guard: prevent deleting Composio-managed connectors via generic path
+			const connector = await connectors.getConnector(input.id, context.orgId);
+			if (connector && connectors.isComposioManaged(connector)) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "Use disconnectComposioConnector to remove Composio-managed connectors",
+				});
+			}
+
 			const deleted = await connectors.deleteConnector(input.id, context.orgId);
 			if (!deleted) {
 				throw new ORPCError("NOT_FOUND", { message: "Connector not found" });
@@ -780,6 +819,72 @@ export const integrationsRouter = {
 			}
 			const members = await integrations.listSlackMembers(input.installationId);
 			return { members };
+		}),
+
+	// ----------------------------------------
+	// Composio endpoints
+	// ----------------------------------------
+
+	/**
+	 * Check if Composio is available (COMPOSIO_API_KEY is set).
+	 */
+	composioAvailable: orgProcedure.output(z.object({ available: z.boolean() })).handler(async () => {
+		return { available: !!env.COMPOSIO_API_KEY };
+	}),
+
+	/**
+	 * Get Composio connection status for all toolkits.
+	 */
+	composioConnectionStatus: orgProcedure
+		.output(
+			z.object({
+				connected: z.record(
+					z.string(),
+					z.object({
+						connectorId: z.string(),
+						connectedBy: z.string().nullable(),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ context }) => {
+			const composioConnectors = await connectors.listComposioConnectors(context.orgId);
+			const connected: Record<string, { connectorId: string; connectedBy: string | null }> = {};
+			for (const c of composioConnectors) {
+				if (c.composioToolkit) {
+					connected[c.composioToolkit] = {
+						connectorId: c.id,
+						connectedBy: null, // Could be enriched with user lookup if needed
+					};
+				}
+			}
+			return { connected };
+		}),
+
+	/**
+	 * Disconnect a Composio-managed connector.
+	 */
+	disconnectComposioConnector: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			try {
+				await integrations.assertIntegrationAdmin(context.user.id, context.orgId);
+			} catch (err) {
+				throwAsORPC(err);
+			}
+			try {
+				const deleted = await connectors.disconnectComposioConnector(input.id, context.orgId);
+				if (!deleted) {
+					throw new ORPCError("NOT_FOUND", { message: "Connector not found" });
+				}
+				return { success: true };
+			} catch (err) {
+				if (err instanceof connectors.ConnectorValidationError) {
+					throw new ORPCError("BAD_REQUEST", { message: err.message });
+				}
+				throw err;
+			}
 		}),
 
 	/**

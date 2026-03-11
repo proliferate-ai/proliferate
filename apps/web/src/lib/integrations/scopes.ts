@@ -4,7 +4,7 @@ import type { IntegrationScopeMeta } from "@/config/integration-scopes";
 
 interface IntegrationScopeInput {
 	key: string;
-	type: "oauth" | "slack" | "mcp-preset" | "custom-mcp" | "direct";
+	type: "oauth" | "slack" | "mcp-preset" | "custom-mcp" | "direct" | "composio-oauth";
 	category: IntegrationCategory;
 }
 
@@ -18,7 +18,11 @@ export function getIntegrationScopeMeta(input: IntegrationScopeInput): Integrati
 		};
 	}
 
-	if (input.type === "mcp-preset" || input.type === "custom-mcp") {
+	if (
+		input.type === "mcp-preset" ||
+		input.type === "custom-mcp" ||
+		input.type === "composio-oauth"
+	) {
 		return {
 			label: "Org scope",
 			description: "Only admins can set this up for the organization.",

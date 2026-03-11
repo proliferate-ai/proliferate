@@ -24,7 +24,7 @@ export interface CatalogEntry {
 	name: string;
 	description: string;
 	category: IntegrationCategory;
-	type: "oauth" | "slack" | "mcp-preset" | "custom-mcp" | "direct";
+	type: "oauth" | "slack" | "mcp-preset" | "custom-mcp" | "direct" | "composio-oauth";
 	provider?: Provider;
 	presetKey?: string;
 }
@@ -159,7 +159,8 @@ export function IntegrationPickerDialog({
 											>
 												<div className="relative">
 													<div className="w-8 h-8 rounded-lg border border-border bg-background flex items-center justify-center p-1 shrink-0">
-														{entry.type === "mcp-preset" && entry.presetKey ? (
+														{(entry.type === "composio-oauth" || entry.type === "mcp-preset") &&
+														entry.presetKey ? (
 															<ConnectorIcon presetKey={entry.presetKey} size="md" />
 														) : entry.provider ? (
 															<ProviderIcon provider={entry.provider} size="md" />

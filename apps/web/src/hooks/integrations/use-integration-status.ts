@@ -3,12 +3,15 @@
 import type { CatalogEntry } from "@/components/integrations/integration-picker-dialog";
 import type { Provider } from "@/components/integrations/provider-icon";
 import { INTEGRATION_CATALOG } from "@/config/integrations";
+import type { ConnectorConfig } from "@proliferate/shared";
+import { getConnectorPresetByKey } from "@proliferate/shared";
 import type { IntegrationWithCreator } from "@proliferate/shared/contracts/integrations";
 import { useCallback, useMemo } from "react";
 
 interface UseIntegrationStatusOptions {
 	integrationsByProvider: Record<Provider, IntegrationWithCreator[]>;
 	allIntegrations?: IntegrationWithCreator[];
+	connectors?: ConnectorConfig[];
 	slackStatus:
 		| {
 				connected: boolean;
@@ -18,15 +21,18 @@ interface UseIntegrationStatusOptions {
 		| undefined;
 	loadingProvider: Provider | null;
 	slackDisconnectIsPending: boolean;
+	composioDisconnectingId?: string | null;
 	searchQuery: string;
 }
 
 export function useIntegrationStatus({
 	integrationsByProvider,
 	allIntegrations,
+	connectors,
 	slackStatus,
 	loadingProvider,
 	slackDisconnectIsPending,
+	composioDisconnectingId,
 	searchQuery,
 }: UseIntegrationStatusOptions) {
 	const getConnectionStatus = useCallback(
@@ -40,13 +46,22 @@ export function useIntegrationStatus({
 					return (allIntegrations ?? []).some(
 						(i) => i.integration_id === entry.key && i.status === "active",
 					);
+				case "composio-oauth": {
+					const preset = entry.presetKey ? getConnectorPresetByKey(entry.presetKey) : undefined;
+					const connector = preset?.composioToolkit
+						? (connectors ?? []).find(
+								(c) => c.composioToolkit === preset.composioToolkit && c.enabled,
+							)
+						: undefined;
+					return !!connector;
+				}
 				case "mcp-preset":
 					return false;
 				default:
 					return false;
 			}
 		},
-		[integrationsByProvider, slackStatus, allIntegrations],
+		[integrationsByProvider, slackStatus, allIntegrations, connectors],
 	);
 
 	const getLoadingStatus = useCallback(
@@ -56,13 +71,21 @@ export function useIntegrationStatus({
 					return loadingProvider === entry.provider;
 				case "slack":
 					return slackDisconnectIsPending;
+				case "composio-oauth": {
+					if (!composioDisconnectingId) return false;
+					const preset = entry.presetKey ? getConnectorPresetByKey(entry.presetKey) : undefined;
+					const connector = preset?.composioToolkit
+						? (connectors ?? []).find((c) => c.composioToolkit === preset.composioToolkit)
+						: undefined;
+					return connector?.id === composioDisconnectingId;
+				}
 				case "mcp-preset":
 					return false;
 				default:
 					return false;
 			}
 		},
-		[loadingProvider, slackDisconnectIsPending],
+		[loadingProvider, slackDisconnectIsPending, composioDisconnectingId, connectors],
 	);
 
 	const getConnectedMeta = useCallback(
@@ -83,9 +106,18 @@ export function useIntegrationStatus({
 				);
 				return match?.creator?.name || match?.display_name || null;
 			}
+			if (entry.type === "composio-oauth") {
+				const preset = entry.presetKey ? getConnectorPresetByKey(entry.presetKey) : undefined;
+				const connector = preset?.composioToolkit
+					? (connectors ?? []).find(
+							(c) => c.composioToolkit === preset.composioToolkit && c.enabled,
+						)
+					: undefined;
+				return connector?.name || null;
+			}
 			return null;
 		},
-		[integrationsByProvider, slackStatus, allIntegrations],
+		[integrationsByProvider, slackStatus, allIntegrations, connectors],
 	);
 
 	const connectedEntries = useMemo(() => {
