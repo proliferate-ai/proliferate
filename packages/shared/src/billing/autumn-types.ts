@@ -244,5 +244,6 @@ export const TOP_UP_PACKS = [
 
 export type TopUpPackId = (typeof TOP_UP_PACKS)[number]["productId"];
 
-/** Default pack used for auto-recharge. */
-export const DEFAULT_AUTO_RECHARGE_PACK = TOP_UP_PACKS[1]; // Builder ($20/20cr)
+/** Default pack used for auto-recharge (Builder $20/20cr). */
+export const DEFAULT_AUTO_RECHARGE_PACK =
+	TOP_UP_PACKS.find((p) => p.productId === "topup_20") ?? TOP_UP_PACKS[0];

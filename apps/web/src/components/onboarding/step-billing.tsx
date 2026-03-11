@@ -13,12 +13,8 @@ interface StepBillingProps {
 export function StepBilling({ onComplete }: StepBillingProps) {
 	const startMutation = useMutation({
 		...orpc.onboarding.startTrial.mutationOptions(),
-		onSuccess: (result) => {
-			if (result.checkoutUrl) {
-				window.location.href = result.checkoutUrl;
-			} else {
-				onComplete();
-			}
+		onSuccess: () => {
+			onComplete();
 		},
 		onError: (err) => {
 			console.error("Failed to initialize free credits:", err);

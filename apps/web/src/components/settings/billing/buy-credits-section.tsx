@@ -18,12 +18,13 @@ import { useState } from "react";
 
 export function BuyCreditsSection() {
 	const [isOpen, setIsOpen] = useState(false);
-	const [selectedPackId, setSelectedPackId] = useState(TOP_UP_PACK_OPTIONS[1].packId);
+	const defaultPack =
+		TOP_UP_PACK_OPTIONS.find((p) => p.packId === "topup_20") ?? TOP_UP_PACK_OPTIONS[0];
+	const [selectedPackId, setSelectedPackId] = useState(defaultPack.packId);
 	const [error, setError] = useState<string | null>(null);
 	const buyCredits = useBuyCredits();
 
-	const selectedPack =
-		TOP_UP_PACK_OPTIONS.find((p) => p.packId === selectedPackId) ?? TOP_UP_PACK_OPTIONS[1];
+	const selectedPack = TOP_UP_PACK_OPTIONS.find((p) => p.packId === selectedPackId) ?? defaultPack;
 
 	const handleBuyCredits = async () => {
 		setError(null);
