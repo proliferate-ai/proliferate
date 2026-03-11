@@ -390,6 +390,24 @@ export const sessionsRouter = {
 		}),
 
 	/**
+	 * Mark a session as done (sets outcome=completed, terminal state).
+	 */
+	markDone: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(z.object({ done: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			try {
+				await sessions.markSessionDone({
+					sessionId: input.id,
+					organizationId: context.orgId,
+				});
+				return { done: true };
+			} catch (err) {
+				throwMappedSessionError(err, "Failed to mark session as done");
+			}
+		}),
+
+	/**
 	 * Soft-delete a session (K6).
 	 */
 	softDelete: orgProcedure

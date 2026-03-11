@@ -28,6 +28,7 @@ import { useOverallWorkState } from "@/hooks/sessions/use-overall-work-state";
 import {
 	useArchiveSession,
 	useDeleteSession,
+	useMarkSessionDone,
 	usePrefetchSession,
 	useRenameSession,
 	useSessionNotificationSubscription,
@@ -39,7 +40,15 @@ import { cn } from "@/lib/display/utils";
 import type { PendingRunSummary } from "@proliferate/shared/contracts/automations";
 import type { Session } from "@proliferate/shared/contracts/sessions";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Archive, Bell, BellOff, GitPullRequestArrow, Settings, Terminal } from "lucide-react";
+import {
+	Archive,
+	Bell,
+	BellOff,
+	CheckCircle,
+	GitPullRequestArrow,
+	Settings,
+	Terminal,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -204,6 +213,7 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 	const renameSession = useRenameSession();
 	const deleteSession = useDeleteSession();
 	const archiveSession = useArchiveSession();
+	const markDone = useMarkSessionDone();
 
 	const sandboxState =
 		typeof session.status === "object" && session.status !== null
@@ -395,6 +405,24 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 												},
 												disabled: !hasSlack,
 												description: !hasSlack ? "Connect Slack in Settings" : undefined,
+											},
+										]
+									: []),
+								...(overallWorkState !== "done"
+									? [
+											{
+												label: "Mark as done",
+												icon: <CheckCircle className="h-4 w-4" />,
+												onClick: async () => {
+													try {
+														await markDone.mutateAsync(session.id);
+														toast.success("Session marked as done");
+													} catch (err) {
+														toast.error(
+															err instanceof Error ? err.message : "Failed to mark as done",
+														);
+													}
+												},
 											},
 										]
 									: []),

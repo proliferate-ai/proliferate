@@ -1195,6 +1195,21 @@ export async function unarchiveSessionForUser(input: {
 	await sessionsDb.unarchiveSessionForUser(input);
 }
 
+export async function markSessionDone(input: {
+	sessionId: string;
+	organizationId: string;
+}): Promise<void> {
+	const session = await sessionsDb.findSessionById(input.sessionId, input.organizationId);
+	if (!session) {
+		throw new SessionNotFoundError(input.sessionId);
+	}
+	await sessionsDb.updateSession(input.sessionId, {
+		outcome: "completed",
+		terminalState: "completed",
+		endedAt: new Date().toISOString(),
+	});
+}
+
 // ============================================
 // K7: Follow-up — send back to coworker
 // ============================================

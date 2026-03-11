@@ -42,12 +42,11 @@ export function OnboardPage() {
 	useEffect(() => {
 		if (!existingSetupSession?.id) return;
 		const isActive =
-			existingSetupSession.status === "starting" ||
-			existingSetupSession.status === "running" ||
-			(typeof existingSetupSession.status === "object" &&
-				existingSetupSession.status?.sandboxState !== "stopped");
+			!existingSetupSession.terminalState &&
+			(existingSetupSession.sandboxState === "running" ||
+				existingSetupSession.sandboxState === "provisioning");
 		if (isActive) {
-			router.replace(`/workspace/${existingSetupSession.id}`);
+			router.replace(`/session/${existingSetupSession.id}`);
 		}
 	}, [existingSetupSession, router]);
 
