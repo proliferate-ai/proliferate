@@ -149,6 +149,7 @@ export function CodingSession({
 		setPanelSide,
 		panelCollapsed,
 		togglePanelCollapsed,
+		setPanelCollapsed,
 	} = usePreviewPanelStore();
 	const [viewPickerOpen, setViewPickerOpen] = useState(false);
 	const [isPanelDragging, setIsPanelDragging] = useState(false);
@@ -201,6 +202,15 @@ export function CodingSession({
 	// G9: Manager sessions use a simplified panel set
 	const isManagerSession = sessionData?.sessionType === "manager";
 	const basePanelTabs = isManagerSession ? MANAGER_PANEL_TABS : PANEL_TABS;
+
+	// Auto-expand panel and open Configure for manager/coworker sessions
+	const managerPanelInitRef = useRef(false);
+	useEffect(() => {
+		if (!isManagerSession || managerPanelInitRef.current) return;
+		managerPanelInitRef.current = true;
+		if (panelCollapsed) setPanelCollapsed(false);
+		if (mode.type === "none") togglePanel("configure");
+	}, [isManagerSession, panelCollapsed, setPanelCollapsed, mode.type, togglePanel]);
 
 	// Build panel tabs — prepend investigation tab when runId is present
 	const effectivePanelTabs = runId ? [INVESTIGATION_TAB, ...basePanelTabs] : basePanelTabs;
@@ -369,7 +379,7 @@ export function CodingSession({
 	const panelViewPicker = (
 		<div className="flex items-center gap-0.5">
 			{pinnedTabs.map((tabType) => {
-				const tab = PANEL_TABS.find((t) => t.type === tabType);
+				const tab = effectivePanelTabs.find((t) => t.type === tabType);
 				if (!tab) return null;
 				const isActive = activeType === tabType;
 				const previewAvailable = Boolean(previewUrl || (mode.type === "url" ? mode.url : null));
