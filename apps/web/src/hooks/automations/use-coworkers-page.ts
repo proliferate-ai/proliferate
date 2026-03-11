@@ -155,7 +155,7 @@ export function useCoworkersPage() {
 			});
 			setPickerOpen(false);
 			startTransition(() => {
-				router.push(`/workspace/${result.worker.managerSessionId}`);
+				router.push(`/workspace/${result.managerSessionId}`);
 			});
 		} catch (err) {
 			setCreateError(

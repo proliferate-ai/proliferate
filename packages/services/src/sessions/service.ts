@@ -96,6 +96,7 @@ export async function listSessionsEnriched(
 		excludeSetup: options?.excludeSetup,
 		excludeAutomation: options?.excludeAutomation,
 		createdBy: options?.createdBy,
+		sortBy: options?.sortBy,
 	});
 	return rows.map((row) => toSession(row));
 }

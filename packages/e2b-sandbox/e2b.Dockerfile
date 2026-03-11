@@ -56,7 +56,9 @@ RUN OVSCODE_VERSION="1.106.3" \
     && rm /tmp/ovscode.tar.gz
 
 # Install OpenCode CLI + sandbox-mcp
-RUN npm install -g opencode-ai@latest proliferate-sandbox-mcp@0.1.19
+COPY proliferate-sandbox-mcp.tgz /tmp/proliferate-sandbox-mcp.tgz
+RUN npm install -g opencode-ai@latest /tmp/proliferate-sandbox-mcp.tgz \
+    && rm /tmp/proliferate-sandbox-mcp.tgz
 
 # Install sandbox-daemon (bundled CJS — provides FS, PTY, ports, health endpoints)
 # Built via: pnpm --filter @proliferate/sandbox-daemon bundle

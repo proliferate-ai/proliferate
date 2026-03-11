@@ -1,3 +1,4 @@
 .env
 sandbox-daemon.cjs
 sandbox-memory.cjs
+proliferate-sandbox-mcp.tgz

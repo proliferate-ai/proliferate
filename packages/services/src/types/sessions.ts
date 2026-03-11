@@ -123,6 +123,7 @@ export interface ListSessionsOptions {
 	createdBy?: string;
 	userId?: string;
 	includeArchived?: boolean;
+	sortBy?: "priority" | "recency";
 }
 
 export interface SessionStatus {
