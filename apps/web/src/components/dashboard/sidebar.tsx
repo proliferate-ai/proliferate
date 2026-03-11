@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Text } from "@/components/ui/text";
 import { useWorkers } from "@/hooks/automations/use-workers";
+import { useBillingState } from "@/hooks/org/use-billing";
 import { useSessions } from "@/hooks/sessions/use-sessions";
 import { useSignOut } from "@/hooks/ui/use-sign-out";
 import { useSession } from "@/lib/auth/client";
@@ -27,6 +28,7 @@ import {
 	Building2,
 	ChevronDown,
 	ChevronRight,
+	Coins,
 	CreditCard,
 	FolderGit2,
 	Home,
@@ -41,6 +43,7 @@ import {
 	X,
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { SearchTrigger } from "./command-search";
@@ -264,6 +267,8 @@ export function SidebarShell({
 	const { theme, resolvedTheme, setTheme } = useTheme();
 	const [userMenuOpen, setUserMenuOpen] = useState(false);
 
+	const billing = useBillingState();
+
 	// Fetch Slack status for support popup
 	const { toggleSidebar, setCommandSearchOpen } = useDashboardStore();
 
@@ -335,6 +340,19 @@ export function SidebarShell({
 
 			{/* Footer */}
 			<div className="border-t border-sidebar-border px-3 py-3 flex flex-col gap-2">
+				{/* Credits */}
+				{billing.isLoaded && (
+					<Link
+						href="/settings/billing"
+						className="flex items-center justify-center gap-2 w-full h-8 rounded-lg text-sm font-medium border border-border/60 bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted hover:border-border"
+					>
+						<Coins className="h-4 w-4" />
+						<span>
+							{billing.creditBalance.toFixed(1)} credit
+							{billing.creditBalance !== 1 ? "s" : ""}
+						</span>
+					</Link>
+				)}
 				{/* Support - Intercom if available, docs fallback */}
 				<Button
 					type="button"

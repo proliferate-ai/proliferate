@@ -14,10 +14,8 @@ export function useBilling() {
 	return useQuery({
 		...orpc.billing.getInfo.queryOptions({ input: {} }),
 		enabled: billingEnabled,
-		// Refetch every 5 minutes to keep credit balance fresh
-		staleTime: 5 * 60 * 1000,
-		// Don't refetch on window focus for billing data
-		refetchOnWindowFocus: false,
+		staleTime: 30_000,
+		refetchInterval: 30_000,
 	});
 }
 
@@ -72,7 +70,7 @@ export function useBillingState(): BillingState {
 		};
 	}
 
-	const creditBalance = Math.round(data.credits.balance);
+	const creditBalance = data.credits.balance;
 	const hasCredits = creditBalance > 0;
 	const isFreeState = data.state.billingState === "free";
 	// Consider "near limit" when below 2% of included credits or < 1 credit
