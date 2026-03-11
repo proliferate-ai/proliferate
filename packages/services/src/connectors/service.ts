@@ -426,9 +426,8 @@ export async function createComposioConnector(
 	const existing = await db.findByComposioToolkit(input.organizationId, input.toolkit);
 	if (existing) {
 		// Atomic update: url, enabled, and composioAccountId in one write
-		const { getDb } = await import("../db/client");
+		const { getDb, orgConnectors } = await import("../db/client");
 		const { eq, and } = await import("drizzle-orm");
-		const { orgConnectors } = await import("../db/client");
 		const [row] = await getDb()
 			.update(orgConnectors)
 			.set({

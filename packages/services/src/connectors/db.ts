@@ -4,7 +4,7 @@
  * All connector reads/writes go through this module.
  */
 
-import { and, eq, getDb, isNull, orgConnectors, secrets } from "../db/client";
+import { and, eq, getDb, isNotNull, isNull, orgConnectors, secrets } from "../db/client";
 
 // ============================================
 // Types
@@ -140,7 +140,6 @@ export async function findByComposioToolkit(
  */
 export async function listComposioByOrg(organizationId: string): Promise<OrgConnectorRow[]> {
 	const db = getDb();
-	const { isNotNull } = await import("drizzle-orm");
 	return db.query.orgConnectors.findMany({
 		where: and(
 			eq(orgConnectors.organizationId, organizationId),
