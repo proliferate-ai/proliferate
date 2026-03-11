@@ -22,23 +22,25 @@ export function CoworkerConfigurePanel({ workerId }: CoworkerConfigurePanelProps
 	}
 
 	return (
-		<WorkerSettingsTab
-			worker={{
-				id: worker.id,
-				name: worker.name,
-				systemPrompt: worker.systemPrompt,
-				status: worker.status,
-				modelId: worker.modelId,
-				capabilities: worker.capabilities ?? [],
-				managerSessionId: worker.managerSessionId ?? null,
-				slackChannelId: worker.slackChannelId ?? null,
-				slackInstallationId: worker.slackInstallationId ?? null,
-			}}
-			onUpdate={actions.handleUpdate}
-			onPause={actions.handlePause}
-			onResume={actions.handleResume}
-			onDelete={actions.handleDelete}
-			isUpdating={actions.isUpdating}
-		/>
+		<div className="h-full overflow-y-auto p-4">
+			<WorkerSettingsTab
+				worker={{
+					id: worker.id,
+					name: worker.name,
+					systemPrompt: worker.systemPrompt,
+					status: worker.status,
+					modelId: worker.modelId,
+					capabilities: worker.capabilities ?? [],
+					managerSessionId: worker.managerSessionId ?? null,
+					slackChannelId: worker.slackChannelId ?? null,
+					slackInstallationId: worker.slackInstallationId ?? null,
+				}}
+				onUpdate={actions.handleUpdate}
+				onPause={actions.handlePause}
+				onResume={actions.handleResume}
+				onDelete={actions.handleDelete}
+				isUpdating={actions.isUpdating}
+			/>
+		</div>
 	);
 }
