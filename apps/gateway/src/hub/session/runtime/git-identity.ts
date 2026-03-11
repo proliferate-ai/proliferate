@@ -42,6 +42,10 @@ export async function resolveGitIdentity(
 		if (!user) {
 			return null;
 		}
+		// Prefer explicit git identity override when configured
+		if (user.gitName || user.gitEmail) {
+			return buildGitIdentity(user.gitName ?? user.name, user.gitEmail ?? user.email);
+		}
 		return buildGitIdentity(user.name, user.email);
 	} catch (err) {
 		logger.warn({ err, userId }, "Failed to resolve git identity");

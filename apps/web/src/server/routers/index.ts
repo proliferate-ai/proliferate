@@ -16,6 +16,7 @@ import { intercomRouter } from "./intercom";
 import { notificationsRouter } from "./notifications";
 import { onboardingRouter } from "./onboarding";
 import { orgsRouter } from "./orgs";
+import { profileRouter } from "./profile";
 import { reposRouter } from "./repos";
 import { schedulesRouter } from "./schedules";
 import { secretFilesRouter } from "./secret-files";
@@ -37,6 +38,7 @@ export const appRouter = {
 	notifications: notificationsRouter,
 	onboarding: onboardingRouter,
 	orgs: orgsRouter,
+	profile: profileRouter,
 	configurations: configurationsRouter,
 	repos: reposRouter,
 	schedules: schedulesRouter,

@@ -55,6 +55,8 @@ export const user = pgTable(
 		email: text().notNull(),
 		emailVerified: boolean().notNull(),
 		image: text(),
+		gitName: text("git_name"),
+		gitEmail: text("git_email"),
 		createdAt: timestamp({ withTimezone: true, mode: "date" })
 			.default(sql`CURRENT_TIMESTAMP`)
 			.notNull(),

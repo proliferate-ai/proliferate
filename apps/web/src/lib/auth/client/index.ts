@@ -31,4 +31,6 @@ export const {
 	useActiveOrganization,
 	useListOrganizations,
 	sendVerificationEmail,
+	linkSocial,
+	listAccounts,
 } = authClient;
