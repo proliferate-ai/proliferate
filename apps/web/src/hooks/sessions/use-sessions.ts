@@ -68,8 +68,6 @@ export function useCreateSession() {
 	const mutation = useMutation({
 		...orpc.sessions.create.mutationOptions(),
 		onSuccess: (result, variables) => {
-			queryClient.invalidateQueries({ queryKey: orpc.sessions.list.key() });
-
 			// Seed the session cache so the detail page renders instantly.
 			// This is partial — TanStack Query will background-refetch the full data.
 			const partialSession: Session = {
