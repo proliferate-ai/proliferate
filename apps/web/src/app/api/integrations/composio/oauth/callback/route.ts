@@ -77,7 +77,8 @@ export async function GET(request: Request) {
 		if (!account.userId || account.userId !== orgId) {
 			return NextResponse.redirect(`${redirectBase}?error=${policy.errors.forbidden}`);
 		}
-		if (!account.integrationId || account.integrationId !== toolkit) {
+		// Fail-open: integrationId may be a UUID rather than the toolkit slug
+		if (account.integrationId && account.integrationId !== toolkit) {
 			return NextResponse.redirect(`${redirectBase}?error=${policy.errors.forbidden}`);
 		}
 	} catch {

@@ -24,7 +24,8 @@ export function useDisconnectComposioConnector() {
 			return orpc.integrations.disconnectComposioConnector.call({ id });
 		},
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["integrations"] });
+			queryClient.invalidateQueries({ queryKey: orpc.integrations.listConnectors.key() });
+			queryClient.invalidateQueries({ queryKey: orpc.integrations.composioConnectionStatus.key() });
 		},
 	});
 }
