@@ -1205,8 +1205,8 @@ export async function markSessionDone(input: {
 	}
 	await sessionsDb.update(input.sessionId, {
 		outcome: "completed",
-		terminalState: "completed",
-		endedAt: new Date().toISOString(),
+		terminalState: "succeeded",
+		agentState: "done",
 	});
 }
 
