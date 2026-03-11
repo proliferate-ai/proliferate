@@ -1,21 +1,23 @@
 "use client";
 
+import { WorkerOrb } from "@/components/automations/worker-card";
 import { OpenCodeIcon } from "@/components/ui/icons";
 import { CREATION_MESSAGES, RESUME_MESSAGES } from "@/config/session-loading";
 import { cn } from "@/lib/display/utils";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-function PulseLoader() {
+function PulseLoader({ workerName }: { workerName?: string }) {
 	return (
 		<div className="relative flex items-center justify-center w-16 h-16">
-			{/* Outer ring — slow pulse */}
 			<span className="absolute inset-0 rounded-full border border-muted-foreground/10 animate-[ping_3s_cubic-bezier(0,0,0.2,1)_infinite]" />
-			{/* Middle ring — offset pulse */}
 			<span className="absolute inset-2 rounded-full border border-muted-foreground/15 animate-[ping_3s_cubic-bezier(0,0,0.2,1)_0.6s_infinite]" />
-			{/* Inner dot — gentle breathe */}
 			<span className="relative flex items-center justify-center w-8 h-8 rounded-full bg-muted/60 dark:bg-muted/40 animate-pulse">
-				<OpenCodeIcon className="h-4 w-4 text-muted-foreground" />
+				{workerName ? (
+					<WorkerOrb name={workerName} size={16} />
+				) : (
+					<OpenCodeIcon className="h-4 w-4 text-muted-foreground" />
+				)}
 			</span>
 		</div>
 	);
@@ -24,6 +26,7 @@ function PulseLoader() {
 interface SessionLoadingShellProps {
 	mode: "creating" | "resuming";
 	repoName?: string;
+	workerName?: string;
 	existingMessages?: Array<{
 		id: string;
 		role: "user" | "assistant";
@@ -36,6 +39,7 @@ interface SessionLoadingShellProps {
 export function SessionLoadingShell({
 	mode,
 	repoName,
+	workerName,
 	existingMessages,
 	initialPrompt,
 	showHeader = true,
@@ -121,7 +125,7 @@ export function SessionLoadingShell({
 						</div>
 					) : (
 						<div className="flex h-full flex-col items-center justify-center p-8 text-center gap-6">
-							<PulseLoader />
+							<PulseLoader workerName={workerName} />
 							<p
 								key={messageIndex}
 								className="text-[13px] text-muted-foreground animate-in fade-in duration-700"

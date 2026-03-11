@@ -26,6 +26,7 @@ import { OVERALL_WORK_STATE_DISPLAY, type OverallWorkStateDisplayConfig } from "
 import { useHasSlackInstallation } from "@/hooks/integrations/use-integrations";
 import { useOverallWorkState } from "@/hooks/sessions/use-overall-work-state";
 import {
+	useArchiveSession,
 	useDeleteSession,
 	usePrefetchSession,
 	useRenameSession,
@@ -38,7 +39,7 @@ import { cn } from "@/lib/display/utils";
 import type { PendingRunSummary } from "@proliferate/shared/contracts/automations";
 import type { Session } from "@proliferate/shared/contracts/sessions";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Bell, BellOff, GitPullRequestArrow, Settings, Terminal } from "lucide-react";
+import { Archive, Bell, BellOff, GitPullRequestArrow, Settings, Terminal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -202,6 +203,7 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 	const prefetchSession = usePrefetchSession();
 	const renameSession = useRenameSession();
 	const deleteSession = useDeleteSession();
+	const archiveSession = useArchiveSession();
 
 	const sandboxState =
 		typeof session.status === "object" && session.status !== null
@@ -362,8 +364,8 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 						<ItemActionsMenu
 							onRename={handleRename}
 							onDelete={() => setDeleteDialogOpen(true)}
-							customActions={
-								canSubscribe
+							customActions={[
+								...(canSubscribe
 									? [
 											{
 												label: isSubscribed ? "Notifications on" : "Notify me",
@@ -395,8 +397,20 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 												description: !hasSlack ? "Connect Slack in Settings" : undefined,
 											},
 										]
-									: undefined
-							}
+									: []),
+								{
+									label: "Archive",
+									icon: <Archive className="h-4 w-4" />,
+									onClick: async () => {
+										try {
+											await archiveSession.mutateAsync(session.id);
+											toast.success("Session archived");
+										} catch (err) {
+											toast.error(err instanceof Error ? err.message : "Failed to archive session");
+										}
+									},
+								},
+							]}
 							onOpenChange={setMenuOpen}
 						/>
 					</div>

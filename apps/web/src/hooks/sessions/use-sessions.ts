@@ -234,6 +234,23 @@ export function useDeleteSession() {
 	};
 }
 
+export function useArchiveSession() {
+	const queryClient = useQueryClient();
+
+	const mutation = useMutation({
+		...orpc.sessions.archive.mutationOptions(),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: orpc.sessions.list.key() });
+		},
+	});
+
+	return {
+		...mutation,
+		mutateAsync: async (id: string) => mutation.mutateAsync({ id }),
+		mutate: (id: string) => mutation.mutate({ id }),
+	};
+}
+
 export function useSessionStatus(id: string, enabled = true) {
 	return useQuery({
 		...orpc.sessions.status.queryOptions({ input: { id } }),

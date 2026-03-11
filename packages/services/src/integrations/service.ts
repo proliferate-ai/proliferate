@@ -1209,7 +1209,7 @@ export async function getSlackInstallationForNotifications(
 /**
  * Send a Slack DM to a user.
  * Opens a DM channel and posts a message with optional Block Kit blocks.
- * Returns `{ sent: true }` on success, or `{ sent: false, error }` on failure.
+ * Throws on failure — callers should catch if best-effort delivery is desired.
  */
 export async function sendSlackDm(
 	installationId: string,
@@ -1224,62 +1224,51 @@ export async function sendSlackDm(
 			url?: string;
 		};
 	}>,
-): Promise<{ sent: true } | { sent: false; error: string }> {
+): Promise<void> {
 	const encryptedToken = await integrationsDb.getSlackInstallationBotToken(installationId);
 	if (!encryptedToken) {
-		return { sent: false, error: "No bot token for installation" };
+		throw new Error("No bot token for installation");
 	}
 
 	const { decrypt, getEncryptionKey } = await import("@proliferate/shared/crypto");
 	const botToken = decrypt(encryptedToken, getEncryptionKey());
 
 	// Open DM channel
-	let dmChannelId: string;
-	try {
-		const openResponse = await fetch(`${SLACK_API_BASE}/conversations.open`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${botToken}`,
-			},
-			body: JSON.stringify({ users: slackUserId }),
-			signal: AbortSignal.timeout(SLACK_TIMEOUT_MS),
-		});
-		const openResult = (await openResponse.json()) as {
-			ok: boolean;
-			channel?: { id: string };
-			error?: string;
-		};
-		if (!openResult.ok || !openResult.channel?.id) {
-			return { sent: false, error: `conversations.open: ${openResult.error ?? "unknown"}` };
-		}
-		dmChannelId = openResult.channel.id;
-	} catch {
-		return { sent: false, error: "Failed to open Slack DM channel" };
+	const openResponse = await fetch(`${SLACK_API_BASE}/conversations.open`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${botToken}`,
+		},
+		body: JSON.stringify({ users: slackUserId }),
+		signal: AbortSignal.timeout(SLACK_TIMEOUT_MS),
+	});
+	const openResult = (await openResponse.json()) as {
+		ok: boolean;
+		channel?: { id: string };
+		error?: string;
+	};
+	if (!openResult.ok || !openResult.channel?.id) {
+		throw new Error(`conversations.open: ${openResult.error ?? "unknown"}`);
 	}
 
 	// Post message
-	try {
-		const postResponse = await fetch(`${SLACK_API_BASE}/chat.postMessage`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${botToken}`,
-			},
-			body: JSON.stringify({
-				channel: dmChannelId,
-				text,
-				...(blocks ? { blocks } : {}),
-			}),
-			signal: AbortSignal.timeout(SLACK_TIMEOUT_MS),
-		});
-		const postResult = (await postResponse.json()) as { ok: boolean; error?: string };
-		if (!postResult.ok) {
-			return { sent: false, error: `chat.postMessage: ${postResult.error ?? "unknown"}` };
-		}
-		return { sent: true };
-	} catch {
-		return { sent: false, error: "Failed to send Slack DM" };
+	const postResponse = await fetch(`${SLACK_API_BASE}/chat.postMessage`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${botToken}`,
+		},
+		body: JSON.stringify({
+			channel: openResult.channel.id,
+			text,
+			...(blocks ? { blocks } : {}),
+		}),
+		signal: AbortSignal.timeout(SLACK_TIMEOUT_MS),
+	});
+	const postResult = (await postResponse.json()) as { ok: boolean; error?: string };
+	if (!postResult.ok) {
+		throw new Error(`chat.postMessage: ${postResult.error ?? "unknown"}`);
 	}
 }
 

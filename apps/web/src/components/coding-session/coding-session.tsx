@@ -342,6 +342,7 @@ export function CodingSession({
 			<SessionLoadingShell
 				mode={isSessionCreating ? "creating" : "resuming"}
 				repoName={repoData?.githubRepoName || sessionData.repo?.githubRepoName}
+				workerName={sessionData.workerName ?? sessionData.automation?.name ?? undefined}
 				showHeader={false}
 			/>
 		) : (
