@@ -84,7 +84,9 @@ export function useIntegrationsPage() {
 			slackStatus,
 			loadingProvider,
 			slackDisconnectIsPending: slackDisconnect.isPending,
-			composioDisconnectIsPending: composioDisconnect.isPending,
+			composioDisconnectingId: composioDisconnect.isPending
+				? (composioDisconnect.variables ?? null)
+				: null,
 			searchQuery,
 		});
 

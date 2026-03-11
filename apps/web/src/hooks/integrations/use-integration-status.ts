@@ -21,7 +21,7 @@ interface UseIntegrationStatusOptions {
 		| undefined;
 	loadingProvider: Provider | null;
 	slackDisconnectIsPending: boolean;
-	composioDisconnectIsPending?: boolean;
+	composioDisconnectingId?: string | null;
 	searchQuery: string;
 }
 
@@ -32,7 +32,7 @@ export function useIntegrationStatus({
 	slackStatus,
 	loadingProvider,
 	slackDisconnectIsPending,
-	composioDisconnectIsPending,
+	composioDisconnectingId,
 	searchQuery,
 }: UseIntegrationStatusOptions) {
 	const getConnectionStatus = useCallback(
@@ -71,15 +71,21 @@ export function useIntegrationStatus({
 					return loadingProvider === entry.provider;
 				case "slack":
 					return slackDisconnectIsPending;
-				case "composio-oauth":
-					return composioDisconnectIsPending ?? false;
+				case "composio-oauth": {
+					if (!composioDisconnectingId) return false;
+					const preset = entry.presetKey ? getConnectorPresetByKey(entry.presetKey) : undefined;
+					const connector = preset?.composioToolkit
+						? (connectors ?? []).find((c) => c.composioToolkit === preset.composioToolkit)
+						: undefined;
+					return connector?.id === composioDisconnectingId;
+				}
 				case "mcp-preset":
 					return false;
 				default:
 					return false;
 			}
 		},
-		[loadingProvider, slackDisconnectIsPending, composioDisconnectIsPending],
+		[loadingProvider, slackDisconnectIsPending, composioDisconnectingId, connectors],
 	);
 
 	const getConnectedMeta = useCallback(
