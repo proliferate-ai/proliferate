@@ -273,6 +273,7 @@ export function CodingSession({
 				pendingApprovals,
 				slackThreadUrl: sessionData.slackThreadUrl,
 				workspaceOptions,
+				workerId: sessionData.workerId ?? null,
 			}
 		: undefined;
 

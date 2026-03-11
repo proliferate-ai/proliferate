@@ -3,23 +3,14 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusDot } from "@/components/ui/status-dot";
+import type { WorkerSession } from "@/config/coworkers";
 import { cn } from "@/lib/display/utils";
 import { formatRelativeTime } from "@/lib/display/utils";
 import { Search } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-export interface WorkerSession {
-	id: string;
-	title: string | null;
-	status: string;
-	repoId: string | null;
-	branchName: string | null;
-	agentState: string | null;
-	terminalState: string | null;
-	updatedAt: string;
-	startedAt: string | null;
-}
+export type { WorkerSession };
 
 type SessionFilter = "all" | "in_progress" | "completed" | "failed";
 

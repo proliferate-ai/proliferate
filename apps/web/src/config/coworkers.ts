@@ -71,3 +71,15 @@ export const ORB_PALETTES: [string, string, string, "nebula" | "glow" | "split"]
 	["#84CC16", "#22C55E", "#BBF7D0", "nebula"], // 10 lime-green
 	["#E11D48", "#BE185D", "#FBCFE8", "split"], // 11 crimson-rose
 ];
+
+export interface WorkerSession {
+	id: string;
+	title: string | null;
+	status: string;
+	repoId: string | null;
+	branchName: string | null;
+	agentState: string | null;
+	terminalState: string | null;
+	updatedAt: string;
+	startedAt: string | null;
+}
