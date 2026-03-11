@@ -2,11 +2,15 @@
 
 import { ModelSelector } from "@/components/automations/model-selector";
 import { WorkerOrb } from "@/components/automations/worker-card";
-import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
+import {
+	CapabilitiesBadges,
+	type IntegrationSummary,
+} from "@/components/dashboard/capabilities-badges";
+import type { Provider } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
-import { BlocksIcon, OpenCodeIcon } from "@/components/ui/icons";
+import { OpenCodeIcon } from "@/components/ui/icons";
+import { LoadingDots } from "@/components/ui/loading-dots";
 import { RoundIconActionButton } from "@/components/ui/round-icon-action-button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSessionAvailableActions } from "@/hooks/actions/use-actions";
 import { useCreateFollowUp } from "@/hooks/sessions/use-follow-up";
 import { cn } from "@/lib/display/utils";
@@ -17,20 +21,21 @@ import {
 	ThreadPrimitive,
 	useComposer,
 	useComposerRuntime,
+	useMessage,
 } from "@assistant-ui/react";
 import type { ActionApprovalRequestMessage } from "@proliferate/shared";
 import type { ModelId } from "@proliferate/shared";
 import type { Session } from "@proliferate/shared/contracts/sessions";
 import type { OverallWorkState } from "@proliferate/shared/sessions";
 import { ArrowUp, Camera, ChevronDown, ChevronRight, Loader2, Square } from "lucide-react";
-import Link from "next/link";
 import type { FC } from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { InboxTray } from "./inbox-tray";
 import { allToolUIs } from "./tool-ui/all-tool-uis";
 import { ProliferateToolCard } from "./tool-ui/proliferate-tool-card";
+import { ToolCallGroup } from "./tool-ui/tool-call-group";
 
 // Shared markdown components for consistent rendering
 interface MarkdownContentProps {
@@ -514,64 +519,23 @@ function getProviderForIntegration(integration: string): Provider | null {
 	return null;
 }
 
-const EnabledActionsStrip: FC<{ sessionId?: string; token?: string | null }> = ({
-	sessionId,
-	token,
-}) => {
+function useSessionIntegrationSummaries(
+	sessionId?: string,
+	token?: string | null,
+): IntegrationSummary[] {
 	const { data: integrations } = useSessionAvailableActions(sessionId ?? "", token ?? null);
-	const enabledIntegrations = integrations?.filter((entry) => entry.actions.length > 0) ?? [];
-	const enabledActionCount = enabledIntegrations.reduce(
-		(total, entry) => total + entry.actions.length,
-		0,
-	);
-
-	if (!sessionId || !token || enabledIntegrations.length === 0) {
-		return null;
-	}
-
-	const visibleIntegrations = enabledIntegrations.slice(0, 3);
-	const overflowCount = Math.max(enabledIntegrations.length - visibleIntegrations.length, 0);
-
-	return (
-		<TooltipProvider>
-			<div className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
-				<div className="flex items-center gap-2">
-					<div className="flex items-center -space-x-1">
-						{visibleIntegrations.map((entry) => {
-							const provider = getProviderForIntegration(entry.integration);
-							const tooltipText = `${entry.displayName}: ${entry.actions.length} actions enabled`;
-							return (
-								<Tooltip key={entry.integrationId}>
-									<TooltipTrigger asChild>
-										<div className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-foreground">
-											{provider ? (
-												<ProviderIcon provider={provider} size="sm" />
-											) : (
-												<BlocksIcon className="h-3.5 w-3.5" />
-											)}
-										</div>
-									</TooltipTrigger>
-									<TooltipContent>{tooltipText}</TooltipContent>
-								</Tooltip>
-							);
-						})}
-						{overflowCount > 0 && (
-							<div className="ml-1 flex h-6 items-center rounded-full border border-border bg-background px-2 text-[11px] text-muted-foreground">
-								+{overflowCount}
-							</div>
-						)}
-					</div>
-					<span className="text-xs text-muted-foreground">
-						{enabledActionCount} actions enabled
-					</span>
-				</div>
-				<Link href="/dashboard/integrations" className="text-xs text-primary hover:underline">
-					Manage actions
-				</Link>
-			</div>
-		</TooltipProvider>
-	);
-};
+	return useMemo(() => {
+		if (!integrations) return [];
+		return integrations
+			.filter((entry) => entry.actions.length > 0)
+			.map((entry) => ({
+				id: entry.integrationId,
+				displayName: entry.displayName,
+				detail: `${entry.actions.length} action${entry.actions.length !== 1 ? "s" : ""} enabled`,
+				provider: getProviderForIntegration(entry.integration),
+			}));
+	}, [integrations]);
+}
 
 const Composer: FC<ComposerProps> = ({ sessionState, sessionId, token }) => {
 	const composerRuntime = useComposerRuntime();
@@ -618,11 +582,11 @@ const Composer: FC<ComposerProps> = ({ sessionState, sessionId, token }) => {
 	};
 
 	const hasContent = useComposer((s) => !!s.text.trim());
+	const integrationSummaries = useSessionIntegrationSummaries(sessionId, token);
 
 	return (
 		<ComposerPrimitive.Root className="max-w-2xl mx-auto w-full">
 			{label && <p className="text-xs text-muted-foreground px-5 pb-1.5">{label}</p>}
-			<EnabledActionsStrip sessionId={sessionId} token={token} />
 
 			<div className="flex flex-col rounded-3xl border border-border bg-muted/40 dark:bg-card">
 				<ComposerPrimitive.Input
@@ -649,7 +613,12 @@ const Composer: FC<ComposerProps> = ({ sessionState, sessionId, token }) => {
 							onReasoningEffortChange={setReasoningEffort}
 						/>
 					</div>
-					<div className="flex items-center gap-0.5">
+					<div className="flex items-center gap-2">
+						<CapabilitiesBadges
+							mode={sessionState?.workerId ? "coworker" : "opencode"}
+							workerId={sessionState?.workerId ?? undefined}
+							integrationSummaries={integrationSummaries}
+						/>
 						{sessionState?.workerId && (
 							<Button
 								variant="ghost"
@@ -695,26 +664,128 @@ const UserMessage: FC = () => (
 	</MessagePrimitive.Root>
 );
 
-const AssistantMessage: FC = () => (
-	<MessagePrimitive.Root className="py-4 px-4">
-		<div className="max-w-2xl mx-auto min-w-0 text-sm">
-			<MessagePrimitive.Content
-				components={{
-					Text: ({ text }) => <MarkdownContent text={text} variant="assistant" />,
-					tools: { Fallback: ToolFallback },
-				}}
-			/>
-		</div>
-	</MessagePrimitive.Root>
-);
+const TOOL_LABELS: Record<string, string> = {
+	read: "Read file",
+	bash: "Bash",
+	edit: "Edit file",
+	write: "Write file",
+	glob: "Glob",
+	grep: "Grep",
+	todowrite: "Todo",
+	task: "Task",
+	webfetch: "Web fetch",
+	verify: "Verify",
+	save_snapshot: "Save snapshot",
+	save_service_commands: "Save service commands",
+	spawn_child_task: "Spawn child",
+};
 
-const ToolFallback: FC<{
-	toolName: string;
-	args: unknown;
+function getToolSummary(toolName: string, args: Record<string, unknown>): string {
+	const label = TOOL_LABELS[toolName] ?? toolName;
+	const path =
+		(args.filePath as string) ??
+		(args.file_path as string) ??
+		(args.path as string) ??
+		(args.glob_pattern as string) ??
+		(args.pattern as string);
+	const cmd = args.command as string | undefined;
+
+	if (cmd) {
+		const display = cmd.length > 50 ? `${cmd.slice(0, 47)}...` : cmd;
+		return `${label} (${display})`;
+	}
+	if (path) return `${label} (${path})`;
+	return label;
+}
+
+interface ContentPart {
+	type: string;
+	text?: string;
+	toolName?: string;
+	toolCallId?: string;
+	args?: Record<string, unknown>;
 	result?: unknown;
 	status?: { type: string };
-}> = ({ toolName, result, status }) => {
+}
+
+const AssistantMessage: FC = () => {
+	const message = useMessage();
+	const content = (message.content ?? []) as ContentPart[];
+	const isRunning = message.status?.type === "running";
+	const hasTextContent = content.some((p) => p.type === "text" && p.text?.trim());
+
+	const groups: Array<
+		{ type: "text"; part: ContentPart } | { type: "tools"; parts: ContentPart[] }
+	> = [];
+	for (const part of content) {
+		if (part.type === "tool-call") {
+			const lastGroup = groups[groups.length - 1];
+			if (lastGroup?.type === "tools") {
+				lastGroup.parts.push(part);
+			} else {
+				groups.push({ type: "tools", parts: [part] });
+			}
+		} else {
+			groups.push({ type: "text", part });
+		}
+	}
+
+	return (
+		<MessagePrimitive.Root className="py-4 px-4">
+			<div className="max-w-2xl mx-auto min-w-0 text-sm">
+				{groups.map((group, i) => {
+					if (group.type === "text") {
+						const text = group.part.text?.trim();
+						if (!text) return null;
+						return (
+							<div key={`text-${i}`} className="animate-in fade-in duration-300">
+								<MarkdownContent text={text} variant="assistant" />
+							</div>
+						);
+					}
+
+					const toolParts = group.parts;
+					const hasRunning = toolParts.some((p) => p.status?.type === "running");
+					const toolElements = toolParts.map((part) => (
+						<ToolCallPart
+							key={part.toolCallId ?? `tool-${i}`}
+							toolName={part.toolName ?? "tool"}
+							args={part.args ?? {}}
+							result={part.result}
+							status={part.status}
+						/>
+					));
+
+					return (
+						<ToolCallGroup key={`tools-${i}`} hasRunning={hasRunning}>
+							{toolElements}
+						</ToolCallGroup>
+					);
+				})}
+
+				{isRunning && !hasTextContent && content.length === 0 && (
+					<div className="py-2">
+						<LoadingDots size="sm" className="text-muted-foreground" />
+					</div>
+				)}
+			</div>
+		</MessagePrimitive.Root>
+	);
+};
+
+function ToolCallPart({
+	toolName,
+	args,
+	result,
+	status,
+}: {
+	toolName: string;
+	args: Record<string, unknown>;
+	result?: unknown;
+	status?: { type: string };
+}) {
 	const [expanded, setExpanded] = useState(false);
+	const summary = getToolSummary(toolName, args);
 	const hasResult = result !== undefined;
 	const resultString = hasResult
 		? typeof result === "string"
@@ -724,27 +795,30 @@ const ToolFallback: FC<{
 
 	return (
 		<ProliferateToolCard
-			label={toolName}
+			label={summary}
 			status={
 				status?.type === "running" ? "running" : status?.type === "error" ? "error" : "success"
 			}
 			errorMessage={typeof result === "string" && result.startsWith("Error") ? result : undefined}
 		>
-			<Button
-				type="button"
-				variant="ghost"
-				onClick={() => hasResult && setExpanded(!expanded)}
-				className="h-auto gap-1 p-0 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground"
-				disabled={!hasResult}
-			>
-				{expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-				<span>{expanded ? "Hide details" : "Show details"}</span>
-			</Button>
-			{expanded && resultString && (
-				<pre className="mt-1 max-h-40 overflow-auto rounded-lg border border-border/40 bg-muted/30 p-2 font-mono text-xs text-muted-foreground">
-					{resultString.slice(0, 3000)}
-				</pre>
+			{hasResult && (
+				<>
+					<Button
+						type="button"
+						variant="ghost"
+						onClick={() => setExpanded(!expanded)}
+						className="h-auto gap-1 p-0 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground"
+					>
+						{expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+						<span>{expanded ? "Hide" : "Details"}</span>
+					</Button>
+					{expanded && resultString && (
+						<pre className="mt-1 max-h-40 overflow-auto rounded-lg border border-border/40 bg-muted/30 p-2 font-mono text-xs text-muted-foreground">
+							{resultString.slice(0, 3000)}
+						</pre>
+					)}
+				</>
 			)}
 		</ProliferateToolCard>
 	);
-};
+}

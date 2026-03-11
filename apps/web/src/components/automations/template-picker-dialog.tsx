@@ -11,12 +11,12 @@ import { Input } from "@/components/ui/input";
 import {
 	TEMPLATE_CATEGORY_LABELS,
 	TEMPLATE_CATEGORY_ORDER,
-	TEMPLATE_ICON_MAP,
 	type TemplateCategory,
 } from "@/config/automations";
 import { cn } from "@/lib/display/utils";
-import { Bug, Loader2, Plus, Search } from "lucide-react";
+import { Loader2, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
+import { WorkerOrb } from "./worker-card";
 
 // ====================================================================
 // Types
@@ -114,7 +114,7 @@ export function TemplatePickerDialog({
 			<DialogContent className="max-w-[1100px] max-h-[75vh] p-0 gap-0 rounded-xl overflow-hidden">
 				{/* Header */}
 				<div className="px-6 py-4 border-b border-border shrink-0">
-					<h2 className="text-base font-semibold">New automation</h2>
+					<h2 className="text-base font-semibold">New coworker</h2>
 					{error && <p className="text-xs text-destructive mt-1">{error}</p>}
 				</div>
 
@@ -175,80 +175,75 @@ export function TemplatePickerDialog({
 
 						<div className="flex-1 overflow-y-auto px-4 pb-5">
 							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-								{/* Blank automation card — always first */}
-								<Button
+								{/* Blank card — always first */}
+								<button
 									type="button"
-									variant="outline"
 									disabled={isPending}
-									className="flex flex-col items-start p-4 pb-3 rounded-xl border-dashed border-border bg-card hover:border-foreground/20 text-left disabled:opacity-50 h-auto"
+									className="flex items-center gap-3.5 rounded-2xl p-3 hover:bg-muted/40 transition-colors text-left disabled:opacity-50 border border-dashed border-border"
 									onClick={onSelectBlank}
 								>
-									<div className="w-8 h-8 rounded-lg border border-border bg-background flex items-center justify-center shrink-0">
+									<div className="w-10 h-10 rounded-full bg-muted/60 flex items-center justify-center shrink-0">
 										<Plus className="h-4 w-4 text-muted-foreground" />
 									</div>
-									<div className="flex flex-col gap-1 mt-2 w-full">
-										<p className="text-sm font-semibold text-foreground">Blank automation</p>
-										<p className="text-xs text-muted-foreground line-clamp-2">
-											Start from scratch with an empty configuration.
+									<div className="min-w-0 flex-1">
+										<p className="text-sm font-medium text-foreground">Blank coworker</p>
+										<p className="text-xs text-muted-foreground mt-0.5 truncate">
+											Start from scratch
 										</p>
 									</div>
-								</Button>
+								</button>
 
 								{/* Template cards */}
 								{filteredTemplates.map((template) => {
 									const missing = getMissingIntegrations(template);
-									const Icon = TEMPLATE_ICON_MAP[template.icon] ?? Bug;
 
 									return (
-										<Button
+										<button
 											key={template.id}
 											type="button"
-											variant="outline"
 											disabled={isPending}
-											className="flex flex-col items-start p-4 pb-3 rounded-xl border-border bg-card hover:border-foreground/20 text-left disabled:opacity-50 h-auto"
+											className="flex items-center gap-3.5 rounded-2xl p-3 hover:bg-muted/40 transition-colors text-left disabled:opacity-50"
 											onClick={() => onSelectTemplate(template)}
 										>
-											<div className="w-8 h-8 rounded-lg border border-border bg-background flex items-center justify-center p-1 shrink-0">
-												<Icon className="h-5 w-5 text-muted-foreground" />
-											</div>
-											<div className="flex flex-col gap-1 mt-2 w-full">
-												<p className="text-sm font-semibold text-foreground">{template.name}</p>
-												<p className="text-xs text-muted-foreground line-clamp-2">
+											<WorkerOrb name={template.name} />
+											<div className="min-w-0 flex-1">
+												<p className="text-sm font-medium text-foreground truncate">
+													{template.name}
+												</p>
+												<p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
 													{template.description}
 												</p>
-											</div>
-
-											{/* Provider badges */}
-											<div className="flex flex-col gap-1.5 mt-2 w-full">
-												<div className="flex items-center gap-1.5">
-													{template.requiredIntegrations.map((req) => {
-														const isConnected = connectedProviders.has(req.provider);
-														return (
-															<div
-																key={req.provider}
-																className={cn(
-																	"flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px]",
-																	isConnected
-																		? "bg-muted/50 text-muted-foreground"
-																		: "border border-dashed border-border text-muted-foreground/50",
-																)}
-															>
-																<ProviderIcon
-																	provider={req.provider as Provider}
-																	size="sm"
-																	className={cn("h-3 w-3", !isConnected && "opacity-50")}
-																/>
-																{!isConnected && (
-																	<span className="text-[10px]">
-																		{getProviderDisplayName(req.provider as Provider)}
-																	</span>
-																)}
-															</div>
-														);
-													})}
-												</div>
+												{template.requiredIntegrations.length > 0 && (
+													<div className="flex items-center gap-1.5 mt-1">
+														{template.requiredIntegrations.map((req) => {
+															const isConnected = connectedProviders.has(req.provider);
+															return (
+																<div
+																	key={req.provider}
+																	className={cn(
+																		"flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px]",
+																		isConnected
+																			? "bg-muted/50 text-muted-foreground"
+																			: "border border-dashed border-border text-muted-foreground/50",
+																	)}
+																>
+																	<ProviderIcon
+																		provider={req.provider as Provider}
+																		size="sm"
+																		className={cn("h-3 w-3", !isConnected && "opacity-50")}
+																	/>
+																	{!isConnected && (
+																		<span className="text-[10px]">
+																			{getProviderDisplayName(req.provider as Provider)}
+																		</span>
+																	)}
+																</div>
+															);
+														})}
+													</div>
+												)}
 												{missing.length > 0 && (
-													<p className="text-[11px] text-muted-foreground/70">
+													<p className="text-[11px] text-muted-foreground/70 mt-0.5">
 														Requires{" "}
 														{missing
 															.map((m) => getProviderDisplayName(m.provider as Provider))
@@ -274,7 +269,7 @@ export function TemplatePickerDialog({
 													</p>
 												)}
 											</div>
-										</Button>
+										</button>
 									);
 								})}
 							</div>

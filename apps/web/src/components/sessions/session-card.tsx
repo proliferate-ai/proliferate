@@ -221,6 +221,7 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 
 	const { overallWorkState, needsUrgentAttention } = useOverallWorkState(session, pendingRun);
 	const config = OVERALL_WORK_STATE_DISPLAY[overallWorkState];
+	const isWorking = overallWorkState === "working";
 
 	const repoShortName = session.repo?.githubRepoName
 		? getRepoShortName(session.repo.githubRepoName)
@@ -284,6 +285,7 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 				className={cn(
 					"group flex items-center px-4 py-2.5 border-b border-border/50 hover:bg-muted/50 transition-colors text-sm cursor-pointer last:border-0",
 					isNew && "animate-in fade-in slide-in-from-top-2 duration-300 bg-primary/5",
+					isWorking && "bg-primary/[0.03] border-l-2 border-l-primary/40",
 				)}
 				onMouseEnter={() => prefetchSession(session.id)}
 				onClick={handleRowClick}

@@ -34,6 +34,7 @@ interface DashboardState {
 	sidebarOrganize: "by-project" | "chronological";
 	sidebarSort: "created" | "updated";
 	sidebarStatusFilter: "all" | "running" | "paused";
+	sidebarRecentsOpen: boolean;
 
 	// Actions
 	setSelectedRepo: (repoId: string | null) => void;
@@ -54,6 +55,7 @@ interface DashboardState {
 	setSidebarOrganize: (organize: "by-project" | "chronological") => void;
 	setSidebarSort: (sort: "created" | "updated") => void;
 	setSidebarStatusFilter: (filter: "all" | "running" | "paused") => void;
+	toggleSidebarRecents: () => void;
 	reset: () => void;
 }
 
@@ -78,6 +80,7 @@ export const useDashboardStore = create<DashboardState>()(
 			sidebarOrganize: "chronological",
 			sidebarSort: "updated",
 			sidebarStatusFilter: "all",
+			sidebarRecentsOpen: true,
 
 			// Actions
 			setSelectedRepo: (repoId) =>
@@ -130,6 +133,8 @@ export const useDashboardStore = create<DashboardState>()(
 			setSidebarOrganize: (organize) => set({ sidebarOrganize: organize }),
 			setSidebarSort: (sort) => set({ sidebarSort: sort }),
 			setSidebarStatusFilter: (filter) => set({ sidebarStatusFilter: filter }),
+			toggleSidebarRecents: () =>
+				set((state) => ({ sidebarRecentsOpen: !state.sidebarRecentsOpen })),
 
 			reset: () =>
 				set({
@@ -150,6 +155,7 @@ export const useDashboardStore = create<DashboardState>()(
 					sidebarOrganize: "chronological",
 					sidebarSort: "updated",
 					sidebarStatusFilter: "all",
+					sidebarRecentsOpen: true,
 				}),
 		}),
 		{
@@ -167,6 +173,7 @@ export const useDashboardStore = create<DashboardState>()(
 				sidebarOrganize: state.sidebarOrganize,
 				sidebarSort: state.sidebarSort,
 				sidebarStatusFilter: state.sidebarStatusFilter,
+				sidebarRecentsOpen: state.sidebarRecentsOpen,
 			}),
 		},
 	),

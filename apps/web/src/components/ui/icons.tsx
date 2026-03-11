@@ -968,23 +968,59 @@ export function SidebarCollapseIcon({ className }: IconProps) {
 	);
 }
 
-export function AutomationsIcon({ className }: IconProps) {
+export function SessionsGridIcon({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+			<circle cx="5.625" cy="5.625" r="3.125" stroke="currentColor" strokeWidth="1.5" />
+			<circle cx="5.625" cy="14.375" r="3.125" stroke="currentColor" strokeWidth="1.5" />
+			<circle cx="14.375" cy="5.625" r="3.125" stroke="currentColor" strokeWidth="1.5" />
+			<circle cx="14.375" cy="14.375" r="3.125" stroke="currentColor" strokeWidth="1.5" />
+		</svg>
+	);
+}
+
+export function CoworkersIcon({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+			<circle cx="7.5" cy="5.833" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+			<path
+				d="M2.5 15.833c0-2.761 2.239-5 5-5s5 2.239 5 5"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+			/>
+			<circle cx="14.167" cy="6.667" r="2.083" stroke="currentColor" strokeWidth="1.5" />
+			<path
+				d="M13.333 10.833c.27-.054.55-.083.834-.083 2.301 0 4.166 1.866 4.166 4.167"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+			/>
+		</svg>
+	);
+}
+
+export function IntegrationsIcon({ className }: IconProps) {
 	return (
 		<svg
 			className={className}
-			xmlns="http://www.w3.org/2000/svg"
 			viewBox="0 0 20 20"
 			fill="none"
-			stroke="currentColor"
-			strokeWidth="1.5"
-			strokeLinecap="round"
-			strokeLinejoin="round"
+			xmlns="http://www.w3.org/2000/svg"
+			color="currentColor"
 		>
-			<path d="M7.29183 5.625V9.16667C6.3118 10.3917 4.74726 11.7612 4.1643 13.3928M7.29183 5.625H12.7085M7.29183 5.625H6.4585M4.1643 13.3928C4.03384 13.758 3.9585 14.1318 3.9585 14.5135C3.9585 16.278 5.38885 17.7083 7.1533 17.7083H12.847C14.6115 17.7083 16.0418 16.278 16.0418 14.5135C16.0418 14.1318 15.9665 13.758 15.836 13.3928M4.1643 13.3928C4.1643 13.3928 6.39669 12.9228 7.84242 12.9613C9.5605 13.0072 10.4398 13.7786 12.1579 13.8244C13.6037 13.863 15.836 13.3928 15.836 13.3928M12.7085 5.625V9.16667C13.6885 10.3917 15.2531 11.7612 15.836 13.3928M12.7085 5.625H13.5418" />
-			<path d="M8.54167 3.33334C8.54167 3.44839 8.44842 3.54167 8.33334 3.54167M8.54167 3.33334C8.54167 3.21828 8.44842 3.125 8.33334 3.125M8.54167 3.33334H8.33334M8.33334 3.54167C8.21828 3.54167 8.125 3.44839 8.125 3.33334M8.33334 3.54167V3.33334M8.33334 3.125C8.21828 3.125 8.125 3.21828 8.125 3.33334M8.33334 3.125V3.33334M8.33334 3.33334H8.125M8.33334 3.33334L8.18602 3.48065M8.33334 3.33334L8.48067 3.18602M8.33334 3.33334L8.18602 3.18602M8.33334 3.33334L8.48067 3.48065M8.18602 3.48065C8.26738 3.56201 8.39925 3.56201 8.48067 3.48065M8.18602 3.48065C8.10466 3.39929 8.10466 3.26738 8.18602 3.18602M8.48067 3.18602C8.562 3.26738 8.562 3.39929 8.48067 3.48065M8.48067 3.18602C8.39925 3.10466 8.26738 3.10466 8.18602 3.18602" />
-			<path d="M11.875 2.08334C11.875 2.42852 11.5952 2.70834 11.25 2.70834C10.9048 2.70834 10.625 2.42852 10.625 2.08334C10.625 1.73817 10.9048 1.45834 11.25 1.45834C11.5952 1.45834 11.875 1.73817 11.875 2.08334Z" />
+			<path
+				d="M12.1416 13.4259C15.2162 13.4259 17.7087 10.9334 17.7087 7.85879C17.7087 7.21676 17.6001 6.60011 17.4001 6.02623L15.1393 8.28702C14.1932 9.23307 12.6594 9.23307 11.7134 8.28702C10.7673 7.34098 10.7673 5.80714 11.7134 4.8611L13.9741 2.60031C13.4003 2.40034 12.7836 2.29166 12.1416 2.29166C9.06697 2.29166 6.57446 4.78415 6.57446 7.85879C6.57446 8.61799 6.72642 9.34166 7.0016 10.0011L2.90644 14.1561C2.1052 14.9691 2.10993 16.2762 2.91705 17.0833C3.72418 17.8904 5.0313 17.8952 5.84426 17.0939L9.9993 12.9988C10.6587 13.274 11.3824 13.4259 12.1416 13.4259Z"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinejoin="round"
+			/>
 		</svg>
 	);
+}
+
+export function AutomationsIcon({ className }: IconProps) {
+	return <CoworkersIcon className={className} />;
 }
 
 export function RunsIcon({ className }: IconProps) {

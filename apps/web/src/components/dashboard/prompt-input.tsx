@@ -3,7 +3,6 @@
 import { ModelSelector } from "@/components/automations/model-selector";
 import { CapabilitiesBadges } from "@/components/dashboard/capabilities-badges";
 import { EnvironmentPicker } from "@/components/dashboard/environment-picker";
-import { PersonaPicker } from "@/components/dashboard/persona-picker";
 import type { Provider } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,7 +15,6 @@ import { cn } from "@/lib/display/utils";
 import { ACTION_ADAPTERS, type AdapterProvider } from "@/lib/integrations/action-adapters";
 import { resolveUserToggleState } from "@/lib/integrations/action-permissions";
 import { useDashboardStore } from "@/stores/dashboard";
-import type { ModelId } from "@proliferate/shared";
 import { ArrowUp } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -41,7 +39,7 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 	const actionModes = actionModesData?.modes ?? {};
 	const preferenceIndex = useActionPreferenceIndex();
 
-	const { selectedModel, setSelectedModel, reasoningEffort, setReasoningEffort, selectedPersona } =
+	const { selectedModel, setSelectedModel, reasoningEffort, setReasoningEffort } =
 		useDashboardStore();
 
 	const enabledIntegrationSummaries = useMemo(() => {
@@ -148,9 +146,6 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 	]);
 
 	const canSubmit = !disabled && !isLoading && prompt.trim();
-	const isCoworker = selectedPersona.type === "coworker";
-	const displayModelId =
-		isCoworker && selectedPersona.modelId ? (selectedPersona.modelId as ModelId) : selectedModel;
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
@@ -184,25 +179,23 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 
 				{/* Bottom toolbar */}
 				<div className="flex items-center justify-between px-3 py-2 overflow-hidden">
-					{/* Left side - Persona, model, environment */}
+					{/* Left side - model, environment */}
 					<div className="flex items-center gap-1 min-w-0 overflow-hidden">
-						<PersonaPicker disabled={isLoading} />
 						<ModelSelector
-							modelId={displayModelId}
+							modelId={selectedModel}
 							onChange={setSelectedModel}
-							disabled={isLoading || isCoworker}
+							disabled={isLoading}
 							variant="ghost"
 							reasoningEffort={reasoningEffort}
 							onReasoningChange={setReasoningEffort}
 						/>
-						{!isCoworker && <EnvironmentPicker disabled={isLoading} />}
+						<EnvironmentPicker disabled={isLoading} />
 					</div>
 
 					{/* Right side - Capabilities + Submit */}
 					<div className="flex items-center gap-2">
 						<CapabilitiesBadges
-							mode={isCoworker ? "coworker" : "opencode"}
-							workerId={isCoworker ? selectedPersona.workerId : undefined}
+							mode="opencode"
 							integrationSummaries={enabledIntegrationSummaries}
 						/>
 						<Button

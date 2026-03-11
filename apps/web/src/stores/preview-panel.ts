@@ -27,6 +27,7 @@ interface PreviewPanelState {
 	pinnedTabs: string[];
 	panelSizes: number[];
 	panelSide: "left" | "right";
+	panelCollapsed: boolean;
 	missingEnvKeyCount: number;
 
 	// Actions
@@ -58,6 +59,10 @@ interface PreviewPanelState {
 	setPanelSizes: (sizes: number[]) => void;
 	setPanelSide: (side: "left" | "right") => void;
 
+	// Panel collapsed toggle
+	togglePanelCollapsed: () => void;
+	setPanelCollapsed: (collapsed: boolean) => void;
+
 	// Missing env key count
 	setMissingEnvKeyCount: (count: number) => void;
 
@@ -77,6 +82,7 @@ export const usePreviewPanelStore = create<PreviewPanelState>()(
 			pinnedTabs: ["url", "services", "git", "terminal"],
 			panelSizes: [35, 65],
 			panelSide: "right",
+			panelCollapsed: true,
 			missingEnvKeyCount: 0,
 
 			openUrl: (url: string) => set({ mode: { type: "url", url } }),
@@ -135,6 +141,9 @@ export const usePreviewPanelStore = create<PreviewPanelState>()(
 			setPanelSizes: (sizes: number[]) => set({ panelSizes: sizes }),
 			setPanelSide: (side) => set({ panelSide: side }),
 
+			togglePanelCollapsed: () => set((state) => ({ panelCollapsed: !state.panelCollapsed })),
+			setPanelCollapsed: (collapsed) => set({ panelCollapsed: collapsed }),
+
 			setMissingEnvKeyCount: (count: number) => set({ missingEnvKeyCount: count }),
 
 			setMobileView: (view: MobileView) => set({ mobileView: view }),
@@ -150,6 +159,7 @@ export const usePreviewPanelStore = create<PreviewPanelState>()(
 				pinnedTabs: state.pinnedTabs,
 				panelSizes: state.panelSizes,
 				panelSide: state.panelSide,
+				panelCollapsed: state.panelCollapsed,
 			}),
 		},
 	),

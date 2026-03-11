@@ -3,10 +3,18 @@
 import { openIntercomMessenger } from "@/components/providers/intercom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { AutomationsIcon, SidebarCollapseIcon, SidebarExpandIcon } from "@/components/ui/icons";
+import {
+	CoworkersIcon,
+	IntegrationsIcon,
+	OpenCodeIcon,
+	SessionsGridIcon,
+	SidebarCollapseIcon,
+	SidebarExpandIcon,
+} from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Text } from "@/components/ui/text";
+import { useSessions } from "@/hooks/sessions/use-sessions";
 import { useSignOut } from "@/hooks/ui/use-sign-out";
 import { useSession } from "@/lib/auth/client";
 import { cn } from "@/lib/display/utils";
@@ -15,6 +23,8 @@ import { env } from "@proliferate/environment/public";
 import {
 	ArrowLeft,
 	Building2,
+	ChevronDown,
+	ChevronRight,
 	CreditCard,
 	FolderGit2,
 	Home,
@@ -22,9 +32,7 @@ import {
 	LogOut,
 	Menu,
 	Moon,
-	Plug,
 	Settings,
-	SquareTerminal,
 	Sun,
 	User,
 	Users,
@@ -105,7 +113,7 @@ export function Sidebar() {
 				<Button
 					variant="ghost"
 					size="icon"
-					className="h-8 w-8 text-muted-foreground hover:text-foreground"
+					className="h-8 w-8 text-muted-foreground hover:text-foreground self-end mr-0.5"
 					onClick={(e) => {
 						e.stopPropagation();
 						toggleSidebar();
@@ -154,7 +162,7 @@ export function Sidebar() {
 					}}
 					title="Sessions"
 				>
-					<SquareTerminal className="h-4 w-4" />
+					<SessionsGridIcon className="h-4 w-4" />
 				</Button>
 				<Button
 					variant={isCoworkersPage ? "secondary" : "ghost"}
@@ -166,7 +174,7 @@ export function Sidebar() {
 					}}
 					title="Coworkers"
 				>
-					<AutomationsIcon className="h-4 w-4" />
+					<CoworkersIcon className="h-4 w-4" />
 				</Button>
 				<Button
 					variant={isIntegrationsPage ? "secondary" : "ghost"}
@@ -178,7 +186,7 @@ export function Sidebar() {
 					}}
 					title="Integrations"
 				>
-					<Plug className="h-4 w-4" />
+					<IntegrationsIcon className="h-4 w-4" />
 				</Button>
 			</div>
 
@@ -403,12 +411,19 @@ export function SidebarShell({
 function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 	const pathname = usePathname();
 	const router = useRouter();
+	const { sidebarRecentsOpen, toggleSidebarRecents } = useDashboardStore();
 
 	const isHomePage = pathname === "/" || pathname === "/dashboard";
 	const isSessionsPage = pathname?.startsWith("/sessions") || pathname?.startsWith("/workspace");
 	const isCoworkersPage = pathname?.startsWith("/coworkers");
 	const isIntegrationsPage = pathname?.startsWith("/integrations");
 	const isSettingsPage = pathname?.startsWith("/settings");
+
+	const { data: recentSessions } = useSessions({
+		limit: 5,
+		sortBy: "recency",
+		refetchInterval: 10000,
+	});
 
 	const handleNavigate = (path: string) => {
 		router.push(path);
@@ -426,19 +441,19 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 					onClick={() => handleNavigate("/")}
 				/>
 				<NavItem
-					icon={SquareTerminal}
+					icon={SessionsGridIcon}
 					label="Sessions"
 					active={!!isSessionsPage}
 					onClick={() => handleNavigate("/sessions")}
 				/>
 				<NavItem
-					icon={AutomationsIcon}
+					icon={CoworkersIcon}
 					label="Coworkers"
 					active={!!isCoworkersPage}
 					onClick={() => handleNavigate("/coworkers")}
 				/>
 				<NavItem
-					icon={Plug}
+					icon={IntegrationsIcon}
 					label="Integrations"
 					active={!!isIntegrationsPage}
 					onClick={() => handleNavigate("/integrations")}
@@ -450,6 +465,47 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 					onClick={() => handleNavigate("/settings/profile")}
 				/>
 			</div>
+
+			{/* Recent sessions */}
+			{recentSessions && recentSessions.length > 0 && (
+				<div className="flex flex-col gap-1">
+					<button
+						type="button"
+						onClick={toggleSidebarRecents}
+						className="flex items-center justify-between px-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+					>
+						<span>Recent</span>
+						{sidebarRecentsOpen ? (
+							<ChevronDown className="h-3 w-3" />
+						) : (
+							<ChevronRight className="h-3 w-3" />
+						)}
+					</button>
+					{sidebarRecentsOpen &&
+						recentSessions.map((session) => {
+							const title = session.title || session.promptSnippet || "Untitled";
+							const isActive = pathname === `/workspace/${session.id}`;
+							const isSetup = session.kind === "setup" || session.sessionType === "setup";
+							return (
+								<Button
+									key={session.id}
+									type="button"
+									variant="ghost"
+									onClick={() => handleNavigate(`/workspace/${session.id}`)}
+									className={cn(
+										"flex items-center gap-2 w-full px-2 h-7 rounded-lg text-xs font-normal justify-start",
+										isActive
+											? "bg-foreground/[0.05] text-foreground"
+											: "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]",
+									)}
+								>
+									<OpenCodeIcon className="h-3 w-3 shrink-0" />
+									<span className="truncate">{isSetup ? `Setup: ${title}` : title}</span>
+								</Button>
+							);
+						})}
+				</div>
+			)}
 		</>
 	);
 }

@@ -16,6 +16,7 @@ export function useSessions(params?: {
 	excludeCli?: boolean;
 	excludeAutomation?: boolean;
 	createdBy?: string;
+	sortBy?: "priority" | "recency";
 	enabled?: boolean;
 	refetchInterval?: number | false;
 }) {

@@ -16,7 +16,7 @@ export interface OverallWorkStateDisplayConfig {
 export const OVERALL_WORK_STATE_DISPLAY: Record<OverallWorkState, OverallWorkStateDisplayConfig> = {
 	working: {
 		label: "Working",
-		colorClassName: "text-foreground",
+		colorClassName: "text-success",
 		animated: true,
 	},
 	needs_input: {

@@ -1,18 +1,29 @@
 import { openIntercomMessenger } from "@/components/providers/intercom";
 import { Button } from "@/components/ui/button";
 import { ChatBubbleIcon } from "@/components/ui/icons";
-import { BookOpen } from "lucide-react";
+import { ArrowLeft, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { NotificationTray } from "./notification-tray";
 
 interface DesktopHeaderProps {
 	pageTitle: string;
+	backHref?: string;
+	backLabel?: string;
 }
 
-export function DesktopHeader({ pageTitle }: DesktopHeaderProps) {
+export function DesktopHeader({ pageTitle, backHref, backLabel }: DesktopHeaderProps) {
 	return (
 		<div className="hidden md:flex shrink-0 items-center justify-between h-12 px-4 border-b border-border/50">
-			<h1 className="text-sm font-medium text-foreground truncate">{pageTitle}</h1>
+			<div className="flex items-center gap-2 min-w-0">
+				{backHref && (
+					<Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" asChild>
+						<Link href={backHref} aria-label={backLabel ?? "Back"}>
+							<ArrowLeft className="h-3.5 w-3.5" />
+						</Link>
+					</Button>
+				)}
+				<h1 className="text-sm font-medium text-foreground truncate">{pageTitle}</h1>
+			</div>
 			<div className="flex items-center gap-1">
 				<Button
 					variant="ghost"

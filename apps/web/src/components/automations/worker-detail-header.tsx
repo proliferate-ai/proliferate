@@ -200,7 +200,7 @@ export function WorkerDetailHeader({
 									)}
 								</Button>
 							</TooltipTrigger>
-							<TooltipContent>Pause Automations</TooltipContent>
+							<TooltipContent>Pause Jobs</TooltipContent>
 						</Tooltip>
 					)}
 					{status === "automations_paused" && (
@@ -220,7 +220,7 @@ export function WorkerDetailHeader({
 									)}
 								</Button>
 							</TooltipTrigger>
-							<TooltipContent>Resume Automations</TooltipContent>
+							<TooltipContent>Resume Jobs</TooltipContent>
 						</Tooltip>
 					)}
 					<Tooltip>

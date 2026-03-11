@@ -4,14 +4,14 @@ import { Button } from "@/components/ui/button";
 import { useRepos } from "@/hooks/org/use-repos";
 import { useSecrets } from "@/hooks/org/use-secrets";
 import { useCreateSecret } from "@/hooks/org/use-secrets";
-import { useCreateBaseline } from "@/hooks/sessions/use-baselines";
+import { useCreateBaseline, useLatestSetupSession } from "@/hooks/sessions/use-baselines";
 import { useCreateConfiguration } from "@/hooks/sessions/use-configurations";
 import { useCreateSession } from "@/hooks/sessions/use-sessions";
 import { useDashboardStore } from "@/stores/dashboard";
 import { getSetupInitialPrompt } from "@proliferate/shared/prompts";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { RepoPicker } from "./repo-picker";
 import { SecretsEditor } from "./secrets-editor";
@@ -33,6 +33,23 @@ export function OnboardPage() {
 	const createConfiguration = useCreateConfiguration();
 	const createSession = useCreateSession();
 	const createSecret = useCreateSecret();
+
+	const { data: existingSetupSession } = useLatestSetupSession(
+		selectedRepoId ?? "",
+		!!selectedRepoId,
+	);
+
+	useEffect(() => {
+		if (!existingSetupSession?.id) return;
+		const isActive =
+			existingSetupSession.status === "starting" ||
+			existingSetupSession.status === "running" ||
+			(typeof existingSetupSession.status === "object" &&
+				existingSetupSession.status?.sandboxState !== "stopped");
+		if (isActive) {
+			router.replace(`/workspace/${existingSetupSession.id}`);
+		}
+	}, [existingSetupSession, router]);
 
 	// Secrets that already exist for the selected repo
 	const existingSecrets = (secrets ?? []).filter((s) => !s.repo_id || s.repo_id === selectedRepoId);

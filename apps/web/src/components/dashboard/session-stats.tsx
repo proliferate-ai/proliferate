@@ -1,20 +1,13 @@
 "use client";
 
-import { useSessions } from "@/hooks/sessions/use-sessions";
+import type { Session } from "@proliferate/shared/contracts/sessions";
 
 /**
  * Compact activity summary for returning users.
  * Shows as a single text line — no stat cards (per design system rules).
- * Only renders when the user has sessions.
  */
-export function ActivitySummary() {
-	const { data: sessions } = useSessions({
-		excludeSetup: true,
-		excludeCli: true,
-		refetchInterval: 5000,
-	});
-
-	if (!sessions || sessions.length === 0) return null;
+export function ActivitySummary({ sessions }: { sessions: Session[] }) {
+	if (sessions.length === 0) return null;
 
 	const now = new Date();
 	const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -24,7 +17,6 @@ export function ActivitySummary() {
 	).length;
 	const activeCount = sessions.filter((s) => s.status.sandboxState === "running").length;
 
-	// Build summary parts
 	const parts: string[] = [];
 	if (recentCount > 0) {
 		parts.push(`${recentCount} session${recentCount === 1 ? "" : "s"} this week`);

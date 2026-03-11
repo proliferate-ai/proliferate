@@ -249,15 +249,18 @@ export async function listByOrganizationEnriched(
 		.leftJoin(pendingApprovalCount, eq(pendingApprovalCount.sessionId, sessions.id))
 		.where(and(...conditions))
 		.orderBy(
-			// V2 agent state priority: approval/input first, then iterating, then errored, then terminal
-			sql`CASE
-				WHEN ${sessions.agentState} IN ('waiting_approval', 'waiting_input') THEN 0
-				WHEN ${sessions.agentState} = 'iterating' AND ${sessions.terminalState} IS NULL THEN 1
-				WHEN ${sessions.agentState} = 'errored' THEN 2
-				WHEN ${sessions.sandboxState} = 'paused' THEN 3
-				ELSE 4
-			END`,
-			desc(sessions.lastActivityAt),
+			...(filters?.sortBy === "recency"
+				? [desc(sessions.lastActivityAt)]
+				: [
+						sql`CASE
+							WHEN ${sessions.agentState} IN ('waiting_approval', 'waiting_input') THEN 0
+							WHEN ${sessions.agentState} = 'iterating' AND ${sessions.terminalState} IS NULL THEN 1
+							WHEN ${sessions.agentState} = 'errored' THEN 2
+							WHEN ${sessions.sandboxState} = 'paused' THEN 3
+							ELSE 4
+						END`,
+						desc(sessions.lastActivityAt),
+					]),
 		)
 		.limit(filters?.limit ?? 50);
 

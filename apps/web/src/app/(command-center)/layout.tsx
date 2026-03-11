@@ -52,7 +52,12 @@ export default function CommandCenterLayout({
 				<Sidebar />
 
 				<div className="flex-1 flex flex-col overflow-hidden">
-					<DesktopHeader pageTitle={getPageTitle(pathname)} />
+					<DesktopHeader
+						pageTitle={getPageTitle(pathname)}
+						{...(pathname.match(/^\/coworkers\/[^/]+/)
+							? { backHref: "/coworkers", backLabel: "Back to Coworkers" }
+							: {})}
+					/>
 
 					<main className="flex-1 flex flex-col overflow-hidden animate-in fade-in duration-200">
 						{children}

@@ -106,6 +106,7 @@ export interface ListSessionsFilters {
 	createdBy?: string;
 	userId?: string;
 	includeArchived?: boolean;
+	sortBy?: "priority" | "recency";
 }
 
 // ============================================

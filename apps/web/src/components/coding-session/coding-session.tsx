@@ -23,7 +23,7 @@ import { cn } from "@/lib/display/utils";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { deriveOverallWorkState } from "@proliferate/shared/sessions";
-import { ArrowLeft, ArrowRightLeft, MoreHorizontal, Pin } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, MoreHorizontal, PanelRight, Pin } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -147,6 +147,8 @@ export function CodingSession({
 		setPanelSizes,
 		panelSide,
 		setPanelSide,
+		panelCollapsed,
+		togglePanelCollapsed,
 	} = usePreviewPanelStore();
 	const [viewPickerOpen, setViewPickerOpen] = useState(false);
 	const [isPanelDragging, setIsPanelDragging] = useState(false);
@@ -476,9 +478,15 @@ export function CodingSession({
 				<TooltipContent side="bottom">Back</TooltipContent>
 			</Tooltip>
 			<div className="h-5 w-px bg-border/60 shrink-0" />
-			{sessionData?.automation?.name || sessionData?.workerName ? (
+			{sessionData?.automation?.name || sessionData?.workerName || sessionData?.workerId ? (
 				<div className="shrink-0">
-					<WorkerOrb name={(sessionData.automation?.name ?? sessionData.workerName)!} size={20} />
+					,
+					<WorkerOrb
+						name={
+							sessionData.automation?.name ?? sessionData.workerName ?? displayTitle ?? "Coworker"
+						}
+						size={20}
+					/>
 				</div>
 			) : (
 				<OpenCodeIcon className="h-5 w-5 shrink-0" />
@@ -512,6 +520,25 @@ export function CodingSession({
 				mobileView={mobileView}
 				onToggleMobileView={toggleMobileView}
 			/>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<Button
+						variant="ghost"
+						size="icon"
+						className={cn(
+							"h-8 w-8 shrink-0 hidden md:inline-flex",
+							!panelCollapsed && "text-foreground",
+							panelCollapsed && "text-muted-foreground",
+						)}
+						onClick={togglePanelCollapsed}
+					>
+						<PanelRight className="h-4 w-4" />
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent side="bottom">
+					{panelCollapsed ? "Open panel" : "Close panel"}
+				</TooltipContent>
+			</Tooltip>
 		</div>
 	);
 
@@ -613,8 +640,13 @@ export function CodingSession({
 		</ResizablePanel>
 	);
 
-	// Desktop layout with resizable panels
-	const desktopContent = (
+	// Desktop layout — full-width chat when panel is collapsed, resizable two-pane otherwise
+	const desktopContent = panelCollapsed ? (
+		<div className="h-full w-full flex flex-col">
+			{chatHeader}
+			<div className="flex-1 min-h-0 flex flex-col">{leftPaneContent}</div>
+		</div>
+	) : (
 		<ResizablePanelGroup
 			orientation="horizontal"
 			className="h-full w-full"

@@ -1,24 +1,42 @@
 import type { Provider } from "@/components/integrations/provider-icon";
 
-type CapabilityProvider = Extract<Provider, "github" | "linear" | "sentry" | "slack" | "jira">;
+type CapabilityProvider = Extract<
+	Provider,
+	| "github"
+	| "linear"
+	| "sentry"
+	| "slack"
+	| "jira"
+	| "posthog"
+	| "mysql"
+	| "mongodb"
+	| "grafana"
+	| "gmail"
+	| "webhook"
+>;
+
+const PREFIX_TO_PROVIDER: [string, CapabilityProvider][] = [
+	["source.github.", "github"],
+	["github.", "github"],
+	["source.linear.", "linear"],
+	["linear.", "linear"],
+	["source.sentry.", "sentry"],
+	["sentry.", "sentry"],
+	["slack.", "slack"],
+	["jira.", "jira"],
+	["posthog.", "posthog"],
+	["mysql.", "mysql"],
+	["mongodb.", "mongodb"],
+	["grafana.", "grafana"],
+	["gmail.", "gmail"],
+	["webhook.", "webhook"],
+];
 
 export function inferProviderFromCapabilityKey(
 	capabilityKey: string,
 ): CapabilityProvider | undefined {
-	if (capabilityKey.startsWith("source.github.") || capabilityKey.startsWith("github.")) {
-		return "github";
-	}
-	if (capabilityKey.startsWith("source.linear.") || capabilityKey.startsWith("linear.")) {
-		return "linear";
-	}
-	if (capabilityKey.startsWith("source.sentry.") || capabilityKey.startsWith("sentry.")) {
-		return "sentry";
-	}
-	if (capabilityKey.startsWith("slack.")) {
-		return "slack";
-	}
-	if (capabilityKey.startsWith("jira.")) {
-		return "jira";
+	for (const [prefix, provider] of PREFIX_TO_PROVIDER) {
+		if (capabilityKey.startsWith(prefix)) return provider;
 	}
 	return undefined;
 }

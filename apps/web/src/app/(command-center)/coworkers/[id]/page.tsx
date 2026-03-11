@@ -6,7 +6,6 @@ import { WorkerFailureBanner } from "@/components/automations/worker-failure-ban
 import { WorkerSessionsTab } from "@/components/automations/worker-sessions-tab";
 import { WorkerSettingsTab } from "@/components/automations/worker-settings-tab";
 import { Button } from "@/components/ui/button";
-import { PageBackLink } from "@/components/ui/page-back-link";
 import { DETAIL_TABS, type DetailTab, type WorkerStatus } from "@/config/coworkers";
 import { useWorkerActions } from "@/hooks/automations/use-worker-actions";
 import { useWorkerDetail } from "@/hooks/automations/use-worker-detail";
@@ -41,7 +40,6 @@ export default function CoworkerDetailPage({
 		return (
 			<div className="bg-background flex flex-col grow min-h-0 overflow-y-auto">
 				<div className="w-full max-w-4xl mx-auto px-6 py-8">
-					<PageBackLink href="/coworkers" label="Coworkers" className="mb-3" />
 					<p className="text-sm text-destructive">Coworker not found</p>
 				</div>
 			</div>
@@ -54,8 +52,6 @@ export default function CoworkerDetailPage({
 	return (
 		<div className="bg-background flex flex-col grow min-h-0 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
 			<div className="w-full max-w-4xl mx-auto px-6 py-6">
-				<PageBackLink href="/coworkers" label="Coworkers" className="mb-3" />
-
 				<WorkerDetailHeader
 					worker={worker}
 					onPause={actions.handlePause}

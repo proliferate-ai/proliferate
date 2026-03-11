@@ -102,6 +102,7 @@ export const sessionsRouter = {
 					excludeAutomation: z.boolean().optional(),
 					createdBy: z.string().optional(),
 					enriched: z.boolean().optional(),
+					sortBy: z.enum(["priority", "recency"]).optional(),
 				})
 				.optional(),
 		)
@@ -116,6 +117,7 @@ export const sessionsRouter = {
 				excludeCli: input?.excludeCli,
 				excludeAutomation: input?.excludeAutomation,
 				createdBy: input?.createdBy,
+				sortBy: input?.sortBy,
 				// K2: Pass userId for visibility + ACL filtering
 				userId: context.user.id,
 			};

@@ -17,6 +17,7 @@ interface WorkerCardProps {
 	status: WorkerStatus;
 	description: string | null;
 	capabilities?: string[];
+	activeTaskCount?: number;
 	updatedAt?: Date | string;
 }
 
@@ -179,6 +180,7 @@ export function WorkerCard({
 	status,
 	description,
 	capabilities = [],
+	activeTaskCount,
 	updatedAt,
 }: WorkerCardProps) {
 	// Capability badges: extract unique integration names
@@ -209,7 +211,7 @@ export function WorkerCard({
 				{description && (
 					<p className="text-xs text-muted-foreground mt-0.5 truncate">{description}</p>
 				)}
-				{visibleBadges.length > 0 && (
+				{(visibleBadges.length > 0 || (activeTaskCount != null && activeTaskCount > 0)) && (
 					<div className="flex items-center gap-1 mt-0.5">
 						{visibleBadges.map((label) => (
 							<Badge
@@ -224,6 +226,16 @@ export function WorkerCard({
 							<Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal">
 								+{overflowCount}
 							</Badge>
+						)}
+						{activeTaskCount != null && activeTaskCount > 0 && (
+							<>
+								{visibleBadges.length > 0 && (
+									<span className="text-muted-foreground/30 text-[10px]">&middot;</span>
+								)}
+								<span className="text-[10px] text-muted-foreground/70 tabular-nums">
+									{activeTaskCount} {activeTaskCount === 1 ? "task" : "tasks"}
+								</span>
+							</>
 						)}
 					</div>
 				)}
