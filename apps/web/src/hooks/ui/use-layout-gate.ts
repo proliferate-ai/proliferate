@@ -17,7 +17,7 @@ export function useLayoutGate(options: LayoutGateOptions = {}) {
 	const { session, isPending: authPending } = useRequireAuth();
 
 	const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
-	const { isLoading: billingLoading, isError: billingError } = useBilling();
+	const { isLoading: billingLoading } = useBilling();
 	const { data: onboardingStatus, isLoading: onboardingLoading } = useOnboarding();
 
 	const needsOnboarding =
@@ -29,10 +29,12 @@ export function useLayoutGate(options: LayoutGateOptions = {}) {
 		}
 	}, [authPending, session, onboardingLoading, needsOnboarding, router]);
 
+	// Don't include billingError as a gate — transient billing API failures
+	// should not permanently block the workspace UI
 	const gatesLoading =
 		authPending ||
 		(requireOnboarding && onboardingLoading) ||
-		(billingEnabled && (billingLoading || billingError));
+		(billingEnabled && billingLoading);
 
 	const ready = !gatesLoading && !!session && !needsOnboarding;
 

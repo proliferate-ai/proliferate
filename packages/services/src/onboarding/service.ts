@@ -413,6 +413,13 @@ export async function autoCompleteIfNeeded(orgId: string, userId: string): Promi
 		);
 		try {
 			await orgsService.markOnboardingComplete(orgId, true);
+
+			// Initialize billing for orgs that haven't gone through startTrial
+			const org = await orgsService.getBillingInfoV2(orgId);
+			if (org?.billingState === "free" || org?.billingState === "unconfigured") {
+				await orgsService.initializeBillingState(orgId, "free", FREE_CREDITS);
+			}
+
 			return true;
 		} catch (err) {
 			logger.warn({ err, orgId }, "Failed to auto-complete onboarding for org");
