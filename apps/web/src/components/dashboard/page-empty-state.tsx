@@ -1,85 +1,84 @@
 // ─── SVG Illustrations ───────────────────────────────────────────────────────
 
-export const AutomationIllustration = () => (
+export const CoworkersIllustration = () => (
 	<svg xmlns="http://www.w3.org/2000/svg" width="66" height="66" viewBox="0 0 66 66" fill="none">
-		<rect
-			x="4"
-			y="8"
-			width="58"
-			height="50"
-			rx="6"
+		{/* Person — head */}
+		<circle
+			cx="22"
+			cy="18"
+			r="7"
 			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
 			strokeWidth="1.5"
 		/>
 		<circle
-			cx="18"
-			cy="24"
-			r="6"
-			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
-			strokeWidth="1.5"
-		/>
-		<circle
-			cx="18"
-			cy="24"
+			cx="22"
+			cy="18"
 			r="2.5"
 			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
 		/>
+		{/* Person — body arc */}
+		<path
+			d="M10 52C10 43 15.4 36 22 36C28.6 36 34 43 34 52"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="1.5"
+			strokeLinecap="round"
+		/>
+		{/* Agent — rounded-rect head */}
 		<rect
-			x="32"
-			y="18"
-			width="12"
-			height="12"
-			rx="3"
+			x="38"
+			y="11"
+			width="14"
+			height="14"
+			rx="5"
 			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
 			strokeWidth="1.5"
 		/>
+		{/* Agent — eyes */}
+		<circle
+			cx="42.5"
+			cy="18"
+			r="1.5"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
+		<circle
+			cx="47.5"
+			cy="18"
+			r="1.5"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
+		{/* Agent — body arc */}
 		<path
-			d="M36 24H40"
+			d="M34 52C34 43 38.6 36 45 36C51.4 36 56 43 56 52"
 			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
 			strokeWidth="1.5"
 			strokeLinecap="round"
 		/>
+		{/* Dashed connection between person and agent */}
 		<path
-			d="M38 22V26"
-			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
-			strokeWidth="1.5"
-			strokeLinecap="round"
-		/>
-		<path
-			d="M48 40L54 46L48 52L42 46Z"
-			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
-			strokeWidth="1.5"
-			strokeLinejoin="round"
-		/>
-		<path
-			d="M24 24H32"
-			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
-			strokeWidth="1.5"
-			strokeLinecap="round"
-		/>
-		<path
-			d="M44 24H52C54 24 56 26 56 28V38"
+			d="M29 20H38"
 			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
 			strokeWidth="1"
 			strokeLinecap="round"
 			strokeDasharray="3 3"
 		/>
+		{/* Small antenna on agent */}
 		<path
-			d="M18 30V42C18 44 20 46 22 46H42"
+			d="M45 11V7"
 			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
-			strokeWidth="1"
+			strokeWidth="1.2"
 			strokeLinecap="round"
-			strokeDasharray="3 3"
 		/>
-		<path
-			d="M16.5 22L18 24.5H17L18.5 26"
-			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
-			strokeWidth="0.8"
-			strokeLinecap="round"
-			strokeLinejoin="round"
+		<circle
+			cx="45"
+			cy="5.5"
+			r="1.5"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
 		/>
 	</svg>
 );
+
+/** @deprecated Use CoworkersIllustration instead */
+export const AutomationIllustration = CoworkersIllustration;
 
 export const MembersIllustration = () => (
 	<svg xmlns="http://www.w3.org/2000/svg" width="66" height="66" viewBox="0 0 66 66" fill="none">

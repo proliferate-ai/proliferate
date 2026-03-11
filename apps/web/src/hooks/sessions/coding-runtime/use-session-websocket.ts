@@ -659,5 +659,9 @@ function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
 		case "fs_change":
 			ctx.incrementActivityTick();
 			break;
+
+		// Snapshot result (from agent's save_snapshot tool or manual save)
+		case "snapshot_result":
+			break;
 	}
 }

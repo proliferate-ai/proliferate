@@ -4,6 +4,7 @@
  * Business rules around worker lifecycle, wake/run orchestration, and run events.
  */
 
+import { env } from "@proliferate/environment/server";
 import { createSyncClient } from "@proliferate/gateway-clients";
 import type { CapabilityMode } from "@proliferate/shared/contracts/actions";
 import type { CoworkerCapabilityInput } from "@proliferate/shared/contracts/automations";
@@ -19,6 +20,7 @@ import * as integrationsDb from "../integrations/db";
 import { findForBindingValidation } from "../integrations/service";
 import { getServicesLogger } from "../logger";
 import * as sessionsDb from "../sessions/db";
+import { triggerEagerStart } from "../sessions/service";
 import { getTemplateById } from "../templates/catalog";
 import type { WakeEventRow } from "../wakes/db";
 import * as wakesDb from "../wakes/db";
@@ -266,6 +268,77 @@ export async function createWorkerFromTemplate(
 		modelId: template.modelId,
 		integrationIds: Object.values(input.integrationBindings).filter(Boolean),
 	});
+}
+
+/**
+ * Create an ad-hoc manager session that clones a worker's config
+ * (system prompt, model, capabilities, integrations) but runs independently.
+ */
+export async function createAdHocSessionFromWorker(input: {
+	workerId: string;
+	organizationId: string;
+	createdBy: string;
+	initialPrompt?: string;
+}): Promise<sessionsDb.SessionRow> {
+	const worker = await workersDb.findWorkerById(input.workerId, input.organizationId);
+	if (!worker) {
+		throw new WorkerNotFoundError(input.workerId);
+	}
+
+	// Clone worker's model config
+	const agentConfig: Record<string, unknown> = {};
+	if (worker.modelId) {
+		agentConfig.modelId = worker.modelId;
+	}
+
+	// Read worker's manager session for repo/configuration linkage
+	const managerSession = await sessionsDb.findByIdInternal(worker.managerSessionId);
+
+	const session = await sessionsDb.createAdHocManagerSession({
+		organizationId: input.organizationId,
+		createdBy: input.createdBy,
+		systemPrompt: worker.systemPrompt,
+		agentConfig: Object.keys(agentConfig).length > 0 ? agentConfig : null,
+		configurationId: managerSession?.configurationId ?? null,
+		repoId: managerSession?.repoId ?? null,
+		repoBaselineId: managerSession?.repoBaselineId ?? null,
+		repoBaselineTargetId: managerSession?.repoBaselineTargetId ?? null,
+		workerId: worker.id,
+		initialPrompt: input.initialPrompt ?? null,
+		visibility: "org",
+		title: input.initialPrompt
+			? `Task: ${input.initialPrompt.slice(0, 80)}`
+			: `Task from ${worker.name}`,
+	});
+
+	// Clone capabilities from worker's manager session
+	const capabilities = await sessionsDb.listSessionCapabilities(worker.managerSessionId);
+	for (const cap of capabilities) {
+		await sessionsDb.upsertSessionCapability({
+			sessionId: session.id,
+			capabilityKey: cap.capabilityKey,
+			mode: cap.mode as "allow" | "require_approval" | "deny",
+			origin: cap.origin ?? undefined,
+		});
+	}
+
+	// Clone integration bindings from worker's manager session
+	const connections = await sessionsDb.listSessionConnections(worker.managerSessionId);
+	if (connections.length > 0) {
+		await sessionsDb.createSessionConnections(
+			session.id,
+			connections.map((c) => c.integrationId),
+		);
+	}
+
+	// Trigger eager start if initial prompt provided
+	if (input.initialPrompt) {
+		const gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL ?? "";
+		const serviceToken = env.SERVICE_TO_SERVICE_AUTH_TOKEN ?? "";
+		triggerEagerStart(session.id, gatewayUrl, serviceToken);
+	}
+
+	return session;
 }
 
 async function applyWorkerIntegrationBindings(

@@ -9,6 +9,7 @@ import { cn } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { modelSupportsReasoning } from "@proliferate/shared/agents";
 import type { PendingRunSummary } from "@proliferate/shared/contracts/automations";
+import type { Session } from "@proliferate/shared/contracts/sessions";
 import { formatDistanceToNow } from "date-fns";
 import { AlertCircle, ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
@@ -144,15 +145,46 @@ function NeedsAttention() {
 // Recent Activity (unified sessions list)
 // ============================================
 
-function RecentActivity() {
-	const { data: sessions, isLoading } = useSessions({
-		limit: 5,
-		excludeSetup: true,
-		excludeCli: true,
-		refetchInterval: 5000,
-	});
+function RecentActivitySkeleton() {
+	return (
+		<div className="w-full">
+			<div className="flex items-end justify-between mb-3">
+				<div>
+					<div className="h-5 w-32 rounded bg-muted animate-pulse" />
+					<div className="h-3.5 w-48 rounded bg-muted animate-pulse mt-1.5" />
+				</div>
+				<div className="h-4 w-20 rounded bg-muted animate-pulse" />
+			</div>
+			<div className="rounded-lg border border-border bg-card overflow-hidden">
+				{[1, 2, 3].map((i) => (
+					<div
+						key={i}
+						className="flex items-center px-4 py-2.5 border-b border-border/50 last:border-0 gap-3 animate-pulse"
+					>
+						<div className="h-1.5 w-1.5 rounded-full bg-muted shrink-0" />
+						<div
+							className="h-4 rounded bg-muted"
+							style={{ width: `${120 + ((i * 47) % 140)}px` }}
+						/>
+						<div className="flex-1" />
+						<div className="h-3 w-16 rounded bg-muted hidden md:block" />
+						<div className="h-3.5 w-14 rounded bg-muted" />
+						<div className="h-3 w-12 rounded bg-muted" />
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
 
-	if (isLoading || !sessions || sessions.length === 0) return null;
+function RecentActivity({ sessions }: { sessions: Session[] }) {
+	if (sessions.length === 0) return null;
+
+	const sorted = [...sessions].sort(
+		(a, b) =>
+			new Date(b.lastActivityAt ?? b.startedAt ?? 0).getTime() -
+			new Date(a.lastActivityAt ?? a.startedAt ?? 0).getTime(),
+	);
 
 	return (
 		<div className="w-full">
@@ -163,7 +195,7 @@ function RecentActivity() {
 				actionHref="/sessions"
 			/>
 			<div className="rounded-lg border border-border bg-card overflow-hidden">
-				{sessions.map((session) => (
+				{sorted.map((session) => (
 					<SessionListRow key={session.id} session={session} />
 				))}
 			</div>
@@ -181,13 +213,16 @@ export function EmptyDashboard() {
 		useDashboardStore();
 	const createConfiguration = useCreateConfiguration();
 	const createSession = useCreateSession();
-	const { data: recentSessions } = useSessions({
-		limit: 1,
-		excludeSetup: true,
+
+	const { data: sessions, isLoading: sessionsLoading } = useSessions({
+		limit: 5,
 		excludeCli: true,
+		sortBy: "recency",
 		refetchInterval: 5000,
 	});
-	const hasSessions = (recentSessions ?? []).length > 0;
+
+	const hasSessions = !sessionsLoading && (sessions ?? []).length > 0;
+	const isEmpty = !sessionsLoading && (sessions ?? []).length === 0;
 
 	const firstName = authSession?.user?.name?.split(" ")[0] ?? "";
 	const greeting = firstName ? getGreeting(firstName) : "How can I help you today?";
@@ -220,7 +255,6 @@ export function EmptyDashboard() {
 					...(configurationId ? { configurationId } : {}),
 				});
 			} catch (sessionError) {
-				// If configuration is stale/deleted, retry without it
 				const isConfigError =
 					configurationId &&
 					sessionError instanceof Error &&
@@ -244,24 +278,19 @@ export function EmptyDashboard() {
 
 	return (
 		<div className="h-full flex flex-col overflow-y-auto">
-			{/* Prompt input area — centered when empty, pinned at top when sessions exist */}
-			<div
-				className={cn(
-					"flex flex-col items-center px-4 pb-6",
-					hasSessions ? "pt-8 md:pt-16" : "flex-1 justify-center",
-				)}
-			>
+			{/* Prompt area — always pinned at the same position */}
+			<div className="flex flex-col items-center px-4 pt-8 md:pt-16 pb-4">
 				<h2 className="text-3xl font-semibold mb-6">{greeting}</h2>
 				<div className="w-full max-w-2xl">
 					<PromptInput onSubmit={handleSubmit} isLoading={isSubmitting} />
 				</div>
 			</div>
 
-			{/* Content sections — bordered column like Tembo */}
 			<div className="flex-1 border-l border-r border-border/50 mx-auto w-full max-w-3xl">
-				<div className="flex flex-col gap-10 px-4 pb-10">
-					{/* Empty state illustration when no sessions */}
-					{!hasSessions && (
+				<div className="flex flex-col gap-6 px-4 pb-10">
+					{sessionsLoading && <RecentActivitySkeleton />}
+
+					{isEmpty && (
 						<PageEmptyState
 							illustration={<EmptyChatsIllustration />}
 							badge={<PlusBadge />}
@@ -285,14 +314,9 @@ export function EmptyDashboard() {
 						</PageEmptyState>
 					)}
 
-					{/* Activity summary for returning users */}
-					{hasSessions && <ActivitySummary />}
-
-					{/* Needs Attention — triage items from agent runs */}
+					{hasSessions && <ActivitySummary sessions={sessions!} />}
 					<NeedsAttention />
-
-					{/* Recent Activity — unified sessions list */}
-					<RecentActivity />
+					{hasSessions && <RecentActivity sessions={sessions!} />}
 				</div>
 			</div>
 		</div>

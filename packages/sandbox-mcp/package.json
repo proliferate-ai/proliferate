@@ -1,6 +1,6 @@
 {
 	"name": "proliferate-sandbox-mcp",
-	"version": "0.1.19",
+	"version": "0.1.20",
 	"description": "MCP server for managing services in Proliferate cloud sandboxes",
 	"type": "module",
 	"bin": {

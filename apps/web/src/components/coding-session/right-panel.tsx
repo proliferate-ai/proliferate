@@ -13,6 +13,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { KeyRound, Loader2, MousePointerClick } from "lucide-react";
 import Link from "next/link";
 import { ArtifactsPanel } from "./artifacts-panel";
+import { CoworkerConfigurePanel } from "./coworker-configure-panel";
+import { CoworkerSessionsPanel } from "./coworker-sessions-panel";
 import { EnvironmentPanel } from "./environment-panel";
 import { FilesPanel } from "./files-panel";
 import { GitPanel } from "./git-panel";
@@ -69,6 +71,7 @@ export interface SessionPanelProps {
 	pendingApprovals?: ActionApprovalRequestMessage["payload"][];
 	slackThreadUrl?: string | null;
 	workspaceOptions?: Array<{ workspacePath: string; label: string }>;
+	workerId?: string | null;
 }
 
 interface RightPanelProps {
@@ -197,6 +200,16 @@ export function RightPanel({
 					clearGitResult={sessionProps.clearGitResult}
 				/>
 			);
+		}
+
+		// Coworker configure panel
+		if (mode.type === "configure" && sessionProps?.workerId) {
+			return <CoworkerConfigurePanel workerId={sessionProps.workerId} />;
+		}
+
+		// Coworker sessions panel
+		if (mode.type === "coworker-sessions" && sessionProps?.workerId) {
+			return <CoworkerSessionsPanel workerId={sessionProps.workerId} />;
 		}
 
 		// Terminal panel

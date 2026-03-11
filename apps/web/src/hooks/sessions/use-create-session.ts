@@ -1,5 +1,6 @@
 "use client";
 
+import { useRepo } from "@/hooks/org/use-repos";
 import { useCreateConfiguration } from "@/hooks/sessions/use-configurations";
 import { useCreateSession as useCreateSessionMutation } from "@/hooks/sessions/use-sessions";
 import { useCallback, useEffect, useRef } from "react";
@@ -16,6 +17,8 @@ interface UseCreateSessionFromRepoResult {
 	isError: boolean;
 	errorMessage: string | undefined;
 	stage: "preparing" | "provisioning";
+	/** True when repo data is loaded and creation can proceed. */
+	isReady: boolean;
 	retry: () => void;
 	/** Kicks off creation; returns sessionId on success, undefined on failure. */
 	create: () => Promise<string | undefined>;
@@ -28,8 +31,12 @@ export function useCreateSessionFromRepo({
 }: UseCreateSessionFromRepoOptions): UseCreateSessionFromRepoResult {
 	const creationStartedRef = useRef(false);
 
+	const { data: repo, isLoading: isRepoLoading } = useRepo(repoId || "");
 	const createConfiguration = useCreateConfiguration();
 	const createSession = useCreateSessionMutation();
+
+	// For coding sessions, wait for repo data so we can check for ready configurations
+	const isReady = sessionType === "setup" || !isRepoLoading;
 
 	const isPending = createConfiguration.isPending || createSession.isPending;
 	const isSuccess = createSession.isSuccess;
@@ -62,12 +69,23 @@ export function useCreateSessionFromRepo({
 
 		creationStartedRef.current = true;
 		try {
-			const configurationResult = await createConfiguration.mutateAsync({
-				repoIds: [repoId],
-			});
+			// Reuse existing ready configuration if available (has snapshot + service commands)
+			let configurationId: string;
+			if (
+				sessionType === "coding" &&
+				repo?.configurationId &&
+				repo.configurationStatus === "ready"
+			) {
+				configurationId = repo.configurationId;
+			} else {
+				const configurationResult = await createConfiguration.mutateAsync({
+					repoIds: [repoId],
+				});
+				configurationId = configurationResult.configurationId;
+			}
 
 			const sessionResult = await createSession.mutateAsync({
-				configurationId: configurationResult.configurationId,
+				configurationId,
 				sessionType,
 				modelId,
 			});
@@ -77,7 +95,16 @@ export function useCreateSessionFromRepo({
 			creationStartedRef.current = false;
 			return undefined;
 		}
-	}, [repoId, sessionType, modelId, isPending, isSuccess, createConfiguration, createSession]);
+	}, [
+		repoId,
+		sessionType,
+		modelId,
+		isPending,
+		isSuccess,
+		repo,
+		createConfiguration,
+		createSession,
+	]);
 
-	return { isPending, isSuccess, isError, errorMessage, stage, retry, create };
+	return { isPending, isSuccess, isError, errorMessage, stage, isReady, retry, create };
 }

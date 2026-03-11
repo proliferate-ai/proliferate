@@ -1,12 +1,19 @@
 "use client";
 
+import { WorkerOrb } from "@/components/automations/worker-card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { OpenCodeIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { INVESTIGATION_TAB, MANAGER_PANEL_TABS, PANEL_TABS } from "@/config/coding-session";
+import {
+	INVESTIGATION_TAB,
+	MANAGER_PANEL_TABS,
+	PANEL_TABS,
+	SETUP_PANEL_TABS,
+} from "@/config/coding-session";
 import { useRepo } from "@/hooks/org/use-repos";
 import { useCodingSessionRuntime } from "@/hooks/sessions/use-coding-session-runtime";
 import { useConfiguration } from "@/hooks/sessions/use-configurations";
@@ -21,7 +28,7 @@ import { cn } from "@/lib/display/utils";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { deriveOverallWorkState } from "@proliferate/shared/sessions";
-import { ArrowLeft, ArrowRightLeft, MoreHorizontal, Pin } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, MoreHorizontal, PanelRight, Pin } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -145,6 +152,9 @@ export function CodingSession({
 		setPanelSizes,
 		panelSide,
 		setPanelSide,
+		panelCollapsed,
+		togglePanelCollapsed,
+		setPanelCollapsed,
 	} = usePreviewPanelStore();
 	const [viewPickerOpen, setViewPickerOpen] = useState(false);
 	const [isPanelDragging, setIsPanelDragging] = useState(false);
@@ -194,9 +204,38 @@ export function CodingSession({
 		}
 	}, [runId, togglePanel, mode.type]);
 
-	// G9: Manager sessions use a simplified panel set
-	const isManagerSession = sessionData?.sessionType === "manager";
-	const basePanelTabs = isManagerSession ? MANAGER_PANEL_TABS : PANEL_TABS;
+	const isManagerSession = sessionData?.kind === "manager";
+	const isSetupSession = sessionData?.sessionType === "setup";
+	const basePanelTabs = isManagerSession
+		? MANAGER_PANEL_TABS
+		: isSetupSession
+			? SETUP_PANEL_TABS
+			: PANEL_TABS;
+
+	// Auto-expand panel and pin tabs for manager/setup sessions
+	const specialPanelInitRef = useRef(false);
+	useEffect(() => {
+		if ((!isManagerSession && !isSetupSession) || specialPanelInitRef.current) return;
+		specialPanelInitRef.current = true;
+		if (panelCollapsed) setPanelCollapsed(false);
+		for (const tab of basePanelTabs) {
+			if (!pinnedTabs.includes(tab.type)) pinTab(tab.type);
+		}
+		if (mode.type === "none") {
+			if (isManagerSession) togglePanel("configure");
+			else if (isSetupSession) togglePanel("environment");
+		}
+	}, [
+		isManagerSession,
+		isSetupSession,
+		basePanelTabs,
+		panelCollapsed,
+		setPanelCollapsed,
+		pinnedTabs,
+		pinTab,
+		mode.type,
+		togglePanel,
+	]);
 
 	// Build panel tabs — prepend investigation tab when runId is present
 	const effectivePanelTabs = runId ? [INVESTIGATION_TAB, ...basePanelTabs] : basePanelTabs;
@@ -269,6 +308,7 @@ export function CodingSession({
 				pendingApprovals,
 				slackThreadUrl: sessionData.slackThreadUrl,
 				workspaceOptions,
+				workerId: sessionData.workerId ?? null,
 			}
 		: undefined;
 
@@ -317,6 +357,7 @@ export function CodingSession({
 			<SessionLoadingShell
 				mode={isSessionCreating ? "creating" : "resuming"}
 				repoName={repoData?.githubRepoName || sessionData.repo?.githubRepoName}
+				workerName={sessionData.workerName ?? sessionData.automation?.name ?? undefined}
 				showHeader={false}
 			/>
 		) : (
@@ -350,20 +391,20 @@ export function CodingSession({
 					overallWorkState: overallWorkState ?? "working",
 					outcome: sessionData.outcome,
 					workerId: sessionData.workerId,
+					automationName: sessionData.automation?.name ?? sessionData.workerName,
 				}}
 			/>
 		</SessionContext.Provider>
 	);
 
 	const isReady = !isLoading && !!authSession && !!sessionData && status !== "error";
-	const isSetupSession = sessionData?.sessionType === "setup";
 
 	const repoSettingsHref = "/settings/environments";
 
 	const panelViewPicker = (
 		<div className="flex items-center gap-0.5">
 			{pinnedTabs.map((tabType) => {
-				const tab = PANEL_TABS.find((t) => t.type === tabType);
+				const tab = effectivePanelTabs.find((t) => t.type === tabType);
 				if (!tab) return null;
 				const isActive = activeType === tabType;
 				const previewAvailable = Boolean(previewUrl || (mode.type === "url" ? mode.url : null));
@@ -473,11 +514,18 @@ export function CodingSession({
 				<TooltipContent side="bottom">Back</TooltipContent>
 			</Tooltip>
 			<div className="h-5 w-px bg-border/60 shrink-0" />
-			<img
-				src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp"
-				alt="Proliferate"
-				className="h-5 w-5 rounded-full shrink-0"
-			/>
+			{sessionData?.automation?.name || sessionData?.workerName || sessionData?.workerId ? (
+				<div className="shrink-0">
+					<WorkerOrb
+						name={
+							sessionData.automation?.name ?? sessionData.workerName ?? displayTitle ?? "Coworker"
+						}
+						size={20}
+					/>
+				</div>
+			) : (
+				<OpenCodeIcon className="h-5 w-5 shrink-0" />
+			)}
 			<div className="min-w-0 flex-1">
 				{isEditingTitle ? (
 					<Input
@@ -507,6 +555,25 @@ export function CodingSession({
 				mobileView={mobileView}
 				onToggleMobileView={toggleMobileView}
 			/>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<Button
+						variant="ghost"
+						size="icon"
+						className={cn(
+							"h-8 w-8 shrink-0 hidden md:inline-flex",
+							!panelCollapsed && "text-foreground",
+							panelCollapsed && "text-muted-foreground",
+						)}
+						onClick={togglePanelCollapsed}
+					>
+						<PanelRight className="h-4 w-4" />
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent side="bottom">
+					{panelCollapsed ? "Open panel" : "Close panel"}
+				</TooltipContent>
+			</Tooltip>
 		</div>
 	);
 
@@ -608,8 +675,13 @@ export function CodingSession({
 		</ResizablePanel>
 	);
 
-	// Desktop layout with resizable panels
-	const desktopContent = (
+	// Desktop layout — full-width chat when panel is collapsed, resizable two-pane otherwise
+	const desktopContent = panelCollapsed ? (
+		<div className="h-full w-full flex flex-col">
+			{chatHeader}
+			<div className="flex-1 min-h-0 flex flex-col">{leftPaneContent}</div>
+		</div>
+	) : (
 		<ResizablePanelGroup
 			orientation="horizontal"
 			className="h-full w-full"

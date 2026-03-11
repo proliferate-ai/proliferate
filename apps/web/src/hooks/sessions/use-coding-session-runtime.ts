@@ -121,6 +121,7 @@ export function useCodingSessionRuntime({
 		onNew,
 		onCancel,
 		convertMessage: (message) => message,
+		suggestions: [],
 	});
 
 	// Derive status

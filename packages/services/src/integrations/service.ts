@@ -1207,6 +1207,72 @@ export async function getSlackInstallationForNotifications(
 }
 
 /**
+ * Send a Slack DM to a user.
+ * Opens a DM channel and posts a message with optional Block Kit blocks.
+ * Throws on failure — callers should catch if best-effort delivery is desired.
+ */
+export async function sendSlackDm(
+	installationId: string,
+	slackUserId: string,
+	text: string,
+	blocks?: Array<{
+		type: string;
+		text?: { type: string; text: string };
+		accessory?: {
+			type: string;
+			text?: { type: string; text: string; emoji?: boolean };
+			url?: string;
+		};
+	}>,
+): Promise<void> {
+	const encryptedToken = await integrationsDb.getSlackInstallationBotToken(installationId);
+	if (!encryptedToken) {
+		throw new Error("No bot token for installation");
+	}
+
+	const { decrypt, getEncryptionKey } = await import("@proliferate/shared/crypto");
+	const botToken = decrypt(encryptedToken, getEncryptionKey());
+
+	// Open DM channel
+	const openResponse = await fetch(`${SLACK_API_BASE}/conversations.open`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${botToken}`,
+		},
+		body: JSON.stringify({ users: slackUserId }),
+		signal: AbortSignal.timeout(SLACK_TIMEOUT_MS),
+	});
+	const openResult = (await openResponse.json()) as {
+		ok: boolean;
+		channel?: { id: string };
+		error?: string;
+	};
+	if (!openResult.ok || !openResult.channel?.id) {
+		throw new Error(`conversations.open: ${openResult.error ?? "unknown"}`);
+	}
+
+	// Post message
+	const postResponse = await fetch(`${SLACK_API_BASE}/chat.postMessage`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${botToken}`,
+		},
+		body: JSON.stringify({
+			channel: openResult.channel.id,
+			text,
+			...(blocks ? { blocks } : {}),
+		}),
+		signal: AbortSignal.timeout(SLACK_TIMEOUT_MS),
+	});
+	const postResult = (await postResponse.json()) as { ok: boolean; error?: string };
+	if (!postResult.ok) {
+		throw new Error(`chat.postMessage: ${postResult.error ?? "unknown"}`);
+	}
+}
+
+/**
  * List all active Slack installations for an organization.
  */
 export async function listActiveSlackInstallations(

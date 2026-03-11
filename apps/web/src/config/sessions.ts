@@ -16,7 +16,7 @@ export interface OverallWorkStateDisplayConfig {
 export const OVERALL_WORK_STATE_DISPLAY: Record<OverallWorkState, OverallWorkStateDisplayConfig> = {
 	working: {
 		label: "Working",
-		colorClassName: "text-foreground",
+		colorClassName: "text-success",
 		animated: true,
 	},
 	needs_input: {
@@ -37,8 +37,8 @@ export const OVERALL_WORK_STATE_DISPLAY: Record<OverallWorkState, OverallWorkSta
 };
 
 export const TABS: { value: FilterTab; label: string }[] = [
-	{ value: "in_progress", label: "In Progress" },
 	{ value: "needs_attention", label: "Needs Attention" },
+	{ value: "in_progress", label: "In Progress" },
 	{ value: "paused", label: "Paused" },
 	{ value: "completed", label: "Completed" },
 ];

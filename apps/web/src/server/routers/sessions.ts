@@ -7,7 +7,7 @@
  */
 
 import { ORPCError } from "@orpc/server";
-import { notifications, sessions } from "@proliferate/services";
+import { notifications, sessions, workers } from "@proliferate/services";
 import {
 	CreateSessionInputSchema,
 	CreateSessionResponseSchema,
@@ -102,6 +102,7 @@ export const sessionsRouter = {
 					excludeAutomation: z.boolean().optional(),
 					createdBy: z.string().optional(),
 					enriched: z.boolean().optional(),
+					sortBy: z.enum(["priority", "recency"]).optional(),
 				})
 				.optional(),
 		)
@@ -116,6 +117,7 @@ export const sessionsRouter = {
 				excludeCli: input?.excludeCli,
 				excludeAutomation: input?.excludeAutomation,
 				createdBy: input?.createdBy,
+				sortBy: input?.sortBy,
 				// K2: Pass userId for visibility + ACL filtering
 				userId: context.user.id,
 			};
@@ -388,6 +390,24 @@ export const sessionsRouter = {
 		}),
 
 	/**
+	 * Mark a session as done (sets outcome=completed, terminal state).
+	 */
+	markDone: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(z.object({ done: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			try {
+				await sessions.markSessionDone({
+					sessionId: input.id,
+					organizationId: context.orgId,
+				});
+				return { done: true };
+			} catch (err) {
+				throwMappedSessionError(err, "Failed to mark session as done");
+			}
+		}),
+
+	/**
 	 * Soft-delete a session (K6).
 	 */
 	softDelete: orgProcedure
@@ -497,5 +517,41 @@ export const sessionsRouter = {
 				context.user.id,
 			);
 			return { subscribed: !!subscription };
+		}),
+
+	/**
+	 * Create an ad-hoc manager session from a coworker's config.
+	 *
+	 * Clones the worker's system prompt, model, capabilities, and integrations
+	 * into a standalone session that runs independently from the worker's main thread.
+	 */
+	createCoworkerTask: billingGatedProcedure
+		.input(
+			z.object({
+				workerId: z.string().uuid(),
+				initialPrompt: z.string().min(1).max(10000).optional(),
+			}),
+		)
+		.output(
+			z.object({
+				sessionId: z.string().uuid(),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			try {
+				const session = await workers.createAdHocSessionFromWorker({
+					workerId: input.workerId,
+					organizationId: context.orgId,
+					createdBy: context.user.id,
+					initialPrompt: input.initialPrompt,
+				});
+
+				return { sessionId: session.id };
+			} catch (err) {
+				if (err instanceof workers.WorkerNotFoundError) {
+					throw new ORPCError("NOT_FOUND", { message: err.message });
+				}
+				throwMappedSessionError(err, "Failed to create coworker task");
+			}
 		}),
 };

@@ -6,6 +6,7 @@
  * notification lifecycle (create, deliver, read, dismiss).
  */
 
+import { env } from "@proliferate/environment/server";
 import {
 	CATEGORY_ROUTING,
 	IMMEDIATE_CATEGORIES,
@@ -16,6 +17,7 @@ import {
 	SUPPRESSION_WINDOW_MS,
 } from "@proliferate/shared/contracts/notifications";
 import * as integrationsService from "../integrations/service";
+import { getServicesLogger } from "../logger";
 import { enqueueOutbox } from "../outbox/service";
 import * as sessionsService from "../sessions/service";
 import * as notificationsDb from "./db";
@@ -137,6 +139,37 @@ export async function subscribeCurrentUserToSessionNotifications(input: {
 		slackUserId,
 		eventTypes: ["completed"],
 	});
+
+	// Send immediate confirmation DM (best-effort — don't fail the subscription if DM fails)
+	const appUrl = env.NEXT_PUBLIC_APP_URL ?? "https://app.proliferate.com";
+	const sessionUrl = `${appUrl}/dashboard/sessions/${input.sessionId}`;
+	const title = session.title ?? "Coding Session";
+	try {
+		await integrationsService.sendSlackDm(
+			installation.id,
+			slackUserId,
+			`You're now watching "${title}"`,
+			[
+				{
+					type: "section",
+					text: {
+						type: "mrkdwn",
+						text: `*Notifications enabled* · ${title}\nYou'll be notified when this session completes.`,
+					},
+					accessory: {
+						type: "button",
+						text: { type: "plain_text", text: "View Session", emoji: true },
+						url: sessionUrl,
+					},
+				},
+			],
+		);
+	} catch (err) {
+		getServicesLogger().warn(
+			{ err, sessionId: input.sessionId },
+			"Failed to send subscription confirmation DM",
+		);
+	}
 }
 
 /**

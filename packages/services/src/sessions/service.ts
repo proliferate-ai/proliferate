@@ -96,6 +96,7 @@ export async function listSessionsEnriched(
 		excludeSetup: options?.excludeSetup,
 		excludeAutomation: options?.excludeAutomation,
 		createdBy: options?.createdBy,
+		sortBy: options?.sortBy,
 	});
 	return rows.map((row) => toSession(row));
 }
@@ -688,7 +689,11 @@ async function createConfigurationSession(input: {
  * Trigger eager session start via the gateway (fire-and-forget).
  * Boots the sandbox and sends the initial prompt in the background.
  */
-function triggerEagerStart(sessionId: string, gatewayUrl: string, serviceToken: string): void {
+export function triggerEagerStart(
+	sessionId: string,
+	gatewayUrl: string,
+	serviceToken: string,
+): void {
 	if (!gatewayUrl || !serviceToken) {
 		logger.warn({ sessionId }, "Skipping eager start: missing gatewayUrl or serviceToken");
 		return;
@@ -1189,6 +1194,21 @@ export async function unarchiveSessionForUser(input: {
 	userId: string;
 }): Promise<void> {
 	await sessionsDb.unarchiveSessionForUser(input);
+}
+
+export async function markSessionDone(input: {
+	sessionId: string;
+	organizationId: string;
+}): Promise<void> {
+	const session = await sessionsDb.findSessionById(input.sessionId, input.organizationId);
+	if (!session) {
+		throw new SessionNotFoundError(input.sessionId);
+	}
+	await sessionsDb.updateWithOrgCheck(input.sessionId, input.organizationId, {
+		outcome: "completed",
+		terminalState: "succeeded",
+		agentState: "done",
+	});
 }
 
 // ============================================

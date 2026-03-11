@@ -16,6 +16,7 @@ export function useSessions(params?: {
 	excludeCli?: boolean;
 	excludeAutomation?: boolean;
 	createdBy?: string;
+	sortBy?: "priority" | "recency";
 	enabled?: boolean;
 	refetchInterval?: number | false;
 }) {
@@ -67,8 +68,6 @@ export function useCreateSession() {
 	const mutation = useMutation({
 		...orpc.sessions.create.mutationOptions(),
 		onSuccess: (result, variables) => {
-			queryClient.invalidateQueries({ queryKey: orpc.sessions.list.key() });
-
 			// Seed the session cache so the detail page renders instantly.
 			// This is partial — TanStack Query will background-refetch the full data.
 			const partialSession: Session = {
@@ -108,6 +107,20 @@ export function useCreateSession() {
 				orpc.sessions.get.queryOptions({ input: { id: result.sessionId } }).queryKey,
 				{ session: partialSession },
 			);
+
+			// Optimistically prepend to all sessions.list caches so lists update instantly
+			const listKey = orpc.sessions.list.key();
+			queryClient.cancelQueries({ queryKey: listKey });
+			queryClient.setQueriesData<{ sessions: Session[] }>({ queryKey: listKey }, (old) => {
+				if (!old?.sessions) return old;
+				if (old.sessions.some((s) => s.id === result.sessionId)) return old;
+				return { sessions: [partialSession, ...old.sessions] };
+			});
+
+			// Delayed invalidation gives the server time to index the new session
+			setTimeout(() => {
+				queryClient.invalidateQueries({ queryKey: listKey });
+			}, 3000);
 		},
 	});
 
@@ -218,6 +231,40 @@ export function useDeleteSession() {
 		mutate: (id: string) => {
 			mutation.mutate({ id });
 		},
+	};
+}
+
+export function useArchiveSession() {
+	const queryClient = useQueryClient();
+
+	const mutation = useMutation({
+		...orpc.sessions.archive.mutationOptions(),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: orpc.sessions.list.key() });
+		},
+	});
+
+	return {
+		...mutation,
+		mutateAsync: async (id: string) => mutation.mutateAsync({ id }),
+		mutate: (id: string) => mutation.mutate({ id }),
+	};
+}
+
+export function useMarkSessionDone() {
+	const queryClient = useQueryClient();
+
+	const mutation = useMutation({
+		...orpc.sessions.markDone.mutationOptions(),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: orpc.sessions.list.key() });
+		},
+	});
+
+	return {
+		...mutation,
+		mutateAsync: async (id: string) => mutation.mutateAsync({ id }),
+		mutate: (id: string) => mutation.mutate({ id }),
 	};
 }
 

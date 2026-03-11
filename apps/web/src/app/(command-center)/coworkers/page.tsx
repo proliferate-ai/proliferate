@@ -6,7 +6,7 @@ import { TemplatePickerDialog } from "@/components/automations/template-picker-d
 import { WorkerActionSelector } from "@/components/automations/worker-action-selector";
 import { WorkerCard, WorkerOrb } from "@/components/automations/worker-card";
 import {
-	AutomationIllustration,
+	CoworkersIllustration,
 	PageEmptyState,
 	PlusBadge,
 } from "@/components/dashboard/page-empty-state";
@@ -85,7 +85,7 @@ export default function CoworkersPage() {
 				</div>
 			) : totalItems === 0 ? (
 				<PageEmptyState
-					illustration={<AutomationIllustration />}
+					illustration={<CoworkersIllustration />}
 					badge={<PlusBadge />}
 					title="No coworkers created"
 					description="Create a coworker to monitor sources and manage async engineering work."
@@ -165,6 +165,7 @@ export default function CoworkersPage() {
 										name={worker.name}
 										status={worker.status as WorkerStatus}
 										description={worker.description}
+										activeTaskCount={worker.activeTaskCount}
 										updatedAt={worker.updatedAt}
 									/>
 								))}
@@ -239,7 +240,7 @@ export default function CoworkersPage() {
 											name={
 												selectedOrbIndex != null
 													? PALETTE_PREVIEW_NAMES[selectedOrbIndex]
-													: createName || "Untitled"
+													: "Untitled"
 											}
 											size={40}
 										/>
@@ -247,10 +248,7 @@ export default function CoworkersPage() {
 								</OrbPicker>
 								<Input
 									value={createName}
-									onChange={(event) => {
-										setCreateName(event.target.value);
-										setSelectedOrbIndex(null);
-									}}
+									onChange={(event) => setCreateName(event.target.value)}
 									placeholder="Untitled coworker"
 									className="flex-1"
 								/>

@@ -22,6 +22,9 @@ export function toConfiguration(row: ConfigurationWithRelationsRow): Configurati
 		createdAt: toIsoString(row.createdAt),
 		createdBy: row.createdBy,
 		sandboxProvider: null, // Field removed from schema
+		refreshEnabled: row.refreshEnabled,
+		refreshIntervalMinutes: row.refreshIntervalMinutes,
+		lastRefreshedAt: toIsoString(row.lastRefreshedAt),
 		configurationRepos: row.configurationRepos?.map((pr) => ({
 			workspacePath: pr.workspacePath,
 			repo: pr.repo
@@ -61,5 +64,8 @@ export function toConfigurationPartial(row: ConfigurationRow): Partial<Configura
 		createdAt: toIsoString(row.createdAt),
 		createdBy: row.createdBy,
 		sandboxProvider: null, // Field removed from schema
+		refreshEnabled: row.refreshEnabled,
+		refreshIntervalMinutes: row.refreshIntervalMinutes,
+		lastRefreshedAt: toIsoString(row.lastRefreshedAt),
 	};
 }

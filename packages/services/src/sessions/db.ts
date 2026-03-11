@@ -249,15 +249,18 @@ export async function listByOrganizationEnriched(
 		.leftJoin(pendingApprovalCount, eq(pendingApprovalCount.sessionId, sessions.id))
 		.where(and(...conditions))
 		.orderBy(
-			// V2 agent state priority: approval/input first, then iterating, then errored, then terminal
-			sql`CASE
-				WHEN ${sessions.agentState} IN ('waiting_approval', 'waiting_input') THEN 0
-				WHEN ${sessions.agentState} = 'iterating' AND ${sessions.terminalState} IS NULL THEN 1
-				WHEN ${sessions.agentState} = 'errored' THEN 2
-				WHEN ${sessions.sandboxState} = 'paused' THEN 3
-				ELSE 4
-			END`,
-			desc(sessions.lastActivityAt),
+			...(filters?.sortBy === "recency"
+				? [desc(sessions.lastActivityAt)]
+				: [
+						sql`CASE
+							WHEN ${sessions.agentState} IN ('waiting_approval', 'waiting_input') THEN 0
+							WHEN ${sessions.agentState} = 'iterating' AND ${sessions.terminalState} IS NULL THEN 1
+							WHEN ${sessions.agentState} = 'errored' THEN 2
+							WHEN ${sessions.sandboxState} = 'paused' THEN 3
+							ELSE 4
+						END`,
+						desc(sessions.lastActivityAt),
+					]),
 		)
 		.limit(filters?.limit ?? 50);
 
@@ -1922,6 +1925,61 @@ export async function updateManagerSessionLinkage(
 		.update(sessions)
 		.set(updates)
 		.where(and(eq(sessions.id, sessionId), eq(sessions.organizationId, organizationId)));
+}
+
+// ============================================
+// Ad-hoc Manager Session Creation
+// ============================================
+
+export interface CreateAdHocManagerSessionInput {
+	organizationId: string;
+	createdBy: string;
+	systemPrompt?: string | null;
+	agentConfig?: Record<string, unknown> | null;
+	configurationId?: string | null;
+	repoId?: string | null;
+	repoBaselineId?: string | null;
+	repoBaselineTargetId?: string | null;
+	workerId?: string | null;
+	initialPrompt?: string | null;
+	visibility?: "private" | "shared" | "org";
+	title?: string | null;
+}
+
+/**
+ * Create a standalone manager session (not tied to a worker).
+ *
+ * Used for ad-hoc coworker sessions that clone a worker's config but run
+ * independently from the worker's main thread.
+ */
+export async function createAdHocManagerSession(
+	input: CreateAdHocManagerSessionInput,
+): Promise<SessionRow> {
+	const db = getDb();
+	const [row] = await db
+		.insert(sessions)
+		.values({
+			organizationId: input.organizationId,
+			createdBy: input.createdBy,
+			sessionType: "coding",
+			kind: "manager",
+			status: "starting",
+			runtimeStatus: "starting",
+			operatorStatus: "active",
+			visibility: input.visibility ?? "org",
+			systemPrompt: input.systemPrompt ?? null,
+			agentConfig: input.agentConfig ?? null,
+			configurationId: input.configurationId ?? null,
+			repoId: input.repoId ?? null,
+			repoBaselineId: input.repoBaselineId ?? null,
+			repoBaselineTargetId: input.repoBaselineTargetId ?? null,
+			workerId: input.workerId ?? null,
+			initialPrompt: input.initialPrompt ?? null,
+			title: input.title ?? null,
+		})
+		.returning();
+
+	return row;
 }
 
 // ============================================

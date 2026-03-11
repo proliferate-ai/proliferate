@@ -1,5 +1,6 @@
 "use client";
 
+import { WorkerOrb } from "@/components/automations/worker-card";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -12,14 +13,22 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { BlocksIcon, BlocksLoadingIcon, GithubIcon, SlackIcon } from "@/components/ui/icons";
+import {
+	BlocksIcon,
+	BlocksLoadingIcon,
+	GithubIcon,
+	OpenCodeIcon,
+	SlackIcon,
+} from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
 import { OVERALL_WORK_STATE_DISPLAY, type OverallWorkStateDisplayConfig } from "@/config/sessions";
 import { useHasSlackInstallation } from "@/hooks/integrations/use-integrations";
 import { useOverallWorkState } from "@/hooks/sessions/use-overall-work-state";
 import {
+	useArchiveSession,
 	useDeleteSession,
+	useMarkSessionDone,
 	usePrefetchSession,
 	useRenameSession,
 	useSessionNotificationSubscription,
@@ -31,7 +40,15 @@ import { cn } from "@/lib/display/utils";
 import type { PendingRunSummary } from "@proliferate/shared/contracts/automations";
 import type { Session } from "@proliferate/shared/contracts/sessions";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Bell, BellOff, GitPullRequestArrow, Settings, Terminal } from "lucide-react";
+import {
+	Archive,
+	Bell,
+	BellOff,
+	CheckCircle,
+	GitPullRequestArrow,
+	Settings,
+	Terminal,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -67,33 +84,40 @@ function formatCompactTimeAgo(date: Date): string {
 }
 
 function OriginCell({ session }: { session: Session }) {
-	if (session.automationId && session.automation) {
+	const name =
+		session.automationId && session.automation
+			? session.automation.name
+			: (session.workerName ?? null);
+
+	if (name) {
 		return (
-			<span className="text-xs text-muted-foreground truncate block">
-				{session.automation.name}
+			<span className="inline-flex items-center gap-1.5" title={name}>
+				<WorkerOrb name={name} size={16} />
 			</span>
 		);
 	}
 
 	if (session.origin === "slack" || session.clientType === "slack") {
 		return (
-			<span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-				<SlackIcon className="h-3 w-3" />
-				Slack
+			<span className="inline-flex items-center" title="Slack">
+				<SlackIcon className="h-4 w-4" />
 			</span>
 		);
 	}
 
 	if (session.origin === "cli" || session.clientType === "cli") {
 		return (
-			<span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-				<Terminal className="h-3 w-3" />
-				CLI
+			<span className="inline-flex items-center" title="CLI">
+				<Terminal className="h-4 w-4 text-muted-foreground" />
 			</span>
 		);
 	}
 
-	return <span className="text-xs text-muted-foreground">Ad-hoc</span>;
+	return (
+		<span className="inline-flex items-center" title="OpenCode">
+			<OpenCodeIcon className="h-4 w-4" />
+		</span>
+	);
 }
 
 function RepoCell({
@@ -112,9 +136,7 @@ function RepoCell({
 					<GithubIcon className="h-3 w-3 shrink-0 -translate-y-px" />
 					<span className="truncate">{repoShortName}</span>
 				</>
-			) : (
-				<span className="text-muted-foreground/60">No repo</span>
-			)}
+			) : null}
 			{firstPr && (
 				<a
 					href={prUrls![0]}
@@ -190,6 +212,8 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 	const prefetchSession = usePrefetchSession();
 	const renameSession = useRenameSession();
 	const deleteSession = useDeleteSession();
+	const archiveSession = useArchiveSession();
+	const markDone = useMarkSessionDone();
 
 	const sandboxState =
 		typeof session.status === "object" && session.status !== null
@@ -207,8 +231,9 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 	const [menuOpen, setMenuOpen] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 
-	const { overallWorkState, needsAttention } = useOverallWorkState(session, pendingRun);
+	const { overallWorkState, needsUrgentAttention } = useOverallWorkState(session, pendingRun);
 	const config = OVERALL_WORK_STATE_DISPLAY[overallWorkState];
+	const isWorking = overallWorkState === "working";
 
 	const repoShortName = session.repo?.githubRepoName
 		? getRepoShortName(session.repo.githubRepoName)
@@ -272,6 +297,7 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 				className={cn(
 					"group flex items-center px-4 py-2.5 border-b border-border/50 hover:bg-muted/50 transition-colors text-sm cursor-pointer last:border-0",
 					isNew && "animate-in fade-in slide-in-from-top-2 duration-300 bg-primary/5",
+					isWorking && "bg-primary/[0.03] border-l-2 border-l-primary/40",
 				)}
 				onMouseEnter={() => prefetchSession(session.id)}
 				onClick={handleRowClick}
@@ -279,11 +305,12 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 					if (e.key === "Enter" && !isEditing) handleRowClick();
 				}}
 			>
-				{/* Attention dot (fixed width so title alignment is stable) */}
-				<div className="w-4 shrink-0 flex items-center justify-center">
-					{needsAttention && (
+				{/* Agent icon */}
+				<div className="w-6 shrink-0 flex items-center justify-center relative">
+					<OriginCell session={session} />
+					{needsUrgentAttention && (
 						<span
-							className="h-1.5 w-1.5 rounded-full bg-primary shrink-0"
+							className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-primary"
 							aria-label="Needs attention"
 							title="Needs attention"
 						/>
@@ -291,7 +318,7 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 				</div>
 
 				{/* Title (flex-1) */}
-				<div className="flex-1 min-w-[140px] flex items-center gap-1.5">
+				<div className="flex-1 min-w-[140px] flex items-center gap-1.5 ml-1.5">
 					{isSetup && (
 						<Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0 gap-0.5">
 							<Settings className="h-2.5 w-2.5" />
@@ -328,11 +355,6 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 					<StatusCell config={config} />
 				</Column>
 
-				{/* Origin (w-20, hidden on mobile) */}
-				<Column className="w-16 shrink-0 hidden md:block">
-					<OriginCell session={session} />
-				</Column>
-
 				{/* Creator avatar (w-8, hidden on mobile) */}
 				<Column className="w-8 shrink-0 hidden md:flex items-center">
 					<CreatorCell createdBy={session.createdBy} creator={session.creator} />
@@ -352,8 +374,8 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 						<ItemActionsMenu
 							onRename={handleRename}
 							onDelete={() => setDeleteDialogOpen(true)}
-							customActions={
-								canSubscribe
+							customActions={[
+								...(canSubscribe
 									? [
 											{
 												label: isSubscribed ? "Notifications on" : "Notify me",
@@ -385,8 +407,38 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 												description: !hasSlack ? "Connect Slack in Settings" : undefined,
 											},
 										]
-									: undefined
-							}
+									: []),
+								...(overallWorkState !== "done"
+									? [
+											{
+												label: "Mark as done",
+												icon: <CheckCircle className="h-4 w-4" />,
+												onClick: async () => {
+													try {
+														await markDone.mutateAsync(session.id);
+														toast.success("Session marked as done");
+													} catch (err) {
+														toast.error(
+															err instanceof Error ? err.message : "Failed to mark as done",
+														);
+													}
+												},
+											},
+										]
+									: []),
+								{
+									label: "Archive",
+									icon: <Archive className="h-4 w-4" />,
+									onClick: async () => {
+										try {
+											await archiveSession.mutateAsync(session.id);
+											toast.success("Session archived");
+										} catch (err) {
+											toast.error(err instanceof Error ? err.message : "Failed to archive session");
+										}
+									},
+								},
+							]}
 							onOpenChange={setMenuOpen}
 						/>
 					</div>

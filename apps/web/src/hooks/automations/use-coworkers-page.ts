@@ -128,7 +128,7 @@ export function useCoworkersPage() {
 			setCreateSystemPrompt("");
 			setCreateCapabilities([]);
 			startTransition(() => {
-				router.push(`/coworkers/${result.worker.id}`);
+				router.push(`/workspace/${result.worker.managerSessionId}`);
 			});
 		} catch (err) {
 			setCreateError(err instanceof Error ? err.message : "Failed to create coworker");
@@ -149,13 +149,13 @@ export function useCoworkersPage() {
 			}
 		}
 		try {
-			const worker = await createFromTemplate.mutateAsync({
+			const result = await createFromTemplate.mutateAsync({
 				templateId: template.id,
 				integrationBindings,
 			});
 			setPickerOpen(false);
 			startTransition(() => {
-				router.push(`/coworkers/${worker.id}`);
+				router.push(`/workspace/${result.managerSessionId}`);
 			});
 		} catch (err) {
 			setCreateError(

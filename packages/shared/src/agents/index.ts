@@ -87,7 +87,7 @@ export const AGENTS: Record<AgentType, AgentInfo> = {
 			// Anthropic
 			{
 				id: "claude-sonnet-4.6",
-				name: "Claude Sonnet 4.6",
+				name: "Sonnet 4.6",
 				description: "Best model for agents and coding",
 				provider: "anthropic",
 				default: true,
@@ -95,7 +95,7 @@ export const AGENTS: Record<AgentType, AgentInfo> = {
 			},
 			{
 				id: "claude-opus-4.6",
-				name: "Claude Opus 4.6",
+				name: "Opus 4.6",
 				description: "Most capable model for complex tasks",
 				provider: "anthropic",
 				supportsReasoning: true,

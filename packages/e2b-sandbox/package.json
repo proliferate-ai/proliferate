@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"prebuild:template": "pnpm --filter @proliferate/sandbox-daemon bundle && test -f ../sandbox-daemon/dist/daemon.cjs && cp ../sandbox-daemon/dist/daemon.cjs ./sandbox-daemon.cjs || (echo 'ERROR: sandbox-daemon bundle not found' && exit 1)",
+		"prebuild:template": "rm -f ./proliferate-sandbox-mcp.tgz ./proliferate-sandbox-mcp-*.tgz && pnpm --filter @proliferate/sandbox-daemon bundle && test -f ../sandbox-daemon/dist/daemon.cjs && cp ../sandbox-daemon/dist/daemon.cjs ./sandbox-daemon.cjs && pnpm --filter @proliferate/sandbox-memory bundle && test -f ../sandbox-memory/dist/sandbox-memory.cjs && cp ../sandbox-memory/dist/sandbox-memory.cjs ./sandbox-memory.cjs && pnpm --filter proliferate-sandbox-mcp bundle && test -f ../sandbox-mcp/dist/bundle.cjs && test -f ../sandbox-mcp/dist/proliferate.cjs && (cd ../sandbox-mcp && npm pack --pack-destination ../e2b-sandbox >/dev/null) && mv ./proliferate-sandbox-mcp-*.tgz ./proliferate-sandbox-mcp.tgz || (echo 'ERROR: E2B template prebuild artifacts not found' && exit 1)",
 		"build:template": "npx tsx build.ts"
 	},
 	"dependencies": {

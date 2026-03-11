@@ -82,6 +82,17 @@ export async function startService(input: {
 		throw new Error(`Failed to start service "${name}"`);
 	}
 
+	processHandle.on("error", (err) => {
+		logStream.write(`\n=== Spawn error: ${err.message} ===\n`);
+		logStream.end();
+		const state = loadState();
+		if (state.services[name]) {
+			state.services[name].status = "error";
+			saveState(state);
+		}
+		deleteProcess(name);
+	});
+
 	processHandle.stdout?.pipe(logStream);
 	processHandle.stderr?.pipe(logStream);
 	setProcess(name, processHandle);

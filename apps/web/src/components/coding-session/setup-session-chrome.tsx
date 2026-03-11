@@ -3,7 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { useFinalizeSetup } from "@/hooks/sessions/use-sessions";
 import { startSnapshotProgressToast } from "@/lib/display/snapshot-progress-toast";
-import { Loader2 } from "lucide-react";
+import { useSetupProgressStore } from "@/stores/setup-progress";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface SetupSessionChromeProps {
@@ -26,6 +27,9 @@ export function SetupSessionChrome({
 }: SetupSessionChromeProps) {
 	const router = useRouter();
 	const finalizeSetupMutation = useFinalizeSetup();
+	const snapshotSaved = useSetupProgressStore((s) =>
+		s.activeSessionId === sessionId ? s.progress.snapshotSaved : false,
+	);
 
 	const handleSaveSnapshot = async () => {
 		const progressToast = startSnapshotProgressToast({
@@ -52,6 +56,27 @@ export function SetupSessionChrome({
 	};
 
 	const isSaving = finalizeSetupMutation.isPending;
+
+	if (snapshotSaved) {
+		return (
+			<div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card">
+				<div className="flex items-center gap-2 min-w-0">
+					<CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+					<span className="text-sm font-medium truncate">
+						Setup complete{repoName ? `: ${repoName}` : ""}
+					</span>
+					<span className="text-xs text-muted-foreground">
+						Snapshot saved. You can now start coding sessions.
+					</span>
+				</div>
+				<div className="flex items-center gap-2">
+					<Button size="sm" className="h-7" onClick={() => router.push("/dashboard")}>
+						Go to Dashboard
+					</Button>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card">

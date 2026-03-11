@@ -62,13 +62,13 @@ export function useCoworkerCreate() {
 			}
 		}
 		try {
-			const worker = await createFromTemplate.mutateAsync({
+			const result = await createFromTemplate.mutateAsync({
 				templateId: template.id,
 				integrationBindings,
 			});
 			setPickerOpen(false);
 			startTransition(() => {
-				router.push(`/coworkers/${worker.id}`);
+				router.push(`/workspace/${result.managerSessionId}`);
 			});
 		} catch (err) {
 			setCreateError(

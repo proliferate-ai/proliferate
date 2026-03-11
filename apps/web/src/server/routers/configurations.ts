@@ -11,6 +11,7 @@ import {
 	ConfigurationSchema,
 	CreateConfigurationInputSchema,
 	UpdateConfigurationInputSchema,
+	UpdateRefreshSettingsInputSchema,
 } from "@proliferate/shared/contracts/configurations";
 import {
 	FinalizeSetupInputSchema,
@@ -331,6 +332,24 @@ export const configurationsRouter = {
 				return { success: true };
 			} catch (error) {
 				throwMappedConfigurationError(error, "Failed to detach repo");
+			}
+		}),
+
+	/**
+	 * Update snapshot refresh settings for a configuration.
+	 */
+	updateRefreshSettings: orgProcedure
+		.input(UpdateRefreshSettingsInputSchema)
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			try {
+				await configurations.updateRefreshSettingsForOrg(input.configurationId, context.orgId, {
+					refreshEnabled: input.refreshEnabled,
+					refreshIntervalMinutes: input.refreshIntervalMinutes,
+				});
+				return { success: true };
+			} catch (error) {
+				throwMappedConfigurationError(error, "Failed to update refresh settings");
 			}
 		}),
 };
