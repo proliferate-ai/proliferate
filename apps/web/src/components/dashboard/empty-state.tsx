@@ -224,6 +224,12 @@ export function EmptyDashboard() {
 	const hasSessions = !sessionsLoading && (sessions ?? []).length > 0;
 	const isEmpty = !sessionsLoading && (sessions ?? []).length === 0;
 
+	console.log("[dashboard] sessions render:", {
+		count: sessions?.length ?? 0,
+		loading: sessionsLoading,
+		ids: sessions?.slice(0, 3).map((s) => s.id.slice(0, 8)),
+	});
+
 	const firstName = authSession?.user?.name?.split(" ")[0] ?? "";
 	const greeting = firstName ? getGreeting(firstName) : "How can I help you today?";
 

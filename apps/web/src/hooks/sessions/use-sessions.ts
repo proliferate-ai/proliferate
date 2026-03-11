@@ -109,14 +109,32 @@ export function useCreateSession() {
 			);
 
 			// Optimistically prepend to all sessions.list caches so lists update instantly
-			queryClient.setQueriesData<{ sessions: Session[] }>(
-				{ queryKey: orpc.sessions.list.key() },
-				(old) => {
-					if (!old?.sessions) return old;
-					if (old.sessions.some((s) => s.id === result.sessionId)) return old;
-					return { sessions: [partialSession, ...old.sessions] };
-				},
-			);
+			const listKey = orpc.sessions.list.key();
+			const matchingQueries = queryClient.getQueriesData<{ sessions: Session[] }>({
+				queryKey: listKey,
+			});
+			console.log("[session-create] optimistic update:", {
+				sessionId: result.sessionId,
+				matchingQueryCount: matchingQueries.length,
+				queryKeys: matchingQueries.map(([key]) => JSON.stringify(key)),
+			});
+
+			queryClient.setQueriesData<{ sessions: Session[] }>({ queryKey: listKey }, (old) => {
+				if (!old?.sessions) {
+					console.log("[session-create] skipped: no old sessions data");
+					return old;
+				}
+				if (old.sessions.some((s) => s.id === result.sessionId)) {
+					console.log("[session-create] skipped: already in list");
+					return old;
+				}
+				console.log(
+					"[session-create] prepending to list with",
+					old.sessions.length,
+					"existing sessions",
+				);
+				return { sessions: [partialSession, ...old.sessions] };
+			});
 		},
 	});
 
