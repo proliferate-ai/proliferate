@@ -281,7 +281,7 @@ export function EmptyDashboard() {
 			{/* Prompt area — always pinned at the same position */}
 			<div className="flex flex-col items-center px-4 pt-8 md:pt-16 pb-4">
 				<h2 className="text-3xl font-semibold mb-6">{greeting}</h2>
-				<div className="w-full max-w-2xl">
+				<div className="w-full ">
 					<PromptInput onSubmit={handleSubmit} isLoading={isSubmitting} />
 				</div>
 			</div>

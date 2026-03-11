@@ -155,10 +155,10 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 	};
 
 	return (
-		<form onSubmit={handleSubmit} className="w-full max-w-2xl mx-auto">
+		<form onSubmit={handleSubmit} className="w-full max-w-3xl mx-auto">
 			<div
 				className={cn(
-					"rounded-2xl border border-border bg-card dark:bg-chat-input shadow-sm transition-all overflow-hidden",
+					"rounded-2xl mx-4 border border-border bg-card dark:bg-chat-input shadow-sm transition-all overflow-hidden",
 					"has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:border-transparent",
 				)}
 			>

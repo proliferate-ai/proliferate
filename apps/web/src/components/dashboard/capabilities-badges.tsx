@@ -30,7 +30,7 @@ interface CapabilitiesBadgesProps {
 
 function BadgeCircle({ provider }: { provider: Provider | null }) {
 	return (
-		<div className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-foreground">
+		<div className="flex -mr-3 h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-foreground">
 			{provider ? (
 				<ProviderIcon provider={provider} size="sm" />
 			) : (
