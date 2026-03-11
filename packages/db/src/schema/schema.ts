@@ -221,7 +221,7 @@ export const organization = pgTable(
 		}),
 		onboardingComplete: boolean("onboarding_complete").default(false),
 		// Billing V2 fields
-		billingState: text("billing_state").default("unconfigured").notNull(),
+		billingState: text("billing_state").default("free").notNull(),
 		billingPlan: text("billing_plan"),
 		shadowBalance: numeric("shadow_balance", { precision: 12, scale: 6 }).default("0"),
 		shadowBalanceUpdatedAt: timestamp("shadow_balance_updated_at", {

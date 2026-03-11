@@ -19,6 +19,11 @@ import * as onboardingDb from "./db";
 
 const logger = getServicesLogger().child({ module: "onboarding" });
 
+/** True if the org has never received free credits (first-time setup). */
+function needsFreeCredits(org: { shadowBalance: string | null } | null | undefined): boolean {
+	return !org || Number(org.shadowBalance ?? 0) === 0;
+}
+
 // ============================================
 // Types
 // ============================================
@@ -37,7 +42,7 @@ export async function completeOnboarding(orgId: string, userId: string): Promise
 	await orgsService.markOnboardingComplete(orgId, true);
 
 	const org = await orgsService.getBillingInfoV2(orgId);
-	if (org?.billingState === "free" || org?.billingState === "unconfigured") {
+	if (needsFreeCredits(org)) {
 		await orgsService.initializeBillingState(orgId, "free", FREE_CREDITS);
 	}
 
@@ -268,8 +273,8 @@ export async function startTrial(input: StartTrialInput): Promise<StartTrialResu
 	const org = await orgsService.getBillingInfoV2(orgId);
 	await orgsService.updateBillingPlan(orgId, selectedPlan);
 
-	// Only initialize free credits if the org isn't already in a paid state
-	if (!org || org.billingState === "free" || org.billingState === "unconfigured") {
+	// Only initialize free credits for first-time setup (never granted before)
+	if (needsFreeCredits(org)) {
 		await orgsService.initializeBillingState(orgId, "free", FREE_CREDITS);
 	}
 
@@ -416,7 +421,7 @@ export async function autoCompleteIfNeeded(orgId: string, userId: string): Promi
 
 			// Initialize billing for orgs that haven't gone through startTrial
 			const org = await orgsService.getBillingInfoV2(orgId);
-			if (org?.billingState === "free" || org?.billingState === "unconfigured") {
+			if (needsFreeCredits(org)) {
 				await orgsService.initializeBillingState(orgId, "free", FREE_CREDITS);
 			}
 

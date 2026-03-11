@@ -107,7 +107,8 @@ export function useBuyCredits() {
 		...orpc.billing.buyCredits.mutationOptions(),
 		onSuccess: () => {
 			// Invalidate billing data to refresh credit balance
-			queryClient.invalidateQueries({ queryKey: ["billing"] });
+			queryClient.invalidateQueries({ queryKey: orpc.billing.getInfo.key() });
+			queryClient.invalidateQueries({ queryKey: orpc.billing.getUsageSummary.key() });
 		},
 	});
 }
@@ -123,7 +124,22 @@ export function useUpdateBillingSettings() {
 		...orpc.billing.updateSettings.mutationOptions(),
 		onSuccess: () => {
 			// Invalidate billing data to refresh settings
-			queryClient.invalidateQueries({ queryKey: ["billing"] });
+			queryClient.invalidateQueries({ queryKey: orpc.billing.getInfo.key() });
+			queryClient.invalidateQueries({ queryKey: orpc.billing.getUsageSummary.key() });
+		},
+	});
+}
+
+/**
+ * Hook to set up a payment method (add credit card).
+ */
+export function useSetupPaymentMethod() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		...orpc.billing.setupPaymentMethod.mutationOptions(),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: orpc.billing.getInfo.key() });
 		},
 	});
 }
@@ -137,7 +153,8 @@ export function useActivatePlan() {
 	return useMutation({
 		...orpc.billing.activatePlan.mutationOptions(),
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["billing"] });
+			queryClient.invalidateQueries({ queryKey: orpc.billing.getInfo.key() });
+			queryClient.invalidateQueries({ queryKey: orpc.billing.getUsageSummary.key() });
 		},
 	});
 }
