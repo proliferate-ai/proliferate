@@ -1,5 +1,6 @@
 "use client";
 
+import { WorkerOrb } from "@/components/automations/worker-card";
 import { openIntercomMessenger } from "@/components/providers/intercom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Text } from "@/components/ui/text";
+import { useWorkers } from "@/hooks/automations/use-workers";
 import { useSessions } from "@/hooks/sessions/use-sessions";
 import { useSignOut } from "@/hooks/ui/use-sign-out";
 import { useSession } from "@/lib/auth/client";
@@ -420,10 +422,16 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 	const isSettingsPage = pathname?.startsWith("/settings");
 
 	const { data: recentSessions } = useSessions({
-		limit: 5,
+		limit: 8,
 		sortBy: "recency",
 		refetchInterval: 10000,
 	});
+	const { data: workers } = useWorkers();
+
+	const managerSessionIds = new Set((workers ?? []).map((w) => w.managerSessionId).filter(Boolean));
+	const nonManagerSessions = (recentSessions ?? [])
+		.filter((s) => !managerSessionIds.has(s.id) && s.kind !== "manager")
+		.slice(0, 5);
 
 	const handleNavigate = (path: string) => {
 		router.push(path);
@@ -466,8 +474,45 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 				/>
 			</div>
 
+			{/* Coworkers */}
+			{workers && workers.length > 0 && (
+				<div className="flex flex-col gap-1">
+					<SectionLabel>Coworkers</SectionLabel>
+					{workers.slice(0, 5).map((worker) => {
+						const isActive =
+							pathname === `/workspace/${worker.managerSessionId}` ||
+							pathname === `/coworkers/${worker.id}`;
+						return (
+							<Button
+								key={worker.id}
+								type="button"
+								variant="ghost"
+								onClick={() =>
+									handleNavigate(
+										worker.managerSessionId
+											? `/workspace/${worker.managerSessionId}`
+											: `/coworkers/${worker.id}`,
+									)
+								}
+								className={cn(
+									"flex items-center gap-2 w-full px-2 h-7 rounded-lg text-xs font-normal justify-start",
+									isActive
+										? "bg-foreground/[0.05] text-foreground"
+										: "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]",
+								)}
+							>
+								<div className="shrink-0">
+									<WorkerOrb name={worker.name} size={14} />
+								</div>
+								<span className="truncate">{worker.name}</span>
+							</Button>
+						);
+					})}
+				</div>
+			)}
+
 			{/* Recent sessions */}
-			{recentSessions && recentSessions.length > 0 && (
+			{nonManagerSessions.length > 0 && (
 				<div className="flex flex-col gap-1">
 					<button
 						type="button"
@@ -482,7 +527,7 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 						)}
 					</button>
 					{sidebarRecentsOpen &&
-						recentSessions.map((session) => {
+						nonManagerSessions.map((session) => {
 							const title = session.title || session.promptSnippet || "Untitled";
 							const isActive = pathname === `/workspace/${session.id}`;
 							const isSetup = session.kind === "setup" || session.sessionType === "setup";
