@@ -1,5 +1,5 @@
 import { createLogger } from "@proliferate/logger";
-import { configurations, integrations, sessions } from "@proliferate/services";
+import { configurations, integrations, sessions, users } from "@proliferate/services";
 import {
 	type AgentConfig,
 	type ModelId,
@@ -475,6 +475,22 @@ async function resolveGitHubToken(
 	repoUrl: string,
 ): Promise<string> {
 	try {
+		// Priority 0: User's personal GitHub OAuth token (from better-auth account table)
+		if (userId) {
+			const personalAccount = await users.getGitHubAccount(userId);
+			if (personalAccount?.accessToken) {
+				const hasAccess = await tokenHasRepoAccess(personalAccount.accessToken, repoUrl);
+				if (hasAccess) {
+					logger.info({ repoUrl, authType: "personal-oauth" }, "Using personal GitHub token");
+					return personalAccount.accessToken;
+				}
+				logger.debug(
+					{ repoUrl },
+					"Personal GitHub token lacks repo access, falling back to integrations",
+				);
+			}
+		}
+
 		// Get repo connections with integration details
 		const repoConnections = await integrations.getRepoConnectionsWithIntegrations(repoId);
 
