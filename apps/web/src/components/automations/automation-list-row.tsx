@@ -1,11 +1,19 @@
 "use client";
 
 import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
+import { BlocksIcon, LinearIcon, SlackIcon } from "@/components/ui/icons";
 import { StatusDot } from "@/components/ui/status-dot";
-import { ACTION_TOOLS } from "@/config/coworkers";
+import { ACTION_TOOLS, type ActionToolIconKey } from "@/config/coworkers";
 import { formatRelativeTime } from "@/lib/display/utils";
 import { Building2 } from "lucide-react";
 import Link from "next/link";
+import type { ComponentType } from "react";
+
+const ACTION_TOOL_ICONS: Record<ActionToolIconKey, ComponentType<{ className?: string }>> = {
+	blocks: BlocksIcon,
+	slack: SlackIcon,
+	linear: LinearIcon,
+};
 
 interface ToolConfig {
 	enabled?: boolean;
@@ -94,9 +102,10 @@ export function AutomationListRow({
 			<div className="hidden md:flex items-center gap-1 w-24 shrink-0">
 				{activeActions.length > 0 ? (
 					<div className="flex items-center gap-0.5">
-						{activeActions.map((t) => (
-							<t.Icon key={t.key} className="h-3.5 w-3.5 text-muted-foreground" />
-						))}
+						{activeActions.map((t) => {
+							const Icon = ACTION_TOOL_ICONS[t.iconKey];
+							return <Icon key={t.key} className="h-3.5 w-3.5 text-muted-foreground" />;
+						})}
 					</div>
 				) : (
 					<span className="text-xs text-muted-foreground/50">—</span>

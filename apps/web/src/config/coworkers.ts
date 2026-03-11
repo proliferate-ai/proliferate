@@ -1,5 +1,4 @@
 import type { Provider } from "@/components/integrations/provider-icon";
-import { BlocksIcon, LinearIcon, SlackIcon } from "@/components/ui/icons";
 
 export type CoworkerListTab = "all" | "active" | "paused";
 
@@ -30,10 +29,17 @@ export const DETAIL_TABS: { value: DetailTab; label: string }[] = [
 	{ value: "configure", label: "Configure" },
 ];
 
+export type ActionToolIconKey = "blocks" | "slack" | "linear";
+
 export const ACTION_TOOLS = [
-	{ key: "create_session" as const, label: "Agent", Icon: BlocksIcon, defaultOn: true },
-	{ key: "slack_notify" as const, label: "Slack", Icon: SlackIcon },
-	{ key: "create_linear_issue" as const, label: "Linear", Icon: LinearIcon },
+	{
+		key: "create_session" as const,
+		label: "Agent",
+		iconKey: "blocks" as ActionToolIconKey,
+		defaultOn: true,
+	},
+	{ key: "slack_notify" as const, label: "Slack", iconKey: "slack" as ActionToolIconKey },
+	{ key: "create_linear_issue" as const, label: "Linear", iconKey: "linear" as ActionToolIconKey },
 ];
 
 export type WorkerStatus = "active" | "automations_paused" | "degraded" | "failed" | "archived";

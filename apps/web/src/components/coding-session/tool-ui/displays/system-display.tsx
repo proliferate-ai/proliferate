@@ -1,7 +1,7 @@
 "use client";
 
+import { getToolLabel } from "@/lib/sessions/tool-utils";
 import { CheckCircle, Loader2 } from "lucide-react";
-import { getToolLabel } from "../config";
 
 interface SystemDisplayProps {
 	toolName: string;

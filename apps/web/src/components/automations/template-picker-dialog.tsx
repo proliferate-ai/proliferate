@@ -176,10 +176,11 @@ export function TemplatePickerDialog({
 						<div className="flex-1 overflow-y-auto px-4 pb-5">
 							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
 								{/* Blank card — always first */}
-								<button
+								<Button
 									type="button"
+									variant="outline"
 									disabled={isPending}
-									className="flex items-center gap-3.5 rounded-2xl p-3 hover:bg-muted/40 transition-colors text-left disabled:opacity-50 border border-dashed border-border"
+									className="flex items-center gap-3.5 rounded-2xl p-3 h-auto hover:bg-muted/40 transition-colors text-left disabled:opacity-50 border-dashed font-normal"
 									onClick={onSelectBlank}
 								>
 									<div className="w-10 h-10 rounded-full bg-muted/60 flex items-center justify-center shrink-0">
@@ -191,18 +192,19 @@ export function TemplatePickerDialog({
 											Start from scratch
 										</p>
 									</div>
-								</button>
+								</Button>
 
 								{/* Template cards */}
 								{filteredTemplates.map((template) => {
 									const missing = getMissingIntegrations(template);
 
 									return (
-										<button
+										<Button
 											key={template.id}
 											type="button"
+											variant="ghost"
 											disabled={isPending}
-											className="flex items-center gap-3.5 rounded-2xl p-3 hover:bg-muted/40 transition-colors text-left disabled:opacity-50"
+											className="flex items-center gap-3.5 rounded-2xl p-3 h-auto hover:bg-muted/40 transition-colors text-left disabled:opacity-50 font-normal"
 											onClick={() => onSelectTemplate(template)}
 										>
 											<WorkerOrb name={template.name} />
@@ -269,7 +271,7 @@ export function TemplatePickerDialog({
 													</p>
 												)}
 											</div>
-										</button>
+										</Button>
 									);
 								})}
 							</div>

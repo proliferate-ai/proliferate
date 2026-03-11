@@ -16,6 +16,7 @@ import {
 	TemplateIntegrationNotFoundError,
 	TemplateNotFoundError,
 } from "../automations/errors";
+import * as billing from "../billing";
 import * as integrationsDb from "../integrations/db";
 import { findForBindingValidation } from "../integrations/service";
 import { getServicesLogger } from "../logger";
@@ -280,6 +281,9 @@ export async function createAdHocSessionFromWorker(input: {
 	createdBy: string;
 	initialPrompt?: string;
 }): Promise<sessionsDb.SessionRow> {
+	// Check billing/credits before creating session
+	await billing.assertBillingGateForOrg(input.organizationId, "session_start");
+
 	const worker = await workersDb.findWorkerById(input.workerId, input.organizationId);
 	if (!worker) {
 		throw new WorkerNotFoundError(input.workerId);

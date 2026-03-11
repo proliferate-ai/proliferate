@@ -3,6 +3,7 @@
 import { ConnectorIcon } from "@/components/integrations/connector-icon";
 import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
 	Select,
 	SelectContent,
@@ -227,9 +228,10 @@ export function WorkerActionSelector({
 					<div key={integration.integrationId ?? integration.integration}>
 						{/* Integration header row */}
 						<div className="flex items-center gap-3 px-4 py-3">
-							<button
+							<Button
 								type="button"
-								className="flex items-center gap-3 flex-1 min-w-0 text-left"
+								variant="ghost"
+								className="flex items-center gap-3 flex-1 min-w-0 text-left h-auto p-0 font-normal"
 								onClick={() => toggleExpanded(integration.integration)}
 								disabled={disabled}
 							>
@@ -255,7 +257,7 @@ export function WorkerActionSelector({
 								<span className="text-xs text-muted-foreground shrink-0">
 									{enabledCount}/{integration.actions.length} actions
 								</span>
-							</button>
+							</Button>
 							<Switch
 								checked={enabled}
 								onCheckedChange={(checked) => toggleIntegration(integration, checked)}

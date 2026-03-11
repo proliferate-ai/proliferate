@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
-import { getFileName, getFilePath } from "../config";
+import { getFileName, getFilePath } from "@/lib/sessions/tool-utils";
 
 interface EditDisplayProps {
 	toolName: string;

@@ -22,6 +22,7 @@ import {
 	IntegrationInactiveError,
 	IntegrationNotFoundError,
 	SlackConfigValidationError,
+	SlackDmDeliveryError,
 } from "./errors";
 import { attachCreators, groupByProvider, toIntegration, toIntegrationWithCreator } from "./mapper";
 import {
@@ -1227,7 +1228,7 @@ export async function sendSlackDm(
 ): Promise<void> {
 	const encryptedToken = await integrationsDb.getSlackInstallationBotToken(installationId);
 	if (!encryptedToken) {
-		throw new Error("No bot token for installation");
+		throw new SlackDmDeliveryError("No bot token for installation");
 	}
 
 	const { decrypt, getEncryptionKey } = await import("@proliferate/shared/crypto");
@@ -1249,7 +1250,7 @@ export async function sendSlackDm(
 		error?: string;
 	};
 	if (!openResult.ok || !openResult.channel?.id) {
-		throw new Error(`conversations.open: ${openResult.error ?? "unknown"}`);
+		throw new SlackDmDeliveryError(`conversations.open: ${openResult.error ?? "unknown"}`);
 	}
 
 	// Post message
@@ -1268,7 +1269,7 @@ export async function sendSlackDm(
 	});
 	const postResult = (await postResponse.json()) as { ok: boolean; error?: string };
 	if (!postResult.ok) {
-		throw new Error(`chat.postMessage: ${postResult.error ?? "unknown"}`);
+		throw new SlackDmDeliveryError(`chat.postMessage: ${postResult.error ?? "unknown"}`);
 	}
 }
 

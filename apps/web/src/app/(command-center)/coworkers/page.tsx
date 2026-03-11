@@ -232,9 +232,10 @@ export default function CoworkersPage() {
 							</p>
 							<div className="flex items-center gap-3">
 								<OrbPicker selectedIndex={selectedOrbIndex} onSelect={setSelectedOrbIndex}>
-									<button
+									<Button
 										type="button"
-										className="rounded-xl cursor-pointer shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+										variant="ghost"
+										className="rounded-xl cursor-pointer shrink-0 h-auto p-0"
 									>
 										<WorkerOrb
 											name={
@@ -244,7 +245,7 @@ export default function CoworkersPage() {
 											}
 											size={40}
 										/>
-									</button>
+									</Button>
 								</OrbPicker>
 								<Input
 									value={createName}
