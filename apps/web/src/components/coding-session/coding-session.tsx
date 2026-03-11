@@ -516,7 +516,6 @@ export function CodingSession({
 			<div className="h-5 w-px bg-border/60 shrink-0" />
 			{sessionData?.automation?.name || sessionData?.workerName || sessionData?.workerId ? (
 				<div className="shrink-0">
-					,
 					<WorkerOrb
 						name={
 							sessionData.automation?.name ?? sessionData.workerName ?? displayTitle ?? "Coworker"
