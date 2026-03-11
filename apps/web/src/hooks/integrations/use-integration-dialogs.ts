@@ -9,7 +9,7 @@ interface UseIntegrationDialogsOptions {
 	disconnectOAuth: (provider: Provider, integrationId: string) => Promise<void>;
 	handleSlackDisconnect: () => Promise<void>;
 	handleRemoveConnector: (id: string) => Promise<void>;
-	handleComposioDisconnect?: (connectorId: string) => Promise<void>;
+	handleComposioDisconnect: (connectorId: string) => Promise<void>;
 }
 
 export type IntegrationDetailTab = "connect" | "about" | "settings";
@@ -100,7 +100,7 @@ export function useIntegrationDialogs({
 			await disconnectOAuth(entry.provider, integrationId);
 		} else if (entry.type === "slack") {
 			await handleSlackDisconnect();
-		} else if (entry.type === "composio-oauth" && integrationId && handleComposioDisconnect) {
+		} else if (entry.type === "composio-oauth" && integrationId) {
 			await handleComposioDisconnect(integrationId);
 		}
 		setDisconnectTarget(null);

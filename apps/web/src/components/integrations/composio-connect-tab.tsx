@@ -4,7 +4,6 @@ import { ConnectorForm } from "@/components/integrations/connector-form";
 import type { CatalogEntry } from "@/components/integrations/integration-picker-dialog";
 import { Button } from "@/components/ui/button";
 import { useComposioAvailable } from "@/hooks/integrations/use-composio";
-import { env } from "@proliferate/environment/public";
 import type { ConnectorConfig, ConnectorPreset } from "@proliferate/shared";
 import { CheckCircle2, Loader2 } from "lucide-react";
 
@@ -28,7 +27,7 @@ export function ComposioConnectTab({
 	onClose,
 }: ComposioConnectTabProps) {
 	const { data: availabilityData, isLoading: isCheckingAvailability } = useComposioAvailable();
-	const composioAvailable = availabilityData?.available ?? false;
+	const composioAvailable = availabilityData?.available;
 
 	// Loading state while checking availability
 	if (isCheckingAvailability) {
@@ -40,7 +39,7 @@ export function ComposioConnectTab({
 	}
 
 	// Self-hosted fallback: show manual connector form
-	if (!composioAvailable) {
+	if (composioAvailable === false) {
 		return (
 			<div className="space-y-4">
 				<p className="text-sm text-muted-foreground">{entry.description}</p>
@@ -110,7 +109,9 @@ export function ComposioConnectTab({
 }
 
 function buildOAuthUrl(toolkit: string): string {
-	const appUrl = env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
-	const returnUrl = encodeURIComponent("/dashboard/integrations");
-	return `${appUrl}/api/integrations/composio/oauth?toolkit=${encodeURIComponent(toolkit)}&returnUrl=${returnUrl}`;
+	const params = new URLSearchParams({
+		toolkit,
+		returnUrl: "/dashboard/integrations",
+	});
+	return `/api/integrations/composio/oauth?${params.toString()}`;
 }

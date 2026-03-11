@@ -1866,6 +1866,11 @@ export const orgConnectors = pgTable(
 		uniqueIndex("org_connectors_composio_toolkit_org_unique")
 			.on(table.organizationId, table.composioToolkit)
 			.where(sql`composio_toolkit IS NOT NULL`),
+		check(
+			"org_connectors_composio_managed_shape_check",
+			sql`(composio_toolkit IS NULL AND composio_account_id IS NULL)
+				OR (composio_toolkit IS NOT NULL AND composio_account_id IS NOT NULL)`,
+		),
 	],
 );
 

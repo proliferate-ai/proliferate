@@ -120,6 +120,28 @@ export async function update(
 }
 
 /**
+ * Update a Composio-managed connector on reconnect (URL, enabled, account ID).
+ */
+export async function updateComposioReconnect(
+	id: string,
+	organizationId: string,
+	input: { url: string; composioAccountId: string },
+): Promise<OrgConnectorRow | undefined> {
+	const db = getDb();
+	const [row] = await db
+		.update(orgConnectors)
+		.set({
+			url: input.url,
+			enabled: true,
+			composioAccountId: input.composioAccountId,
+			updatedAt: new Date(),
+		})
+		.where(and(eq(orgConnectors.id, id), eq(orgConnectors.organizationId, organizationId)))
+		.returning();
+	return row;
+}
+
+/**
  * Find a connector by Composio toolkit and organization.
  */
 export async function findByComposioToolkit(

@@ -15,6 +15,7 @@ import {
 	ConnectorAuthSchema,
 	ConnectorConfigSchema,
 	ConnectorRiskPolicySchema,
+	getConnectorPresetByKey,
 } from "@proliferate/shared/connectors";
 import {
 	GitHubStatusSchema,
@@ -545,9 +546,12 @@ export const integrationsRouter = {
 			}
 
 			// Block piggybacking on the platform Composio key via generic connector creation
-			if (input.secretKey === "COMPOSIO_API_KEY") {
+			const preset = getConnectorPresetByKey(input.presetKey);
+			const effectiveSecretKey = input.secretKey || preset?.recommendedSecretKey;
+			if (effectiveSecretKey === "COMPOSIO_API_KEY") {
 				throw new ORPCError("BAD_REQUEST", {
-					message: "COMPOSIO_API_KEY is reserved for Composio-managed connectors",
+					message:
+						"COMPOSIO_API_KEY is reserved for managed Composio connectors. Use the Composio OAuth flow instead.",
 				});
 			}
 
@@ -596,11 +600,7 @@ export const integrationsRouter = {
 			}
 
 			// Block piggybacking on the platform Composio key via generic connector creation
-			if (
-				input.auth.type === "custom_header" &&
-				"secretKey" in input.auth &&
-				input.auth.secretKey === "COMPOSIO_API_KEY"
-			) {
+			if (input.auth.secretKey === "COMPOSIO_API_KEY") {
 				throw new ORPCError("BAD_REQUEST", {
 					message: "COMPOSIO_API_KEY is reserved for Composio-managed connectors",
 				});
@@ -640,6 +640,14 @@ export const integrationsRouter = {
 			} catch (err) {
 				throwAsORPC(err);
 			}
+
+			// Block piggybacking on the platform Composio key via connector update
+			if (input.auth?.secretKey === "COMPOSIO_API_KEY") {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "COMPOSIO_API_KEY is reserved for Composio-managed connectors",
+				});
+			}
+
 			const connector = await connectors.updateConnector(input.id, context.orgId, {
 				name: input.name,
 				url: input.url,

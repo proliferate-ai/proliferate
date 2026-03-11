@@ -181,6 +181,12 @@ export async function updateConnector(
  * Delete an org connector.
  */
 export async function deleteConnector(id: string, organizationId: string): Promise<boolean> {
+	const row = await db.findByIdAndOrg(id, organizationId);
+	if (row?.composioToolkit) {
+		throw new ConnectorValidationError(
+			"Composio-managed connectors must be disconnected, not deleted. Use disconnectComposioConnector instead.",
+		);
+	}
 	return db.deleteById(id, organizationId);
 }
 
@@ -425,24 +431,10 @@ export async function createComposioConnector(
 	// Check if connector already exists (upsert for reconnect / double-click races)
 	const existing = await db.findByComposioToolkit(input.organizationId, input.toolkit);
 	if (existing) {
-		// Atomic update: url, enabled, and composioAccountId in one write
-		const { getDb, orgConnectors } = await import("../db/client");
-		const { eq, and } = await import("drizzle-orm");
-		const [row] = await getDb()
-			.update(orgConnectors)
-			.set({
-				url: input.mcpUrl,
-				enabled: true,
-				composioAccountId: input.connectedAccountId,
-				updatedAt: new Date(),
-			})
-			.where(
-				and(
-					eq(orgConnectors.id, existing.id),
-					eq(orgConnectors.organizationId, input.organizationId),
-				),
-			)
-			.returning();
+		const row = await db.updateComposioReconnect(existing.id, input.organizationId, {
+			url: input.mcpUrl,
+			composioAccountId: input.connectedAccountId,
+		});
 		return toConnectorConfig(row ?? existing);
 	}
 
@@ -519,11 +511,15 @@ export async function disconnectComposioConnector(
 
 	// Best-effort Composio account cleanup
 	if (row.composioAccountId && env.COMPOSIO_API_KEY) {
-		const config: composio.ComposioClientConfig = {
-			apiKey: env.COMPOSIO_API_KEY,
-			baseUrl: env.COMPOSIO_BASE_URL,
-		};
-		await composio.deleteConnectedAccount(config, row.composioAccountId);
+		try {
+			const config: composio.ComposioClientConfig = {
+				apiKey: env.COMPOSIO_API_KEY,
+				baseUrl: env.COMPOSIO_BASE_URL,
+			};
+			await composio.deleteConnectedAccount(config, row.composioAccountId);
+		} catch {
+			// Best-effort — deleteConnectedAccount already logs internally
+		}
 	}
 
 	return db.deleteById(id, organizationId);
