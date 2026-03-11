@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { getFileName, getFilePath } from "../config";
@@ -11,7 +12,7 @@ interface EditDisplayProps {
 	status?: { type: string };
 }
 
-export function EditDisplay({ toolName, args, result, status }: EditDisplayProps) {
+export function EditDisplay({ toolName, args, status }: EditDisplayProps) {
 	const [expanded, setExpanded] = useState(false);
 	const isRunning = status?.type === "running";
 	const filePath = getFilePath(args);
@@ -28,10 +29,11 @@ export function EditDisplay({ toolName, args, result, status }: EditDisplayProps
 
 	return (
 		<div className="my-1">
-			<button
-				type="button"
+			<Button
+				variant="ghost"
+				size="sm"
 				onClick={() => setExpanded(!expanded)}
-				className="flex w-full items-center justify-between"
+				className="flex w-full items-center justify-between h-auto p-0"
 			>
 				<div className="flex min-w-0 items-center gap-1.5">
 					<ChevronRight
@@ -56,14 +58,15 @@ export function EditDisplay({ toolName, args, result, status }: EditDisplayProps
 						{isEdit ? "Editing File" : "Creating File"}
 					</span>
 				</div>
-			</button>
+			</Button>
 			{expanded && (
 				<div className="relative py-1 pr-1 pl-7">
 					<div className="absolute top-0 bottom-0 left-[9.5px] w-px bg-border" />
 					<div className="w-full min-w-0 rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-						<button
-							type="button"
-							className="flex w-full items-center gap-3 px-3 py-2 text-left"
+						<Button
+							variant="ghost"
+							size="sm"
+							className="flex w-full items-center gap-3 px-3 py-2 text-left h-auto"
 							onClick={() => setExpanded(!expanded)}
 						>
 							<span className="truncate text-sm font-medium text-foreground" dir="rtl">
@@ -77,7 +80,7 @@ export function EditDisplay({ toolName, args, result, status }: EditDisplayProps
 									<span className="text-sm font-medium text-destructive">-{removedLines}</span>
 								)}
 							</div>
-						</button>
+						</Button>
 						{isEdit && oldStr && newStr && (
 							<div className="border-t border-border px-2 pb-2">
 								<div className="w-full overflow-x-auto rounded-lg">

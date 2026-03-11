@@ -6,6 +6,7 @@ import {
 	getProviderDisplayName,
 } from "@/components/integrations/provider-icon";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { BlocksIcon } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useWorker } from "@/hooks/automations/use-workers";
@@ -104,7 +105,11 @@ export function CapabilitiesBadges({
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
-				<button type="button" className="flex items-center -space-x-1 cursor-pointer">
+				<Button
+					variant="ghost"
+					size="sm"
+					className="flex items-center -space-x-1 cursor-pointer h-auto p-0"
+				>
 					{visible.map((entry) => (
 						<BadgeCircle key={entry.id} provider={entry.provider} />
 					))}
@@ -113,7 +118,7 @@ export function CapabilitiesBadges({
 							+{overflow}
 						</div>
 					)}
-				</button>
+				</Button>
 			</PopoverTrigger>
 			<PopoverContent className="w-72 p-0" align="end">
 				<div className="px-3 py-2.5 border-b border-border">

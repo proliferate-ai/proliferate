@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { getFilePath, getToolLabel } from "../config";
@@ -25,10 +26,11 @@ export function ReadingSummary({ tools, hasRunning }: ReadingSummaryProps) {
 
 	return (
 		<div className="my-1">
-			<button
-				type="button"
+			<Button
+				variant="ghost"
+				size="sm"
 				onClick={() => setExpanded(!expanded)}
-				className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+				className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors h-auto p-0"
 			>
 				<ChevronRight
 					className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
@@ -56,7 +58,7 @@ export function ReadingSummary({ tools, hasRunning }: ReadingSummaryProps) {
 					/>
 				</svg>
 				<span className="font-medium text-foreground">{label}</span>
-			</button>
+			</Button>
 			{expanded && (
 				<div className="relative py-1 pr-1 pl-7">
 					<div className="absolute top-0 bottom-0 left-[9.5px] w-px bg-border" />

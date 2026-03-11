@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { ChevronRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 
@@ -18,10 +19,11 @@ export function ShellDisplay({ args, result, status }: ShellDisplayProps) {
 
 	return (
 		<div className="my-1">
-			<button
-				type="button"
+			<Button
+				variant="ghost"
+				size="sm"
 				onClick={() => setExpanded(!expanded)}
-				className="flex w-full items-center gap-1.5"
+				className="flex w-full items-center gap-1.5 h-auto p-0"
 			>
 				<ChevronRight
 					className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
@@ -56,7 +58,7 @@ export function ShellDisplay({ args, result, status }: ShellDisplayProps) {
 					</svg>
 				)}
 				<span className="text-sm font-medium text-foreground">Terminal</span>
-			</button>
+			</Button>
 			<div className="relative py-1 pr-1 pl-7">
 				<div className="absolute top-0 bottom-0 left-[9.5px] w-px bg-border" />
 				<div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">

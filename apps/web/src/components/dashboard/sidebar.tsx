@@ -514,8 +514,10 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 			{/* Recent sessions */}
 			{nonManagerSessions.length > 0 && (
 				<div className="flex flex-col gap-1">
-					<button
+					<Button
 						type="button"
+						variant="ghost"
+						size="sm"
 						onClick={toggleSidebarRecents}
 						className="flex items-center justify-between px-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
 					>
@@ -525,7 +527,7 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 						) : (
 							<ChevronRight className="h-3 w-3" />
 						)}
-					</button>
+					</Button>
 					{sidebarRecentsOpen &&
 						nonManagerSessions.map((session) => {
 							const title = session.title || session.promptSnippet || "Untitled";
