@@ -13,6 +13,7 @@ import {
 	ActivatePlanResponseSchema,
 	BillingInfoSchema,
 	BuyCreditsResponseSchema,
+	SetupPaymentResponseSchema,
 	UpdateBillingSettingsResponseSchema,
 } from "@proliferate/shared/contracts/billing";
 import { z } from "zod";
@@ -92,6 +93,29 @@ export const billingRouter = {
 				throwMappedBillingError(err, {
 					forbiddenMessage: "Only admins can update billing settings",
 					internalMessage: "Failed to update billing settings",
+				});
+			}
+		}),
+
+	/**
+	 * Set up a payment method (add credit card).
+	 * Returns a Stripe checkout URL for payment setup.
+	 */
+	setupPaymentMethod: orgProcedure
+		.input(z.object({}).optional())
+		.output(SetupPaymentResponseSchema)
+		.handler(async ({ context }) => {
+			try {
+				await billing.assertBillingAdmin(context.user.id, context.orgId);
+				return await billing.setupOrgPaymentMethod({
+					orgId: context.orgId,
+					userEmail: context.user.email,
+					appUrl: env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+				});
+			} catch (err) {
+				throwMappedBillingError(err, {
+					forbiddenMessage: "Only admins can manage payment methods",
+					internalMessage: "Failed to set up payment method",
 				});
 			}
 		}),

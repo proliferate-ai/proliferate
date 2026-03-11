@@ -17,6 +17,14 @@ export interface AutumnCustomer {
 	email?: string;
 	features: Record<string, AutumnFeature>;
 	products?: AutumnProduct[];
+	/** Expanded via `?expand=payment_method`. Present only when requested. */
+	payment_method?: {
+		type: string;
+		last4?: string;
+		brand?: string;
+		exp_month?: number;
+		exp_year?: number;
+	} | null;
 }
 
 export interface AutumnProduct {

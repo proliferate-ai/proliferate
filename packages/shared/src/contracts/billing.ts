@@ -16,6 +16,7 @@ export const BillingInfoSchema = z.object({
 	}),
 	selectedPlan: z.enum(["dev", "pro"]),
 	hasActiveSubscription: z.boolean(),
+	hasPaymentMethod: z.boolean(),
 	credits: z.object({
 		balance: z.number(),
 		used: z.number(),
@@ -61,5 +62,13 @@ export const UpdateBillingSettingsResponseSchema = z.object({
 	success: z.boolean(),
 	settings: BillingSettingsSchema,
 });
+
+export const SetupPaymentResponseSchema = z.object({
+	success: z.boolean(),
+	checkoutUrl: z.string().optional(),
+	message: z.string().optional(),
+});
+
+export type SetupPaymentResponse = z.infer<typeof SetupPaymentResponseSchema>;
 
 export type UpdateBillingSettingsResponse = z.infer<typeof UpdateBillingSettingsResponseSchema>;

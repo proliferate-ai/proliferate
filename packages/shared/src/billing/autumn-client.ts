@@ -91,10 +91,13 @@ async function autumnRequest<T>(method: "GET" | "POST", path: string, body?: unk
 // ============================================
 
 /**
- * Get customer details including feature balances.
+ * Get customer details including feature balances and payment method.
  */
 export async function autumnGetCustomer(customerId: string): Promise<AutumnCustomer> {
-	return autumnRequest<AutumnCustomer>("GET", `/customers/${encodeURIComponent(customerId)}`);
+	return autumnRequest<AutumnCustomer>(
+		"GET",
+		`/customers/${encodeURIComponent(customerId)}?expand=payment_method`,
+	);
 }
 
 /**
@@ -116,19 +119,29 @@ export async function autumnCreateCustomer(
 
 /**
  * Initiate payment method setup (no immediate charge).
+ * Endpoint: POST /v1/setup_payment
+ * @see https://docs.useautumn.com/examples/trial-card-not-required
  */
 export async function autumnSetupPayment(
 	request: AutumnSetupPaymentRequest,
 ): Promise<AutumnSetupPaymentResponse> {
-	try {
-		return await autumnRequest<AutumnSetupPaymentResponse>("POST", "/payment/setup", request);
-	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		if (message.includes("404")) {
-			return await autumnRequest<AutumnSetupPaymentResponse>("POST", "/setup_payment", request);
-		}
-		throw err;
-	}
+	return autumnRequest<AutumnSetupPaymentResponse>("POST", "/setup_payment", request);
+}
+
+/**
+ * Open customer billing portal (manage payment methods, subscriptions).
+ * Endpoint: POST /v1/customers/:id/billing_portal
+ * @see https://docs.useautumn.com/api-reference/customers/open-billing-portal
+ */
+export async function autumnBillingPortal(
+	customerId: string,
+	returnUrl: string,
+): Promise<{ customer_id: string; url: string }> {
+	return autumnRequest<{ customer_id: string; url: string }>(
+		"POST",
+		`/customers/${encodeURIComponent(customerId)}/billing_portal`,
+		{ return_url: returnUrl },
+	);
 }
 
 // ============================================

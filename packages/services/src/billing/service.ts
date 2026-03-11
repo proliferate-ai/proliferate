@@ -9,21 +9,25 @@ import { createBillingFastReconcileQueue } from "@proliferate/queue";
 import {
 	AUTUMN_FEATURES,
 	AUTUMN_PRODUCTS,
-	type BillingState,
 	DEFAULT_BILLING_SETTINGS,
 	PLAN_CONFIGS,
 	TOP_UP_PACKS,
 	type TopUpPackId,
 	autumnAttach,
+	autumnBillingPortal,
 	autumnGetCustomer,
+	autumnSetupPayment,
 	canPossiblyStart,
 	getStateMessage,
+	normalizeBillingState,
+	parseBillingSettings,
 } from "@proliferate/shared/billing";
 import type {
 	ActivatePlanResponse,
 	BillingInfo,
 	BillingSettings,
 	BuyCreditsResponse,
+	SetupPaymentResponse,
 	UpdateBillingSettingsResponse,
 } from "@proliferate/shared/contracts/billing";
 import { getServicesLogger } from "../logger";
@@ -108,6 +112,8 @@ export async function getOrgBillingInfo(orgId: string): Promise<BillingInfo> {
 		(p: { status: string }) => p.status === "active",
 	);
 	const hasActiveSubscription = Boolean(activeProduct);
+	// Payment method is expanded from Autumn — null/undefined means no card on file
+	const hasPaymentMethod = autumnCustomer?.payment_method != null;
 	const plan = (activeProduct?.id as "dev" | "pro" | undefined) ?? selectedPlan;
 	const planConfig = PLAN_CONFIGS[plan] ?? PLAN_CONFIGS.dev;
 
@@ -115,7 +121,7 @@ export async function getOrgBillingInfo(orgId: string): Promise<BillingInfo> {
 	const concurrentFeature = autumnCustomer?.features[AUTUMN_FEATURES.maxConcurrentSessions];
 	const snapshotsFeature = autumnCustomer?.features[AUTUMN_FEATURES.maxSnapshots];
 
-	const billingState = org.billingState as BillingState;
+	const billingState = normalizeBillingState(org.billingState);
 	const shadowBalance = Number(org.shadowBalance ?? 0);
 	const graceExpiresAt = org.graceExpiresAt;
 	const canStart = canPossiblyStart(billingState, graceExpiresAt);
@@ -144,6 +150,7 @@ export async function getOrgBillingInfo(orgId: string): Promise<BillingInfo> {
 		},
 		selectedPlan,
 		hasActiveSubscription,
+		hasPaymentMethod,
 		credits: {
 			balance: creditsBalance,
 			used: creditsUsed,
@@ -158,7 +165,7 @@ export async function getOrgBillingInfo(orgId: string): Promise<BillingInfo> {
 			maxSnapshots: snapshotsFeature?.balance ?? planConfig.maxSnapshots,
 			snapshotRetentionDays: planConfig.snapshotRetentionDays,
 		},
-		billingSettings: org.billingSettings ?? DEFAULT_BILLING_SETTINGS,
+		billingSettings: parseBillingSettings(org.billingSettings),
 		state: {
 			billingState,
 			shadowBalance,
@@ -189,6 +196,57 @@ export async function updateOrgBillingSettings(
 
 	await updateBillingSettings(orgId, newSettings);
 	return { success: true, settings: newSettings };
+}
+
+export async function setupOrgPaymentMethod(input: {
+	orgId: string;
+	userEmail: string;
+	appUrl: string;
+}): Promise<SetupPaymentResponse> {
+	if (!isBillingEnabled()) {
+		throw new BillingDisabledError();
+	}
+
+	const org = await getBillingInfoV2(input.orgId);
+	if (!org) {
+		throw new BillingNotFoundError();
+	}
+
+	const baseUrl = input.appUrl || "http://localhost:3000";
+	const returnUrl = `${baseUrl}/settings/billing?success=payment`;
+
+	// If customer already exists in Autumn, open billing portal
+	if (org.autumnCustomerId) {
+		try {
+			const portal = await autumnBillingPortal(org.autumnCustomerId, returnUrl);
+			return { success: true, checkoutUrl: portal.url };
+		} catch (err) {
+			log.warn({ err, orgId: input.orgId }, "Billing portal failed, falling back to setup_payment");
+		}
+	}
+
+	// Otherwise, initiate payment method setup (creates customer if needed)
+	const customerId = org.autumnCustomerId ?? input.orgId;
+	const result = await autumnSetupPayment({
+		customer_id: customerId,
+		success_url: returnUrl,
+		customer_data: {
+			email: input.userEmail,
+			name: org.name,
+		},
+	});
+
+	// Persist customer ID if Autumn created a new customer
+	if (!org.autumnCustomerId) {
+		await updateAutumnCustomerId(input.orgId, customerId);
+	}
+
+	const checkoutUrl = result.checkout_url ?? result.url;
+	if (checkoutUrl) {
+		return { success: true, checkoutUrl };
+	}
+
+	return { success: true, message: "Payment method already on file" };
 }
 
 export async function activateOrgPlan(input: {

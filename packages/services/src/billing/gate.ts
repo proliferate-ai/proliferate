@@ -12,12 +12,12 @@ import {
 	BillingGateError,
 	type BillingGateResult,
 	type BillingPlan,
-	type BillingState,
 	type GatedOperation,
 	MIN_CREDITS_TO_START,
 	type OrgBillingInfo,
 	PLAN_CONFIGS,
 	checkBillingGate,
+	normalizeBillingState,
 	parseBillingSettings,
 } from "@proliferate/shared/billing";
 import { getServicesLogger } from "../logger";
@@ -108,7 +108,7 @@ export async function checkBillingGateForOrg(
 	const billingSettings = parseBillingSettings(org.billingSettings);
 	const orgBillingInfo: OrgBillingInfo = {
 		id: org.id,
-		billingState: org.billingState as BillingState,
+		billingState: normalizeBillingState(org.billingState),
 		shadowBalance: Number(org.shadowBalance ?? 0),
 		graceExpiresAt: org.graceExpiresAt,
 		autumnCustomerId: org.autumnCustomerId,

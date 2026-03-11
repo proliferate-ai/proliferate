@@ -1,11 +1,12 @@
 "use client";
 
 import { PageShell } from "@/components/dashboard/page-shell";
+import { AutoRechargeSection } from "@/components/settings/billing/auto-recharge-section";
 import { BuyCreditsSection } from "@/components/settings/billing/buy-credits-section";
 import { CostDriversSection } from "@/components/settings/billing/cost-drivers-section";
 import { CreditUsageSection } from "@/components/settings/billing/credit-usage-section";
 import { EntitlementStatusSection } from "@/components/settings/billing/entitlement-status-section";
-import { AutoRechargeSection } from "@/components/settings/billing/auto-recharge-section";
+import { PaymentMethodSection } from "@/components/settings/billing/payment-method-section";
 import { PlanSection } from "@/components/settings/billing/plan-section";
 import { RecentEventsSection } from "@/components/settings/billing/recent-events-section";
 import { UsageSummarySection } from "@/components/settings/billing/usage-summary-section";
@@ -57,9 +58,16 @@ export default function BillingPage() {
 		<PageShell title="Billing" subtitle="Credits, plans, and usage" maxWidth="2xl">
 			<div className="space-y-10">
 				<CreditUsageSection credits={billing.credits} />
+				<PaymentMethodSection hasPaymentMethod={billing.hasPaymentMethod} isAdmin={isAdmin} />
+				{isAdmin && <BuyCreditsSection />}
 				<UsageSummarySection />
 				<EntitlementStatusSection />
-				{isAdmin && <BuyCreditsSection />}
+				{isAdmin && (
+					<AutoRechargeSection
+						billingSettings={billing.billingSettings}
+						onUpdate={handleUpdateBillingSettings}
+					/>
+				)}
 				<CostDriversSection />
 				<RecentEventsSection />
 				<PlanSection
@@ -70,12 +78,6 @@ export default function BillingPage() {
 					billingState={billing.state.billingState}
 					isAdmin={isAdmin}
 				/>
-				{isAdmin && (
-					<AutoRechargeSection
-						billingSettings={billing.billingSettings}
-						onUpdate={handleUpdateBillingSettings}
-					/>
-				)}
 			</div>
 		</PageShell>
 	);

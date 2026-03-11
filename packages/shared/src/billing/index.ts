@@ -18,6 +18,7 @@ export * from "./gating";
 export {
 	autumnGetCustomer,
 	autumnAttach,
+	autumnBillingPortal,
 	autumnCreateCustomer,
 	autumnSetupPayment,
 	autumnCheck,

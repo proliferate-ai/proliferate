@@ -29,6 +29,20 @@ export type BillingState =
 	| "exhausted" // Credits exhausted, sessions blocked
 	| "suspended"; // Manually suspended (billing issues)
 
+const VALID_BILLING_STATES = new Set<string>(["free", "active", "grace", "exhausted", "suspended"]);
+
+/**
+ * Normalize a raw billing state string from DB to a valid BillingState.
+ * Maps legacy states (unconfigured, trial) to their V2 equivalents.
+ */
+export function normalizeBillingState(raw: string | null | undefined): BillingState {
+	if (raw && VALID_BILLING_STATES.has(raw)) {
+		return raw as BillingState;
+	}
+	// Legacy states: unconfigured → free, trial → free
+	return "free";
+}
+
 /**
  * Grace window configuration.
  */

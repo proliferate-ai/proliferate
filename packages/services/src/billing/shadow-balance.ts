@@ -13,6 +13,7 @@ import type { BillingState, ReconciliationType } from "@proliferate/shared/billi
 import {
 	GRACE_WINDOW_CONFIG,
 	getStateUpdateFields,
+	normalizeBillingState,
 	processStateTransition,
 } from "@proliferate/shared/billing";
 import {
@@ -118,7 +119,7 @@ export async function deductShadowBalance(update: ShadowBalanceUpdate): Promise<
 
 		const previousBalance = Number(org.shadowBalance ?? 0);
 		const newBalance = previousBalance - update.credits;
-		const currentState = org.billingState as BillingState;
+		const currentState = normalizeBillingState(org.billingState);
 
 		// Orgs without an Autumn customer have no external billing to reconcile —
 		// mark events "skipped" so the outbox ignores them. The insert is still
@@ -297,7 +298,7 @@ export async function bulkDeductShadowBalance(
 		}
 
 		const previousBalance = Number(org.shadowBalance ?? 0);
-		const currentState = org.billingState as BillingState;
+		const currentState = normalizeBillingState(org.billingState);
 
 		// Orgs without an Autumn customer have no external billing to reconcile —
 		// mark events "skipped" so the outbox ignores them.
@@ -452,7 +453,7 @@ export async function addShadowBalance(
 
 		const previousBalance = Number(org.shadowBalance ?? 0);
 		const newBalance = previousBalance + credits;
-		const currentState = org.billingState as BillingState;
+		const currentState = normalizeBillingState(org.billingState);
 
 		// Check if we need to transition state due to credits being added
 		let stateChanged = false;

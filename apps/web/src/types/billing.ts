@@ -11,6 +11,7 @@ export interface BillingInfo {
 	};
 	selectedPlan: "dev" | "pro";
 	hasActiveSubscription: boolean;
+	hasPaymentMethod: boolean;
 	credits: {
 		balance: number;
 		used: number;
