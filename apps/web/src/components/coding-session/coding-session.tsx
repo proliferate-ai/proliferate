@@ -8,7 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { INVESTIGATION_TAB, MANAGER_PANEL_TABS, PANEL_TABS } from "@/config/coding-session";
+import {
+	INVESTIGATION_TAB,
+	MANAGER_PANEL_TABS,
+	PANEL_TABS,
+	SETUP_PANEL_TABS,
+} from "@/config/coding-session";
 import { useRepo } from "@/hooks/org/use-repos";
 import { useCodingSessionRuntime } from "@/hooks/sessions/use-coding-session-runtime";
 import { useConfiguration } from "@/hooks/sessions/use-configurations";
@@ -200,20 +205,30 @@ export function CodingSession({
 	}, [runId, togglePanel, mode.type]);
 
 	const isManagerSession = sessionData?.kind === "manager";
-	const basePanelTabs = isManagerSession ? MANAGER_PANEL_TABS : PANEL_TABS;
+	const isSetupSession = sessionData?.sessionType === "setup";
+	const basePanelTabs = isManagerSession
+		? MANAGER_PANEL_TABS
+		: isSetupSession
+			? SETUP_PANEL_TABS
+			: PANEL_TABS;
 
-	// Auto-expand panel, pin manager tabs, and open Configure for coworker sessions
-	const managerPanelInitRef = useRef(false);
+	// Auto-expand panel and pin tabs for manager/setup sessions
+	const specialPanelInitRef = useRef(false);
 	useEffect(() => {
-		if (!isManagerSession || managerPanelInitRef.current) return;
-		managerPanelInitRef.current = true;
+		if ((!isManagerSession && !isSetupSession) || specialPanelInitRef.current) return;
+		specialPanelInitRef.current = true;
 		if (panelCollapsed) setPanelCollapsed(false);
-		for (const tab of MANAGER_PANEL_TABS) {
+		for (const tab of basePanelTabs) {
 			if (!pinnedTabs.includes(tab.type)) pinTab(tab.type);
 		}
-		if (mode.type === "none") togglePanel("configure");
+		if (mode.type === "none") {
+			if (isManagerSession) togglePanel("configure");
+			else if (isSetupSession) togglePanel("environment");
+		}
 	}, [
 		isManagerSession,
+		isSetupSession,
+		basePanelTabs,
 		panelCollapsed,
 		setPanelCollapsed,
 		pinnedTabs,
@@ -383,7 +398,6 @@ export function CodingSession({
 	);
 
 	const isReady = !isLoading && !!authSession && !!sessionData && status !== "error";
-	const isSetupSession = sessionData?.sessionType === "setup";
 
 	const repoSettingsHref = "/settings/environments";
 
