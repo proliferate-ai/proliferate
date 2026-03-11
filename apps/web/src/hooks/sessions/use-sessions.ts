@@ -109,6 +109,16 @@ export function useCreateSession() {
 				orpc.sessions.get.queryOptions({ input: { id: result.sessionId } }).queryKey,
 				{ session: partialSession },
 			);
+
+			// Optimistically prepend to all sessions.list caches so lists update instantly
+			queryClient.setQueriesData<{ sessions: Session[] }>(
+				{ queryKey: orpc.sessions.list.key() },
+				(old) => {
+					if (!old?.sessions) return old;
+					if (old.sessions.some((s) => s.id === result.sessionId)) return old;
+					return { sessions: [partialSession, ...old.sessions] };
+				},
+			);
 		},
 	});
 
