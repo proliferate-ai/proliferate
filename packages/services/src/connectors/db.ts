@@ -302,6 +302,30 @@ export async function createWithSecret(
 }
 
 /**
+ * Ensure an org-level secret exists. If it already exists, this is a no-op.
+ * Uses INSERT ... ON CONFLICT DO NOTHING for race-safe idempotency.
+ */
+export async function ensureOrgSecret(input: {
+	organizationId: string;
+	key: string;
+	encryptedValue: string;
+	description: string;
+	createdBy: string;
+}): Promise<void> {
+	const db = getDb();
+	await db
+		.insert(secrets)
+		.values({
+			organizationId: input.organizationId,
+			key: input.key,
+			encryptedValue: input.encryptedValue,
+			description: input.description,
+			createdBy: input.createdBy,
+		})
+		.onConflictDoNothing();
+}
+
+/**
  * List org-wide secret keys for an organization.
  * Used to populate the "use existing secret" dropdown in quick setup.
  */

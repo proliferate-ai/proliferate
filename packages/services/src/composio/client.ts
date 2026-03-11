@@ -11,6 +11,8 @@ import { getServicesLogger } from "../logger";
 
 const log = getServicesLogger().child({ module: "composio-client" });
 
+const REQUEST_TIMEOUT_MS = 10_000;
+
 export interface ComposioClientConfig {
 	apiKey: string;
 	baseUrl?: string;
@@ -55,6 +57,7 @@ export async function initiateOAuth(
 	const response = await fetch(`${getBaseUrl(config)}/api/v3/connected_accounts`, {
 		method: "POST",
 		headers: headers(config),
+		signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 		body: JSON.stringify({
 			integration_id: input.toolkit,
 			user_id: input.orgId,
@@ -114,6 +117,7 @@ export async function getConnectedAccount(
 		{
 			method: "GET",
 			headers: headers(config),
+			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 		},
 	);
 
@@ -153,6 +157,7 @@ export async function deleteConnectedAccount(
 			{
 				method: "DELETE",
 				headers: headers(config),
+				signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 			},
 		);
 
@@ -192,6 +197,7 @@ export async function getOrCreateMcpServer(
 	const response = await fetch(`${getBaseUrl(config)}/api/v3/mcp`, {
 		method: "POST",
 		headers: headers(config),
+		signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 		body: JSON.stringify({
 			toolkit: input.toolkit,
 			user_id: input.orgId,

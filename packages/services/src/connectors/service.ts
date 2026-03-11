@@ -447,58 +447,25 @@ export async function createComposioConnector(
 		throw new ConnectorValidationError("COMPOSIO_API_KEY is not configured");
 	}
 
-	if (composioKeyExists) {
-		// Reuse existing secret — create connector with composio columns in one INSERT
-		const row = await db.create({
-			organizationId: input.organizationId,
-			name: preset.defaults.name,
-			transport: "remote_http",
-			url: input.mcpUrl,
-			auth: { type: "custom_header", secretKey: "COMPOSIO_API_KEY", headerName: "x-api-key" },
-			riskPolicy: preset.defaults.riskPolicy,
-			enabled: true,
-			createdBy: input.createdBy,
-			composioToolkit: input.toolkit,
-			composioAccountId: input.connectedAccountId,
-		});
-		return toConnectorConfig(row);
-	}
+	if (!composioKeyExists) {
+		// Race-safe: ON CONFLICT DO NOTHING if another flow already created it
+		let encryptedValue: string;
+		try {
+			encryptedValue = encrypt(apiKey, getEncryptionKey());
+		} catch {
+			throw new ConnectorValidationError("Encryption not configured");
+		}
 
-	// First Composio connector — atomically create secret + connector (with composio columns)
-	let encryptedValue: string;
-	try {
-		encryptedValue = encrypt(apiKey, getEncryptionKey());
-	} catch {
-		throw new ConnectorValidationError("Encryption not configured");
-	}
-
-	try {
-		const { connectorRow } = await db.createWithSecret({
+		await db.ensureOrgSecret({
 			organizationId: input.organizationId,
-			createdBy: input.createdBy,
+			key: "COMPOSIO_API_KEY",
 			encryptedValue,
-			baseSecretKey: "COMPOSIO_API_KEY",
-			secretDescription: "Composio API key (auto-created for OAuth integrations)",
-			connector: {
-				name: preset.defaults.name,
-				transport: "remote_http",
-				url: input.mcpUrl,
-				riskPolicy: preset.defaults.riskPolicy ?? null,
-			},
-			authConfig: { type: "custom_header", headerName: "x-api-key" },
-			composioToolkit: input.toolkit,
-			composioAccountId: input.connectedAccountId,
+			description: "Composio API key (auto-created for OAuth integrations)",
+			createdBy: input.createdBy,
 		});
-
-		return toConnectorConfig(connectorRow);
-	} catch (err: unknown) {
-		// Race: another concurrent flow already created COMPOSIO_API_KEY — fall through to connector-only path
-		const isUniqueViolation =
-			err && typeof err === "object" && "code" in err && err.code === "23505";
-		if (!isUniqueViolation) throw err;
 	}
 
-	// Fallback: secret was just created by another flow, create connector only
+	// Create connector (secret is guaranteed to exist at this point)
 	const row = await db.create({
 		organizationId: input.organizationId,
 		name: preset.defaults.name,
