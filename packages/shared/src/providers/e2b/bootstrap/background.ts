@@ -48,7 +48,7 @@ export async function setupAdditionalDependencies(
 			envs: sandboxMcpEnvs,
 		})
 		.catch((err: unknown) => {
-			providerLogger.debug({ err }, "sandbox-mcp process ended");
+			providerLogger.warn({ err }, "sandbox-mcp process ended unexpectedly");
 		});
 
 	log.debug("Starting sandbox-daemon (async)");
@@ -112,6 +112,37 @@ export async function setupAdditionalDependencies(
 	void bootServices(sandbox, opts, log);
 }
 
+/** Polls sandbox-mcp health endpoint until it responds or retries are exhausted. */
+async function waitForSandboxMcp(
+	sandbox: Sandbox,
+	log: Logger,
+	maxAttempts = 15,
+	delayMs = 1000,
+): Promise<boolean> {
+	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+		try {
+			const result = await sandbox.commands.run(
+				"curl -sf http://127.0.0.1:4000/api/health -o /dev/null",
+				{ timeoutMs: 5000 },
+			);
+			if (result.exitCode === 0) {
+				log.debug({ attempt }, "sandbox-mcp ready");
+				return true;
+			}
+		} catch {
+			// Connection refused or timeout — keep retrying.
+		}
+		if (attempt < maxAttempts) {
+			await new Promise((r) => setTimeout(r, delayMs));
+		}
+	}
+	log.warn(
+		{ maxAttempts },
+		"sandbox-mcp not ready after polling — service commands will be skipped",
+	);
+	return false;
+}
+
 /** Applies secret/env file writes and starts tracked service commands. */
 async function bootServices(sandbox: Sandbox, opts: CreateSandboxOpts, log: Logger): Promise<void> {
 	const workspaceDir = "/home/user/workspace";
@@ -139,13 +170,17 @@ async function bootServices(sandbox: Sandbox, opts: CreateSandboxOpts, log: Logg
 
 	if (!opts.snapshotHasDeps || !opts.serviceCommands?.length) return;
 
+	// Wait for sandbox-mcp API to be ready before starting tracked services
+	const ready = await waitForSandboxMcp(sandbox, log);
+	if (!ready) return;
+
 	for (const cmd of opts.serviceCommands) {
 		const baseDir =
 			cmd.workspacePath && cmd.workspacePath !== "."
 				? `${workspaceDir}/${cmd.workspacePath}`
 				: workspaceDir;
 		const cwd = cmd.cwd ? `${baseDir}/${cmd.cwd}` : baseDir;
-		log.info({ name: cmd.name, cwd }, "Starting service (tracked)");
+		log.info({ serviceName: cmd.name, cwd }, "Starting service (tracked)");
 
 		sandbox.commands
 			.run(
@@ -153,7 +188,7 @@ async function bootServices(sandbox: Sandbox, opts: CreateSandboxOpts, log: Logg
 				{ timeoutMs: 60000 },
 			)
 			.catch((err) => {
-				log.error({ err, name: cmd.name }, "proliferate services start failed");
+				log.error({ err, serviceName: cmd.name }, "proliferate services start failed");
 			});
 	}
 }

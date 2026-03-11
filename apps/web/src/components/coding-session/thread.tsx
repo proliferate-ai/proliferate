@@ -34,8 +34,7 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { InboxTray } from "./inbox-tray";
 import { allToolUIs } from "./tool-ui/all-tool-uis";
-import { ProliferateToolCard } from "./tool-ui/proliferate-tool-card";
-import { ToolCallGroup } from "./tool-ui/tool-call-group";
+import { ToolCallBlock, type ToolCallPart as ToolCallPartType } from "./tool-ui/tool-call-renderer";
 
 // Shared markdown components for consistent rendering
 interface MarkdownContentProps {
@@ -664,40 +663,6 @@ const UserMessage: FC = () => (
 	</MessagePrimitive.Root>
 );
 
-const TOOL_LABELS: Record<string, string> = {
-	read: "Read file",
-	bash: "Bash",
-	edit: "Edit file",
-	write: "Write file",
-	glob: "Glob",
-	grep: "Grep",
-	todowrite: "Todo",
-	task: "Task",
-	webfetch: "Web fetch",
-	verify: "Verify",
-	save_snapshot: "Save snapshot",
-	save_service_commands: "Save service commands",
-	spawn_child_task: "Spawn child",
-};
-
-function getToolSummary(toolName: string, args: Record<string, unknown>): string {
-	const label = TOOL_LABELS[toolName] ?? toolName;
-	const path =
-		(args.filePath as string) ??
-		(args.file_path as string) ??
-		(args.path as string) ??
-		(args.glob_pattern as string) ??
-		(args.pattern as string);
-	const cmd = args.command as string | undefined;
-
-	if (cmd) {
-		const display = cmd.length > 50 ? `${cmd.slice(0, 47)}...` : cmd;
-		return `${label} (${display})`;
-	}
-	if (path) return `${label} (${path})`;
-	return label;
-}
-
 interface ContentPart {
 	type: string;
 	text?: string;
@@ -715,15 +680,22 @@ const AssistantMessage: FC = () => {
 	const hasTextContent = content.some((p) => p.type === "text" && p.text?.trim());
 
 	const groups: Array<
-		{ type: "text"; part: ContentPart } | { type: "tools"; parts: ContentPart[] }
+		{ type: "text"; part: ContentPart } | { type: "tools"; parts: ToolCallPartType[] }
 	> = [];
 	for (const part of content) {
 		if (part.type === "tool-call") {
+			const toolPart: ToolCallPartType = {
+				toolName: part.toolName ?? "tool",
+				toolCallId: part.toolCallId,
+				args: part.args ?? {},
+				result: part.result,
+				status: part.status,
+			};
 			const lastGroup = groups[groups.length - 1];
 			if (lastGroup?.type === "tools") {
-				lastGroup.parts.push(part);
+				lastGroup.parts.push(toolPart);
 			} else {
-				groups.push({ type: "tools", parts: [part] });
+				groups.push({ type: "tools", parts: [toolPart] });
 			}
 		} else {
 			groups.push({ type: "text", part });
@@ -744,23 +716,7 @@ const AssistantMessage: FC = () => {
 						);
 					}
 
-					const toolParts = group.parts;
-					const hasRunning = toolParts.some((p) => p.status?.type === "running");
-					const toolElements = toolParts.map((part) => (
-						<ToolCallPart
-							key={part.toolCallId ?? `tool-${i}`}
-							toolName={part.toolName ?? "tool"}
-							args={part.args ?? {}}
-							result={part.result}
-							status={part.status}
-						/>
-					));
-
-					return (
-						<ToolCallGroup key={`tools-${i}`} hasRunning={hasRunning}>
-							{toolElements}
-						</ToolCallGroup>
-					);
+					return <ToolCallBlock key={`tools-${i}`} tools={group.parts} />;
 				})}
 
 				{isRunning && !hasTextContent && content.length === 0 && (
@@ -772,53 +728,3 @@ const AssistantMessage: FC = () => {
 		</MessagePrimitive.Root>
 	);
 };
-
-function ToolCallPart({
-	toolName,
-	args,
-	result,
-	status,
-}: {
-	toolName: string;
-	args: Record<string, unknown>;
-	result?: unknown;
-	status?: { type: string };
-}) {
-	const [expanded, setExpanded] = useState(false);
-	const summary = getToolSummary(toolName, args);
-	const hasResult = result !== undefined;
-	const resultString = hasResult
-		? typeof result === "string"
-			? result
-			: JSON.stringify(result, null, 2)
-		: null;
-
-	return (
-		<ProliferateToolCard
-			label={summary}
-			status={
-				status?.type === "running" ? "running" : status?.type === "error" ? "error" : "success"
-			}
-			errorMessage={typeof result === "string" && result.startsWith("Error") ? result : undefined}
-		>
-			{hasResult && (
-				<>
-					<Button
-						type="button"
-						variant="ghost"
-						onClick={() => setExpanded(!expanded)}
-						className="h-auto gap-1 p-0 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground"
-					>
-						{expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-						<span>{expanded ? "Hide" : "Details"}</span>
-					</Button>
-					{expanded && resultString && (
-						<pre className="mt-1 max-h-40 overflow-auto rounded-lg border border-border/40 bg-muted/30 p-2 font-mono text-xs text-muted-foreground">
-							{resultString.slice(0, 3000)}
-						</pre>
-					)}
-				</>
-			)}
-		</ProliferateToolCard>
-	);
-}
