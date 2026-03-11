@@ -2,18 +2,16 @@
 
 import { ModelSelector } from "@/components/automations/model-selector";
 import { WorkerOrb } from "@/components/automations/worker-card";
-import {
-	CapabilitiesBadges,
-	type IntegrationSummary,
-} from "@/components/dashboard/capabilities-badges";
-import type { Provider } from "@/components/integrations/provider-icon";
+import { CapabilitiesBadges } from "@/components/dashboard/capabilities-badges";
 import { Button } from "@/components/ui/button";
 import { OpenCodeIcon } from "@/components/ui/icons";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { RoundIconActionButton } from "@/components/ui/round-icon-action-button";
-import { useSessionAvailableActions } from "@/hooks/actions/use-actions";
+import { COMPOSER_LABELS, COMPOSER_PLACEHOLDERS, type ComposerMode } from "@/config/coding-session";
 import { useCreateFollowUp } from "@/hooks/sessions/use-follow-up";
+import { useSessionIntegrationSummaries } from "@/hooks/sessions/use-session-integrations";
 import { cn } from "@/lib/display/utils";
+import { parseAssistantContentSegments } from "@/lib/sessions/assistant-content";
 import { useDashboardStore } from "@/stores/dashboard";
 import {
 	ComposerPrimitive,
@@ -29,7 +27,7 @@ import type { Session } from "@proliferate/shared/contracts/sessions";
 import type { OverallWorkState } from "@proliferate/shared/sessions";
 import { ArrowUp, Camera, ChevronDown, ChevronRight, Loader2, Square } from "lucide-react";
 import type { FC } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { InboxTray } from "./inbox-tray";
@@ -40,90 +38,6 @@ import { ToolCallBlock, type ToolCallPart as ToolCallPartType } from "./tool-ui/
 interface MarkdownContentProps {
 	text: string;
 	variant?: "user" | "assistant";
-}
-
-interface ProliferateCommandSegment {
-	type: "command";
-	command: string;
-	actionLabel: string;
-	url: string | null;
-}
-
-interface MarkdownSegment {
-	type: "markdown";
-	text: string;
-}
-
-type AssistantContentSegment = ProliferateCommandSegment | MarkdownSegment;
-
-function getProliferateCommandFromLine(line: string): string | null {
-	const trimmed = line.trim();
-	if (!trimmed) return null;
-
-	const unwrapped = trimmed
-		.replace(/^[-*]\s+/, "")
-		.replace(/^\d+\.\s+/, "")
-		.replace(/^`+|`+$/g, "");
-	const match = unwrapped.match(/(?:^|\()((?:@?proliferate)\s+[^\n)`]+)/i);
-	if (!match) return null;
-	return match[1].replace(/^@/i, "").trim();
-}
-
-function getProliferateActionLabel(command: string): string {
-	const normalized = command.toLowerCase();
-	if (normalized.includes("actions list")) return "List actions";
-	if (normalized.includes("sentry action")) return "Run Sentry action";
-	if (normalized.includes("create pr") || normalized.includes("pr create"))
-		return "Create pull request";
-	if (normalized.includes("env set")) return "Set environment values";
-	if (normalized.includes("save_snapshot")) return "Save snapshot";
-	return "Proliferate command";
-}
-
-function parseAssistantContentSegments(text: string): AssistantContentSegment[] {
-	const lines = text.split("\n");
-	const segments: AssistantContentSegment[] = [];
-	let markdownBuffer: string[] = [];
-
-	const flushMarkdown = () => {
-		const chunk = markdownBuffer.join("\n").trim();
-		if (chunk) segments.push({ type: "markdown", text: chunk });
-		markdownBuffer = [];
-	};
-
-	let index = 0;
-	while (index < lines.length) {
-		const line = lines[index];
-		const command = getProliferateCommandFromLine(line);
-		if (!command) {
-			markdownBuffer.push(line);
-			index += 1;
-			continue;
-		}
-
-		flushMarkdown();
-		let nextUrl: string | null = null;
-		for (let lookAhead = index + 1; lookAhead < Math.min(lines.length, index + 4); lookAhead += 1) {
-			const urlMatch = lines[lookAhead].match(/https?:\/\/\S+/i);
-			if (urlMatch) {
-				nextUrl = urlMatch[0];
-				index = lookAhead;
-				break;
-			}
-			if (!lines[lookAhead].trim()) break;
-		}
-
-		segments.push({
-			type: "command",
-			command,
-			actionLabel: getProliferateActionLabel(command),
-			url: nextUrl,
-		});
-		index += 1;
-	}
-
-	flushMarkdown();
-	return segments;
 }
 
 const AssistantCommandCard: FC<{
@@ -465,8 +379,6 @@ export const Thread: FC<ThreadProps> = ({
 	);
 };
 
-type ComposerMode = "normal" | "paused" | "waiting_approval" | "completed" | "failed";
-
 function deriveComposerMode(sessionState?: SessionStateForComposer): ComposerMode {
 	if (!sessionState) return "normal";
 
@@ -487,54 +399,10 @@ function deriveComposerMode(sessionState?: SessionStateForComposer): ComposerMod
 	return "normal";
 }
 
-const COMPOSER_LABELS: Record<ComposerMode, string | null> = {
-	normal: null,
-	paused: "Session is paused. Sending a message will resume it.",
-	waiting_approval: "Waiting for approval. Message will be delivered after resolution.",
-	completed: "Session completed. Sending will start a new continuation.",
-	failed: "Session failed. Sending will start a new rerun.",
-};
-
-const COMPOSER_PLACEHOLDERS: Record<ComposerMode, string> = {
-	normal: "Send a follow-up...",
-	paused: "Send a message to resume...",
-	waiting_approval: "Queue a message...",
-	completed: "Start a continuation...",
-	failed: "Start a rerun...",
-};
-
 interface ComposerProps {
 	sessionState?: SessionStateForComposer;
 	sessionId?: string;
 	token?: string | null;
-}
-
-function getProviderForIntegration(integration: string): Provider | null {
-	if (integration === "github" || integration === "jira" || integration === "linear") {
-		return integration;
-	}
-	if (integration === "posthog" || integration === "sentry" || integration === "slack") {
-		return integration;
-	}
-	return null;
-}
-
-function useSessionIntegrationSummaries(
-	sessionId?: string,
-	token?: string | null,
-): IntegrationSummary[] {
-	const { data: integrations } = useSessionAvailableActions(sessionId ?? "", token ?? null);
-	return useMemo(() => {
-		if (!integrations) return [];
-		return integrations
-			.filter((entry) => entry.actions.length > 0)
-			.map((entry) => ({
-				id: entry.integrationId,
-				displayName: entry.displayName,
-				detail: `${entry.actions.length} action${entry.actions.length !== 1 ? "s" : ""} enabled`,
-				provider: getProviderForIntegration(entry.integration),
-			}));
-	}, [integrations]);
 }
 
 const Composer: FC<ComposerProps> = ({ sessionState, sessionId, token }) => {

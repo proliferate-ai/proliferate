@@ -111,11 +111,13 @@ function EffortFlyout({
 				{EFFORT_OPTIONS.map((opt) => {
 					const isActive = modelId === selectedModelId && opt.id === effort;
 					return (
-						<button
+						<Button
 							key={opt.id}
 							type="button"
+							variant="ghost"
+							size="sm"
 							className={cn(
-								"flex flex-col items-start w-full rounded-md px-1.5 py-2 text-left transition-colors",
+								"flex flex-col items-start w-full rounded-md px-1.5 py-2 h-auto text-left font-normal",
 								isActive ? "bg-primary/10 text-foreground" : "text-foreground hover:bg-muted",
 							)}
 							onClick={(e) => {
@@ -128,7 +130,7 @@ function EffortFlyout({
 								<span className={cn("text-sm leading-none", !isActive && "ml-5")}>{opt.label}</span>
 							</div>
 							<span className="text-[11px] text-muted-foreground mt-1 ml-5">{opt.description}</span>
-						</button>
+						</Button>
 					);
 				})}
 			</div>

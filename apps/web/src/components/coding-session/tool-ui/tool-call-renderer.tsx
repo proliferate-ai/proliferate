@@ -1,6 +1,7 @@
 "use client";
 
-import { type ToolCategory, getToolCategory } from "./config";
+import type { ToolCategory } from "@/config/tool-ui";
+import { getToolCategory } from "@/lib/sessions/tool-utils";
 import { EditDisplay } from "./displays/edit-display";
 import { MetaDisplay } from "./displays/meta-display";
 import { ReadingSummary } from "./displays/reading-summary";

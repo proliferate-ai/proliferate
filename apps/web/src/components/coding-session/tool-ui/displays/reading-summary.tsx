@@ -1,9 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { getFilePath, getToolLabel } from "@/lib/sessions/tool-utils";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
-import { getFilePath, getToolLabel } from "../config";
 
 interface LookupTool {
 	toolName: string;

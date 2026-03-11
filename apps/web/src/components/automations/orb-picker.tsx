@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ORB_PALETTES } from "@/config/coworkers";
 import { cn } from "@/lib/display/utils";
@@ -41,37 +42,35 @@ export function OrbPicker({ selectedIndex, onSelect, children }: OrbPickerProps)
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
 				{children ?? (
-					<button
-						type="button"
-						className="rounded-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					>
+					<Button type="button" variant="ghost" className="rounded-full cursor-pointer h-auto p-0">
 						<WorkerOrb
 							name={selectedIndex != null ? PALETTE_PREVIEW_NAMES[selectedIndex] : "default"}
 							size={40}
 						/>
-					</button>
+					</Button>
 				)}
 			</PopoverTrigger>
 			<PopoverContent className="w-auto p-3" align="start" sideOffset={8}>
 				<p className="text-xs font-medium text-muted-foreground mb-2">Choose orb style</p>
 				<div className="grid grid-cols-4 gap-2">
 					{ORB_PALETTES.map((_, i) => (
-						<button
+						<Button
 							key={PALETTE_PREVIEW_NAMES[i]}
 							type="button"
+							variant="ghost"
 							onClick={() => {
 								onSelect(i);
 								setOpen(false);
 							}}
 							className={cn(
-								"rounded-full p-0.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+								"rounded-full p-0.5 h-auto transition-all",
 								selectedIndex === i
 									? "ring-2 ring-foreground"
 									: "ring-1 ring-transparent hover:ring-border",
 							)}
 						>
 							<WorkerOrb name={PALETTE_PREVIEW_NAMES[i]} size={36} />
-						</button>
+						</Button>
 					))}
 				</div>
 			</PopoverContent>

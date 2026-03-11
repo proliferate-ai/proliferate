@@ -52,3 +52,10 @@ export class SlackConfigValidationError extends Error {
 		this.name = "SlackConfigValidationError";
 	}
 }
+
+export class SlackDmDeliveryError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "SlackDmDeliveryError";
+	}
+}

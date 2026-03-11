@@ -45,19 +45,3 @@ export const TOOL_DISPLAY_LABEL: Record<string, string> = {
 };
 
 export const LOOKUP_GROUP_LABEL = "Reading";
-
-export function getToolCategory(toolName: string): ToolCategory {
-	return TOOL_CATEGORY[toolName] ?? "meta";
-}
-
-export function getToolLabel(toolName: string): string {
-	return TOOL_DISPLAY_LABEL[toolName] ?? toolName;
-}
-
-export function getFilePath(args: Record<string, unknown>): string | null {
-	return (args.filePath as string) ?? (args.file_path as string) ?? (args.path as string) ?? null;
-}
-
-export function getFileName(path: string): string {
-	return path.split("/").pop() ?? path;
-}

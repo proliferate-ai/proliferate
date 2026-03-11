@@ -40,3 +40,14 @@ export function inferProviderFromCapabilityKey(
 	}
 	return undefined;
 }
+
+/** Map an integration identifier (e.g. "github", "sentry") to its Provider icon key. */
+export function getProviderForIntegration(integration: string): Provider | null {
+	if (integration === "github" || integration === "jira" || integration === "linear") {
+		return integration;
+	}
+	if (integration === "posthog" || integration === "sentry" || integration === "slack") {
+		return integration;
+	}
+	return null;
+}
