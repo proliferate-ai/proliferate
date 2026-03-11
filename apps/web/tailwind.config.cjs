@@ -41,14 +41,6 @@ module.exports = {
 					DEFAULT: "hsl(var(--success))",
 					foreground: "hsl(var(--success-foreground))",
 				},
-				warning: {
-					DEFAULT: "hsl(var(--warning))",
-					foreground: "hsl(var(--warning-foreground))",
-				},
-				info: {
-					DEFAULT: "hsl(var(--info))",
-					foreground: "hsl(var(--info-foreground))",
-				},
 				muted: {
 					DEFAULT: "hsl(var(--muted))",
 					foreground: "hsl(var(--muted-foreground))",
@@ -70,9 +62,14 @@ module.exports = {
 					foreground: "hsl(var(--sidebar-foreground))",
 					border: "hsl(var(--sidebar-border))",
 				},
-				success: "hsl(var(--success))",
-				warning: "hsl(var(--warning))",
-				info: "hsl(var(--info))",
+				warning: {
+					DEFAULT: "hsl(var(--warning))",
+					foreground: "hsl(var(--warning-foreground))",
+				},
+				info: {
+					DEFAULT: "hsl(var(--info))",
+					foreground: "hsl(var(--info-foreground))",
+				},
 				"chat-input": "hsl(var(--chat-input))",
 			},
 			boxShadow: {

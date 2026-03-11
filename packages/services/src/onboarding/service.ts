@@ -241,7 +241,6 @@ export interface StartTrialInput {
 
 export interface StartTrialResult {
 	success: boolean;
-	checkoutUrl?: string;
 	message?: string;
 }
 

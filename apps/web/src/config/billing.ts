@@ -1,3 +1,5 @@
+import { TOP_UP_PACKS } from "@proliferate/shared/billing";
+
 export const AUTO_RECHARGE_CAP_OPTIONS = [
 	{ value: "5000", label: "$50" },
 	{ value: "10000", label: "$100" },
@@ -40,17 +42,23 @@ export const PLAN_OPTIONS: PlanOption[] = [
 ];
 
 export interface TopUpPackOption {
-	packId: "topup_10" | "topup_20" | "topup_50" | "topup_100" | "topup_1000";
+	packId: (typeof TOP_UP_PACKS)[number]["productId"];
 	name: string;
 	credits: number;
 	price: string;
 	priceCents: number;
 }
 
-export const TOP_UP_PACK_OPTIONS: TopUpPackOption[] = [
-	{ packId: "topup_10", name: "Starter", credits: 10, price: "$10", priceCents: 1000 },
-	{ packId: "topup_20", name: "Builder", credits: 20, price: "$20", priceCents: 2000 },
-	{ packId: "topup_50", name: "Growth", credits: 50, price: "$50", priceCents: 5000 },
-	{ packId: "topup_100", name: "Scale", credits: 100, price: "$100", priceCents: 10000 },
-	{ packId: "topup_1000", name: "Enterprise", credits: 1000, price: "$1,000", priceCents: 100000 },
-];
+const PRICE_FORMAT = new Intl.NumberFormat("en-US", {
+	style: "currency",
+	currency: "USD",
+	minimumFractionDigits: 0,
+});
+
+export const TOP_UP_PACK_OPTIONS: TopUpPackOption[] = TOP_UP_PACKS.map((p) => ({
+	packId: p.productId,
+	name: p.name,
+	credits: p.credits,
+	priceCents: p.priceCents,
+	price: PRICE_FORMAT.format(p.priceCents / 100),
+}));

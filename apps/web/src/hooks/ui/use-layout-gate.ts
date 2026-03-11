@@ -32,9 +32,7 @@ export function useLayoutGate(options: LayoutGateOptions = {}) {
 	// Don't include billingError as a gate — transient billing API failures
 	// should not permanently block the workspace UI
 	const gatesLoading =
-		authPending ||
-		(requireOnboarding && onboardingLoading) ||
-		(billingEnabled && billingLoading);
+		authPending || (requireOnboarding && onboardingLoading) || (billingEnabled && billingLoading);
 
 	const ready = !gatesLoading && !!session && !needsOnboarding;
 

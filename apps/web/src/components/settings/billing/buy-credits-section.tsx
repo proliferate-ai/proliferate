@@ -65,7 +65,7 @@ export function BuyCreditsSection() {
 				open={isOpen}
 				onOpenChange={(open) => {
 					setIsOpen(open);
-					if (!open) setSelectedPackId(TOP_UP_PACK_OPTIONS[1].packId);
+					if (!open) setSelectedPackId(defaultPack.packId);
 				}}
 			>
 				<DialogContent className="sm:max-w-md">
