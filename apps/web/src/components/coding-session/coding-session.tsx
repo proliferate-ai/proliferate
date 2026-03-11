@@ -199,8 +199,7 @@ export function CodingSession({
 		}
 	}, [runId, togglePanel, mode.type]);
 
-	// G9: Manager sessions use a simplified panel set
-	const isManagerSession = sessionData?.sessionType === "manager";
+	const isManagerSession = sessionData?.kind === "manager";
 	const basePanelTabs = isManagerSession ? MANAGER_PANEL_TABS : PANEL_TABS;
 
 	// Auto-expand panel and open Configure for manager/coworker sessions
