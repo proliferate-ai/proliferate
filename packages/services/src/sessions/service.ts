@@ -1203,7 +1203,7 @@ export async function markSessionDone(input: {
 	if (!session) {
 		throw new SessionNotFoundError(input.sessionId);
 	}
-	await sessionsDb.updateSession(input.sessionId, {
+	await sessionsDb.update(input.sessionId, {
 		outcome: "completed",
 		terminalState: "completed",
 		endedAt: new Date().toISOString(),
