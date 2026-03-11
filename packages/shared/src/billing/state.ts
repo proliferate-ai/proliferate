@@ -140,10 +140,13 @@ export function processStateTransition(
 			}
 
 			case "exhausted":
-				// Grace expired - pause all sessions
+				// Credits exhausted - pause all sessions
 				action = {
 					type: "pause_sessions",
-					reason: "Grace period expired. All sessions paused.",
+					reason:
+						currentState === "free"
+							? "Free credits exhausted. All sessions paused."
+							: "Grace period expired. All sessions paused.",
 				};
 				break;
 

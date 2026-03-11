@@ -106,6 +106,7 @@ export async function deductShadowBalance(update: ShadowBalanceUpdate): Promise<
 				billingState: organization.billingState,
 				shadowBalance: organization.shadowBalance,
 				graceExpiresAt: organization.graceExpiresAt,
+				autumnCustomerId: organization.autumnCustomerId,
 			})
 			.from(organization)
 			.where(eq(organization.id, update.organizationId))
@@ -119,10 +120,10 @@ export async function deductShadowBalance(update: ShadowBalanceUpdate): Promise<
 		const newBalance = previousBalance - update.credits;
 		const currentState = org.billingState as BillingState;
 
-		// Free-tier orgs have no Autumn customer — mark events "skipped"
-		// so the outbox ignores them. The insert is still required for idempotency:
-		// a crash between deduction and checkpoint advancement must not double-deduct.
-		const outboxStatus = currentState === "free" ? "skipped" : "pending";
+		// Orgs without an Autumn customer have no external billing to reconcile —
+		// mark events "skipped" so the outbox ignores them. The insert is still
+		// required for idempotency.
+		const outboxStatus = org.autumnCustomerId ? "pending" : "skipped";
 
 		// Global idempotency check via billing_event_keys lookup table.
 		// This preserves exactly-once semantics even when billing_events is partitioned
@@ -285,6 +286,7 @@ export async function bulkDeductShadowBalance(
 				billingState: organization.billingState,
 				shadowBalance: organization.shadowBalance,
 				graceExpiresAt: organization.graceExpiresAt,
+				autumnCustomerId: organization.autumnCustomerId,
 			})
 			.from(organization)
 			.where(eq(organization.id, organizationId))
@@ -297,9 +299,9 @@ export async function bulkDeductShadowBalance(
 		const previousBalance = Number(org.shadowBalance ?? 0);
 		const currentState = org.billingState as BillingState;
 
-		// Free-tier orgs have no Autumn customer — mark events "skipped"
-		// so the outbox ignores them. The insert is still required for idempotency.
-		const outboxStatus = currentState === "free" ? "skipped" : "pending";
+		// Orgs without an Autumn customer have no external billing to reconcile —
+		// mark events "skipped" so the outbox ignores them.
+		const outboxStatus = org.autumnCustomerId ? "pending" : "skipped";
 
 		// 2. Bulk insert idempotency keys — determines which events are new
 		const keysInserted = await tx
