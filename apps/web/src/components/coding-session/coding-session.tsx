@@ -202,14 +202,25 @@ export function CodingSession({
 	const isManagerSession = sessionData?.kind === "manager";
 	const basePanelTabs = isManagerSession ? MANAGER_PANEL_TABS : PANEL_TABS;
 
-	// Auto-expand panel and open Configure for manager/coworker sessions
+	// Auto-expand panel, pin manager tabs, and open Configure for coworker sessions
 	const managerPanelInitRef = useRef(false);
 	useEffect(() => {
 		if (!isManagerSession || managerPanelInitRef.current) return;
 		managerPanelInitRef.current = true;
 		if (panelCollapsed) setPanelCollapsed(false);
+		for (const tab of MANAGER_PANEL_TABS) {
+			if (!pinnedTabs.includes(tab.type)) pinTab(tab.type);
+		}
 		if (mode.type === "none") togglePanel("configure");
-	}, [isManagerSession, panelCollapsed, setPanelCollapsed, mode.type, togglePanel]);
+	}, [
+		isManagerSession,
+		panelCollapsed,
+		setPanelCollapsed,
+		pinnedTabs,
+		pinTab,
+		mode.type,
+		togglePanel,
+	]);
 
 	// Build panel tabs — prepend investigation tab when runId is present
 	const effectivePanelTabs = runId ? [INVESTIGATION_TAB, ...basePanelTabs] : basePanelTabs;
