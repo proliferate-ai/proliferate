@@ -1203,7 +1203,7 @@ export async function markSessionDone(input: {
 	if (!session) {
 		throw new SessionNotFoundError(input.sessionId);
 	}
-	await sessionsDb.update(input.sessionId, {
+	await sessionsDb.updateWithOrgCheck(input.sessionId, input.organizationId, {
 		outcome: "completed",
 		terminalState: "succeeded",
 		agentState: "done",

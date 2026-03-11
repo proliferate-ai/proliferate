@@ -170,6 +170,7 @@ export const MarkdownContent: FC<MarkdownContentProps> = ({ text, variant = "ass
 						/>
 					) : (
 						<MarkdownContent
+							// biome-ignore lint/suspicious/noArrayIndexKey: ordered message segments, stable position
 							key={`assistant-markdown-${index}`}
 							text={segment.text}
 							variant="assistant"
@@ -710,12 +711,14 @@ const AssistantMessage: FC = () => {
 						const text = group.part.text?.trim();
 						if (!text) return null;
 						return (
+							// biome-ignore lint/suspicious/noArrayIndexKey: ordered content groups, stable position
 							<div key={`text-${i}`} className="animate-in fade-in duration-300">
 								<MarkdownContent text={text} variant="assistant" />
 							</div>
 						);
 					}
 
+					// biome-ignore lint/suspicious/noArrayIndexKey: ordered content groups, stable position
 					return <ToolCallBlock key={`tools-${i}`} tools={group.parts} />;
 				})}
 

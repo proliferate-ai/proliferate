@@ -86,6 +86,7 @@ export function EditDisplay({ toolName, args, status }: EditDisplayProps) {
 								<div className="w-full overflow-x-auto rounded-lg">
 									<pre className="text-xs leading-relaxed">
 										{oldStr.split("\n").map((line, i) => (
+											// biome-ignore lint/suspicious/noArrayIndexKey: static diff lines, never reorder
 											<div
 												key={`del-${i}`}
 												className="bg-destructive/10 text-destructive px-2 py-0.5"
@@ -95,6 +96,7 @@ export function EditDisplay({ toolName, args, status }: EditDisplayProps) {
 											</div>
 										))}
 										{newStr.split("\n").map((line, i) => (
+											// biome-ignore lint/suspicious/noArrayIndexKey: static diff lines, never reorder
 											<div key={`add-${i}`} className="bg-success/10 text-success px-2 py-0.5">
 												<span className="select-none text-success/50 mr-2">+</span>
 												{line}
@@ -111,6 +113,7 @@ export function EditDisplay({ toolName, args, status }: EditDisplayProps) {
 										.slice(0, 2000)
 										.split("\n")
 										.map((line, i) => (
+											// biome-ignore lint/suspicious/noArrayIndexKey: static file content lines
 											<div key={`line-${i}`} className="bg-success/10 text-success px-2 py-0.5">
 												<span className="select-none text-success/50 mr-2">+</span>
 												{line}
