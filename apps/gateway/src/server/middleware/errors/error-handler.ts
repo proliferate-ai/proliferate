@@ -1,8 +1,9 @@
+import { createLogger } from "@proliferate/logger";
+import { BillingGateError } from "@proliferate/shared/billing";
 /**
  * Error handler middleware.
  */
-import { createLogger } from "@proliferate/logger";
-import { BillingGateError } from "@proliferate/shared/billing";
+import * as Sentry from "@sentry/node";
 import type { ErrorRequestHandler } from "express";
 import { ApiError } from "./api-error";
 
@@ -28,6 +29,7 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 		return;
 	}
 
+	Sentry.captureException(err);
 	logger.error({ err }, "Unhandled error");
 	res.status(500).json({ error: "Internal server error" });
 };

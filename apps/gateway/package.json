@@ -22,6 +22,7 @@
 		"@proliferate/providers": "workspace:*",
 		"@proliferate/services": "workspace:*",
 		"@proliferate/shared": "workspace:*",
+		"@sentry/node": "^10.34.0",
 		"bullmq": "^5.30.1",
 		"dotenv": "^16.4.5",
 		"eventsource-parser": "^3.0.6",
