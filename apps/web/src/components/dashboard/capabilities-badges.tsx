@@ -114,7 +114,7 @@ export function CapabilitiesBadges({
 						<BadgeCircle key={entry.id} provider={entry.provider} />
 					))}
 					{overflow > 0 && (
-						<div className="ml-1 inline-flex h-6 items-center rounded-full border border-border bg-background px-2 text-[11px] text-muted-foreground">
+						<div className="inline-flex -mr-3 h-6 items-center rounded-full border border-border bg-background px-2 text-[11px] text-muted-foreground">
 							+{overflow}
 						</div>
 					)}
@@ -136,7 +136,7 @@ export function CapabilitiesBadges({
 					{/* Org integrations (both modes) */}
 					{(integrationSummaries ?? []).map((entry) => (
 						<div key={entry.id} className="flex items-center gap-2.5 px-3 py-1.5">
-							<div className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-muted/30 text-foreground shrink-0">
+							<div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted/30 text-foreground">
 								{entry.provider ? (
 									<ProviderIcon provider={entry.provider} size="sm" />
 								) : (

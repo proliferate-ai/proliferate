@@ -223,7 +223,7 @@ export async function createWorkerWithManagerSession(input: {
 				repoId: input.repoId,
 				configurationId: input.configurationId,
 				visibility: "org",
-				title: `Manager: ${name}`,
+				title: name,
 			},
 			tx,
 		);
