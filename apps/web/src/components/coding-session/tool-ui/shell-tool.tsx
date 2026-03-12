@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { parseProliferateCommand } from "@/lib/sessions/proliferate/command-parser";
 import { makeAssistantToolUI } from "@assistant-ui/react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
@@ -17,8 +18,13 @@ export const ShellToolUI = makeAssistantToolUI<ShellArgs, string>({
 		const isRunning = status.type === "running";
 		const command = args.command || "";
 
-		// Truncate long commands for display in parens
+		// Truncate long commands for display
 		const displayCommand = command.length > 50 ? `${command.slice(0, 47)}...` : command;
+
+		const parsed = parseProliferateCommand(command);
+		if (parsed) {
+			return null;
+		}
 		// Trim result to handle placeholder space from empty results
 		const trimmedResult = result?.trim();
 

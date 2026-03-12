@@ -1,6 +1,8 @@
 "use client";
 
+import { ProliferateBashDisplay } from "@/components/coding-session/tool-ui/proliferate/proliferate-bash-display";
 import { Button } from "@/components/ui/button";
+import { parseProliferateCommand } from "@/lib/sessions/proliferate/command-parser";
 import { ChevronRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 
@@ -14,6 +16,14 @@ export function ShellDisplay({ args, result, status }: ShellDisplayProps) {
 	const [expanded, setExpanded] = useState(false);
 	const isRunning = status?.type === "running";
 	const command = (args.command as string) ?? "";
+
+	const parsed = parseProliferateCommand(command);
+	if (parsed) {
+		return (
+			<ProliferateBashDisplay parsed={parsed} result={result} status={status} command={command} />
+		);
+	}
+
 	const displayCmd = command.length > 60 ? `${command.slice(0, 57)}...` : command;
 	const output = typeof result === "string" ? result.trim() : null;
 
