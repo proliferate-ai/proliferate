@@ -13,7 +13,7 @@ import { useOrgMembers } from "@/hooks/org/use-orgs";
 import { useConfigurations } from "@/hooks/sessions/use-configurations";
 import { useActiveOrganization, useSession } from "@/lib/auth/client";
 import { type OrgRole, hasRoleOrHigher } from "@/lib/auth/roles";
-import { getConnectorPresetByKey } from "@proliferate/shared";
+import { resolveActiveComposioConnector } from "@/lib/integrations/composio-connectors";
 import { useCallback, useMemo, useState } from "react";
 
 // TODO: break this hook into smaller, focused hooks (e.g. useSlackConfig, useConnectorManagement, useIntegrationPicker)
@@ -170,11 +170,7 @@ export function useIntegrationsPage() {
 			if (entry.type === "oauth" && entry.provider) {
 				integrationId = integrationsByProvider[entry.provider]?.[0]?.id;
 			} else if (entry.type === "composio-oauth" && entry.presetKey) {
-				const preset = getConnectorPresetByKey(entry.presetKey);
-				const connector = preset?.composioToolkit
-					? (connectors ?? []).find((c) => c.composioToolkit === preset.composioToolkit)
-					: undefined;
-				integrationId = connector?.id;
+				integrationId = resolveActiveComposioConnector(entry, connectors)?.id;
 			}
 
 			setDisconnectTarget({ entry, integrationId });

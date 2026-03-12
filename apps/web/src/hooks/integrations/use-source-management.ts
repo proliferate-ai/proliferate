@@ -5,8 +5,8 @@ import {
 	useDisabledSourceIds,
 	useToggleActionPreference,
 } from "@/hooks/actions/use-action-preferences";
+import { resolveActiveComposioConnector } from "@/lib/integrations/composio-connectors";
 import type { ConnectorConfig } from "@proliferate/shared";
-import { getConnectorPresetByKey } from "@proliferate/shared";
 import { useCallback } from "react";
 
 export function useSourceManagement(connectors: ConnectorConfig[] | undefined) {
@@ -18,10 +18,7 @@ export function useSourceManagement(connectors: ConnectorConfig[] | undefined) {
 			if (entry.type === "oauth" && entry.provider) return entry.provider;
 			if (entry.type === "slack") return "slack";
 			if (entry.type === "composio-oauth" && entry.presetKey) {
-				const preset = getConnectorPresetByKey(entry.presetKey);
-				const connector = preset?.composioToolkit
-					? (connectors ?? []).find((c) => c.composioToolkit === preset.composioToolkit)
-					: undefined;
+				const connector = resolveActiveComposioConnector(entry, connectors);
 				return connector ? `connector:${connector.id}` : null;
 			}
 			if (entry.type === "mcp-preset" && entry.presetKey) {

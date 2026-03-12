@@ -249,9 +249,9 @@ export class GmailPollingTrigger extends PollingTrigger<
 		}
 
 		const json = (await response.json()) as ComposioConnectedAccount & {
-			data?: Record<string, unknown>;
+			data?: ComposioConnectedAccount;
 		};
-		return json;
+		return json.data ?? json;
 	}
 
 	private async gmailRequest<T>(

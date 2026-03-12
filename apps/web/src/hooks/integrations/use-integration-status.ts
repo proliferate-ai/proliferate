@@ -3,8 +3,8 @@
 import type { CatalogEntry } from "@/components/integrations/integration-picker-dialog";
 import type { Provider } from "@/components/integrations/provider-icon";
 import { INTEGRATION_CATALOG } from "@/config/integrations";
+import { resolveActiveComposioConnector } from "@/lib/integrations/composio-connectors";
 import type { ConnectorConfig } from "@proliferate/shared";
-import { getConnectorPresetByKey } from "@proliferate/shared";
 import type { IntegrationWithCreator } from "@proliferate/shared/contracts/integrations";
 import { useCallback, useMemo } from "react";
 
@@ -46,15 +46,8 @@ export function useIntegrationStatus({
 					return (allIntegrations ?? []).some(
 						(i) => i.integration_id === entry.key && i.status === "active",
 					);
-				case "composio-oauth": {
-					const preset = entry.presetKey ? getConnectorPresetByKey(entry.presetKey) : undefined;
-					const connector = preset?.composioToolkit
-						? (connectors ?? []).find(
-								(c) => c.composioToolkit === preset.composioToolkit && c.enabled,
-							)
-						: undefined;
-					return !!connector;
-				}
+				case "composio-oauth":
+					return !!resolveActiveComposioConnector(entry, connectors);
 				case "mcp-preset":
 					return false;
 				default:
@@ -73,10 +66,7 @@ export function useIntegrationStatus({
 					return slackDisconnectIsPending;
 				case "composio-oauth": {
 					if (!composioDisconnectingId) return false;
-					const preset = entry.presetKey ? getConnectorPresetByKey(entry.presetKey) : undefined;
-					const connector = preset?.composioToolkit
-						? (connectors ?? []).find((c) => c.composioToolkit === preset.composioToolkit)
-						: undefined;
+					const connector = resolveActiveComposioConnector(entry, connectors);
 					return connector?.id === composioDisconnectingId;
 				}
 				case "mcp-preset":
@@ -107,13 +97,7 @@ export function useIntegrationStatus({
 				return match?.creator?.name || match?.display_name || null;
 			}
 			if (entry.type === "composio-oauth") {
-				const preset = entry.presetKey ? getConnectorPresetByKey(entry.presetKey) : undefined;
-				const connector = preset?.composioToolkit
-					? (connectors ?? []).find(
-							(c) => c.composioToolkit === preset.composioToolkit && c.enabled,
-						)
-					: undefined;
-				return connector?.name || null;
+				return resolveActiveComposioConnector(entry, connectors)?.name || null;
 			}
 			return null;
 		},

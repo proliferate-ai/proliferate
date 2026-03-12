@@ -435,7 +435,9 @@ export async function createComposioConnector(
 			url: input.mcpUrl,
 			composioAccountId: input.connectedAccountId,
 		});
-		return toConnectorConfig(row ?? existing);
+		if (row) {
+			return toConnectorConfig(row);
+		}
 	}
 
 	// Check if COMPOSIO_API_KEY secret already exists in this org
