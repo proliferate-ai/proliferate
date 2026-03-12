@@ -16,6 +16,7 @@ interface VerifyOAuthCallbackContextInput {
 	provider: OAuthCallbackProvider;
 	state: OAuthCallbackStateActor;
 	returnUrl: string | undefined;
+	allowDifferentUserSameOrg?: boolean;
 }
 
 export type OAuthCallbackProvider = "linear" | "jira" | "sentry" | "slack" | "composio";
@@ -164,6 +165,7 @@ export async function verifyOAuthCallbackContext({
 	provider,
 	state,
 	returnUrl,
+	allowDifferentUserSameOrg = false,
 }: VerifyOAuthCallbackContextInput): Promise<
 	{ context: { userId: string; orgId: string; redirectBase: string } } | { response: NextResponse }
 > {
@@ -185,7 +187,7 @@ export async function verifyOAuthCallbackContext({
 	}
 
 	const authUserId = authResult.session.user.id;
-	if (authUserId !== state.userId) {
+	if (!allowDifferentUserSameOrg && authUserId !== state.userId) {
 		return {
 			response: NextResponse.redirect(`${redirectBase}?error=${policy.errors.forbidden}`),
 		};

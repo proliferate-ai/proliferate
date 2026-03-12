@@ -80,7 +80,7 @@ export function toConnectorConfig(row: db.OrgConnectorRow): ConnectorConfig {
 		id: row.id,
 		name: row.name,
 		transport: row.transport as "remote_http",
-		url: row.url,
+		url: normalizeComposioMcpUrl(row),
 		auth: row.auth as ConnectorAuth,
 		riskPolicy: (row.riskPolicy as ConnectorRiskPolicy) ?? undefined,
 		enabled: row.enabled,
@@ -566,4 +566,23 @@ function buildAuth(
 		};
 	}
 	return { type: "bearer", secretKey };
+}
+
+function normalizeComposioMcpUrl(row: db.OrgConnectorRow): string {
+	if (!row.composioToolkit) {
+		return row.url;
+	}
+
+	try {
+		const url = new URL(row.url);
+		if (!url.searchParams.has("connected_account_ids") || url.searchParams.has("user_id")) {
+			return row.url;
+		}
+
+		url.searchParams.delete("connected_account_ids");
+		url.searchParams.set("user_id", row.organizationId);
+		return url.toString();
+	} catch {
+		return row.url;
+	}
 }

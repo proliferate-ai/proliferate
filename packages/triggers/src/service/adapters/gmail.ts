@@ -248,8 +248,10 @@ export class GmailPollingTrigger extends PollingTrigger<
 			throw new Error(`Composio account error (${response.status}): ${text}`);
 		}
 
-		const json = (await response.json()) as { data?: ComposioConnectedAccount };
-		return (json.data ?? json) as ComposioConnectedAccount;
+		const json = (await response.json()) as ComposioConnectedAccount & {
+			data?: Record<string, unknown>;
+		};
+		return json;
 	}
 
 	private async gmailRequest<T>(

@@ -34,8 +34,6 @@ export async function GET(request: NextRequest) {
 		);
 	}
 
-	const callbackUrl = `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/api/integrations/composio/oauth/callback`;
-
 	const { state } = buildSignedOAuthStateFromRequest({
 		request,
 		orgId: authContext.context.orgId,
@@ -53,7 +51,7 @@ export async function GET(request: NextRequest) {
 		const result = await composio.initiateOAuth(config, {
 			toolkit,
 			orgId: authContext.context.orgId,
-			callbackUrl: `${callbackUrl}?state=${encodeURIComponent(state)}`,
+			callbackUrl: `${baseUrl}/api/integrations/composio/oauth/callback?state=${encodeURIComponent(state)}`,
 		});
 
 		return NextResponse.redirect(result.redirectUrl);

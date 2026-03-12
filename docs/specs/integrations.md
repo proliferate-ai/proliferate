@@ -95,11 +95,12 @@
 - Composio is an external MCP gateway that handles OAuth + token refresh for SaaS apps (Gmail, Notion, Salesforce, Google Calendar, Google Drive, HubSpot).
 - Users see per-app integrations ("Gmail", "Notion") — never "Composio." Each toolkit gets its own `org_connectors` row with typed `composio_toolkit` and `composio_account_id` columns.
 - A partial unique index (`org_connectors_composio_toolkit_org_unique`) enforces one connector per toolkit per org.
+- OAuth initiation must resolve an existing Composio-managed auth config for the toolkit or lazily create one through Composio's Auth Configs API before redirecting the user.
 - Auth reuses `custom_header` type: `{ type: "custom_header", headerName: "x-api-key", secretKey: "COMPOSIO_API_KEY" }`. All Composio connectors reference a single shared org secret bootstrapped atomically on first connector creation.
 - Managed connector semantics: `url` and `auth` fields are locked — `updateConnector` rejects changes. `enabled`, `name`, and `riskPolicy` remain editable.
 - Disconnect goes through `disconnectComposioConnector` (dedicated service function and oRPC procedure): deletes Composio account (best-effort), then deletes connector row. Generic `deleteConnector` rejects Composio-managed connectors.
 - Generic `createConnector`/`createConnectorWithSecret` reject `COMPOSIO_API_KEY` as secret key to prevent piggybacking on the platform key.
-- OAuth flow: initiation route builds signed state with `extraPayload: { toolkit }`, redirects to Composio. Callback parses Composio's `status` + `connected_account_id` (NOT standard OAuth `code`), verifies signed state, validates account binding, gets MCP URL, and calls `createComposioConnector` (upsert semantics).
+- OAuth flow: initiation route builds signed state with `extraPayload: { toolkit }`, passes the callback through Composio's hosted auth link, and redirects the user to Composio. Callback parses Composio's `status` + `connected_account_id`/`connectedAccountId` (NOT standard OAuth `code`), verifies signed state, re-validates that the callback session is still an admin/owner in the target org (exact initiating user match is not required), retries the connected-account lookup briefly to tolerate Composio propagation lag, validates account binding against the connected account toolkit + org, resolves or creates a matching Composio MCP server config, generates a user-scoped MCP URL (prefer `user_ids_url`; `connected_account_urls` can execute against Composio's fallback `default` user for some toolkits), and calls `createComposioConnector` (upsert semantics).
 - `composioAvailable` endpoint returns `!!process.env.COMPOSIO_API_KEY` — no API call, for UI gating.
 - Self-hosted fallback: without `COMPOSIO_API_KEY`, UI shows manual `ConnectorForm` (full URL + key entry). These connectors have no `composioToolkit` set and are not "managed."
 - Token refresh is handled by Composio transparently; auth errors surface to the agent like any other connector failure.
@@ -243,8 +244,11 @@ Sections 3 and 4 were intentionally removed in this spec revision. File tree and
 ### 6.10 Composio-Managed Connector Invariants — `Implemented`
 - Composio OAuth initiation must require authenticated admin/owner caller in active org.
 - Composio OAuth state must be signed, time-bounded, and include toolkit in extra payload.
+- Composio OAuth initiation must resolve or lazily create a Composio-managed auth config for the toolkit before redirecting.
 - Composio callback must parse `status` + `connected_account_id` (not standard OAuth `code`).
-- Composio callback must verify signed state, validate account binding via `getConnectedAccount`, and reject mismatches.
+- Composio callback must verify signed state, re-validate that the callback session is still an admin/owner in the target org, validate account binding via `getConnectedAccount` (org/user + toolkit slug), and reject mismatches.
+- Composio callback must retry `getConnectedAccount` for a short bounded window before failing when Composio has not yet propagated the bound org/toolkit fields.
+- Composio callback must resolve or create a matching MCP server config and generate a user-scoped MCP URL before connector persistence; when Composio returns both `user_ids_url` and `connected_account_urls`, persistence must prefer the user-scoped URL.
 - `createComposioConnector` must use upsert semantics: if connector for org+toolkit exists, update it; otherwise create.
 - First Composio connector in an org must atomically create the `COMPOSIO_API_KEY` org secret; subsequent connectors reuse it.
 - `updateConnector` must reject `url` and `auth` changes on connectors where `composioToolkit` is set.
