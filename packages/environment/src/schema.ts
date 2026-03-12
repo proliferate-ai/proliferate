@@ -101,6 +101,9 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 		CI: optionalBoolean,
 		COMPOSIO_API_KEY: optionalString,
 		COMPOSIO_BASE_URL: optionalString,
+		CUSTOMERIO_SITE_ID: optionalString, // Customer.io Track API site ID
+		CUSTOMERIO_API_KEY: optionalString, // Customer.io Track API key
+		CUSTOMERIO_REGION: optionalString, // "us" (default) or "eu"
 		DEFAULT_SANDBOX_PROVIDER: optionalString,
 		DEV_CONSOLE_LOG_PATH: optionalString, // Dev-only: file path for client console log capture
 		DEV_USER_ID: optionalString, // Local dev convenience

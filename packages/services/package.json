@@ -29,6 +29,7 @@
 		"@proliferate/shared": "workspace:*",
 		"@proliferate/triggers": "workspace:*",
 		"cron-parser": "^5.5.0",
+		"customerio-node": "^4.3.0",
 		"drizzle-orm": "^0.44.0",
 		"ioredis": "^5.5.0",
 		"redlock": "^5.0.0-beta.2"
