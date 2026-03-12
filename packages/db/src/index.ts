@@ -7,7 +7,7 @@
 // Client
 export { getDb, resetDb, type Database } from "./client";
 
-// Schema - tables and relations
+// Schema - authored domain tables and relations
 export * from "./schema";
 
 // Re-export common Drizzle utilities for convenience

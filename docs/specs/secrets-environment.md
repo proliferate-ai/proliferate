@@ -58,8 +58,7 @@ Secret reads are scope-sensitive:
 - Reference: `apps/gateway/src/hub/capabilities/tools/save-env-files.ts`, `packages/services/src/configurations/db.ts`, `apps/gateway/src/lib/session-creator.ts`.
 
 ### Things Agents Get Wrong
-- Secret bundles are no longer the active runtime model; current schema comment explicitly marks `secret_files` as replacing bundles (`packages/db/src/schema/schema.ts`).
-- `packages/db/src/schema/secrets.ts` still defines bundle-era tables but is not the canonical export path (`packages/db/src/schema/index.ts` exports `schema.ts` + `relations.ts`).
+- Secret bundles are retired; the canonical authored schema in `packages/db/src/schema/secrets.ts` models `secrets`, `secret_files`, and `configuration_secrets`.
 - `request_env_variables` is not gateway-intercepted; it is a sandbox tool surfaced in UI via tool events (`packages/shared/src/opencode-tools/index.ts`, `apps/web/src/components/coding-session/runtime/message-handlers.ts`).
 - `save_env_files` is gateway-intercepted and setup-session-only (`apps/gateway/src/hub/capabilities/tools/save-env-files.ts`).
 - `checkSecrets` behavior changes when `configuration_id` is present; repo filtering is bypassed in that branch (`packages/services/src/secrets/service.ts:checkSecrets`).
@@ -263,7 +262,6 @@ Secret reads are scope-sensitive:
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **Stale bundle-era schema file remains in tree** — `packages/db/src/schema/secrets.ts` still models `secret_bundles`, while canonical exports point to `schema.ts`/`relations.ts`. Impact: easy agent confusion and wrong imports.
 - [ ] **Configuration-linked secrets are not consumed in session boot path** — `getSecretsForConfiguration()` exists but `buildSandboxEnvVars()` currently reads `getSecretsForSession()` only. Impact: configuration-linked secret expectations can diverge from runtime injection behavior.
 - [ ] **Secret file content is currently write-only in services layer** — no decrypt/read path exists beyond encrypted persistence and metadata listing. Impact: file-based secret UX is only partially wired to backend runtime flows.
 - [x] **Conflict target alignment for repo-scoped writes** — `upsertByRepoAndKey` and `bulkCreateSecrets` now use schema-aligned conflict targets including `configurationId` and explicitly write `configurationId: null` for repo-scoped rows (`packages/services/src/secrets/db.ts`).

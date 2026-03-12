@@ -112,7 +112,7 @@ Both gateway runtime and worker build paths prefer repo-linked integrations, the
 ## 6. Subsystem Invariants & Rules
 
 ### 6.1 Repo Lifecycle Invariants
-- Repo identity is unique per org by `(organization_id, github_repo_id)` (`packages/db/src/schema/schema.ts:repos`).
+- Repo identity is unique per org by `(organization_id, github_repo_id)` (`packages/db/src/schema/repos.ts:repos`).
 - `createRepo` must be idempotent on that key; existing rows are returned instead of duplicated (`packages/services/src/repos/service.ts:createRepo`).
 - Repo connection linking must be safe under retries (`onConflictDoNothing`) (`packages/services/src/repos/db.ts:createConnection`).
 - `createRepoWithConfiguration` must not roll back repo creation if configuration auto-create fails; the repo remains valid (`packages/services/src/repos/service.ts:createRepoWithConfiguration`).

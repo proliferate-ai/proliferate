@@ -55,7 +55,7 @@
 ### Poll Groups
 - Poll groups are persisted in `trigger_poll_groups` and keyed by org + provider + integration.
 - Group cursor state lives on poll-group rows, not on trigger rows.
-- Evidence: `packages/db/src/schema/schema.ts`, `packages/services/src/poll-groups/db.ts`, `apps/trigger-service/src/polling/worker.ts`.
+- Evidence: `packages/db/src/schema/triggers.ts`, `packages/services/src/poll-groups/db.ts`, `apps/trigger-service/src/polling/worker.ts`.
 
 ### Trigger Event + Run Handoff
 - A trigger match creates a `trigger_events` row and an `automation_runs` row together.
@@ -147,7 +147,7 @@ _Sections 3 (File Tree) and 4 (Data Models) are intentionally removed. Code and 
 - Invariant: Poll concurrency is guarded by a Redis lock per group with TTL.
   Evidence: `apps/trigger-service/src/polling/worker.ts`, `packages/queue/src/index.ts:REDIS_KEYS.pollGroupLock`.
 - Invariant: Poll cursors are persisted in `trigger_poll_groups.cursor`.
-  Evidence: `packages/services/src/poll-groups/db.ts:updateGroupCursor`, `packages/db/src/schema/schema.ts`.
+  Evidence: `packages/services/src/poll-groups/db.ts:updateGroupCursor`, `packages/db/src/schema/triggers.ts`.
 - Rule: Orphan poll groups are removed when no active polling triggers remain; BullMQ repeatables are unscheduled accordingly.
   Evidence: `packages/services/src/triggers/service.ts`, `packages/services/src/poll-groups/db.ts`, `packages/queue/src/index.ts:removePollGroupJob`.
 
