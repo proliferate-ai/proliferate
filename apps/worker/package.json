@@ -21,6 +21,7 @@
 		"@proliferate/services": "workspace:*",
 		"@proliferate/shared": "workspace:*",
 		"@proliferate/triggers": "workspace:*",
+		"@sentry/node": "^10.34.0",
 		"bullmq": "^5.30.1",
 		"e2b": "^2.14.1",
 		"ioredis": "^5.4.1",

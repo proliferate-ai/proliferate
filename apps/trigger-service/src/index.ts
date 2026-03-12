@@ -1,5 +1,16 @@
-import { runtimeEnv } from "@proliferate/environment/runtime";
+import { nodeEnv, runtimeEnv } from "@proliferate/environment/runtime";
 import { env } from "@proliferate/environment/server";
+import * as Sentry from "@sentry/node";
+
+Sentry.init({
+	dsn: env.NEXT_PUBLIC_SENTRY_DSN ?? "",
+	environment: nodeEnv,
+	tracesSampleRate: nodeEnv === "production" ? 0.1 : 1.0,
+	beforeSend(event) {
+		if (nodeEnv !== "production") return null;
+		return event;
+	},
+});
 import { setServicesLogger } from "@proliferate/services/logger";
 import { registerDefaultTriggers } from "@proliferate/triggers";
 import { startInboxGcWorker } from "./gc/inbox-gc.js";
@@ -67,8 +78,19 @@ async function gracefulShutdown() {
 	for (const cleanup of workerCleanups) {
 		await cleanup();
 	}
+	await Sentry.flush(2000);
 	process.exit(0);
 }
 
 process.on("SIGINT", gracefulShutdown);
 process.on("SIGTERM", gracefulShutdown);
+
+process.on("uncaughtException", (err) => {
+	logger.fatal({ err }, "Uncaught exception");
+	Sentry.captureException(err);
+	Sentry.flush(2000).then(() => process.exit(1));
+});
+process.on("unhandledRejection", (reason) => {
+	logger.fatal({ err: reason }, "Unhandled rejection");
+	Sentry.captureException(reason);
+});

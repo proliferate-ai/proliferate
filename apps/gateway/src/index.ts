@@ -4,6 +4,20 @@
  * Starts the Express server with WebSocket support.
  */
 
+import { nodeEnv } from "@proliferate/environment/runtime";
+import { env as serverEnv } from "@proliferate/environment/server";
+import * as Sentry from "@sentry/node";
+
+Sentry.init({
+	dsn: serverEnv.NEXT_PUBLIC_SENTRY_DSN ?? "",
+	environment: nodeEnv,
+	tracesSampleRate: nodeEnv === "production" ? 0.1 : 1.0,
+	beforeSend(event) {
+		if (nodeEnv !== "production") return null;
+		return event;
+	},
+});
+
 import { getEnvStatus } from "@proliferate/environment";
 import { createLogger } from "@proliferate/logger";
 import { setServicesLogger } from "@proliferate/services/logger";
@@ -44,6 +58,7 @@ async function start(): Promise<void> {
 		if (shutdownPromise) return shutdownPromise;
 		shutdownPromise = (async () => {
 			logger.info("Shutting down — flushing telemetry and releasing leases");
+			await Sentry.flush(2000);
 			const forceExit = setTimeout(() => {
 				logger.warn("Shutdown timeout — forcing exit");
 				process.exit(0);
@@ -72,4 +87,14 @@ async function start(): Promise<void> {
 start().catch((err) => {
 	logger.fatal({ err }, "Failed to start gateway");
 	process.exit(1);
+});
+
+process.on("uncaughtException", (err) => {
+	logger.fatal({ err }, "Uncaught exception");
+	Sentry.captureException(err);
+	Sentry.flush(2000).then(() => process.exit(1));
+});
+process.on("unhandledRejection", (reason) => {
+	logger.fatal({ err: reason }, "Unhandled rejection");
+	Sentry.captureException(reason);
 });

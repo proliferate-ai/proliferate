@@ -9,6 +9,20 @@
  * in _archived/ folder - functionality is incomplete.
  */
 
+import { nodeEnv } from "@proliferate/environment/runtime";
+import { env as sentryEnv } from "@proliferate/environment/server";
+import * as Sentry from "@sentry/node";
+
+Sentry.init({
+	dsn: sentryEnv.NEXT_PUBLIC_SENTRY_DSN ?? "",
+	environment: nodeEnv,
+	tracesSampleRate: nodeEnv === "production" ? 0.1 : 1.0,
+	beforeSend(event) {
+		if (nodeEnv !== "production") return null;
+		return event;
+	},
+});
+
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { getEnvStatus } from "@proliferate/environment";
@@ -218,12 +232,23 @@ async function shutdown(): Promise<void> {
 	// Close Redis client
 	await closeRedisClient();
 
+	await Sentry.flush(2000);
 	logger.info("Shutdown complete");
 	process.exit(0);
 }
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+
+process.on("uncaughtException", (err) => {
+	logger.fatal({ err }, "Uncaught exception");
+	Sentry.captureException(err);
+	Sentry.flush(2000).then(() => process.exit(1));
+});
+process.on("unhandledRejection", (reason) => {
+	logger.fatal({ err: reason }, "Unhandled rejection");
+	Sentry.captureException(reason);
+});
 
 // Keep process alive
 process.stdin.resume();

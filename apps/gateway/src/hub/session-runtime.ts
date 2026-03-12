@@ -18,6 +18,7 @@ import type {
 	SandboxProvider,
 	SandboxProviderType,
 } from "@proliferate/shared";
+import { BillingGateError } from "@proliferate/shared/billing";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import { SandboxAgentV2CodingHarnessAdapter } from "../harness/coding/sandbox-agent-v2/adapter";
 import type {
@@ -419,7 +420,7 @@ export class SessionRuntime {
 					const msg = gateResult.message ?? "Billing check failed";
 					this.log("Billing gate denied resume", { orgId, error: msg });
 					this.onStatus("error", msg);
-					throw new Error(`Billing gate denied: ${msg}`);
+					throw new BillingGateError(msg, gateResult.code ?? "STATE_BLOCKED");
 				}
 			}
 
