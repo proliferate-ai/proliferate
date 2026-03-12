@@ -230,8 +230,8 @@
 | Configuration resolver | Implemented | `apps/gateway/src/api/proliferate/http/sessions/configuration-resolver.ts` | Resolves config at session start |
 | Service commands persistence | Implemented | `packages/db/src/schema/configurations.ts:serviceCommands` | JSONB on configurations |
 | Env file persistence | Implemented | `packages/db/src/schema/configurations.ts:envFiles` | JSONB on configurations |
-| Configuration connector configuration (deprecated) | Deprecated | `packages/db/src/schema/configurations.ts:connectors` | Legacy JSONB on configurations table; migrated to org-scoped `org_connectors` table via `0022_org_connectors.sql` |
-| Org-scoped connector catalog | Implemented | `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/` | `org_connectors` table with full CRUD via Integrations routes |
+| Configuration connector configuration (deprecated) | Deprecated | `packages/db/src/schema/configurations.ts:connectors` | Legacy JSONB on configurations table; superseded by org-scoped `org_connectors` persistence |
+| Org-scoped connector catalog | Implemented | `packages/db/src/schema/integrations.ts:orgConnectors`, `packages/services/src/connectors/` | `org_connectors` table with full CRUD via Integrations routes |
 | Org connector management UI | Implemented | `apps/web/src/app/(command-center)/dashboard/integrations/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools redirects to integrations page |
 | Org connector validation endpoint | Implemented | `apps/web/src/server/routers/integrations.ts:validateConnector` | `tools/list` preflight with diagnostics |
 | Base snapshot status tracking | Implemented | `packages/db/src/schema/configurations.ts:sandboxBaseSnapshots` | Building/ready/failed |
@@ -279,7 +279,7 @@
 | Jira metadata | Implemented | `apps/web/src/server/routers/integrations.ts:jiraMetadata` | Sites, projects, issue types |
 | Jira action adapter | Implemented | `packages/providers/src/providers/jira/actions.ts` | 6 actions: list_sites, list/get/create/update issues, add_comment |
 | GitHub auth (gateway) | Implemented | `apps/gateway/src/hub/session/runtime/github-auth.ts` | Gateway-side GitHub token resolution |
-| Org-scoped MCP connector catalog | Implemented | `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/` | Org-level connector CRUD with atomic secret provisioning |
+| Org-scoped MCP connector catalog | Implemented | `packages/db/src/schema/integrations.ts:orgConnectors`, `packages/services/src/connectors/` | Org-level connector CRUD with atomic secret provisioning |
 | Org-scoped connector management UI | Implemented | `apps/web/src/app/(command-center)/dashboard/integrations/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools redirects to integrations; connector management on integrations page |
 
 ---

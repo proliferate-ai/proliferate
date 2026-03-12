@@ -1,63 +1,72 @@
-/**
- * Slack integration schema
- */
-
-import { relations } from "drizzle-orm";
-import { index, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import {
+	check,
+	foreignKey,
+	index,
+	jsonb,
+	pgTable,
+	text,
+	timestamp,
+	unique,
+	uuid,
+} from "drizzle-orm/pg-core";
 import { organization, user } from "./auth";
 import { configurations } from "./configurations";
 import { repos } from "./repos";
 import { sessions } from "./sessions";
 
-// ============================================
-// Slack Installations
-// ============================================
-
 export const slackInstallations = pgTable(
 	"slack_installations",
 	{
-		id: uuid("id").primaryKey().defaultRandom(),
-		organizationId: text("organization_id")
-			.notNull()
-			.references(() => organization.id, { onDelete: "cascade" }),
-
-		// Slack workspace info
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id").notNull(),
 		teamId: text("team_id").notNull(),
 		teamName: text("team_name"),
-
-		// Bot credentials (encrypted)
 		encryptedBotToken: text("encrypted_bot_token").notNull(),
 		botUserId: text("bot_user_id").notNull(),
-
-		// Installation metadata
-		scopes: text("scopes").array(),
-		installedBy: text("installed_by").references(() => user.id),
-
-		// Status
-		status: text("status").default("active"),
-
-		// Connect channel (for slash commands)
-		connectChannelId: text("connect_channel_id"),
-
-		// Invite URL
-		inviteUrl: text("invite_url"),
-
-		// Default configuration strategy for Slack-initiated sessions
-		defaultConfigSelectionStrategy: text("default_config_selection_strategy").default("fixed"), // 'fixed' | 'agent_decide'
-		defaultConfigurationId: uuid("default_configuration_id").references(() => configurations.id, {
-			onDelete: "set null",
-		}),
-		fallbackConfigurationId: uuid("fallback_configuration_id").references(() => configurations.id, {
-			onDelete: "set null",
-		}),
-		allowedConfigurationIds: jsonb("allowed_configuration_ids"), // string[] of config UUIDs for agent_decide
-
-		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+		scopes: text().array(),
+		installedBy: text("installed_by"),
+		status: text().default("active"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		supportChannelId: text("support_channel_id"),
+		supportChannelName: text("support_channel_name"),
+		supportInviteId: text("support_invite_id"),
+		supportInviteUrl: text("support_invite_url"),
+		defaultConfigSelectionStrategy: text("default_config_selection_strategy").default("fixed"),
+		defaultConfigurationId: uuid("default_configuration_id"),
+		fallbackConfigurationId: uuid("fallback_configuration_id"),
+		allowedConfigurationIds: jsonb("allowed_configuration_ids"),
 	},
 	(table) => [
-		index("idx_slack_installations_org").on(table.organizationId),
-		index("idx_slack_installations_team").on(table.teamId),
+		index("idx_slack_installations_org").using(
+			"btree",
+			table.organizationId.asc().nullsLast().op("text_ops"),
+		),
+		index("idx_slack_installations_team").using(
+			"btree",
+			table.teamId.asc().nullsLast().op("text_ops"),
+		),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "slack_installations_organization_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.installedBy],
+			foreignColumns: [user.id],
+			name: "slack_installations_installed_by_fkey",
+		}),
+		foreignKey({
+			columns: [table.defaultConfigurationId],
+			foreignColumns: [configurations.id],
+			name: "slack_installations_default_configuration_id_fkey",
+		}).onDelete("set null"),
+		foreignKey({
+			columns: [table.fallbackConfigurationId],
+			foreignColumns: [configurations.id],
+			name: "slack_installations_fallback_configuration_id_fkey",
+		}).onDelete("set null"),
 		unique("slack_installations_organization_id_team_id_key").on(
 			table.organizationId,
 			table.teamId,
@@ -65,55 +74,51 @@ export const slackInstallations = pgTable(
 	],
 );
 
-export const slackInstallationsRelations = relations(slackInstallations, ({ one, many }) => ({
-	organization: one(organization, {
-		fields: [slackInstallations.organizationId],
-		references: [organization.id],
-	}),
-	installedByUser: one(user, {
-		fields: [slackInstallations.installedBy],
-		references: [user.id],
-	}),
-	conversations: many(slackConversations),
-}));
-
-// ============================================
-// Slack Conversations
-// ============================================
-
 export const slackConversations = pgTable(
 	"slack_conversations",
 	{
-		id: uuid("id").primaryKey().defaultRandom(),
-		slackInstallationId: uuid("slack_installation_id")
-			.notNull()
-			.references(() => slackInstallations.id, { onDelete: "cascade" }),
-
-		// Slack thread identifiers
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		slackInstallationId: uuid("slack_installation_id").notNull(),
 		channelId: text("channel_id").notNull(),
 		threadTs: text("thread_ts").notNull(),
-
-		// Linked session
-		sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "set null" }),
-		repoId: uuid("repo_id").references(() => repos.id),
-
-		// Metadata
+		sessionId: uuid("session_id"),
+		repoId: uuid("repo_id"),
 		startedBySlackUserId: text("started_by_slack_user_id"),
-
-		// Status
-		status: text("status").default("active"),
-
-		// Pending prompt (for /proliferate new flow)
+		status: text().default("active"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		lastMessageAt: timestamp("last_message_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		pendingPrompt: text("pending_prompt"),
-
-		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-		lastMessageAt: timestamp("last_message_at", { withTimezone: true }).defaultNow(),
 	},
 	(table) => [
-		index("idx_slack_conversations_installation").on(table.slackInstallationId),
-		index("idx_slack_conversations_session").on(table.sessionId),
-		index("idx_slack_conversations_thread").on(table.channelId, table.threadTs),
-		unique("slack_conversations_slack_installation_id_channel_id_thread_ts_key").on(
+		index("idx_slack_conversations_installation").using(
+			"btree",
+			table.slackInstallationId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_slack_conversations_session").using(
+			"btree",
+			table.sessionId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_slack_conversations_thread").using(
+			"btree",
+			table.channelId.asc().nullsLast().op("text_ops"),
+			table.threadTs.asc().nullsLast().op("text_ops"),
+		),
+		foreignKey({
+			columns: [table.slackInstallationId],
+			foreignColumns: [slackInstallations.id],
+			name: "slack_conversations_slack_installation_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.sessionId],
+			foreignColumns: [sessions.id],
+			name: "slack_conversations_session_id_fkey",
+		}).onDelete("set null"),
+		foreignKey({
+			columns: [table.repoId],
+			foreignColumns: [repos.id],
+			name: "slack_conversations_repo_id_fkey",
+		}),
+		unique("slack_conversations_slack_installation_id_channel_id_thread_key").on(
 			table.slackInstallationId,
 			table.channelId,
 			table.threadTs,
@@ -121,8 +126,54 @@ export const slackConversations = pgTable(
 	],
 );
 
+export const sessionNotificationSubscriptions = pgTable(
+	"session_notification_subscriptions",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		sessionId: uuid("session_id").notNull(),
+		userId: text("user_id").notNull(),
+		slackInstallationId: uuid("slack_installation_id").notNull(),
+		destinationType: text("destination_type").notNull().default("dm_user"),
+		slackUserId: text("slack_user_id"),
+		eventTypes: jsonb("event_types").default(["completed"]),
+		notifiedAt: timestamp("notified_at", { withTimezone: true, mode: "date" }),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		index("idx_session_notif_sub_session").using(
+			"btree",
+			table.sessionId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_session_notif_sub_user").using(
+			"btree",
+			table.userId.asc().nullsLast().op("text_ops"),
+		),
+		foreignKey({
+			columns: [table.sessionId],
+			foreignColumns: [sessions.id],
+			name: "session_notification_subscriptions_session_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.userId],
+			foreignColumns: [user.id],
+			name: "session_notification_subscriptions_user_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.slackInstallationId],
+			foreignColumns: [slackInstallations.id],
+			name: "session_notification_subscriptions_slack_installation_id_fkey",
+		}).onDelete("cascade"),
+		unique("session_notification_subscriptions_session_user_key").on(table.sessionId, table.userId),
+		check(
+			"chk_session_notif_sub_dm_user_slack_id",
+			sql`(destination_type != 'dm_user') OR (slack_user_id IS NOT NULL)`,
+		),
+	],
+);
+
 export const slackConversationsRelations = relations(slackConversations, ({ one }) => ({
-	installation: one(slackInstallations, {
+	slackInstallation: one(slackInstallations, {
 		fields: [slackConversations.slackInstallationId],
 		references: [slackInstallations.id],
 	}),
@@ -136,43 +187,17 @@ export const slackConversationsRelations = relations(slackConversations, ({ one 
 	}),
 }));
 
-// ============================================
-// Session Notification Subscriptions
-// ============================================
-
-export const sessionNotificationSubscriptions = pgTable(
-	"session_notification_subscriptions",
-	{
-		id: uuid("id").primaryKey().defaultRandom(),
-		sessionId: uuid("session_id")
-			.notNull()
-			.references(() => sessions.id, { onDelete: "cascade" }),
-		userId: text("user_id")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
-		slackInstallationId: uuid("slack_installation_id")
-			.notNull()
-			.references(() => slackInstallations.id, { onDelete: "cascade" }),
-
-		// Destination
-		destinationType: text("destination_type").notNull().default("dm_user"), // 'dm_user'
-		slackUserId: text("slack_user_id"), // Slack user ID for DM target
-
-		// Event types to notify on
-		eventTypes: jsonb("event_types").default(["completed"]), // string[]
-
-		// Delivery tracking for idempotent retries
-		notifiedAt: timestamp("notified_at", { withTimezone: true }),
-
-		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-	},
-	(table) => [
-		index("idx_session_notif_sub_session").on(table.sessionId),
-		index("idx_session_notif_sub_user").on(table.userId),
-		unique("session_notification_subscriptions_session_user_key").on(table.sessionId, table.userId),
-	],
-);
+export const slackInstallationsRelations = relations(slackInstallations, ({ one, many }) => ({
+	slackConversations: many(slackConversations),
+	organization: one(organization, {
+		fields: [slackInstallations.organizationId],
+		references: [organization.id],
+	}),
+	user: one(user, {
+		fields: [slackInstallations.installedBy],
+		references: [user.id],
+	}),
+}));
 
 export const sessionNotificationSubscriptionsRelations = relations(
 	sessionNotificationSubscriptions,

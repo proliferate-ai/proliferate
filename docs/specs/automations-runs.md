@@ -168,7 +168,7 @@ Sources:
 Sources:
 - `packages/services/src/runs/service.ts`
 - `packages/services/src/runs/db.ts`
-- `packages/db/src/schema/schema.ts`
+- `packages/db/src/schema/automations.ts`
 
 ### 6.2 Enrichment Invariants — `Implemented`
 
