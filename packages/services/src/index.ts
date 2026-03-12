@@ -13,6 +13,7 @@ export * as automations from "./automations";
 export * as baselines from "./baselines";
 export * as billing from "./billing";
 export * as composio from "./composio";
+export * as customerio from "./customerio";
 export * as connectors from "./connectors";
 export * as integrations from "./integrations";
 export * as onboarding from "./onboarding";

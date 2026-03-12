@@ -3,6 +3,7 @@ import "server-only";
 import { isEmailEnabled, sendInvitationEmail, sendVerificationEmail } from "@/lib/infra/email";
 import { logger } from "@/lib/infra/logger";
 import { env, features } from "@proliferate/environment/server";
+import { customerio } from "@proliferate/services";
 import { betterAuth } from "better-auth";
 import { apiKey, organization } from "better-auth/plugins";
 import { Pool } from "pg";
@@ -154,6 +155,27 @@ export const auth = betterAuth({
 						);
 					} catch (error) {
 						log.error({ err: error }, "Failed to create default organization");
+					}
+
+					// Identify user in Customer.io for welcome sequence + changelog emails
+					if (env.CUSTOMERIO_SITE_ID && env.CUSTOMERIO_API_KEY) {
+						try {
+							await customerio.identifyUser(
+								{
+									siteId: env.CUSTOMERIO_SITE_ID,
+									apiKey: env.CUSTOMERIO_API_KEY,
+									region: (env.CUSTOMERIO_REGION as "us" | "eu") ?? "us",
+								},
+								{
+									userId: user.id,
+									email: user.email,
+									name: user.name,
+									createdAt: user.createdAt,
+								},
+							);
+						} catch (error) {
+							log.error({ err: error, userId: user.id }, "Failed to identify user in Customer.io");
+						}
 					}
 				},
 			},
