@@ -60,6 +60,15 @@ COPY proliferate-sandbox-mcp.tgz /tmp/proliferate-sandbox-mcp.tgz
 RUN npm install -g opencode-ai@latest /tmp/proliferate-sandbox-mcp.tgz \
     && rm /tmp/proliferate-sandbox-mcp.tgz
 
+# Pre-warm OpenCode database migration so it doesn't run on first sandbox start.
+# OpenCode performs a one-time SQLite migration that can take minutes — baking it into
+# the image keeps fresh sandbox cold-start within the gateway's readiness timeout.
+RUN su user -c "HOME=/home/user opencode serve --port 9999 > /tmp/opencode-prewarm.log 2>&1 &" && \
+    timeout 120 bash -c 'until grep -q "Database migration complete" /tmp/opencode-prewarm.log 2>/dev/null; do sleep 2; done' && \
+    pkill -u user opencode 2>/dev/null || true && \
+    echo "OpenCode migration pre-warmed:" && \
+    cat /tmp/opencode-prewarm.log || true
+
 # Install sandbox-daemon (bundled CJS — provides FS, PTY, ports, health endpoints)
 # Built via: pnpm --filter @proliferate/sandbox-daemon bundle
 # Then copied into this directory before template build (see prebuild:template script)

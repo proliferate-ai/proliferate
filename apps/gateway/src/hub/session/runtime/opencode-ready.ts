@@ -4,9 +4,11 @@ export async function waitForOpenCodeReady(input: {
 	logError: (message: string, error?: unknown) => void;
 	loggerWarn: (data: Record<string, unknown>, message: string) => void;
 }): Promise<void> {
-	const maxAttempts = 8;
-	const intervalMs = 1500;
-	const perAttemptTimeoutMs = 2000;
+	// OpenCode runs a one-time SQLite migration on first start ("may take a few minutes").
+	// Generous timeout needed for fresh (non-snapshot) sandboxes.
+	const maxAttempts = 60;
+	const intervalMs = 3000;
+	const perAttemptTimeoutMs = 5000;
 	const probeUrl = `${input.openCodeUrl}/session`;
 
 	input.log("Waiting for OpenCode readiness", { probeUrl });
