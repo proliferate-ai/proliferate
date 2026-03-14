@@ -73,6 +73,7 @@ Both gateway runtime and worker build paths prefer repo-linked integrations, the
 - Assuming CLI path uses distinct "prebuild" tables. It uses `configurations` plus compatibility naming in some clients/docs.
 - Assuming `workspacePath` self-heals when repos are attached/detached. It does not normalize existing entries.
 - Assuming public GitHub search is authenticated. It currently uses unauthenticated API calls from the web router.
+- On the v1 rewrite branch, the authored DB schema has intentionally dropped configurations/baselines and keeps only `repos` plus `repo_snapshots` in `packages/db/src/schema/repos.ts`; the old configuration-driven service layer is now legacy reference code pending replacement.
 
 ---
 

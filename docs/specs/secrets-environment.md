@@ -64,6 +64,7 @@ Secret reads are scope-sensitive:
 - `checkSecrets` behavior changes when `configuration_id` is present; repo filtering is bypassed in that branch (`packages/services/src/secrets/service.ts:checkSecrets`).
 - Session boot secret resolution is centralized in `resolveSessionBootSecretMaterial()` with precedence `configuration > repo > org` (`packages/services/src/sessions/sandbox-env.ts`).
 - Secret-file API reads still return metadata only; decrypted file content is only surfaced through the internal boot path (`packages/services/src/secret-files/db.ts`, `packages/services/src/sessions/sandbox-env.ts`).
+- On the v1 rewrite branch, the authored DB schema has been reduced to `secrets` plus `repo_secrets` in `packages/db/src/schema/secrets.ts`; configuration-linked secrets and secret file tables are intentionally removed until the new backend/runtime flow is rebuilt.
 
 ---
 
