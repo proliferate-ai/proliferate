@@ -89,6 +89,7 @@
 				"packages/logger/src/**",
 				"apps/backend/src/**",
 				"apps/web/src/lib/auth/**",
+				"apps/web/src/lib/config/**",
 				"apps/web/src/lib/infra/**",
 				"apps/web/next.config.js",
 				"scripts/**",
