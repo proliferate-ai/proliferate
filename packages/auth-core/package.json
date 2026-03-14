@@ -1,0 +1,21 @@
+{
+	"name": "@proliferate/auth-core",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@proliferate/logger": "workspace:*",
+		"better-auth": "^1.4.12",
+		"pg": "^8.17.0"
+	},
+	"devDependencies": {
+		"@types/pg": "^8.16.0",
+		"typescript": "^5.3.3"
+	}
+}

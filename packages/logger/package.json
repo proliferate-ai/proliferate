@@ -14,7 +14,6 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@proliferate/environment": "workspace:*",
 		"pino": "^10.0.0",
 		"pino-http": "^11.0.0",
 		"pino-pretty": "^13.0.0"

@@ -4,7 +4,8 @@
  * Raw Drizzle queries - no business logic.
  */
 
-import { type InferSelectModel, eq, getDb, user } from "../db/client";
+import { type InferSelectModel, eq, getDb } from "@proliferate/db";
+import { user } from "@proliferate/db/schema";
 
 // ============================================
 // Types

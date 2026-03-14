@@ -1,183 +1,169 @@
-/**
- * Auth schema - better-auth managed tables
- */
+import { relations, sql } from "drizzle-orm";
+import { boolean, index, pgEnum, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 
-import { relations } from "drizzle-orm";
-import {
-	boolean,
-	index,
-	integer,
-	numeric,
-	pgTable,
-	text,
-	timestamp,
-	uniqueIndex,
-} from "drizzle-orm/pg-core";
+export const organizationRole = pgEnum("organization_role", ["owner", "admin", "member"]);
 
-// ============================================
-// User
-// ============================================
-
-export const user = pgTable("user", {
-	id: text("id").primaryKey(),
-	name: text("name").notNull(),
-	email: text("email").notNull().unique(),
-	emailVerified: boolean("emailVerified").notNull(),
-	image: text("image"),
-	createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
-	updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().notNull(),
-});
-
-export const userRelations = relations(user, ({ many }) => ({
-	sessions: many(authSession),
-	accounts: many(account),
-	members: many(member),
-	apiKeys: many(apikey),
-}));
-
-// ============================================
-// Auth Session (better-auth sessions, not app sessions)
-// ============================================
-
-export const authSession = pgTable(
-	"session",
+export const user = pgTable(
+	"user",
 	{
-		id: text("id").primaryKey(),
-		expiresAt: timestamp("expiresAt", { withTimezone: true }).notNull(),
-		token: text("token").notNull().unique(),
-		createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
-		updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull(),
-		ipAddress: text("ipAddress"),
-		userAgent: text("userAgent"),
-		userId: text("userId")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
-		activeOrganizationId: text("activeOrganizationId"),
+		id: text().primaryKey().notNull(),
+		name: text().notNull(),
+		email: text().notNull(),
+		emailVerified: boolean().notNull(),
+		image: text(),
+		createdAt: timestamp({ withTimezone: true, mode: "date" })
+			.default(sql`CURRENT_TIMESTAMP`)
+			.notNull(),
+		updatedAt: timestamp({ withTimezone: true, mode: "date" })
+			.default(sql`CURRENT_TIMESTAMP`)
+			.notNull(),
 	},
-	(table) => [index("session_userId_idx").on(table.userId)],
+	(table) => [unique("user_email_key").on(table.email)],
 );
-
-export const authSessionRelations = relations(authSession, ({ one }) => ({
-	user: one(user, {
-		fields: [authSession.userId],
-		references: [user.id],
-	}),
-}));
-
-// ============================================
-// Account
-// ============================================
-
-export const account = pgTable(
-	"account",
-	{
-		id: text("id").primaryKey(),
-		accountId: text("accountId").notNull(),
-		providerId: text("providerId").notNull(),
-		userId: text("userId")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
-		accessToken: text("accessToken"),
-		refreshToken: text("refreshToken"),
-		idToken: text("idToken"),
-		accessTokenExpiresAt: timestamp("accessTokenExpiresAt", { withTimezone: true }),
-		refreshTokenExpiresAt: timestamp("refreshTokenExpiresAt", { withTimezone: true }),
-		scope: text("scope"),
-		password: text("password"),
-		createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
-		updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull(),
-	},
-	(table) => [index("account_userId_idx").on(table.userId)],
-);
-
-export const accountRelations = relations(account, ({ one }) => ({
-	user: one(user, {
-		fields: [account.userId],
-		references: [user.id],
-	}),
-}));
-
-// ============================================
-// Verification
-// ============================================
-
-export const verification = pgTable(
-	"verification",
-	{
-		id: text("id").primaryKey(),
-		identifier: text("identifier").notNull(),
-		value: text("value").notNull(),
-		expiresAt: timestamp("expiresAt", { withTimezone: true }).notNull(),
-		createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
-		updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().notNull(),
-	},
-	(table) => [index("verification_identifier_idx").on(table.identifier)],
-);
-
-// ============================================
-// Organization
-// ============================================
 
 export const organization = pgTable(
 	"organization",
 	{
-		id: text("id").primaryKey(),
-		name: text("name").notNull(),
-		slug: text("slug").notNull().unique(),
-		logo: text("logo"),
-		createdAt: timestamp("createdAt", { withTimezone: true }).notNull(),
-		metadata: text("metadata"),
-		// Custom columns
-		allowedDomains: text("allowed_domains").array(),
-		isPersonal: boolean("is_personal").default(false),
+		id: text().primaryKey().notNull(),
+		name: text().notNull(),
+		slug: text().notNull(),
+		logo: text(),
+		createdAt: timestamp({ withTimezone: true, mode: "date" })
+			.default(sql`CURRENT_TIMESTAMP`)
+			.notNull(),
 		autumnCustomerId: text("autumn_customer_id"),
-		billingSettings: text("billing_settings"), // JSONB stored as text for better-auth compat
-		onboardingComplete: boolean("onboarding_complete").default(false),
-		// Billing V2 fields
-		billingState: text("billing_state").default("free").notNull(),
-		billingPlan: text("billing_plan"),
-		shadowBalance: numeric("shadow_balance", { precision: 12, scale: 6 }).default("0"),
-		shadowBalanceUpdatedAt: timestamp("shadow_balance_updated_at", { withTimezone: true }),
-		graceEnteredAt: timestamp("grace_entered_at", { withTimezone: true }),
-		graceExpiresAt: timestamp("grace_expires_at", { withTimezone: true }),
-		// Overage + reconciliation fields (Phase 1.2)
-		overageUsedCents: integer("overage_used_cents").default(0).notNull(),
-		overageCycleMonth: text("overage_cycle_month"),
-		overageTopupCount: integer("overage_topup_count").default(0).notNull(),
-		overageLastTopupAt: timestamp("overage_last_topup_at", { withTimezone: true }),
-		overageDeclineAt: timestamp("overage_decline_at", { withTimezone: true }),
-		lastReconciledAt: timestamp("last_reconciled_at", { withTimezone: true }),
 	},
-	(table) => [uniqueIndex("organization_slug_uidx").on(table.slug)],
+	(table) => [unique("organization_slug_key").on(table.slug)],
 );
-
-export const organizationRelations = relations(organization, ({ many }) => ({
-	members: many(member),
-	invitations: many(invitation),
-}));
-
-// ============================================
-// Member
-// ============================================
 
 export const member = pgTable(
 	"member",
 	{
-		id: text("id").primaryKey(),
+		id: text().primaryKey().notNull(),
 		organizationId: text("organizationId")
 			.notNull()
 			.references(() => organization.id, { onDelete: "cascade" }),
 		userId: text("userId")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		role: text("role").notNull(),
-		createdAt: timestamp("createdAt", { withTimezone: true }).notNull(),
+		role: organizationRole().notNull(),
+		createdAt: timestamp({ withTimezone: true, mode: "date" })
+			.default(sql`CURRENT_TIMESTAMP`)
+			.notNull(),
 	},
 	(table) => [
 		index("member_organizationId_idx").on(table.organizationId),
 		index("member_userId_idx").on(table.userId),
+		unique("member_organizationId_userId_key").on(table.organizationId, table.userId),
 	],
 );
+
+export const invitation = pgTable(
+	"invitation",
+	{
+		id: text().primaryKey().notNull(),
+		organizationId: text("organizationId")
+			.notNull()
+			.references(() => organization.id, { onDelete: "cascade" }),
+		email: text().notNull(),
+		role: organizationRole().notNull(),
+		status: text().default("pending").notNull(),
+		expiresAt: timestamp({ withTimezone: true, mode: "date" }).notNull(),
+		createdAt: timestamp({ withTimezone: true, mode: "date" })
+			.default(sql`CURRENT_TIMESTAMP`)
+			.notNull(),
+		inviterId: text()
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+	},
+	(table) => [
+		index("invitation_email_idx").on(table.email),
+		index("invitation_organizationId_idx").on(table.organizationId),
+	],
+);
+
+export const session = pgTable(
+	"session",
+	{
+		id: text().primaryKey().notNull(),
+		expiresAt: timestamp({ withTimezone: true, mode: "date" }).notNull(),
+		token: text().notNull(),
+		createdAt: timestamp({ withTimezone: true, mode: "date" })
+			.default(sql`CURRENT_TIMESTAMP`)
+			.notNull(),
+		updatedAt: timestamp({ withTimezone: true, mode: "date" })
+			.default(sql`CURRENT_TIMESTAMP`)
+			.notNull(),
+		ipAddress: text(),
+		userAgent: text(),
+		userId: text()
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		activeOrganizationId: text("activeOrganizationId").references(() => organization.id, {
+			onDelete: "set null",
+		}),
+	},
+	(table) => [
+		index("session_userId_idx").on(table.userId),
+		unique("session_token_key").on(table.token),
+	],
+);
+
+export const account = pgTable(
+	"account",
+	{
+		id: text().primaryKey().notNull(),
+		accountId: text().notNull(),
+		providerId: text().notNull(),
+		userId: text()
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		accessToken: text(),
+		refreshToken: text(),
+		idToken: text(),
+		accessTokenExpiresAt: timestamp({ withTimezone: true, mode: "date" }),
+		refreshTokenExpiresAt: timestamp({ withTimezone: true, mode: "date" }),
+		scope: text(),
+		password: text(),
+		createdAt: timestamp({ withTimezone: true, mode: "date" })
+			.default(sql`CURRENT_TIMESTAMP`)
+			.notNull(),
+		updatedAt: timestamp({ withTimezone: true, mode: "date" })
+			.default(sql`CURRENT_TIMESTAMP`)
+			.notNull(),
+	},
+	(table) => [index("account_userId_idx").on(table.userId)],
+);
+
+export const verification = pgTable(
+	"verification",
+	{
+		id: text().primaryKey().notNull(),
+		identifier: text().notNull(),
+		value: text().notNull(),
+		expiresAt: timestamp({ withTimezone: true, mode: "date" }).notNull(),
+		createdAt: timestamp({ withTimezone: true, mode: "date" })
+			.default(sql`CURRENT_TIMESTAMP`)
+			.notNull(),
+		updatedAt: timestamp({ withTimezone: true, mode: "date" })
+			.default(sql`CURRENT_TIMESTAMP`)
+			.notNull(),
+	},
+	(table) => [index("verification_identifier_idx").on(table.identifier)],
+);
+
+export const userRelations = relations(user, ({ many }) => ({
+	accounts: many(account),
+	sessions: many(session),
+	memberships: many(member),
+	invitationsSent: many(invitation),
+}));
+
+export const organizationRelations = relations(organization, ({ many }) => ({
+	memberships: many(member),
+	invitations: many(invitation),
+	authSessions: many(session),
+}));
 
 export const memberRelations = relations(member, ({ one }) => ({
 	organization: one(organization, {
@@ -190,32 +176,6 @@ export const memberRelations = relations(member, ({ one }) => ({
 	}),
 }));
 
-// ============================================
-// Invitation
-// ============================================
-
-export const invitation = pgTable(
-	"invitation",
-	{
-		id: text("id").primaryKey(),
-		organizationId: text("organizationId")
-			.notNull()
-			.references(() => organization.id, { onDelete: "cascade" }),
-		email: text("email").notNull(),
-		role: text("role"),
-		status: text("status").notNull(),
-		expiresAt: timestamp("expiresAt", { withTimezone: true }).notNull(),
-		createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
-		inviterId: text("inviterId")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
-	},
-	(table) => [
-		index("invitation_organizationId_idx").on(table.organizationId),
-		index("invitation_email_idx").on(table.email),
-	],
-);
-
 export const invitationRelations = relations(invitation, ({ one }) => ({
 	organization: one(organization, {
 		fields: [invitation.organizationId],
@@ -227,43 +187,20 @@ export const invitationRelations = relations(invitation, ({ one }) => ({
 	}),
 }));
 
-// ============================================
-// API Key (better-auth apiKey plugin)
-// ============================================
-
-export const apikey = pgTable(
-	"apikey",
-	{
-		id: text("id").primaryKey(),
-		name: text("name"),
-		start: text("start"),
-		prefix: text("prefix"),
-		key: text("key").notNull(),
-		userId: text("userId")
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
-		refillInterval: integer("refillInterval"),
-		refillAmount: integer("refillAmount"),
-		lastRefillAt: timestamp("lastRefillAt", { withTimezone: true }),
-		enabled: boolean("enabled"),
-		rateLimitEnabled: boolean("rateLimitEnabled"),
-		rateLimitTimeWindow: integer("rateLimitTimeWindow"),
-		rateLimitMax: integer("rateLimitMax"),
-		requestCount: integer("requestCount"),
-		remaining: integer("remaining"),
-		lastRequest: timestamp("lastRequest", { withTimezone: true }),
-		expiresAt: timestamp("expiresAt", { withTimezone: true }),
-		createdAt: timestamp("createdAt", { withTimezone: true }).notNull(),
-		updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull(),
-		permissions: text("permissions"),
-		metadata: text("metadata"),
-	},
-	(table) => [index("apikey_key_idx").on(table.key), index("apikey_userId_idx").on(table.userId)],
-);
-
-export const apikeyRelations = relations(apikey, ({ one }) => ({
+export const sessionRelations = relations(session, ({ one }) => ({
 	user: one(user, {
-		fields: [apikey.userId],
+		fields: [session.userId],
+		references: [user.id],
+	}),
+	activeOrganization: one(organization, {
+		fields: [session.activeOrganizationId],
+		references: [organization.id],
+	}),
+}));
+
+export const accountRelations = relations(account, ({ one }) => ({
+	user: one(user, {
+		fields: [account.userId],
 		references: [user.id],
 	}),
 }));

@@ -1,4 +1,5 @@
-import { nodeEnv, runtimeEnv } from "@proliferate/environment/runtime";
+const nodeEnv = process.env.NODE_ENV ?? "development";
+const runtimeEnv = process.env as Record<string, string | undefined>;
 import pino, { type LevelWithSilent, type Logger, type LoggerOptions } from "pino";
 import pinoHttp, { type Options as PinoHttpOptions } from "pino-http";
 

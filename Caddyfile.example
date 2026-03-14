@@ -3,12 +3,10 @@
 # Usage:
 #   1. Copy to Caddyfile: cp Caddyfile.example Caddyfile
 #   2. Replace proliferate.example.com with your domain
-#   3. Use with docker-compose.override.yml
-
 proliferate.example.com {
-    # WebSocket gateway - strip /gateway prefix before proxying
-    handle_path /gateway/* {
-        reverse_proxy gateway:8787
+    # oRPC backend API
+    handle /api/rpc/* {
+        reverse_proxy backend:3001
     }
 
     # Everything else goes to web app

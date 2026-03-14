@@ -1,9 +1,8 @@
 /**
- * Database schema exports
- *
- * Generated from the canonical database schema via `drizzle-kit pull`.
- * To refresh: run `pnpm db:pull` from `packages/db`.
+ * Canonical authored schema exports for the v1 rewrite.
  */
 
-export * from "./schema";
-export * from "./relations";
+export * from "./auth";
+export * from "./repos";
+export * from "./secrets";
+export * from "./sessions";

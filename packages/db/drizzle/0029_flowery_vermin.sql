@@ -1,1 +1,0 @@
-ALTER TABLE "automations" ADD COLUMN "source_template_id" text;
