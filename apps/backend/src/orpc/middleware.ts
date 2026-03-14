@@ -1,13 +1,20 @@
 /**
  * oRPC middleware.
  *
- * Session resolution helpers used in router .use() chains.
+ * Reusable middleware layers for auth and org resolution.
+ * Uses `decorateMiddleware` so these can be passed directly to `.use()`.
  */
 
-import { ORPCError } from "@orpc/server";
+import {
+	type Meta,
+	ORPCError,
+	type ORPCErrorConstructorMap,
+	decorateMiddleware,
+} from "@orpc/server";
 import { type Auth, createAuth } from "@proliferate/auth-core";
 import { orgs } from "@proliferate/services";
 import { type SessionResult, getSessionFromHeaders } from "../auth/session";
+import type { AuthContext, BaseContext, OrgContext } from "./context";
 
 // ============================================
 // Lazy auth instance
@@ -26,7 +33,7 @@ function getAuth(): Auth {
 // Session resolution helpers
 // ============================================
 
-export async function resolveSession(request: Request): Promise<SessionResult> {
+async function resolveSession(request: Request): Promise<SessionResult> {
 	const session = await getSessionFromHeaders(getAuth(), request.headers);
 	if (!session) {
 		throw new ORPCError("UNAUTHORIZED", { message: "Unauthorized" });
@@ -34,9 +41,7 @@ export async function resolveSession(request: Request): Promise<SessionResult> {
 	return session;
 }
 
-export async function resolveSessionWithOrg(
-	request: Request,
-): Promise<SessionResult & { orgId: string }> {
+async function resolveSessionWithOrg(request: Request): Promise<SessionResult & { orgId: string }> {
 	const session = await resolveSession(request);
 
 	const orgId = session.session.activeOrganizationId;
@@ -51,3 +56,37 @@ export async function resolveSessionWithOrg(
 
 	return { ...session, orgId };
 }
+
+// ============================================
+// Reusable middleware
+// ============================================
+
+/**
+ * Requires a valid session. Adds `user` and `session` to context.
+ */
+export const protectedMiddleware = decorateMiddleware<
+	BaseContext,
+	Omit<AuthContext, "request">,
+	any,
+	any,
+	ORPCErrorConstructorMap<any>,
+	Meta
+>(async ({ context, next }) => {
+	const s = await resolveSession(context.request);
+	return next({ context: { user: s.user, session: s.session } });
+});
+
+/**
+ * Requires a valid session + active org membership. Adds `user`, `session`, and `orgId` to context.
+ */
+export const orgMiddleware = decorateMiddleware<
+	BaseContext,
+	Omit<OrgContext, "request">,
+	any,
+	any,
+	ORPCErrorConstructorMap<any>,
+	Meta
+>(async ({ context, next }) => {
+	const r = await resolveSessionWithOrg(context.request);
+	return next({ context: { user: r.user, session: r.session, orgId: r.orgId } });
+});
