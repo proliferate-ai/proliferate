@@ -1,7 +1,9 @@
-import { relations, sql } from "drizzle-orm";
-import { check, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
+import { index, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organization, user } from "./auth";
 import { repos } from "./repos";
+
+export const sessionState = pgEnum("session_state", ["working", "idle", "cancelled", "done"]);
 
 export const sessions = pgTable(
 	"sessions",
@@ -14,7 +16,7 @@ export const sessions = pgTable(
 			.notNull()
 			.references(() => organization.id, { onDelete: "cascade" }),
 		createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
-		state: text().default("working").notNull(),
+		state: sessionState().default("working").notNull(),
 		sessionType: text("session_type").default("coding").notNull(),
 		sandboxId: text("sandbox_id"),
 		previewUrl: text("preview_url"),
@@ -33,10 +35,6 @@ export const sessions = pgTable(
 		index("sessions_organization_id_idx").on(table.organizationId),
 		index("sessions_created_by_idx").on(table.createdBy),
 		index("sessions_state_idx").on(table.state),
-		check(
-			"sessions_state_check",
-			sql`state = ANY (ARRAY['working'::text, 'idle'::text, 'cancelled'::text, 'done'::text])`,
-		),
 	],
 );
 
