@@ -2,8 +2,10 @@
 
 > **Purpose:** Single source of truth for every product feature, its implementation status, and which spec owns it.
 > **Status key:** `Implemented` | `Partial` | `Planned` | `Deprecated`
-> **Updated:** 2026-03-07. Manager agent runtime spec freeze.
+> **Updated:** 2026-03-13. V1 rewrite branch schema reset.
 > **Evidence convention:** `Planned` entries may cite RFC/spec files until code exists; once implemented, update evidence to concrete code paths.
+
+> **Rewrite note:** The `packages/db` authored schema has been reset on the v1 rewrite branch to a minimal surface (`auth`, `repos`, `repo_snapshots`, `secrets`, `repo_secrets`, `sessions`). The rest of the codebase still contains legacy references and will be rewritten on subsequent PRs.
 
 ---
 

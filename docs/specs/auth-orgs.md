@@ -43,6 +43,7 @@
 - Super-admin status is environment-driven (`SUPER_ADMIN_EMAILS`), not persisted in DB (`apps/web/src/lib/super-admin.ts`).
 - `admin.getStatus` is auth-required but not super-admin-only by design (it returns `isSuperAdmin: false` for normal users), while `adminProcedure` gates privileged admin endpoints (`apps/web/src/server/routers/admin.ts`).
 - Onboarding gates are enforced in layout-level client routing using onboarding status and billing state, not only in route handlers (`apps/web/src/app/(command-center)/layout.tsx`, `apps/web/src/app/(workspace)/layout.tsx`).
+- On the v1 rewrite branch, the authored DB schema for auth/org tables has been reduced to the minimal better-auth-compatible columns in `packages/db/src/schema/auth.ts`; richer org billing/onboarding/action-mode fields are intentionally absent until the backend rewrite reaches those surfaces.
 
 ---
 
