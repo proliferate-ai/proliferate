@@ -1,8 +1,8 @@
 "use client";
 
+import { REQUIRE_EMAIL_VERIFICATION } from "@/config/auth";
 import { useOrgMembersAndInvitations } from "@/hooks/org/use-orgs";
 import { organization, useActiveOrganization, useSession } from "@/lib/auth/client";
-import { REQUIRE_EMAIL_VERIFICATION } from "@/config/auth";
 import { orpc } from "@/lib/infra/orpc";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -32,8 +32,8 @@ export function useMembersPage() {
 	const members = data?.members;
 	const invitations = data?.invitations;
 	const currentUserRole = data?.currentUserRole;
-	const isOwner = currentUserRole === "owner";
-	const canInvite = isOwner || currentUserRole === "admin";
+	const isOwner = currentUserRole === "admin";
+	const canInvite = currentUserRole === "admin";
 
 	const handleInvite = async () => {
 		if (!inviteEmail.trim() || !activeOrg?.id) return;
