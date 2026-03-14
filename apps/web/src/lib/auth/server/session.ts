@@ -2,6 +2,7 @@ import "server-only";
 
 import { auth } from "@/lib/auth/server";
 import { getImpersonationCookie, isSuperAdmin } from "@/lib/auth/super-admin";
+import { isDevMode, serverConfig } from "@/lib/config/server";
 import { logger } from "@/lib/infra/logger";
 
 const log = logger.child({ module: "auth-helpers" });
@@ -26,13 +27,8 @@ export interface SessionResult {
  * Active when: DEV_USER_ID is set and not "disabled", not production, not CI.
  */
 export function getDevUserId(): string | undefined {
-	const devUserId = process.env.DEV_USER_ID;
-	if (
-		devUserId &&
-		devUserId !== "disabled" &&
-		process.env.NODE_ENV !== "production" &&
-		!process.env.CI
-	) {
+	const devUserId = serverConfig.devUserId;
+	if (devUserId && devUserId !== "disabled" && isDevMode() && !serverConfig.ci) {
 		return devUserId;
 	}
 	return undefined;

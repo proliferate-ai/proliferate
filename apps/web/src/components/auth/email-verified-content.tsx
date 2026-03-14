@@ -30,7 +30,7 @@ export function EmailVerifiedContent() {
 
 					<div className="rounded-lg border border-border bg-card/50 p-5">
 						<Button asChild className="h-10 w-full">
-							<Link href="/dashboard">Go to Dashboard</Link>
+							<Link href="/sessions">Go to Sessions</Link>
 						</Button>
 					</div>
 				</div>

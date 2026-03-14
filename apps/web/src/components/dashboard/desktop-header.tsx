@@ -1,9 +1,6 @@
-import { openIntercomMessenger } from "@/components/providers/intercom";
 import { Button } from "@/components/ui/button";
-import { ChatBubbleIcon } from "@/components/ui/icons";
 import { ArrowLeft, BookOpen } from "lucide-react";
 import Link from "next/link";
-import { NotificationTray } from "./notification-tray";
 
 interface DesktopHeaderProps {
 	pageTitle: string;
@@ -36,16 +33,6 @@ export function DesktopHeader({ pageTitle, backHref, backLabel }: DesktopHeaderP
 						<span className="text-xs">Docs</span>
 					</Link>
 				</Button>
-				<Button
-					variant="ghost"
-					size="sm"
-					className="h-8 gap-1.5 rounded-lg text-muted-foreground"
-					onClick={openIntercomMessenger}
-				>
-					<ChatBubbleIcon className="h-3.5 w-3.5" />
-					<span className="text-xs">Help</span>
-				</Button>
-				<NotificationTray />
 			</div>
 		</div>
 	);

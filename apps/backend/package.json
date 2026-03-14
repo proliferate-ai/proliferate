@@ -4,8 +4,8 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "tsx watch src/index.ts",
-		"start": "node --import tsx src/index.ts",
+		"dev": "tsx watch --env-file=../../.env --env-file=.env src/index.ts",
+		"start": "node --env-file=.env --import tsx src/index.ts",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {

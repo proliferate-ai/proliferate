@@ -1,20 +1,17 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "@/components/ui/icons";
 import { OnboardingCardImage } from "./onboarding-card-image";
 
 interface StepCompleteProps {
 	onComplete: () => void;
-	isSubmitting?: boolean;
-	error?: string;
 }
 
-export function StepComplete({ onComplete, isSubmitting, error }: StepCompleteProps) {
+export function StepComplete({ onComplete }: StepCompleteProps) {
 	return (
 		<div className="w-[480px]">
 			<div className="rounded-2xl overflow-hidden border border-border">
-				{/* Image Area - wider aspect ratio */}
+				{/* Image Area */}
 				<OnboardingCardImage
 					src="/final.png"
 					alt="Setup complete"
@@ -39,31 +36,16 @@ export function StepComplete({ onComplete, isSubmitting, error }: StepCompletePr
 					<div className="mb-5 text-center">
 						<h1 className="text-2xl font-semibold text-foreground">You're all set!</h1>
 						<p className="mt-2 text-sm text-muted-foreground">
-							Your repositories are connected. Head to the dashboard to start a session — just pick
-							a repo, describe what you need, and an agent gets to work.
+							Your organization is ready. Head to the sessions page to get started.
 						</p>
 					</div>
-
-					{error && (
-						<p className="mb-3 text-sm text-destructive text-center">
-							Failed to complete onboarding. Please try again.
-						</p>
-					)}
 
 					<Button
 						variant="contrast"
 						onClick={onComplete}
-						disabled={isSubmitting}
 						className="h-11 w-full rounded-lg"
 					>
-						{isSubmitting ? (
-							<>
-								<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-								Finishing...
-							</>
-						) : (
-							"Go to Dashboard"
-						)}
+						Go to Sessions
 					</Button>
 				</div>
 			</div>

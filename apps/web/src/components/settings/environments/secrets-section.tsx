@@ -3,49 +3,68 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useCreateSecret, useDeleteSecret, useSecretsGrouped } from "@/hooks/org/use-secrets";
-import type { Secret } from "@proliferate/shared/contracts/secrets";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { useCreateSecret, useDeleteSecret } from "@/hooks/org/use-secrets";
+import { Pencil, Plus, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { SecretBindingsModal } from "./secret-bindings-modal";
 import { SecretEditModal } from "./secret-edit-modal";
 
-interface SecretsSectionProps {
-	secrets: Secret[];
-}
-
-interface GroupedSecret {
+interface SecretItem {
+	id: string;
 	key: string;
-	secretType: string | null;
-	repos: Array<{ repoId: string | null; repoName: string | null }>;
+	organizationId: string;
+	repoBindings: Array<{ id: string; repoId: string }>;
+	createdAt: Date;
+	updatedAt: Date;
 }
 
-export function SecretsSection({ secrets }: SecretsSectionProps) {
+interface SecretsSectionProps {
+	secrets: SecretItem[];
+	repos: Array<{ id: string; githubRepoName: string }>;
+}
+
+function formatScope(
+	secret: SecretItem,
+	reposById: Map<string, { id: string; githubRepoName: string }>,
+): string {
+	if (secret.repoBindings.length === 0) {
+		return "All repositories";
+	}
+
+	const repoNames = secret.repoBindings
+		.map((binding) => reposById.get(binding.repoId)?.githubRepoName)
+		.filter((name): name is string => Boolean(name));
+
+	if (repoNames.length === 0) {
+		return `${secret.repoBindings.length} repo${secret.repoBindings.length === 1 ? "" : "s"}`;
+	}
+
+	if (repoNames.length <= 2) {
+		return repoNames.join(", ");
+	}
+
+	return `${repoNames.slice(0, 2).join(", ")} +${repoNames.length - 2}`;
+}
+
+export function SecretsSection({ secrets, repos }: SecretsSectionProps) {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [showSearch, setShowSearch] = useState(false);
 	const [showAddForm, setShowAddForm] = useState(false);
 	const [newKey, setNewKey] = useState("");
 	const [newValue, setNewValue] = useState("");
 	const [addError, setAddError] = useState("");
-	const [editingSecret, setEditingSecret] = useState<GroupedSecret | null>(null);
+	const [editingSecret, setEditingSecret] = useState<{ id: string; key: string } | null>(null);
+	const [bindingSecret, setBindingSecret] = useState<SecretItem | null>(null);
 
 	const deleteSecret = useDeleteSecret();
 	const createSecret = useCreateSecret();
-	const { data: groupedSecrets } = useSecretsGrouped();
+	const reposById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos]);
 
 	const filteredSecrets = useMemo(() => {
 		if (!searchQuery) return secrets;
 		const q = searchQuery.toLowerCase();
 		return secrets.filter((s) => s.key.toLowerCase().includes(q));
 	}, [secrets, searchQuery]);
-
-	// Build a lookup from key -> grouped data for the edit modal
-	const groupedByKey = useMemo(() => {
-		const map = new Map<string, GroupedSecret>();
-		for (const g of groupedSecrets ?? []) {
-			map.set(g.key, g);
-		}
-		return map;
-	}, [groupedSecrets]);
 
 	const handleAddSecret = async () => {
 		if (!newKey.trim()) {
@@ -67,13 +86,6 @@ export function SecretsSection({ secrets }: SecretsSectionProps) {
 			setShowAddForm(false);
 		} catch (err) {
 			setAddError(err instanceof Error ? err.message : "Failed to create secret");
-		}
-	};
-
-	const handleEdit = (secretKey: string) => {
-		const grouped = groupedByKey.get(secretKey);
-		if (grouped) {
-			setEditingSecret(grouped);
 		}
 	};
 
@@ -183,11 +195,10 @@ export function SecretsSection({ secrets }: SecretsSectionProps) {
 					{/* Header */}
 					<div
 						className="grid items-center px-4 py-2 text-xs text-muted-foreground border-b border-border/50"
-						style={{ gridTemplateColumns: "2fr 2fr 1fr 0.5fr" }}
+						style={{ gridTemplateColumns: "2fr 2fr 0.5fr" }}
 					>
 						<span>Name</span>
-						<span>Repository</span>
-						<span>Type</span>
+						<span>Scope</span>
 						<span />
 					</div>
 
@@ -196,21 +207,26 @@ export function SecretsSection({ secrets }: SecretsSectionProps) {
 						<div
 							key={secret.id}
 							className="grid items-center px-4 py-2.5 text-sm border-b border-border/30 last:border-b-0 hover:bg-muted/30 group"
-							style={{ gridTemplateColumns: "2fr 2fr 1fr 0.5fr" }}
+							style={{ gridTemplateColumns: "2fr 2fr 0.5fr" }}
 						>
 							<span className="font-mono text-xs truncate">{secret.key}</span>
 							<span className="text-xs text-muted-foreground truncate">
-								{secret.repo_id ? "Repo-scoped" : "All repositories"}
-							</span>
-							<span className="text-xs text-muted-foreground">
-								{secret.secret_type === "redacted" ? "Redacted" : "Secret"}
+								{formatScope(secret, reposById)}
 							</span>
 							<div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
 								<Button
 									variant="ghost"
 									size="icon"
 									className="h-6 w-6"
-									onClick={() => handleEdit(secret.key)}
+									onClick={() => setBindingSecret(secret)}
+								>
+									<SlidersHorizontal className="h-3 w-3" />
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-6 w-6"
+									onClick={() => setEditingSecret({ id: secret.id, key: secret.key })}
 								>
 									<Pencil className="h-3 w-3" />
 								</Button>
@@ -229,10 +245,23 @@ export function SecretsSection({ secrets }: SecretsSectionProps) {
 			) : null}
 
 			<SecretEditModal
-				secret={editingSecret}
+				secretId={editingSecret?.id ?? null}
+				secretKey={editingSecret?.key ?? null}
 				open={editingSecret !== null}
 				onOpenChange={(open) => {
-					if (!open) setEditingSecret(null);
+					if (!open) {
+						setEditingSecret(null);
+					}
+				}}
+			/>
+			<SecretBindingsModal
+				secret={bindingSecret}
+				repos={repos}
+				open={bindingSecret !== null}
+				onOpenChange={(open) => {
+					if (!open) {
+						setBindingSecret(null);
+					}
 				}}
 			/>
 		</section>

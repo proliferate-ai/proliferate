@@ -1,4 +1,4 @@
-import { useAuthProviders } from "@/hooks/integrations/use-auth-providers";
+import { useAuthProviders } from "@/hooks/auth/use-auth-providers";
 import { signIn, useSession } from "@/lib/auth/client";
 import { setLastAuthMethod } from "@/lib/auth/last-auth-method";
 import { sanitizeRedirect } from "@/lib/auth/utils";

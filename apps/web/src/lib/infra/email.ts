@@ -1,9 +1,10 @@
 import "server-only";
+import { serverConfig } from "@/lib/config/server";
 import { logger } from "@/lib/infra/logger";
 import { Resend } from "resend";
 
 const log = logger.child({ module: "email" });
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const resend = serverConfig.resendApiKey ? new Resend(serverConfig.resendApiKey) : null;
 
 // ---------------------------------------------------------------------------
 // Public: feature check
@@ -56,7 +57,7 @@ async function send(params: { to: string; subject: string; html: string }): Prom
 		throw new Error("Attempted to send email but email is disabled.");
 	}
 	await resend.emails.send({
-		from: process.env.EMAIL_FROM ?? "",
+		from: serverConfig.emailFrom,
 		...params,
 	});
 }
@@ -94,7 +95,7 @@ export async function sendInvitationEmail(data: {
 	inviter: { user: { name: string } };
 	role: string;
 }): Promise<void> {
-	const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invite/${data.id}`;
+	const inviteUrl = `${serverConfig.appUrl}/invite/${data.id}`;
 	log.info({ to: data.email, orgName: data.organization.name }, "Sending invitation email");
 	await send({
 		to: data.email,
@@ -107,33 +108,6 @@ export async function sendInvitationEmail(data: {
 				paragraph(`You'll be joining as a <strong>${escapeHtml(data.role)}</strong>.`) +
 				paragraph(ctaButton("Accept Invitation", inviteUrl), "margin: 24px 0;") +
 				muted("This invitation expires in 7 days."),
-		),
-	});
-}
-
-// ---------------------------------------------------------------------------
-// Email: integration request (sent to admin)
-// ---------------------------------------------------------------------------
-
-export async function sendIntegrationRequestEmail(data: {
-	userName: string;
-	userEmail: string;
-	orgName: string;
-	integrationName: string;
-}): Promise<void> {
-	log.info(
-		{ integration: data.integrationName, orgName: data.orgName },
-		"Sending integration request email",
-	);
-	await send({
-		to: process.env.EMAIL_FROM ?? "",
-		subject: `Integration request: ${data.integrationName}`,
-		html: layout(
-			paragraph(
-				`<strong>${escapeHtml(data.userName)}</strong> from <strong>${escapeHtml(data.orgName)}</strong> requested:`,
-			) +
-				paragraph(escapeHtml(data.integrationName), "font-size: 18px; padding: 12px 0;") +
-				muted(`User email: ${escapeHtml(data.userEmail)}`),
 		),
 	});
 }

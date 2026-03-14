@@ -20,7 +20,7 @@ export function InvitationError({ message }: { message: string }) {
 				<Text variant="body" color="muted" className="mb-6">
 					{message}
 				</Text>
-				<Button onClick={() => router.push("/dashboard")}>Go to Dashboard</Button>
+				<Button onClick={() => router.push("/sessions")}>Go to Sessions</Button>
 			</div>
 		</div>
 	);

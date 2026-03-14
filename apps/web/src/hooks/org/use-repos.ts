@@ -14,7 +14,7 @@ export function useRepo(id: string) {
 	return useQuery({
 		...orpc.repos.get.queryOptions({ input: { id } }),
 		enabled: !!id,
-		select: (data) => data.repo,
+		select: (data) => data,
 	});
 }
 
@@ -42,67 +42,10 @@ export function useDeleteRepo() {
 	);
 }
 
-export function useAvailableRepos(integrationId?: string) {
+export function useRepoSnapshots(repoId: string, enabled = true) {
 	return useQuery({
-		...orpc.repos.available.queryOptions({ input: { integrationId } }),
-		select: (data) => data,
-	});
-}
-
-export function useSearchRepos(query: string, enabled = true) {
-	return useQuery({
-		...orpc.repos.search.queryOptions({ input: { q: query } }),
-		enabled: enabled && query.length >= 2,
-		select: (data) => data.repositories,
-	});
-}
-
-export function useServiceCommands(repoId: string, enabled = true) {
-	return useQuery({
-		...orpc.repos.getServiceCommands.queryOptions({ input: { id: repoId } }),
+		...orpc.repos.listSnapshots.queryOptions({ input: { repoId } }),
 		enabled: enabled && !!repoId,
-		select: (data) => data.commands,
+		select: (data) => data.snapshots,
 	});
-}
-
-export function useUpdateServiceCommands() {
-	const queryClient = useQueryClient();
-
-	return useMutation(
-		orpc.repos.updateServiceCommands.mutationOptions({
-			onSuccess: (_data, input) => {
-				queryClient.invalidateQueries({
-					queryKey: orpc.repos.getServiceCommands.key({ input: { id: input.id } }),
-				});
-				queryClient.invalidateQueries({ queryKey: orpc.repos.list.key() });
-			},
-		}),
-	);
-}
-
-export function useCheckSecrets(
-	keys: string[],
-	repoId?: string,
-	configurationId?: string,
-	enabled = true,
-) {
-	return useQuery({
-		...orpc.secrets.check.queryOptions({
-			input: { keys, repo_id: repoId, configuration_id: configurationId },
-		}),
-		enabled: enabled && keys.length > 0,
-		select: (data) => data.keys,
-	});
-}
-
-export function useCreateSecret() {
-	const queryClient = useQueryClient();
-
-	return useMutation(
-		orpc.secrets.create.mutationOptions({
-			onSuccess: () => {
-				queryClient.invalidateQueries({ queryKey: orpc.secrets.check.key() });
-			},
-		}),
-	);
 }

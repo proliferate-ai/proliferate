@@ -130,7 +130,7 @@ export function useInvitation(invitationId: string) {
 			}
 
 			const orgName = encodeURIComponent(state.invitation.organizationName);
-			router.push(`/dashboard?joined=${orgName}`);
+			router.push(`/sessions?joined=${orgName}`);
 		} catch {
 			setState((s) => ({
 				...s,

@@ -14,7 +14,7 @@ export default function GeneralPage() {
 	const { data: members } = useOrgMembers(activeOrg?.id ?? "");
 
 	const currentUserRole = members?.find((m) => m.userId === currentUserId)?.role;
-	const isOwner = currentUserRole === "owner";
+	const isOwner = currentUserRole === "admin";
 
 	if (isActiveOrgPending || !activeOrg) {
 		return (

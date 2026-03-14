@@ -10,11 +10,11 @@ export interface Invitation {
 	email: string;
 	role: "owner" | "admin" | "member";
 	status: string;
-	expiresAt: string;
-	createdAt: string;
+	expiresAt: string | Date;
+	createdAt: string | Date;
 	inviter: {
 		name: string | null;
-		email: string;
+		email: string | null;
 	} | null;
 }
 
@@ -25,7 +25,7 @@ interface PendingInvitationsProps {
 	onCancelInvitation: (invitationId: string) => void;
 }
 
-function formatExpiresIn(expiresAt: string): string {
+function formatExpiresIn(expiresAt: string | Date): string {
 	const diff = new Date(expiresAt).getTime() - Date.now();
 	const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
 	if (days <= 0) return "Expired";

@@ -2,7 +2,6 @@
 
 import { signOut } from "@/lib/auth/client";
 import { useDashboardStore } from "@/stores/dashboard";
-import { useOnboardingStore } from "@/stores/onboarding";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
@@ -20,7 +19,6 @@ export function useSignOut() {
 
 		// Reset Zustand stores
 		useDashboardStore.getState().reset();
-		useOnboardingStore.getState().reset();
 
 		// Navigate to sign-in
 		router.push("/sign-in");

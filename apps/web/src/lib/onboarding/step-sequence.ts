@@ -1,16 +1,7 @@
-import type { FlowType, OnboardingStep } from "@/stores/onboarding";
+import type { OnboardingStep } from "@/stores/onboarding";
 
-export function getStepSequence(flowType: FlowType, billingEnabled: boolean): OnboardingStep[] {
-	if (flowType === "developer") {
-		const steps: OnboardingStep[] = ["path", "tools"];
-		if (billingEnabled) steps.push("billing");
-		steps.push("complete");
-		return steps;
-	}
-	const steps: OnboardingStep[] = ["path", "create-org", "questionnaire", "tools", "invite"];
-	if (billingEnabled) steps.push("billing");
-	steps.push("complete");
-	return steps;
+export function getStepSequence(): OnboardingStep[] {
+	return ["create-org", "invite", "complete"];
 }
 
 export function getStepInfo(

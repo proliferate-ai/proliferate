@@ -22,7 +22,7 @@ export interface Member {
 	id: string;
 	userId: string;
 	role: "owner" | "admin" | "member";
-	createdAt: string;
+	createdAt: string | Date;
 	user: {
 		id: string;
 		name: string | null;

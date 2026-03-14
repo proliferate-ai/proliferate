@@ -1,9 +1,9 @@
 "use client";
 
+import { REQUIRE_EMAIL_VERIFICATION } from "@/config/auth";
 import { useOrgMembersAndInvitations } from "@/hooks/org/use-orgs";
 import { organization, useActiveOrganization, useSession } from "@/lib/auth/client";
 import { orpc } from "@/lib/infra/orpc";
-import { env } from "@proliferate/environment/public";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -14,7 +14,7 @@ export function useMembersPage() {
 	const currentUserId = authSession?.user?.id;
 	const isEmailVerified = authSession?.user?.emailVerified ?? false;
 
-	const requireVerificationForInvites = env.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION;
+	const requireVerificationForInvites = REQUIRE_EMAIL_VERIFICATION;
 
 	const [isInviting, setIsInviting] = useState(false);
 	const [inviteEmail, setInviteEmail] = useState("");
@@ -32,8 +32,8 @@ export function useMembersPage() {
 	const members = data?.members;
 	const invitations = data?.invitations;
 	const currentUserRole = data?.currentUserRole;
-	const isOwner = currentUserRole === "owner";
-	const canInvite = isOwner || currentUserRole === "admin";
+	const isOwner = currentUserRole === "admin";
+	const canInvite = currentUserRole === "admin";
 
 	const handleInvite = async () => {
 		if (!inviteEmail.trim() || !activeOrg?.id) return;

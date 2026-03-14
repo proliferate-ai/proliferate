@@ -128,7 +128,7 @@ export function createAuth(options: AuthOptions = {}) {
 			apiKey({ rateLimit: { enabled: false } }),
 			organization({
 				allowUserToCreateOrganization: true,
-				creatorRole: "owner",
+				creatorRole: "admin",
 				invitationExpiresIn: 7 * 24 * 60 * 60,
 				...(options.sendInvitationEmail
 					? { sendInvitationEmail: options.sendInvitationEmail }
@@ -171,7 +171,7 @@ export function createAuth(options: AuthOptions = {}) {
 
 							await pool.query(
 								`INSERT INTO "member" (id, "organizationId", "userId", role, "createdAt")
-								 VALUES ($1, $2, $3, 'owner', NOW())`,
+								 VALUES ($1, $2, $3, 'admin', NOW())`,
 								[`mem_${user.id}`, `org_${user.id}`, user.id],
 							);
 						} catch (error) {

@@ -10,14 +10,11 @@ import {
 	CommandList,
 	CommandSeparator,
 } from "@/components/ui/command";
-import { useAutomations } from "@/hooks/automations/use-automations";
 import { useSessions } from "@/hooks/sessions/use-sessions";
 import { useDashboardStore } from "@/stores/dashboard";
-import { Blocks, Home, Plug, Plus, Search, Settings, User } from "lucide-react";
+import { Search, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
-import { AutomationRow } from "./automation-row";
-import { SessionRow } from "./session-row";
 
 interface CommandSearchProps {
 	open: boolean;
@@ -26,115 +23,36 @@ interface CommandSearchProps {
 
 export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 	const router = useRouter();
-	const { setActiveSession, clearPendingPrompt } = useDashboardStore();
+	const { setActiveSession } = useDashboardStore();
 
 	// Fetch sessions
-	const { data: sessions } = useSessions({ excludeSetup: true });
-
-	// Fetch automations
-	const { data: automations = [] } = useAutomations();
-
-	// Sessions is task-first in V1; fallback excludes setup if kind is absent.
-	const filteredSessions = sessions?.filter((session) =>
-		session.kind ? session.kind === "task" : session.sessionType !== "setup",
-	);
-
-	const handleNewSession = useCallback(() => {
-		clearPendingPrompt();
-		setActiveSession(null);
-		router.push("/dashboard");
-		onOpenChange(false);
-	}, [clearPendingPrompt, setActiveSession, router, onOpenChange]);
-
-	const handleNewAutomation = useCallback(() => {
-		router.push("/coworkers?create=1");
-		onOpenChange(false);
-	}, [router, onOpenChange]);
+	const { data: sessions } = useSessions();
 
 	const handleSelectSession = useCallback(
 		(sessionId: string) => {
-			clearPendingPrompt();
 			setActiveSession(sessionId);
-			router.push(`/workspace/${sessionId}`);
+			router.push("/sessions");
 			onOpenChange(false);
 		},
-		[clearPendingPrompt, setActiveSession, router, onOpenChange],
-	);
-
-	const handleSelectAutomation = useCallback(
-		(automationId: string) => {
-			router.push(`/coworkers/${automationId}`);
-			onOpenChange(false);
-		},
-		[router, onOpenChange],
+		[setActiveSession, router, onOpenChange],
 	);
 
 	return (
 		<CommandDialog open={open} onOpenChange={onOpenChange}>
-			<CommandInput autoFocus placeholder="Search sessions and coworkers..." />
+			<CommandInput autoFocus placeholder="Search sessions..." />
 			<CommandList>
 				<CommandEmpty>No results found.</CommandEmpty>
 
-				{/* Quick Actions */}
-				<CommandGroup heading="Actions">
-					<CommandItem onSelect={handleNewSession}>
-						<Plus className="mr-2 h-4 w-4" />
-						<span>New Session</span>
-					</CommandItem>
-					<CommandItem onSelect={handleNewAutomation}>
-						<Plus className="mr-2 h-4 w-4" />
-						<span>New Coworker</span>
-					</CommandItem>
-					<CommandItem
-						onSelect={() => {
-							router.push("/settings/repositories");
-							onOpenChange(false);
-						}}
-					>
-						<Plug className="mr-2 h-4 w-4" />
-						<span>Connect Repository</span>
-					</CommandItem>
-				</CommandGroup>
-
-				<CommandSeparator />
-
 				{/* Navigation */}
 				<CommandGroup heading="Navigate">
-					<CommandItem
-						onSelect={() => {
-							router.push("/");
-							onOpenChange(false);
-						}}
-					>
-						<Home className="mr-2 h-4 w-4" />
-						<span>Home</span>
-					</CommandItem>
 					<CommandItem
 						onSelect={() => {
 							router.push("/sessions");
 							onOpenChange(false);
 						}}
 					>
-						<User className="mr-2 h-4 w-4" />
+						<Search className="mr-2 h-4 w-4" />
 						<span>Sessions</span>
-					</CommandItem>
-					<CommandItem
-						onSelect={() => {
-							router.push("/coworkers");
-							onOpenChange(false);
-						}}
-					>
-						<Blocks className="mr-2 h-4 w-4" />
-						<span>Coworkers</span>
-					</CommandItem>
-					<CommandItem
-						onSelect={() => {
-							router.push("/integrations");
-							onOpenChange(false);
-						}}
-					>
-						<Plug className="mr-2 h-4 w-4" />
-						<span>Integrations</span>
 					</CommandItem>
 					<CommandItem
 						onSelect={() => {
@@ -150,39 +68,20 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 				<CommandSeparator />
 
 				{/* Sessions */}
-				{filteredSessions && filteredSessions.length > 0 && (
+				{sessions && sessions.length > 0 && (
 					<CommandGroup heading="Sessions">
-						{filteredSessions.slice(0, 10).map((session) => (
+						{sessions.slice(0, 10).map((session) => (
 							<CommandItem key={session.id} onSelect={() => handleSelectSession(session.id)}>
-								<SessionRow
-									title={session.title}
-									promptSnippet={session.promptSnippet}
-									repoName={session.repo?.githubRepoName || null}
-									branchName={session.branchName}
-									status={session.status}
-									hasUnreadUpdate={session.hasUnreadUpdate ?? session.unread ?? false}
-									lastActivityAt={session.lastActivityAt}
-									startedAt={session.startedAt}
-								/>
-							</CommandItem>
-						))}
-					</CommandGroup>
-				)}
-
-				{/* Coworkers */}
-				{automations.length > 0 && (
-					<CommandGroup heading="Coworkers">
-						{automations.slice(0, 10).map((automation) => (
-							<CommandItem
-								key={automation.id}
-								onSelect={() => handleSelectAutomation(automation.id)}
-							>
-								<AutomationRow
-									name={automation.name}
-									enabled={automation.enabled}
-									updatedAt={automation.updated_at}
-									providers={automation.activeProviders}
-								/>
+								<div className="flex-1 min-w-0">
+									<p className="text-sm truncate font-medium">
+										{session.initialPrompt || "Untitled"}
+									</p>
+									<p className="text-xs text-muted-foreground truncate">
+										{session.repo
+											? `${session.repo.githubOrg}/${session.repo.githubName}`
+											: "No repo"}
+									</p>
+								</div>
 							</CommandItem>
 						))}
 					</CommandGroup>
@@ -208,7 +107,7 @@ export function SearchTrigger({ onClick }: SearchTriggerProps) {
 			<Search className="h-5 w-5" />
 			<span className="flex-1 text-left text-sm">Search</span>
 			<kbd className="hidden sm:inline-flex opacity-0 group-hover:opacity-100 transition-opacity h-5 items-center gap-1 rounded border bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
-				<span className="text-xs">⌘</span>K
+				<span className="text-xs">&#x2318;</span>K
 			</kbd>
 		</Button>
 	);
