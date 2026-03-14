@@ -20,7 +20,6 @@
 		"db:studio": "drizzle-kit studio"
 	},
 	"dependencies": {
-		"@proliferate/environment": "workspace:*",
 		"drizzle-orm": "^0.44.0",
 		"postgres": "^3.4.5"
 	},

@@ -83,6 +83,13 @@
 			"include": [
 				"packages/environment/src/**",
 				"packages/sandbox-mcp/src/env.ts",
+				"packages/auth-core/src/**",
+				"packages/db/src/client.ts",
+				"packages/db/drizzle.config.ts",
+				"packages/logger/src/**",
+				"apps/backend/src/**",
+				"apps/web/src/lib/auth/**",
+				"apps/web/src/lib/infra/**",
 				"apps/web/next.config.js",
 				"scripts/**",
 				"infra/**",

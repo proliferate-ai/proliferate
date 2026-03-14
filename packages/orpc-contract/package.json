@@ -1,0 +1,19 @@
+{
+	"name": "@proliferate/orpc-contract",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@orpc/contract": "^1.13.4",
+		"zod": "^3.22.3"
+	},
+	"devDependencies": {
+		"typescript": "^5.3.3"
+	}
+}

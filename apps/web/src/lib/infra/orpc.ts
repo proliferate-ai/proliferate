@@ -3,23 +3,20 @@
 /**
  * oRPC client with TanStack Query integration.
  *
- * Usage:
- *   const { data } = useQuery(orpc.repos.list.queryOptions({ input: {} }));
- *   const mutation = useMutation(orpc.repos.create.mutationOptions());
+ * Points at the backend service for all product API calls.
  */
 
-import type { AppRouter } from "@/server/routers";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
-import type { RouterClient } from "@orpc/server";
+import type { ContractRouterClient } from "@orpc/contract";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
+import type { AppRouter } from "@proliferate/orpc-contract";
 
-// Build absolute URL for oRPC - RPCLink requires absolute URLs
 const getBaseUrl = () => {
 	if (typeof window !== "undefined") {
-		return window.location.origin;
+		return process.env.NEXT_PUBLIC_BACKEND_URL ?? window.location.origin;
 	}
-	return "";
+	return process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
 };
 
 const link = new RPCLink({
@@ -32,6 +29,6 @@ const link = new RPCLink({
 	},
 });
 
-const client: RouterClient<AppRouter> = createORPCClient(link);
+const client: ContractRouterClient<AppRouter> = createORPCClient(link);
 
 export const orpc = createTanstackQueryUtils(client);

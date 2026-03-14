@@ -1,4 +1,3 @@
-import { env } from "@proliferate/environment/server";
 import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({
@@ -11,6 +10,6 @@ export default defineConfig({
 	],
 	out: "./drizzle",
 	dbCredentials: {
-		url: env.DATABASE_URL,
+		url: process.env.DATABASE_URL!,
 	},
 });

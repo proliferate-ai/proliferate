@@ -14,6 +14,7 @@ const nextConfig = {
 		root: monorepoRoot,
 	},
 	transpilePackages: [
+		"@proliferate/auth-core",
 		"@proliferate/shared",
 		"@proliferate/gateway-clients",
 		"@proliferate/environment",

@@ -5,8 +5,6 @@
  * Uses postgres.js driver with Drizzle ORM.
  */
 
-import { nodeEnv } from "@proliferate/environment/runtime";
-import { env } from "@proliferate/environment/server";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
@@ -19,7 +17,7 @@ const globalForDb = globalThis as unknown as {
 	drizzleDb: ReturnType<typeof drizzle<typeof schema>> | undefined;
 };
 
-const isDev = nodeEnv === "development";
+const isDev = process.env.NODE_ENV === "development";
 
 /**
  * Get the Drizzle database instance.
@@ -29,7 +27,7 @@ export function getDb() {
 	if (globalForDb.drizzleDb) return globalForDb.drizzleDb;
 
 	// Create postgres.js connection
-	const sql = postgres(env.DATABASE_URL, {
+	const sql = postgres(process.env.DATABASE_URL!, {
 		max: 10,
 		idle_timeout: 20,
 		connect_timeout: isDev ? 60 : 10, // Survive Next.js first-boot compile storm

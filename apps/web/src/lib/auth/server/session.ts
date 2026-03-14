@@ -5,8 +5,6 @@ import { getImpersonationCookie, isSuperAdmin } from "@/lib/auth/super-admin";
 import { logger } from "@/lib/infra/logger";
 
 const log = logger.child({ module: "auth-helpers" });
-import { nodeEnv } from "@proliferate/environment/runtime";
-import { env } from "@proliferate/environment/server";
 import { orgs, users } from "@proliferate/services";
 import { headers } from "next/headers";
 
@@ -27,8 +25,13 @@ export interface SessionResult {
  * Active when: DEV_USER_ID is set and not "disabled", not production, not CI.
  */
 export function getDevUserId(): string | undefined {
-	const devUserId = env.DEV_USER_ID;
-	if (devUserId && devUserId !== "disabled" && nodeEnv !== "production" && !env.CI) {
+	const devUserId = process.env.DEV_USER_ID;
+	if (
+		devUserId &&
+		devUserId !== "disabled" &&
+		process.env.NODE_ENV !== "production" &&
+		!process.env.CI
+	) {
 		return devUserId;
 	}
 	return undefined;

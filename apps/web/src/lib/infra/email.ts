@@ -1,10 +1,9 @@
 import "server-only";
 import { logger } from "@/lib/infra/logger";
-import { env, features } from "@proliferate/environment/server";
 import { Resend } from "resend";
 
 const log = logger.child({ module: "email" });
-const resend = features.emailEnabled ? new Resend(env.RESEND_API_KEY) : null;
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 // ---------------------------------------------------------------------------
 // Public: feature check
@@ -57,7 +56,7 @@ async function send(params: { to: string; subject: string; html: string }): Prom
 		throw new Error("Attempted to send email but email is disabled.");
 	}
 	await resend.emails.send({
-		from: env.EMAIL_FROM ?? "",
+		from: process.env.EMAIL_FROM ?? "",
 		...params,
 	});
 }
@@ -95,7 +94,7 @@ export async function sendInvitationEmail(data: {
 	inviter: { user: { name: string } };
 	role: string;
 }): Promise<void> {
-	const inviteUrl = `${env.NEXT_PUBLIC_APP_URL}/invite/${data.id}`;
+	const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invite/${data.id}`;
 	log.info({ to: data.email, orgName: data.organization.name }, "Sending invitation email");
 	await send({
 		to: data.email,
@@ -127,7 +126,7 @@ export async function sendIntegrationRequestEmail(data: {
 		"Sending integration request email",
 	);
 	await send({
-		to: env.EMAIL_FROM ?? "",
+		to: process.env.EMAIL_FROM ?? "",
 		subject: `Integration request: ${data.integrationName}`,
 		html: layout(
 			paragraph(

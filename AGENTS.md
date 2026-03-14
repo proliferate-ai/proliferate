@@ -1,10 +1,13 @@
 # Proliferate - Agent Guidelines
 
+
+NOTE:
+- Do NOT make design decisions without clarifying with the programmer. Never assume you know exactly what to do if something has been underspecified.
+
 > Code style, patterns, and conventions for AI coding agents working on this codebase.
 
 ## Core Philosophy
 
-- **Spec-first**: Read the relevant system spec before changing any subsystem. Update the spec in the same PR if behavior changes. See **Specs** section below.
 - **Minimal and elegant**: Less code is better. Every line should earn its place.
 - **Reads like English**: Code should be self-explanatory through explicit naming.
 - **Follow existing patterns**: Never duplicate functionality. Find and extend what exists.
