@@ -28,7 +28,6 @@ export const repos = pgTable(
 		connectionSource: repoConnectionSource("connection_source").default("integration").notNull(),
 		defaultBranch: text("default_branch").default("main").notNull(),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
-		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 	},
 	(table) => [
 		index("repos_organization_id_idx").on(table.organizationId),
