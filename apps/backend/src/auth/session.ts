@@ -16,12 +16,39 @@ export interface SessionResult {
 	};
 }
 
+function getDevUserId(): string | undefined {
+	const devUserId = process.env.DEV_USER_ID;
+	if (
+		devUserId &&
+		devUserId !== "disabled" &&
+		process.env.NODE_ENV !== "production" &&
+		!process.env.CI
+	) {
+		return devUserId;
+	}
+	return undefined;
+}
+
 export async function getSessionFromHeaders(
 	auth: Auth,
 	headers: Headers,
 ): Promise<SessionResult | null> {
+	// Dev mode bypass
+	const devUserId = getDevUserId();
+	if (devUserId) {
+		const user = await users.findById(devUserId);
+		if (user) {
+			const orgId = await orgs.getFirstOrgIdForUser(devUserId);
+			return {
+				user: { id: user.id, email: user.email, name: user.name },
+				session: { id: `dev-session-${devUserId}`, activeOrganizationId: orgId ?? null },
+			};
+		}
+	}
+
 	// Check for API key auth first
 	const authorization = headers.get("authorization");
+
 	if (authorization?.startsWith("Bearer ")) {
 		const key = authorization.replace("Bearer ", "");
 		const orgIdHeader = headers.get("x-org-id");

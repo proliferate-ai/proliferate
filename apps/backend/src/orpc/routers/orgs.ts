@@ -12,8 +12,8 @@ import { resolveSession, resolveSessionWithOrg } from "../middleware";
 export const orgsRouter = {
 	list: orpc.orgs.list
 		.use(async ({ context, next }) => {
-			const session = await resolveSession(context.request);
-			return next({ context: { user: session.user, session: session.session } });
+			const s = await resolveSession(context.request);
+			return next({ context: { user: s.user, session: s.session } });
 		})
 		.handler(async ({ context }) => {
 			const orgsList = await orgs.listOrgs(context.user.id);
@@ -22,10 +22,8 @@ export const orgsRouter = {
 
 	get: orpc.orgs.get
 		.use(async ({ context, next }) => {
-			const resolved = await resolveSessionWithOrg(context.request);
-			return next({
-				context: { user: resolved.user, session: resolved.session, orgId: resolved.orgId },
-			});
+			const r = await resolveSessionWithOrg(context.request);
+			return next({ context: { user: r.user, session: r.session, orgId: r.orgId } });
 		})
 		.handler(async ({ input, context }) => {
 			const org = await orgs.getOrg(input.id, context.user.id);
@@ -37,10 +35,8 @@ export const orgsRouter = {
 
 	listMembers: orpc.orgs.listMembers
 		.use(async ({ context, next }) => {
-			const resolved = await resolveSessionWithOrg(context.request);
-			return next({
-				context: { user: resolved.user, session: resolved.session, orgId: resolved.orgId },
-			});
+			const r = await resolveSessionWithOrg(context.request);
+			return next({ context: { user: r.user, session: r.session, orgId: r.orgId } });
 		})
 		.handler(async ({ input, context }) => {
 			const members = await orgs.listMembers(input.id, context.user.id);
@@ -52,10 +48,8 @@ export const orgsRouter = {
 
 	listInvitations: orpc.orgs.listInvitations
 		.use(async ({ context, next }) => {
-			const resolved = await resolveSessionWithOrg(context.request);
-			return next({
-				context: { user: resolved.user, session: resolved.session, orgId: resolved.orgId },
-			});
+			const r = await resolveSessionWithOrg(context.request);
+			return next({ context: { user: r.user, session: r.session, orgId: r.orgId } });
 		})
 		.handler(async ({ input, context }) => {
 			const invitations = await orgs.listInvitations(input.id, context.user.id);
@@ -67,10 +61,8 @@ export const orgsRouter = {
 
 	getMembersAndInvitations: orpc.orgs.getMembersAndInvitations
 		.use(async ({ context, next }) => {
-			const resolved = await resolveSessionWithOrg(context.request);
-			return next({
-				context: { user: resolved.user, session: resolved.session, orgId: resolved.orgId },
-			});
+			const r = await resolveSessionWithOrg(context.request);
+			return next({ context: { user: r.user, session: r.session, orgId: r.orgId } });
 		})
 		.handler(async ({ input, context }) => {
 			const result = await orgs.getMembersAndInvitations(input.id, context.user.id);

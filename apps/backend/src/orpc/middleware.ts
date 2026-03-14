@@ -1,8 +1,7 @@
 /**
- * oRPC middleware helpers.
+ * oRPC middleware.
  *
- * Provides auth resolution functions used by router handlers.
- * These are called inside `.use()` chains on contract procedures.
+ * Session resolution helpers used in router .use() chains.
  */
 
 import { ORPCError } from "@orpc/server";
@@ -24,7 +23,7 @@ function getAuth(): Auth {
 }
 
 // ============================================
-// Resolve session from request
+// Session resolution helpers
 // ============================================
 
 export async function resolveSession(request: Request): Promise<SessionResult> {
@@ -34,10 +33,6 @@ export async function resolveSession(request: Request): Promise<SessionResult> {
 	}
 	return session;
 }
-
-// ============================================
-// Resolve session + verify org membership
-// ============================================
 
 export async function resolveSessionWithOrg(
 	request: Request,

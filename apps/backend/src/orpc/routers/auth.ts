@@ -5,7 +5,6 @@
  */
 
 import { orpc } from "../contract";
-import { resolveSession } from "../middleware";
 
 export const authRouter = {
 	providers: orpc.auth.providers.handler(async () => ({
@@ -15,15 +14,4 @@ export const authRouter = {
 			email: true,
 		},
 	})),
-
-	wsToken: orpc.auth.wsToken
-		.use(async ({ context, next }) => {
-			const session = await resolveSession(context.request);
-			return next({ context: { user: session.user, session: session.session } });
-		})
-		.handler(async ({ context }) => {
-			// Placeholder -- WS token signing will be implemented when the
-			// gateway ingress layer is added to the backend.
-			return { token: `placeholder-${context.user.id}` };
-		}),
 };

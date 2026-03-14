@@ -52,12 +52,3 @@ export function useOrgMembersAndInvitations(orgId: string | undefined) {
 		enabled: !!orgId,
 	});
 }
-
-/**
- * Hook to get domain suggestions for auto-join
- */
-export function useOrgDomainSuggestions() {
-	return useQuery({
-		...orpc.orgs.getDomainSuggestions.queryOptions({ input: {} }),
-	});
-}
