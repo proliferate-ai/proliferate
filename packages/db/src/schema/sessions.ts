@@ -22,7 +22,7 @@ export const sessions = pgTable(
 		previewUrl: text("preview_url"),
 		agentBaseUrl: text("agent_base_url"),
 		devtoolsBaseUrl: text("devtools_base_url"),
-		agentSessionId: text("agent_session_id"),
+		sandboxAgentId: text("sandbox_agent_id"),
 		prMetadata: jsonb("pr_metadata"),
 		initialPrompt: text("initial_prompt"),
 		harnessType: text("harness_type").notNull(),
