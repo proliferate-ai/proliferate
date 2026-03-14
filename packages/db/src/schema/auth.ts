@@ -1,5 +1,7 @@
 import { relations, sql } from "drizzle-orm";
-import { boolean, index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { boolean, index, pgEnum, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+
+export const organizationRole = pgEnum("organization_role", ["admin", "member"]);
 
 export const user = pgTable(
 	"user",
@@ -29,7 +31,6 @@ export const organization = pgTable(
 		createdAt: timestamp({ withTimezone: true, mode: "date" })
 			.default(sql`CURRENT_TIMESTAMP`)
 			.notNull(),
-		isPersonal: boolean("is_personal").default(false).notNull(),
 		autumnCustomerId: text("autumn_customer_id"),
 	},
 	(table) => [unique("organization_slug_key").on(table.slug)],
@@ -45,7 +46,7 @@ export const member = pgTable(
 		userId: text("userId")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
-		role: text().notNull(),
+		role: organizationRole().notNull(),
 		createdAt: timestamp({ withTimezone: true, mode: "date" })
 			.default(sql`CURRENT_TIMESTAMP`)
 			.notNull(),
@@ -65,7 +66,7 @@ export const invitation = pgTable(
 			.notNull()
 			.references(() => organization.id, { onDelete: "cascade" }),
 		email: text().notNull(),
-		role: text(),
+		role: organizationRole().notNull(),
 		status: text().default("pending").notNull(),
 		expiresAt: timestamp({ withTimezone: true, mode: "date" }).notNull(),
 		createdAt: timestamp({ withTimezone: true, mode: "date" })

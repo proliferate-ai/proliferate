@@ -1,8 +1,8 @@
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 import {
 	type AnyPgColumn,
-	check,
 	index,
+	pgEnum,
 	pgTable,
 	text,
 	timestamp,
@@ -10,6 +10,8 @@ import {
 	uuid,
 } from "drizzle-orm/pg-core";
 import { organization } from "./auth";
+
+export const repoConnectionSource = pgEnum("repo_connection_source", ["integration", "manual"]);
 
 export const repos = pgTable(
 	"repos",
@@ -23,7 +25,7 @@ export const repos = pgTable(
 		defaultSnapshotId: uuid("default_snapshot_id").references((): AnyPgColumn => repoSnapshots.id, {
 			onDelete: "set null",
 		}),
-		connectionSource: text("connection_source").default("integration").notNull(),
+		connectionSource: repoConnectionSource("connection_source").default("integration").notNull(),
 		defaultBranch: text("default_branch").default("main").notNull(),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
@@ -31,10 +33,6 @@ export const repos = pgTable(
 	(table) => [
 		index("repos_organization_id_idx").on(table.organizationId),
 		unique("repos_org_github_name_key").on(table.organizationId, table.githubOrg, table.githubName),
-		check(
-			"repos_connection_source_check",
-			sql`connection_source = ANY (ARRAY['integration'::text, 'manual'::text])`,
-		),
 	],
 );
 
