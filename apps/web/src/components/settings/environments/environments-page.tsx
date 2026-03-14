@@ -1,17 +1,172 @@
 "use client";
 
 import { PageShell } from "@/components/dashboard/page-shell";
-import { AddRepoDialog } from "@/components/settings/repositories/add-repo-dialog";
 import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { LoadingDots } from "@/components/ui/loading-dots";
-import { useRepos } from "@/hooks/org/use-repos";
+import { useCreateRepo, useDeleteRepo, useRepos } from "@/hooks/org/use-repos";
 import { useSecrets } from "@/hooks/org/use-secrets";
-import { useActiveBaselinesByRepos } from "@/hooks/sessions/use-baselines";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { RepoEnvironmentRow } from "./repo-environment-row";
 import { SecretsSection } from "./secrets-section";
+
+function AddRepoDialog({
+	open,
+	onOpenChange,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+}) {
+	const [githubOrg, setGithubOrg] = useState("");
+	const [githubName, setGithubName] = useState("");
+	const [defaultBranch, setDefaultBranch] = useState("main");
+	const [error, setError] = useState("");
+	const createRepo = useCreateRepo();
+
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!githubOrg.trim() || !githubName.trim()) {
+			setError("Organization and repository name are required");
+			return;
+		}
+		setError("");
+		try {
+			await createRepo.mutateAsync({
+				githubOrg: githubOrg.trim(),
+				githubName: githubName.trim(),
+				defaultBranch: defaultBranch.trim() || "main",
+			});
+			setGithubOrg("");
+			setGithubName("");
+			setDefaultBranch("main");
+			onOpenChange(false);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Failed to add repository");
+		}
+	};
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="sm:max-w-md">
+				<DialogHeader>
+					<DialogTitle>Add Repository</DialogTitle>
+				</DialogHeader>
+				<form onSubmit={handleSubmit}>
+					<div className="space-y-4 py-2">
+						<div className="space-y-2">
+							<Label htmlFor="github-org" className="text-xs">
+								GitHub Organization
+							</Label>
+							<Input
+								id="github-org"
+								value={githubOrg}
+								onChange={(e) => setGithubOrg(e.target.value)}
+								placeholder="e.g., acme-corp"
+								className="h-8 text-sm"
+								autoFocus
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor="github-name" className="text-xs">
+								Repository Name
+							</Label>
+							<Input
+								id="github-name"
+								value={githubName}
+								onChange={(e) => setGithubName(e.target.value)}
+								placeholder="e.g., my-app"
+								className="h-8 text-sm"
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label htmlFor="default-branch" className="text-xs">
+								Default Branch
+							</Label>
+							<Input
+								id="default-branch"
+								value={defaultBranch}
+								onChange={(e) => setDefaultBranch(e.target.value)}
+								placeholder="main"
+								className="h-8 text-sm"
+							/>
+						</div>
+						{error && <p className="text-xs text-destructive">{error}</p>}
+					</div>
+					<DialogFooter>
+						<Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+							Cancel
+						</Button>
+						<Button type="submit" size="sm" disabled={createRepo.isPending}>
+							{createRepo.isPending ? "Adding..." : "Add Repository"}
+						</Button>
+					</DialogFooter>
+				</form>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+function RepoRow({
+	repo,
+}: {
+	repo: { id: string; githubRepoName: string };
+}) {
+	const deleteRepo = useDeleteRepo();
+	const [confirmDelete, setConfirmDelete] = useState(false);
+
+	const repoName = repo.githubRepoName.split("/").pop() || repo.githubRepoName;
+	const orgName = repo.githubRepoName.split("/")[0];
+
+	return (
+		<div className="flex items-center justify-between px-4 py-3 rounded-lg border border-border bg-card">
+			<div className="flex items-center gap-1.5 min-w-0">
+				<span className="text-xs text-muted-foreground">{orgName}/</span>
+				<span className="text-sm font-medium truncate">{repoName}</span>
+			</div>
+			<div className="flex items-center gap-2 shrink-0">
+				{confirmDelete ? (
+					<>
+						<span className="text-xs text-muted-foreground">Delete?</span>
+						<Button
+							variant="destructive"
+							size="sm"
+							className="h-7 text-xs"
+							onClick={() => deleteRepo.mutate({ id: repo.id })}
+							disabled={deleteRepo.isPending}
+						>
+							{deleteRepo.isPending ? "..." : "Yes"}
+						</Button>
+						<Button
+							variant="outline"
+							size="sm"
+							className="h-7 text-xs"
+							onClick={() => setConfirmDelete(false)}
+						>
+							No
+						</Button>
+					</>
+				) : (
+					<Button
+						variant="ghost"
+						size="icon"
+						className="h-7 w-7 text-muted-foreground hover:text-destructive"
+						onClick={() => setConfirmDelete(true)}
+					>
+						<Trash2 className="h-3.5 w-3.5" />
+					</Button>
+				)}
+			</div>
+		</div>
+	);
+}
 
 export function EnvironmentsPage() {
 	const [addRepoOpen, setAddRepoOpen] = useState(false);
@@ -19,17 +174,6 @@ export function EnvironmentsPage() {
 
 	const { data: repos, isLoading: reposLoading } = useRepos();
 	const { data: secrets } = useSecrets();
-
-	const repoIds = useMemo(() => (repos ?? []).map((r) => r.id), [repos]);
-	const { data: activeBaselines } = useActiveBaselinesByRepos(repoIds, repoIds.length > 0);
-
-	const baselinesByRepo = useMemo(() => {
-		const map = new Map<string, { id: string; status: string }>();
-		for (const b of activeBaselines ?? []) {
-			map.set(b.repoId, b);
-		}
-		return map;
-	}, [activeBaselines]);
 
 	const filteredRepos = useMemo(() => {
 		const list = repos ?? [];
@@ -53,16 +197,16 @@ export function EnvironmentsPage() {
 	return (
 		<PageShell
 			title="Environments"
-			subtitle="Configure development environments and secrets for your repositories."
+			subtitle="Configure repositories and secrets for your organization."
 		>
 			<div className="space-y-10">
-				{/* Environments section */}
+				{/* Repositories section */}
 				<section>
 					<div className="flex items-center justify-between mb-3">
 						<div>
-							<h2 className="text-sm font-medium">Environments</h2>
+							<h2 className="text-sm font-medium">Repositories</h2>
 							<p className="text-xs text-muted-foreground mt-0.5">
-								Agents write better code with a configured development environment.
+								Repositories available to your coding agents.
 							</p>
 						</div>
 						<div className="flex items-center gap-2">
@@ -87,9 +231,7 @@ export function EnvironmentsPage() {
 					{!hasRepos ? (
 						<div className="rounded-lg border border-dashed border-border/80 py-8 text-center">
 							<p className="text-sm text-muted-foreground">No repositories yet</p>
-							<p className="text-xs text-muted-foreground mt-1">
-								Add a repository to get started with environment setup.
-							</p>
+							<p className="text-xs text-muted-foreground mt-1">Add a repository to get started.</p>
 							<Button size="sm" className="mt-4" onClick={() => setAddRepoOpen(true)}>
 								<Plus className="h-3.5 w-3.5 mr-1.5" />
 								Add Repository
@@ -102,25 +244,17 @@ export function EnvironmentsPage() {
 					) : (
 						<div className="space-y-2">
 							{filteredRepos.map((repo) => (
-								<RepoEnvironmentRow
-									key={repo.id}
-									repo={repo}
-									baseline={baselinesByRepo.get(repo.id)}
-								/>
+								<RepoRow key={repo.id} repo={repo} />
 							))}
 						</div>
 					)}
 				</section>
 
 				{/* Secrets section */}
-				<SecretsSection secrets={secrets ?? []} />
+				<SecretsSection secrets={secrets ?? []} repos={repos ?? []} />
 			</div>
 
-			<AddRepoDialog
-				open={addRepoOpen}
-				onOpenChange={setAddRepoOpen}
-				existingRepoIds={new Set((repos ?? []).map((r) => r.githubRepoId))}
-			/>
+			<AddRepoDialog open={addRepoOpen} onOpenChange={setAddRepoOpen} />
 		</PageShell>
 	);
 }

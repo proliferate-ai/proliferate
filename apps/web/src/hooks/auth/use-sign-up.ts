@@ -1,5 +1,5 @@
 import { REQUIRE_EMAIL_VERIFICATION } from "@/config/auth";
-import { useAuthProviders } from "@/hooks/integrations/use-auth-providers";
+import { useAuthProviders } from "@/hooks/auth/use-auth-providers";
 import { getUtms } from "@/lib/analytics/utm";
 import { signIn, signUp, useSession } from "@/lib/auth/client";
 import { setLastAuthMethod } from "@/lib/auth/last-auth-method";

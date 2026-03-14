@@ -2,8 +2,8 @@
 
 import { useOrgMembersAndInvitations } from "@/hooks/org/use-orgs";
 import { organization, useActiveOrganization, useSession } from "@/lib/auth/client";
+import { REQUIRE_EMAIL_VERIFICATION } from "@/config/auth";
 import { orpc } from "@/lib/infra/orpc";
-import { env } from "@proliferate/environment/public";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -14,7 +14,7 @@ export function useMembersPage() {
 	const currentUserId = authSession?.user?.id;
 	const isEmailVerified = authSession?.user?.emailVerified ?? false;
 
-	const requireVerificationForInvites = env.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION;
+	const requireVerificationForInvites = REQUIRE_EMAIL_VERIFICATION;
 
 	const [isInviting, setIsInviting] = useState(false);
 	const [inviteEmail, setInviteEmail] = useState("");

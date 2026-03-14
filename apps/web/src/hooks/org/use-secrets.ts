@@ -1,7 +1,6 @@
 "use client";
 
 import { orpc } from "@/lib/infra/orpc";
-import type { CheckSecretsInput, CreateSecretInput } from "@proliferate/shared/contracts/secrets";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function useSecrets() {
@@ -21,7 +20,7 @@ export function useCreateSecret() {
 		},
 	});
 
-	const mutateAsync = async (data: CreateSecretInput) => {
+	const mutateAsync = async (data: { key: string; value: string }) => {
 		const result = await mutation.mutateAsync(data);
 		return result;
 	};
@@ -29,7 +28,7 @@ export function useCreateSecret() {
 	return {
 		...mutation,
 		mutateAsync,
-		mutate: (data: CreateSecretInput) => {
+		mutate: (data: { key: string; value: string }) => {
 			mutation.mutate(data);
 		},
 	};
@@ -59,59 +58,32 @@ export function useDeleteSecret() {
 	};
 }
 
-export function useCheckSecrets() {
-	const mutation = useMutation(orpc.secrets.check.mutationOptions());
-
-	const mutateAsync = async (data: CheckSecretsInput) => {
-		const result = await mutation.mutateAsync(data);
-		return result;
-	};
-
-	return {
-		...mutation,
-		mutateAsync,
-		mutate: (data: CheckSecretsInput) => {
-			mutation.mutate(data);
-		},
-	};
-}
-
-export function useSecretsGrouped() {
-	return useQuery({
-		...orpc.secrets.listGrouped.queryOptions({}),
-		select: (data) => data.secrets,
-	});
-}
-
-export function useAssignSecretToRepos() {
-	const queryClient = useQueryClient();
-	return useMutation({
-		...orpc.secrets.assignToRepos.mutationOptions(),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: orpc.secrets.list.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.secrets.listGrouped.key() });
-		},
-	});
-}
-
 export function useUpdateSecretValue() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		...orpc.secrets.updateValue.mutationOptions(),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: orpc.secrets.list.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.secrets.listGrouped.key() });
 		},
 	});
 }
 
-export function useRemoveSecretFromRepos() {
+export function useAddRepoBinding() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		...orpc.secrets.removeFromRepos.mutationOptions(),
+		...orpc.secrets.addRepoBinding.mutationOptions(),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: orpc.secrets.list.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.secrets.listGrouped.key() });
+		},
+	});
+}
+
+export function useRemoveRepoBinding() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		...orpc.secrets.removeRepoBinding.mutationOptions(),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: orpc.secrets.list.key() });
 		},
 	});
 }

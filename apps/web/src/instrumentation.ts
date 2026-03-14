@@ -1,12 +1,12 @@
-import { nextRuntime } from "@proliferate/environment/runtime";
+import { getNextRuntime } from "@/lib/config/runtime";
 import * as Sentry from "@sentry/nextjs";
 
 export async function register() {
-	if (nextRuntime === "nodejs") {
+	if (getNextRuntime() === "nodejs") {
 		await import("../sentry.server.config");
 	}
 
-	if (nextRuntime === "edge") {
+	if (getNextRuntime() === "edge") {
 		await import("../sentry.edge.config");
 	}
 }

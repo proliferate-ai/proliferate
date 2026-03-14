@@ -1,7 +1,7 @@
 "use client";
 
+import { REQUIRE_EMAIL_VERIFICATION } from "@/config/auth";
 import { useSession } from "@/lib/auth/client";
-import { env } from "@proliferate/environment/public";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -24,7 +24,7 @@ export function useRequireAuth() {
 		if (
 			!isPending &&
 			session &&
-			env.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION &&
+			REQUIRE_EMAIL_VERIFICATION &&
 			!session.user?.emailVerified
 		) {
 			router.push("/auth/verify-email");

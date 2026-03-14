@@ -1,13 +1,8 @@
 "use client";
 
-import { WorkerOrb } from "@/components/automations/worker-card";
-import { openIntercomMessenger } from "@/components/providers/intercom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
-	CoworkersIcon,
-	IntegrationsIcon,
-	OpenCodeIcon,
 	SessionsGridIcon,
 	SidebarCollapseIcon,
 	SidebarExpandIcon,
@@ -15,23 +10,14 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Text } from "@/components/ui/text";
-import { useWorkers } from "@/hooks/automations/use-workers";
-import { useBillingState } from "@/hooks/org/use-billing";
-import { useSessions } from "@/hooks/sessions/use-sessions";
 import { useSignOut } from "@/hooks/ui/use-sign-out";
 import { useSession } from "@/lib/auth/client";
 import { cn } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
-import { env } from "@proliferate/environment/public";
 import {
 	ArrowLeft,
 	Building2,
-	ChevronDown,
-	ChevronRight,
-	Coins,
-	CreditCard,
 	FolderGit2,
-	Home,
 	LifeBuoy,
 	LogOut,
 	Menu,
@@ -43,7 +29,6 @@ import {
 	X,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { SearchTrigger } from "./command-search";
@@ -89,15 +74,12 @@ export function MobileSidebar() {
 
 // Desktop sidebar - hidden on mobile
 export function Sidebar() {
-	const { sidebarCollapsed, toggleSidebar, setActiveSession } = useDashboardStore();
+	const { sidebarCollapsed, toggleSidebar } = useDashboardStore();
 	const pathname = usePathname();
 	const router = useRouter();
 
 	const isSettingsPage = pathname?.startsWith("/settings");
-	const isHomePage = pathname === "/" || pathname === "/dashboard";
-	const isSessionsPage = pathname?.startsWith("/sessions") || pathname?.startsWith("/workspace");
-	const isCoworkersPage = pathname?.startsWith("/coworkers");
-	const isIntegrationsPage = pathname?.startsWith("/integrations");
+	const isSessionsPage = pathname?.startsWith("/sessions");
 
 	return (
 		<aside
@@ -108,7 +90,7 @@ export function Sidebar() {
 			)}
 			onClick={sidebarCollapsed ? toggleSidebar : undefined}
 		>
-			{/* Collapsed view — icon-only nav */}
+			{/* Collapsed view -- icon-only nav */}
 			<div
 				className={cn(
 					"flex flex-col items-center h-full py-2 gap-1 transition-opacity duration-150",
@@ -129,35 +111,6 @@ export function Sidebar() {
 				</Button>
 				<div className="my-1" />
 				<Button
-					variant="ghost"
-					size="icon"
-					className="h-8 w-8 text-muted-foreground hover:text-foreground"
-					onClick={(e) => {
-						e.stopPropagation();
-						setActiveSession(null);
-						router.push("/sessions");
-					}}
-					title="Sessions"
-				>
-					<img
-						src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp"
-						alt="Proliferate"
-						className="h-4 w-4 rounded-full"
-					/>
-				</Button>
-				<Button
-					variant={isHomePage ? "secondary" : "ghost"}
-					size="icon"
-					className="h-8 w-8 text-muted-foreground hover:text-foreground"
-					onClick={(e) => {
-						e.stopPropagation();
-						router.push("/");
-					}}
-					title="Home"
-				>
-					<Home className="h-4 w-4" />
-				</Button>
-				<Button
 					variant={isSessionsPage ? "secondary" : "ghost"}
 					size="icon"
 					className="h-8 w-8 text-muted-foreground hover:text-foreground"
@@ -170,28 +123,16 @@ export function Sidebar() {
 					<SessionsGridIcon className="h-4 w-4" />
 				</Button>
 				<Button
-					variant={isCoworkersPage ? "secondary" : "ghost"}
+					variant={isSettingsPage ? "secondary" : "ghost"}
 					size="icon"
 					className="h-8 w-8 text-muted-foreground hover:text-foreground"
 					onClick={(e) => {
 						e.stopPropagation();
-						router.push("/coworkers");
+						router.push("/settings/profile");
 					}}
-					title="Coworkers"
+					title="Settings"
 				>
-					<CoworkersIcon className="h-4 w-4" />
-				</Button>
-				<Button
-					variant={isIntegrationsPage ? "secondary" : "ghost"}
-					size="icon"
-					className="h-8 w-8 text-muted-foreground hover:text-foreground"
-					onClick={(e) => {
-						e.stopPropagation();
-						router.push("/integrations");
-					}}
-					title="Integrations"
-				>
-					<IntegrationsIcon className="h-4 w-4" />
+					<Settings className="h-4 w-4" />
 				</Button>
 			</div>
 
@@ -252,7 +193,7 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
 	return <h2 className="px-2 text-sm font-medium text-muted-foreground">{children}</h2>;
 }
 
-// Shared sidebar shell — header (logo + search) + nav area (children) + footer (support + user card)
+// Shared sidebar shell -- header (logo + search) + nav area (children) + footer (support + user card)
 export function SidebarShell({
 	children,
 	onClose,
@@ -267,9 +208,6 @@ export function SidebarShell({
 	const { theme, resolvedTheme, setTheme } = useTheme();
 	const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-	const billing = useBillingState();
-
-	// Fetch Slack status for support popup
 	const { toggleSidebar, setCommandSearchOpen } = useDashboardStore();
 
 	const user = authSession?.user;
@@ -333,35 +271,20 @@ export function SidebarShell({
 				<SearchTrigger onClick={() => setCommandSearchOpen(true)} />
 			</div>
 
-			{/* Scrollable nav — content provided by caller */}
+			{/* Scrollable nav -- content provided by caller */}
 			<nav className="flex-1 overflow-y-auto overflow-x-hidden px-3">
 				<div className="flex flex-col gap-5">{children}</div>
 			</nav>
 
 			{/* Footer */}
 			<div className="border-t border-sidebar-border px-3 py-3 flex flex-col gap-2">
-				{/* Credits */}
-				{billing.isLoaded && (
-					<Link
-						href="/settings/billing"
-						className="flex items-center justify-center gap-2 w-full h-8 rounded-lg text-sm font-medium border border-border/60 bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted hover:border-border"
-					>
-						<Coins className="h-4 w-4" />
-						<span>
-							{billing.creditBalance.toFixed(1)} credit
-							{billing.creditBalance !== 1 ? "s" : ""}
-						</span>
-					</Link>
-				)}
-				{/* Support - Intercom if available, docs fallback */}
+				{/* Support */}
 				<Button
 					type="button"
 					variant="outline"
 					className="flex items-center justify-center gap-2 w-full h-8 rounded-lg text-sm font-medium border-border/60 bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted hover:border-border"
 					onClick={() => {
-						if (!openIntercomMessenger()) {
-							window.open("https://docs.proliferate.com", "_blank", "noopener,noreferrer");
-						}
+						window.open("https://docs.proliferate.com", "_blank", "noopener,noreferrer");
 					}}
 				>
 					<LifeBuoy className="h-4 w-4" />
@@ -431,25 +354,9 @@ export function SidebarShell({
 function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 	const pathname = usePathname();
 	const router = useRouter();
-	const { sidebarRecentsOpen, toggleSidebarRecents } = useDashboardStore();
 
-	const isHomePage = pathname === "/" || pathname === "/dashboard";
-	const isSessionsPage = pathname?.startsWith("/sessions") || pathname?.startsWith("/workspace");
-	const isCoworkersPage = pathname?.startsWith("/coworkers");
-	const isIntegrationsPage = pathname?.startsWith("/integrations");
+	const isSessionsPage = pathname?.startsWith("/sessions");
 	const isSettingsPage = pathname?.startsWith("/settings");
-
-	const { data: recentSessions } = useSessions({
-		limit: 8,
-		sortBy: "recency",
-		refetchInterval: 10000,
-	});
-	const { data: workers } = useWorkers();
-
-	const managerSessionIds = new Set((workers ?? []).map((w) => w.managerSessionId).filter(Boolean));
-	const nonManagerSessions = (recentSessions ?? [])
-		.filter((s) => !managerSessionIds.has(s.id) && s.kind !== "manager")
-		.slice(0, 5);
 
 	const handleNavigate = (path: string) => {
 		router.push(path);
@@ -457,125 +364,22 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 	};
 
 	return (
-		<>
-			{/* Top-level nav */}
-			<div className="flex flex-col gap-1">
-				<NavItem
-					icon={Home}
-					label="Home"
-					active={!!isHomePage}
-					onClick={() => handleNavigate("/")}
-				/>
-				<NavItem
-					icon={SessionsGridIcon}
-					label="Sessions"
-					active={!!isSessionsPage}
-					onClick={() => handleNavigate("/sessions")}
-				/>
-				<NavItem
-					icon={CoworkersIcon}
-					label="Coworkers"
-					active={!!isCoworkersPage}
-					onClick={() => handleNavigate("/coworkers")}
-				/>
-				<NavItem
-					icon={IntegrationsIcon}
-					label="Integrations"
-					active={!!isIntegrationsPage}
-					onClick={() => handleNavigate("/integrations")}
-				/>
-				<NavItem
-					icon={Settings}
-					label="Settings"
-					active={!!isSettingsPage}
-					onClick={() => handleNavigate("/settings/profile")}
-				/>
-			</div>
-
-			{/* Coworkers */}
-			{workers && workers.length > 0 && (
-				<div className="flex flex-col gap-1">
-					<SectionLabel>Coworkers</SectionLabel>
-					{workers.slice(0, 5).map((worker) => {
-						const isActive =
-							pathname === `/workspace/${worker.managerSessionId}` ||
-							pathname === `/coworkers/${worker.id}`;
-						return (
-							<Button
-								key={worker.id}
-								type="button"
-								variant="ghost"
-								onClick={() =>
-									handleNavigate(
-										worker.managerSessionId
-											? `/workspace/${worker.managerSessionId}`
-											: `/coworkers/${worker.id}`,
-									)
-								}
-								className={cn(
-									"flex items-center gap-2 w-full px-2 h-7 rounded-lg text-xs font-normal justify-start",
-									isActive
-										? "bg-foreground/[0.05] text-foreground"
-										: "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]",
-								)}
-							>
-								<div className="shrink-0">
-									<WorkerOrb name={worker.name} size={14} />
-								</div>
-								<span className="truncate">{worker.name}</span>
-							</Button>
-						);
-					})}
-				</div>
-			)}
-
-			{/* Recent sessions */}
-			{nonManagerSessions.length > 0 && (
-				<div className="flex flex-col gap-1">
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						onClick={toggleSidebarRecents}
-						className="flex items-center justify-between px-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-					>
-						<span>Recent</span>
-						{sidebarRecentsOpen ? (
-							<ChevronDown className="h-3 w-3" />
-						) : (
-							<ChevronRight className="h-3 w-3" />
-						)}
-					</Button>
-					{sidebarRecentsOpen &&
-						nonManagerSessions.map((session) => {
-							const title = session.title || session.promptSnippet || "Untitled";
-							const isActive = pathname === `/workspace/${session.id}`;
-							const isSetup = session.kind === "setup" || session.sessionType === "setup";
-							return (
-								<Button
-									key={session.id}
-									type="button"
-									variant="ghost"
-									onClick={() => handleNavigate(`/workspace/${session.id}`)}
-									className={cn(
-										"flex items-center gap-2 w-full px-2 h-7 rounded-lg text-xs font-normal justify-start",
-										isActive
-											? "bg-foreground/[0.05] text-foreground"
-											: "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]",
-									)}
-								>
-									<OpenCodeIcon className="h-3 w-3 shrink-0" />
-									<span className="truncate">{isSetup ? `Setup: ${title}` : title}</span>
-								</Button>
-							);
-						})}
-				</div>
-			)}
-		</>
+		<div className="flex flex-col gap-1">
+			<NavItem
+				icon={SessionsGridIcon}
+				label="Sessions"
+				active={!!isSessionsPage}
+				onClick={() => handleNavigate("/sessions")}
+			/>
+			<NavItem
+				icon={Settings}
+				label="Settings"
+				active={!!isSettingsPage}
+				onClick={() => handleNavigate("/settings/profile")}
+			/>
+		</div>
 	);
 }
-
-const BILLING_ENABLED = env.NEXT_PUBLIC_BILLING_ENABLED;
 
 // Settings-specific nav items
 function SettingsNav({ onNavigate }: { onNavigate?: () => void }) {
@@ -585,10 +389,7 @@ function SettingsNav({ onNavigate }: { onNavigate?: () => void }) {
 	const isProfilePage = pathname === "/settings/profile";
 	const isGeneralPage = pathname === "/settings/general";
 	const isMembersPage = pathname === "/settings/members";
-	const isEnvironmentsPage =
-		pathname?.startsWith("/settings/environments") ||
-		pathname?.startsWith("/settings/repositories");
-	const isBillingPage = pathname === "/settings/billing";
+	const isEnvironmentsPage = pathname?.startsWith("/settings/environments");
 
 	const handleNavigate = (path: string) => {
 		router.push(path);
@@ -597,7 +398,7 @@ function SettingsNav({ onNavigate }: { onNavigate?: () => void }) {
 
 	return (
 		<>
-			{/* Back to dashboard */}
+			{/* Back to sessions */}
 			<div className="flex flex-col gap-1">
 				<NavItem
 					icon={ArrowLeft}
@@ -639,14 +440,6 @@ function SettingsNav({ onNavigate }: { onNavigate?: () => void }) {
 					active={!!isEnvironmentsPage}
 					onClick={() => handleNavigate("/settings/environments")}
 				/>
-				{BILLING_ENABLED && (
-					<NavItem
-						icon={CreditCard}
-						label="Billing"
-						active={!!isBillingPage}
-						onClick={() => handleNavigate("/settings/billing")}
-					/>
-				)}
 			</div>
 		</>
 	);

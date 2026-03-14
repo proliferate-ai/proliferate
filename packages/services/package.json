@@ -4,8 +4,12 @@
 	"private": true,
 	"type": "module",
 	"exports": {
+		".": "./src/index.ts",
 		"./orgs": "./src/orgs/index.ts",
 		"./users": "./src/users/index.ts",
+		"./repos": "./src/repos/index.ts",
+		"./secrets": "./src/secrets/index.ts",
+		"./sessions": "./src/sessions/index.ts",
 		"./logger": "./src/logger.ts"
 	},
 	"scripts": {

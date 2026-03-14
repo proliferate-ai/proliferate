@@ -1,15 +1,9 @@
 export const PAGE_TITLES: Record<string, string> = {
-	"/": "Home",
-	"/dashboard": "Home",
+	"/": "Sessions",
 	"/sessions": "Sessions",
-	"/coworkers": "Coworkers",
-	"/integrations": "Integrations",
 	"/settings": "Settings",
 	"/settings/profile": "Profile",
 	"/settings/general": "General",
 	"/settings/members": "Members",
 	"/settings/environments": "Environments",
-	"/settings/billing": "Billing",
-	"/settings/connections": "Connections",
-	"/settings/tools": "Tools",
 };
