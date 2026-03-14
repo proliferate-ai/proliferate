@@ -1,7 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import { boolean, index, pgEnum, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 
-export const organizationRole = pgEnum("organization_role", ["owner", "admin", "member"]);
+export const organizationRole = pgEnum("organization_role", ["admin", "member"]);
 
 export const user = pgTable(
 	"user",

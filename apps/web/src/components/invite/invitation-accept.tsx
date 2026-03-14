@@ -73,8 +73,8 @@ export function InvitationAccept({
 						<Text variant="body" color="destructive" className="mb-4">
 							This invitation has expired.
 						</Text>
-						<Button variant="outline" onClick={() => router.push("/dashboard")}>
-							Go to Dashboard
+						<Button variant="outline" onClick={() => router.push("/sessions")}>
+							Go to Sessions
 						</Button>
 					</div>
 				) : (

@@ -13,7 +13,7 @@ export function GitHubButton() {
 		try {
 			await signIn.social({
 				provider: "github",
-				callbackURL: "/dashboard",
+				callbackURL: "/sessions",
 			});
 		} catch (err) {
 			console.error("GitHub sign in failed:", err);

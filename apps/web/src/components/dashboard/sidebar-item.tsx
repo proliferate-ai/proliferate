@@ -103,7 +103,7 @@ export function SidebarItem({
 		mutationFn: deleteFn,
 		onSuccess: () => {
 			if (isActive) {
-				router.push("/dashboard");
+				router.push("/sessions");
 			}
 		},
 		onSettled: () => {
