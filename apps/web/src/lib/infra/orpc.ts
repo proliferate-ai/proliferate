@@ -12,11 +12,13 @@ import type { ContractRouterClient } from "@orpc/contract";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import type { AppRouter } from "@proliferate/orpc-contract";
 
+const DEFAULT_BACKEND_URL = "http://localhost:3001";
+
 const getBaseUrl = () => {
 	if (typeof window !== "undefined") {
-		return process.env.NEXT_PUBLIC_BACKEND_URL ?? window.location.origin;
+		return process.env.NEXT_PUBLIC_BACKEND_URL ?? DEFAULT_BACKEND_URL;
 	}
-	return process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
+	return process.env.NEXT_PUBLIC_BACKEND_URL ?? DEFAULT_BACKEND_URL;
 };
 
 const link = new RPCLink({
