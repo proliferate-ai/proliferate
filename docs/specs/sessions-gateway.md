@@ -47,7 +47,7 @@
 - Assuming SSE carries bidirectional traffic. SSE is read-only (sandbox → gateway); prompts/cancel are HTTP.
 - Assuming preview/devtools proxies can skip session readiness checks. Most proxy routes require runtime readiness to resolve targets.
 - Assuming markdown summaries are safe to render raw. UI must use sanitized markdown renderer.
-- On the v1 rewrite branch, the authored `sessions` table in `packages/db/src/schema/sessions.ts` has been collapsed to a minimal coding-session shape (`state`, `repoId`, `organizationId`, `sandboxId`, `previewUrl`, `agentBaseUrl`, `devtoolsBaseUrl`, `sandboxAgentId`, `prMetadata`, `initialPrompt`, `harnessType`); the current gateway/hub implementation still reflects the legacy richer model and will be replaced in follow-up PRs.
+- On the v1 rewrite branch, the authored `sessions` table in `packages/db/src/schema/sessions.ts` has been collapsed to a minimal coding-session shape (`state ∈ {working,idle,cancelled,done}`, `sessionType ∈ {coding,setup}`, `repoId`, `organizationId`, `sandboxId`, `previewUrl`, `agentBaseUrl`, `devtoolsBaseUrl`, `sandboxAgentId`, `prMetadata`, `initialPrompt`, `harnessType ∈ {opencode,claude,codex,amp}`); the current gateway/hub implementation still reflects the legacy richer model and will be replaced in follow-up PRs.
 
 ---
 
