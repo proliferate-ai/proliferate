@@ -3,6 +3,7 @@
 
 NOTE:
 - Do NOT make design decisions without clarifying with the programmer. Never assume you know exactly what to do if something has been underspecified.
+- ALWAYS use centarlized config or constnats file to refer to covairales or deine constants ha will be used.
 
 > Code style, patterns, and conventions for AI coding agents working on this codebase.
 

@@ -8,7 +8,7 @@ import "server-only";
 
 import { logger } from "@/lib/infra/logger";
 import { env } from "@proliferate/environment/server";
-import { orgs } from "@proliferate/services";
+import * as orgs from "@proliferate/services/orgs";
 
 const log = logger.child({ module: "billing" });
 

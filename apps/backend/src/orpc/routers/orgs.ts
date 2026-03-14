@@ -5,7 +5,7 @@
  */
 
 import { ORPCError } from "@orpc/server";
-import { orgs } from "@proliferate/services";
+import * as orgs from "@proliferate/services/orgs";
 import { orpc } from "../contract";
 import { orgMiddleware, protectedMiddleware } from "../middleware";
 

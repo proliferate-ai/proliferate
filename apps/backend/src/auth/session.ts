@@ -1,10 +1,11 @@
 import type { Auth } from "@proliferate/auth-core";
 import { createLogger } from "@proliferate/logger";
-import { orgs, users } from "@proliferate/services";
+import * as orgs from "@proliferate/services/orgs";
+import * as users from "@proliferate/services/users";
 
 const log = createLogger({ service: "backend" }).child({ module: "auth" });
 
-export interface SessionResult {
+type SessionResult = {
 	user: {
 		id: string;
 		email: string;
@@ -14,7 +15,7 @@ export interface SessionResult {
 		id: string;
 		activeOrganizationId?: string | null;
 	};
-}
+};
 
 function getDevUserId(): string | undefined {
 	const devUserId = process.env.DEV_USER_ID;
@@ -33,7 +34,6 @@ export async function getSessionFromHeaders(
 	auth: Auth,
 	headers: Headers,
 ): Promise<SessionResult | null> {
-	// Dev mode bypass
 	const devUserId = getDevUserId();
 	if (devUserId) {
 		const user = await users.findById(devUserId);
@@ -46,7 +46,6 @@ export async function getSessionFromHeaders(
 		}
 	}
 
-	// Check for API key auth first
 	const authorization = headers.get("authorization");
 
 	if (authorization?.startsWith("Bearer ")) {
@@ -86,7 +85,6 @@ export async function getSessionFromHeaders(
 		}
 	}
 
-	// Cookie-based session
 	const session = await auth.api.getSession({ headers });
 	if (!session?.user) return null;
 
@@ -101,12 +99,4 @@ export async function getSessionFromHeaders(
 			activeOrganizationId: session.session.activeOrganizationId,
 		},
 	};
-}
-
-export async function requireAuthFromHeaders(auth: Auth, headers: Headers): Promise<SessionResult> {
-	const session = await getSessionFromHeaders(auth, headers);
-	if (!session) {
-		throw new Error("Unauthorized");
-	}
-	return session;
 }

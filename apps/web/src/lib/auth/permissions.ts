@@ -1,5 +1,5 @@
 import "server-only";
-import { orgs } from "@proliferate/services";
+import * as orgs from "@proliferate/services/orgs";
 import { type OrgRole, type Permission, hasPermission, hasRoleOrHigher } from "./roles";
 
 export {

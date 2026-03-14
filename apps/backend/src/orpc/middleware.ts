@@ -1,10 +1,3 @@
-/**
- * oRPC middleware.
- *
- * Reusable middleware layers for auth and org resolution.
- * Uses `decorateMiddleware` so these can be passed directly to `.use()`.
- */
-
 import {
 	type Meta,
 	ORPCError,
@@ -12,13 +5,8 @@ import {
 	decorateMiddleware,
 } from "@orpc/server";
 import { type Auth, createAuth } from "@proliferate/auth-core";
-import { orgs } from "@proliferate/services";
-import { type SessionResult, getSessionFromHeaders } from "../auth/session";
-import type { AuthContext, BaseContext, OrgContext } from "./context";
-
-// ============================================
-// Lazy auth instance
-// ============================================
+import * as orgs from "@proliferate/services/orgs";
+import { getSessionFromHeaders } from "../auth/session";
 
 let authInstance: Auth | null = null;
 
@@ -29,20 +17,44 @@ function getAuth(): Auth {
 	return authInstance;
 }
 
-// ============================================
-// Session resolution helpers
-// ============================================
+type BaseContext = { request: Request };
+type SessionContext = NonNullable<Awaited<ReturnType<typeof getSessionFromHeaders>>>;
+type AuthContext = Pick<SessionContext, "user" | "session">;
+type OrgContext = AuthContext & { orgId: string };
 
-async function resolveSession(request: Request): Promise<SessionResult> {
-	const session = await getSessionFromHeaders(getAuth(), request.headers);
+export const protectedMiddleware = decorateMiddleware<
+	BaseContext,
+	AuthContext,
+	any,
+	any,
+	ORPCErrorConstructorMap<any>,
+	Meta
+>(async ({ context, next }) => {
+	const session = await getSessionFromHeaders(getAuth(), context.request.headers);
 	if (!session) {
 		throw new ORPCError("UNAUTHORIZED", { message: "Unauthorized" });
 	}
-	return session;
-}
 
-async function resolveSessionWithOrg(request: Request): Promise<SessionResult & { orgId: string }> {
-	const session = await resolveSession(request);
+	return next({
+		context: {
+			user: session.user,
+			session: session.session,
+		},
+	});
+});
+
+export const orgMiddleware = decorateMiddleware<
+	BaseContext,
+	OrgContext,
+	any,
+	any,
+	ORPCErrorConstructorMap<any>,
+	Meta
+>(async ({ context, next }) => {
+	const session = await getSessionFromHeaders(getAuth(), context.request.headers);
+	if (!session) {
+		throw new ORPCError("UNAUTHORIZED", { message: "Unauthorized" });
+	}
 
 	const orgId = session.session.activeOrganizationId;
 	if (!orgId) {
@@ -54,39 +66,11 @@ async function resolveSessionWithOrg(request: Request): Promise<SessionResult & 
 		throw new ORPCError("NOT_FOUND", { message: "Organization not found" });
 	}
 
-	return { ...session, orgId };
-}
-
-// ============================================
-// Reusable middleware
-// ============================================
-
-/**
- * Requires a valid session. Adds `user` and `session` to context.
- */
-export const protectedMiddleware = decorateMiddleware<
-	BaseContext,
-	Omit<AuthContext, "request">,
-	any,
-	any,
-	ORPCErrorConstructorMap<any>,
-	Meta
->(async ({ context, next }) => {
-	const s = await resolveSession(context.request);
-	return next({ context: { user: s.user, session: s.session } });
-});
-
-/**
- * Requires a valid session + active org membership. Adds `user`, `session`, and `orgId` to context.
- */
-export const orgMiddleware = decorateMiddleware<
-	BaseContext,
-	Omit<OrgContext, "request">,
-	any,
-	any,
-	ORPCErrorConstructorMap<any>,
-	Meta
->(async ({ context, next }) => {
-	const r = await resolveSessionWithOrg(context.request);
-	return next({ context: { user: r.user, session: r.session, orgId: r.orgId } });
+	return next({
+		context: {
+			user: session.user,
+			session: session.session,
+			orgId,
+		},
+	});
 });

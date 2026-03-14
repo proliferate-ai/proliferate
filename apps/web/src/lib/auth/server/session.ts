@@ -5,7 +5,8 @@ import { getImpersonationCookie, isSuperAdmin } from "@/lib/auth/super-admin";
 import { logger } from "@/lib/infra/logger";
 
 const log = logger.child({ module: "auth-helpers" });
-import { orgs, users } from "@proliferate/services";
+import * as orgs from "@proliferate/services/orgs";
+import * as users from "@proliferate/services/users";
 import { headers } from "next/headers";
 
 export interface SessionResult {

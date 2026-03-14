@@ -1,16 +1,5 @@
-import {
-	type InferSelectModel,
-	and,
-	asc,
-	eq,
-	getDb,
-	gt,
-	invitation,
-	member,
-	organization,
-	sessions,
-	type user,
-} from "../db/client";
+import { type InferSelectModel, and, asc, eq, getDb, gt, type user } from "@proliferate/db";
+import { invitation, member, organization, sessions } from "@proliferate/db/schema";
 
 export type OrganizationRow = InferSelectModel<typeof organization>;
 export type MemberDbRow = InferSelectModel<typeof member>;

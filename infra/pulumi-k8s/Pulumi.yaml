@@ -1,3 +1,0 @@
-name: proliferate-k8s
-runtime: nodejs
-description: Proliferate multi-cloud Kubernetes platform (AWS-first)

@@ -4,6 +4,10 @@ import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfigDir = path.dirname(fileURLToPath(import.meta.url));
 const monorepoRoot = path.resolve(nextConfigDir, "../..");
+const DEFAULT_LOCAL_BACKEND_URL = "http://localhost:3001";
+const backendProxyTarget =
+	process.env.NEXT_PUBLIC_BACKEND_URL ??
+	(process.env.NODE_ENV !== "production" ? DEFAULT_LOCAL_BACKEND_URL : null);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -15,11 +19,8 @@ const nextConfig = {
 	},
 	transpilePackages: [
 		"@proliferate/auth-core",
-		"@proliferate/shared",
-		"@proliferate/gateway-clients",
-		"@proliferate/environment",
+		"@proliferate/orpc-contract",
 		"@proliferate/services",
-		"@proliferate/queue",
 		"@proliferate/db",
 		"@proliferate/logger",
 	],
@@ -74,6 +75,22 @@ const nextConfig = {
 				source: "/dashboard/setup/:id",
 				destination: "/workspace/setup/:id",
 				permanent: true,
+			},
+		];
+	},
+	async rewrites() {
+		if (!backendProxyTarget) {
+			return [];
+		}
+
+		return [
+			{
+				source: "/api/rpc/:path*",
+				destination: `${backendProxyTarget}/api/rpc/:path*`,
+			},
+			{
+				source: "/api/rpc",
+				destination: `${backendProxyTarget}/api/rpc`,
 			},
 		];
 	},
