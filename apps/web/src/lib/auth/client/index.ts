@@ -1,18 +1,11 @@
 "use client";
 
+import { publicConfig } from "@/lib/config/public";
 import { organizationClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
-function getBaseURL() {
-	if (typeof window !== "undefined") {
-		return `${window.location.origin}/api/auth`;
-	}
-	const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-	return `${appUrl}/api/auth`;
-}
-
 export const authClient = createAuthClient({
-	baseURL: getBaseURL(),
+	baseURL: `${publicConfig.appUrl}/api/auth`,
 	plugins: [organizationClient()],
 });
 

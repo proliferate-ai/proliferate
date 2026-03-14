@@ -1,4 +1,5 @@
 import "server-only";
+import { isDevMode, serverConfig } from "@/lib/config/server";
 import { cookies } from "next/headers";
 
 export interface ImpersonationData {
@@ -10,7 +11,7 @@ const IMPERSONATION_COOKIE = "x-impersonate";
 
 export function isSuperAdmin(email: string | null | undefined): boolean {
 	if (!email) return false;
-	const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS ?? "")
+	const superAdminEmails = serverConfig.superAdminEmails
 		.split(",")
 		.map((e) => e.trim().toLowerCase())
 		.filter(Boolean);
@@ -33,10 +34,10 @@ export async function setImpersonationCookie(data: ImpersonationData): Promise<v
 	const cookieStore = await cookies();
 	cookieStore.set(IMPERSONATION_COOKIE, JSON.stringify(data), {
 		httpOnly: true,
-		secure: process.env.NODE_ENV === "production",
+		secure: !isDevMode(),
 		sameSite: "strict",
 		path: "/",
-		maxAge: 60 * 60 * 24, // 24 hours max
+		maxAge: 60 * 60 * 24,
 	});
 }
 

@@ -14,7 +14,6 @@ export function useCurrentUserRole() {
 
 	return {
 		role,
-		isOwner: role === "owner",
-		isAdmin: role === "owner" || role === "admin",
+		isAdmin: role === "admin",
 	};
 }

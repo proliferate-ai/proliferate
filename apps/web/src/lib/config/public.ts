@@ -22,7 +22,16 @@ function resolveBackendBaseUrl(): string {
 	return "";
 }
 
+function resolveAppUrl(): string {
+	if (typeof window !== "undefined") {
+		return window.location.origin;
+	}
+	return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+}
+
 export const publicConfig = {
+	/** Base URL for the web app (no trailing slash). */
+	appUrl: resolveAppUrl(),
 	/** Base URL for the oRPC backend (no trailing slash). */
 	backendBaseUrl: resolveBackendBaseUrl(),
 };

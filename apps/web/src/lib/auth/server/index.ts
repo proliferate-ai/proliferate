@@ -1,5 +1,7 @@
 import "server-only";
 
+import { runtimeConfig } from "@/lib/config/runtime";
+import { isDevMode, isLocalDb, serverConfig } from "@/lib/config/server";
 import { isEmailEnabled, sendInvitationEmail, sendVerificationEmail } from "@/lib/infra/email";
 import { logger } from "@/lib/infra/logger";
 import { createAuth } from "@proliferate/auth-core";
@@ -7,24 +9,20 @@ import { Pool } from "pg";
 
 const log = logger.child({ module: "auth" });
 
-const isDev = process.env.NODE_ENV !== "production";
+const isDev = isDevMode();
 
 // Prevent Next.js HMR from creating orphaned pools on every file save
 const globalForAuthDb = globalThis as unknown as { authPool: Pool | undefined };
 
-const isLocalDb =
-	!process.env.DATABASE_URL?.includes("amazonaws.com") &&
-	!process.env.DATABASE_URL?.includes("neon.tech");
-
 const pool =
 	globalForAuthDb.authPool ??
 	new Pool({
-		connectionString: process.env.DATABASE_URL,
+		connectionString: serverConfig.databaseUrl,
 		max: isDev ? 5 : 1,
 		idleTimeoutMillis: 10000,
 		connectionTimeoutMillis: isDev ? 60000 : 5000,
 		keepAlive: isDev,
-		ssl: isLocalDb ? false : { rejectUnauthorized: false },
+		ssl: isLocalDb() ? false : { rejectUnauthorized: false },
 	});
 
 if (isDev) {
@@ -34,7 +32,7 @@ if (isDev) {
 export const auth = createAuth({
 	pool,
 	emailAndPassword: {
-		requireEmailVerification: Boolean(process.env.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION),
+		requireEmailVerification: runtimeConfig.enforceEmailVerification,
 	},
 	emailVerification: {
 		sendVerificationEmail: async ({ user, url }) => {
