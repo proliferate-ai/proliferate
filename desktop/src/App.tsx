@@ -3,12 +3,11 @@ import { Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { AuthRequiredGate } from "@/components/auth/AuthRequiredGate"
 import { SetupGate, SetupRoute } from "@/components/setup/SetupGate"
-import { AppCloseWarningDialog } from "@/components/feedback/AppCloseWarningDialog"
 import { ToastContainer } from "@/components/feedback/Toast"
 import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { applyThemePreference, initializeTheme } from "@/config/theme"
-import { useAppCloseGuard } from "@/hooks/app/use-app-close-guard"
+import { useExportRunningAgentCount } from "@/hooks/app/use-export-running-agent-count"
 import { useAuthBootstrap } from "@/hooks/auth/use-auth-bootstrap"
 import { useAgentAutoReconcile } from "@/hooks/agents/use-agent-auto-reconcile"
 import { useGlobalShortcuts } from "@/hooks/shortcuts/use-global-shortcuts"
@@ -32,7 +31,7 @@ import { bootstrapWorkspaceUi } from "@/stores/preferences/workspace-ui-store"
 function App() {
   const bootstrapAuth = useAuthBootstrap()
   const authStatus = useAuthStore((s) => s.status)
-  const closeGuard = useAppCloseGuard()
+  useExportRunningAgentCount()
   useGlobalShortcuts()
   useTurnEndSound()
   useAgentAutoReconcile()
@@ -76,14 +75,6 @@ function App() {
 
   return (
     <>
-      <AppCloseWarningDialog
-        open={closeGuard.closeDialogOpen}
-        runningAgentCount={closeGuard.runningAgentCount}
-        isQuitting={closeGuard.isQuitting}
-        onClose={closeGuard.closeDialog}
-        onHideWindow={closeGuard.hideWindow}
-        onQuitApp={closeGuard.quitApp}
-      />
       <UpdateRestartDialog />
       <AppErrorBoundary>
         <InstrumentedRoutes>

@@ -17,6 +17,7 @@ tauri-plugin-deep-link.workspace = true
 tauri-plugin-single-instance = { workspace = true, features = ["deep-link"] }
 tauri-plugin-updater.workspace = true
 tauri-plugin-process.workspace = true
+tauri-plugin-dialog.workspace = true
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true

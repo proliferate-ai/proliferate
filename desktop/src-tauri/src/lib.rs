@@ -1,10 +1,12 @@
 mod commands;
 mod editors;
+mod quit_flow;
 mod sidecar;
 mod state;
 mod telemetry;
 
 use commands::{config, keychain, runtime, shell};
+use quit_flow::QuitFlowState;
 use tauri::Manager;
 #[cfg(target_os = "macos")]
 use tauri::{
@@ -18,11 +20,20 @@ use tauri_plugin_deep_link::DeepLinkExt;
 const CLOSE_ACTIVE_TAB_MENU_ID: &str = "workspace.close-active-tab";
 #[cfg(target_os = "macos")]
 const CLOSE_ACTIVE_TAB_EVENT: &str = "workspace://close-active-tab";
+#[cfg(target_os = "macos")]
+const APP_QUIT_MENU_ID: &str = "app.quit";
 
 #[cfg(target_os = "macos")]
 fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R>> {
     let close_tab_item = MenuItemBuilder::with_id(CLOSE_ACTIVE_TAB_MENU_ID, "Close Tab")
         .accelerator("CmdOrCtrl+W")
+        .build(app)?;
+
+    // Custom Quit item (not PredefinedMenuItem::quit()) so the accelerator
+    // routes through on_menu_event into our confirmation dialog instead of
+    // calling [NSApp terminate:] directly, which bypasses the Rust event loop.
+    let quit_item = MenuItemBuilder::with_id(APP_QUIT_MENU_ID, "Quit Proliferate")
+        .accelerator("CmdOrCtrl+Q")
         .build(app)?;
 
     let app_menu = SubmenuBuilder::new(app, app.package_info().name.clone())
@@ -34,7 +45,7 @@ fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu
         .hide_others()
         .show_all()
         .separator()
-        .quit()
+        .item(&quit_item)
         .build()?;
 
     let file_menu = SubmenuBuilder::new(app, "File")
@@ -91,11 +102,14 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(sc.clone())
+        .manage(QuitFlowState::default())
         .invoke_handler(tauri::generate_handler![
             config::get_app_config,
             runtime::get_runtime_info,
             runtime::restart_runtime,
+            quit_flow::set_running_agent_count,
             shell::pick_folder,
             shell::list_available_editors,
             shell::open_in_editor,
@@ -117,14 +131,20 @@ pub fn run() {
 
     #[cfg(target_os = "macos")]
     let builder = builder.menu(build_macos_menu).on_menu_event(|app, event| {
-        if event.id() == CLOSE_ACTIVE_TAB_MENU_ID {
+        let id = event.id();
+        if id == CLOSE_ACTIVE_TAB_MENU_ID {
             let _ = app.emit_to(
                 EventTarget::webview_window("main"),
                 CLOSE_ACTIVE_TAB_EVENT,
                 (),
             );
+        } else if id == APP_QUIT_MENU_ID {
+            quit_flow::prompt_quit_confirmation(app);
         }
     });
+
+    #[cfg(target_os = "macos")]
+    let builder = builder.on_window_event(quit_flow::handle_window_event);
 
     builder
         .setup(move |app| {
@@ -157,5 +177,8 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
-        .run(|_app_handle, _event| {});
+        .run(|_app_handle, _event| {
+            #[cfg(target_os = "macos")]
+            quit_flow::handle_run_event(_app_handle, _event);
+        });
 }

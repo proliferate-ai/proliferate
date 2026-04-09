@@ -71,6 +71,7 @@ tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-dialog = "2"
 
 # Desktop-only
 rfd = "0.15"
