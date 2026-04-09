@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "core:window:allow-hide",
+    "core:window:allow-start-dragging",
+    "deep-link:default",
+    "opener:default",
+    "shell:allow-open",
+    "store:default",
+    "os:default",
+    "updater:default",
+    "process:default"
+  ]
+}

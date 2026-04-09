@@ -1,0 +1,29 @@
+{
+  "productName": "Proliferate Dev",
+  "identifier": "com.proliferate.app.dev",
+  "app": {
+    "windows": [
+      {
+        "title": "Proliferate Dev",
+        "width": 1440,
+        "height": 900,
+        "resizable": true,
+        "fullscreen": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "transparent": true,
+        "trafficLightPosition": { "x": 13, "y": 14 }
+      }
+    ]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["proliferate-dev"]
+      }
+    },
+    "updater": {
+      "endpoints": []
+    }
+  }
+}

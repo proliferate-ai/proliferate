@@ -1,0 +1,1164 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Proliferate self-hosted control plane on a single EC2 host.
+
+Parameters:
+  ReleaseVersion:
+    Type: String
+    Description: Unprefixed release version used for the GHCR image tag; the default runtime asset is downloaded from server-v<ReleaseVersion>.
+
+  ServerImageRepository:
+    Type: String
+    Default: ghcr.io/proliferate-ai/proliferate-server
+    Description: Container image repository for the Proliferate API.
+
+  RuntimeBinaryUrl:
+    Type: String
+    Default: ""
+    Description: Optional override for the runtime binary tarball URL. Leave blank to use the server release asset.
+
+  RuntimeBinaryChecksumUrl:
+    Type: String
+    Default: ""
+    Description: Optional override for a SHA256SUMS file used to verify the runtime tarball. Leave blank to use the matching server release asset checksum file when RuntimeBinaryUrl is also blank.
+
+  SiteAddress:
+    Type: String
+    Default: ""
+    Description: Public hostname for the control plane. Required unless UseSslipFallback is true.
+
+  UseSslipFallback:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Use an sslip.io hostname derived from the Elastic IP instead of a custom domain.
+
+  CreateRoute53Record:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Create a Route53 A record for SiteAddress.
+
+  HostedZoneId:
+    Type: String
+    Default: ""
+    Description: Route53 hosted zone id for SiteAddress when CreateRoute53Record is true.
+
+  ExistingVpcId:
+    Type: String
+    Default: ""
+    Description: Optional existing VPC id to reuse instead of creating a dedicated VPC.
+
+  ExistingSubnetId:
+    Type: String
+    Default: ""
+    Description: Optional existing public subnet id to reuse instead of creating a dedicated subnet.
+
+  AllocateElasticIp:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Allocate and attach a dedicated Elastic IP. Set false to rely on the instance public IP.
+
+  InstanceType:
+    Type: String
+    Default: t4g.small
+    AllowedValues:
+      - t4g.small
+      - t4g.medium
+      - t4g.large
+    Description: EC2 instance type for the self-hosted control plane.
+
+  PostgresPassword:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Optional password for the bundled Postgres container. Leave blank to auto-generate and persist one on first bootstrap.
+
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Optional JWT signing secret for the control plane. Leave blank to auto-generate and persist one on first bootstrap.
+
+  CloudSecretKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Optional secret key used for cloud auth/session signing. Leave blank to auto-generate and persist one on first bootstrap.
+
+  GitHubOAuthClientId:
+    Type: String
+    Default: ""
+    Description: GitHub OAuth client id for desktop sign-in.
+
+  GitHubOAuthClientSecret:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: GitHub OAuth client secret for desktop sign-in.
+
+  SandboxProvider:
+    Type: String
+    Default: e2b
+    AllowedValues: [e2b, daytona]
+    Description: Cloud sandbox provider used for remote workspaces.
+
+  E2BApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: E2B API key when SandboxProvider is e2b.
+
+  E2BTemplateName:
+    Type: String
+    Default: ""
+    Description: E2B template ref when SandboxProvider is e2b, for example team-slug/proliferate-runtime-cloud:production.
+
+  DaytonaApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Daytona API key when SandboxProvider is daytona.
+
+  DaytonaServerUrl:
+    Type: String
+    Default: https://app.daytona.io/api
+    Description: Daytona API base URL when SandboxProvider is daytona.
+
+  DaytonaTarget:
+    Type: String
+    Default: us
+    Description: Daytona target/region when SandboxProvider is daytona.
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
+    Description: Amazon Linux 2023 arm64 AMI id.
+
+Rules:
+  SiteAddressRequiredWithoutSslip:
+    RuleCondition: !Equals [!Ref UseSslipFallback, "false"]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref SiteAddress, ""]]
+        AssertDescription: SiteAddress is required unless UseSslipFallback is true.
+
+  HostedZoneRequiredWhenRoute53Enabled:
+    RuleCondition: !Equals [!Ref CreateRoute53Record, "true"]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref HostedZoneId, ""]]
+        AssertDescription: HostedZoneId is required when CreateRoute53Record is true.
+      - Assert: !Equals [!Ref UseSslipFallback, "false"]
+        AssertDescription: CreateRoute53Record cannot be used with UseSslipFallback.
+
+  ExistingVpcRequiresSubnet:
+    RuleCondition: !Not [!Equals [!Ref ExistingVpcId, ""]]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref ExistingSubnetId, ""]]
+        AssertDescription: ExistingSubnetId is required when ExistingVpcId is provided.
+
+  ExistingSubnetRequiresVpc:
+    RuleCondition: !Not [!Equals [!Ref ExistingSubnetId, ""]]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref ExistingVpcId, ""]]
+        AssertDescription: ExistingVpcId is required when ExistingSubnetId is provided.
+
+  E2BTemplateRequiredWhenProviderIsE2B:
+    RuleCondition: !Equals [!Ref SandboxProvider, "e2b"]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref E2BApiKey, ""]]
+        AssertDescription: E2BApiKey is required when SandboxProvider is e2b.
+      - Assert: !Not [!Equals [!Ref E2BTemplateName, ""]]
+        AssertDescription: E2BTemplateName is required when SandboxProvider is e2b.
+
+Conditions:
+  UsesSslipFallback: !Equals [!Ref UseSslipFallback, "true"]
+  HasExistingVpcId: !Not [!Equals [!Ref ExistingVpcId, ""]]
+  HasExistingSubnetId: !Not [!Equals [!Ref ExistingSubnetId, ""]]
+  UsesExistingNetwork: !And
+    - !Condition HasExistingVpcId
+    - !Condition HasExistingSubnetId
+  CreatesVpcResources: !Not [!Condition UsesExistingNetwork]
+  UsesElasticIp: !Equals [!Ref AllocateElasticIp, "true"]
+  CreatesRoute53Record: !And
+    - !Equals [!Ref CreateRoute53Record, "true"]
+    - !Not [!Equals [!Ref HostedZoneId, ""]]
+    - !Not [!Condition UsesSslipFallback]
+  HasRuntimeBinaryUrlOverride: !Not [!Equals [!Ref RuntimeBinaryUrl, ""]]
+  HasRuntimeBinaryChecksumUrlOverride: !Not [!Equals [!Ref RuntimeBinaryChecksumUrl, ""]]
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Condition: CreatesVpcResources
+    Properties:
+      CidrBlock: 10.42.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: CreatesVpcResources
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-igw
+
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: CreatesVpcResources
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Condition: CreatesVpcResources
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.42.0.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-public
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: CreatesVpcResources
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-public
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Condition: CreatesVpcResources
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreatesVpcResources
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet
+
+  ProliferateSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public ingress for the Proliferate control plane.
+      VpcId: !If
+        - UsesExistingNetwork
+        - !Ref ExistingVpcId
+        - !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-sg
+
+  ProliferateEip:
+    Type: AWS::EC2::EIP
+    Condition: UsesElasticIp
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-eip
+
+  ProliferateEipAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Condition: UsesElasticIp
+    Properties:
+      AllocationId: !GetAtt ProliferateEip.AllocationId
+      InstanceId: !Ref ProliferateInstance
+
+  ProliferateIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+      Policies:
+        - PolicyName: CloudFormationBootstrapAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStackResource
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStacks
+                  - cloudformation:SignalResource
+                Resource: "*"
+
+  ProliferateInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref ProliferateIamRole]
+
+  ProliferateInstance:
+    Type: AWS::EC2::Instance
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT20M
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          bootstrap:
+            - install
+            - write_files
+            - deploy
+          update:
+            - write_files
+            - deploy-update
+
+        install:
+          commands:
+            01-install-base:
+              command: |
+                dnf install -y docker awscli aws-cfn-bootstrap tar openssl
+            02-install-compose-plugin:
+              command: |
+                if ! docker compose version >/dev/null 2>&1; then
+                  dnf install -y docker-compose-plugin || true
+                fi
+                if ! docker compose version >/dev/null 2>&1; then
+                  arch="$(uname -m)"
+                  case "$arch" in
+                    aarch64|arm64)
+                      compose_arch="aarch64"
+                      ;;
+                    x86_64|amd64)
+                      compose_arch="x86_64"
+                      ;;
+                    *)
+                      echo "Unsupported architecture for Docker Compose plugin: $arch" >&2
+                      exit 1
+                      ;;
+                  esac
+                  mkdir -p /usr/local/lib/docker/cli-plugins
+                  curl -fsSL "https://github.com/docker/compose/releases/download/v2.39.4/docker-compose-linux-${compose_arch}" \
+                    -o /usr/local/lib/docker/cli-plugins/docker-compose
+                  chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+                fi
+                docker compose version
+            03-enable-docker:
+              command: systemctl enable --now docker
+            04-create-directories:
+              command: mkdir -p /opt/proliferate/server/deploy /opt/proliferate/bin /etc/cfn/hooks.d
+
+        write_files:
+          files:
+            /opt/proliferate/server/deploy/docker-compose.production.yml:
+              mode: "000644"
+              owner: root
+              group: root
+              content: |
+                services:
+                  caddy:
+                    image: caddy:2
+                    restart: unless-stopped
+                    ports:
+                      - "80:80"
+                      - "443:443"
+                    environment:
+                      SITE_ADDRESS: ${SITE_ADDRESS}
+                    volumes:
+                      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+                      - caddy_data:/data
+                      - caddy_config:/config
+                    depends_on:
+                      api:
+                        condition: service_started
+
+                  db:
+                    image: postgres:16-alpine
+                    restart: unless-stopped
+                    environment:
+                      POSTGRES_DB: ${POSTGRES_DB}
+                      POSTGRES_USER: ${POSTGRES_USER}
+                      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+                    volumes:
+                      - pgdata:/var/lib/postgresql/data
+                    healthcheck:
+                      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+                      interval: 5s
+                      timeout: 3s
+                      retries: 10
+
+                  migrate:
+                    image: ${PROLIFERATE_SERVER_IMAGE:-ghcr.io/proliferate-ai/proliferate-server}:${PROLIFERATE_SERVER_IMAGE_TAG:-stable}
+                    restart: "no"
+                    env_file:
+                      - ${PROLIFERATE_ENV_FILE:-.env}
+                    depends_on:
+                      db:
+                        condition: service_healthy
+                    command: ["alembic", "upgrade", "head"]
+
+                  api:
+                    image: ${PROLIFERATE_SERVER_IMAGE:-ghcr.io/proliferate-ai/proliferate-server}:${PROLIFERATE_SERVER_IMAGE_TAG:-stable}
+                    restart: unless-stopped
+                    env_file:
+                      - ${PROLIFERATE_ENV_FILE:-.env}
+                    ports:
+                      - "127.0.0.1:8000:8000"
+                    volumes:
+                      - ${PROLIFERATE_HOST_BIN_DIR:-/opt/proliferate/bin}:/opt/proliferate/bin:ro
+                    depends_on:
+                      db:
+                        condition: service_healthy
+                    command:
+                      [
+                        "uvicorn",
+                        "proliferate.main:app",
+                        "--host",
+                        "0.0.0.0",
+                        "--port",
+                        "8000",
+                        "--proxy-headers",
+                        "--forwarded-allow-ips",
+                        "*",
+                      ]
+
+                volumes:
+                  pgdata:
+                  caddy_data:
+                  caddy_config:
+
+            /opt/proliferate/server/deploy/Caddyfile:
+              mode: "000644"
+              owner: root
+              group: root
+              content: |
+                {$SITE_ADDRESS} {
+                  encode zstd gzip
+                  reverse_proxy api:8000
+                }
+
+            /opt/proliferate/server/deploy/bootstrap.sh:
+              mode: "000755"
+              owner: root
+              group: root
+              content: |
+                #!/usr/bin/env bash
+
+                set -euo pipefail
+
+                SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+                STATIC_ENV_FILE="$SCRIPT_DIR/.env.static"
+                LEGACY_ENV_FILE="$SCRIPT_DIR/.env"
+                RUNTIME_ENV_FILE="$SCRIPT_DIR/.env.runtime"
+                EXAMPLE_ENV_FILE="$SCRIPT_DIR/.env.production.example"
+
+                if [[ -f "$STATIC_ENV_FILE" ]]; then
+                  ENV_FILE="$STATIC_ENV_FILE"
+                else
+                  ENV_FILE="$LEGACY_ENV_FILE"
+                fi
+
+                if ! command -v docker >/dev/null 2>&1; then
+                  echo "Docker is required." >&2
+                  exit 1
+                fi
+
+                if ! docker compose version >/dev/null 2>&1; then
+                  echo "Docker Compose v2 is required." >&2
+                  exit 1
+                fi
+
+                if [[ ! -f "$ENV_FILE" ]]; then
+                  cp "$EXAMPLE_ENV_FILE" "$STATIC_ENV_FILE"
+                  echo "Created $STATIC_ENV_FILE from $EXAMPLE_ENV_FILE."
+                  echo "Edit it, point DNS at your host, then rerun this script."
+                  exit 0
+                fi
+
+                export PROLIFERATE_STATIC_ENV_FILE="$ENV_FILE"
+                export PROLIFERATE_ENV_FILE="$RUNTIME_ENV_FILE"
+
+                "$SCRIPT_DIR/ensure-secrets.sh"
+                "$SCRIPT_DIR/registry-login.sh"
+                "$SCRIPT_DIR/install-runtime.sh"
+
+                docker compose --env-file "$RUNTIME_ENV_FILE" -f "$SCRIPT_DIR/docker-compose.production.yml" up -d db
+                docker compose --env-file "$RUNTIME_ENV_FILE" -f "$SCRIPT_DIR/docker-compose.production.yml" run --rm migrate
+                docker compose --env-file "$RUNTIME_ENV_FILE" -f "$SCRIPT_DIR/docker-compose.production.yml" up -d api caddy
+
+                "$SCRIPT_DIR/wait-for-health.sh"
+
+            /opt/proliferate/server/deploy/update.sh:
+              mode: "000755"
+              owner: root
+              group: root
+              content: |
+                #!/usr/bin/env bash
+
+                set -euo pipefail
+
+                SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+                COMPOSE_FILE="$SCRIPT_DIR/docker-compose.production.yml"
+                STATIC_ENV_FILE="$SCRIPT_DIR/.env.static"
+                LEGACY_ENV_FILE="$SCRIPT_DIR/.env"
+                RUNTIME_ENV_FILE="$SCRIPT_DIR/.env.runtime"
+
+                if [[ -f "$STATIC_ENV_FILE" ]]; then
+                  ENV_FILE="$STATIC_ENV_FILE"
+                else
+                  ENV_FILE="$LEGACY_ENV_FILE"
+                fi
+
+                if [[ ! -f "$ENV_FILE" ]]; then
+                  echo "Missing $ENV_FILE. Copy .env.production.example to .env.static and set your values first." >&2
+                  exit 1
+                fi
+
+                export PROLIFERATE_STATIC_ENV_FILE="$ENV_FILE"
+                export PROLIFERATE_ENV_FILE="$RUNTIME_ENV_FILE"
+
+                "$SCRIPT_DIR/ensure-secrets.sh"
+                "$SCRIPT_DIR/registry-login.sh"
+                "$SCRIPT_DIR/install-runtime.sh"
+
+                docker compose --env-file "$RUNTIME_ENV_FILE" -f "$COMPOSE_FILE" pull
+                docker compose --env-file "$RUNTIME_ENV_FILE" -f "$COMPOSE_FILE" run --rm migrate
+                docker compose --env-file "$RUNTIME_ENV_FILE" -f "$COMPOSE_FILE" up -d
+
+                "$SCRIPT_DIR/wait-for-health.sh"
+
+            /opt/proliferate/server/deploy/ensure-secrets.sh:
+              mode: "000755"
+              owner: root
+              group: root
+              content: |
+                #!/usr/bin/env bash
+
+                set -euo pipefail
+
+                SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+                STATIC_ENV_FILE="${PROLIFERATE_STATIC_ENV_FILE:-$SCRIPT_DIR/.env.static}"
+                LEGACY_ENV_FILE="$SCRIPT_DIR/.env"
+                GENERATED_ENV_FILE="$SCRIPT_DIR/.env.generated"
+                RUNTIME_ENV_FILE="${PROLIFERATE_ENV_FILE:-$SCRIPT_DIR/.env.runtime}"
+
+                if [[ ! -f "$STATIC_ENV_FILE" && -f "$LEGACY_ENV_FILE" ]]; then
+                  STATIC_ENV_FILE="$LEGACY_ENV_FILE"
+                fi
+
+                if [[ ! -f "$STATIC_ENV_FILE" ]]; then
+                  echo "Missing static env file. Create $SCRIPT_DIR/.env.static (or legacy $LEGACY_ENV_FILE) first." >&2
+                  exit 1
+                fi
+
+                read_env_value() {
+                  local file="$1"
+                  local key="$2"
+                  local line
+
+                  if [[ ! -f "$file" ]]; then
+                    return 0
+                  fi
+
+                  line="$(grep -m1 "^${key}=" "$file" || true)"
+                  if [[ -z "$line" ]]; then
+                    return 0
+                  fi
+
+                  printf '%s' "${line#*=}"
+                }
+
+                resolve_instance_public_ip() {
+                  local token=""
+                  local ip=""
+                  local attempt
+
+                  for attempt in $(seq 1 30); do
+                    token="$(curl -fsS --connect-timeout 1 --max-time 2 -X PUT \
+                      "http://169.254.169.254/latest/api/token" \
+                      -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" || true)"
+
+                    if [[ -n "$token" ]]; then
+                      ip="$(curl -fsS --connect-timeout 1 --max-time 2 \
+                        -H "X-aws-ec2-metadata-token: $token" \
+                        "http://169.254.169.254/latest/meta-data/public-ipv4" || true)"
+                    else
+                      ip="$(curl -fsS --connect-timeout 1 --max-time 2 \
+                        "http://169.254.169.254/latest/meta-data/public-ipv4" || true)"
+                    fi
+
+                    if [[ -n "$ip" ]]; then
+                      printf '%s' "$ip"
+                      return 0
+                    fi
+
+                    sleep 2
+                  done
+
+                  echo "Unable to resolve the instance public IPv4 for sslip fallback." >&2
+                  exit 1
+                }
+
+                random_hex() {
+                  local bytes="$1"
+
+                  if command -v openssl >/dev/null 2>&1; then
+                    openssl rand -hex "$bytes"
+                    return 0
+                  fi
+
+                  python3 - "$bytes" <<'PY'
+                import secrets
+                import sys
+
+                print(secrets.token_hex(int(sys.argv[1])))
+                PY
+                }
+
+                resolve_value() {
+                  local key="$1"
+                  local generated_value="$2"
+                  local static_value="$3"
+                  local random_bytes="$4"
+
+                  if [[ -n "$generated_value" ]]; then
+                    printf '%s' "$generated_value"
+                    return 0
+                  fi
+
+                  if [[ -n "$static_value" ]]; then
+                    printf '%s' "$static_value"
+                    return 0
+                  fi
+
+                  random_hex "$random_bytes"
+                }
+
+                POSTGRES_DB="$(read_env_value "$STATIC_ENV_FILE" POSTGRES_DB)"
+                POSTGRES_USER="$(read_env_value "$STATIC_ENV_FILE" POSTGRES_USER)"
+                POSTGRES_DB="${POSTGRES_DB:-proliferate}"
+                POSTGRES_USER="${POSTGRES_USER:-proliferate}"
+                SITE_ADDRESS="$(read_env_value "$STATIC_ENV_FILE" SITE_ADDRESS)"
+                PUBLIC_HEALTHCHECK_URL="$(read_env_value "$STATIC_ENV_FILE" PROLIFERATE_PUBLIC_HEALTHCHECK_URL)"
+                USE_SSLIP_FALLBACK="$(read_env_value "$STATIC_ENV_FILE" PROLIFERATE_USE_SSLIP_FALLBACK)"
+
+                if [[ -z "$SITE_ADDRESS" && "$USE_SSLIP_FALLBACK" == "true" ]]; then
+                  SITE_ADDRESS="$(resolve_instance_public_ip).sslip.io"
+                fi
+
+                if [[ -z "$SITE_ADDRESS" ]]; then
+                  echo "SITE_ADDRESS must be set unless PROLIFERATE_USE_SSLIP_FALLBACK=true." >&2
+                  exit 1
+                fi
+
+                if [[ -z "$PUBLIC_HEALTHCHECK_URL" ]]; then
+                  PUBLIC_HEALTHCHECK_URL="https://${SITE_ADDRESS}/health"
+                fi
+
+                POSTGRES_PASSWORD="$(resolve_value \
+                  POSTGRES_PASSWORD \
+                  "$(read_env_value "$GENERATED_ENV_FILE" POSTGRES_PASSWORD)" \
+                  "$(read_env_value "$STATIC_ENV_FILE" POSTGRES_PASSWORD)" \
+                  24)"
+                JWT_SECRET="$(resolve_value \
+                  JWT_SECRET \
+                  "$(read_env_value "$GENERATED_ENV_FILE" JWT_SECRET)" \
+                  "$(read_env_value "$STATIC_ENV_FILE" JWT_SECRET)" \
+                  32)"
+                CLOUD_SECRET_KEY="$(resolve_value \
+                  CLOUD_SECRET_KEY \
+                  "$(read_env_value "$GENERATED_ENV_FILE" CLOUD_SECRET_KEY)" \
+                  "$(read_env_value "$STATIC_ENV_FILE" CLOUD_SECRET_KEY)" \
+                  32)"
+
+                cat >"$GENERATED_ENV_FILE" <<EOF
+                # Generated on first bootstrap. Preserve this file to keep stack-managed secrets stable.
+                POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+                JWT_SECRET=$JWT_SECRET
+                CLOUD_SECRET_KEY=$CLOUD_SECRET_KEY
+                EOF
+
+                {
+                  printf '# Generated runtime env. Do not edit directly.\n'
+                  grep -Ev '^(POSTGRES_PASSWORD|DATABASE_URL|JWT_SECRET|CLOUD_SECRET_KEY|SITE_ADDRESS|PROLIFERATE_PUBLIC_HEALTHCHECK_URL|PROLIFERATE_USE_SSLIP_FALLBACK)=' "$STATIC_ENV_FILE" || true
+                  printf 'SITE_ADDRESS=%s\n' "$SITE_ADDRESS"
+                  printf 'PROLIFERATE_PUBLIC_HEALTHCHECK_URL=%s\n' "$PUBLIC_HEALTHCHECK_URL"
+                  printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+                  printf 'DATABASE_URL=postgresql+asyncpg://%s:%s@db:5432/%s\n' "$POSTGRES_USER" "$POSTGRES_PASSWORD" "$POSTGRES_DB"
+                  printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
+                  printf 'CLOUD_SECRET_KEY=%s\n' "$CLOUD_SECRET_KEY"
+                } >"$RUNTIME_ENV_FILE"
+
+                chmod 600 "$GENERATED_ENV_FILE" "$RUNTIME_ENV_FILE"
+
+            /opt/proliferate/server/deploy/install-runtime.sh:
+              mode: "000755"
+              owner: root
+              group: root
+              content: |
+                #!/usr/bin/env bash
+
+                set -euo pipefail
+
+                SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+                ENV_FILE="${PROLIFERATE_ENV_FILE:-$SCRIPT_DIR/.env}"
+
+                if [[ ! -f "$ENV_FILE" ]]; then
+                  echo "Missing $ENV_FILE. Generate the runtime env via bootstrap/update first." >&2
+                  exit 1
+                fi
+
+                read_env_value() {
+                  local key="$1"
+                  local line
+
+                  line="$(grep -m1 "^${key}=" "$ENV_FILE" || true)"
+                  if [[ -z "$line" ]]; then
+                    return 0
+                  fi
+
+                  printf '%s' "${line#*=}"
+                }
+
+                TARGET_PATH="$(read_env_value CLOUD_RUNTIME_SOURCE_BINARY_PATH)"
+                RUNTIME_URL="$(read_env_value RUNTIME_BINARY_URL)"
+                RUNTIME_SHA256="$(read_env_value RUNTIME_BINARY_SHA256)"
+                RUNTIME_SHA256_URL="$(read_env_value RUNTIME_BINARY_SHA256_URL)"
+
+                if [[ -z "$TARGET_PATH" ]]; then
+                  exit 0
+                fi
+
+                if [[ -x "$TARGET_PATH" && -z "$RUNTIME_URL" ]]; then
+                  exit 0
+                fi
+
+                if [[ -z "$RUNTIME_URL" ]]; then
+                  echo "Missing runtime binary at $TARGET_PATH and RUNTIME_BINARY_URL is not set." >&2
+                  exit 1
+                fi
+
+                TARGET_DIR="$(dirname "$TARGET_PATH")"
+                mkdir -p "$TARGET_DIR"
+
+                temp_dir="$(mktemp -d)"
+                trap 'rm -rf "$temp_dir"' EXIT
+
+                archive_path="$temp_dir/runtime.tar.gz"
+                curl -fsSL "$RUNTIME_URL" -o "$archive_path"
+
+                if [[ -z "$RUNTIME_SHA256" && -n "$RUNTIME_SHA256_URL" ]]; then
+                  checksum_path="$temp_dir/SHA256SUMS"
+                  runtime_filename="$(basename "$RUNTIME_URL")"
+                  curl -fsSL "$RUNTIME_SHA256_URL" -o "$checksum_path"
+                  RUNTIME_SHA256="$(
+                    awk -v filename="$runtime_filename" '$2 == filename { print $1; exit }' "$checksum_path"
+                  )"
+
+                  if [[ -z "$RUNTIME_SHA256" ]]; then
+                    echo "Checksum file $RUNTIME_SHA256_URL did not contain an entry for $runtime_filename." >&2
+                    exit 1
+                  fi
+                fi
+
+                if [[ -n "$RUNTIME_SHA256" ]]; then
+                  actual_sha256="$(sha256sum "$archive_path" | awk '{print $1}')"
+                  if [[ "$actual_sha256" != "$RUNTIME_SHA256" ]]; then
+                    echo "Runtime archive checksum mismatch for $RUNTIME_URL." >&2
+                    exit 1
+                  fi
+                fi
+
+                tar xzf "$archive_path" -C "$temp_dir"
+
+                if [[ ! -f "$temp_dir/anyharness" ]]; then
+                  echo "Downloaded runtime archive did not contain an anyharness binary." >&2
+                  exit 1
+                fi
+
+                install -m 0755 "$temp_dir/anyharness" "$TARGET_PATH"
+
+            /opt/proliferate/server/deploy/registry-login.sh:
+              mode: "000755"
+              owner: root
+              group: root
+              content: |
+                #!/usr/bin/env bash
+
+                set -euo pipefail
+
+                SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+                ENV_FILE="${PROLIFERATE_ENV_FILE:-$SCRIPT_DIR/.env}"
+
+                if [[ ! -f "$ENV_FILE" ]]; then
+                  echo "Missing $ENV_FILE. Generate the runtime env via bootstrap/update first." >&2
+                  exit 1
+                fi
+
+                read_env_value() {
+                  local key="$1"
+                  local line
+
+                  line="$(grep -m1 "^${key}=" "$ENV_FILE" || true)"
+                  if [[ -z "$line" ]]; then
+                    return 0
+                  fi
+
+                  printf '%s' "${line#*=}"
+                }
+
+                IMAGE_REPOSITORY="$(read_env_value PROLIFERATE_SERVER_IMAGE)"
+                if [[ -z "$IMAGE_REPOSITORY" ]]; then
+                  IMAGE_REPOSITORY="ghcr.io/proliferate-ai/proliferate-server"
+                fi
+                REGISTRY_HOST="${IMAGE_REPOSITORY%%/*}"
+
+                if [[ ! "$REGISTRY_HOST" =~ \.dkr\.ecr\.[^.]+\.amazonaws\.com$ ]]; then
+                  exit 0
+                fi
+
+                if ! command -v aws >/dev/null 2>&1; then
+                  echo "aws CLI is required to authenticate to private ECR registries." >&2
+                  exit 1
+                fi
+
+                AWS_REGION_VALUE="$(read_env_value AWS_REGION)"
+                if [[ -z "$AWS_REGION_VALUE" ]]; then
+                  echo "AWS_REGION must be set when pulling Proliferate images from private ECR." >&2
+                  exit 1
+                fi
+
+                aws ecr get-login-password --region "$AWS_REGION_VALUE" \
+                  | docker login --username AWS --password-stdin "$REGISTRY_HOST"
+
+            /opt/proliferate/server/deploy/wait-for-health.sh:
+              mode: "000755"
+              owner: root
+              group: root
+              content: |
+                #!/usr/bin/env bash
+
+                set -euo pipefail
+
+                SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+                RUNTIME_ENV_FILE="${PROLIFERATE_ENV_FILE:-$SCRIPT_DIR/.env.runtime}"
+                HEALTHCHECK_URL="${PROLIFERATE_HEALTHCHECK_URL:-http://127.0.0.1:8000/health}"
+                PUBLIC_HEALTHCHECK_URL="${PROLIFERATE_PUBLIC_HEALTHCHECK_URL:-}"
+                MAX_ATTEMPTS="${PROLIFERATE_HEALTHCHECK_ATTEMPTS:-60}"
+                SLEEP_SECONDS="${PROLIFERATE_HEALTHCHECK_SLEEP_SECONDS:-2}"
+
+                read_env_value() {
+                  local file="$1"
+                  local key="$2"
+                  local line
+
+                  if [[ ! -f "$file" ]]; then
+                    return 0
+                  fi
+
+                  line="$(grep -m1 "^${key}=" "$file" || true)"
+                  if [[ -z "$line" ]]; then
+                    return 0
+                  fi
+
+                  printf '%s' "${line#*=}"
+                }
+
+                wait_for_url() {
+                  local url="$1"
+                  local attempt=1
+
+                  until curl -fsS "$url" >/dev/null; do
+                    if (( attempt >= MAX_ATTEMPTS )); then
+                      echo "Health check failed for $url after $MAX_ATTEMPTS attempts." >&2
+                      exit 1
+                    fi
+
+                    attempt=$((attempt + 1))
+                    sleep "$SLEEP_SECONDS"
+                  done
+                }
+
+                if [[ -z "$PUBLIC_HEALTHCHECK_URL" ]]; then
+                  PUBLIC_HEALTHCHECK_URL="$(read_env_value "$RUNTIME_ENV_FILE" PROLIFERATE_PUBLIC_HEALTHCHECK_URL)"
+                fi
+
+                wait_for_url "$HEALTHCHECK_URL"
+
+                if [[ -n "$PUBLIC_HEALTHCHECK_URL" ]]; then
+                  wait_for_url "$PUBLIC_HEALTHCHECK_URL"
+                fi
+
+            /opt/proliferate/server/deploy/.env.production.example:
+              mode: "000644"
+              owner: root
+              group: root
+              content: |
+                SITE_ADDRESS=api.company.com
+                PROLIFERATE_PUBLIC_HEALTHCHECK_URL=
+                PROLIFERATE_SERVER_IMAGE=ghcr.io/proliferate-ai/proliferate-server
+                PROLIFERATE_SERVER_IMAGE_TAG=stable
+                PROLIFERATE_HOST_BIN_DIR=/opt/proliferate/bin
+                AWS_REGION=
+                POSTGRES_DB=proliferate
+                POSTGRES_USER=proliferate
+                # Leave blank to auto-generate and persist on first bootstrap.
+                POSTGRES_PASSWORD=
+                # Leave blank to auto-generate and persist on first bootstrap.
+                JWT_SECRET=
+                CLOUD_SECRET_KEY=
+                CORS_ALLOW_ORIGINS=http://localhost:1420,http://127.0.0.1:1420,http://localhost:3000,http://127.0.0.1:3000,http://tauri.localhost,tauri://localhost
+                # For advanced auth-flow overrides such as DESKTOP_GITHUB_AUTH_ENABLED,
+                # DESKTOP_REDIRECT_SCHEME, or token lifetimes, see
+                # docs/reference/env-secrets-matrix.md.
+                GITHUB_OAUTH_CLIENT_ID=
+                GITHUB_OAUTH_CLIENT_SECRET=
+                SANDBOX_PROVIDER=e2b
+                E2B_API_KEY=
+                # Use the published cloud runtime template for hosted E2B workspaces.
+                E2B_TEMPLATE_NAME=TEAM_SLUG/proliferate-runtime-cloud:production
+                DAYTONA_API_KEY=
+                DAYTONA_SERVER_URL=https://app.daytona.io/api
+                DAYTONA_TARGET=us
+                SUPPORT_SLACK_WEBHOOK_URL=
+                STRIPE_SECRET_KEY=
+                STRIPE_WEBHOOK_SECRET=
+                STRIPE_STARTER_MONTHLY_PRICE_ID=
+                STRIPE_PRO_MONTHLY_PRICE_ID=
+                STRIPE_CHECKOUT_SUCCESS_URL=
+                STRIPE_CHECKOUT_CANCEL_URL=
+                STRIPE_CUSTOMER_PORTAL_RETURN_URL=
+                POSTHOG_PROJECT_API_KEY=
+                POSTHOG_HOST=https://us.i.posthog.com
+                SENTRY_DSN=
+                SENTRY_ENVIRONMENT=self-hosted
+                SENTRY_RELEASE=proliferate-server@self-hosted
+                SENTRY_TRACES_SAMPLE_RATE=1.0
+                CUSTOMERIO_SITE_ID=
+                CUSTOMERIO_API_KEY=
+                ANTHROPIC_API_KEY=
+                AI_MAGIC_SESSION_TITLE_MODEL=claude-haiku-4-5-20251001
+                CLOUD_RUNTIME_SOURCE_BINARY_PATH=
+                RUNTIME_BINARY_URL=
+                RUNTIME_BINARY_SHA256=
+                RUNTIME_BINARY_SHA256_URL=
+                CLOUD_RUNTIME_SENTRY_DSN=
+                CLOUD_RUNTIME_SENTRY_ENVIRONMENT=
+                CLOUD_RUNTIME_SENTRY_RELEASE=
+                CLOUD_RUNTIME_SENTRY_TRACES_SAMPLE_RATE=1.0
+
+            /opt/proliferate/server/deploy/.env.static:
+              mode: "000600"
+              owner: root
+              group: root
+              content: !Sub
+                - |
+                  SITE_ADDRESS=${ResolvedStaticSiteAddress}
+                  PROLIFERATE_PUBLIC_HEALTHCHECK_URL=
+                  PROLIFERATE_USE_SSLIP_FALLBACK=${UseSslipFallback}
+                  PROLIFERATE_SERVER_IMAGE=${ServerImageRepository}
+                  PROLIFERATE_SERVER_IMAGE_TAG=${ReleaseVersion}
+                  PROLIFERATE_HOST_BIN_DIR=/opt/proliferate/bin
+                  AWS_REGION=${AWS::Region}
+                  POSTGRES_DB=proliferate
+                  POSTGRES_USER=proliferate
+                  POSTGRES_PASSWORD=${PostgresPassword}
+                  JWT_SECRET=${JwtSecret}
+                  CLOUD_SECRET_KEY=${CloudSecretKey}
+                  CORS_ALLOW_ORIGINS=http://localhost:1420,http://127.0.0.1:1420,http://localhost:3000,http://127.0.0.1:3000,http://tauri.localhost,tauri://localhost
+                  GITHUB_OAUTH_CLIENT_ID=${GitHubOAuthClientId}
+                  GITHUB_OAUTH_CLIENT_SECRET=${GitHubOAuthClientSecret}
+                  SANDBOX_PROVIDER=${SandboxProvider}
+                  E2B_API_KEY=${E2BApiKey}
+                  E2B_TEMPLATE_NAME=${E2BTemplateName}
+                  DAYTONA_API_KEY=${DaytonaApiKey}
+                  DAYTONA_SERVER_URL=${DaytonaServerUrl}
+                  DAYTONA_TARGET=${DaytonaTarget}
+                  CLOUD_RUNTIME_SOURCE_BINARY_PATH=/opt/proliferate/bin/anyharness-linux
+                  RUNTIME_BINARY_URL=${ResolvedRuntimeBinaryUrl}
+                  RUNTIME_BINARY_SHA256_URL=${ResolvedRuntimeBinaryChecksumUrl}
+                - ResolvedStaticSiteAddress: !If
+                    - UsesSslipFallback
+                    - !If
+                        - UsesElasticIp
+                        - !Join ["", [!Ref ProliferateEip, ".sslip.io"]]
+                        - ""
+                    - !Ref SiteAddress
+                  ResolvedRuntimeBinaryUrl: !If
+                    - HasRuntimeBinaryUrlOverride
+                    - !Ref RuntimeBinaryUrl
+                    - !Sub https://github.com/proliferate-ai/proliferate/releases/download/server-v${ReleaseVersion}/anyharness-x86_64-unknown-linux-musl.tar.gz
+                  ResolvedRuntimeBinaryChecksumUrl: !If
+                    - HasRuntimeBinaryChecksumUrlOverride
+                    - !Ref RuntimeBinaryChecksumUrl
+                    - !If
+                      - HasRuntimeBinaryUrlOverride
+                      - ""
+                      - !Sub https://github.com/proliferate-ai/proliferate/releases/download/server-v${ReleaseVersion}/self-hosted-assets.SHA256SUMS
+
+            /etc/cfn/cfn-hup.conf:
+              mode: "000400"
+              owner: root
+              group: root
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=5
+                verbose=true
+
+            /etc/cfn/hooks.d/proliferate-auto-update.conf:
+              mode: "000400"
+              owner: root
+              group: root
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.ProliferateInstance.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region} --configsets update
+                runas=root
+
+            /etc/systemd/system/cfn-hup.service:
+              mode: "000644"
+              owner: root
+              group: root
+              content: |
+                [Unit]
+                Description=cfn-hup daemon
+                After=network-online.target
+                Wants=network-online.target
+
+                [Service]
+                Type=simple
+                ExecStart=/opt/aws/bin/cfn-hup -v
+                Restart=always
+
+                [Install]
+                WantedBy=multi-user.target
+
+        deploy:
+          commands:
+            01-daemon-reload:
+              command: systemctl daemon-reload
+            02-bootstrap:
+              command: cd /opt/proliferate/server/deploy && ./bootstrap.sh
+            03-enable-cfn-hup:
+              command: systemctl enable --now cfn-hup
+
+        deploy-update:
+          commands:
+            01-daemon-reload:
+              command: systemctl daemon-reload
+            02-update:
+              command: cd /opt/proliferate/server/deploy && ./update.sh
+            03-restart-cfn-hup:
+              command: systemctl restart cfn-hup
+
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref ProliferateInstanceProfile
+      SubnetId: !If
+        - UsesExistingNetwork
+        - !Ref ExistingSubnetId
+        - !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref ProliferateSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-instance
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          dnf install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region} --configsets bootstrap
+          EXIT_CODE=$?
+          /opt/aws/bin/cfn-signal -e $EXIT_CODE --stack ${AWS::StackName} --resource ProliferateInstance --region ${AWS::Region}
+          exit $EXIT_CODE
+
+  ProliferateDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: CreatesRoute53Record
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub ${SiteAddress}.
+      Type: A
+      TTL: "60"
+      ResourceRecords:
+        - !If
+            - UsesElasticIp
+            - !Ref ProliferateEip
+            - !GetAtt ProliferateInstance.PublicIp
+
+Outputs:
+  BaseUrl:
+    Description: Public HTTPS URL for the Proliferate control plane.
+    Value: !Sub
+      - https://${ResolvedSiteAddress}
+      - ResolvedSiteAddress: !If
+          - UsesSslipFallback
+          - !If
+              - UsesElasticIp
+              - !Join ["", [!Ref ProliferateEip, ".sslip.io"]]
+              - !Join ["", [!GetAtt ProliferateInstance.PublicIp, ".sslip.io"]]
+          - !Ref SiteAddress
+
+  SiteAddress:
+    Description: Public hostname configured for the control plane.
+    Value: !If
+      - UsesSslipFallback
+      - !If
+          - UsesElasticIp
+          - !Join ["", [!Ref ProliferateEip, ".sslip.io"]]
+          - !Join ["", [!GetAtt ProliferateInstance.PublicIp, ".sslip.io"]]
+      - !Ref SiteAddress
+
+  ElasticIp:
+    Description: Elastic IP address assigned to the EC2 host.
+    Condition: UsesElasticIp
+    Value: !Ref ProliferateEip
+
+  PublicIp:
+    Description: Public IP address currently serving the control plane.
+    Value: !If
+      - UsesElasticIp
+      - !Ref ProliferateEip
+      - !GetAtt ProliferateInstance.PublicIp
+
+  InstanceId:
+    Description: EC2 instance id running the control plane.
+    Value: !Ref ProliferateInstance
+
+  SsmStartSessionCommand:
+    Description: AWS CLI command to open an SSM shell on the host.
+    Value: !Sub aws ssm start-session --target ${ProliferateInstance}

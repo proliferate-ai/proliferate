@@ -1,0 +1,37 @@
+{
+	"folders": [
+		{
+			"path": "../../../../../claude-agent-acp"
+		},
+		{
+			"path": "../../../../../codex-acp"
+		},
+		{
+			"path": "../../../../../gemini-cli"
+		},
+		{
+			"path": "../../../../../openclaw"
+		},
+		{
+			"path": "../../../../../acp-ui"
+		},
+		{
+			"path": "../../../../../acpx"
+		},
+		{
+			"path": "../../../../../sandbox-agent"
+		},
+		{
+			"path": "../../../../../proliferate"
+		},
+		{
+			"path": "../../../../../rust-sdk"
+		},
+		{
+			"path": "../../../.."
+		}
+	],
+	"settings": {
+		"specstory.cloudSync.enabled": "never"
+	}
+}

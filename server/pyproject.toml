@@ -1,0 +1,115 @@
+[project]
+name = "proliferate-server"
+version = "0.1.0"
+description = "Proliferate control plane API"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "fastapi-users[sqlalchemy,oauth]>=14.0.0",
+    "httpx-oauth>=0.16.0",
+    "httpx>=0.28.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "python-jose[cryptography]>=3.3.0",
+    "cryptography>=44.0.0",
+    "passlib[bcrypt]>=1.7.0",
+    "python-multipart>=0.0.18",
+    "e2b>=1.5.6",
+    "daytona>=0.29.0",
+    "posthog>=6.7.6",
+    "sentry-sdk[fastapi]>=2.28.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.25.0",
+    "httpx>=0.28.0",
+    "mypy>=1.14.0",
+    "ruff>=0.9.0",
+    "sqlalchemy[mypy]>=2.0.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 99
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN"]
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN", "I001"]
+# integrations/ wraps untyped third-party SDKs; Any is the only honest annotation
+"proliferate/integrations/**" = ["ANN401"]
+# runtime/ operates on untyped E2B sandbox objects
+"proliferate/server/cloud/runtime/**" = ["ANN401"]
+# utils/ contains generic helpers where Any is unavoidable at public boundaries
+"proliferate/utils/**" = ["ANN401"]
+# pages.py contains inline HTML/SVG string content that exceeds line length
+"proliferate/auth/desktop/pages.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_any_explicit = true
+
+[[tool.mypy.overrides]]
+# integrations/ wraps untyped third-party SDKs (e2b, sentry, posthog) where
+# Any is the only honest annotation at the adapter boundary. Sentry uses
+# conditional imports that produce assignment/misc errors due to optional deps.
+module = ["proliferate.integrations.*"]
+disallow_any_explicit = false
+warn_return_any = false
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+# cloud/runtime operates on untyped E2B sandbox objects; utils contains generic
+# helpers (JSON crypto, telemetry scrubbing, time) where Any is unavoidable.
+module = [
+    "proliferate.server.cloud.runtime.*",
+    "proliferate.utils.*",
+]
+disallow_any_explicit = false
+warn_return_any = false
+
+[[tool.mypy.overrides]]
+# Pydantic plugin false positives: class-level Any in BaseModel subclasses is
+# injected by the Pydantic mypy plugin, not real Any usage in the source code.
+module = [
+    "proliferate.server.billing.models",
+    "proliferate.server.health",
+    "proliferate.auth.models",
+    "proliferate.auth.desktop.models",
+    "proliferate.server.cloud.workspaces.models",
+    "proliferate.server.cloud.credentials.models",
+    "proliferate.server.cloud.repos.models",
+    "proliferate.server.support.models",
+    "proliferate.config",
+]
+disallow_any_explicit = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "cloud_e2e: live cloud lifecycle tests that require real provider credentials",
+    "e2b: tests specific to the E2B provider",
+    "daytona: tests specific to the Daytona provider",
+    "live_webhook: tests that require a real externally reachable E2B webhook target",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["proliferate"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

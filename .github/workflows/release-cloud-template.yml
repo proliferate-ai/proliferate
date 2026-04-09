@@ -1,0 +1,83 @@
+name: Release Cloud Template
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  E2B_PUBLIC_TEMPLATE_FAMILY: ${{ vars.E2B_PUBLIC_TEMPLATE_FAMILY }}
+  E2B_TEAM_ID: ${{ vars.E2B_TEAM_ID }}
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install E2B CLI
+        run: npm install -g @e2b/cli
+
+      - name: Validate E2B template config
+        run: |
+          test -n "$E2B_PUBLIC_TEMPLATE_FAMILY"
+          test -n "$E2B_TEAM_ID"
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install MUSL target
+        run: rustup target add x86_64-unknown-linux-musl
+
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
+
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild --locked
+
+      - name: Resolve immutable template tag
+        run: echo "SHA_TAG=sha-${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+
+      - name: Build and publish immutable template
+        run: >
+          node scripts/build-template.mjs
+          --name "$E2B_PUBLIC_TEMPLATE_FAMILY"
+          --tag "$SHA_TAG"
+          --publish
+          --rebuild-runtime
+        env:
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          E2B_ACCESS_TOKEN: ${{ secrets.E2B_ACCESS_TOKEN }}
+          E2B_TEAM_ID: ${{ vars.E2B_TEAM_ID }}
+
+      - name: Smoke test immutable public ref
+        run: node scripts/smoke-cloud-template.mjs --template "$E2B_PUBLIC_TEMPLATE_FAMILY:$SHA_TAG"
+        env:
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+
+      - name: Promote immutable build to staging
+        run: >
+          node scripts/promote-cloud-template.mjs
+          --name "$E2B_PUBLIC_TEMPLATE_FAMILY"
+          --source-tag "$SHA_TAG"
+          --tag staging
+        env:
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}

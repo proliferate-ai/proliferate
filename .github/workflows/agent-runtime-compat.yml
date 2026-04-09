@@ -1,0 +1,138 @@
+name: Agent Runtime Compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  NODE_OPTIONS: --max-old-space-size=8192
+
+jobs:
+  agent-runtime-local:
+    name: Real AnyHarness local runtime compatibility
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      ANYHARNESS_TEST_CLAUDE_PORTABLE_AUTH_JSON: ${{ secrets.ANYHARNESS_TEST_CLAUDE_PORTABLE_AUTH_JSON }}
+      ANYHARNESS_TEST_CODEX_AUTH_JSON: ${{ secrets.ANYHARNESS_TEST_CODEX_AUTH_JSON }}
+      GEMINI_OAUTH_CREDS_JSON: ${{ secrets.GEMINI_OAUTH_CREDS_JSON }}
+      GITHUB_TOKEN: ${{ secrets.ANYHARNESS_TEST_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.ANYHARNESS_TEST_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+      ANYHARNESS_TEST_FIXTURE_REPO_URL: ${{ vars.ANYHARNESS_TEST_FIXTURE_REPO_URL }}
+      ANYHARNESS_TEST_FIXTURE_REPO_REF: ${{ vars.ANYHARNESS_TEST_FIXTURE_REPO_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libcap-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install repo dependencies
+        run: pnpm install
+
+      - name: Validate required agent secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${ANTHROPIC_API_KEY:-}" && -z "${ANYHARNESS_TEST_CLAUDE_PORTABLE_AUTH_JSON:-}" ]]; then
+            echo "Claude compatibility requires ANTHROPIC_API_KEY or ANYHARNESS_TEST_CLAUDE_PORTABLE_AUTH_JSON" >&2
+            exit 1
+          fi
+
+          if [[ -z "${OPENAI_API_KEY:-}" && -z "${CODEX_API_KEY:-}" && -z "${ANYHARNESS_TEST_CODEX_AUTH_JSON:-}" ]]; then
+            echo "Codex compatibility requires OPENAI_API_KEY, CODEX_API_KEY, or ANYHARNESS_TEST_CODEX_AUTH_JSON" >&2
+            exit 1
+          fi
+
+          if [[ -z "${GEMINI_API_KEY:-}" && -z "${GOOGLE_API_KEY:-}" && -z "${GEMINI_OAUTH_CREDS_JSON:-}" ]]; then
+            echo "Gemini compatibility requires GEMINI_API_KEY, GOOGLE_API_KEY, or GEMINI_OAUTH_CREDS_JSON" >&2
+            exit 1
+          fi
+
+      - name: Seed Claude auth
+        if: env.ANYHARNESS_TEST_CLAUDE_PORTABLE_AUTH_JSON != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          home = Path.home()
+          payload = os.environ["ANYHARNESS_TEST_CLAUDE_PORTABLE_AUTH_JSON"]
+          data = json.loads(payload)
+
+          if "claudeAiOauth" in data:
+              target = home / ".claude" / ".credentials.json"
+              target.parent.mkdir(parents=True, exist_ok=True)
+          else:
+              target = home / ".claude.json"
+
+          target.write_text(payload)
+          target.chmod(0o600)
+          PY
+
+      - name: Seed Codex auth
+        if: env.ANYHARNESS_TEST_CODEX_AUTH_JSON != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$HOME/.codex"
+          printf '%s' "$ANYHARNESS_TEST_CODEX_AUTH_JSON" > "$HOME/.codex/auth.json"
+          chmod 600 "$HOME/.codex/auth.json"
+
+      - name: Prepare AnyHarness runtime compatibility environment
+        id: prepare-runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          STATE_FILE="$RUNNER_TEMP/anyharness-agent-runtime-state.json"
+          ENV_FILE="$RUNNER_TEMP/anyharness-agent-runtime.env"
+
+          node scripts/setup-agent-runtime-suite.mjs prepare \
+            --state-file "$STATE_FILE" \
+            --env-output-file "$ENV_FILE"
+
+          cat "$ENV_FILE" >> "$GITHUB_ENV"
+          echo "state_file=$STATE_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Run real-agent compatibility scenarios
+        run: pnpm test:agent:runtime:attached
+
+      - name: Cleanup AnyHarness runtime compatibility environment
+        if: always() && steps.prepare-runtime.outputs.state_file != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/setup-agent-runtime-suite.mjs cleanup \
+            --state-file "${{ steps.prepare-runtime.outputs.state_file }}"

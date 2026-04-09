@@ -1,0 +1,93 @@
+from pydantic import model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+ENV_FILES = (
+    ".env",
+    ".env.local",
+)
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=ENV_FILES,
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    # App
+    debug: bool = False
+    api_base_url: str = ""
+    cors_allow_origins: str = (
+        "http://localhost:1420,"
+        "http://127.0.0.1:1420,"
+        "http://localhost:3000,"
+        "http://127.0.0.1:3000,"
+        "http://tauri.localhost,"
+        "tauri://localhost"
+    )
+
+    # Database
+    database_url: str = "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate"
+    database_echo: bool = False
+
+    # Auth
+    jwt_secret: str = "CHANGE-ME-IN-PRODUCTION"
+
+    # GitHub OAuth
+    github_oauth_client_id: str = ""
+    github_oauth_client_secret: str = ""
+
+    # Customer.io (optional)
+    customerio_site_id: str = ""
+    customerio_api_key: str = ""
+    customerio_app_api_key: str = ""
+    customerio_from_email: str = "hello@proliferate.dev"
+    frontend_base_url: str = ""
+    posthog_project_api_key: str = ""
+    posthog_host: str = "https://us.i.posthog.com"
+
+    # Observability
+    sentry_dsn: str = ""
+    sentry_environment: str = "trusted-beta"
+    sentry_release: str = "proliferate-server@0.1.0"
+    sentry_traces_sample_rate: float = 1.0
+
+    # Secondary LLM flows
+    anthropic_api_key: str = ""
+    ai_magic_session_title_model: str = "claude-haiku-4-5-20251001"
+
+    # Cloud workspaces
+    cloud_secret_key: str = "CHANGE-ME-IN-PRODUCTION-CLOUD-SECRET"
+    cloud_free_sandbox_hours: float = 2000.0
+    cloud_concurrent_sandbox_limit: int = 200
+    cloud_billing_mode: str = "off"
+    support_slack_webhook_url: str = ""
+    sandbox_provider: str = "e2b"
+    cloud_runtime_source_binary_path: str = ""
+    cloud_runtime_sentry_dsn: str = ""
+    cloud_runtime_sentry_environment: str = ""
+    cloud_runtime_sentry_release: str = ""
+    cloud_runtime_sentry_traces_sample_rate: float = 1.0
+    e2b_api_key: str = ""
+    e2b_template_name: str = ""
+    e2b_webhook_signature_secret: str = ""
+    daytona_api_key: str = ""
+    daytona_server_url: str = "https://app.daytona.io/api"
+    daytona_target: str = "us"
+
+    @model_validator(mode="after")
+    def validate_secrets_in_production(self) -> "Settings":
+        if not self.debug:
+            if self.jwt_secret == "CHANGE-ME-IN-PRODUCTION":
+                raise ValueError("jwt_secret must be set in production (debug=False)")
+            if self.cloud_secret_key == "CHANGE-ME-IN-PRODUCTION-CLOUD-SECRET":
+                raise ValueError("cloud_secret_key must be set in production (debug=False)")
+        return self
+
+
+settings = Settings()
+
+
+def get_cors_allow_origins() -> list[str]:
+    return [origin.strip() for origin in settings.cors_allow_origins.split(",") if origin.strip()]

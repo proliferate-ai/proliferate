@@ -1,0 +1,292 @@
+name: Cloud Tests
+
+on:
+  push:
+    paths:
+      - ".github/workflows/cloud-tests.yml"
+      - "Makefile"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - "anyharness/**"
+      - "server/**"
+      - "docs/ci-cd/README.md"
+  pull_request:
+    paths:
+      - ".github/workflows/cloud-tests.yml"
+      - "Makefile"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - "anyharness/**"
+      - "server/**"
+      - "docs/ci-cd/README.md"
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
+  JWT_SECRET: test-jwt-secret
+  CLOUD_SECRET_KEY: test-cloud-secret
+  LOCAL_PGHOST: 127.0.0.1
+  LOCAL_PGPORT: 5432
+  USE_EXISTING_POSTGRES: 1
+  PROLIFERATE_CLOUD_TEST_BASE_URL: http://127.0.0.1:8000
+  CLOUD_TEST_GITHUB_OWNER: proliferate-ai
+  CLOUD_TEST_GITHUB_REPO: proliferate
+  CLOUD_TEST_GITHUB_BASE_BRANCH: main
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  CODEX_AUTH_JSON_BASE64: ${{ secrets.CODEX_AUTH_JSON_BASE64 }}
+  E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+  E2B_TEMPLATE_NAME: ${{ secrets.E2B_TEMPLATE_NAME }}
+  DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}
+  DAYTONA_SERVER_URL: ${{ secrets.DAYTONA_SERVER_URL }}
+  DAYTONA_TARGET: ${{ secrets.DAYTONA_TARGET }}
+
+jobs:
+  preflight:
+    name: Cloud test prerequisites
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - name: Check required secrets
+        id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          missing=()
+          for name in GH_TOKEN ANTHROPIC_API_KEY CODEX_AUTH_JSON_BASE64 E2B_API_KEY E2B_TEMPLATE_NAME DAYTONA_API_KEY; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if [[ ${#missing[@]} -eq 0 ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Missing required cloud test secrets: ${missing[*]}"
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "Skipping cloud tests for this pull request because required secrets are unavailable."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          exit 1
+
+  cloud-lifecycle:
+    name: Cloud lifecycle (${{ matrix.provider }})
+    needs: preflight
+    if: needs.preflight.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    environment: cloud-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [e2b, daytona]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: proliferate
+          POSTGRES_PASSWORD: localdev
+          POSTGRES_DB: proliferate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U proliferate -d proliferate"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - uses: goto-bus-stop/setup-zig@v2
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild --locked
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install server dependencies
+        working-directory: server
+        run: uv sync --extra dev
+
+      - name: Materialize Codex auth
+        if: ${{ env.CODEX_AUTH_JSON_BASE64 != '' }}
+        run: |
+          mkdir -p "$HOME/.codex"
+          printf '%s' "$CODEX_AUTH_JSON_BASE64" | base64 --decode > "$HOME/.codex/auth.json"
+
+      - name: Build Linux AnyHarness binary
+        run: make cloud-runtime-build
+
+      - name: Run cloud lifecycle suite
+        env:
+          RUN_CLOUD_E2E: "1"
+          CLOUD_RUNTIME_SOURCE_BINARY_PATH: ${{ github.workspace }}/target/x86_64-unknown-linux-musl/release/anyharness
+        run: make test-cloud-${{ matrix.provider }}
+
+  cloud-runtime:
+    name: Cloud runtime (${{ matrix.provider }})
+    needs: preflight
+    if: needs.preflight.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    environment: cloud-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [e2b, daytona]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: proliferate
+          POSTGRES_PASSWORD: localdev
+          POSTGRES_DB: proliferate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U proliferate -d proliferate"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - uses: goto-bus-stop/setup-zig@v2
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild --locked
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install server dependencies
+        working-directory: server
+        run: uv sync --extra dev
+
+      - name: Materialize Codex auth
+        if: ${{ env.CODEX_AUTH_JSON_BASE64 != '' }}
+        run: |
+          mkdir -p "$HOME/.codex"
+          printf '%s' "$CODEX_AUTH_JSON_BASE64" | base64 --decode > "$HOME/.codex/auth.json"
+
+      - name: Build Linux AnyHarness binary
+        run: make cloud-runtime-build
+
+      - name: Prepare database
+        working-directory: server
+        run: uv run alembic upgrade head
+
+      - name: Start local cloud server
+        working-directory: server
+        env:
+          SANDBOX_PROVIDER: ${{ matrix.provider }}
+          CLOUD_BILLING_MODE: off
+          CLOUD_RUNTIME_SOURCE_BINARY_PATH: ${{ github.workspace }}/target/x86_64-unknown-linux-musl/release/anyharness
+        run: |
+          uv run uvicorn proliferate.main:app --host 127.0.0.1 --port 8000 >"$RUNNER_TEMP/cloud-server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/cloud-server.pid"
+          for _ in $(seq 1 60); do
+            if curl --silent --fail http://127.0.0.1:8000/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/cloud-server.log"
+          exit 1
+
+      - name: Bootstrap cloud runtime env
+        working-directory: server
+        run: |
+          payload="$(uv run python tests/e2e/infra/bootstrap_cloud_runtime_env.py \
+            --base-url "$PROLIFERATE_CLOUD_TEST_BASE_URL" \
+            --provider "${{ matrix.provider }}" \
+            --sync-provider claude \
+            --git-owner "$CLOUD_TEST_GITHUB_OWNER" \
+            --git-repo "$CLOUD_TEST_GITHUB_REPO" \
+            --base-branch "$CLOUD_TEST_GITHUB_BASE_BRANCH" \
+            --branch-prefix "gha-cloud-runtime-${{ matrix.provider }}" \
+            --email-prefix "gha-cloud-runtime-${{ matrix.provider }}")"
+          python - "$payload" >> "$GITHUB_ENV" <<'PY'
+          import json
+          import sys
+
+          payload = json.loads(sys.argv[1])
+          for key, value in payload.items():
+              print(f"{key}={value}")
+          PY
+
+      - name: Run shared runtime scenarios against cloud backend
+        run: make test-agent-runtime-cloud-${{ matrix.provider }}
+
+      - name: Show cloud server log on failure
+        if: failure()
+        run: |
+          if [ -f "$RUNNER_TEMP/cloud-server.log" ]; then
+            cat "$RUNNER_TEMP/cloud-server.log"
+          else
+            echo "cloud-server.log not found"
+          fi
+
+      - name: Stop local cloud server
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/cloud-server.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/cloud-server.pid")" || true
+          fi

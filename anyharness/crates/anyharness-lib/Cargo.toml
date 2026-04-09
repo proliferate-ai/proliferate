@@ -1,0 +1,34 @@
+[package]
+name = "anyharness-lib"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Core runtime library for AnyHarness"
+
+[dependencies]
+anyharness-contract.workspace = true
+anyharness-credential-discovery.workspace = true
+axum.workspace = true
+tokio.workspace = true
+tower-http.workspace = true
+tower.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+utoipa.workspace = true
+utoipa-axum.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+rusqlite.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+url.workspace = true
+dirs.workspace = true
+subtle.workspace = true
+agent-client-protocol.workspace = true
+tokio-util.workspace = true
+tokio-stream.workspace = true
+futures.workspace = true
+async-trait.workspace = true
+portable-pty.workspace = true
+nucleo-matcher.workspace = true

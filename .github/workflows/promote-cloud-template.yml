@@ -1,0 +1,52 @@
+name: Promote Cloud Template
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: Immutable source tag to promote, e.g. sha-abc1234
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  E2B_PUBLIC_TEMPLATE_FAMILY: ${{ vars.E2B_PUBLIC_TEMPLATE_FAMILY }}
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate E2B template config
+        run: test -n "$E2B_PUBLIC_TEMPLATE_FAMILY"
+
+      - name: Smoke test source tag
+        run: >
+          node scripts/smoke-cloud-template.mjs
+          --template "$E2B_PUBLIC_TEMPLATE_FAMILY:${{ inputs.source_tag }}"
+        env:
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+
+      - name: Promote source tag to production
+        run: >
+          node scripts/promote-cloud-template.mjs
+          --name "$E2B_PUBLIC_TEMPLATE_FAMILY"
+          --source-tag "${{ inputs.source_tag }}"
+          --tag production
+        env:
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}

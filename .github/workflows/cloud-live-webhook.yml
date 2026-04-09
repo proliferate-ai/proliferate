@@ -1,0 +1,167 @@
+name: Cloud Live Webhook Smoke
+
+on:
+  schedule:
+    - cron: "30 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-live-e2b-webhook
+  cancel-in-progress: false
+
+env:
+  DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
+  LOCAL_PGHOST: 127.0.0.1
+  LOCAL_PGPORT: 5432
+  USE_EXISTING_POSTGRES: 1
+  RUN_CLOUD_E2E: "1"
+  RUN_LIVE_E2B_WEBHOOK: "1"
+  E2B_WEBHOOK_PUBLIC_URL: ${{ vars.E2B_WEBHOOK_PUBLIC_URL || 'https://workers.ngrok.dev/v1/cloud/webhooks/e2b' }}
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+  E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+  E2B_TEMPLATE_NAME: ${{ secrets.E2B_TEMPLATE_NAME }}
+  E2B_WEBHOOK_SIGNATURE_SECRET: ${{ secrets.E2B_WEBHOOK_SIGNATURE_SECRET }}
+
+jobs:
+  live-e2b-webhook:
+    runs-on: ubuntu-latest
+    environment: cloud-tests
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: proliferate
+          POSTGRES_PASSWORD: localdev
+          POSTGRES_DB: proliferate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U proliferate -d proliferate"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - name: Check required webhook secrets
+        id: prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ready=true
+          for name in NGROK_AUTHTOKEN E2B_API_KEY E2B_WEBHOOK_SIGNATURE_SECRET; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing $name; skipping live webhook smoke."
+              ready=false
+            fi
+          done
+
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.prerequisites.outputs.ready == 'true'
+
+      - uses: astral-sh/setup-uv@v5
+        if: steps.prerequisites.outputs.ready == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.prerequisites.outputs.ready == 'true'
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.prerequisites.outputs.ready == 'true'
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - uses: goto-bus-stop/setup-zig@v2
+        if: steps.prerequisites.outputs.ready == 'true'
+
+      - name: Install system deps
+        if: steps.prerequisites.outputs.ready == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Install cargo-zigbuild
+        if: steps.prerequisites.outputs.ready == 'true'
+        run: cargo install cargo-zigbuild --locked
+
+      - name: Install ngrok
+        if: steps.prerequisites.outputs.ready == 'true'
+        run: |
+          curl -fsSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc | \
+            sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | \
+            sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt-get update
+          sudo apt-get install -y ngrok
+
+      - name: Configure ngrok
+        if: steps.prerequisites.outputs.ready == 'true'
+        run: ngrok config add-authtoken "${{ secrets.NGROK_AUTHTOKEN }}"
+
+      - name: Install server dependencies
+        if: steps.prerequisites.outputs.ready == 'true'
+        working-directory: server
+        run: uv sync --extra dev
+
+      - name: Build Linux AnyHarness binary
+        if: steps.prerequisites.outputs.ready == 'true'
+        run: make cloud-runtime-build
+
+      - name: Ensure E2B webhook configuration
+        if: steps.prerequisites.outputs.ready == 'true'
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from urllib import request
+
+          api_key = os.environ["E2B_API_KEY"]
+          webhook_url = os.environ["E2B_WEBHOOK_PUBLIC_URL"]
+          signature_secret = os.environ["E2B_WEBHOOK_SIGNATURE_SECRET"]
+          headers = {
+              "X-API-Key": api_key,
+              "Content-Type": "application/json",
+          }
+
+          def call(method: str, url: str, payload: dict | None = None) -> list | dict:
+              data = None if payload is None else json.dumps(payload).encode("utf-8")
+              req = request.Request(url, data=data, method=method, headers=headers)
+              with request.urlopen(req) as resp:
+                  body = resp.read()
+              return json.loads(body.decode("utf-8")) if body else {}
+
+          payload = {
+              "name": "Proliferate CI webhook",
+              "url": webhook_url,
+              "enabled": True,
+              "events": [
+                  "sandbox.lifecycle.created",
+                  "sandbox.lifecycle.paused",
+                  "sandbox.lifecycle.resumed",
+                  "sandbox.lifecycle.killed",
+              ],
+              "signatureSecret": signature_secret,
+          }
+
+          existing = call("GET", "https://api.e2b.app/events/webhooks")
+          if not isinstance(existing, list):
+              raise SystemExit("Unexpected E2B webhook list response")
+          match = next((item for item in existing if item.get("url") == webhook_url), None)
+          if match is None:
+              call("POST", "https://api.e2b.app/events/webhooks", payload)
+          else:
+              call("PATCH", f"https://api.e2b.app/events/webhooks/{match['id']}", payload)
+          PY
+
+      - name: Run live webhook smoke
+        if: steps.prerequisites.outputs.ready == 'true'
+        env:
+          CLOUD_RUNTIME_SOURCE_BINARY_PATH: ${{ github.workspace }}/target/x86_64-unknown-linux-musl/release/anyharness
+        run: make test-cloud-webhooks

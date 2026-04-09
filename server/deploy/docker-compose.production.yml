@@ -1,0 +1,71 @@
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_started
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    image: ${PROLIFERATE_SERVER_IMAGE:-ghcr.io/proliferate-ai/proliferate-server}:${PROLIFERATE_SERVER_IMAGE_TAG:-stable}
+    restart: "no"
+    env_file:
+      - ${PROLIFERATE_ENV_FILE:-.env}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+
+  api:
+    image: ${PROLIFERATE_SERVER_IMAGE:-ghcr.io/proliferate-ai/proliferate-server}:${PROLIFERATE_SERVER_IMAGE_TAG:-stable}
+    restart: unless-stopped
+    env_file:
+      - ${PROLIFERATE_ENV_FILE:-.env}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ${PROLIFERATE_HOST_BIN_DIR:-/opt/proliferate/bin}:/opt/proliferate/bin:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      [
+        "uvicorn",
+        "proliferate.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--proxy-headers",
+        "--forwarded-allow-ips",
+        "*",
+      ]
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

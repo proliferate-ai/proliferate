@@ -1,0 +1,11 @@
+[package]
+name = "anyharness-contract"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Public API contract types for AnyHarness (source of truth for TS SDK generation)"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+utoipa.workspace = true

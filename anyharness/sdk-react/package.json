@@ -1,0 +1,41 @@
+{
+  "name": "@anyharness/sdk-react",
+  "version": "0.1.0",
+  "description": "React bindings for the AnyHarness TypeScript SDK",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "AGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proliferate-ai/proliferate",
+    "directory": "anyharness/sdk-react"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@anyharness/sdk": "workspace:*"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.95.2",
+    "react": "^19"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.11",
+    "typescript": "^5.7.0"
+  }
+}

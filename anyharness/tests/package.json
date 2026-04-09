@@ -1,0 +1,21 @@
+{
+  "name": "@anyharness/tests",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@anyharness/sdk": "workspace:*"
+  },
+  "scripts": {
+    "export-session-events": "tsx src/tools/export-session-events.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cloud:e2b": "tsx src/runners/run-cloud-runtime-suite.ts e2b",
+    "test:cloud:daytona": "tsx src/runners/run-cloud-runtime-suite.ts daytona"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4"
+  }
+}

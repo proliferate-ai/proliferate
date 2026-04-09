@@ -1,0 +1,1051 @@
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AssistantMessage } from "./AssistantMessage";
+import { SystemMessage } from "./SystemMessage";
+import { UserMessage } from "./UserMessage";
+import { StreamingIndicator } from "./StreamingIndicator";
+import { TurnSeparator } from "./TurnSeparator";
+import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
+import { Button } from "@/components/ui/Button";
+import { ReasoningBlock } from "@/components/workspace/chat/tool-calls/ReasoningBlock";
+import {
+  ToolCallBlock,
+  ToolCallLeadingAffordance,
+  TOOL_CALL_BODY_MAX_HEIGHT_CLASS,
+} from "@/components/workspace/chat/tool-calls/ToolCallBlock";
+import { BashCommandCall } from "@/components/workspace/chat/tool-calls/BashCommandCall";
+import { FileChangeCall } from "@/components/workspace/chat/tool-calls/FileChangeCall";
+import { FileReadCall } from "@/components/workspace/chat/tool-calls/FileReadCall";
+import { ReadGroupBlock } from "@/components/workspace/chat/tool-calls/ReadGroupBlock";
+import { ToolCallSummary } from "@/components/workspace/chat/tool-calls/ToolCallSummary";
+import { TurnDiffPanel } from "./TurnDiffPanel";
+import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
+import {
+  ClipboardList,
+  CircleQuestion,
+  FilePen,
+  FilePlus,
+  FileText,
+  FolderList,
+  Settings,
+  Spinner,
+  Sparkles,
+  Terminal,
+} from "@/components/ui/icons";
+import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
+import { useMessageListScroll } from "@/hooks/chat/use-message-list-scroll";
+import { buildTurnPresentation } from "@/lib/domain/chat/transcript-presentation";
+import type {
+  FileChangeContentPart,
+  FileReadContentPart,
+  TranscriptState,
+  ToolCallContentPart,
+  ToolCallItem,
+  ToolInputTextContentPart,
+  ToolResultTextContentPart,
+  TranscriptItem,
+  TerminalOutputContentPart,
+} from "@anyharness/sdk";
+import type { SessionViewState } from "@/lib/domain/sessions/activity";
+
+const TURN_HORIZONTAL_PADDING = "px-7";
+
+/**
+ * Minimum height of the trailing-status slot at the bottom of an in-progress
+ * turn (StreamingIndicator while "working", "Waiting for your input" while
+ * "needs_input"). Pinned so that swapping the indicator for the first line of
+ * the assistant's prose reply is a zero-delta layout transition — no scroll
+ * bump, no content jump.
+ *
+ * Value derivation (keep in sync if any of these move):
+ *   • text-chat single-line height — `--text-chat--line-height` in index.css
+ *     (currently `1.125rem` / 18px)
+ *   • assistant-message copy-button slot — `h-6` in AssistantMessage.tsx
+ *     (24px, reserved via `pl-1 pt-0.5 h-6`)
+ *   ----
+ *   = 18px + 24px = 42px = 2.625rem
+ *
+ * The same constant is also used by the pendingUserPrompt TurnShell so the
+ * user-bubble→turn transition preserves its slot height.
+ */
+const TRAILING_STATUS_MIN_HEIGHT = "min-h-[2.625rem]";
+
+interface MessageListProps {
+  activeSessionId: string;
+  selectedWorkspaceId: string | null;
+  transcript: TranscriptState;
+  pendingUserPrompt: { text: string; timestamp: string } | null;
+  sessionViewState: SessionViewState;
+}
+
+export function MessageList({
+  activeSessionId,
+  selectedWorkspaceId,
+  transcript,
+  pendingUserPrompt,
+  sessionViewState,
+}: MessageListProps) {
+  const latestTurnId = transcript.turnOrder[transcript.turnOrder.length - 1] ?? null;
+  const { openFileDiff } = useWorkspaceFileActions();
+
+  const totalItems = transcript.turnOrder.reduce(
+    (sum, tid) => sum + (transcript.turnsById[tid]?.itemOrder.length ?? 0),
+    0,
+  );
+  const { scrollRef, contentRef } = useMessageListScroll({
+    totalItems,
+    pendingPromptText: pendingUserPrompt?.text ?? null,
+    isSessionBusy: sessionViewState === "working" || sessionViewState === "needs_input",
+    selectedWorkspaceId,
+    activeSessionId,
+  });
+
+  return (
+    <div className="flex-1 min-h-0" data-telemetry-block>
+      <AutoHideScrollArea className="h-full" ref={scrollRef}>
+        <div ref={contentRef} className="max-w-3xl mx-auto pt-4 pb-10">
+          {transcript.turnOrder.map((turnId, turnIdx) => {
+            const turn = transcript.turnsById[turnId];
+            if (!turn) return null;
+            const isLatestTurn = turnId === latestTurnId;
+            const hasPendingReplacement = !!pendingUserPrompt;
+            const isLatestTurnInProgress =
+              isLatestTurn && !hasPendingReplacement && !turn.completedAt;
+            const hasFileBadges = turn.fileBadges.length > 0;
+
+            // The trailing status indicator is only meaningful when the turn is
+            // in progress and the final prose answer hasn't started landing yet.
+            // Once the last top-level item is an assistant_prose with text, that
+            // prose IS the placeholder for "the final answer lands here" — no
+            // separate spinner needed.
+            const trailingStatus =
+              isLatestTurnInProgress && !lastTopLevelItemIsProse(turn, transcript)
+                ? resolveTurnTrailingStatus(turn.startedAt, sessionViewState)
+                : null;
+
+            return (
+              <TurnShell key={turnId} isFirst={turnIdx === 0}>
+                <div className="flex flex-col gap-2">
+                  <TurnItemSequence
+                    turnId={turnId}
+                    transcript={transcript}
+                    isTurnComplete={!!turn.completedAt}
+                  />
+                  {turn.completedAt && hasFileBadges && (
+                    <TurnDiffPanel
+                      turn={turn}
+                      transcript={transcript}
+                      onOpenFile={(filePath) => void openFileDiff(filePath)}
+                    />
+                  )}
+                  {trailingStatus && (
+                    <div className={TRAILING_STATUS_MIN_HEIGHT}>{trailingStatus}</div>
+                  )}
+                </div>
+              </TurnShell>
+            );
+          })}
+
+          {pendingUserPrompt && (
+            <TurnShell isFirst={transcript.turnOrder.length === 0}>
+              <div className="flex flex-col gap-2">
+                <UserMessage
+                  content={pendingUserPrompt.text}
+                  showCopyButton
+                />
+                <div className={TRAILING_STATUS_MIN_HEIGHT}>
+                  <StreamingIndicator startedAt={pendingUserPrompt.timestamp} />
+                </div>
+              </div>
+            </TurnShell>
+          )}
+        </div>
+      </AutoHideScrollArea>
+    </div>
+  );
+}
+
+function resolveTurnTrailingStatus(
+  startedAt: string,
+  sessionViewState: SessionViewState,
+): ReactNode {
+  if (sessionViewState === "working") {
+    return <StreamingIndicator startedAt={startedAt} />;
+  }
+
+  if (sessionViewState === "needs_input") {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <CircleQuestion className="size-3.5 shrink-0 text-amber-500" />
+        <span>Waiting for your input</span>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+/**
+ * True if the last top-level item in the turn is an assistant_prose with text.
+ * "Top level" here means: we skip items that are nested children of an
+ * ongoing tool_call (they render inside their parent's block, not as the
+ * turn's trailing content). The final message is always prose, so if the
+ * latest top-level item is already prose, the prose itself is the placeholder
+ * for "the final answer lands here" and we don't need a separate spinner.
+ */
+function lastTopLevelItemIsProse(
+  turn: { itemOrder: readonly string[] },
+  transcript: TranscriptState,
+): boolean {
+  for (let i = turn.itemOrder.length - 1; i >= 0; i--) {
+    const item = transcript.itemsById[turn.itemOrder[i]];
+    if (!item) continue;
+    if ("parentToolCallId" in item && item.parentToolCallId) {
+      const parent = transcript.itemsById[item.parentToolCallId];
+      if (parent?.kind === "tool_call") continue;
+    }
+    return item.kind === "assistant_prose" && !!item.text;
+  }
+  return false;
+}
+
+function TurnItemSequence({
+  turnId,
+  transcript,
+  isTurnComplete,
+}: {
+  turnId: string;
+  transcript: TranscriptState;
+  isTurnComplete: boolean;
+}) {
+  const turn = transcript.turnsById[turnId];
+  if (!turn) {
+    return null;
+  }
+
+  const presentation = buildTurnPresentation(turn, transcript);
+  let hasRenderedSummary = false;
+
+  // Find the last visible assistant_prose root id in this turn
+  let lastAssistantProseRootId: string | null = null;
+  for (let i = presentation.rootIds.length - 1; i >= 0; i--) {
+    const rootId = presentation.rootIds[i];
+    if (presentation.collapsedRootIds.has(rootId)) continue;
+    const item = transcript.itemsById[rootId];
+    if (item?.kind === "assistant_prose" && item.text) {
+      lastAssistantProseRootId = rootId;
+      break;
+    }
+  }
+
+  return (
+    <>
+      {presentation.rootIds.map((itemId) => {
+        if (presentation.collapsedRootIds.has(itemId)) {
+          if (hasRenderedSummary || !presentation.collapsedSummary) {
+            return null;
+          }
+          hasRenderedSummary = true;
+
+          const collapsedRootIds = presentation.rootIds.filter((rootId) =>
+            presentation.collapsedRootIds.has(rootId)
+          );
+
+          // Check if there's a final assistant message after the collapsed block
+          const hasTrailingAssistantProse = presentation.rootIds.some((rootId) => {
+            if (presentation.collapsedRootIds.has(rootId)) return false;
+            const item = transcript.itemsById[rootId];
+            return item?.kind === "assistant_prose" && !!item.text;
+          });
+
+          return (
+            <ToolCallSummary
+              key={`${turnId}-collapsed-summary`}
+              icon={<ClipboardList />}
+              label="Work history"
+              summary={formatCollapsedSummary(presentation.collapsedSummary)}
+              typeIcons={buildCollapsedSummaryIcons(presentation.collapsedSummary)}
+              itemCount={collapsedRootIds.length}
+              showFinalSeparator={hasTrailingAssistantProse}
+            >
+              <div className="space-y-1">
+                {collapsedRootIds.map((collapsedRootId) => (
+                  <TranscriptTreeNode
+                    key={collapsedRootId}
+                    itemId={collapsedRootId}
+                    transcript={transcript}
+                    childrenByParentId={presentation.childrenByParentId}
+                  />
+                ))}
+              </div>
+            </ToolCallSummary>
+          );
+        }
+
+        if (presentation.readGroupedIds.has(itemId)) {
+          const group = presentation.readGroups.get(itemId);
+          if (!group) return null;
+
+          return (
+            <ReadGroupBlock key={`read-group-${itemId}`} group={group}>
+              {group.memberIds.map((memberId) => (
+                <TranscriptTreeNode
+                  key={memberId}
+                  itemId={memberId}
+                  transcript={transcript}
+                  childrenByParentId={presentation.childrenByParentId}
+                />
+              ))}
+            </ReadGroupBlock>
+          );
+        }
+
+        return (
+          <TranscriptTreeNode
+            key={itemId}
+            itemId={itemId}
+            transcript={transcript}
+            childrenByParentId={presentation.childrenByParentId}
+            isLastAssistantProse={isTurnComplete && itemId === lastAssistantProseRootId}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function TurnShell({
+  children,
+  isFirst = false,
+}: {
+  children: ReactNode;
+  isFirst?: boolean;
+}) {
+  return (
+    <div className={`${TURN_HORIZONTAL_PADDING} w-full max-w-full ${isFirst ? "pt-0" : "pt-2"} pb-2`}>
+      {children}
+    </div>
+  );
+}
+
+function TranscriptItemBlock({
+  item,
+  isLastAssistantProse = false,
+}: {
+  item: TranscriptItem;
+  isLastAssistantProse?: boolean;
+}) {
+  switch (item.kind) {
+    case "user_message":
+      return <UserMessage content={item.text} showCopyButton />;
+
+    case "assistant_prose":
+      if (!item.text) return null;
+
+      return (
+        <div className="flex justify-start relative">
+          <div className="flex flex-col w-full min-w-0 max-w-full break-words">
+            <AssistantMessage
+              content={item.text}
+              isStreaming={item.isStreaming}
+              showCopyButton={isLastAssistantProse}
+            />
+          </div>
+        </div>
+      );
+
+    case "thought":
+      return (
+        <div className="flex justify-start relative">
+          <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
+            <ReasoningBlock content={item.text || undefined} />
+          </div>
+        </div>
+      );
+
+    case "tool_call":
+      return (
+        <div className="flex justify-start relative">
+          <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
+            <ToolCallItemBlock item={item} />
+          </div>
+        </div>
+      );
+
+    case "plan":
+      // Plans are now rendered as a persistent panel above the composer
+      return null;
+
+    case "error":
+      return (
+        <p className="text-xs text-destructive py-1">{item.message}</p>
+      );
+
+    case "unknown":
+      return (
+        <SystemMessage content={`Unknown event: ${item.eventType}`} />
+      );
+
+    default:
+      return null;
+  }
+}
+
+function TranscriptTreeNode({
+  itemId,
+  transcript,
+  childrenByParentId,
+  isLastAssistantProse = false,
+}: {
+  itemId: string;
+  transcript: TranscriptState;
+  childrenByParentId: Map<string, string[]>;
+  isLastAssistantProse?: boolean;
+}) {
+  const item = transcript.itemsById[itemId];
+  if (!item) return null;
+
+  const childIds = childrenByParentId.get(itemId) ?? [];
+  if (item.kind === "tool_call" && (childIds.length > 0 || isSubagentItem(item))) {
+    return (
+      <ToolCallGroupBlock
+        item={item}
+        childIds={childIds}
+        transcript={transcript}
+        childrenByParentId={childrenByParentId}
+      />
+    );
+  }
+
+  return (
+    <TranscriptItemBlock
+      item={item}
+      isLastAssistantProse={isLastAssistantProse}
+    />
+  );
+}
+
+function ToolCallItemBlock({
+  item,
+}: {
+  item: ToolCallItem;
+}) {
+  const fileChanges = item.contentParts.filter(
+    (part): part is FileChangeContentPart => part.type === "file_change",
+  );
+  const fileReads = item.contentParts.filter(
+    (part): part is FileReadContentPart => part.type === "file_read",
+  );
+  const terminalParts = item.contentParts.filter(
+    (part): part is TerminalOutputContentPart => part.type === "terminal_output",
+  );
+  const toolCallPart = item.contentParts.find(
+    (part): part is ToolCallContentPart => part.type === "tool_call",
+  );
+  const toolResultText = item.contentParts
+    .filter((part): part is ToolResultTextContentPart => part.type === "tool_result_text")
+    .map((part) => part.text)
+    .join("\n\n");
+  const normalizedResultText = normalizeToolResultText(toolResultText);
+  const toolName = toolCallPart?.title ?? item.title ?? item.nativeToolName ?? "Tool call";
+  const rawInput = isRecord(item.rawInput);
+  const bashDescription = readString(rawInput?.description) ?? undefined;
+  const bashCommand = readString(rawInput?.command) ?? toolName;
+  const fallbackDisplay = describeToolCall(item, toolName);
+  const rows: React.ReactNode[] = [];
+  const status = mapStatus(item.status);
+
+  fileChanges.forEach((part, idx) => {
+    rows.push(
+      <FileChangeCall
+        key={`file-change-${idx}`}
+        operation={part.operation}
+        path={part.path}
+        workspacePath={part.workspacePath}
+        basename={part.basename}
+        newPath={part.newPath}
+        newWorkspacePath={part.newWorkspacePath}
+        newBasename={part.newBasename}
+        additions={part.additions}
+        deletions={part.deletions}
+        patch={part.patch}
+        preview={part.preview}
+        status={status}
+      />,
+    );
+  });
+
+  fileReads.forEach((part, idx) => {
+    rows.push(
+      <FileReadCall
+        key={`file-read-${idx}`}
+        path={part.path}
+        workspacePath={part.workspacePath}
+        basename={part.basename}
+        line={part.line}
+        scope={part.scope}
+        startLine={part.startLine}
+        endLine={part.endLine}
+        preview={part.preview ?? (normalizedResultText || undefined)}
+        status={status}
+      />,
+    );
+  });
+
+  if (terminalParts.length > 0) {
+    const output = terminalParts
+      .filter((part) => part.event === "output" && part.data)
+      .map((part) => part.data ?? "")
+      .join("");
+    rows.push(
+      <BashCommandCall
+        key="terminal"
+        command={bashCommand}
+        description={bashDescription}
+        output={output || (typeof item.rawOutput === "string" ? item.rawOutput : undefined)}
+        status={status}
+      />,
+    );
+  }
+
+  if (rows.length === 0 && normalizedResultText) {
+    if (item.nativeToolName === "Bash" || item.toolKind === "execute") {
+      rows.push(
+        <BashCommandCall
+          key="terminal-result"
+          command={bashCommand}
+          description={bashDescription}
+          output={normalizedResultText}
+          status={status}
+        />,
+      );
+    } else if (item.nativeToolName === "Read" || item.toolKind === "read") {
+      const fallbackReadPath = deriveReadPath(item, toolName);
+      rows.push(
+        <FileReadCall
+          key="read-result"
+          path={fallbackReadPath}
+          basename={fallbackReadPath.split("/").pop() ?? fallbackReadPath}
+          scope="unknown"
+          preview={normalizedResultText}
+          status={status}
+        />,
+      );
+    }
+  }
+
+  if (rows.length === 0 && normalizedResultText) {
+    rows.push(
+      <ToolCallBlock
+        key="result"
+        icon={<ToolKindIcon kind={item.toolKind} nativeToolName={item.nativeToolName} title={toolName} />}
+        name={<span className="font-[460] text-foreground/90">{fallbackDisplay.label}</span>}
+        status={status}
+        hint={fallbackDisplay.hint}
+      >
+        <div className="overflow-hidden rounded-md border border-border/60 bg-muted/25">
+          <AutoHideScrollArea className="w-full" viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}>
+            <pre className="m-0 whitespace-pre-wrap px-3 py-2 font-mono text-xs text-foreground">
+              {normalizedResultText}
+            </pre>
+          </AutoHideScrollArea>
+        </div>
+      </ToolCallBlock>,
+    );
+  }
+
+  if (rows.length === 0) {
+    rows.push(
+      <ToolCallBlock
+        key="tool"
+        icon={<ToolKindIcon kind={item.toolKind} nativeToolName={item.nativeToolName} title={toolName} />}
+        name={<span className="font-[460] text-foreground/90">{fallbackDisplay.label}</span>}
+        status={status}
+        hint={fallbackDisplay.hint}
+      />,
+    );
+  }
+
+  return rows.length === 1 ? <>{rows[0]}</> : <div className="space-y-1.5">{rows}</div>;
+}
+
+function ToolCallGroupBlock({
+  item,
+  childIds,
+  transcript,
+  childrenByParentId,
+}: {
+  item: ToolCallItem;
+  childIds: string[];
+  transcript: TranscriptState;
+  childrenByParentId: Map<string, string[]>;
+}) {
+  const isAgent = isSubagentItem(item);
+
+  if (isAgent) {
+    return (
+      <AgentGroupBlock
+        item={item}
+        childIds={childIds}
+        transcript={transcript}
+        childrenByParentId={childrenByParentId}
+      />
+    );
+  }
+
+  const descendants = collectDescendantItems(childIds, transcript, childrenByParentId);
+  const subagentCount = descendants.filter(
+    (entry) => entry.kind === "tool_call" && entry.semanticKind === "subagent",
+  ).length;
+  const toolCallCount = descendants.filter(
+    (entry) => entry.kind === "tool_call" && entry.semanticKind !== "subagent",
+  ).length;
+  const messageCount = descendants.filter(
+    (entry) => entry.kind === "assistant_prose" || entry.kind === "thought",
+  ).length;
+  const summary = formatCollapsedSummary({
+    messages: messageCount,
+    toolCalls: toolCallCount,
+    subagents: subagentCount,
+  });
+  const renderableItemCount = (hasRenderableToolDetails(item) ? 1 : 0) + childIds.length;
+
+  return (
+    <ToolCallSummary
+      icon={
+        <ToolKindIcon
+          kind={item.toolKind}
+          nativeToolName={item.nativeToolName}
+          title={item.title ?? item.nativeToolName ?? null}
+        />
+      }
+      label={item.title ?? item.nativeToolName ?? "Tool group"}
+      summary={summary}
+      defaultExpanded={item.status === "in_progress"}
+      itemCount={renderableItemCount}
+      typeIcons={buildCollapsedSummaryIcons({
+        messages: messageCount,
+        toolCalls: toolCallCount,
+        subagents: subagentCount,
+      })}
+    >
+      <div className="space-y-1.5">
+        {hasRenderableToolDetails(item) && (
+          <ToolCallItemBlock item={item} />
+        )}
+        <div className="ml-1 space-y-1.5">
+          {childIds.map((childId) => (
+            <TranscriptTreeNode
+              key={childId}
+              itemId={childId}
+              transcript={transcript}
+              childrenByParentId={childrenByParentId}
+            />
+          ))}
+        </div>
+      </div>
+    </ToolCallSummary>
+  );
+}
+
+function AgentGroupBlock({
+  item,
+  childIds,
+  transcript,
+  childrenByParentId,
+}: {
+  item: ToolCallItem;
+  childIds: string[];
+  transcript: TranscriptState;
+  childrenByParentId: Map<string, string[]>;
+}) {
+  const isRunning = item.status === "in_progress";
+  const [expanded, setExpanded] = useState(false);
+  const [workExpanded, setWorkExpanded] = useState(false);
+
+  const promptText = item.contentParts
+    .filter((p): p is ToolInputTextContentPart => p.type === "tool_input_text")
+    .map((p) => p.text)
+    .join("\n\n");
+  const normalizedPrompt = promptText.trim();
+
+  // Agent synthesis lives in the agent item's own tool_result_text content parts
+  const agentResultText = item.contentParts
+    .filter((p): p is ToolResultTextContentPart => p.type === "tool_result_text")
+    .map((p) => p.text)
+    .join("\n\n");
+  const normalizedAgentResult = normalizeToolResultText(agentResultText);
+
+  // Count internal work
+  const descendants = collectDescendantItems(childIds, transcript, childrenByParentId);
+  const toolCallCount = descendants.filter(
+    (entry) => entry.kind === "tool_call",
+  ).length;
+  const messageCount = descendants.filter(
+    (entry) => entry.kind === "assistant_prose" || entry.kind === "thought",
+  ).length;
+  const workSummary = formatCollapsedSummary({
+    messages: messageCount,
+    toolCalls: toolCallCount,
+    subagents: 0,
+  });
+
+  const description = item.title ?? "Agent task";
+  const hasWork = childIds.length > 0;
+  const hasBodyContent = hasWork || !!normalizedPrompt || !!normalizedAgentResult;
+  const collapsedSummary = workSummary || (isRunning ? "Working" : null);
+  const headerExpandable = hasBodyContent;
+
+  return (
+    <div className="py-0.5">
+      {/* Agent header — clickable to collapse/expand */}
+      <div
+        onClick={() => headerExpandable && setExpanded(!expanded)}
+        className={`group/tool-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-base leading-5 transition-colors ${
+          headerExpandable
+            ? "cursor-pointer text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+            : "cursor-default text-muted-foreground"
+        }`}
+      >
+        <ToolCallLeadingAffordance
+          icon={<AgentHeaderIcon isRunning={isRunning} />}
+          expandable={headerExpandable}
+          expanded={expanded}
+        />
+        <span className="font-[460] text-foreground/90">{description}</span>
+        {!expanded && collapsedSummary && (
+          <span className="ml-1 text-sm text-muted-foreground">{collapsedSummary}</span>
+        )}
+      </div>
+
+      {/* Agent body — indented with left border */}
+      {expanded && hasBodyContent && <div className="ml-2 border-l border-border/70 pl-3">
+        {normalizedPrompt && (
+          <AgentPromptBlock content={normalizedPrompt} />
+        )}
+
+        {/* Internal work — collapsed when complete */}
+        {hasWork && (
+          isRunning ? (
+            <div className="space-y-1">
+              {childIds.map((childId) => (
+                <TranscriptTreeNode
+                  key={childId}
+                  itemId={childId}
+                  transcript={transcript}
+                  childrenByParentId={childrenByParentId}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="py-0.5">
+              <TurnSeparator
+                label={workSummary}
+                interactive
+                expanded={workExpanded}
+                onClick={() => setWorkExpanded(!workExpanded)}
+              />
+              {workExpanded && (
+                <div className="mt-1.5 space-y-1">
+                  {childIds.map((childId) => (
+                    <TranscriptTreeNode
+                      key={childId}
+                      itemId={childId}
+                      transcript={transcript}
+                      childrenByParentId={childrenByParentId}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        )}
+
+        {/* Agent's synthesis / result */}
+        {normalizedAgentResult && (
+          <AgentResultBlock content={normalizedAgentResult} />
+        )}
+      </div>}
+    </div>
+  );
+}
+
+
+const AGENT_RESULT_COLLAPSED_HEIGHT = 200;
+
+function AgentHeaderIcon({ isRunning }: { isRunning: boolean }) {
+  if (!isRunning) {
+    return <Sparkles />;
+  }
+
+  return <Spinner className="size-3 text-muted-foreground/60" />;
+}
+
+function AgentPromptBlock({ content }: { content: string }) {
+  return (
+    <div className="mt-1">
+      <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        Prompt To Subagent
+      </div>
+      <div className="overflow-hidden rounded-md border border-border/60 bg-muted/25">
+        <AutoHideScrollArea className="w-full" viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}>
+          <div className="px-3 py-2 text-sm leading-relaxed text-muted-foreground">
+            <MarkdownRenderer
+              content={content}
+              className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+            />
+          </div>
+        </AutoHideScrollArea>
+      </div>
+    </div>
+  );
+}
+
+function AgentResultBlock({ content }: { content: string }) {
+  const [resultExpanded, setResultExpanded] = useState(false);
+  const [needsTruncation, setNeedsTruncation] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      setNeedsTruncation(contentRef.current.scrollHeight > AGENT_RESULT_COLLAPSED_HEIGHT);
+    }
+  }, [content]);
+
+  return (
+    <div data-chat-selection-unit className="mt-1">
+      <div
+        className={`relative ${!resultExpanded && needsTruncation ? "overflow-hidden" : ""}`}
+        style={!resultExpanded && needsTruncation ? { maxHeight: AGENT_RESULT_COLLAPSED_HEIGHT } : undefined}
+      >
+        <div ref={contentRef} className="text-chat leading-relaxed select-text text-foreground">
+          <MarkdownRenderer
+            content={content}
+            className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+          />
+        </div>
+        {!resultExpanded && needsTruncation && (
+          <>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-background to-transparent" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center">
+              <Button
+                variant="inverted"
+                size="pill"
+                onClick={() => setResultExpanded(true)}
+                className="pointer-events-auto"
+              >
+                Show full response
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function collectDescendantItems(
+  itemIds: string[],
+  transcript: TranscriptState,
+  childrenByParentId: Map<string, string[]>,
+): TranscriptItem[] {
+  const out: TranscriptItem[] = [];
+  for (const itemId of itemIds) {
+    const item = transcript.itemsById[itemId];
+    if (!item) continue;
+    out.push(item);
+    const childIds = childrenByParentId.get(itemId) ?? [];
+    out.push(...collectDescendantItems(childIds, transcript, childrenByParentId));
+  }
+  return out;
+}
+
+function hasRenderableToolDetails(item: ToolCallItem): boolean {
+  return item.contentParts.some((part) => part.type !== "tool_call");
+}
+
+function formatCollapsedSummary(summary: {
+  messages: number;
+  toolCalls: number;
+  subagents: number;
+}): string {
+  return [
+    pluralize(summary.messages, "message"),
+    pluralize(summary.toolCalls, "tool call"),
+    pluralize(summary.subagents, "subagent"),
+  ]
+    .filter((value): value is string => value !== null)
+    .join(", ");
+}
+
+function pluralize(count: number, singular: string, plural?: string): string | null {
+  if (count <= 0) {
+    return null;
+  }
+  return `${count} ${count === 1 ? singular : (plural ?? singular + "s")}`;
+}
+
+function buildCollapsedSummaryIcons(summary: {
+  messages: number;
+  toolCalls: number;
+  subagents: number;
+}): ReactNode[] {
+  const icons: ReactNode[] = [];
+  if (summary.messages > 0) {
+    icons.push(<FileText key="messages" className="size-3.5" />);
+  }
+  if (summary.toolCalls > 0) {
+    icons.push(<Settings key="tools" className="size-3.5" />);
+  }
+  if (summary.subagents > 0) {
+    icons.push(<ClipboardList key="subagents" className="size-3.5" />);
+  }
+  return icons;
+}
+
+function normalizeToolResultText(text: string): string {
+  const trimmed = text.trim();
+  const match = trimmed.match(/^```(?:console|text|bash|sh)?\n([\s\S]*?)\n```$/);
+  return match ? match[1] : text;
+}
+
+function isSubagentItem(item: ToolCallItem): boolean {
+  return item.nativeToolName === "Agent" || item.semanticKind === "subagent";
+}
+
+function describeToolCall(
+  item: ToolCallItem,
+  toolName: string,
+): { label: string; hint?: string } {
+  const cleanedToolName = toolName.trim();
+  const nativeName = item.nativeToolName?.trim() ?? "";
+  const normalizedToolName = cleanedToolName.toLowerCase();
+  const raw = isRecord(item.rawInput);
+
+  switch (item.semanticKind) {
+    case "subagent": {
+      const description = readString(raw?.description) ?? undefined;
+      return {
+        label: "Agent task",
+        hint: description
+          ?? (cleanedToolName && normalizedToolName !== "agent" ? cleanedToolName : undefined),
+      };
+    }
+    case "search": {
+      const pattern = readString(raw?.pattern) ?? undefined;
+      return {
+        label: "Search",
+        hint: pattern
+          ?? (cleanedToolName && normalizedToolName !== "search" ? cleanedToolName : undefined),
+      };
+    }
+    case "fetch":
+      return {
+        label: "Fetch",
+        hint: cleanedToolName && normalizedToolName !== "fetch" ? cleanedToolName : undefined,
+      };
+    case "mode_switch":
+      return {
+        label: "Mode change",
+        hint: cleanedToolName || nativeName || undefined,
+      };
+    case "terminal": {
+      const description = readString(raw?.description) ?? undefined;
+      return {
+        label: description ?? "Command",
+        hint: cleanedToolName || nativeName || undefined,
+      };
+    }
+    case "file_read":
+      return {
+        label: "Read",
+        hint: cleanedToolName && normalizedToolName !== "read" ? cleanedToolName : undefined,
+      };
+    case "file_change":
+      return {
+        label: "Changed file",
+        hint: cleanedToolName && normalizedToolName !== "edit" ? cleanedToolName : undefined,
+      };
+    default:
+      if (nativeName && nativeName !== cleanedToolName) {
+        return {
+          label: nativeName,
+          hint: cleanedToolName || undefined,
+        };
+      }
+      if (cleanedToolName) {
+        return {
+          label: cleanedToolName,
+          hint: item.toolKind !== "other" ? item.toolKind : undefined,
+        };
+      }
+      return {
+        label: "Tool call",
+        hint: item.toolKind !== "other" ? item.toolKind : undefined,
+      };
+  }
+}
+
+function deriveReadPath(item: ToolCallItem, fallback: string): string {
+  const rawInput = isRecord(item.rawInput);
+  const fromInput =
+    readString(rawInput?.file_path) ??
+    readString(rawInput?.path);
+  if (fromInput) return fromInput;
+  return fallback.startsWith("Read ") ? fallback.slice(5) : fallback;
+}
+
+function isRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? value as Record<string, unknown> : null;
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function mapStatus(
+  status: string,
+): "running" | "completed" | "failed" {
+  if (status === "completed") return "completed";
+  if (status === "failed") return "failed";
+  return "running";
+}
+
+function ToolKindIcon({
+  kind,
+  nativeToolName,
+  title,
+}: {
+  kind: string;
+  nativeToolName: string | null;
+  title?: string | null;
+}) {
+  const className = "size-3 text-faint";
+  const normalizedNativeToolName = nativeToolName?.toLowerCase() ?? "";
+  const normalizedTitle = title?.toLowerCase() ?? "";
+
+  if (nativeToolName === "Bash" || kind === "execute") {
+    return <Terminal className={className} />;
+  }
+  if (
+    normalizedNativeToolName === "ls"
+    || kind === "list"
+    || normalizedTitle.startsWith("list ")
+    || normalizedTitle.startsWith("listing")
+    || normalizedTitle.includes(" listing")
+  ) {
+    return <FolderList className={className} />;
+  }
+  if (nativeToolName === "Read" || kind === "read") {
+    return <FileText className={className} />;
+  }
+  if (nativeToolName === "Write") {
+    return <FilePlus className={className} />;
+  }
+  if (nativeToolName === "Edit" || kind === "edit") {
+    return <FilePen className={className} />;
+  }
+  if (nativeToolName === "Agent" || kind === "think") {
+    return <ClipboardList className={className} />;
+  }
+  return <Settings className={className} />;
+}

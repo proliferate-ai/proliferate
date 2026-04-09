@@ -1,0 +1,18 @@
+# Existing oversized source files. Keep this list shrinking over time.
+anyharness/crates/anyharness-lib/src/acp/event_sink.rs
+anyharness/crates/anyharness-lib/src/acp/session_actor.rs
+anyharness/crates/anyharness-lib/src/agents/installer.rs
+anyharness/crates/anyharness-lib/src/agents/resolver.rs
+anyharness/crates/anyharness-lib/src/api/http/sessions.rs
+anyharness/crates/anyharness-lib/src/sessions/live_config.rs
+anyharness/crates/anyharness-lib/src/sessions/runtime.rs
+anyharness/crates/anyharness-lib/src/sessions/store.rs
+anyharness/crates/anyharness-lib/src/workspaces/service.rs
+anyharness/sdk/src/reducer/transcript.ts
+desktop/src/components/ui/icons.tsx
+desktop/src/components/workspace/chat/transcript/MessageList.tsx
+server/tests/integration/test_cloud_api.py
+server/tests/unit/test_cloud_runtime_provision.py
+server/proliferate/db/store/cloud_workspaces.py
+server/proliferate/server/cloud/runtime/provision.py
+server/proliferate/server/cloud/workspaces/service.py

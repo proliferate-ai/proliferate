@@ -1,0 +1,24 @@
+[package]
+name = "anyharness"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "AnyHarness runtime binary"
+
+[[bin]]
+name = "anyharness"
+path = "src/main.rs"
+
+[dependencies]
+anyharness-lib.workspace = true
+axum.workspace = true
+clap.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+sentry.workspace = true
+sentry-anyhow.workspace = true
+sentry-tracing.workspace = true

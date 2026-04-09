@@ -1,0 +1,17 @@
+{
+  "private": true,
+  "scripts": {
+    "e2b:template": "node scripts/build-template.mjs",
+    "e2b:smoke": "node scripts/smoke-e2b-runtime.mjs",
+    "test:agent:setup": "node scripts/setup-agent-runtime-suite.mjs prepare",
+    "test:agent:cleanup": "node scripts/setup-agent-runtime-suite.mjs cleanup",
+    "test:agent:sdk": "pnpm --filter @anyharness/sdk test",
+    "test:agent:runtime:attached": "pnpm --filter @anyharness/sdk generate && pnpm --filter @anyharness/tests test",
+    "test:agent:runtime:local": "pnpm --filter @anyharness/sdk generate && node scripts/run-local-agent-runtime-suite.mjs",
+    "test:agent:local:fast": "pnpm test:agent:runtime:local",
+    "test:agent:local": "pnpm test:agent:sdk && pnpm test:agent:runtime:local"
+  },
+  "dependencies": {
+    "e2b": "^2.16.0"
+  }
+}

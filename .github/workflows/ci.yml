@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  repo-shape:
+    name: Repo shape checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check max source file length
+        run: python3 scripts/check_max_lines.py
+
+      - name: Check server layer boundaries
+        run: python3 scripts/check_server_boundaries.py
+
+  cargo-check:
+    name: Cargo check & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system deps (Tauri)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo check
+        run: cargo check --workspace
+
+      - name: Cargo test
+        run: cargo test --workspace
+
+  sdk-build:
+    name: Build SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate OpenAPI spec
+        run: |
+          mkdir -p anyharness/sdk/generated
+          cargo run --bin anyharness -- print-openapi > anyharness/sdk/generated/openapi.json
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Generate TypeScript types
+        working-directory: anyharness/sdk
+        run: pnpm run generate:types
+
+      - name: Build SDK
+        working-directory: anyharness/sdk
+        run: pnpm run build
+
+  desktop-frontend:
+    name: Desktop frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate and build SDK
+        run: |
+          mkdir -p anyharness/sdk/generated
+          cargo run --bin anyharness -- print-openapi > anyharness/sdk/generated/openapi.json
+          pnpm install
+          cd anyharness/sdk && pnpm run generate:types && pnpm run build
+
+      - name: Build desktop frontend
+        working-directory: desktop
+        run: pnpm run build

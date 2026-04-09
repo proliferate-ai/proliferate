@@ -1,0 +1,2 @@
+class SlackWebhookError(RuntimeError):
+    pass

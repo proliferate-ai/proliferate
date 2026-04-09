@@ -1,0 +1,618 @@
+# Canonical environment variable reference for the Proliferate stack.
+#
+# Every env var across every deployment surface lives here. Use the tags
+# to filter by deployment mode:
+#
+#   local-dev     — Mode B (local desktop + local control plane)
+#   self-hosted   — Mode C/D (Docker Compose or CloudFormation)
+#   production    — Mode E (Proliferate Cloud)
+#   ci            — GitHub Actions workflows
+#   desktop       — Desktop renderer (VITE_*) or native Tauri
+#
+# Mode A (local desktop only) requires no env vars.
+
+# ═══════════════════════════════════════════════════════════════════════
+# Server: Core
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: DEBUG
+  secret: false
+  default: "false"
+  description: Debug mode flag
+  tags: [local-dev]
+
+- name: API_BASE_URL
+  secret: false
+  default: ""
+  description: Canonical public API base URL for absolute auth callback generation
+  tags: [self-hosted, production]
+
+- name: DATABASE_URL
+  secret: true
+  default: "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate"
+  description: PostgreSQL connection string
+  tags: [local-dev, self-hosted, production]
+
+- name: DATABASE_ECHO
+  secret: false
+  default: "false"
+  description: SQLAlchemy query echo/logging
+  tags: [local-dev]
+
+- name: CORS_ALLOW_ORIGINS
+  secret: false
+  default: "http://localhost:1420,...,tauri://localhost"
+  description: Comma-separated browser/webview origins allowed to call the API
+  tags: [local-dev, self-hosted, production]
+
+- name: JWT_SECRET
+  secret: true
+  default: "CHANGE-ME-IN-PRODUCTION"
+  description: JWT signing and OAuth state signing
+  tags: [local-dev, self-hosted, production]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Server: GitHub OAuth
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: GITHUB_OAUTH_CLIENT_ID
+  secret: true
+  default: ""
+  description: GitHub OAuth client ID for desktop sign-in
+  tags: [local-dev, self-hosted, production]
+
+- name: GITHUB_OAUTH_CLIENT_SECRET
+  secret: true
+  default: ""
+  description: GitHub OAuth client secret
+  tags: [local-dev, self-hosted, production]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Server: Sandbox Providers
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: SANDBOX_PROVIDER
+  secret: false
+  default: "e2b"
+  description: "Cloud sandbox provider: e2b or daytona"
+  tags: [local-dev, self-hosted, production]
+
+- name: E2B_API_KEY
+  secret: true
+  default: ""
+  description: E2B provisioning auth
+  tags: [local-dev, self-hosted, production]
+
+- name: E2B_TEMPLATE_NAME
+  secret: false
+  default: ""
+  description: Explicit E2B template ref for cloud provisioning, typically TEAM_SLUG/proliferate-runtime-cloud:production
+  tags: [local-dev, self-hosted, production]
+
+- name: E2B_WEBHOOK_SIGNATURE_SECRET
+  secret: true
+  default: ""
+  description: E2B webhook verification
+  tags: [production]
+
+- name: DAYTONA_API_KEY
+  secret: true
+  default: ""
+  description: Daytona provisioning auth
+  tags: [local-dev, self-hosted, production]
+
+- name: DAYTONA_SERVER_URL
+  secret: false
+  default: "https://app.daytona.io/api"
+  description: Daytona API base URL
+  tags: [local-dev, self-hosted, production]
+
+- name: DAYTONA_TARGET
+  secret: false
+  default: "us"
+  description: Daytona target/region
+  tags: [local-dev, self-hosted, production]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Server: Cloud Workspaces
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: CLOUD_SECRET_KEY
+  secret: true
+  default: "CHANGE-ME-IN-PRODUCTION-CLOUD-SECRET"
+  description: Control-plane signing for cloud flows
+  tags: [local-dev, self-hosted, production]
+
+- name: CLOUD_FREE_SANDBOX_HOURS
+  secret: false
+  default: "2000.0"
+  description: Free-tier usage limit (hours)
+  tags: [self-hosted, production]
+
+- name: CLOUD_CONCURRENT_SANDBOX_LIMIT
+  secret: false
+  default: "200"
+  description: Concurrent sandbox limit
+  tags: [self-hosted, production]
+
+- name: CLOUD_BILLING_MODE
+  secret: false
+  default: "off"
+  description: "Billing mode: off, observe, or enforce"
+  tags: [production]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Server: Cloud Runtime Injection (both E2B and Daytona)
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: CLOUD_RUNTIME_SOURCE_BINARY_PATH
+  secret: false
+  default: ""
+  description: Path to the Linux AnyHarness binary uploaded into cloud sandboxes
+  tags: [self-hosted, production]
+
+- name: CLOUD_RUNTIME_SENTRY_DSN
+  secret: true
+  default: ""
+  description: Sentry DSN for remote AnyHarness in cloud sandboxes
+  tags: [self-hosted, production]
+
+- name: CLOUD_RUNTIME_SENTRY_ENVIRONMENT
+  secret: false
+  default: ""
+  description: Sentry environment for remote AnyHarness
+  tags: [self-hosted, production]
+
+- name: CLOUD_RUNTIME_SENTRY_RELEASE
+  secret: false
+  default: ""
+  description: Sentry release for remote AnyHarness
+  tags: [self-hosted, production]
+
+- name: CLOUD_RUNTIME_SENTRY_TRACES_SAMPLE_RATE
+  secret: false
+  default: "1.0"
+  description: Sentry traces sample rate for remote AnyHarness
+  tags: [self-hosted, production]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Server: AI Magic
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: ANTHROPIC_API_KEY
+  secret: true
+  default: ""
+  description: Anthropic API key for AI session title generation
+  tags: [local-dev, self-hosted, production]
+
+- name: AI_MAGIC_SESSION_TITLE_MODEL
+  secret: false
+  default: "claude-haiku-4-5-20251001"
+  description: Claude model used for session titles
+  tags: [local-dev, self-hosted, production]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Server: Observability
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: SENTRY_DSN
+  secret: true
+  default: ""
+  description: Server Sentry DSN
+  tags: [self-hosted, production]
+
+- name: SENTRY_ENVIRONMENT
+  secret: false
+  default: "trusted-beta"
+  description: Server Sentry environment
+  tags: [self-hosted, production]
+
+- name: SENTRY_RELEASE
+  secret: false
+  default: "proliferate-server@0.1.0"
+  description: Server Sentry release tag
+  tags: [self-hosted, production]
+
+- name: SENTRY_TRACES_SAMPLE_RATE
+  secret: false
+  default: "1.0"
+  description: Server Sentry traces sample rate
+  tags: [self-hosted, production]
+
+- name: POSTHOG_PROJECT_API_KEY
+  secret: true
+  default: ""
+  description: Server-side PostHog analytics key
+  tags: [self-hosted, production]
+
+- name: POSTHOG_HOST
+  secret: false
+  default: "https://us.i.posthog.com"
+  description: PostHog ingest host
+  tags: [self-hosted, production]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Server: Messaging
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: CUSTOMERIO_SITE_ID
+  secret: true
+  default: ""
+  description: Customer.io workspace ID
+  tags: [production]
+
+- name: CUSTOMERIO_API_KEY
+  secret: true
+  default: ""
+  description: Customer.io API auth
+  tags: [production]
+
+- name: CUSTOMERIO_APP_API_KEY
+  secret: true
+  default: ""
+  description: Customer.io app API auth
+  tags: [production]
+
+- name: CUSTOMERIO_FROM_EMAIL
+  secret: false
+  default: "hello@proliferate.dev"
+  description: Customer.io sender email address
+  tags: [production]
+
+- name: FRONTEND_BASE_URL
+  secret: false
+  default: ""
+  description: Frontend base URL for email links
+  tags: [production]
+
+- name: SUPPORT_SLACK_WEBHOOK_URL
+  secret: true
+  default: ""
+  description: Slack incoming webhook for support messages (Proliferate Cloud only)
+  tags: [production]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Desktop: Renderer (VITE_*)
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: VITE_PROLIFERATE_API_BASE_URL
+  secret: false
+  default: "http://127.0.0.1:8000"
+  description: Control-plane base URL (overridden at runtime by ~/.proliferate/config.json)
+  tags: [local-dev, ci]
+
+- name: VITE_PROLIFERATE_ENVIRONMENT
+  secret: false
+  default: "development"
+  description: Renderer telemetry environment
+  tags: [local-dev, ci]
+
+- name: VITE_PROLIFERATE_RELEASE
+  secret: false
+  default: "proliferate-desktop@dev"
+  description: Renderer telemetry release tag
+  tags: [local-dev, ci]
+
+- name: VITE_PROLIFERATE_TELEMETRY_DISABLED
+  secret: false
+  default: "false"
+  description: Disable all renderer telemetry
+  tags: [local-dev]
+
+- name: VITE_DEV_DISABLE_AUTH
+  secret: false
+  default: ""
+  description: Dev-only auth bypass
+  tags: [local-dev]
+
+- name: VITE_REQUIRE_AUTH
+  secret: false
+  default: ""
+  description: Force auth requirement in dev
+  tags: [local-dev]
+
+- name: VITE_PROLIFERATE_DEBUG_LATENCY
+  secret: false
+  default: ""
+  description: Extra latency logging in dev
+  tags: [local-dev]
+
+- name: VITE_PROLIFERATE_SENTRY_DSN
+  secret: false
+  default: ""
+  description: Renderer Sentry DSN
+  tags: [local-dev, ci]
+
+- name: VITE_PROLIFERATE_SENTRY_TRACES_SAMPLE_RATE
+  secret: false
+  default: "1.0"
+  description: Renderer Sentry traces sample rate
+  tags: [local-dev, ci]
+
+- name: VITE_PROLIFERATE_SENTRY_ENABLE_LOGS
+  secret: false
+  default: "true"
+  description: Renderer Sentry log capture
+  tags: [local-dev, ci]
+
+- name: VITE_PROLIFERATE_POSTHOG_KEY
+  secret: false
+  default: ""
+  description: Renderer PostHog key
+  tags: [local-dev, ci]
+
+- name: VITE_PROLIFERATE_POSTHOG_HOST
+  secret: false
+  default: "https://us.i.posthog.com"
+  description: Renderer PostHog host
+  tags: [local-dev, ci]
+
+- name: VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED
+  secret: false
+  default: "false"
+  description: Renderer session recording toggle
+  tags: [local-dev, ci]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Desktop: Native Tauri (compile-time)
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: PROLIFERATE_DESKTOP_SENTRY_DSN
+  secret: false
+  default: ""
+  description: Native desktop Sentry DSN (baked into release builds)
+  tags: [ci]
+
+- name: PROLIFERATE_DESKTOP_SENTRY_ENVIRONMENT
+  secret: false
+  default: "development"
+  description: Native desktop Sentry environment
+  tags: [ci]
+
+- name: PROLIFERATE_DESKTOP_SENTRY_RELEASE
+  secret: false
+  default: "proliferate-desktop-native@dev"
+  description: Native desktop Sentry release tag
+  tags: [ci]
+
+- name: PROLIFERATE_DESKTOP_SENTRY_TRACES_SAMPLE_RATE
+  secret: false
+  default: "1.0"
+  description: Native desktop Sentry traces sample rate
+  tags: [ci]
+
+- name: ANYHARNESS_SENTRY_DSN
+  secret: false
+  default: ""
+  description: Bundled sidecar Sentry DSN (baked into release builds)
+  tags: [ci]
+
+- name: ANYHARNESS_SENTRY_ENVIRONMENT
+  secret: false
+  default: "development"
+  description: Bundled sidecar Sentry environment
+  tags: [ci]
+
+- name: ANYHARNESS_SENTRY_RELEASE
+  secret: false
+  default: "anyharness-sidecar@dev"
+  description: Bundled sidecar Sentry release tag
+  tags: [ci]
+
+- name: ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE
+  secret: false
+  default: "1.0"
+  description: Bundled sidecar Sentry traces sample rate
+  tags: [ci]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Desktop: Native Tauri (runtime)
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: ANYHARNESS_BIN
+  secret: false
+  default: ""
+  description: Explicit sidecar binary path override
+  tags: [local-dev]
+
+- name: ANYHARNESS_DEV_URL
+  secret: false
+  default: ""
+  description: Skip bundled sidecar, connect to an external AnyHarness
+  tags: [local-dev]
+
+- name: ANYHARNESS_PORT
+  secret: false
+  default: ""
+  description: Override the local sidecar port
+  tags: [local-dev]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Deploy: Docker Compose / Bootstrap
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: SITE_ADDRESS
+  secret: false
+  default: ""
+  description: Public hostname for Caddy TLS (DNS must resolve before first boot)
+  tags: [self-hosted]
+
+- name: PROLIFERATE_SERVER_IMAGE
+  secret: false
+  default: "ghcr.io/proliferate-ai/proliferate-server"
+  description: Server container image repository
+  tags: [self-hosted]
+
+- name: PROLIFERATE_SERVER_IMAGE_TAG
+  secret: false
+  default: "stable"
+  description: Server container image tag
+  tags: [self-hosted]
+
+- name: PROLIFERATE_HOST_BIN_DIR
+  secret: false
+  default: "/opt/proliferate/bin"
+  description: Host directory for runtime binaries (mounted into API container)
+  tags: [self-hosted]
+
+- name: PROLIFERATE_PUBLIC_HEALTHCHECK_URL
+  secret: false
+  default: ""
+  description: Public HTTPS endpoint to verify after local health passes
+  tags: [self-hosted]
+
+- name: RUNTIME_BINARY_URL
+  secret: false
+  default: ""
+  description: Tarball URL for AnyHarness binary download
+  tags: [self-hosted]
+
+- name: RUNTIME_BINARY_SHA256_URL
+  secret: false
+  default: ""
+  description: SHA256SUMS file URL for tarball verification
+  tags: [self-hosted]
+
+- name: POSTGRES_DB
+  secret: false
+  default: "proliferate"
+  description: PostgreSQL database name (Docker Compose)
+  tags: [self-hosted]
+
+- name: POSTGRES_USER
+  secret: false
+  default: "proliferate"
+  description: PostgreSQL user (Docker Compose)
+  tags: [self-hosted]
+
+- name: POSTGRES_PASSWORD
+  secret: true
+  default: ""
+  description: PostgreSQL password (auto-generated on first bootstrap if blank)
+  tags: [self-hosted]
+
+- name: AWS_REGION
+  secret: false
+  default: ""
+  description: AWS region (only needed for private ECR pulls)
+  tags: [self-hosted]
+
+# ═══════════════════════════════════════════════════════════════════════
+# CI: Server
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: AWS_ROLE_ARN
+  secret: false
+  description: GitHub OIDC role ARN for ECR push
+  tags: [ci]
+  ci_type: var
+  workflow: server-ci
+
+# ═══════════════════════════════════════════════════════════════════════
+# CI: Desktop Release
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: TAURI_SIGNING_PRIVATE_KEY
+  secret: true
+  description: Desktop updater signing key
+  tags: [ci]
+  ci_type: secret
+  workflow: release-desktop
+
+- name: TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+  secret: true
+  description: Desktop updater signing key password
+  tags: [ci]
+  ci_type: secret
+  workflow: release-desktop
+
+- name: APPLE_CERTIFICATE
+  secret: true
+  description: Apple Developer cert (.p12, base64-encoded)
+  tags: [ci]
+  ci_type: secret
+  workflow: release-desktop
+
+- name: APPLE_CERTIFICATE_PASSWORD
+  secret: true
+  description: Apple cert password
+  tags: [ci]
+  ci_type: secret
+  workflow: release-desktop
+
+- name: APPLE_SIGNING_IDENTITY
+  secret: true
+  description: Apple team ID for code signing
+  tags: [ci]
+  ci_type: secret
+  workflow: release-desktop
+
+- name: APPLE_API_KEY
+  secret: true
+  description: App Store Connect API key ID
+  tags: [ci]
+  ci_type: secret
+  workflow: release-desktop
+
+- name: APPLE_API_KEY_PATH
+  secret: true
+  description: App Store Connect .p8 key content
+  tags: [ci]
+  ci_type: secret
+  workflow: release-desktop
+
+- name: APPLE_API_ISSUER
+  secret: true
+  description: Apple notarization issuer ID
+  tags: [ci]
+  ci_type: secret
+  workflow: release-desktop
+
+- name: KEYCHAIN_PASSWORD
+  secret: true
+  description: macOS keychain password for CI
+  tags: [ci]
+  ci_type: secret
+  workflow: release-desktop
+
+- name: SENTRY_AUTH_TOKEN
+  secret: true
+  description: Sentry source map upload token
+  tags: [ci]
+  ci_type: secret
+  workflow: release-desktop
+
+- name: SENTRY_ORG
+  secret: false
+  description: Sentry organization slug
+  tags: [ci]
+  ci_type: var
+  workflow: release-desktop
+
+- name: SENTRY_PROJECT
+  secret: false
+  description: Sentry project slug
+  tags: [ci]
+  ci_type: var
+  workflow: release-desktop
+
+- name: AWS_DESKTOP_RELEASE_ROLE_ARN
+  secret: false
+  description: GitHub OIDC role ARN for S3 + CloudFront
+  tags: [ci]
+  ci_type: var
+  workflow: release-desktop
+
+- name: DESKTOP_DOWNLOADS_S3_BUCKET
+  secret: false
+  description: S3 bucket for desktop updater assets
+  tags: [ci]
+  ci_type: var
+  workflow: release-desktop
+
+- name: DESKTOP_CLOUDFRONT_DISTRIBUTION_ID
+  secret: false
+  description: CloudFront distribution for desktop updater
+  tags: [ci]
+  ci_type: var
+  workflow: release-desktop

@@ -1,0 +1,8 @@
+packages:
+  - "anyharness/sdk"
+  - "anyharness/sdk-react"
+  - "anyharness/tests"
+  - "desktop"
+
+onlyBuiltDependencies:
+  - "@sentry/cli"

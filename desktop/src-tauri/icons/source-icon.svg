@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="warmGlow" cx="512" cy="512" r="280" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#C8860A" stop-opacity="0.55"/>
+      <stop offset="50%" stop-color="#C8860A" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#C8860A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" fill="#000000"/>
+  <rect width="1024" height="1024" rx="220" fill="url(#warmGlow)"/>
+  <g transform="translate(262, 262) scale(2.5)">
+    <rect x="75.00" y="75.00" width="50.00" height="50.00" fill="#f3f1ef"/>
+    <rect x="87.67" y="5.00" width="24.67" height="24.67" fill="#f3f1ef"/>
+    <rect x="129.00" y="46.33" width="24.67" height="24.67" fill="#f3f1ef"/>
+    <rect x="170.33" y="87.67" width="24.67" height="24.67" fill="#f3f1ef"/>
+    <rect x="129.00" y="129.00" width="24.67" height="24.67" fill="#f3f1ef"/>
+    <rect x="87.67" y="170.33" width="24.67" height="24.67" fill="#f3f1ef"/>
+    <rect x="46.33" y="129.00" width="24.67" height="24.67" fill="#f3f1ef"/>
+    <rect x="5.00" y="87.67" width="24.67" height="24.67" fill="#f3f1ef"/>
+    <rect x="46.33" y="46.33" width="24.67" height="24.67" fill="#f3f1ef"/>
+  </g>
+</svg>

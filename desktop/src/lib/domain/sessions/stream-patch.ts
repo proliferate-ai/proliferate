@@ -1,0 +1,148 @@
+import type {
+  SessionEventEnvelope,
+  SessionExecutionSummary,
+  SessionLiveConfigSnapshot,
+  SessionStatus,
+  TranscriptState,
+} from "@anyharness/sdk";
+import type { SessionStreamConnectionState } from "@/stores/sessions/harness-store";
+
+export interface SessionStreamPatchInput {
+  slot: {
+    modelId: string | null;
+    modeId: string | null;
+    title: string | null;
+    status: SessionStatus | null;
+    executionSummary?: SessionExecutionSummary | null;
+  };
+  nextTranscript: TranscriptState;
+  nextPendingUserPrompt: {
+    text: string;
+    timestamp: string;
+  } | null;
+  envelope: SessionEventEnvelope;
+}
+
+export interface SessionStreamPatch {
+  transcript: TranscriptState;
+  pendingUserPrompt: {
+    text: string;
+    timestamp: string;
+  } | null;
+  liveConfig?: SessionLiveConfigSnapshot | null;
+  executionSummary?: SessionExecutionSummary | null;
+  modelId?: string | null;
+  modeId?: string | null;
+  title?: string | null;
+  status?: SessionStatus | null;
+  sseHandle?: null;
+  streamConnectionState?: SessionStreamConnectionState;
+}
+
+export function buildSessionStreamPatch({
+  slot,
+  nextTranscript,
+  nextPendingUserPrompt,
+  envelope,
+}: SessionStreamPatchInput): SessionStreamPatch {
+  const event = envelope.event;
+  const patch: SessionStreamPatch = {
+    transcript: nextTranscript,
+    pendingUserPrompt: nextPendingUserPrompt,
+  };
+
+  if (event.type === "current_mode_update") {
+    patch.modeId = event.currentModeId;
+  }
+
+  if (event.type === "config_option_update") {
+    patch.liveConfig = event.liveConfig;
+    patch.modelId =
+      event.liveConfig.normalizedControls.model?.currentValue ?? slot.modelId;
+    patch.modeId =
+      event.liveConfig.normalizedControls.mode?.currentValue ?? slot.modeId;
+    patch.transcript = {
+      ...nextTranscript,
+      currentModeId:
+        event.liveConfig.normalizedControls.mode?.currentValue
+        ?? nextTranscript.currentModeId,
+    };
+  }
+
+  if (event.type === "session_info_update" && event.title !== undefined) {
+    patch.title = event.title ?? null;
+  }
+
+  if (
+    event.type === "turn_started"
+    || event.type === "item_started"
+    || event.type === "item_delta"
+  ) {
+    patch.status = "running";
+    patch.executionSummary = {
+      phase: "running",
+      hasLiveHandle: true,
+      pendingApproval: null,
+      updatedAt: envelope.timestamp,
+    };
+  }
+
+  if (event.type === "permission_requested") {
+    patch.status = "running";
+    patch.executionSummary = {
+      phase: "awaiting_permission",
+      hasLiveHandle: true,
+      pendingApproval: {
+        requestId: event.requestId,
+        title: event.title,
+        toolCallId: event.toolCallId ?? null,
+        toolKind: event.toolKind ?? null,
+      },
+      updatedAt: envelope.timestamp,
+    };
+  }
+
+  if (event.type === "permission_resolved") {
+    patch.status = "running";
+    patch.executionSummary = {
+      phase: "running",
+      hasLiveHandle: true,
+      pendingApproval: null,
+      updatedAt: envelope.timestamp,
+    };
+  }
+
+  if (
+    (event.type === "item_started" || event.type === "item_completed")
+    && event.item.kind === "user_message"
+    && nextPendingUserPrompt == null
+  ) {
+    patch.pendingUserPrompt = null;
+  }
+
+  if (event.type === "turn_ended" || event.type === "error") {
+    patch.status = event.type === "error" ? "errored" : "idle";
+    patch.executionSummary = {
+      phase: event.type === "error" ? "errored" : "idle",
+      hasLiveHandle: true,
+      pendingApproval: null,
+      updatedAt: envelope.timestamp,
+    };
+  }
+
+  if (event.type === "session_ended") {
+    patch.status = event.reason === "error" ? "errored" : "closed";
+    patch.executionSummary = {
+      phase: event.reason === "error" ? "errored" : "closed",
+      hasLiveHandle: false,
+      pendingApproval: null,
+      updatedAt: envelope.timestamp,
+    };
+  }
+
+  if (patch.title === undefined) {
+    patch.title = slot.title;
+  }
+
+  return patch;
+}

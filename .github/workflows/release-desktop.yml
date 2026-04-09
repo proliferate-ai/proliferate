@@ -1,0 +1,388 @@
+name: Release Desktop
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (skip GitHub release creation)"
+        type: boolean
+        default: false
+      target_os:
+        description: "Target OS"
+        type: choice
+        options:
+          - all
+          - macos
+          - windows
+        default: all
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  VITE_PROLIFERATE_API_BASE_URL: ${{ vars.VITE_PROLIFERATE_API_BASE_URL }}
+  VITE_PROLIFERATE_ENVIRONMENT: ${{ vars.VITE_PROLIFERATE_ENVIRONMENT || 'production' }}
+  VITE_PROLIFERATE_SENTRY_DSN: ${{ vars.VITE_PROLIFERATE_SENTRY_DSN }}
+  VITE_PROLIFERATE_SENTRY_TRACES_SAMPLE_RATE: ${{ vars.VITE_PROLIFERATE_SENTRY_TRACES_SAMPLE_RATE }}
+  VITE_PROLIFERATE_SENTRY_ENABLE_LOGS: ${{ vars.VITE_PROLIFERATE_SENTRY_ENABLE_LOGS }}
+  VITE_PROLIFERATE_POSTHOG_KEY: ${{ vars.VITE_PROLIFERATE_POSTHOG_KEY }}
+  VITE_PROLIFERATE_POSTHOG_HOST: ${{ vars.VITE_PROLIFERATE_POSTHOG_HOST }}
+  PROLIFERATE_DESKTOP_SENTRY_DSN: ${{ vars.PROLIFERATE_DESKTOP_SENTRY_DSN || vars.VITE_PROLIFERATE_SENTRY_DSN }}
+  PROLIFERATE_DESKTOP_SENTRY_ENVIRONMENT: ${{ vars.PROLIFERATE_DESKTOP_SENTRY_ENVIRONMENT || vars.VITE_PROLIFERATE_ENVIRONMENT || 'production' }}
+  PROLIFERATE_DESKTOP_SENTRY_TRACES_SAMPLE_RATE: ${{ vars.PROLIFERATE_DESKTOP_SENTRY_TRACES_SAMPLE_RATE || vars.VITE_PROLIFERATE_SENTRY_TRACES_SAMPLE_RATE }}
+  ANYHARNESS_SENTRY_DSN: ${{ vars.ANYHARNESS_SENTRY_DSN || vars.E2B_RUNTIME_SENTRY_DSN }}
+  ANYHARNESS_SENTRY_ENVIRONMENT: ${{ vars.ANYHARNESS_SENTRY_ENVIRONMENT || vars.E2B_RUNTIME_SENTRY_ENVIRONMENT || vars.VITE_PROLIFERATE_ENVIRONMENT || 'production' }}
+  ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE: ${{ vars.ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE || vars.E2B_RUNTIME_SENTRY_TRACES_SAMPLE_RATE }}
+  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+jobs:
+  build-desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            runner_os: macos
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            runner_os: macos
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            runner_os: windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Decide whether to build this matrix entry
+        id: filter
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ "${{ inputs.target_os }}" != "all" ]] && [[ "${{ inputs.target_os }}" != "${{ matrix.runner_os }}" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.filter.outputs.skip != 'true'
+        uses: actions/checkout@v4
+
+      - name: Validate version consistency
+        if: steps.filter.outputs.skip != 'true' && github.event_name == 'push'
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#desktop-v}"
+          PKG_VERSION=$(node -p "require('./desktop/package.json').version")
+          TAURI_VERSION=$(node -p "JSON.parse(require('fs').readFileSync('./desktop/src-tauri/tauri.conf.json','utf8')).version")
+          CARGO_VERSION=$(grep '^version' desktop/src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          if [[ "$TAG_VERSION" != "$PKG_VERSION" ]] || [[ "$TAG_VERSION" != "$TAURI_VERSION" ]] || [[ "$TAG_VERSION" != "$CARGO_VERSION" ]]; then
+            echo "::error::Version mismatch: tag=$TAG_VERSION pkg=$PKG_VERSION tauri=$TAURI_VERSION cargo=$CARGO_VERSION"
+            exit 1
+          fi
+
+      - name: Setup Node 22
+        if: steps.filter.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup pnpm
+        if: steps.filter.outputs.skip != 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - name: Setup Rust stable
+        if: steps.filter.outputs.skip != 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build AnyHarness runtime for target
+        if: steps.filter.outputs.skip != 'true'
+        shell: bash
+        run: |
+          cargo build --release -p anyharness --target "${{ matrix.target }}"
+          mkdir -p desktop/src-tauri/binaries
+          if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
+            cp "target/${{ matrix.target }}/release/anyharness.exe" "desktop/src-tauri/binaries/anyharness-${{ matrix.target }}.exe"
+          else
+            cp "target/${{ matrix.target }}/release/anyharness" "desktop/src-tauri/binaries/anyharness-${{ matrix.target }}"
+            chmod +x "desktop/src-tauri/binaries/anyharness-${{ matrix.target }}"
+          fi
+
+      - name: Generate and build SDK
+        if: steps.filter.outputs.skip != 'true'
+        shell: bash
+        run: |
+          mkdir -p anyharness/sdk/generated anyharness/sdk/src/generated
+          cargo run --bin anyharness -- print-openapi > anyharness/sdk/generated/openapi.json
+          pnpm install
+          cd anyharness/sdk && pnpm run generate:types && pnpm run build
+
+      - name: Prepare Sentry CLI
+        if: steps.filter.outputs.skip != 'true'
+        shell: bash
+        run: pnpm rebuild @sentry/cli
+
+      - name: Build frontend
+        if: steps.filter.outputs.skip != 'true'
+        working-directory: desktop
+        shell: bash
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+        run: |
+          export VITE_PROLIFERATE_RELEASE="proliferate-desktop@${GITHUB_REF_NAME:-$GITHUB_SHA}"
+          pnpm run build
+
+      - name: Import Apple Developer Certificate
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          if [[ -z "$APPLE_CERTIFICATE" ]]; then
+            echo "No Apple certificate configured, skipping code signing setup"
+            exit 0
+          fi
+          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          security import certificate.p12 -k build.keychain \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          rm certificate.p12
+
+      - name: Write App Store Connect API key
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
+        env:
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_PATH }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          if [[ -z "$APPLE_API_KEY" ]]; then
+            echo "No App Store Connect API key configured, skipping notarization setup"
+            exit 0
+          fi
+          mkdir -p ~/private_keys
+          echo "$APPLE_API_KEY_CONTENT" > ~/private_keys/AuthKey_${APPLE_API_KEY}.p8
+
+      - name: Build Tauri app
+        if: steps.filter.outputs.skip != 'true'
+        working-directory: desktop
+        shell: bash
+        env:
+          _SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          _API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          _API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          export VITE_PROLIFERATE_RELEASE="${VITE_PROLIFERATE_RELEASE:-proliferate-desktop@${GITHUB_REF_NAME:-$GITHUB_SHA}}"
+          export PROLIFERATE_DESKTOP_SENTRY_RELEASE="${PROLIFERATE_DESKTOP_SENTRY_RELEASE:-proliferate-desktop-native@${GITHUB_REF_NAME:-$GITHUB_SHA}}"
+          export ANYHARNESS_SENTRY_RELEASE="${ANYHARNESS_SENTRY_RELEASE:-anyharness-sidecar@${GITHUB_REF_NAME:-$GITHUB_SHA}}"
+
+          if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
+            export ANYHARNESS_BIN="$PWD/src-tauri/binaries/anyharness-${{ matrix.target }}.exe"
+          else
+            export ANYHARNESS_BIN="$PWD/src-tauri/binaries/anyharness-${{ matrix.target }}"
+          fi
+
+          if [[ "${{ matrix.runner_os }}" == "macos" ]]; then
+            if [[ -n "$_SIGNING_IDENTITY" ]]; then
+              export APPLE_SIGNING_IDENTITY="$_SIGNING_IDENTITY"
+              export APPLE_API_ISSUER="$_API_ISSUER"
+              export APPLE_API_KEY="$_API_KEY"
+              export APPLE_API_KEY_PATH="$HOME/private_keys/AuthKey_${_API_KEY}.p8"
+            else
+              export APPLE_SIGNING_IDENTITY="-"
+            fi
+            # Build the DMG in the known-good path first, then build the updater-
+            # enabled app bundle separately so the mac updater tarball is emitted.
+            pnpm tauri build --target ${{ matrix.target }} --bundles dmg
+            pnpm tauri build --target ${{ matrix.target }} --bundles app
+          else
+            pnpm tauri build --target ${{ matrix.target }} --bundles msi,nsis
+          fi
+
+      - name: Verify updater artifacts
+        if: steps.filter.outputs.skip != 'true'
+        working-directory: desktop
+        shell: bash
+        run: |
+          base="../target/${{ matrix.target }}/release/bundle"
+          find "$base" -type f | sort
+
+          if [[ "${{ matrix.runner_os }}" == "macos" ]]; then
+            compgen -G "$base/dmg/*.dmg" > /dev/null || { echo "::error::Missing macOS DMG"; exit 1; }
+            compgen -G "$base/macos/*.app.tar.gz" > /dev/null || { echo "::error::Missing macOS updater tarball"; exit 1; }
+            compgen -G "$base/macos/*.app.tar.gz.sig" > /dev/null || { echo "::error::Missing macOS updater signature"; exit 1; }
+          else
+            compgen -G "$base/nsis/*-setup.exe" > /dev/null || { echo "::error::Missing Windows NSIS installer"; exit 1; }
+            compgen -G "$base/nsis/*-setup.exe.sig" > /dev/null || { echo "::error::Missing Windows updater signature"; exit 1; }
+          fi
+
+      - name: Normalize updater artifact names (macOS)
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
+        working-directory: desktop
+        shell: bash
+        run: |
+          base="../target/${{ matrix.target }}/release/bundle/macos"
+          version="${GITHUB_REF_NAME#desktop-v}"
+
+          if [[ "${{ matrix.target }}" == "aarch64-apple-darwin" ]]; then
+            suffix="aarch64"
+          else
+            suffix="x64"
+          fi
+
+          archive_src=$(find "$base" -maxdepth 1 -type f -name '*.app.tar.gz' ! -name '*_*.app.tar.gz' | head -n 1)
+          sig_src=$(find "$base" -maxdepth 1 -type f -name '*.app.tar.gz.sig' ! -name '*_*.app.tar.gz.sig' | head -n 1)
+
+          [[ -n "$archive_src" ]] || { echo "::error::Missing source updater archive"; exit 1; }
+          [[ -n "$sig_src" ]] || { echo "::error::Missing source updater signature"; exit 1; }
+
+          archive_dst="$base/Proliferate_${version}_${suffix}.app.tar.gz"
+          sig_dst="$archive_dst.sig"
+
+          mv "$archive_src" "$archive_dst"
+          mv "$sig_src" "$sig_dst"
+
+          echo "Normalized updater archive to $(basename "$archive_dst")"
+          echo "Normalized updater signature to $(basename "$sig_dst")"
+
+      - name: Verify normalized updater artifact names (macOS)
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
+        working-directory: desktop
+        shell: bash
+        run: |
+          base="../target/${{ matrix.target }}/release/bundle/macos"
+          if [[ "${{ matrix.target }}" == "aarch64-apple-darwin" ]]; then
+            suffix="aarch64"
+          else
+            suffix="x64"
+          fi
+
+          compgen -G "$base/*_${suffix}.app.tar.gz" > /dev/null || { echo "::error::Missing normalized macOS updater tarball"; exit 1; }
+          compgen -G "$base/*_${suffix}.app.tar.gz.sig" > /dev/null || { echo "::error::Missing normalized macOS updater signature"; exit 1; }
+
+      - name: Upload build artifacts (macOS)
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            target/${{ matrix.target }}/release/bundle/macos/*_*.app.tar.gz
+            target/${{ matrix.target }}/release/bundle/macos/*_*.app.tar.gz.sig
+          if-no-files-found: error
+
+      - name: Upload build artifacts (Windows)
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/bundle/**/*.msi
+            target/${{ matrix.target }}/release/bundle/**/*-setup.exe
+            target/${{ matrix.target }}/release/bundle/**/*-setup.exe.sig
+          if-no-files-found: error
+
+  create-release:
+    needs: build-desktop
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+          pattern: desktop-*
+          merge-multiple: false
+
+      - name: List artifacts
+        run: find all-artifacts -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Proliferate ${{ github.ref_name }}
+          draft: true
+          files: all-artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-updater:
+    needs: [build-desktop, create-release]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+          pattern: desktop-*
+          merge-multiple: false
+
+      - name: List artifacts
+        run: find all-artifacts -type f | sort
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DESKTOP_RELEASE_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Generate updater manifest
+        run: |
+          node scripts/generate-updater-manifest.mjs \
+            --version "${GITHUB_REF_NAME#desktop-v}" \
+            --artifacts-dir all-artifacts \
+            --base-url "${{ vars.DESKTOP_DOWNLOADS_BASE_URL }}/desktop/stable" \
+            --output latest.json
+
+      - name: Upload updater assets to S3
+        run: |
+          BUCKET="${{ vars.DESKTOP_DOWNLOADS_S3_BUCKET }}"
+          find all-artifacts -type f \( \
+            -name "*.app.tar.gz" -o \
+            -name "*.app.tar.gz.sig" -o \
+            -name "*-setup.exe" -o \
+            -name "*-setup.exe.sig" \
+          \) -print0 | while IFS= read -r -d '' file; do
+            aws s3 cp "$file" "s3://${BUCKET}/desktop/stable/$(basename "$file")"
+          done
+
+      - name: Upload manifest to S3
+        run: |
+          aws s3 cp latest.json \
+            "s3://${{ vars.DESKTOP_DOWNLOADS_S3_BUCKET }}/desktop/stable/latest.json" \
+            --content-type "application/json" \
+            --cache-control "max-age=300"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.DESKTOP_CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/desktop/stable/latest.json"

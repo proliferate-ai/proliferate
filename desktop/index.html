@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en" data-theme="ship" data-mode="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Proliferate</title>
+    <script>
+      document.documentElement.dataset.theme =
+        localStorage.getItem("proliferate-theme") || "ship";
+      var m = localStorage.getItem("proliferate-mode") || "dark";
+      var resolvedMode =
+        m === "system"
+          ? window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light"
+          : m === "light"
+            ? "light"
+            : "dark";
+      document.documentElement.dataset.mode = resolvedMode;
+      document.documentElement.style.colorScheme = resolvedMode;
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

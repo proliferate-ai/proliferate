@@ -1,0 +1,161 @@
+import type {
+  AgentSummary,
+  ReconcileAgentResult,
+} from "@anyharness/sdk";
+import {
+  AGENT_READINESS_LABELS,
+  AGENT_SETUP_COPY,
+} from "@/config/agents";
+
+export type AgentStatusTone =
+  | "muted"
+  | "success"
+  | "warning"
+  | "destructive";
+
+export type AgentReconcileState =
+  | "idle"
+  | "reconciling"
+  | "done"
+  | "error";
+
+export interface AgentStatusDisplay {
+  label: string;
+  tone: AgentStatusTone;
+}
+
+export function isReadyAgent(agent: AgentSummary): boolean {
+  return agent.readiness === "ready";
+}
+
+export function getReadyAgents(agents: AgentSummary[]): AgentSummary[] {
+  return agents.filter(isReadyAgent);
+}
+
+export function getAgentsNeedingSetup(
+  agents: AgentSummary[],
+): AgentSummary[] {
+  return agents.filter(
+    (agent) =>
+      agent.readiness !== "ready" && agent.readiness !== "unsupported",
+  );
+}
+
+export function getNotReadyAgents(agents: AgentSummary[]): AgentSummary[] {
+  return agents.filter((agent) => agent.readiness !== "ready");
+}
+
+export function getReadyAgentKinds(agents: AgentSummary[]): Set<string> {
+  return new Set(getReadyAgents(agents).map((agent) => agent.kind));
+}
+
+export function agentNeedsInstall(agent: AgentSummary): boolean {
+  return agent.readiness === "install_required";
+}
+
+export function agentSupportsCredentials(agent: AgentSummary): boolean {
+  return (
+    isReadyAgent(agent)
+    || agent.readiness === "credentials_required"
+    || agent.readiness === "login_required"
+  );
+}
+
+export function formatAgentEnvVarLabel(name: string): string {
+  return name
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .replace(/\bApi\b/g, "API")
+    .replace(/\bUrl\b/g, "URL")
+    .replace(/\bSdk\b/g, "SDK")
+    .replace(/\bId\b/g, "ID");
+}
+
+export function getAgentStatusDisplay(
+  agent: AgentSummary,
+  options?: {
+    reconcileResult?: ReconcileAgentResult;
+    isReconciling?: boolean;
+  },
+): AgentStatusDisplay {
+  if (options?.isReconciling) {
+    return {
+      label: AGENT_SETUP_COPY.installing,
+      tone: "muted",
+    };
+  }
+
+  if (options?.reconcileResult?.outcome === "failed") {
+    return {
+      label: AGENT_SETUP_COPY.installFailed,
+      tone: "destructive",
+    };
+  }
+
+  if (options?.reconcileResult?.outcome === "installed") {
+    return {
+      label: AGENT_SETUP_COPY.justInstalled,
+      tone: "success",
+    };
+  }
+
+  if (agent.readiness === "ready") {
+    return {
+      label: AGENT_READINESS_LABELS.ready,
+      tone: "success",
+    };
+  }
+
+  if (
+    agent.readiness === "install_required"
+    || agent.readiness === "credentials_required"
+    || agent.readiness === "login_required"
+  ) {
+    return {
+      label: AGENT_READINESS_LABELS[agent.readiness],
+      tone: "warning",
+    };
+  }
+
+  if (agent.readiness === "error") {
+    return {
+      label: AGENT_READINESS_LABELS.error,
+      tone: "destructive",
+    };
+  }
+
+  return {
+    label: AGENT_READINESS_LABELS[agent.readiness],
+    tone: "muted",
+  };
+}
+
+export function getAgentSetupSubtitle(
+  agent: AgentSummary,
+  reconcileResult?: ReconcileAgentResult,
+): string {
+  if (agent.readiness === "ready") {
+    return AGENT_SETUP_COPY.subtitles.ready;
+  }
+
+  if (agent.readiness === "unsupported") {
+    return AGENT_SETUP_COPY.subtitles.unsupported;
+  }
+
+  if (
+    agent.readiness === "install_required"
+    && (
+      reconcileResult?.outcome === "failed"
+      || reconcileResult?.outcome === "installed"
+    )
+  ) {
+    return AGENT_SETUP_COPY.subtitles.retryInstall;
+  }
+
+  if (agent.readiness === "install_required") {
+    return AGENT_SETUP_COPY.subtitles.install;
+  }
+
+  return AGENT_SETUP_COPY.subtitles.credentials;
+}

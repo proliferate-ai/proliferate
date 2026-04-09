@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: proliferate
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: proliferate
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proliferate"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  migrate:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://proliferate:localdev@db:5432/proliferate
+      JWT_SECRET: local-dev-secret-change-in-production
+      DEBUG: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://proliferate:localdev@db:5432/proliferate
+      JWT_SECRET: local-dev-secret-change-in-production
+      DEBUG: "true"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

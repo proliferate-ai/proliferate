@@ -1,0 +1,9 @@
+pub mod acp_registry;
+pub mod catalog;
+pub mod credentials;
+pub mod installer;
+pub mod model;
+pub mod reconcile;
+pub mod reconcile_execution;
+pub mod registry;
+pub mod resolver;

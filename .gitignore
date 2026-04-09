@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+.venv/
+
+# Build output
+dist/
+out/
+target/
+desktop/index.js
+*.db
+*.db-wal
+*.db-shm
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+.cursorindexingignore
+
+# Cursor / Specstory
+.specstory/
+
+# Environment
+.env
+e2b-connection.json
+.env.local
+.env.prod
+.env.*.local
+
+references/
+# Generated SDK artifacts (regenerated from Rust)
+anyharness/sdk/generated/
+anyharness/sdk/src/generated/
+
+# Generated cloud client OpenAPI spec (intermediate artifact, regenerated from Python)
+server/openapi.json
+
+# Tauri build outputs and sidecar binaries
+desktop/src-tauri/binaries/
+desktop/src-tauri/gen/
+
+# CI / release artifacts
+anyharness-sdk.tgz
+*.tgz
+*.dmg
+*.msi
+
+# Logs and runtime artifacts
+logs/
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+
+# Scratch files
+context.md
+email.tsx
+/*.txt
+
+# Lock files not managed by workspace
+package-lock.json

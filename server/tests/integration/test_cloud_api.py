@@ -1,0 +1,1245 @@
+import asyncio
+import base64
+from datetime import UTC, datetime
+import hashlib
+import json
+import uuid
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from proliferate.db.models.auth import OAuthAccount
+from proliferate.db.models.cloud import (
+    CloudCredential,
+    CloudRepoConfig,
+    CloudSandbox,
+    CloudWorkspace,
+)
+from proliferate.integrations.github import GitHubRepoBranches
+from proliferate.integrations.sandbox.base import ProviderSandboxState
+from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.repos import service as repos_service
+from proliferate.server.cloud.runtime import service as runtime_service
+from proliferate.server.cloud.runtime.anyharness_api import CloudRuntimeReconnectError
+from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
+from proliferate.server.cloud.workspaces import service as cloud_service
+from proliferate.utils.crypto import encrypt_text
+from proliferate.utils.time import utcnow
+
+
+async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]:
+    """Create a user via the user manager and obtain tokens via PKCE."""
+    from proliferate.auth.models import UserCreate
+    from proliferate.auth.users import UserManager
+    from proliferate.db.engine import get_async_session
+    from proliferate.db.store.users import get_user_db
+
+    user_id: str | None = None
+    async for session in get_async_session():
+        async for user_db in get_user_db(session):
+            manager = UserManager(user_db)
+            user = await manager.create(
+                UserCreate(email=email, password="unused-oauth-only", display_name="Cloud Tester"),
+            )
+            await session.commit()
+            user_id = str(user.id)
+
+    assert user_id is not None
+
+    verifier = "test-code-verifier-that-is-long-enough-for-pkce"
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+
+    resp = await client.post(
+        "/auth/desktop/authorize",
+        params={"user_id": user_id},
+        json={
+            "state": f"cloud-state-{uuid.uuid4().hex[:8]}",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "redirect_uri": "proliferate://auth/callback",
+        },
+    )
+    assert resp.status_code == 201
+    code = resp.json()["code"]
+
+    resp = await client.post(
+        "/auth/desktop/token",
+        json={
+            "code": code,
+            "code_verifier": verifier,
+            "grant_type": "authorization_code",
+        },
+    )
+    assert resp.status_code == 200
+    token_data = resp.json()
+    return {
+        "user_id": user_id,
+        "access_token": token_data["access_token"],
+    }
+
+
+async def _link_github_account(db_session: AsyncSession, user_id: str) -> None:
+    account = OAuthAccount(
+        user_id=uuid.UUID(user_id),
+        oauth_name="github",
+        access_token="github-access-token",
+        account_id="12345",
+        account_email="cloud@example.com",
+    )
+    db_session.add(account)
+    await db_session.commit()
+
+
+async def _link_secondary_account(db_session: AsyncSession, user_id: str) -> None:
+    account = OAuthAccount(
+        user_id=uuid.UUID(user_id),
+        oauth_name="google",
+        access_token="google-access-token",
+        account_id="secondary-12345",
+        account_email="cloud-secondary@example.com",
+    )
+    db_session.add(account)
+    await db_session.commit()
+
+
+async def _list_credentials(db_session: AsyncSession, user_id: str) -> list[CloudCredential]:
+    return (
+        (
+            await db_session.execute(
+                select(CloudCredential).where(CloudCredential.user_id == uuid.UUID(user_id))
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+def _disable_workspace_provision(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        cloud_service,
+        "schedule_workspace_provision",
+        lambda _workspace_id: None,
+    )
+
+
+class TestCloudCredentials:
+    @pytest.mark.asyncio
+    async def test_sync_and_delete_supported_credentials(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        session = await _register_and_login(client, "cloud-creds@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        claude_response = await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "env",
+                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
+            },
+        )
+        assert claude_response.status_code == 200
+
+        codex_file = base64.b64encode(
+            json.dumps({"auth_mode": "chatgpt", "access_token": "opaque"}).encode("utf-8")
+        ).decode("ascii")
+        codex_response = await client.put(
+            "/v1/cloud/credentials/codex",
+            headers=headers,
+            json={
+                "authMode": "file",
+                "files": [
+                    {
+                        "relativePath": ".codex/auth.json",
+                        "contentBase64": codex_file,
+                    }
+                ],
+            },
+        )
+        assert codex_response.status_code == 200
+
+        statuses_response = await client.get("/v1/cloud/credentials", headers=headers)
+        assert statuses_response.status_code == 200
+        statuses_payload = statuses_response.json()
+        assert statuses_payload[0]["provider"] == "claude"
+        assert statuses_payload[0]["authMode"] == "env"
+        assert statuses_payload[0]["supported"] is True
+        assert statuses_payload[0]["localDetected"] is False
+        assert statuses_payload[0]["synced"] is True
+        assert isinstance(statuses_payload[0]["lastSyncedAt"], str)
+        assert statuses_payload[1]["provider"] == "codex"
+        assert statuses_payload[1]["authMode"] == "file"
+        assert statuses_payload[1]["supported"] is True
+        assert statuses_payload[1]["localDetected"] is False
+        assert statuses_payload[1]["synced"] is True
+        assert isinstance(statuses_payload[1]["lastSyncedAt"], str)
+
+        records = await _list_credentials(db_session, session["user_id"])
+        assert len(records) == 2
+
+        delete_response = await client.delete("/v1/cloud/credentials/codex", headers=headers)
+        assert delete_response.status_code == 200
+
+        statuses_after_delete = await client.get("/v1/cloud/credentials", headers=headers)
+        assert statuses_after_delete.status_code == 200
+        assert statuses_after_delete.json()[1]["synced"] is False
+
+    @pytest.mark.asyncio
+    async def test_sync_claude_file_backed_credential(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        """Claude file-backed auth sync via .claude/.credentials.json."""
+        session = await _register_and_login(client, "cloud-claude-file@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        cred_file = base64.b64encode(
+            json.dumps(
+                {
+                    "claudeAiOauth": {
+                        "accessToken": "test-access-token",
+                        "refreshToken": "test-refresh",
+                    }
+                }
+            ).encode("utf-8")
+        ).decode("ascii")
+        response = await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "file",
+                "files": [
+                    {
+                        "relativePath": ".claude/.credentials.json",
+                        "contentBase64": cred_file,
+                    }
+                ],
+            },
+        )
+        assert response.status_code == 200
+
+        statuses = await client.get("/v1/cloud/credentials", headers=headers)
+        assert statuses.status_code == 200
+        claude_status = statuses.json()[0]
+        assert claude_status["provider"] == "claude"
+        assert claude_status["authMode"] == "file"
+        assert claude_status["synced"] is True
+
+    @pytest.mark.asyncio
+    async def test_sync_claude_file_backed_rejects_unapproved_path(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        """Only allowlisted Claude auth files are accepted."""
+        session = await _register_and_login(client, "cloud-claude-file-bad@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        cred_file = base64.b64encode(b'{"some":"data"}').decode("ascii")
+        response = await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "file",
+                "files": [
+                    {
+                        "relativePath": ".claude/some-random-file.json",
+                        "contentBase64": cred_file,
+                    }
+                ],
+            },
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_payload"
+
+
+class TestCloudRepoConfig:
+    @pytest.mark.asyncio
+    async def test_concurrent_first_save_returns_success(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        session = await _register_and_login(client, "cloud-repo-config-race@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        payload = {
+            "configured": True,
+            "envVars": {"API_BASE_URL": "https://example.internal"},
+            "setupScript": "pnpm install",
+            "files": [],
+        }
+
+        responses = await asyncio.gather(
+            client.put(
+                "/v1/cloud/repos/proliferate-ai/proliferate/config",
+                headers=headers,
+                json=payload,
+            ),
+            client.put(
+                "/v1/cloud/repos/proliferate-ai/proliferate/config",
+                headers=headers,
+                json=payload,
+            ),
+        )
+
+        assert [response.status_code for response in responses] == [200, 200]
+
+        records = (
+            (
+                await db_session.execute(
+                    select(CloudRepoConfig).where(
+                        CloudRepoConfig.user_id == uuid.UUID(session["user_id"]),
+                        CloudRepoConfig.git_owner == "proliferate-ai",
+                        CloudRepoConfig.git_repo_name == "proliferate",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(records) == 1
+
+    @pytest.mark.asyncio
+    async def test_sync_claude_main_config_rejects_nonportable_oauth_metadata(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        session = await _register_and_login(client, "cloud-claude-main-config@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        nonportable = base64.b64encode(
+            json.dumps(
+                {
+                    "oauthAccount": {
+                        "accountUuid": "account-123",
+                        "organizationUuid": "org-123",
+                        "emailAddress": "user@example.com",
+                    }
+                }
+            ).encode("utf-8")
+        ).decode("ascii")
+        response = await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "file",
+                "files": [
+                    {
+                        "relativePath": ".claude.json",
+                        "contentBase64": nonportable,
+                    }
+                ],
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_payload"
+
+    @pytest.mark.asyncio
+    async def test_sync_claude_file_backed_rejects_invalid_base64_json(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        """File content must be valid base64-encoded JSON."""
+        session = await _register_and_login(client, "cloud-claude-file-nojson@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        bad_b64 = base64.b64encode(b"not json {{{").decode("ascii")
+        response = await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "file",
+                "files": [
+                    {
+                        "relativePath": ".claude/.credentials.json",
+                        "contentBase64": bad_b64,
+                    }
+                ],
+            },
+        )
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_sync_claude_env_still_works(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        """The existing env-var path continues to work."""
+        session = await _register_and_login(client, "cloud-claude-env-still@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        response = await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "env",
+                "envVars": {"ANTHROPIC_API_KEY": "sk-ant-test-key"},
+            },
+        )
+        assert response.status_code == 200
+
+        statuses = await client.get("/v1/cloud/credentials", headers=headers)
+        claude_status = statuses.json()[0]
+        assert claude_status["authMode"] == "env"
+        assert claude_status["synced"] is True
+
+    @pytest.mark.asyncio
+    async def test_sync_claude_file_replaces_previous_env_credential(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        """Syncing file-backed auth replaces a previously synced env credential."""
+        session = await _register_and_login(client, "cloud-claude-replace@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        # First sync env
+        await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "env",
+                "envVars": {"ANTHROPIC_API_KEY": "sk-ant-old"},
+            },
+        )
+
+        # Then sync file
+        cred_file = base64.b64encode(
+            json.dumps({"claudeAiOauth": {"accessToken": "new-access"}}).encode("utf-8")
+        ).decode("ascii")
+        response = await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "file",
+                "files": [
+                    {
+                        "relativePath": ".claude/.credentials.json",
+                        "contentBase64": cred_file,
+                    }
+                ],
+            },
+        )
+        assert response.status_code == 200
+
+        statuses = await client.get("/v1/cloud/credentials", headers=headers)
+        claude_status = statuses.json()[0]
+        assert claude_status["authMode"] == "file"
+        assert claude_status["synced"] is True
+
+        # Only one active (non-revoked) Claude credential should exist
+        records = await _list_credentials(db_session, session["user_id"])
+        active_claude = [r for r in records if r.provider == "claude" and r.revoked_at is None]
+        assert len(active_claude) == 1
+        assert active_claude[0].auth_mode == "file"
+
+
+class TestCloudRepoBranches:
+    @pytest.mark.asyncio
+    async def test_branch_endpoint_returns_default_branch_and_list(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main", "release", "stable"],
+            )
+
+        monkeypatch.setattr(repos_service, "get_github_repo_branches", _repo_branches)
+
+        session = await _register_and_login(client, "cloud-branches@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await _link_github_account(db_session, session["user_id"])
+
+        response = await client.get(
+            "/v1/cloud/repos/acme/rocket/branches",
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "defaultBranch": "main",
+            "branches": ["main", "release", "stable"],
+        }
+
+
+class TestCloudWorkspaces:
+    @pytest.mark.asyncio
+    async def test_create_workspace_requires_linked_github_and_synced_credentials(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _disable_workspace_provision(monkeypatch)
+
+        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main", "release"],
+            )
+
+        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+
+        session = await _register_and_login(client, "cloud-create-gating@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        request = {
+            "gitProvider": "github",
+            "gitOwner": "acme",
+            "gitRepoName": "rocket",
+            "baseBranch": "main",
+            "branchName": "pure-drift",
+        }
+
+        no_github = await client.post("/v1/cloud/workspaces", headers=headers, json=request)
+        assert no_github.status_code == 400
+        assert no_github.json()["detail"]["code"] == "github_link_required"
+
+        await _link_github_account(db_session, session["user_id"])
+
+        no_creds = await client.post("/v1/cloud/workspaces", headers=headers, json=request)
+        assert no_creds.status_code == 400
+        assert no_creds.json()["detail"]["code"] == "missing_supported_credentials"
+
+        sync_response = await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "env",
+                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
+            },
+        )
+        assert sync_response.status_code == 200
+
+        create_response = await client.post("/v1/cloud/workspaces", headers=headers, json=request)
+        assert create_response.status_code == 200
+        payload = create_response.json()
+        assert payload["repo"] == {
+            "provider": "github",
+            "owner": "acme",
+            "name": "rocket",
+            "branch": "pure-drift",
+            "baseBranch": "main",
+        }
+        assert payload["status"] == "queued"
+        assert payload["allowedAgentKinds"] == ["claude", "codex"]
+        assert payload["readyAgentKinds"] == ["claude"]
+        assert payload["runtimeGeneration"] == 0
+
+    @pytest.mark.asyncio
+    async def test_create_workspace_requires_github_repo_access(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _disable_workspace_provision(monkeypatch)
+
+        async def _deny_repo_access(*_args, **_kwargs) -> GitHubRepoBranches:
+            raise CloudApiError(
+                "github_repo_access_required",
+                "Reconnect GitHub and grant repository access before creating a cloud workspace.",
+                status_code=400,
+            )
+
+        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _deny_repo_access)
+
+        session = await _register_and_login(client, "cloud-create-repo-access@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await _link_github_account(db_session, session["user_id"])
+
+        sync_response = await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "env",
+                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
+            },
+        )
+        assert sync_response.status_code == 200
+
+        create_response = await client.post(
+            "/v1/cloud/workspaces",
+            headers=headers,
+            json={
+                "gitProvider": "github",
+                "gitOwner": "acme",
+                "gitRepoName": "rocket",
+                "baseBranch": "main",
+                "branchName": "pure-drift",
+            },
+        )
+        assert create_response.status_code == 400
+        assert create_response.json()["detail"]["code"] == "github_repo_access_required"
+
+    @pytest.mark.asyncio
+    async def test_create_workspace_rejects_existing_cloud_branch_name(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _disable_workspace_provision(monkeypatch)
+
+        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main", "release"],
+            )
+
+        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+
+        session = await _register_and_login(client, "cloud-create-duplicate-branch@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await _link_github_account(db_session, session["user_id"])
+
+        await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "env",
+                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
+            },
+        )
+
+        request = {
+            "gitProvider": "github",
+            "gitOwner": "acme",
+            "gitRepoName": "rocket",
+            "baseBranch": "main",
+            "branchName": "pure-drift",
+        }
+
+        first_response = await client.post("/v1/cloud/workspaces", headers=headers, json=request)
+        assert first_response.status_code == 200
+
+        second_response = await client.post("/v1/cloud/workspaces", headers=headers, json=request)
+        assert second_response.status_code == 400
+        assert second_response.json()["detail"]["code"] == "cloud_branch_already_exists"
+
+    @pytest.mark.asyncio
+    async def test_create_workspace_rejects_missing_base_branch(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _disable_workspace_provision(monkeypatch)
+
+        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main", "release"],
+            )
+
+        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+
+        session = await _register_and_login(client, "cloud-create-missing-base@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await _link_github_account(db_session, session["user_id"])
+
+        await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "env",
+                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
+            },
+        )
+
+        response = await client.post(
+            "/v1/cloud/workspaces",
+            headers=headers,
+            json={
+                "gitProvider": "github",
+                "gitOwner": "acme",
+                "gitRepoName": "rocket",
+                "baseBranch": "pure-drift",
+                "branchName": "cloud-branch",
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "github_branch_not_found"
+
+    @pytest.mark.asyncio
+    async def test_create_workspace_rejects_existing_remote_branch_name(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _disable_workspace_provision(monkeypatch)
+
+        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main", "pure-drift"],
+            )
+
+        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+
+        session = await _register_and_login(client, "cloud-create-existing-branch@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await _link_github_account(db_session, session["user_id"])
+
+        await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "env",
+                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
+            },
+        )
+
+        response = await client.post(
+            "/v1/cloud/workspaces",
+            headers=headers,
+            json={
+                "gitProvider": "github",
+                "gitOwner": "acme",
+                "gitRepoName": "rocket",
+                "baseBranch": "main",
+                "branchName": "pure-drift",
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "github_branch_already_exists"
+
+    @pytest.mark.asyncio
+    async def test_connection_returns_runtime_ready_agents(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def _workspace_connection(_workspace: CloudWorkspace) -> RuntimeConnectionTarget:
+            return RuntimeConnectionTarget(
+                runtime_url="https://example-runtime.invalid",
+                access_token="runtime-token",
+                anyharness_workspace_id="workspace-123",
+                runtime_generation=2,
+                ready_agent_kinds=["codex"],
+            )
+
+        monkeypatch.setattr(cloud_service, "get_workspace_connection", _workspace_connection)
+
+        session = await _register_and_login(client, "cloud-connection-ready@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        workspace = CloudWorkspace(
+            user_id=uuid.UUID(session["user_id"]),
+            display_name="acme/rocket",
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            git_branch="cloud-branch",
+            git_base_branch="main",
+            status="ready",
+            status_detail="Ready",
+            last_error=None,
+            template_version="v1",
+            runtime_generation=2,
+            runtime_url="https://example-runtime.invalid",
+            runtime_token_ciphertext=encrypt_text("runtime-token"),
+            anyharness_workspace_id="workspace-123",
+        )
+        db_session.add(workspace)
+        await db_session.commit()
+        await db_session.refresh(workspace)
+
+        sandbox = CloudSandbox(
+            cloud_workspace_id=workspace.id,
+            provider="e2b",
+            external_sandbox_id=f"sandbox-{uuid.uuid4()}",
+            status="paused",
+            template_version="v1",
+        )
+        db_session.add(sandbox)
+        await db_session.commit()
+        workspace.active_sandbox_id = sandbox.id
+        await db_session.commit()
+
+        response = await client.get(
+            f"/v1/cloud/workspaces/{workspace.id}/connection",
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["readyAgentKinds"] == ["codex"]
+
+    @pytest.mark.asyncio
+    async def test_connection_returns_not_ready_when_runtime_probe_fails(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def _boom(*_args, **_kwargs) -> RuntimeConnectionTarget:
+            raise CloudRuntimeReconnectError("runtime down")
+
+        monkeypatch.setattr(cloud_service, "get_workspace_connection", _boom)
+
+        session = await _register_and_login(client, "cloud-connection-not-ready@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        workspace = CloudWorkspace(
+            user_id=uuid.UUID(session["user_id"]),
+            display_name="acme/rocket",
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            git_branch="cloud-branch",
+            git_base_branch="main",
+            status="ready",
+            status_detail="Ready",
+            last_error=None,
+            template_version="v1",
+            runtime_generation=1,
+            runtime_url="https://example-runtime.invalid",
+            runtime_token_ciphertext=encrypt_text("runtime-token"),
+            anyharness_workspace_id="workspace-123",
+        )
+        db_session.add(workspace)
+        await db_session.commit()
+        await db_session.refresh(workspace)
+
+        sandbox = CloudSandbox(
+            cloud_workspace_id=workspace.id,
+            provider="e2b",
+            external_sandbox_id=f"sandbox-{uuid.uuid4()}",
+            status="paused",
+            template_version="v1",
+        )
+        db_session.add(sandbox)
+        await db_session.commit()
+        workspace.active_sandbox_id = sandbox.id
+        await db_session.commit()
+
+        response = await client.get(
+            f"/v1/cloud/workspaces/{workspace.id}/connection",
+            headers=headers,
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "workspace_not_ready"
+
+    @pytest.mark.asyncio
+    async def test_sync_credentials_succeeds_when_agent_reconcile_fails(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        class _FakeProvider:
+            async def connect_running_sandbox(self, _sandbox_id: str) -> object:
+                return object()
+
+            async def get_sandbox_state(self, sandbox_id: str) -> ProviderSandboxState:
+                return ProviderSandboxState(
+                    external_sandbox_id=sandbox_id,
+                    state="running",
+                    started_at=None,
+                    end_at=None,
+                    observed_at=datetime.now(UTC),
+                    metadata={},
+                )
+
+            async def resolve_runtime_context(self, _sandbox: object) -> object:
+                return object()
+
+        async def _ensure_ready(*_args, **_kwargs) -> str:
+            return "https://example-runtime.invalid"
+
+        async def _payloads(_user_id: uuid.UUID) -> dict[str, object]:
+            return {
+                "codex": {
+                    "authMode": "file",
+                    "files": {".codex/auth.json": '{"access_token":"opaque"}'},
+                }
+            }
+
+        async def _write_files(*_args, **_kwargs) -> None:
+            return None
+
+        async def _boom(*_args, **_kwargs) -> None:
+            raise RuntimeError("codex install failed")
+
+        monkeypatch.setattr(
+            cloud_service,
+            "sync_workspace_credentials",
+            runtime_service.sync_workspace_credentials,
+        )
+        monkeypatch.setattr(runtime_service, "ensure_workspace_runtime_ready", _ensure_ready)
+        monkeypatch.setattr(runtime_service, "load_active_cloud_credential_payloads", _payloads)
+        monkeypatch.setattr(runtime_service, "get_sandbox_provider", lambda _kind: _FakeProvider())
+        monkeypatch.setattr(runtime_service, "write_credential_files", _write_files)
+        monkeypatch.setattr(runtime_service, "reconcile_remote_agents", _boom)
+
+        session = await _register_and_login(client, "cloud-sync-credentials@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        workspace = CloudWorkspace(
+            user_id=uuid.UUID(session["user_id"]),
+            display_name="acme/rocket",
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            git_branch="cloud-branch",
+            git_base_branch="main",
+            status="ready",
+            status_detail="Ready",
+            last_error=None,
+            template_version="v1",
+            runtime_generation=2,
+            runtime_url="https://example-runtime.invalid",
+            runtime_token_ciphertext=encrypt_text("runtime-token"),
+            anyharness_workspace_id="workspace-123",
+        )
+        db_session.add(workspace)
+        await db_session.commit()
+        await db_session.refresh(workspace)
+
+        sandbox = CloudSandbox(
+            cloud_workspace_id=workspace.id,
+            provider="e2b",
+            external_sandbox_id=f"sandbox-{uuid.uuid4()}",
+            status="running",
+            template_version="v1",
+        )
+        db_session.add(sandbox)
+        await db_session.commit()
+        workspace.active_sandbox_id = sandbox.id
+        await db_session.commit()
+
+        response = await client.post(
+            f"/v1/cloud/workspaces/{workspace.id}/sync-credentials",
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "ready"
+        assert response.json()["runtimeGeneration"] == 2
+
+    @pytest.mark.asyncio
+    async def test_start_workspace_from_error_reuses_persisted_sandbox(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        scheduled: list[uuid.UUID] = []
+
+        class _FakeProvider:
+            async def get_sandbox_state(self, sandbox_id: str) -> ProviderSandboxState:
+                return ProviderSandboxState(
+                    external_sandbox_id=sandbox_id,
+                    state="paused",
+                    started_at=None,
+                    end_at=None,
+                    observed_at=datetime.now(UTC),
+                    metadata={},
+                )
+
+            async def resume_sandbox(self, _sandbox_id: str) -> None:
+                return None
+
+        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main"],
+            )
+
+        async def _ensure_runtime_ready(
+            workspace: CloudWorkspace,
+            **_kwargs,
+        ) -> None:
+            workspace.status = "ready"
+            workspace.status_detail = "Ready"
+            workspace.last_error = None
+            workspace.updated_at = utcnow()
+
+        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+        monkeypatch.setattr(
+            cloud_service,
+            "schedule_workspace_provision",
+            lambda workspace_id: scheduled.append(workspace_id),
+        )
+        monkeypatch.setattr(cloud_service, "get_sandbox_provider", lambda _kind: _FakeProvider())
+        monkeypatch.setattr(cloud_service, "ensure_workspace_runtime_ready", _ensure_runtime_ready)
+
+        session = await _register_and_login(client, "cloud-start-reuse@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await _link_github_account(db_session, session["user_id"])
+
+        await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "env",
+                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
+            },
+        )
+
+        workspace = CloudWorkspace(
+            user_id=uuid.UUID(session["user_id"]),
+            display_name="acme/rocket",
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            git_branch="cloud-branch",
+            git_base_branch="main",
+            status="error",
+            status_detail="Reconnect failed",
+            last_error="runtime down",
+            template_version="v1",
+            runtime_generation=3,
+            runtime_url="https://example-runtime.invalid",
+            runtime_token_ciphertext=encrypt_text("runtime-token"),
+            anyharness_workspace_id="workspace-123",
+        )
+        db_session.add(workspace)
+        await db_session.commit()
+        await db_session.refresh(workspace)
+
+        sandbox = CloudSandbox(
+            cloud_workspace_id=workspace.id,
+            provider="e2b",
+            external_sandbox_id=f"sandbox-{uuid.uuid4()}",
+            status="paused",
+            template_version="v1",
+        )
+        db_session.add(sandbox)
+        await db_session.commit()
+        workspace.active_sandbox_id = sandbox.id
+        await db_session.commit()
+
+        response = await client.post(
+            f"/v1/cloud/workspaces/{workspace.id}/start",
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "ready"
+        assert response.json()["runtimeGeneration"] == 3
+        assert scheduled == []
+
+    @pytest.mark.asyncio
+    async def test_start_workspace_from_error_requeues_provision_when_reconnect_fails(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        scheduled: list[uuid.UUID] = []
+
+        class _FakeProvider:
+            async def get_sandbox_state(self, sandbox_id: str) -> ProviderSandboxState:
+                return ProviderSandboxState(
+                    external_sandbox_id=sandbox_id,
+                    state="running",
+                    started_at=None,
+                    end_at=None,
+                    observed_at=datetime.now(UTC),
+                    metadata={},
+                )
+
+        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main"],
+            )
+
+        async def _boom(*_args, **_kwargs) -> None:
+            raise CloudRuntimeReconnectError("sandbox missing")
+
+        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+        monkeypatch.setattr(
+            cloud_service,
+            "schedule_workspace_provision",
+            lambda workspace_id: scheduled.append(workspace_id),
+        )
+        monkeypatch.setattr(cloud_service, "get_sandbox_provider", lambda _kind: _FakeProvider())
+        monkeypatch.setattr(cloud_service, "ensure_workspace_runtime_ready", _boom)
+
+        session = await _register_and_login(client, "cloud-start-reprovision@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await _link_github_account(db_session, session["user_id"])
+
+        await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "env",
+                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
+            },
+        )
+
+        workspace = CloudWorkspace(
+            user_id=uuid.UUID(session["user_id"]),
+            display_name="acme/rocket",
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            git_branch="cloud-branch",
+            git_base_branch="main",
+            status="error",
+            status_detail="Reconnect failed",
+            last_error="runtime down",
+            template_version="v1",
+            runtime_generation=3,
+            runtime_url="https://example-runtime.invalid",
+            runtime_token_ciphertext=encrypt_text("runtime-token"),
+            anyharness_workspace_id="workspace-123",
+        )
+        db_session.add(workspace)
+        await db_session.commit()
+        await db_session.refresh(workspace)
+
+        sandbox = CloudSandbox(
+            cloud_workspace_id=workspace.id,
+            provider="e2b",
+            external_sandbox_id=f"sandbox-{uuid.uuid4()}",
+            status="error",
+            template_version="v1",
+        )
+        db_session.add(sandbox)
+        await db_session.commit()
+        workspace.active_sandbox_id = sandbox.id
+        await db_session.commit()
+
+        response = await client.post(
+            f"/v1/cloud/workspaces/{workspace.id}/start",
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "queued"
+        assert scheduled == [workspace.id]
+
+    @pytest.mark.asyncio
+    async def test_update_display_name_persists_and_clears(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        session = await _register_and_login(client, "cloud-display-name-set@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        workspace = CloudWorkspace(
+            user_id=uuid.UUID(session["user_id"]),
+            display_name=None,
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            git_branch="cloud-branch",
+            git_base_branch="main",
+            status="ready",
+            status_detail="Ready",
+            last_error=None,
+            template_version="v1",
+            runtime_generation=1,
+        )
+        db_session.add(workspace)
+        await db_session.commit()
+        await db_session.refresh(workspace)
+
+        # Set with surrounding whitespace — server should trim and persist.
+        set_response = await client.patch(
+            f"/v1/cloud/workspaces/{workspace.id}/display-name",
+            headers=headers,
+            json={"displayName": "  My Custom Cloud Name  "},
+        )
+        assert set_response.status_code == 200
+        assert set_response.json()["displayName"] == "My Custom Cloud Name"
+
+        await db_session.refresh(workspace)
+        assert workspace.display_name == "My Custom Cloud Name"
+
+        # Empty string clears the override.
+        clear_via_empty = await client.patch(
+            f"/v1/cloud/workspaces/{workspace.id}/display-name",
+            headers=headers,
+            json={"displayName": "   "},
+        )
+        assert clear_via_empty.status_code == 200
+        assert clear_via_empty.json()["displayName"] is None
+
+        # Set again, then clear via null.
+        await client.patch(
+            f"/v1/cloud/workspaces/{workspace.id}/display-name",
+            headers=headers,
+            json={"displayName": "Pinned again"},
+        )
+        clear_via_null = await client.patch(
+            f"/v1/cloud/workspaces/{workspace.id}/display-name",
+            headers=headers,
+            json={"displayName": None},
+        )
+        assert clear_via_null.status_code == 200
+        assert clear_via_null.json()["displayName"] is None
+
+        await db_session.refresh(workspace)
+        assert workspace.display_name is None
+
+    @pytest.mark.asyncio
+    async def test_update_display_name_rejects_too_long(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        session = await _register_and_login(client, "cloud-display-name-too-long@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        workspace = CloudWorkspace(
+            user_id=uuid.UUID(session["user_id"]),
+            display_name=None,
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            git_branch="cloud-branch",
+            git_base_branch="main",
+            status="ready",
+            status_detail="Ready",
+            last_error=None,
+            template_version="v1",
+            runtime_generation=1,
+        )
+        db_session.add(workspace)
+        await db_session.commit()
+        await db_session.refresh(workspace)
+
+        response = await client.patch(
+            f"/v1/cloud/workspaces/{workspace.id}/display-name",
+            headers=headers,
+            json={"displayName": "x" * 161},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_display_name"
+
+    @pytest.mark.asyncio
+    async def test_update_display_name_returns_404_for_unknown_workspace(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        session = await _register_and_login(client, "cloud-display-name-404@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        response = await client.patch(
+            f"/v1/cloud/workspaces/{uuid.uuid4()}/display-name",
+            headers=headers,
+            json={"displayName": "anything"},
+        )
+        assert response.status_code == 404
+        assert response.json()["detail"]["code"] == "workspace_not_found"
