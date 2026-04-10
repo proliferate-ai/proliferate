@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { ChatView } from "@/components/workspace/chat/ChatView";
-import { useWorkspaceTabShortcuts } from "@/hooks/workspaces/use-workspace-tab-shortcuts";
+import { useWorkspaceContentShortcuts } from "@/hooks/workspaces/use-workspace-content-shortcuts";
 import { useWorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";
 import { useTerminalActions } from "@/hooks/terminals/use-terminal-actions";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -25,7 +25,7 @@ export function WorkspaceContentView() {
     });
   }, [selectedWorkspaceId, createTab, showToast]);
 
-  useWorkspaceTabShortcuts({ ...tabActions, createNewTerminalTab });
+  useWorkspaceContentShortcuts({ ...tabActions, createNewTerminalTab });
 
   return (
     <div className="h-full flex flex-col">

@@ -42,6 +42,7 @@ import {
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
 
 interface GlobalHeaderProps {
   branchName?: string;
@@ -201,16 +202,11 @@ function HeaderTabs() {
 
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
 
-  // Listen for Cmd+R rename shortcut event
-  useEffect(() => {
-    const handler = () => {
-      if (activeSessionId) {
-        setRenamingSessionId(activeSessionId);
-      }
-    };
-    window.addEventListener("shortcut:rename-session", handler);
-    return () => window.removeEventListener("shortcut:rename-session", handler);
-  }, [activeSessionId]);
+  useShortcutHandler("session.rename", () => {
+    if (activeSessionId) {
+      setRenamingSessionId(activeSessionId);
+    }
+  });
 
   const isChatActive = activeMainTab.kind === "chat";
   const chatTabs = useWorkspaceChatTabs(selectedWorkspaceId, activeSessionId, isChatActive);

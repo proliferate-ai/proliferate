@@ -1,6 +1,6 @@
 import { useCallback, type KeyboardEvent } from "react";
 import { getPreviousSessionModeValue } from "@/lib/domain/chat/session-mode-control";
-import { SHORTCUTS } from "@/config/shortcuts";
+import { COMPOSER_SHORTCUTS } from "@/config/shortcuts";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls";
 
 interface UseChatComposerKeyboardArgs {
@@ -20,7 +20,7 @@ export function useChatComposerKeyboard({
 }: UseChatComposerKeyboardArgs) {
   const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (
-      event.key === SHORTCUTS.stopSession.key
+      event.key === COMPOSER_SHORTCUTS.stopSession.key
       && !event.shiftKey
       && !event.altKey
       && !event.ctrlKey
@@ -34,7 +34,7 @@ export function useChatComposerKeyboard({
     }
 
     if (
-      event.key === SHORTCUTS.previousMode.key
+      event.key === COMPOSER_SHORTCUTS.previousMode.key
       && event.shiftKey
       && !event.altKey
       && !event.ctrlKey
@@ -55,7 +55,7 @@ export function useChatComposerKeyboard({
     }
 
     if (
-      event.key === SHORTCUTS.submitMessage.key
+      event.key === COMPOSER_SHORTCUTS.submitMessage.key
       && !event.shiftKey
       && !event.altKey
       && !event.nativeEvent.isComposing

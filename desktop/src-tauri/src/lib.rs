@@ -19,14 +19,21 @@ use tauri_plugin_deep_link::DeepLinkExt;
 #[cfg(target_os = "macos")]
 const CLOSE_ACTIVE_TAB_MENU_ID: &str = "workspace.close-active-tab";
 #[cfg(target_os = "macos")]
-const CLOSE_ACTIVE_TAB_EVENT: &str = "workspace://close-active-tab";
-#[cfg(target_os = "macos")]
 const APP_QUIT_MENU_ID: &str = "app.quit";
+#[cfg(target_os = "macos")]
+const OPEN_SETTINGS_MENU_ID: &str = "app.open-settings";
+#[cfg(target_os = "macos")]
+const SHORTCUT_TRIGGERED_EVENT: &str = "shortcut://triggered";
+#[cfg(target_os = "macos")]
+const KNOWN_SHORTCUT_IDS: &[&str] = &[CLOSE_ACTIVE_TAB_MENU_ID, OPEN_SETTINGS_MENU_ID];
 
 #[cfg(target_os = "macos")]
 fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R>> {
     let close_tab_item = MenuItemBuilder::with_id(CLOSE_ACTIVE_TAB_MENU_ID, "Close Tab")
         .accelerator("CmdOrCtrl+W")
+        .build(app)?;
+    let open_settings_item = MenuItemBuilder::with_id(OPEN_SETTINGS_MENU_ID, "Settings...")
+        .accelerator("CmdOrCtrl+Comma")
         .build(app)?;
 
     // Custom Quit item (not PredefinedMenuItem::quit()) so the accelerator
@@ -38,6 +45,8 @@ fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu
 
     let app_menu = SubmenuBuilder::new(app, app.package_info().name.clone())
         .about(None)
+        .separator()
+        .item(&open_settings_item)
         .separator()
         .services()
         .separator()
@@ -131,14 +140,14 @@ pub fn run() {
 
     #[cfg(target_os = "macos")]
     let builder = builder.menu(build_macos_menu).on_menu_event(|app, event| {
-        let id = event.id();
-        if id == CLOSE_ACTIVE_TAB_MENU_ID {
+        let event_id = event.id().as_ref();
+        if KNOWN_SHORTCUT_IDS.contains(&event_id) {
             let _ = app.emit_to(
                 EventTarget::webview_window("main"),
-                CLOSE_ACTIVE_TAB_EVENT,
-                (),
+                SHORTCUT_TRIGGERED_EVENT,
+                event_id.to_string(),
             );
-        } else if id == APP_QUIT_MENU_ID {
+        } else if event_id == APP_QUIT_MENU_ID {
             quit_flow::prompt_quit_confirmation(app);
         }
     });

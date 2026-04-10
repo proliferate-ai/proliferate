@@ -1,5 +1,5 @@
 import { CHAT_COMPOSER_LABELS } from "@/config/chat";
-import { SHORTCUTS } from "@/config/shortcuts";
+import { COMPOSER_SHORTCUTS } from "@/config/shortcuts";
 import { ArrowUp, StopSquare } from "@/components/ui/icons";
 
 export function ChatComposerActions({
@@ -35,7 +35,7 @@ export function ChatComposerActions({
       type="button"
       onClick={canSubmit ? onSubmit : undefined}
       disabled={!canSubmit}
-      title={`${CHAT_COMPOSER_LABELS.send} (${SHORTCUTS.submitMessage.label})`}
+      title={`${CHAT_COMPOSER_LABELS.send} (${COMPOSER_SHORTCUTS.submitMessage.label})`}
       className={`flex size-7 items-center justify-center rounded-full transition-colors disabled:cursor-default ${
         canSubmit
           ? "bg-foreground text-background hover:bg-foreground/90"

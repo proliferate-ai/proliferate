@@ -1,65 +1,169 @@
-/**
- * Central shortcut definitions. Every keybinding in the app reads from here.
- *
- * `meta` means Cmd on macOS, Ctrl on Windows/Linux.
- * Hooks match via `(e.metaKey || e.ctrlKey)`.
- */
+export type ShortcutOwner = "js" | "native-menu";
 
-export interface ShortcutDef {
-  /** `event.key` value (lowercase for letters, exact for special keys like "ArrowLeft") */
-  key: string;
+interface ShortcutModifierMatch {
   meta: boolean;
   shift: boolean;
+  alt: boolean;
+}
+
+export type ShortcutMatch =
+  | ({
+    kind: "fixed";
+    key: string;
+  } & ShortcutModifierMatch)
+  | ({
+    kind: "digit-key";
+  } & ShortcutModifierMatch)
+  | ({
+    kind: "digit-code";
+  } & ShortcutModifierMatch);
+
+export interface ShortcutDef<Id extends string = string> {
+  id: Id;
+  label: string;
+  description: string;
+  owner: ShortcutOwner;
+  match: ShortcutMatch;
+  allowInInputs: boolean;
+}
+
+export interface ComposerShortcutDef {
+  key: string;
   label: string;
   description: string;
 }
 
-/**
- * Range shortcuts match a range of keys (e.g. digits 1-9) rather than a single key.
- * The `key` field is a human-readable range descriptor, NOT a valid `event.key` value.
- * These entries exist for documentation and label display only — the actual range
- * matching is done inline in the shortcut hooks.
- */
-export interface RangeShortcutDef extends Omit<ShortcutDef, "key"> {
-  /** Human-readable range descriptor. NOT usable in `event.key` comparisons. */
-  key: `${string}-${string}`;
-}
-
-// ---------------------------------------------------------------------------
-// Global (app-wide, no workspace required for some)
-// ---------------------------------------------------------------------------
-
 export const SHORTCUTS = {
-  // Global — workspace context
-  newWorktree: { key: "n", meta: true, shift: false, label: "⌘N", description: "New worktree workspace" },
-  newLocal: { key: "n", meta: true, shift: true, label: "⌘⇧N", description: "New local workspace" },
-  addRepository: { key: "i", meta: true, shift: false, label: "⌘I", description: "Add repository" },
-
-  // Workspace tabs
-  previousTab: { key: "ArrowLeft", meta: true, shift: true, label: "⌘⇧←", description: "Previous tab" },
-  nextTab: { key: "ArrowRight", meta: true, shift: true, label: "⌘⇧→", description: "Next tab" },
-  newSessionTab: { key: "t", meta: true, shift: false, label: "⌘T", description: "New session tab" },
-  restoreTab: { key: "t", meta: true, shift: true, label: "⌘⇧T", description: "Restore last dismissed tab" },
-  closeTab: { key: "w", meta: true, shift: false, label: "⌘W", description: "Close tab" },
-
-  // Focus
-  focusToggle: { key: "l", meta: true, shift: false, label: "⌘L", description: "Toggle chat / terminal focus" },
-  openFilePalette: { key: "p", meta: true, shift: false, label: "⌘P", description: "Open file palette" },
-  renameChat: { key: "r", meta: true, shift: false, label: "⌘R", description: "Rename current chat" },
-
-  // Chat composer (textarea-scoped, not window-level)
-  submitMessage: { key: "Enter", meta: false, shift: false, label: "↵", description: "Submit message" },
-  previousMode: { key: "Tab", meta: false, shift: true, label: "⇧⇥", description: "Previous session mode" },
-  stopSession: { key: "Escape", meta: false, shift: false, label: "Esc", description: "Stop running session" },
+  openSettings: {
+    id: "app.open-settings",
+    label: "⌘,",
+    description: "Open settings",
+    owner: "native-menu",
+    match: { kind: "fixed", key: ",", meta: true, shift: false, alt: false },
+    allowInInputs: true,
+  },
+  newWorktree: {
+    id: "workspace.new-worktree",
+    label: "⌘N",
+    description: "New worktree workspace",
+    owner: "js",
+    match: { kind: "fixed", key: "n", meta: true, shift: false, alt: false },
+    allowInInputs: true,
+  },
+  newLocal: {
+    id: "workspace.new-local",
+    label: "⌘⇧N",
+    description: "New local workspace",
+    owner: "js",
+    match: { kind: "fixed", key: "n", meta: true, shift: true, alt: false },
+    allowInInputs: true,
+  },
+  addRepository: {
+    id: "workspace.add-repository",
+    label: "⌘I",
+    description: "Add repository",
+    owner: "js",
+    match: { kind: "fixed", key: "i", meta: true, shift: false, alt: false },
+    allowInInputs: false,
+  },
+  workspaceByIndex: {
+    id: "workspace.by-index",
+    label: "⌘⌥1-9",
+    description: "Switch to workspace by index",
+    owner: "js",
+    match: { kind: "digit-code", meta: true, shift: false, alt: true },
+    allowInInputs: true,
+  },
+  previousTab: {
+    id: "workspace.previous-tab",
+    label: "⌘⇧←",
+    description: "Previous tab",
+    owner: "js",
+    match: { kind: "fixed", key: "ArrowLeft", meta: true, shift: true, alt: false },
+    allowInInputs: false,
+  },
+  nextTab: {
+    id: "workspace.next-tab",
+    label: "⌘⇧→",
+    description: "Next tab",
+    owner: "js",
+    match: { kind: "fixed", key: "ArrowRight", meta: true, shift: true, alt: false },
+    allowInInputs: false,
+  },
+  tabByIndex: {
+    id: "workspace.tab-by-index",
+    label: "⌘1-9",
+    description: "Jump to tab by index",
+    owner: "js",
+    match: { kind: "digit-key", meta: true, shift: false, alt: false },
+    allowInInputs: true,
+  },
+  newSessionTab: {
+    id: "workspace.new-session-tab",
+    label: "⌘T",
+    description: "New session tab",
+    owner: "js",
+    match: { kind: "fixed", key: "t", meta: true, shift: false, alt: false },
+    allowInInputs: true,
+  },
+  restoreTab: {
+    id: "workspace.restore-tab",
+    label: "⌘⇧T",
+    description: "Restore last dismissed tab",
+    owner: "js",
+    match: { kind: "fixed", key: "t", meta: true, shift: true, alt: false },
+    allowInInputs: true,
+  },
+  closeActiveTab: {
+    id: "workspace.close-active-tab",
+    label: "⌘W",
+    description: "Close tab",
+    owner: "native-menu",
+    match: { kind: "fixed", key: "w", meta: true, shift: false, alt: false },
+    allowInInputs: true,
+  },
+  focusToggle: {
+    id: "workspace.focus-toggle",
+    label: "⌘L",
+    description: "Toggle chat / terminal focus",
+    owner: "js",
+    match: { kind: "fixed", key: "l", meta: true, shift: false, alt: false },
+    allowInInputs: true,
+  },
+  openFilePalette: {
+    id: "workspace.open-file-palette",
+    label: "⌘P",
+    description: "Open file palette",
+    owner: "js",
+    match: { kind: "fixed", key: "p", meta: true, shift: false, alt: false },
+    allowInInputs: true,
+  },
+  renameSession: {
+    id: "session.rename",
+    label: "⌘R",
+    description: "Rename current chat",
+    owner: "js",
+    match: { kind: "fixed", key: "r", meta: true, shift: false, alt: false },
+    allowInInputs: true,
+  },
 } as const satisfies Record<string, ShortcutDef>;
 
-/**
- * Range-based shortcuts. Matching logic lives in their respective hooks;
- * these entries are for documentation and label display only.
- */
-export const RANGE_SHORTCUTS = {
-  /** Cmd+Option+1-9: switch workspace by sidebar index. Matched via e.code in use-global-shortcuts. */
-  workspaceByIndex: { key: "1-9", meta: true, shift: false, label: "⌘⌥1-9", description: "Switch to workspace by index" },
-  /** Cmd+1-9: jump to tab by index within workspace. Matched inline in use-workspace-tab-shortcuts. */
-  tabByIndex: { key: "1-9", meta: true, shift: false, label: "⌘1-9", description: "Jump to tab by index" },
-} as const satisfies Record<string, RangeShortcutDef>;
+export type ShortcutId = (typeof SHORTCUTS)[keyof typeof SHORTCUTS]["id"];
+
+export const COMPOSER_SHORTCUTS = {
+  submitMessage: {
+    key: "Enter",
+    label: "↵",
+    description: "Submit message",
+  },
+  previousMode: {
+    key: "Tab",
+    label: "⇧⇥",
+    description: "Previous session mode",
+  },
+  stopSession: {
+    key: "Escape",
+    label: "Esc",
+    description: "Stop running session",
+  },
+} as const satisfies Record<string, ComposerShortcutDef>;

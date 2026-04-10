@@ -8,9 +8,10 @@ import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { applyThemePreference, initializeTheme } from "@/config/theme"
 import { useExportRunningAgentCount } from "@/hooks/app/use-export-running-agent-count"
+import { useAppShortcuts } from "@/hooks/app/use-app-shortcuts"
 import { useAuthBootstrap } from "@/hooks/auth/use-auth-bootstrap"
 import { useAgentAutoReconcile } from "@/hooks/agents/use-agent-auto-reconcile"
-import { useGlobalShortcuts } from "@/hooks/shortcuts/use-global-shortcuts"
+import { useShortcutDispatcher } from "@/hooks/shortcuts/use-shortcut-dispatcher"
 import { useTurnEndSound } from "@/hooks/sessions/use-turn-end-sound"
 import { bootstrapHarnessRuntime } from "@/lib/integrations/anyharness/runtime-bootstrap"
 import { AppErrorBoundary } from "@/components/ui/AppErrorBoundary"
@@ -32,7 +33,8 @@ function App() {
   const bootstrapAuth = useAuthBootstrap()
   const authStatus = useAuthStore((s) => s.status)
   useExportRunningAgentCount()
-  useGlobalShortcuts()
+  useShortcutDispatcher()
+  useAppShortcuts()
   useTurnEndSound()
   useAgentAutoReconcile()
 

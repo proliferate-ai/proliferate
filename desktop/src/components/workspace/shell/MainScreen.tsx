@@ -11,8 +11,8 @@ import { Button } from "@/components/ui/Button";
 import { ArrowUp, Check, LoaderCircle, SplitPanel } from "@/components/ui/icons";
 import { GlobalHeader } from "@/components/workspace/shell/GlobalHeader";
 import { useMainScreenActions } from "@/hooks/main/use-main-screen-actions";
+import { useMainScreenShortcuts } from "@/hooks/main/use-main-screen-shortcuts";
 import { useMainScreenState } from "@/hooks/main/use-main-screen-state";
-import { useWorkspaceShortcuts } from "@/hooks/shortcuts/use-workspace-shortcuts";
 import { useUpdater, type UpdaterPhase } from "@/hooks/updater/use-updater";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
 
@@ -49,7 +49,7 @@ export function MainScreen() {
     downloadUpdate,
     openRestartPrompt,
   } = useUpdater();
-  useWorkspaceShortcuts({
+  useMainScreenShortcuts({
     onOpenFilePalette: actions.handleFilePaletteOpen,
   });
 
