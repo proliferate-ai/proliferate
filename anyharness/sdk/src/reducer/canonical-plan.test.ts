@@ -65,6 +65,7 @@ describe("canonical plan derivation", () => {
     transcript.pendingApproval = {
       requestId: "perm-1",
       toolCallId: "toolu_plan_1",
+      toolKind: "switch_mode",
       title: "Ready to code?",
       options: {},
     };

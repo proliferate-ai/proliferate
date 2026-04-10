@@ -15,7 +15,7 @@ export function ComposerAttachedPanel({
   onToggleExpanded,
 }: ComposerAttachedPanelProps) {
   return (
-    <div className="overflow-clip rounded-t-2xl border-x border-t border-border/80 bg-card/70 transition-colors">
+    <div className="relative overflow-clip rounded-t-2xl border-x border-t border-border/80 bg-card/70 backdrop-blur-sm transition-colors">
       <div className="flex w-full items-center justify-between gap-1.5 py-1.5 pr-2 pl-3 text-sm">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           {header}

@@ -39,6 +39,7 @@
     "react-router-dom": "^7",
     "remark-gfm": "^4",
     "shiki": "^4.0.2",
+    "tailwind-merge": "^3.5.0",
     "use-sync-external-store": "^1.6.0",
     "zustand": "^5"
   },

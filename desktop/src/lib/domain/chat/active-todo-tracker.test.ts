@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createTranscriptState, type TranscriptState } from "@anyharness/sdk";
-import { deriveActivePlan } from "@/lib/domain/chat/active-plan";
+import { deriveActiveTodoTracker } from "@/lib/domain/chat/active-todo-tracker";
 
-describe("active plan derivation", () => {
+describe("active todo tracker derivation", () => {
   it("returns active structured plans for non-Claude agents", () => {
     const transcript = transcriptWithItems({
       "plan-1": {
@@ -17,18 +17,15 @@ describe("active plan derivation", () => {
       },
     });
 
-    expect(deriveActivePlan(transcript)).toEqual({
-      sourceKind: "structured_plan",
+    expect(deriveActiveTodoTracker(transcript)).toEqual({
       entries: [
         { content: "Inspect router", status: "completed" },
         { content: "Add /health endpoint", status: "in_progress" },
       ],
-      body: null,
-      isActive: true,
     });
   });
 
-  it("maps Claude mode-switch plans to markdown bodies", () => {
+  it("returns null for Claude mode-switch plans (they render in the transcript, not as a todo tracker)", () => {
     const transcript = transcriptWithItems({
       "tool-1": {
         kind: "tool_call",
@@ -48,37 +45,29 @@ describe("active plan derivation", () => {
     transcript.pendingApproval = {
       requestId: "perm-1",
       toolCallId: "toolu_plan_1",
+      toolKind: "switch_mode",
       title: "Ready to code?",
       options: {},
     };
 
-    expect(deriveActivePlan(transcript)).toEqual({
-      sourceKind: "mode_switch",
-      entries: [],
-      body: "# Plan\n\n1. Add route\n2. Add tests\n3. Return response",
-      isActive: true,
-    });
+    expect(deriveActiveTodoTracker(transcript)).toBeNull();
   });
 
   it("drops plans once they are no longer active", () => {
     const transcript = transcriptWithItems({
-      "tool-1": {
-        kind: "tool_call",
-        sourceAgentKind: "claude",
-        nativeToolName: "ExitPlanMode",
-        title: "Ready to code?",
-        semanticKind: "mode_switch",
-        toolCallId: "toolu_plan_1",
-        approvalState: "approved",
-        startedSeq: 7,
-        contentParts: [
-          { type: "tool_call", toolCallId: "toolu_plan_1", title: "Ready to code?", toolKind: "switch_mode" },
-          { type: "tool_result_text", text: "# Plan\n\n1. Add route\n2. Add tests\n3. Return response" },
+      "plan-1": {
+        kind: "plan",
+        sourceAgentKind: "codex",
+        status: "completed",
+        startedSeq: 3,
+        entries: [
+          { content: "Inspect router", status: "completed" },
+          { content: "Add /health endpoint", status: "completed" },
         ],
       },
     });
 
-    expect(deriveActivePlan(transcript)).toBeNull();
+    expect(deriveActiveTodoTracker(transcript)).toBeNull();
   });
 });
 

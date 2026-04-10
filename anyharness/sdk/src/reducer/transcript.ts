@@ -464,6 +464,7 @@ function applyPermissionRequested(s: TranscriptState, evt: PermissionRequestedEv
   s.pendingApproval = {
     requestId: evt.requestId,
     toolCallId: evt.toolCallId ?? null,
+    toolKind: evt.toolKind ?? null,
     title: evt.title,
     options: evt.options,
   } satisfies PendingApproval;

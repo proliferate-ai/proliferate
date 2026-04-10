@@ -11,6 +11,10 @@ follow. Read [styling.md](styling.md) only when the change touches styling,
 primitives, tokens, or theme usage.
 Read [telemetry.md](telemetry.md) when the change touches analytics, error
 capture, Sentry, PostHog, replay masking, or telemetry payloads.
+Read [chat-composer.md](chat-composer.md) when the change touches the chat
+composer area — the input, the panels that sit above it (todo tracker,
+approval card, workspace status, cloud runtime), or the Claude plan card in
+the transcript.
 
 Cloud note:
 

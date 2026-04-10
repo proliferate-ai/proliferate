@@ -1307,6 +1307,29 @@ body {
   box-shadow: 0 0 0 2px var(--color-ring);
 }
 
+/* ---- Vertical scroll fade mask ----
+   Masks the top and bottom edges of a scrollable container with a linear
+   gradient so content fades out near the edges instead of hard-cutting.
+   Override `--edge-fade-distance` at the callsite (default 1.5rem) via
+   Tailwind's arbitrary-value syntax, e.g. `[--edge-fade-distance:2rem]`. */
+.vertical-scroll-fade-mask {
+  --edge-fade-distance: 1.5rem;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black var(--edge-fade-distance),
+    black calc(100% - var(--edge-fade-distance)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black var(--edge-fade-distance),
+    black calc(100% - var(--edge-fade-distance)),
+    transparent 100%
+  );
+}
+
 /* ---- Chat view text selection ----
    Scoped to the chat view root only (the rest of the app uses the browser
    default selection color). Uses each theme's accent (`--color-border-highlight`)

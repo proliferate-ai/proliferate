@@ -45,6 +45,9 @@ Always do so at the start of the task, not halfway through implementation.
 1. `docs/frontend/README.md`
 2. `docs/frontend/styling.md` when the change touches UI styling, primitives,
    tokens, or theme usage
+3. `docs/frontend/chat-composer.md` when the change touches the chat composer,
+   the panels above it (todo tracker, approval card, workspace/cloud status),
+   or the Claude plan card in the transcript
 
 ### SDK (`anyharness/sdk/**`, `anyharness/sdk-react/**`)
 
@@ -119,6 +122,10 @@ follow. Read [styling.md](styling.md) only when the change touches styling,
 primitives, tokens, or theme usage.
 Read [telemetry.md](telemetry.md) when the change touches analytics, error
 capture, Sentry, PostHog, replay masking, or telemetry payloads.
+Read [chat-composer.md](chat-composer.md) when the change touches the chat
+composer area — the input, the panels that sit above it (todo tracker,
+approval card, workspace status, cloud runtime), or the Claude plan card in
+the transcript.
 
 Cloud note:
 

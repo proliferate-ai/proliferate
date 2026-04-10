@@ -1,4 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes } from "react";
+import { twMerge } from "tailwind-merge";
 
 type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "destructive" | "inverted";
 type ButtonSize = "sm" | "md" | "pill" | "icon" | "icon-sm";
@@ -49,7 +50,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         disabled={disabled || loading}
-        className={`${base} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+        className={twMerge(base, variantClasses[variant], sizeClasses[size], className)}
         {...props}
       >
         {loading && (

@@ -135,6 +135,7 @@ export interface UnknownItem {
 export interface PendingApproval {
   requestId: string;
   toolCallId: string | null;
+  toolKind: string | null;
   title: string;
   options: unknown;
 }

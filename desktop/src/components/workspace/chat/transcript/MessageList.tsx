@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AssistantMessage } from "./AssistantMessage";
+import { ClaudePlanCard } from "./ClaudePlanCard";
 import { SystemMessage } from "./SystemMessage";
 import { UserMessage } from "./UserMessage";
 import { StreamingIndicator } from "./StreamingIndicator";
@@ -34,6 +35,10 @@ import {
 import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
 import { useMessageListScroll } from "@/hooks/chat/use-message-list-scroll";
 import { buildTurnPresentation } from "@/lib/domain/chat/transcript-presentation";
+import {
+  extractClaudePlanBody,
+  isClaudeExitPlanModeCall,
+} from "@/lib/domain/chat/claude-plan-tool-call";
 import type {
   FileChangeContentPart,
   FileReadContentPart,
@@ -362,7 +367,20 @@ function TranscriptItemBlock({
         </div>
       );
 
-    case "tool_call":
+    case "tool_call": {
+      if (isClaudeExitPlanModeCall(item)) {
+        const body = extractClaudePlanBody(item) ?? "";
+        return (
+          <div className="flex justify-start relative">
+            <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
+              <ClaudePlanCard
+                content={body}
+                isStreaming={item.status === "in_progress"}
+              />
+            </div>
+          </div>
+        );
+      }
       return (
         <div className="flex justify-start relative">
           <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
@@ -370,9 +388,11 @@ function TranscriptItemBlock({
           </div>
         </div>
       );
+    }
 
     case "plan":
-      // Plans are now rendered as a persistent panel above the composer
+      // Structured plan items (Codex/Gemini todos) render as the
+      // TodoTrackerPanel above the composer, not inline in the transcript.
       return null;
 
     case "error":

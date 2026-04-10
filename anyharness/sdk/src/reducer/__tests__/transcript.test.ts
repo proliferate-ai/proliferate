@@ -137,6 +137,7 @@ describe("transcript reducer", () => {
             requestId: "perm-1",
             title: "Run command",
             toolCallId: "tool-1",
+            toolKind: "execute",
             options: [{ id: "allow", label: "Allow" }],
           },
         },
@@ -160,6 +161,64 @@ describe("transcript reducer", () => {
 
     expect(state.pendingApproval).toBeNull();
     expect((state.itemsById["tool-1"] as ToolCallItem).approvalState).toBe("approved");
+  });
+
+  it("preserves toolKind on pendingApproval", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        completedToolItem(2, "tool-1"),
+        {
+          sessionId: "session-1",
+          seq: 3,
+          timestamp: "2026-04-04T00:00:03Z",
+          turnId: "turn-1",
+          itemId: "tool-1",
+          event: {
+            type: "permission_requested",
+            requestId: "perm-1",
+            title: "Run command",
+            toolCallId: "tool-1",
+            toolKind: "switch_mode",
+            options: [{ id: "allow", label: "Allow" }],
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    expect(state.pendingApproval).toMatchObject({
+      requestId: "perm-1",
+      toolCallId: "tool-1",
+      toolKind: "switch_mode",
+      title: "Run command",
+    });
+  });
+
+  it("defaults pendingApproval toolKind to null when absent on the event", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        completedToolItem(2, "tool-1"),
+        {
+          sessionId: "session-1",
+          seq: 3,
+          timestamp: "2026-04-04T00:00:03Z",
+          turnId: "turn-1",
+          itemId: "tool-1",
+          event: {
+            type: "permission_requested",
+            requestId: "perm-1",
+            title: "Run command",
+            toolCallId: "tool-1",
+            options: [{ id: "allow", label: "Allow" }],
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    expect(state.pendingApproval?.toolKind).toBeNull();
   });
 
   it("aggregates file badges when the turn ends", () => {

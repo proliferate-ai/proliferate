@@ -145,6 +145,9 @@ importers:
       shiki:
         specifier: ^4.0.2
         version: 4.0.2
+      tailwind-merge:
+        specifier: ^3.5.0
+        version: 3.5.0
       use-sync-external-store:
         specifier: ^1.6.0
         version: 1.6.0(react@19.2.4)
@@ -2388,6 +2391,9 @@ packages:
   supports-color@10.2.2:
     resolution: {integrity: sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g==}
     engines: {node: '>=18'}
+
+  tailwind-merge@3.5.0:
+    resolution: {integrity: sha512-I8K9wewnVDkL1NTGoqWmVEIlUcB9gFriAEkXkfCjX5ib8ezGxtR3xD7iZIxrfArjEsH7F1CHD4RFUtxefdqV/A==}
 
   tailwindcss@4.2.2:
     resolution: {integrity: sha512-KWBIxs1Xb6NoLdMVqhbhgwZf2PGBpPEiwOqgI4pFIYbNTfBXiKYyWoTsXgBQ9WFg/OlhnvHaY+AEpW7wSmFo2Q==}
@@ -4906,6 +4912,8 @@ snapshots:
       '@babel/core': 7.29.0
 
   supports-color@10.2.2: {}
+
+  tailwind-merge@3.5.0: {}
 
   tailwindcss@4.2.2: {}
 

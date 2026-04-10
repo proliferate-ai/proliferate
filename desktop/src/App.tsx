@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { Suspense, lazy, useEffect } from "react"
 import { Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { AuthRequiredGate } from "@/components/auth/AuthRequiredGate"
@@ -28,6 +28,16 @@ import {
 } from "@/stores/preferences/user-preferences-store"
 import { bootstrapRepoPreferences } from "@/stores/preferences/repo-preferences-store"
 import { bootstrapWorkspaceUi } from "@/stores/preferences/workspace-ui-store"
+
+// Dev-only playground. Lazy-loaded with a DEV guard so neither this file
+// nor any of its fixtures / transitive deps land in production bundles.
+const ChatPlaygroundPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/pages/ChatPlaygroundPage").then((m) => ({
+        default: m.ChatPlaygroundPage,
+      })),
+    )
+  : null
 
 function App() {
   const bootstrapAuth = useAuthBootstrap()
@@ -94,6 +104,16 @@ function App() {
               </Route>
             </Route>
           </Route>
+          {import.meta.env.DEV && ChatPlaygroundPage && (
+            <Route
+              path="/playground"
+              element={
+                <Suspense fallback={null}>
+                  <ChatPlaygroundPage />
+                </Suspense>
+              }
+            />
+          )}
         </InstrumentedRoutes>
         <RepoSetupModalHost />
       </AppErrorBoundary>
