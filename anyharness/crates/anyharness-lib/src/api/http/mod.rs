@@ -12,3 +12,4 @@ pub mod provider_configs;
 pub mod sessions;
 pub mod terminals;
 pub mod workspaces;
+pub(crate) mod workspaces_contract;

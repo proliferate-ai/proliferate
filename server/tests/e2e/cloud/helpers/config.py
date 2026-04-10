@@ -101,6 +101,8 @@ def load_cloud_test_config() -> CloudTestConfig:
         ),
         github_token=discover_github_token(),
         anthropic_api_key=discover_secret("ANTHROPIC_API_KEY"),
+        gemini_api_key=discover_secret("GEMINI_API_KEY"),
+        google_api_key=discover_secret("GOOGLE_API_KEY"),
         e2b_api_key=discover_secret("E2B_API_KEY"),
         e2b_template_name=discover_secret("E2B_TEMPLATE_NAME"),
         e2b_webhook_signature_secret=discover_secret("E2B_WEBHOOK_SIGNATURE_SECRET"),
@@ -109,14 +111,19 @@ def load_cloud_test_config() -> CloudTestConfig:
         daytona_target=discover_secret("DAYTONA_TARGET") or settings.daytona_target,
         claude_auth_path=discover_existing_path(
             [
-                Path.home() / ".claude.json",
                 Path.home() / ".claude" / ".credentials.json",
+                Path.home() / ".claude.json",
             ]
         ),
         codex_auth_path=discover_existing_path(
             [
                 Path.home() / ".codex" / "auth.json",
                 Path.home() / ".config" / "codex" / "auth.json",
+            ]
+        ),
+        gemini_auth_path=discover_existing_path(
+            [
+                Path.home() / ".gemini" / "oauth_creds.json",
             ]
         ),
     )

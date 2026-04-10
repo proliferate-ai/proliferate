@@ -80,7 +80,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sync-provider",
         action="append",
-        choices=("claude", "codex"),
+        choices=("claude", "codex", "gemini"),
         default=None,
         help=(
             "Cloud agent credential to sync before creating the runtime "

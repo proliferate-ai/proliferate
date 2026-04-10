@@ -507,40 +507,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/credentials/claude": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Sync Claude Credential Endpoint */
-        put: operations["sync_claude_credential_endpoint_v1_cloud_credentials_claude_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/credentials/codex": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Sync Codex Credential Endpoint */
-        put: operations["sync_codex_credential_endpoint_v1_cloud_credentials_codex_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/cloud/credentials/{provider}": {
         parameters: {
             query?: never;
@@ -549,7 +515,8 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /** Sync Cloud Credential Endpoint */
+        put: operations["sync_cloud_credential_endpoint_v1_cloud_credentials__provider__put"];
         post?: never;
         /** Delete Cloud Credential Endpoint */
         delete: operations["delete_cloud_credential_endpoint_v1_cloud_credentials__provider__delete"];
@@ -1174,11 +1141,37 @@ export interface components {
         };
         /** SyncCodexFile */
         SyncCodexFile: {
+            /** Relativepath */
+            relativePath: string;
+            /** Contentbase64 */
+            contentBase64: string;
+        };
+        /** SyncGeminiEnvCredentialRequest */
+        SyncGeminiEnvCredentialRequest: {
             /**
-             * Relativepath
+             * Authmode
              * @constant
              */
-            relativePath: ".codex/auth.json";
+            authMode: "env";
+            /** Envvars */
+            envVars: {
+                [key: string]: string;
+            };
+        };
+        /** SyncGeminiFileCredentialRequest */
+        SyncGeminiFileCredentialRequest: {
+            /**
+             * Authmode
+             * @constant
+             */
+            authMode: "file";
+            /** Files */
+            files: components["schemas"]["SyncGeminiFileEntry"][];
+        };
+        /** SyncGeminiFileEntry */
+        SyncGeminiFileEntry: {
+            /** Relativepath */
+            relativePath: string;
             /** Contentbase64 */
             contentBase64: string;
         };
@@ -1313,7 +1306,7 @@ export interface components {
             /** Runtimegeneration */
             runtimeGeneration: number;
             /** Allowedagentkinds */
-            allowedAgentKinds: ("claude" | "codex")[];
+            allowedAgentKinds: ("claude" | "codex" | "gemini")[];
             /** Readyagentkinds */
             readyAgentKinds: string[];
         };
@@ -2558,51 +2551,18 @@ export interface operations {
             };
         };
     };
-    sync_claude_credential_endpoint_v1_cloud_credentials_claude_put: {
+    sync_cloud_credential_endpoint_v1_cloud_credentials__provider__put: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                provider: "claude" | "codex" | "gemini";
+            };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SyncClaudeEnvCredentialRequest"] | components["schemas"]["SyncClaudeFileCredentialRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    sync_codex_credential_endpoint_v1_cloud_credentials_codex_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SyncCodexCredentialRequest"];
+                "application/json": components["schemas"]["SyncClaudeEnvCredentialRequest"] | components["schemas"]["SyncClaudeFileCredentialRequest"] | components["schemas"]["SyncCodexCredentialRequest"] | components["schemas"]["SyncGeminiEnvCredentialRequest"] | components["schemas"]["SyncGeminiFileCredentialRequest"];
             };
         };
         responses: {
@@ -2633,7 +2593,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                provider: "claude" | "codex";
+                provider: "claude" | "codex" | "gemini";
             };
             cookie?: never;
         };

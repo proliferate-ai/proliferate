@@ -35,7 +35,7 @@ fn detect_local_auth(kind: &CredentialDiscoveryKind, home_dir: &Path) -> bool {
         CredentialDiscoveryKind::None => false,
         CredentialDiscoveryKind::Claude => detect_shared_local_auth(ProviderId::Claude, home_dir),
         CredentialDiscoveryKind::Codex => detect_shared_local_auth(ProviderId::Codex, home_dir),
-        CredentialDiscoveryKind::Gemini => detect_gemini_local_auth(home_dir),
+        CredentialDiscoveryKind::Gemini => detect_shared_local_auth(ProviderId::Gemini, home_dir),
         CredentialDiscoveryKind::OpenCode => detect_opencode_local_auth(home_dir),
         CredentialDiscoveryKind::Cursor => detect_cursor_local_auth(home_dir),
         CredentialDiscoveryKind::Amp => detect_amp_local_auth(home_dir),
@@ -51,27 +51,6 @@ fn detect_shared_local_auth(provider: ProviderId, home_dir: &Path) -> bool {
             false
         }
     }
-}
-
-/// Check Gemini-specific local OAuth cache.
-///
-/// Checks:
-/// - `~/.gemini/oauth_creds.json` for OAuth token fields
-fn detect_gemini_local_auth(home_dir: &Path) -> bool {
-    let path = home_dir.join(".gemini").join("oauth_creds.json");
-    let Some(data) = read_json_file(&path) else {
-        return false;
-    };
-
-    for key in ["refresh_token", "access_token", "id_token"] {
-        if let Some(token) = data.get(key).and_then(|value| value.as_str()) {
-            if !token.is_empty() {
-                return true;
-            }
-        }
-    }
-
-    false
 }
 
 /// Check OpenCode-specific local auth file for any provider credential.
@@ -203,7 +182,7 @@ mod tests {
         )
         .expect("write oauth creds");
 
-        assert!(detect_gemini_local_auth(&home));
+        assert!(detect_shared_local_auth(ProviderId::Gemini, &home));
 
         let _ = std::fs::remove_dir_all(&home);
     }
@@ -243,7 +222,7 @@ mod tests {
         std::fs::create_dir_all(&gemini_dir).expect("create gemini dir");
         std::fs::write(gemini_dir.join("oauth_creds.json"), r#"{}"#).expect("write oauth creds");
 
-        assert!(!detect_gemini_local_auth(&home));
+        assert!(!detect_shared_local_auth(ProviderId::Gemini, &home));
 
         let _ = std::fs::remove_dir_all(&home);
     }

@@ -42,6 +42,17 @@ async def test_provisioned_workspace_is_sane(
         user_id=auth.user_id,
         access_token=cloud_test_config.github_token,
     )
+    repo_config_response = await cloud_client.put(
+        f"/v1/cloud/repos/{cloud_test_config.github_owner}/{cloud_test_config.github_repo}/config",
+        headers=auth.headers,
+        json={
+            "configured": True,
+            "envVars": {},
+            "setupScript": "",
+            "files": [],
+        },
+    )
+    repo_config_response.raise_for_status()
 
     # Sync Claude into the control plane before provisioning so the cloud
     # runtime should come up with at least one ready agent.
@@ -68,7 +79,7 @@ async def test_provisioned_workspace_is_sane(
         assert connection["accessToken"]
         assert connection["anyharnessWorkspaceId"]
         assert connection["runtimeGeneration"] >= 1
-        assert connection["allowedAgentKinds"] == ["claude", "codex"]
+        assert connection["allowedAgentKinds"] == ["claude", "codex", "gemini"]
         assert connection["readyAgentKinds"] == ["claude"]
 
         await assert_workspace_sane(

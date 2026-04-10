@@ -4,6 +4,7 @@ use std::path::PathBuf;
 pub enum ProviderId {
     Claude,
     Codex,
+    Gemini,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -3,15 +3,14 @@ import type { CloudAgentKind } from "@/lib/integrations/cloud/client";
 import { ProliferateClientError } from "@/lib/integrations/cloud/client";
 import {
   deleteCloudCredential,
-  syncClaudeCloudCredential,
-  syncCodexCloudCredential,
-  type SyncClaudeCredentialBody,
+  syncCloudCredential,
 } from "@/lib/integrations/cloud/credentials";
 import {
   exportSyncableCloudCredential,
 } from "@/platform/tauri/credentials";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { getProviderDisplayName } from "@/config/providers";
 import { cloudCredentialsKey } from "./query-keys";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import {
@@ -28,7 +27,7 @@ function describeCloudCredentialActionFailure(
     return error.message;
   }
 
-  const providerLabel = provider === "claude" ? "Claude" : "Codex";
+  const providerLabel = getProviderDisplayName(provider);
   return action === "sync"
     ? `Failed to sync ${providerLabel} credentials.`
     : `Failed to clear ${providerLabel} credentials.`;
@@ -44,13 +43,8 @@ export function useCloudCredentialActions() {
       telemetryHandled: true,
     },
     mutationFn: async (provider) => {
-      if (provider === "claude") {
-        const exported = await exportSyncableCloudCredential("claude");
-        await syncClaudeCloudCredential(exported as SyncClaudeCredentialBody);
-        return;
-      }
-      const exported = await exportSyncableCloudCredential("codex");
-      await syncCodexCloudCredential(exported);
+      const exported = await exportSyncableCloudCredential(provider);
+      await syncCloudCredential(provider, exported);
     },
     onSuccess: async (_result, provider) => {
       await Promise.all([

@@ -345,7 +345,7 @@ async def create_cloud_workspace(
     if not any(status.synced for status in statuses):
         raise CloudApiError(
             "missing_supported_credentials",
-            "Sync a supported Claude or Codex credential before creating a cloud workspace.",
+            "Sync a supported cloud credential before creating a cloud workspace.",
             status_code=400,
         )
     log_cloud_event(
@@ -435,7 +435,7 @@ async def start_cloud_workspace(
     if not any(status.synced for status in statuses):
         raise CloudApiError(
             "missing_supported_credentials",
-            "Sync a supported Claude or Codex credential before starting a cloud workspace.",
+            "Sync a supported cloud credential before starting a cloud workspace.",
             status_code=400,
         )
     log_cloud_event(

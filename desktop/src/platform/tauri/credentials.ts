@@ -1,8 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { RuntimeInfo } from "./runtime";
 
+export type CloudCredentialProvider = "claude" | "codex" | "gemini";
+
 export interface LocalCloudCredentialSource {
-  provider: "claude" | "codex";
+  provider: CloudCredentialProvider;
   authMode: "env" | "file";
   detected: boolean;
 }
@@ -12,14 +14,10 @@ export interface SyncEnvCredentialRequest {
   envVars: Record<string, string>;
 }
 
-/** Approved Claude file-backed auth paths for cloud sync. */
-export type ClaudeFilePath = ".claude/.credentials.json" | ".claude.json";
-export type CodexFilePath = ".codex/auth.json";
-
 export interface SyncClaudeFileCredentialRequest {
   authMode: "file";
   files: Array<{
-    relativePath: ClaudeFilePath;
+    relativePath: ".claude/.credentials.json" | ".claude.json";
     contentBase64: string;
   }>;
 }
@@ -27,7 +25,15 @@ export interface SyncClaudeFileCredentialRequest {
 export interface SyncCodexCredentialRequest {
   authMode: "file";
   files: Array<{
-    relativePath: CodexFilePath;
+    relativePath: ".codex/auth.json";
+    contentBase64: string;
+  }>;
+}
+
+export interface SyncGeminiFileCredentialRequest {
+  authMode: "file";
+  files: Array<{
+    relativePath: ".gemini/oauth_creds.json" | ".gemini/settings.json";
     contentBase64: string;
   }>;
 }
@@ -35,6 +41,16 @@ export interface SyncCodexCredentialRequest {
 export type SyncClaudeCredentialRequest =
   | SyncEnvCredentialRequest
   | SyncClaudeFileCredentialRequest;
+
+export type SyncGeminiCredentialRequest =
+  | SyncEnvCredentialRequest
+  | SyncGeminiFileCredentialRequest;
+
+export interface SyncCloudCredentialRequestByProvider {
+  claude: SyncClaudeCredentialRequest;
+  codex: SyncCodexCredentialRequest;
+  gemini: SyncGeminiCredentialRequest;
+}
 
 export async function listConfiguredEnvVarNames(): Promise<string[]> {
   return invoke<string[]>("list_configured_env_var_names");
@@ -59,16 +75,10 @@ export async function listSyncableCloudCredentials(): Promise<LocalCloudCredenti
   return invoke<LocalCloudCredentialSource[]>("list_syncable_cloud_credentials");
 }
 
-export async function exportSyncableCloudCredential(
-  provider: "claude",
-): Promise<SyncClaudeCredentialRequest>;
-export async function exportSyncableCloudCredential(
-  provider: "codex",
-): Promise<SyncCodexCredentialRequest>;
-export async function exportSyncableCloudCredential(
-  provider: "claude" | "codex",
-): Promise<SyncClaudeCredentialRequest | SyncCodexCredentialRequest> {
-  return invoke<SyncClaudeCredentialRequest | SyncCodexCredentialRequest>(
+export async function exportSyncableCloudCredential<P extends CloudCredentialProvider>(
+  provider: P,
+): Promise<SyncCloudCredentialRequestByProvider[P]> {
+  return invoke<SyncCloudCredentialRequestByProvider[P]>(
     "export_syncable_cloud_credential",
     { provider },
   );

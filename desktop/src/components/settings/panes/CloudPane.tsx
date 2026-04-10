@@ -7,7 +7,10 @@ import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
 import { SupportDialog } from "@/components/support/SupportDialog";
 import { AUTH_ACCOUNT_LABELS } from "@/config/auth";
+import { CLOUD_CREDENTIAL_PROVIDER_ORDER } from "@/config/cloud-providers";
+import { getProviderDisplayName } from "@/config/providers";
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
+import { describeCloudCredentialStatus } from "@/lib/domain/cloud/credentials";
 import {
   buildCloudRepoSettingsHref,
 } from "@/lib/domain/settings/navigation";
@@ -21,7 +24,12 @@ import { useCloudBilling } from "@/hooks/cloud/use-cloud-billing";
 import { useCloudCredentialActions } from "@/hooks/cloud/use-cloud-credential-actions";
 import { useCloudCredentials } from "@/hooks/cloud/use-cloud-credentials";
 import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
-import type { CloudCredentialStatus, CloudRepoConfigSummary } from "@/lib/integrations/cloud/client";
+import type {
+  CloudAgentKind,
+  CloudCredentialStatus,
+  CloudRepoConfigSummary,
+} from "@/lib/integrations/cloud/client";
+import { isCloudAgentKind } from "@/lib/integrations/cloud/client";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 const EMPTY_CLOUD_CREDENTIAL_STATUSES: CloudCredentialStatus[] = [];
@@ -42,8 +50,8 @@ export function CloudPane({ repositories }: CloudPaneProps) {
     error: signInError,
   } = useGitHubSignIn();
   const authStatus = useAuthStore((state) => state.status);
-  const [syncingProvider, setSyncingProvider] = useState<"claude" | "codex" | null>(null);
-  const [clearingProvider, setClearingProvider] = useState<"claude" | "codex" | null>(null);
+  const [syncingProvider, setSyncingProvider] = useState<CloudAgentKind | null>(null);
+  const [clearingProvider, setClearingProvider] = useState<CloudAgentKind | null>(null);
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false);
   const [unlimitedDialogOpen, setUnlimitedDialogOpen] = useState(false);
   const canManageCloudCredentials = authStatus === "authenticated" && !isDevAuthBypassed();
@@ -66,23 +74,25 @@ export function CloudPane({ repositories }: CloudPaneProps) {
     ),
     [repoConfigs?.configs],
   );
+  const credentialStatusMap = useMemo(() => {
+    const statusMap = new Map<CloudAgentKind, CloudCredentialStatus>();
+    for (const status of credentialStatuses) {
+      if (isCloudAgentKind(status.provider)) {
+        statusMap.set(status.provider, status);
+      }
+    }
+    return statusMap;
+  }, [credentialStatuses]);
 
-  const rows = [
-    {
-      provider: "claude" as const,
-      label: "Claude",
-      description: credentialStatuses.find((status) => status.provider === "claude")?.authMode === "file"
-        ? "Synced via Claude Code local auth."
-        : credentialStatuses.find((status) => status.provider === "claude")?.synced
-          ? "Synced via ANTHROPIC_API_KEY."
-          : "Sync your ANTHROPIC_API_KEY or Claude Code login for cloud workspaces.",
-    },
-    {
-      provider: "codex" as const,
-      label: "Codex",
-      description: "Sync your local ~/.codex/auth.json for cloud workspaces.",
-    },
-  ];
+  const rows = CLOUD_CREDENTIAL_PROVIDER_ORDER.map((provider) => {
+    const status = credentialStatusMap.get(provider);
+    return {
+      provider,
+      status,
+      label: getProviderDisplayName(provider),
+      description: describeCloudCredentialStatus(provider, status),
+    };
+  });
 
   return (
     <section className="space-y-6">
@@ -154,7 +164,7 @@ export function CloudPane({ repositories }: CloudPaneProps) {
 
       <SettingsCard>
         {rows.map((row) => {
-          const status = credentialStatuses.find((entry) => entry.provider === row.provider);
+          const status = row.status;
           const syncing = syncingProvider === row.provider;
           const clearing = clearingProvider === row.provider;
           const requiresSignIn = !canManageCloudCredentials && Boolean(status?.localDetected);

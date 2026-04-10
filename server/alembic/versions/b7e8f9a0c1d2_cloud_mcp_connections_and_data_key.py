@@ -19,12 +19,19 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _has_column(table_name: str, column_name: str) -> bool:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return column_name in {column["name"] for column in inspector.get_columns(table_name)}
+
+
 def upgrade() -> None:
     """Upgrade schema."""
-    op.add_column(
-        "cloud_workspace",
-        sa.Column("anyharness_data_key_ciphertext", sa.Text(), nullable=True),
-    )
+    if not _has_column("cloud_workspace", "anyharness_data_key_ciphertext"):
+        op.add_column(
+            "cloud_workspace",
+            sa.Column("anyharness_data_key_ciphertext", sa.Text(), nullable=True),
+        )
 
     op.create_table(
         "cloud_mcp_connection",
@@ -52,4 +59,5 @@ def downgrade() -> None:
     """Downgrade schema."""
     op.drop_index("ix_cloud_mcp_connection_user_id", table_name="cloud_mcp_connection")
     op.drop_table("cloud_mcp_connection")
-    op.drop_column("cloud_workspace", "anyharness_data_key_ciphertext")
+    if _has_column("cloud_workspace", "anyharness_data_key_ciphertext"):
+        op.drop_column("cloud_workspace", "anyharness_data_key_ciphertext")

@@ -81,6 +81,50 @@ pub enum ExportedCloudCredential {
     File(ExportedFileCloudCredential),
 }
 
+#[derive(Clone, Copy)]
+struct CloudCredentialProviderSpec {
+    id: &'static str,
+    default_auth_mode: &'static str,
+    env_secret_names: &'static [&'static str],
+    discovery_provider: Option<ProviderId>,
+    missing_message: &'static str,
+    augment_env_vars: Option<fn(&str, &mut HashMap<String, String>)>,
+}
+
+fn augment_gemini_env_vars(name: &str, env_vars: &mut HashMap<String, String>) {
+    if name == "GOOGLE_API_KEY" {
+        env_vars.insert("GOOGLE_GENAI_USE_VERTEXAI".to_string(), "true".to_string());
+    }
+}
+
+const CLOUD_CREDENTIAL_PROVIDERS: &[CloudCredentialProviderSpec] = &[
+    CloudCredentialProviderSpec {
+        id: "claude",
+        default_auth_mode: "env",
+        env_secret_names: &["ANTHROPIC_API_KEY"],
+        discovery_provider: Some(ProviderId::Claude),
+        missing_message: "No Claude credentials found. Set ANTHROPIC_API_KEY or log in to Claude Code.",
+        augment_env_vars: None,
+    },
+    CloudCredentialProviderSpec {
+        id: "codex",
+        default_auth_mode: "file",
+        env_secret_names: &[],
+        discovery_provider: Some(ProviderId::Codex),
+        missing_message: "No Codex credentials found. Log in to Codex or ensure local auth is available.",
+        augment_env_vars: None,
+    },
+    CloudCredentialProviderSpec {
+        id: "gemini",
+        default_auth_mode: "env",
+        // Order matters: prefer a direct Gemini API key over Vertex-style Google API key auth.
+        env_secret_names: &["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+        discovery_provider: Some(ProviderId::Gemini),
+        missing_message: "No Gemini credentials found. Set GEMINI_API_KEY, set GOOGLE_API_KEY for Vertex AI, or log in to Gemini CLI.",
+        augment_env_vars: Some(augment_gemini_env_vars),
+    },
+];
+
 fn read_env_secret(name: &str) -> Result<Option<String>, String> {
     read_password(SERVICE, name)
 }
@@ -342,72 +386,64 @@ pub async fn clear_pending_auth() -> Result<(), String> {
 pub async fn list_syncable_cloud_credentials() -> Result<Vec<LocalCloudCredentialSource>, String> {
     let home = home_dir()?;
     tracing::info!(home_dir = %home.display(), "Listing syncable cloud credentials");
-    let claude_env_detected = read_env_secret("ANTHROPIC_API_KEY")?.is_some();
-    let claude_file_detected = portable_auth_detected(ProviderId::Claude, &home);
-    let claude_auth_mode = if claude_env_detected {
-        "env"
-    } else if claude_file_detected {
-        "file"
-    } else {
-        "env"
-    };
+    let sources = CLOUD_CREDENTIAL_PROVIDERS
+        .iter()
+        .map(|spec| {
+            let env_detected = detect_env_secret(spec)?.is_some();
+            let file_detected = spec
+                .discovery_provider
+                .map(|provider| portable_auth_detected(provider, &home))
+                .unwrap_or(false);
+            let auth_mode = if env_detected {
+                "env"
+            } else if file_detected {
+                "file"
+            } else {
+                spec.default_auth_mode
+            };
 
-    let codex_detected = portable_auth_detected(ProviderId::Codex, &home);
+            tracing::info!(
+                provider = spec.id,
+                env_detected,
+                file_detected,
+                auth_mode,
+                "Resolved syncable cloud credential state"
+            );
 
-    tracing::info!(
-        claude_env_detected,
-        claude_file_detected,
-        codex_detected,
-        "Resolved syncable cloud credential state"
-    );
+            Ok(LocalCloudCredentialSource {
+                provider: spec.id.to_string(),
+                auth_mode: auth_mode.to_string(),
+                detected: env_detected || file_detected,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
 
-    Ok(vec![
-        LocalCloudCredentialSource {
-            provider: "claude".to_string(),
-            auth_mode: claude_auth_mode.to_string(),
-            detected: claude_env_detected || claude_file_detected,
-        },
-        LocalCloudCredentialSource {
-            provider: "codex".to_string(),
-            auth_mode: "file".to_string(),
-            detected: codex_detected,
-        },
-    ])
+    Ok(sources)
 }
 
 #[tauri::command]
 pub async fn export_syncable_cloud_credential(
     provider: String,
 ) -> Result<ExportedCloudCredential, String> {
-    match provider.as_str() {
-        "claude" => export_claude_credential(),
-        "codex" => export_portable_file_credential(ProviderId::Codex),
-        _ => Err(format!("Unsupported cloud credential provider: {provider}")),
-    }
-}
+    let Some(spec) = cloud_credential_provider(&provider) else {
+        return Err(format!("Unsupported cloud credential provider: {provider}"));
+    };
 
-/// Export Claude credential: env-var takes priority, then file-backed auth.
-fn export_claude_credential() -> Result<ExportedCloudCredential, String> {
-    // Prefer env-var auth if available.
-    if let Some(api_key) = read_env_secret("ANTHROPIC_API_KEY")? {
-        tracing::info!("Exporting Claude cloud credential from desktop env secret");
-        let mut env_vars = HashMap::new();
-        env_vars.insert("ANTHROPIC_API_KEY".to_string(), api_key);
-        return Ok(ExportedCloudCredential::Env(ExportedEnvCloudCredential {
-            auth_mode: "env".to_string(),
-            env_vars,
-        }));
+    if let Some(env_credential) = export_env_credential(spec)? {
+        return Ok(env_credential);
     }
 
-    // Fall back to file-backed auth.
-    match export_portable_file_credential(ProviderId::Claude) {
-        Ok(credential) => Ok(credential),
-        Err(err) if err == "No portable cloud credential found for provider." => Err(
-            "No Claude credentials found. Set ANTHROPIC_API_KEY or log in to Claude Code."
-                .to_string(),
-        ),
-        Err(err) => Err(err),
+    if let Some(discovery_provider) = spec.discovery_provider {
+        return match export_portable_file_credential(discovery_provider) {
+            Ok(credential) => Ok(credential),
+            Err(err) if err == "No portable cloud credential found for provider." => {
+                Err(spec.missing_message.to_string())
+            }
+            Err(err) => Err(err),
+        };
     }
+
+    Err(spec.missing_message.to_string())
 }
 
 fn export_portable_file_credential(
@@ -425,6 +461,43 @@ fn export_portable_file_credential(
         auth_mode: "file".to_string(),
         files: portable_export_to_cloud_files(export),
     }))
+}
+
+fn cloud_credential_provider(provider: &str) -> Option<&'static CloudCredentialProviderSpec> {
+    CLOUD_CREDENTIAL_PROVIDERS
+        .iter()
+        .find(|spec| spec.id == provider)
+}
+
+fn detect_env_secret(
+    spec: &CloudCredentialProviderSpec,
+) -> Result<Option<(&'static str, String)>, String> {
+    for &name in spec.env_secret_names {
+        if let Some(value) = read_env_secret(name)? {
+            return Ok(Some((name, value)));
+        }
+    }
+    Ok(None)
+}
+
+fn export_env_credential(
+    spec: &CloudCredentialProviderSpec,
+) -> Result<Option<ExportedCloudCredential>, String> {
+    let Some((name, value)) = detect_env_secret(spec)? else {
+        return Ok(None);
+    };
+
+    tracing::info!(provider = spec.id, env_var = name, "Exporting cloud credential from desktop env secret");
+    let mut env_vars = HashMap::new();
+    env_vars.insert(name.to_string(), value);
+    if let Some(augment_env_vars) = spec.augment_env_vars {
+        augment_env_vars(name, &mut env_vars);
+    }
+
+    Ok(Some(ExportedCloudCredential::Env(ExportedEnvCloudCredential {
+        auth_mode: "env".to_string(),
+        env_vars,
+    })))
 }
 
 fn portable_auth_detected(provider: ProviderId, home_dir: &std::path::Path) -> bool {

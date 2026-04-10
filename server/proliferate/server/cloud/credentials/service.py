@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
-from typing import Literal, NoReturn
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from typing import NoReturn
 from uuid import UUID
 
-from proliferate.constants.cloud import CLAUDE_ALLOWED_AUTH_FILES, SUPPORTED_CLOUD_AGENTS
+from proliferate.constants.cloud import (
+    CLAUDE_ALLOWED_AUTH_FILES,
+    CODEX_ALLOWED_AUTH_FILES,
+    GEMINI_ALLOWED_AUTH_FILES,
+    SUPPORTED_CLOUD_AGENTS,
+)
 from proliferate.db.models.cloud import CloudCredential
 from proliferate.db.store.cloud_credentials import (
     load_cloud_credentials_for_user,
@@ -13,25 +19,107 @@ from proliferate.db.store.cloud_credentials import (
     persist_cloud_credential_sync,
 )
 from proliferate.server.cloud.credentials.models import (
+    CloudAgentKind,
+    CloudCredentialAuthMode,
     CredentialStatus,
     CredentialStatusRecord,
-    SyncClaudeCredentialRequest,
-    SyncClaudeEnvCredentialRequest,
-    SyncClaudeFileCredentialRequest,
-    SyncCodexCredentialRequest,
+    SyncCloudCredentialRequest,
     build_credential_statuses,
     credential_status_payload,
 )
 from proliferate.server.cloud.credentials.validation import (
     decode_base64_json,
     has_portable_claude_file,
+    has_portable_codex_file,
+    has_portable_gemini_file,
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.utils.crypto import decrypt_json, encrypt_json
 
+FileContentValidator = Callable[[dict[str, object], str], bool]
+EnvPayloadNormalizer = Callable[[Mapping[str, str]], dict[str, str]]
+
+
+@dataclass(frozen=True)
+class CredentialProviderSpec:
+    provider: CloudAgentKind
+    default_auth_mode: CloudCredentialAuthMode
+    allowed_env_vars: frozenset[str]
+    allowed_file_paths: frozenset[str]
+    env_normalizer: EnvPayloadNormalizer | None = None
+    file_validator: FileContentValidator | None = None
+
+
+_CREDENTIAL_SPECS: dict[CloudAgentKind, CredentialProviderSpec] = {
+    "claude": CredentialProviderSpec(
+        provider="claude",
+        default_auth_mode="env",
+        allowed_env_vars=frozenset({"ANTHROPIC_API_KEY"}),
+        allowed_file_paths=CLAUDE_ALLOWED_AUTH_FILES,
+        env_normalizer=lambda env_vars: _normalize_claude_env_payload(env_vars),
+        file_validator=has_portable_claude_file,
+    ),
+    "codex": CredentialProviderSpec(
+        provider="codex",
+        default_auth_mode="file",
+        allowed_env_vars=frozenset(),
+        allowed_file_paths=CODEX_ALLOWED_AUTH_FILES,
+        file_validator=lambda data, _relative_path: has_portable_codex_file(data),
+    ),
+    "gemini": CredentialProviderSpec(
+        provider="gemini",
+        default_auth_mode="env",
+        allowed_env_vars=frozenset(
+            {
+                "GEMINI_API_KEY",
+                "GOOGLE_API_KEY",
+                "GOOGLE_GENAI_USE_VERTEXAI",
+            }
+        ),
+        allowed_file_paths=GEMINI_ALLOWED_AUTH_FILES,
+        env_normalizer=lambda env_vars: _normalize_gemini_env_payload(env_vars),
+        file_validator=has_portable_gemini_file,
+    ),
+}
+
 
 def _invalid_payload(message: str) -> NoReturn:
     raise CloudApiError("invalid_payload", message, status_code=400)
+
+
+def _provider_spec(provider: CloudAgentKind) -> CredentialProviderSpec:
+    return _CREDENTIAL_SPECS[provider]
+
+
+def _normalize_claude_env_payload(env_vars: Mapping[str, str]) -> dict[str, str]:
+    api_key = env_vars.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        _invalid_payload("Claude cloud sync requires ANTHROPIC_API_KEY.")
+    return {"ANTHROPIC_API_KEY": api_key}
+
+
+def _normalize_gemini_env_payload(env_vars: Mapping[str, str]) -> dict[str, str]:
+    has_gemini_api_key = bool(env_vars.get("GEMINI_API_KEY"))
+    has_google_api_key = bool(env_vars.get("GOOGLE_API_KEY"))
+    uses_vertex_ai = env_vars.get("GOOGLE_GENAI_USE_VERTEXAI") == "true"
+
+    if has_gemini_api_key and has_google_api_key:
+        _invalid_payload(
+            "Gemini cloud sync must use either GEMINI_API_KEY or GOOGLE_API_KEY, not both."
+        )
+    if has_google_api_key and not uses_vertex_ai:
+        _invalid_payload(
+            "Gemini GOOGLE_API_KEY sync requires GOOGLE_GENAI_USE_VERTEXAI=true."
+        )
+    if uses_vertex_ai and not has_google_api_key:
+        _invalid_payload(
+            "GOOGLE_GENAI_USE_VERTEXAI=true requires GOOGLE_API_KEY for Gemini cloud sync."
+        )
+    if has_gemini_api_key and "GOOGLE_GENAI_USE_VERTEXAI" in env_vars:
+        _invalid_payload("Gemini API key sync must not include GOOGLE_GENAI_USE_VERTEXAI.")
+    if not has_gemini_api_key and not has_google_api_key:
+        _invalid_payload("Gemini cloud sync requires GEMINI_API_KEY or GOOGLE_API_KEY.")
+    return dict(env_vars)
 
 
 async def list_cloud_credentials(
@@ -64,42 +152,40 @@ def _active_credential_payloads(
     }
 
 
-async def sync_claude_credential_for_user(
-    user_id: UUID,
-    body: SyncClaudeCredentialRequest,
-) -> Literal["env", "file"]:
-    if body.auth_mode == "env":
-        if not isinstance(body, SyncClaudeEnvCredentialRequest):
-            raise CloudApiError(
-                "invalid_payload", "Expected env credential payload", status_code=422
-            )
-        api_key = body.env_vars.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            _invalid_payload("Claude cloud sync requires ANTHROPIC_API_KEY.")
-        await persist_cloud_credential_sync(
-            user_id,
-            "claude",
-            encrypt_json(
-                {
-                    "provider": "claude",
-                    "authMode": "env",
-                    "envVars": {"ANTHROPIC_API_KEY": api_key},
-                }
-            ),
-            "env",
-        )
-        return "env"
+def _normalize_env_payload(
+    spec: CredentialProviderSpec,
+    env_vars: Mapping[str, str],
+) -> dict[str, str]:
+    if spec.env_normalizer is None:
+        _invalid_payload(f"Env credential sync is not supported for provider '{spec.provider}'.")
 
-    if not isinstance(body, SyncClaudeFileCredentialRequest):
-        raise CloudApiError("invalid_payload", "Expected file credential payload", status_code=422)
-    if not body.files:
-        _invalid_payload("Claude file sync requires at least one auth file.")
+    env_var_names = set(env_vars.keys())
+    unexpected = sorted(env_var_names - spec.allowed_env_vars)
+    if unexpected:
+        _invalid_payload(
+            f"{spec.provider.capitalize()} cloud sync does not allow env vars: {', '.join(unexpected)}."
+        )
+
+    normalized_input = {key: value for key, value in env_vars.items() if key in spec.allowed_env_vars}
+    if not normalized_input:
+        _invalid_payload(f"{spec.provider.capitalize()} cloud sync requires at least one env var.")
+    return spec.env_normalizer(normalized_input)
+
+
+def _normalize_file_payload(
+    spec: CredentialProviderSpec,
+    body: SyncCloudCredentialRequest,
+) -> dict[str, str]:
+    files = getattr(body, "files", None)
+    if not isinstance(files, list) or not files:
+        _invalid_payload(f"{spec.provider.capitalize()} file sync requires at least one auth file.")
 
     decoded_files: dict[str, str] = {}
-    for entry in body.files:
-        if entry.relative_path not in CLAUDE_ALLOWED_AUTH_FILES:
+    for entry in files:
+        relative_path = getattr(entry, "relative_path", None)
+        if relative_path not in spec.allowed_file_paths:
             _invalid_payload(
-                f"File path '{entry.relative_path}' is not an approved Claude auth file."
+                f"File path '{relative_path}' is not an approved {spec.provider.capitalize()} auth file."
             )
         try:
             decoded = decode_base64_json(entry.content_base64)
@@ -107,63 +193,54 @@ async def sync_claude_credential_for_user(
         except Exception as exc:
             raise CloudApiError(
                 "invalid_payload",
-                f"File '{entry.relative_path}' must be valid base64-encoded JSON.",
+                f"File '{relative_path}' must be valid base64-encoded JSON.",
                 status_code=400,
             ) from exc
-        if not isinstance(parsed, dict) or not has_portable_claude_file(
-            parsed, entry.relative_path
+        if not isinstance(parsed, dict) or (
+            spec.file_validator is not None and not spec.file_validator(parsed, relative_path)
         ):
             _invalid_payload(
-                f"File '{entry.relative_path}' does not contain portable Claude"
-                " credentials for cloud use."
+                f"File '{relative_path}' does not contain portable {spec.provider.capitalize()} credentials for cloud use."
             )
-        # By the time the desktop uploads a file payload, the local source
-        # backend has already been normalized away. Cloud persists only the
-        # portable runtime-home-relative file contents.
-        decoded_files[entry.relative_path] = decoded
+        decoded_files[relative_path] = decoded
 
-    await persist_cloud_credential_sync(
-        user_id,
-        "claude",
-        encrypt_json(
-            {
-                "provider": "claude",
-                "authMode": "file",
-                "files": decoded_files,
-            }
-        ),
-        "file",
-    )
-    return "file"
+    return decoded_files
 
 
-async def sync_codex_credential_for_user(
+async def sync_cloud_credential_for_user(
     user_id: UUID,
-    body: SyncCodexCredentialRequest,
-) -> Literal["file"]:
-    auth_file = next(
-        (item for item in body.files if item.relative_path == ".codex/auth.json"),
-        None,
-    )
-    if auth_file is None:
-        _invalid_payload("Codex cloud sync requires a .codex/auth.json file.")
-    try:
-        decoded = decode_base64_json(auth_file.content_base64)
-        json.loads(decoded)
-    except Exception as exc:
-        raise CloudApiError(
-            "invalid_payload",
-            "Codex cloud sync requires valid base64-encoded JSON.",
-            status_code=400,
-        ) from exc
+    provider: CloudAgentKind,
+    body: SyncCloudCredentialRequest,
+) -> CloudCredentialAuthMode:
+    spec = _provider_spec(provider)
+    if body.auth_mode == "env":
+        env_vars = getattr(body, "env_vars", None)
+        if not isinstance(env_vars, Mapping):
+            _invalid_payload(f"{spec.provider.capitalize()} cloud sync requires env vars.")
+        normalized_env_vars = _normalize_env_payload(spec, env_vars)
+        await persist_cloud_credential_sync(
+            user_id,
+            provider,
+            encrypt_json(
+                {
+                    "provider": provider,
+                    "authMode": "env",
+                    "envVars": normalized_env_vars,
+                }
+            ),
+            "env",
+        )
+        return "env"
+
+    normalized_files = _normalize_file_payload(spec, body)
     await persist_cloud_credential_sync(
         user_id,
-        "codex",
+        provider,
         encrypt_json(
             {
-                "provider": "codex",
+                "provider": provider,
                 "authMode": "file",
-                "files": {".codex/auth.json": decoded},
+                "files": normalized_files,
             }
         ),
         "file",
@@ -173,6 +250,6 @@ async def sync_codex_credential_for_user(
 
 async def delete_cloud_credential_for_user(
     user_id: UUID,
-    provider: Literal["claude", "codex"],
+    provider: CloudAgentKind,
 ) -> None:
     await persist_cloud_credential_delete(user_id, provider)

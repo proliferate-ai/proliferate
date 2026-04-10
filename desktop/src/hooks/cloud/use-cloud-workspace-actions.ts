@@ -4,7 +4,7 @@ import type {
   CloudWorkspaceDetail,
   CreateCloudWorkspaceRequest,
 } from "@/lib/integrations/cloud/client";
-import { ProliferateClientError } from "@/lib/integrations/cloud/client";
+import { isCloudAgentKind, ProliferateClientError } from "@/lib/integrations/cloud/client";
 import {
   createCloudWorkspace,
   deleteCloudWorkspace,
@@ -38,21 +38,26 @@ async function autoSyncDetectedCloudCredentialsIfNeeded(
   }
 
   const localSources = await listSyncableCloudCredentials().catch(() => []);
-  const syncableProviders = localSources
+  const syncableProviders = Array.from(new Set(localSources
     .filter((source): source is typeof source & { provider: CloudAgentKind } => (
-      source.detected && (source.provider === "claude" || source.provider === "codex")
+      source.detected && isCloudAgentKind(source.provider)
     ))
-    .map((source) => source.provider);
+    .map((source) => source.provider)));
 
   if (syncableProviders.length === 0) {
     return false;
   }
 
   for (const provider of syncableProviders) {
-    await syncCredential(provider);
+    try {
+      await syncCredential(provider);
+      return true;
+    } catch {
+      // Try the next detected provider before giving up on auto-sync.
+    }
   }
 
-  return true;
+  return false;
 }
 
 export function useCloudWorkspaceActions() {

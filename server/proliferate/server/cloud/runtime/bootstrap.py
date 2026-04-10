@@ -57,8 +57,8 @@ def build_runtime_env(
     if _runtime_sentry_release():
         env["ANYHARNESS_SENTRY_RELEASE"] = _runtime_sentry_release()
     env["ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE"] = str(_runtime_sentry_traces_sample_rate())
-    if credentials.claude is not None and credentials.claude.api_key:
-        env["ANTHROPIC_API_KEY"] = credentials.claude.api_key
+    for item in credentials.iter_env_vars():
+        env[item.name] = item.value
     env["ANYHARNESS_BEARER_TOKEN"] = runtime_token
     env["ANYHARNESS_DATA_KEY"] = anyharness_data_key
     if repo_env_vars:

@@ -17,9 +17,9 @@ from typing import Literal
 # Supported cloud agent kinds
 # ---------------------------------------------------------------------------
 
-CloudAgentKind = Literal["claude", "codex"]
+CloudAgentKind = Literal["claude", "codex", "gemini"]
 
-SUPPORTED_CLOUD_AGENTS: tuple[CloudAgentKind, ...] = ("claude", "codex")
+SUPPORTED_CLOUD_AGENTS: tuple[CloudAgentKind, ...] = ("claude", "codex", "gemini")
 
 ANYHARNESS_RESERVED_ENV_PREFIX: str = "ANYHARNESS_"
 PROLIFERATE_RESERVED_ENV_PREFIX: str = "PROLIFERATE_"
@@ -34,6 +34,7 @@ RESERVED_CLOUD_REPO_ENV_VARS: frozenset[str] = frozenset(
         "CURSOR_API_KEY",
         "GEMINI_API_KEY",
         "GOOGLE_API_KEY",
+        "GOOGLE_GENAI_USE_VERTEXAI",
         "OPENAI_API_KEY",
     }
 )
@@ -46,6 +47,19 @@ CLAUDE_ALLOWED_AUTH_FILES: frozenset[str] = frozenset(
     {
         ".claude/.credentials.json",
         ".claude.json",
+    }
+)
+
+CODEX_ALLOWED_AUTH_FILES: frozenset[str] = frozenset(
+    {
+        ".codex/auth.json",
+    }
+)
+
+GEMINI_ALLOWED_AUTH_FILES: frozenset[str] = frozenset(
+    {
+        ".gemini/oauth_creds.json",
+        ".gemini/settings.json",
     }
 )
 

@@ -125,6 +125,26 @@ def _disable_workspace_provision(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+async def _configure_repo(
+    client: AsyncClient,
+    headers: dict[str, str],
+    *,
+    git_owner: str,
+    git_repo_name: str,
+) -> None:
+    response = await client.put(
+        f"/v1/cloud/repos/{git_owner}/{git_repo_name}/config",
+        headers=headers,
+        json={
+            "configured": True,
+            "envVars": {},
+            "setupScript": "",
+            "files": [],
+        },
+    )
+    assert response.status_code == 200
+
+
 class TestCloudCredentials:
     @pytest.mark.asyncio
     async def test_sync_and_delete_supported_credentials(
@@ -146,7 +166,9 @@ class TestCloudCredentials:
         assert claude_response.status_code == 200
 
         codex_file = base64.b64encode(
-            json.dumps({"auth_mode": "chatgpt", "access_token": "opaque"}).encode("utf-8")
+            json.dumps({"auth_mode": "chatgpt", "tokens": {"access_token": "opaque"}}).encode(
+                "utf-8"
+            )
         ).decode("ascii")
         codex_response = await client.put(
             "/v1/cloud/credentials/codex",
@@ -506,6 +528,7 @@ class TestCloudWorkspaces:
         assert no_github.json()["detail"]["code"] == "github_link_required"
 
         await _link_github_account(db_session, session["user_id"])
+        await _configure_repo(client, headers, git_owner="acme", git_repo_name="rocket")
 
         no_creds = await client.post("/v1/cloud/workspaces", headers=headers, json=request)
         assert no_creds.status_code == 400
@@ -532,7 +555,7 @@ class TestCloudWorkspaces:
             "baseBranch": "main",
         }
         assert payload["status"] == "queued"
-        assert payload["allowedAgentKinds"] == ["claude", "codex"]
+        assert payload["allowedAgentKinds"] == ["claude", "codex", "gemini"]
         assert payload["readyAgentKinds"] == ["claude"]
         assert payload["runtimeGeneration"] == 0
 
@@ -602,6 +625,7 @@ class TestCloudWorkspaces:
         session = await _register_and_login(client, "cloud-create-duplicate-branch@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         await _link_github_account(db_session, session["user_id"])
+        await _configure_repo(client, headers, git_owner="acme", git_repo_name="rocket")
 
         await client.put(
             "/v1/cloud/credentials/claude",

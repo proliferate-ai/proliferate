@@ -1,4 +1,5 @@
 use std::path::Path;
+#[cfg(target_os = "macos")]
 use std::process::Command;
 
 use serde_json::Value;
@@ -12,6 +13,7 @@ const CLAUDE_CREDENTIALS_PATH: &str = ".claude/.credentials.json";
 const CLAUDE_CONFIG_PATH: &str = ".claude.json";
 const CLAUDE_API_CONFIG_PATH: &str = ".claude.json.api";
 const CLAUDE_OAUTH_CREDENTIALS_PATH: &str = ".claude-oauth-credentials.json";
+#[cfg(target_os = "macos")]
 const CLAUDE_KEYCHAIN_SERVICES: &[&str] = &["Claude Code-credentials", "Claude Code"];
 const CLAUDE_KEYCHAIN_ROOT_KEY: &str = "claudeAiOauth";
 

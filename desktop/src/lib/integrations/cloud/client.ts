@@ -23,7 +23,11 @@ export type CloudWorkspaceStatus =
   | "stopped"
   | "error";
 
-export type CloudAgentKind = "claude" | "codex";
+export type CloudAgentKind = "claude" | "codex" | "gemini";
+
+export function isCloudAgentKind(value: string): value is CloudAgentKind {
+  return value === "claude" || value === "codex" || value === "gemini";
+}
 
 // Generated type aliases — names preserved so all existing import sites are unchanged.
 export type RepoRef                   = components["schemas"]["RepoRef"];

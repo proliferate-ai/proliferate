@@ -34,6 +34,8 @@ class CloudTestConfig:
     github_base_branch: str
     github_token: str | None
     anthropic_api_key: str | None
+    gemini_api_key: str | None
+    google_api_key: str | None
     e2b_api_key: str | None
     e2b_template_name: str | None
     e2b_webhook_signature_secret: str | None
@@ -42,6 +44,7 @@ class CloudTestConfig:
     daytona_target: str
     claude_auth_path: Path | None
     codex_auth_path: Path | None
+    gemini_auth_path: Path | None
 
 
 @dataclass

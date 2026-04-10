@@ -5,15 +5,22 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Literal
 
-from pydantic import BaseModel, Discriminator, Field, Tag
+from pydantic import BaseModel, Field
 
-from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS
+from proliferate.constants.cloud import (
+    SUPPORTED_CLOUD_AGENTS,
+)
 from proliferate.constants.cloud import CloudAgentKind as CloudAgentKind
 
-_DEFAULT_AUTH_MODES: dict[str, Literal["env", "file"]] = {"claude": "env", "codex": "file"}
+CloudCredentialAuthMode = Literal["env", "file"]
 
+_DEFAULT_AUTH_MODES: dict[str, CloudCredentialAuthMode] = {
+    "claude": "env",
+    "codex": "file",
+    "gemini": "env",
+}
 
 class SyncClaudeEnvCredentialRequest(BaseModel):
     auth_mode: Literal["env"] = Field(alias="authMode")
@@ -32,30 +39,40 @@ class SyncClaudeFileCredentialRequest(BaseModel):
     files: list[SyncClaudeFileEntry]
 
 
-def _claude_cred_discriminator(v: object) -> str:
-    if isinstance(v, dict):
-        return str(v.get("authMode", "env"))
-    return str(getattr(v, "auth_mode", "env"))
-
-
-SyncClaudeCredentialRequest = Annotated[
-    (
-        Annotated[SyncClaudeEnvCredentialRequest, Tag("env")]
-        | Annotated[SyncClaudeFileCredentialRequest, Tag("file")]
-    ),
-    Discriminator(_claude_cred_discriminator),
-]
+SyncClaudeCredentialRequest = SyncClaudeEnvCredentialRequest | SyncClaudeFileCredentialRequest
 
 
 class SyncCodexFile(BaseModel):
     # Codex cloud sync stores the canonical auth file under runtime home.
-    relative_path: Literal[".codex/auth.json"] = Field(alias="relativePath")
+    relative_path: str = Field(alias="relativePath")
     content_base64: str = Field(alias="contentBase64")
 
 
 class SyncCodexCredentialRequest(BaseModel):
     auth_mode: Literal["file"] = Field(alias="authMode")
     files: list[SyncCodexFile]
+
+
+class SyncGeminiEnvCredentialRequest(BaseModel):
+    auth_mode: Literal["env"] = Field(alias="authMode")
+    env_vars: dict[str, str] = Field(alias="envVars")
+
+
+class SyncGeminiFileEntry(BaseModel):
+    relative_path: str = Field(alias="relativePath")
+    content_base64: str = Field(alias="contentBase64")
+
+
+class SyncGeminiFileCredentialRequest(BaseModel):
+    auth_mode: Literal["file"] = Field(alias="authMode")
+    files: list[SyncGeminiFileEntry]
+
+
+SyncGeminiCredentialRequest = SyncGeminiEnvCredentialRequest | SyncGeminiFileCredentialRequest
+
+SyncCloudCredentialRequest = (
+    SyncClaudeCredentialRequest | SyncCodexCredentialRequest | SyncGeminiCredentialRequest
+)
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +83,7 @@ class SyncCodexCredentialRequest(BaseModel):
 @dataclass(frozen=True)
 class CredentialStatusRecord:
     provider: CloudAgentKind
-    auth_mode: Literal["env", "file"]
+    auth_mode: CloudCredentialAuthMode
     supported: bool
     local_detected: bool
     synced: bool
@@ -75,7 +92,7 @@ class CredentialStatusRecord:
 
 class CredentialStatus(BaseModel):
     provider: str
-    auth_mode: Literal["env", "file"] = Field(serialization_alias="authMode")
+    auth_mode: CloudCredentialAuthMode = Field(serialization_alias="authMode")
     supported: bool
     local_detected: bool = Field(serialization_alias="localDetected")
     synced: bool
@@ -111,8 +128,7 @@ def build_credential_statuses(
         raw_auth_mode = (
             getattr(record, "auth_mode", None) if record else None
         ) or _DEFAULT_AUTH_MODES.get(provider, "env")
-        # raw_auth_mode is always "env" or "file" after the above expression
-        auth_mode: Literal["env", "file"] = (
+        auth_mode: CloudCredentialAuthMode = (
             raw_auth_mode if raw_auth_mode in ("env", "file") else "env"
         )
         last_synced_at = _to_iso(getattr(record, "last_synced_at", None)) if record else None

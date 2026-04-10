@@ -1,17 +1,32 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
+#[cfg(target_os = "macos")]
+use std::process::Command;
 
 use serde_json::Value;
+#[cfg(target_os = "macos")]
+use sha2::{Digest, Sha256};
 
 use crate::{
+    util::{home_matches_process_home, resolve_process_override_dir},
     DiscoveryError, LocalAuthSource, LocalAuthState, PortableAuthExport, PortableAuthFile,
     PortableRelativePath,
 };
 
 const CODEX_AUTH_PATH: &str = ".codex/auth.json";
+const CODEX_KEYCHAIN_SERVICE: &str = "Codex Auth";
 
 pub fn detect_local_auth_state(home_dir: &Path) -> Result<LocalAuthState, DiscoveryError> {
-    let path = home_dir.join(CODEX_AUTH_PATH);
+    let path = local_codex_auth_path(home_dir);
     tracing::debug!(path = %path.display(), "Detecting Codex local auth state");
+
+    if let Some((account, _data)) = read_keychain_codex_auth(home_dir)? {
+        tracing::debug!(account, "Codex keychain auth detected");
+        return Ok(LocalAuthState::Present(LocalAuthSource::MacOsKeychain {
+            service: CODEX_KEYCHAIN_SERVICE.to_string(),
+            account,
+        }));
+    }
+
     let Some(data) = read_json_file(&path)? else {
         tracing::debug!(path = %path.display(), "Codex auth file not found");
         return Ok(LocalAuthState::Absent);
@@ -27,8 +42,14 @@ pub fn detect_local_auth_state(home_dir: &Path) -> Result<LocalAuthState, Discov
 }
 
 pub fn export_portable_auth(home_dir: &Path) -> Result<Option<PortableAuthExport>, DiscoveryError> {
-    let path = home_dir.join(CODEX_AUTH_PATH);
+    let path = local_codex_auth_path(home_dir);
     tracing::debug!(path = %path.display(), "Exporting portable Codex auth");
+
+    if let Some((account, data)) = read_keychain_codex_auth(home_dir)? {
+        tracing::debug!(account, "Portable Codex auth detected in keychain");
+        return Ok(Some(portable_export(&data)?));
+    }
+
     let Some(data) = read_json_file(&path)? else {
         return Ok(None);
     };
@@ -39,12 +60,25 @@ pub fn export_portable_auth(home_dir: &Path) -> Result<Option<PortableAuthExport
     }
 
     tracing::debug!(path = %path.display(), "Portable Codex auth detected");
-    Ok(Some(PortableAuthExport {
+    Ok(Some(portable_export(&data)?))
+}
+
+fn portable_export(data: &Value) -> Result<PortableAuthExport, DiscoveryError> {
+    Ok(PortableAuthExport {
         files: vec![PortableAuthFile {
             relative_path: portable_path(CODEX_AUTH_PATH),
-            content: serde_json::to_vec(&data)?,
+            content: serde_json::to_vec(data)?,
         }],
-    }))
+    })
+}
+
+fn local_codex_auth_path(home_dir: &Path) -> PathBuf {
+    resolve_codex_home(home_dir).join("auth.json")
+}
+
+fn resolve_codex_home(home_dir: &Path) -> PathBuf {
+    let default_home = home_dir.join(".codex");
+    resolve_process_override_dir("CODEX_HOME", home_dir, default_home)
 }
 
 fn read_json_file(path: &Path) -> Result<Option<Value>, DiscoveryError> {
@@ -73,6 +107,76 @@ fn has_codex_auth(data: &Value) -> bool {
             .and_then(Value::as_str)
             .map(|value| !value.is_empty())
             .unwrap_or(false)
+}
+
+#[cfg(target_os = "macos")]
+fn read_keychain_codex_auth(home_dir: &Path) -> Result<Option<(String, Value)>, DiscoveryError> {
+    if !home_matches_process_home(home_dir) {
+        tracing::debug!(
+            home_dir = %home_dir.display(),
+            "Skipping Codex keychain lookup because home_dir does not match process home"
+        );
+        return Ok(None);
+    }
+
+    let codex_home = resolve_codex_home(home_dir);
+    let account = codex_keychain_account(&codex_home);
+    let output = Command::new("security")
+        .args([
+            "find-generic-password",
+            "-s",
+            CODEX_KEYCHAIN_SERVICE,
+            "-a",
+            &account,
+            "-w",
+        ])
+        .output()
+        .map_err(|err| DiscoveryError::Keychain(err.to_string()))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        tracing::debug!(
+            account,
+            status = output.status.code(),
+            stderr = stderr.trim(),
+            "Codex keychain entry not found via security CLI"
+        );
+        return Ok(None);
+    }
+
+    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let parsed: Value = match serde_json::from_str(&raw) {
+        Ok(value) => value,
+        Err(err) => {
+            tracing::warn!(account, error = %err, "Codex keychain entry was not valid JSON");
+            return Ok(None);
+        }
+    };
+
+    if !has_codex_auth(&parsed) {
+        tracing::debug!(account, "Codex keychain entry did not contain usable auth");
+        return Ok(None);
+    }
+
+    Ok(Some((account, parsed)))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn read_keychain_codex_auth(
+    _home_dir: &Path,
+) -> Result<Option<(String, Value)>, DiscoveryError> {
+    Ok(None)
+}
+
+#[cfg(target_os = "macos")]
+fn codex_keychain_account(codex_home: &Path) -> String {
+    let canonical = codex_home
+        .canonicalize()
+        .unwrap_or_else(|_| codex_home.to_path_buf());
+    let mut hasher = Sha256::new();
+    hasher.update(canonical.to_string_lossy().as_bytes());
+    let hex = format!("{:x}", hasher.finalize());
+    let truncated = hex.get(..16).unwrap_or(&hex);
+    format!("cli|{truncated}")
 }
 
 fn portable_path(value: &str) -> PortableRelativePath {
@@ -115,11 +219,8 @@ mod tests {
     #[test]
     fn exports_codex_auth_file() {
         let home = make_temp_home();
-        fs::write(
-            home.join(CODEX_AUTH_PATH),
-            r#"{"OPENAI_API_KEY":"sk-test"}"#,
-        )
-        .expect("write codex auth");
+        fs::write(home.join(CODEX_AUTH_PATH), r#"{"OPENAI_API_KEY":"sk-test"}"#)
+            .expect("write codex auth");
 
         let export = export_portable_auth(&home)
             .expect("export")

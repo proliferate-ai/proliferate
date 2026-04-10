@@ -75,6 +75,30 @@ async def test_sync_codex_credential_roundtrip(
 @pytest.mark.asyncio
 @pytest.mark.cloud_e2e
 @pytest.mark.parametrize("provider_kind", PROVIDER_CASES)
+async def test_sync_gemini_credential_roundtrip(
+    cloud_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    cloud_test_config,
+    provider_kind: str,
+) -> None:
+    require_local_auth(cloud_test_config, "gemini")
+
+    auth = await create_user_and_login(
+        cloud_client,
+        db_session,
+        email_prefix=f"{provider_kind}-gemini",
+    )
+
+    statuses = await sync_cloud_credential(cloud_client, auth, cloud_test_config, "gemini")
+    assert status_for_provider(statuses, "gemini")["synced"] is True
+
+    deleted_statuses = await delete_cloud_credential(cloud_client, auth, "gemini")
+    assert status_for_provider(deleted_statuses, "gemini")["synced"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.cloud_e2e
+@pytest.mark.parametrize("provider_kind", PROVIDER_CASES)
 async def test_sync_claude_invalid_path_rejected(
     cloud_client: httpx.AsyncClient,
     db_session: AsyncSession,
@@ -100,7 +124,7 @@ async def test_sync_claude_invalid_path_rejected(
             ],
         },
     )
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -126,6 +150,61 @@ async def test_sync_codex_invalid_path_rejected(
             "files": [
                 {
                     "relativePath": ".codex/not-auth.json",
+                    "contentBase64": "e30=",
+                }
+            ],
+        },
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.cloud_e2e
+@pytest.mark.parametrize("provider_kind", PROVIDER_CASES)
+async def test_sync_gemini_invalid_env_rejected(
+    cloud_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    provider_kind: str,
+) -> None:
+    auth = await create_user_and_login(
+        cloud_client,
+        db_session,
+        email_prefix=f"{provider_kind}-gemini-invalid-env",
+    )
+    response = await cloud_client.put(
+        "/v1/cloud/credentials/gemini",
+        headers=auth.headers,
+        json={
+            "authMode": "env",
+            "envVars": {
+                "GOOGLE_APPLICATION_CREDENTIALS": "/tmp/adc.json",
+            },
+        },
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.cloud_e2e
+@pytest.mark.parametrize("provider_kind", PROVIDER_CASES)
+async def test_sync_gemini_invalid_path_rejected(
+    cloud_client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    provider_kind: str,
+) -> None:
+    auth = await create_user_and_login(
+        cloud_client,
+        db_session,
+        email_prefix=f"{provider_kind}-gemini-invalid-path",
+    )
+    response = await cloud_client.put(
+        "/v1/cloud/credentials/gemini",
+        headers=auth.headers,
+        json={
+            "authMode": "file",
+            "files": [
+                {
+                    "relativePath": ".gemini/not-allowed.json",
                     "contentBase64": "e30=",
                 }
             ],

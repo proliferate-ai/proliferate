@@ -6,7 +6,11 @@ import httpx
 import pytest
 
 from proliferate.server.cloud.runtime import anyharness_api
-from proliferate.server.cloud.runtime.anyharness_api import CloudRuntimeReconnectError
+from proliferate.server.cloud.runtime.anyharness_api import (
+    CloudRuntimeReconnectError,
+    _install_required_synced_providers,
+    _synced_ready_providers,
+)
 
 
 class _FakeAsyncClient:
@@ -188,3 +192,28 @@ async def test_reconcile_remote_agents_installs_only_install_required_synced_age
 
     assert ready_agents == ["claude", "codex"]
     assert install_calls == ["codex"]
+
+
+def test_install_required_synced_providers_includes_gemini() -> None:
+    providers = _install_required_synced_providers(
+        [
+            {"kind": "claude", "readiness": "ready"},
+            {"kind": "gemini", "readiness": "install_required"},
+        ],
+        ["claude", "gemini"],
+    )
+
+    assert providers == ["gemini"]
+
+
+def test_synced_ready_providers_includes_gemini() -> None:
+    providers = _synced_ready_providers(
+        [
+            {"kind": "claude", "readiness": "ready"},
+            {"kind": "gemini", "readiness": "ready"},
+            {"kind": "codex", "readiness": "install_required"},
+        ],
+        ["claude", "codex", "gemini"],
+    )
+
+    assert providers == ["claude", "gemini"]
