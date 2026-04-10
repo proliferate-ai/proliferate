@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => {
     }),
     syncCloudMcpConnectionMock: vi.fn(async () => undefined),
     deleteCloudMcpConnectionMock: vi.fn(async () => undefined),
+    commandExistsMock: vi.fn(async () => true),
   };
 });
 
@@ -39,6 +40,10 @@ vi.mock("@/platform/tauri/connectors", () => ({
   getConnectorSecret: mocks.getConnectorSecretMock,
   setConnectorSecret: mocks.setConnectorSecretMock,
   deleteConnectorSecret: mocks.deleteConnectorSecretMock,
+}));
+
+vi.mock("@/platform/tauri/process", () => ({
+  commandExists: mocks.commandExistsMock,
 }));
 
 vi.mock("@/lib/integrations/cloud/mcp_connections", () => ({
@@ -60,12 +65,17 @@ describe("mcp launch resolution", () => {
     mocks.deleteConnectorSecretMock.mockClear();
     mocks.syncCloudMcpConnectionMock.mockClear();
     mocks.deleteCloudMcpConnectionMock.mockClear();
+    mocks.commandExistsMock.mockReset();
+    mocks.commandExistsMock.mockResolvedValue(true);
   });
 
   it("resolves installed http connectors into session MCP servers", async () => {
     await installConnector("context7", "ctx7sk-example");
 
-    const resolution = await resolveSessionMcpServersForLaunch();
+    const resolution = await resolveSessionMcpServersForLaunch({
+      targetLocation: "local",
+      workspacePath: "/workspace",
+    });
 
     expect(resolution.warnings).toEqual([]);
     expect(resolution.mcpServers).toHaveLength(1);
@@ -83,13 +93,68 @@ describe("mcp launch resolution", () => {
     }).connections[0]!.connectionId;
     mocks.connectorSecrets.delete(`${connectionId}:api_key`);
 
-    const resolution = await resolveSessionMcpServersForLaunch();
+    const resolution = await resolveSessionMcpServersForLaunch({
+      targetLocation: "local",
+      workspacePath: "/workspace",
+    });
 
     expect(resolution.mcpServers).toEqual([]);
     expect(resolution.warnings).toEqual([
       expect.objectContaining({
         kind: "missing_secret",
         catalogEntryId: "context7",
+      }),
+    ]);
+  });
+
+  it("skips local-only connectors for cloud launches", async () => {
+    await installConnector("filesystem", "");
+
+    const resolution = await resolveSessionMcpServersForLaunch({
+      targetLocation: "cloud",
+      workspacePath: "/workspace",
+    });
+
+    expect(resolution.mcpServers).toEqual([]);
+    expect(resolution.warnings).toEqual([
+      expect.objectContaining({
+        kind: "unsupported_target",
+        catalogEntryId: "filesystem",
+      }),
+    ]);
+  });
+
+  it("skips stdio connectors when the local command is missing", async () => {
+    await installConnector("playwright", "");
+    mocks.commandExistsMock.mockResolvedValue(false);
+
+    const resolution = await resolveSessionMcpServersForLaunch({
+      targetLocation: "local",
+      workspacePath: "/workspace",
+    });
+
+    expect(resolution.mcpServers).toEqual([]);
+    expect(resolution.warnings).toEqual([
+      expect.objectContaining({
+        kind: "missing_stdio_command",
+        catalogEntryId: "playwright",
+      }),
+    ]);
+  });
+
+  it("skips workspace-bound stdio connectors when the workspace path is unavailable", async () => {
+    await installConnector("filesystem", "");
+
+    const resolution = await resolveSessionMcpServersForLaunch({
+      targetLocation: "local",
+      workspacePath: null,
+    });
+
+    expect(resolution.mcpServers).toEqual([]);
+    expect(resolution.warnings).toEqual([
+      expect.objectContaining({
+        kind: "workspace_path_unresolved",
+        catalogEntryId: "filesystem",
       }),
     ]);
   });

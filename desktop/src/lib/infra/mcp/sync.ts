@@ -1,7 +1,10 @@
-import { getConnectorCatalogEntry, isConnectorCatalogEntryActive } from "@/lib/domain/mcp/catalog";
-import type { SavedConnectorMetadata } from "@/lib/domain/mcp/types";
 import {
   connectorSupportsCloudSecretSync,
+  getConnectorCatalogEntry,
+  isConnectorCatalogEntryActive,
+} from "@/lib/domain/mcp/catalog";
+import type { SavedConnectorMetadata } from "@/lib/domain/mcp/types";
+import {
   loadConnectorSecretValue,
   readConnectorState,
   updateConnectorSyncState,

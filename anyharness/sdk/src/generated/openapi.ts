@@ -1364,6 +1364,10 @@ export interface components {
             /** @description Timestamp when this snapshot was last updated. */
             updatedAt: string;
         };
+        SessionMcpEnvVar: {
+            name: string;
+            value: string;
+        };
         SessionMcpHeader: {
             name: string;
             value: string;
@@ -1375,9 +1379,20 @@ export interface components {
             serverName: string;
             url: string;
         };
-        SessionMcpServer: components["schemas"]["SessionMcpHttpServer"] & {
+        SessionMcpServer: (components["schemas"]["SessionMcpHttpServer"] & {
             /** @enum {string} */
             transport: "http";
+        }) | (components["schemas"]["SessionMcpStdioServer"] & {
+            /** @enum {string} */
+            transport: "stdio";
+        });
+        SessionMcpStdioServer: {
+            args?: string[];
+            catalogEntryId?: string | null;
+            command: string;
+            connectionId: string;
+            env?: components["schemas"]["SessionMcpEnvVar"][];
+            serverName: string;
         };
         SessionRawNotificationEnvelope: {
             notification: unknown;

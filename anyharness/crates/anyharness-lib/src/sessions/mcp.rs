@@ -3,8 +3,8 @@ use std::fmt;
 use aes_gcm_siv::aead::{Aead, AeadCore, KeyInit, OsRng};
 use aes_gcm_siv::Aes256GcmSiv;
 use agent_client_protocol as acp;
-use anyhow::Context;
 use anyharness_contract::v1::SessionMcpServer as ContractSessionMcpServer;
+use anyhow::Context;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -62,6 +62,22 @@ impl fmt::Debug for SessionMcpHeader {
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct SessionMcpEnvVar {
+    pub name: String,
+    pub value: String,
+}
+
+impl fmt::Debug for SessionMcpEnvVar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SessionMcpEnvVar")
+            .field("name", &self.name)
+            .field("value", &"<redacted>")
+            .finish()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionMcpHttpServer {
     pub connection_id: String,
     pub catalog_entry_id: Option<String>,
@@ -73,7 +89,11 @@ pub struct SessionMcpHttpServer {
 
 impl fmt::Debug for SessionMcpHttpServer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let header_names: Vec<&str> = self.headers.iter().map(|header| header.name.as_str()).collect();
+        let header_names: Vec<&str> = self
+            .headers
+            .iter()
+            .map(|header| header.name.as_str())
+            .collect();
         f.debug_struct("SessionMcpHttpServer")
             .field("connection_id", &self.connection_id)
             .field("catalog_entry_id", &self.catalog_entry_id)
@@ -85,15 +105,48 @@ impl fmt::Debug for SessionMcpHttpServer {
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionMcpStdioServer {
+    pub connection_id: String,
+    pub catalog_entry_id: Option<String>,
+    pub server_name: String,
+    pub command: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub env: Vec<SessionMcpEnvVar>,
+}
+
+impl fmt::Debug for SessionMcpStdioServer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let env_names: Vec<&str> = self
+            .env
+            .iter()
+            .map(|variable| variable.name.as_str())
+            .collect();
+        f.debug_struct("SessionMcpStdioServer")
+            .field("connection_id", &self.connection_id)
+            .field("catalog_entry_id", &self.catalog_entry_id)
+            .field("server_name", &self.server_name)
+            .field("command", &self.command)
+            .field("arg_count", &self.args.len())
+            .field("env_names", &env_names)
+            .finish()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case", tag = "transport")]
 pub enum SessionMcpServer {
     Http(SessionMcpHttpServer),
+    Stdio(SessionMcpStdioServer),
 }
 
 impl fmt::Debug for SessionMcpServer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Http(server) => f.debug_tuple("Http").field(server).finish(),
+            Self::Stdio(server) => f.debug_tuple("Stdio").field(server).finish(),
         }
     }
 }
@@ -137,20 +190,39 @@ pub fn bindings_from_contract(bindings: Vec<ContractSessionMcpServer>) -> Vec<Se
     bindings
         .into_iter()
         .map(|binding| match binding {
-            ContractSessionMcpServer::Http(server) => SessionMcpServer::Http(SessionMcpHttpServer {
-                connection_id: server.connection_id,
-                catalog_entry_id: server.catalog_entry_id,
-                server_name: server.server_name,
-                url: server.url,
-                headers: server
-                    .headers
-                    .into_iter()
-                    .map(|header| SessionMcpHeader {
-                        name: header.name,
-                        value: header.value,
-                    })
-                    .collect(),
-            }),
+            ContractSessionMcpServer::Http(server) => {
+                SessionMcpServer::Http(SessionMcpHttpServer {
+                    connection_id: server.connection_id,
+                    catalog_entry_id: server.catalog_entry_id,
+                    server_name: server.server_name,
+                    url: server.url,
+                    headers: server
+                        .headers
+                        .into_iter()
+                        .map(|header| SessionMcpHeader {
+                            name: header.name,
+                            value: header.value,
+                        })
+                        .collect(),
+                })
+            }
+            ContractSessionMcpServer::Stdio(server) => {
+                SessionMcpServer::Stdio(SessionMcpStdioServer {
+                    connection_id: server.connection_id,
+                    catalog_entry_id: server.catalog_entry_id,
+                    server_name: server.server_name,
+                    command: server.command,
+                    args: server.args,
+                    env: server
+                        .env
+                        .into_iter()
+                        .map(|env_var| SessionMcpEnvVar {
+                            name: env_var.name,
+                            value: env_var.value,
+                        })
+                        .collect(),
+                })
+            }
         })
         .collect()
 }
@@ -180,7 +252,10 @@ pub fn encrypt_bindings(
 
     let mut encoded = nonce.to_vec();
     encoded.extend(ciphertext);
-    Ok(Some(format!("{CIPHERTEXT_PREFIX}{}", STANDARD.encode(encoded))))
+    Ok(Some(format!(
+        "{CIPHERTEXT_PREFIX}{}",
+        STANDARD.encode(encoded)
+    )))
 }
 
 pub fn decrypt_bindings(
@@ -223,19 +298,30 @@ pub fn to_acp_servers(bindings: &[SessionMcpServer]) -> Vec<acp::McpServer> {
     bindings
         .iter()
         .map(|binding| match binding {
-            SessionMcpServer::Http(server) => {
-                acp::McpServer::Http(
-                    acp::McpServerHttp::new(server.server_name.clone(), server.url.clone()).headers(
+            SessionMcpServer::Http(server) => acp::McpServer::Http(
+                acp::McpServerHttp::new(server.server_name.clone(), server.url.clone()).headers(
+                    server
+                        .headers
+                        .iter()
+                        .map(|header| {
+                            acp::HttpHeader::new(header.name.clone(), header.value.clone())
+                        })
+                        .collect(),
+                ),
+            ),
+            SessionMcpServer::Stdio(server) => acp::McpServer::Stdio(
+                acp::McpServerStdio::new(server.server_name.clone(), server.command.clone())
+                    .args(server.args.clone())
+                    .env(
                         server
-                            .headers
+                            .env
                             .iter()
-                            .map(|header| {
-                                acp::HttpHeader::new(header.name.clone(), header.value.clone())
+                            .map(|env_var| {
+                                acp::EnvVariable::new(env_var.name.clone(), env_var.value.clone())
                             })
                             .collect(),
                     ),
-                )
-            }
+            ),
         })
         .collect()
 }
@@ -244,7 +330,7 @@ pub fn to_acp_servers(bindings: &[SessionMcpServer]) -> Vec<acp::McpServer> {
 mod tests {
     use super::*;
 
-    fn sample_binding() -> SessionMcpServer {
+    fn sample_http_binding() -> SessionMcpServer {
         SessionMcpServer::Http(SessionMcpHttpServer {
             connection_id: "connection-1".to_string(),
             catalog_entry_id: Some("github".to_string()),
@@ -257,6 +343,20 @@ mod tests {
         })
     }
 
+    fn sample_stdio_binding() -> SessionMcpServer {
+        SessionMcpServer::Stdio(SessionMcpStdioServer {
+            connection_id: "connection-2".to_string(),
+            catalog_entry_id: Some("filesystem".to_string()),
+            server_name: "filesystem".to_string(),
+            command: "mcp-server-filesystem".to_string(),
+            args: vec!["/workspace".to_string()],
+            env: vec![SessionMcpEnvVar {
+                name: "API_KEY".to_string(),
+                value: "secret".to_string(),
+            }],
+        })
+    }
+
     fn sample_cipher() -> SessionDataCipher {
         SessionDataCipher::from_env_value("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
             .expect("cipher")
@@ -264,7 +364,7 @@ mod tests {
 
     #[test]
     fn encrypt_and_decrypt_bindings_round_trip() {
-        let bindings = vec![sample_binding()];
+        let bindings = vec![sample_http_binding(), sample_stdio_binding()];
         let ciphertext = encrypt_bindings(Some(&sample_cipher()), &bindings)
             .expect("encrypt bindings")
             .expect("ciphertext");
@@ -277,14 +377,30 @@ mod tests {
 
     #[test]
     fn encrypt_requires_data_key_when_bindings_present() {
-        let error = encrypt_bindings(None, &[sample_binding()]).expect_err("missing key error");
+        let error =
+            encrypt_bindings(None, &[sample_http_binding()]).expect_err("missing key error");
         assert!(matches!(error, SessionMcpBindingsError::MissingDataKey));
     }
 
     #[test]
     fn decrypt_requires_restart_when_ciphertext_is_corrupt() {
-        let error =
-            decrypt_bindings(Some(&sample_cipher()), Some("v1:not-valid-base64")).expect_err("decrypt error");
+        let error = decrypt_bindings(Some(&sample_cipher()), Some("v1:not-valid-base64"))
+            .expect_err("decrypt error");
         assert!(matches!(error, SessionMcpBindingsError::Decrypt(_)));
+    }
+
+    #[test]
+    fn stdio_debug_redacts_env_values() {
+        let debug_output = format!("{:?}", sample_stdio_binding());
+        assert!(!debug_output.contains("secret"));
+        assert!(debug_output.contains("API_KEY"));
+    }
+
+    #[test]
+    fn to_acp_servers_maps_stdio_transport() {
+        let bindings = vec![sample_stdio_binding()];
+        let mapped = to_acp_servers(&bindings);
+        assert_eq!(mapped.len(), 1);
+        assert!(matches!(mapped[0], acp::McpServer::Stdio(_)));
     }
 }

@@ -5,7 +5,7 @@ mod sidecar;
 mod state;
 mod telemetry;
 
-use commands::{config, keychain, runtime, shell};
+use commands::{config, keychain, process, runtime, shell};
 use quit_flow::QuitFlowState;
 use tauri::Manager;
 #[cfg(target_os = "macos")]
@@ -125,6 +125,7 @@ pub fn run() {
             shell::reveal_in_finder,
             shell::open_in_terminal,
             shell::open_external,
+            process::command_exists,
             keychain::list_configured_env_var_names,
             keychain::list_syncable_cloud_credentials,
             keychain::export_syncable_cloud_credential,

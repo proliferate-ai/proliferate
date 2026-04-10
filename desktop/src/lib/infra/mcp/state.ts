@@ -1,4 +1,9 @@
-import { ACTIVE_CONNECTOR_CATALOG, getConnectorCatalogEntry, isConnectorCatalogEntryActive } from "@/lib/domain/mcp/catalog";
+import {
+  ACTIVE_CONNECTOR_CATALOG,
+  connectorHasMissingSecrets,
+  getConnectorCatalogEntry,
+  isConnectorCatalogEntryActive,
+} from "@/lib/domain/mcp/catalog";
 import { normalizeConnectorSecretValue } from "@/lib/domain/mcp/validation";
 import type {
   ConnectorCatalogEntry,
@@ -103,14 +108,6 @@ export function sortInstalledConnectors(connections: SavedConnectorMetadata[]) {
   return [...connections].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
-export function getPrimarySecretField(catalogEntry: ConnectorCatalogEntry) {
-  return catalogEntry.requiredFields[0] ?? null;
-}
-
-export function connectorSupportsCloudSecretSync(catalogEntry: ConnectorCatalogEntry): boolean {
-  return catalogEntry.requiredFields.length > 0;
-}
-
 export async function loadConnectorSecretValue(
   connectionId: string,
   fieldId: string,
@@ -138,14 +135,6 @@ export interface InstalledConnectorLaunchRecord {
   record: InstalledConnectorRecord;
   secretValues: Record<string, string>;
 }
-
-export function connectorHasMissingSecrets(
-  catalogEntry: ConnectorCatalogEntry,
-  secretValues: Record<string, string>,
-): boolean {
-  return catalogEntry.requiredFields.some((field) => !secretValues[field.id]);
-}
-
 export async function updateConnectorSyncState(
   connectionId: string,
   syncState: ConnectorSyncState,

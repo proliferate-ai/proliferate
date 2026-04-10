@@ -242,7 +242,7 @@ fn pick_port() -> u16 {
 /// us the PATH the user would have in a terminal (login + interactive ensures
 /// both .zprofile and .zshrc are sourced, which is needed for tools like fnm/nvm
 /// that set up PATH in .zshrc).
-fn resolve_shell_path() -> Option<String> {
+pub(crate) fn resolve_shell_path() -> Option<String> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
     let output = std::process::Command::new(&shell)
         .args(["-l", "-i", "-c", "echo $PATH"])

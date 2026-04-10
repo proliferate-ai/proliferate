@@ -4810,6 +4810,21 @@
           }
         }
       },
+      "SessionMcpEnvVar": {
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
       "SessionMcpHeader": {
         "type": "object",
         "required": [
@@ -4878,8 +4893,66 @@
                 }
               }
             ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SessionMcpStdioServer"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "transport"
+                ],
+                "properties": {
+                  "transport": {
+                    "type": "string",
+                    "enum": [
+                      "stdio"
+                    ]
+                  }
+                }
+              }
+            ]
           }
         ]
+      },
+      "SessionMcpStdioServer": {
+        "type": "object",
+        "required": [
+          "connectionId",
+          "serverName",
+          "command"
+        ],
+        "properties": {
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "catalogEntryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "command": {
+            "type": "string"
+          },
+          "connectionId": {
+            "type": "string"
+          },
+          "env": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionMcpEnvVar"
+            }
+          },
+          "serverName": {
+            "type": "string"
+          }
+        }
       },
       "SessionRawNotificationEnvelope": {
         "type": "object",

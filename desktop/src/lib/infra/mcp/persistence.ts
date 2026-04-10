@@ -1,4 +1,9 @@
-import { getConnectorCatalogEntry, isConnectorCatalogEntryActive } from "@/lib/domain/mcp/catalog";
+import {
+  connectorSupportsCloudSecretSync,
+  getConnectorCatalogEntry,
+  getPrimarySecretField,
+  isConnectorCatalogEntryActive,
+} from "@/lib/domain/mcp/catalog";
 import { generateConnectorServerName } from "@/lib/domain/mcp/server-name";
 import { normalizeConnectorSecretValue, validateConnectorSecretValue } from "@/lib/domain/mcp/validation";
 import type {
@@ -7,8 +12,6 @@ import type {
   SavedConnectorMetadata,
 } from "@/lib/domain/mcp/types";
 import {
-  connectorSupportsCloudSecretSync,
-  getPrimarySecretField,
   listAvailableConnectorEntries,
   listInstalledConnectorRecords,
   loadConnectorSecretValue,

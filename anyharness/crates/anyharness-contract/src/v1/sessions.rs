@@ -105,7 +105,10 @@ impl fmt::Debug for CreateSessionRequest {
             .field("mode_id", &self.mode_id)
             .field(
                 "system_prompt_append_count",
-                &self.system_prompt_append.as_ref().map(|entries| entries.len()),
+                &self
+                    .system_prompt_append
+                    .as_ref()
+                    .map(|entries| entries.len()),
             )
             .field(
                 "mcp_server_count",
@@ -159,7 +162,9 @@ pub enum PermissionDecision {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::v1::{SessionMcpHeader, SessionMcpHttpServer};
+    use crate::v1::{
+        SessionMcpEnvVar, SessionMcpHeader, SessionMcpHttpServer, SessionMcpStdioServer,
+    };
 
     #[test]
     fn create_session_request_serializes_model_mode_and_prompt() {
@@ -169,16 +174,29 @@ mod tests {
             model_id: Some("default".to_string()),
             mode_id: Some("bypassPermissions".to_string()),
             system_prompt_append: Some(vec!["Rename the branch".to_string()]),
-            mcp_servers: Some(vec![SessionMcpServer::Http(SessionMcpHttpServer {
-                connection_id: "connection-1".to_string(),
-                catalog_entry_id: Some("github".to_string()),
-                server_name: "github".to_string(),
-                url: "https://api.github.com/mcp".to_string(),
-                headers: vec![SessionMcpHeader {
-                    name: "Authorization".to_string(),
-                    value: "Bearer secret".to_string(),
-                }],
-            })]),
+            mcp_servers: Some(vec![
+                SessionMcpServer::Http(SessionMcpHttpServer {
+                    connection_id: "connection-1".to_string(),
+                    catalog_entry_id: Some("github".to_string()),
+                    server_name: "github".to_string(),
+                    url: "https://api.github.com/mcp".to_string(),
+                    headers: vec![SessionMcpHeader {
+                        name: "Authorization".to_string(),
+                        value: "Bearer secret".to_string(),
+                    }],
+                }),
+                SessionMcpServer::Stdio(SessionMcpStdioServer {
+                    connection_id: "connection-2".to_string(),
+                    catalog_entry_id: Some("filesystem".to_string()),
+                    server_name: "filesystem".to_string(),
+                    command: "mcp-server-filesystem".to_string(),
+                    args: vec!["/workspace".to_string()],
+                    env: vec![SessionMcpEnvVar {
+                        name: "LOG_LEVEL".to_string(),
+                        value: "warn".to_string(),
+                    }],
+                }),
+            ]),
         };
 
         let json = serde_json::to_value(&request).expect("serialize create request");
@@ -203,6 +221,20 @@ mod tests {
                                 "value": "Bearer secret"
                             }
                         ]
+                    },
+                    {
+                        "transport": "stdio",
+                        "connectionId": "connection-2",
+                        "catalogEntryId": "filesystem",
+                        "serverName": "filesystem",
+                        "command": "mcp-server-filesystem",
+                        "args": ["/workspace"],
+                        "env": [
+                            {
+                                "name": "LOG_LEVEL",
+                                "value": "warn"
+                            }
+                        ]
                     }
                 ]
             })
@@ -222,7 +254,7 @@ mod tests {
         let Some(mcp_servers) = round_tripped.mcp_servers else {
             panic!("expected mcp servers");
         };
-        assert_eq!(mcp_servers.len(), 1);
+        assert_eq!(mcp_servers.len(), 2);
     }
 
     #[test]

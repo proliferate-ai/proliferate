@@ -140,7 +140,20 @@ function reportConnectorLaunchWarnings(
   }
 
   if (warnings.length === 1) {
-    showToast(`${warnings[0]!.connectorName} wasn't available in this session because it needs a token.`, "info");
+    const warning = warnings[0]!;
+    if (warning.kind === "unsupported_target") {
+      showToast(`${warning.connectorName} wasn't available in this session because it only supports local runtimes.`, "info");
+      return;
+    }
+    if (warning.kind === "missing_stdio_command") {
+      showToast(`${warning.connectorName} wasn't available in this session because its local command wasn't installed.`, "info");
+      return;
+    }
+    if (warning.kind === "workspace_path_unresolved") {
+      showToast(`${warning.connectorName} wasn't available in this session because the workspace path couldn't be resolved.`, "info");
+      return;
+    }
+    showToast(`${warning.connectorName} wasn't available in this session because it needs a token.`, "info");
     return;
   }
 
@@ -245,10 +258,15 @@ export function useSessionCreationActions({
       runtimeUrl: target.baseUrl,
       authToken: target.authToken,
     });
-    const { mcpServers, warnings: connectorWarnings } = await resolveSessionMcpServersForLaunch();
-    const localWorkspace = cloudWorkspaceId
-      ? null
-      : await client.workspaces.get(target.anyharnessWorkspaceId, requestOptions);
+    const targetWorkspace = await client.workspaces.get(
+      target.anyharnessWorkspaceId,
+      requestOptions,
+    ).catch(() => null);
+    const { mcpServers, warnings: connectorWarnings } = await resolveSessionMcpServersForLaunch({
+      targetLocation: target.location,
+      workspacePath: targetWorkspace?.path ?? null,
+    });
+    const localWorkspace = cloudWorkspaceId ? null : targetWorkspace;
     const cloudWorkspace = cloudWorkspaceId
       ? await getCloudWorkspace(cloudWorkspaceId).catch(() => undefined)
       : undefined;

@@ -3,7 +3,9 @@ export type ConnectorCatalogId =
   | "context7"
   | "brave_search"
   | "tavily"
-  | "openweather";
+  | "openweather"
+  | "filesystem"
+  | "playwright";
 
 export type ConnectorAvailability = "universal" | "local_only" | "cloud_only";
 export type ConnectorSyncState = "synced" | "degraded";
@@ -17,27 +19,57 @@ export interface ConnectorCatalogField {
   prefixHint?: string;
 }
 
-export type ConnectorAuthStyle =
+export type ConnectorHttpAuthStyle =
   | { kind: "bearer" }
   | { kind: "header"; headerName: string }
   | { kind: "query"; parameterName: string };
 
-export type ConnectorIconId = "github" | "globe" | "search" | "sun";
+export type ConnectorArgTemplate =
+  | { source: { kind: "static"; value: string } }
+  | { source: { kind: "workspace_path" } };
 
-export interface ConnectorCatalogEntry {
+export type ConnectorEnvTemplate =
+  | { name: string; source: { kind: "static"; value: string } }
+  | { name: string; source: { kind: "field"; fieldId: string } };
+
+export type ConnectorIconId =
+  | "github"
+  | "globe"
+  | "search"
+  | "sun"
+  | "folder"
+  | "terminal";
+
+interface ConnectorCatalogEntryBase {
   id: ConnectorCatalogId;
   name: string;
   oneLiner: string;
   description: string;
   docsUrl: string;
   availability: ConnectorAvailability;
-  authStyle: ConnectorAuthStyle;
-  authFieldId: string;
-  mcpServerUrl: string;
+  cloudSecretSync: boolean;
   serverNameBase: string;
   iconId: ConnectorIconId;
-  requiredFields: readonly [ConnectorCatalogField, ...ConnectorCatalogField[]];
+  requiredFields: readonly ConnectorCatalogField[];
 }
+
+export interface HttpConnectorCatalogEntry extends ConnectorCatalogEntryBase {
+  transport: "http";
+  authStyle: ConnectorHttpAuthStyle;
+  authFieldId: string;
+  url: string;
+}
+
+export interface StdioConnectorCatalogEntry extends ConnectorCatalogEntryBase {
+  transport: "stdio";
+  command: string;
+  args: readonly ConnectorArgTemplate[];
+  env: readonly ConnectorEnvTemplate[];
+}
+
+export type ConnectorCatalogEntry =
+  | HttpConnectorCatalogEntry
+  | StdioConnectorCatalogEntry;
 
 export interface SavedConnectorMetadata {
   connectionId: string;
@@ -68,9 +100,14 @@ export interface InstalledConnectorRecord {
   broken: boolean;
 }
 
-export interface ConnectorLaunchResolutionWarning {
-  kind: "missing_secret";
+interface ConnectorLaunchResolutionWarningBase {
   connectionId: string;
   catalogEntryId: ConnectorCatalogId;
   connectorName: string;
 }
+
+export type ConnectorLaunchResolutionWarning =
+  | (ConnectorLaunchResolutionWarningBase & { kind: "missing_secret" })
+  | (ConnectorLaunchResolutionWarningBase & { kind: "missing_stdio_command" })
+  | (ConnectorLaunchResolutionWarningBase & { kind: "workspace_path_unresolved" })
+  | (ConnectorLaunchResolutionWarningBase & { kind: "unsupported_target" });

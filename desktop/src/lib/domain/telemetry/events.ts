@@ -9,7 +9,11 @@ export type AuthSignInSource = "desktop_callback" | "dev_bypass" | "interactive_
 export type WorkspaceCreationKind = "repo" | "worktree" | "local";
 export type WorkspaceOpenSource = "filesystem";
 export type SetupScriptTelemetryStatus = "failed" | "not_run" | "succeeded";
-export type ConnectorSkipReasonKind = "missing_secret";
+export type ConnectorSkipReasonKind =
+  | "missing_secret"
+  | "missing_stdio_command"
+  | "workspace_path_unresolved"
+  | "unsupported_target";
 
 export interface DesktopProductEventMap {
   app_update_available: { version: string };

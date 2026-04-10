@@ -10,9 +10,11 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
     docsUrl:
       "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens",
     availability: "universal",
+    cloudSecretSync: true,
+    transport: "http",
     authStyle: { kind: "bearer" },
     authFieldId: "personal_access_token",
-    mcpServerUrl: "https://api.githubcopilot.com/mcp/",
+    url: "https://api.githubcopilot.com/mcp/",
     serverNameBase: "github",
     iconId: "github",
     requiredFields: [
@@ -35,9 +37,11 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
       "Use Context7 when Proliferate needs current, version-specific documentation and code examples for the libraries in your project.",
     docsUrl: "https://context7.com/docs/howto/api-keys",
     availability: "universal",
+    cloudSecretSync: true,
+    transport: "http",
     authStyle: { kind: "bearer" },
     authFieldId: "api_key",
-    mcpServerUrl: "https://mcp.context7.com/mcp",
+    url: "https://mcp.context7.com/mcp",
     serverNameBase: "context7",
     iconId: "globe",
     requiredFields: [
@@ -61,9 +65,11 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
     docsUrl:
       "https://api-dashboard.search.brave.com/documentation/guides/authentication",
     availability: "universal",
+    cloudSecretSync: true,
+    transport: "http",
     authStyle: { kind: "header", headerName: "X-Subscription-Token" },
     authFieldId: "api_key",
-    mcpServerUrl: "",
+    url: "",
     serverNameBase: "brave_search",
     iconId: "search",
     requiredFields: [
@@ -85,9 +91,11 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
       "Use Tavily when Proliferate needs web search plus extraction and crawl tools for deeper research tasks.",
     docsUrl: "https://docs.tavily.com/guides/quickstart",
     availability: "universal",
+    cloudSecretSync: true,
+    transport: "http",
     authStyle: { kind: "bearer" },
     authFieldId: "api_key",
-    mcpServerUrl: "https://mcp.tavily.com/mcp",
+    url: "https://mcp.tavily.com/mcp",
     serverNameBase: "tavily",
     iconId: "globe",
     requiredFields: [
@@ -110,9 +118,11 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
       "Use OpenWeather for live conditions, short-term forecasts, and weather lookups without leaving the session.",
     docsUrl: "https://openweathermap.org/appid",
     availability: "universal",
+    cloudSecretSync: true,
+    transport: "http",
     authStyle: { kind: "query", parameterName: "appid" },
     authFieldId: "api_key",
-    mcpServerUrl: "",
+    url: "",
     serverNameBase: "openweather",
     iconId: "sun",
     requiredFields: [
@@ -126,12 +136,38 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
       },
     ],
   },
+  {
+    id: "filesystem",
+    name: "Filesystem",
+    oneLiner: "Read and write files inside the current workspace.",
+    description:
+      "Use the Filesystem server when Proliferate should inspect or edit files directly through MCP against the active workspace path.",
+    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
+    availability: "local_only",
+    cloudSecretSync: false,
+    transport: "stdio",
+    command: "mcp-server-filesystem",
+    args: [{ source: { kind: "workspace_path" } }],
+    env: [],
+    serverNameBase: "filesystem",
+    iconId: "folder",
+    requiredFields: [],
+  },
+  {
+    id: "playwright",
+    name: "Playwright",
+    oneLiner: "Drive and inspect the browser with Playwright tools.",
+    description:
+      "Use Playwright when Proliferate needs browser automation, DOM inspection, and page interaction over MCP.",
+    docsUrl: "https://github.com/microsoft/playwright-mcp",
+    availability: "local_only",
+    cloudSecretSync: false,
+    transport: "stdio",
+    command: "playwright-mcp",
+    args: [],
+    env: [],
+    serverNameBase: "playwright",
+    iconId: "terminal",
+    requiredFields: [],
+  },
 ] as const;
-
-export const ACTIVE_CONNECTOR_CATALOG = CONNECTOR_CATALOG.filter(
-  (entry) => entry.mcpServerUrl.trim().length > 0,
-);
-
-export function getConnectorCatalogEntry(catalogEntryId: string) {
-  return CONNECTOR_CATALOG.find((entry) => entry.id === catalogEntryId) ?? null;
-}

@@ -138,4 +138,15 @@ describe("mcp connector persistence", () => {
     expect(changed).toBe(true);
     expect((mocks.persistedState as { pendingDeletes: unknown[] }).pendingDeletes).toHaveLength(0);
   });
+
+  it("installs zero-field stdio connectors without cloud secret sync", async () => {
+    const result = await installConnector("filesystem", "");
+
+    expect(result).toEqual({ degraded: false });
+    expect(mocks.syncCloudMcpConnectionMock).not.toHaveBeenCalled();
+
+    const paneData = await loadConnectorPaneData();
+    expect(paneData.installed).toHaveLength(1);
+    expect(paneData.installed[0]?.broken).toBe(false);
+  });
 });
