@@ -53,6 +53,7 @@ export function createTranscriptState(sessionId: string): TranscriptState {
     unknownEvents: [],
     isStreaming: false,
     lastSeq: 0,
+    pendingPrompts: [],
   };
 }
 
@@ -183,6 +184,30 @@ export function reduceEvent(
         size: evt.size,
         cost: evt.cost ?? null,
       };
+      break;
+
+    case "pending_prompt_added":
+      s.pendingPrompts = [
+        ...s.pendingPrompts,
+        {
+          seq: evt.seq,
+          promptId: evt.promptId ?? null,
+          text: evt.text,
+          queuedAt: evt.queuedAt,
+        },
+      ];
+      break;
+
+    case "pending_prompt_updated":
+      s.pendingPrompts = s.pendingPrompts.map((entry) =>
+        entry.seq === evt.seq ? { ...entry, text: evt.text } : entry,
+      );
+      break;
+
+    case "pending_prompt_removed":
+      s.pendingPrompts = s.pendingPrompts.filter(
+        (entry) => entry.seq !== evt.seq,
+      );
       break;
 
     case "permission_requested":

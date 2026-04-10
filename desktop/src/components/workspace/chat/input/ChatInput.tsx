@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import {
   CHAT_COMPOSER_INPUT,
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
@@ -12,6 +12,8 @@ import { useChatDraftState } from "@/hooks/chat/use-chat-draft-state";
 import { useChatModelSelectorState } from "@/hooks/chat/use-chat-model-selector-state";
 import { useChatPromptActions } from "@/hooks/chat/use-chat-prompt-actions";
 import { useChatSessionControls } from "@/hooks/chat/use-chat-session-controls";
+import { useQueuedPromptEdit } from "@/hooks/chat/use-queued-prompt-edit";
+import { Button } from "@/components/ui/Button";
 import { ChatComposerActions } from "./ChatComposerActions";
 import { ModelSelector } from "./ModelSelector";
 import { SessionConfigControls } from "./SessionConfigControls";
@@ -31,18 +33,57 @@ export function ChatInput() {
     activeSessionId,
     isRunning,
   } = useActiveChatSessionState();
-  const { selectedWorkspaceId, draft, setDraft, isEmpty } = useChatDraftState();
+  const { selectedWorkspaceId, draft, setDraft } = useChatDraftState();
   const { isDisabled, areRuntimeControlsDisabled } = useChatAvailabilityState();
   const modelSelectorProps = useChatModelSelectorState();
   const { agentKind, controls: sessionConfigControls, modeControl } = useChatSessionControls();
   const { handleSubmit, handleCancel } = useChatPromptActions();
-  const canSubmit = !isEmpty && !isDisabled && !isRunning;
+  const {
+    isEditing: isEditingQueuedPrompt,
+    editDraft,
+    setEditDraftText,
+    cancelEdit,
+    commitEdit,
+  } = useQueuedPromptEdit();
+  const effectiveDraft = isEditingQueuedPrompt ? editDraft : draft;
+  const effectiveIsEmpty = effectiveDraft.trim().length === 0;
+  const canSubmit = !effectiveIsEmpty && !isDisabled;
+
+  const onEffectiveDraftChange = useCallback(
+    (value: string) => {
+      if (isEditingQueuedPrompt) {
+        setEditDraftText(value);
+      } else {
+        setDraft(value);
+      }
+    },
+    [isEditingQueuedPrompt, setDraft, setEditDraftText],
+  );
+
+  const onSubmit = useCallback(async () => {
+    if (isEditingQueuedPrompt) {
+      await commitEdit();
+      return;
+    }
+    await handleSubmit();
+  }, [commitEdit, handleSubmit, isEditingQueuedPrompt]);
+
+  const onCancel = useCallback(() => {
+    if (isEditingQueuedPrompt) {
+      cancelEdit();
+      return;
+    }
+    handleCancel();
+  }, [cancelEdit, handleCancel, isEditingQueuedPrompt]);
+
   const { handleKeyDown } = useChatComposerKeyboard({
-    handleSubmit,
-    handleCancel,
+    handleSubmit: onSubmit,
+    handleCancel: onCancel,
     isRunning,
     canSubmit,
     modeControl,
+    isEditingQueuedPrompt,
+    onCancelEdit: cancelEdit,
   });
 
   useEffect(() => {
@@ -79,11 +120,24 @@ export function ChatInput() {
     const next = Math.min(maxPx, Math.max(minPx, contentHeight));
     el.style.height = `${next}px`;
     el.style.overflowY = contentHeight > maxPx ? "auto" : "hidden";
-  }, [draft]);
+  }, [effectiveDraft]);
 
   return (
     <ChatComposerSurface onClick={() => textareaRef.current?.focus()}>
       <form className="relative flex flex-col">
+        {isEditingQueuedPrompt && (
+          <div className="mx-5 mt-3 flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
+            <span>Editing queued message</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={cancelEdit}
+              className="h-6 px-2 text-xs"
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
         <div
           className="mb-2 flex-grow select-text overflow-y-auto px-5 pt-3.5"
           style={{
@@ -96,8 +150,8 @@ export function ChatInput() {
             ref={textareaRef}
             variant="ghost"
             rows={CHAT_COMPOSER_INPUT.minRows}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            value={effectiveDraft}
+            onChange={(event) => onEffectiveDraftChange(event.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={CHAT_COMPOSER_LABELS.placeholder}
             spellCheck={false}
@@ -124,10 +178,11 @@ export function ChatInput() {
           <div className="flex items-center">
             <ChatComposerActions
               isRunning={isRunning}
-              isEmpty={isEmpty}
+              isEmpty={effectiveIsEmpty}
               isDisabled={isDisabled}
-              onSubmit={handleSubmit}
-              onCancel={handleCancel}
+              isEditingQueuedPrompt={isEditingQueuedPrompt}
+              onSubmit={onSubmit}
+              onCancel={onCancel}
             />
           </div>
         </div>

@@ -16,19 +16,11 @@ export interface SessionStreamPatchInput {
     executionSummary?: SessionExecutionSummary | null;
   };
   nextTranscript: TranscriptState;
-  nextPendingUserPrompt: {
-    text: string;
-    timestamp: string;
-  } | null;
   envelope: SessionEventEnvelope;
 }
 
 export interface SessionStreamPatch {
   transcript: TranscriptState;
-  pendingUserPrompt: {
-    text: string;
-    timestamp: string;
-  } | null;
   liveConfig?: SessionLiveConfigSnapshot | null;
   executionSummary?: SessionExecutionSummary | null;
   modelId?: string | null;
@@ -42,13 +34,11 @@ export interface SessionStreamPatch {
 export function buildSessionStreamPatch({
   slot,
   nextTranscript,
-  nextPendingUserPrompt,
   envelope,
 }: SessionStreamPatchInput): SessionStreamPatch {
   const event = envelope.event;
   const patch: SessionStreamPatch = {
     transcript: nextTranscript,
-    pendingUserPrompt: nextPendingUserPrompt,
   };
 
   if (event.type === "current_mode_update") {
@@ -110,14 +100,6 @@ export function buildSessionStreamPatch({
       pendingApproval: null,
       updatedAt: envelope.timestamp,
     };
-  }
-
-  if (
-    (event.type === "item_started" || event.type === "item_completed")
-    && event.item.kind === "user_message"
-    && nextPendingUserPrompt == null
-  ) {
-    patch.pendingUserPrompt = null;
   }
 
   if (event.type === "turn_ended" || event.type === "error") {

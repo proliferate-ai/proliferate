@@ -191,6 +191,10 @@ pub fn build_router(state: AppState) -> Router {
             post(sessions::prompt_session),
         )
         .route(
+            "/sessions/{session_id}/pending-prompts/{seq}",
+            patch(sessions::edit_pending_prompt).delete(sessions::delete_pending_prompt),
+        )
+        .route(
             "/sessions/{session_id}/resume",
             post(sessions::resume_session),
         )

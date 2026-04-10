@@ -23,14 +23,28 @@ use crate::sessions::model::SessionRecord;
 use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::{
     AvailableCommandsUpdatePayload, ConfigApplyState, ConfigOptionUpdatePayload,
-    CurrentModeUpdatePayload, NormalizedSessionControl, PendingApprovalSummary, SessionEndReason,
-    SessionEventEnvelope, SessionExecutionPhase, SessionExecutionSummary, SessionInfoUpdatePayload,
-    SessionStateUpdatePayload, StopReason, UsageUpdatePayload,
+    CurrentModeUpdatePayload, NormalizedSessionControl, PendingApprovalSummary,
+    PendingPromptAddedPayload, PendingPromptRemovalReason, PendingPromptRemovedPayload,
+    PendingPromptUpdatedPayload, SessionEndReason, SessionEventEnvelope, SessionExecutionPhase,
+    SessionExecutionSummary, SessionInfoUpdatePayload, SessionStateUpdatePayload, StopReason,
+    UsageUpdatePayload,
 };
 
 #[derive(Debug)]
 pub enum PromptAcceptError {
-    Busy,
+    ActorDead,
+    EnqueueFailed(String),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum PromptAcceptance {
+    Started,
+    Queued { seq: i64 },
+}
+
+#[derive(Debug)]
+pub enum QueueMutationError {
+    NotFound,
     ActorDead,
 }
 
@@ -42,8 +56,23 @@ pub enum SetConfigOptionCommandError {
 pub enum SessionCommand {
     Prompt {
         text: String,
+        prompt_id: Option<String>,
         latency: Option<LatencyRequestContext>,
-        respond_to: oneshot::Sender<Result<(), PromptAcceptError>>,
+        /// Set by the actor's own startup-drain path when self-dispatching a
+        /// queue head. External callers always pass `None`. When `Some`, the
+        /// first iteration of the drain loop will delete this row and emit
+        /// `PendingPromptRemoved { Executed }` right after `begin_turn`.
+        from_queue_seq: Option<i64>,
+        respond_to: oneshot::Sender<Result<PromptAcceptance, PromptAcceptError>>,
+    },
+    EditPendingPrompt {
+        seq: i64,
+        text: String,
+        respond_to: oneshot::Sender<Result<(), QueueMutationError>>,
+    },
+    DeletePendingPrompt {
+        seq: i64,
+        respond_to: oneshot::Sender<Result<(), QueueMutationError>>,
     },
     SetConfigOption {
         config_id: String,
@@ -1098,65 +1127,241 @@ async fn run_actor(
         config.is_resume,
         &config.session.status,
     );
+
+    // Invariant 5: startup drain. If the durable queue is non-empty, self-dispatch
+    // a Prompt command for the head row carrying `from_queue_seq`. The first
+    // iteration of the outer Prompt arm will treat it as a drained iteration —
+    // `begin_turn` runs, then the head row is deleted and `PendingPromptRemoved`
+    // is emitted. If more items exist, the turn-end drain loop picks them up
+    // naturally from there. Races: the main select loop hasn't started yet, so
+    // no other command can interleave.
+    match store.peek_head_pending_prompt(&session_id) {
+        Ok(Some(head)) => {
+            let (drain_respond_tx, _drain_respond_rx) = oneshot::channel();
+            if let Err(error) = handle
+                .command_tx
+                .send(SessionCommand::Prompt {
+                    text: head.text,
+                    prompt_id: head.prompt_id,
+                    latency: None,
+                    from_queue_seq: Some(head.seq),
+                    respond_to: drain_respond_tx,
+                })
+                .await
+            {
+                tracing::warn!(
+                    session_id = %session_id,
+                    error = %error,
+                    "failed to self-dispatch startup drain prompt",
+                );
+            } else {
+                tracing::info!(
+                    session_id = %session_id,
+                    seq = head.seq,
+                    "session.actor.startup_drain.dispatched",
+                );
+            }
+        }
+        Ok(None) => {}
+        Err(error) => {
+            tracing::warn!(
+                session_id = %session_id,
+                error = %error,
+                "failed to peek pending prompt queue at startup",
+            );
+        }
+    }
+
     let mut pending_exit = PendingExit::Close;
     loop {
         tokio::select! {
             cmd = command_rx.recv() => {
                 match cmd {
-                    Some(SessionCommand::Prompt { text, latency, respond_to }) => {
-                        let latency_fields = latency_trace_fields(latency.as_ref());
-                        tracing::info!(
-                            session_id = %session_id,
-                            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
-                            "[workspace-latency] session.actor.prompt.received"
-                        );
-                        {
-                            let mut sink = event_sink.lock().await;
-                            sink.begin_turn(text.clone());
-                        }
+                    Some(SessionCommand::Prompt { text, prompt_id, latency, from_queue_seq, respond_to }) => {
+                        // Invariant 2: the actor is the sole writer of `busy`.
+                        busy.store(true, Ordering::Release);
+                        let _ = respond_to.send(Ok(PromptAcceptance::Started));
 
-                        let now = chrono::Utc::now().to_rfc3339();
-                        handle.set_execution_phase(SessionExecutionPhase::Running).await;
-                        let _ = store.update_status(&session_id, "running", &now);
-                        let _ = store.update_last_prompt_at(&session_id, &now);
-                        let _ = respond_to.send(Ok(()));
-                        tracing::info!(
-                            session_id = %session_id,
-                            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
-                            "[workspace-latency] session.actor.prompt.accepted"
-                        );
+                        let mut current_text = text;
+                        let mut current_prompt_id = prompt_id;
+                        let mut current_latency = latency;
+                        let mut current_queue_seq: Option<i64> = from_queue_seq;
+                        let mut exit_after_prompt: Option<PendingExit> = None;
+                        let mut broken_session = false;
 
-                        let req = acp::PromptRequest::new(
-                            native_session_id.clone(),
-                            vec![text.into()],
-                        );
-
-                        let mut exit_after_prompt = None;
-                        let mut prompt_result = None;
-                        tracing::info!(
-                            session_id = %session_id,
-                            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
-                            "[workspace-latency] session.actor.prompt.dispatch_started"
-                        );
-                        let prompt_fut = conn.prompt(req);
-                        tokio::pin!(prompt_fut);
-
-                        while prompt_result.is_none() {
-                            tokio::select! {
-                                result = &mut prompt_fut => {
-                                    prompt_result = Some(result);
+                        'drain: loop {
+                            let latency_fields = latency_trace_fields(current_latency.as_ref());
+                            tracing::info!(
+                                session_id = %session_id,
+                                flow_id = latency_fields.flow_id,
+                                flow_kind = latency_fields.flow_kind,
+                                flow_source = latency_fields.flow_source,
+                                prompt_id = latency_fields.prompt_id,
+                                "[workspace-latency] session.actor.prompt.received"
+                            );
+                            {
+                                let mut sink = event_sink.lock().await;
+                                sink.begin_turn(current_text.clone());
+                                // Invariant 3: delete the queue row and emit Removed
+                                // AFTER begin_turn has durably persisted the replacement
+                                // turn events. `current_queue_seq` is only set on drained
+                                // iterations; initial iterations get None.
+                                if let Some(seq) = current_queue_seq.take() {
+                                    if let Err(error) = store.delete_pending_prompt(&session_id, seq) {
+                                        tracing::warn!(
+                                            session_id = %session_id,
+                                            seq,
+                                            error = %error,
+                                            "failed to delete pending prompt after begin_turn",
+                                        );
+                                    }
+                                    sink.pending_prompt_removed(PendingPromptRemovedPayload {
+                                        seq,
+                                        reason: PendingPromptRemovalReason::Executed,
+                                    });
                                 }
-                                notification = notification_rx.recv() => {
-                                    if let Some(notif) = notification {
+                            }
+
+                            let now = chrono::Utc::now().to_rfc3339();
+                            handle.set_execution_phase(SessionExecutionPhase::Running).await;
+                            let _ = store.update_status(&session_id, "running", &now);
+                            let _ = store.update_last_prompt_at(&session_id, &now);
+                            tracing::info!(
+                                session_id = %session_id,
+                                flow_id = latency_fields.flow_id,
+                                flow_kind = latency_fields.flow_kind,
+                                flow_source = latency_fields.flow_source,
+                                prompt_id = latency_fields.prompt_id,
+                                "[workspace-latency] session.actor.prompt.accepted"
+                            );
+
+                            let req = acp::PromptRequest::new(
+                                native_session_id.clone(),
+                                vec![current_text.clone().into()],
+                            );
+
+                            let mut prompt_result = None;
+                            tracing::info!(
+                                session_id = %session_id,
+                                flow_id = latency_fields.flow_id,
+                                flow_kind = latency_fields.flow_kind,
+                                flow_source = latency_fields.flow_source,
+                                prompt_id = latency_fields.prompt_id,
+                                "[workspace-latency] session.actor.prompt.dispatch_started"
+                            );
+                            let prompt_fut = conn.prompt(req);
+                            tokio::pin!(prompt_fut);
+
+                            while prompt_result.is_none() {
+                                tokio::select! {
+                                    result = &mut prompt_fut => {
+                                        prompt_result = Some(result);
+                                    }
+                                    notification = notification_rx.recv() => {
+                                        if let Some(notif) = notification {
+                                            handle_notification_with_resume_replay_filter(
+                                                &notif,
+                                                &mut resume_replay_filter,
+                                                &event_sink,
+                                                &store,
+                                                &session_id,
+                                                &source_agent_kind,
+                                                &mut persisted_config_state,
+                                                &mut startup_state,
+                                            ).await;
+                                        }
+                                    }
+                                    cmd = command_rx.recv() => {
+                                        match cmd {
+                                            Some(SessionCommand::Cancel) => {
+                                                let _ = conn
+                                                    .cancel(acp::CancelNotification::new(native_session_id.clone()))
+                                                    .await;
+                                            }
+                                            Some(SessionCommand::Dismiss { respond_to }) => {
+                                                let _ = conn
+                                                    .cancel(acp::CancelNotification::new(native_session_id.clone()))
+                                                    .await;
+                                                let _ = respond_to.send(Ok(()));
+                                                exit_after_prompt = Some(PendingExit::Dismiss);
+                                            }
+                                            Some(SessionCommand::SetConfigOption { config_id, value, respond_to }) => {
+                                                let option = find_select_option_for_request(&startup_state.config_options, &config_id);
+                                                let result = queue_pending_config_change(
+                                                    &store,
+                                                    &session_id,
+                                                    &startup_state,
+                                                    &config_id,
+                                                    &value,
+                                                );
+                                                let result = match result {
+                                                    Ok(()) => {
+                                                        if let Err(error) = persist_requested_config_value_if_changed(
+                                                            &store,
+                                                            &event_sink,
+                                                            &session_id,
+                                                            &mut persisted_config_state,
+                                                            tracked_config_purpose(&config_id, option),
+                                                            &value,
+                                                            chrono::Utc::now().to_rfc3339(),
+                                                        )
+                                                        .await
+                                                        {
+                                                            let _ = store.delete_pending_config_change(&session_id, &config_id);
+                                                            Err(SetConfigOptionCommandError::Rejected(error.to_string()))
+                                                        } else {
+                                                            Ok(ConfigApplyState::Queued)
+                                                        }
+                                                    }
+                                                    Err(error) => Err(error),
+                                                };
+                                                let _ = respond_to.send(result);
+                                            }
+                                            Some(SessionCommand::Close { respond_to }) => {
+                                                let _ = respond_to.send(Ok(()));
+                                                exit_after_prompt = Some(PendingExit::Close);
+                                            }
+                                            Some(SessionCommand::Prompt { text: queued_text, prompt_id: queued_prompt_id, latency: _, from_queue_seq: _, respond_to }) => {
+                                                // Invariant 2/3: busy-path enqueue. Insert durably,
+                                                // emit PendingPromptAdded, respond Queued.
+                                                match store.insert_pending_prompt(&session_id, &queued_text, queued_prompt_id.as_deref()) {
+                                                    Ok(record) => {
+                                                        let mut sink = event_sink.lock().await;
+                                                        sink.pending_prompt_added(PendingPromptAddedPayload {
+                                                            seq: record.seq,
+                                                            prompt_id: record.prompt_id.clone(),
+                                                            text: record.text.clone(),
+                                                            queued_at: record.queued_at.clone(),
+                                                        });
+                                                        drop(sink);
+                                                        let _ = respond_to.send(Ok(PromptAcceptance::Queued { seq: record.seq }));
+                                                    }
+                                                    Err(error) => {
+                                                        tracing::warn!(
+                                                            session_id = %session_id,
+                                                            error = %error,
+                                                            "failed to enqueue pending prompt",
+                                                        );
+                                                        let _ = respond_to.send(Err(PromptAcceptError::EnqueueFailed(error.to_string())));
+                                                    }
+                                                }
+                                            }
+                                            Some(SessionCommand::EditPendingPrompt { seq, text, respond_to }) => {
+                                                let _ = respond_to.send(handle_edit_pending_prompt(&store, &event_sink, &session_id, seq, text).await);
+                                            }
+                                            Some(SessionCommand::DeletePendingPrompt { seq, respond_to }) => {
+                                                let _ = respond_to.send(handle_delete_pending_prompt(&store, &event_sink, &session_id, seq).await);
+                                            }
+                                            None => {}
+                                        }
+                                    }
+                                }
+                            }
+
+                            let result = prompt_result.expect("prompt_result must be set");
+                            match &result {
+                                Ok(resp) => {
+                                    while let Ok(notif) = notification_rx.try_recv() {
                                         handle_notification_with_resume_replay_filter(
                                             &notif,
                                             &mut resume_replay_filter,
@@ -1168,119 +1373,85 @@ async fn run_actor(
                                             &mut startup_state,
                                         ).await;
                                     }
-                                }
-                                cmd = command_rx.recv() => {
-                                    match cmd {
-                                        Some(SessionCommand::Cancel) => {
-                                            let _ = conn
-                                                .cancel(acp::CancelNotification::new(native_session_id.clone()))
-                                                .await;
-                                        }
-                                        Some(SessionCommand::Dismiss { respond_to }) => {
-                                            let _ = conn
-                                                .cancel(acp::CancelNotification::new(native_session_id.clone()))
-                                                .await;
-                                            let _ = respond_to.send(Ok(()));
-                                            exit_after_prompt = Some(PendingExit::Dismiss);
-                                        }
-                                        Some(SessionCommand::SetConfigOption { config_id, value, respond_to }) => {
-                                            let option = find_select_option_for_request(&startup_state.config_options, &config_id);
-                                            let result = queue_pending_config_change(
-                                                &store,
-                                                &session_id,
-                                                &startup_state,
-                                                &config_id,
-                                                &value,
-                                            );
-                                            let result = match result {
-                                                Ok(()) => {
-                                                    if let Err(error) = persist_requested_config_value_if_changed(
-                                                        &store,
-                                                        &event_sink,
-                                                        &session_id,
-                                                        &mut persisted_config_state,
-                                                        tracked_config_purpose(&config_id, option),
-                                                        &value,
-                                                        chrono::Utc::now().to_rfc3339(),
-                                                    )
-                                                    .await
-                                                    {
-                                                        let _ = store.delete_pending_config_change(&session_id, &config_id);
-                                                        Err(SetConfigOptionCommandError::Rejected(error.to_string()))
-                                                    } else {
-                                                        Ok(ConfigApplyState::Queued)
-                                                    }
-                                                }
-                                                Err(error) => Err(error),
-                                            };
-                                            let _ = respond_to.send(result);
-                                        }
-                                        Some(SessionCommand::Close { respond_to }) => {
-                                            let _ = respond_to.send(Ok(()));
-                                            exit_after_prompt = Some(PendingExit::Close);
-                                        }
-                                        Some(SessionCommand::Prompt { respond_to, .. }) => {
-                                            let _ = respond_to.send(Err(PromptAcceptError::Busy));
-                                        }
-                                        None => {}
-                                    }
-                                }
-                            }
-                        }
-
-                        let result = prompt_result.expect("prompt_result must be set");
-                        match &result {
-                            Ok(resp) => {
-                                while let Ok(notif) = notification_rx.try_recv() {
-                                    handle_notification_with_resume_replay_filter(
-                                        &notif,
-                                        &mut resume_replay_filter,
-                                        &event_sink,
-                                        &store,
-                                        &session_id,
+                                    let stop = map_stop_reason(&resp.stop_reason);
+                                    let mut sink = event_sink.lock().await;
+                                    sink.turn_ended(stop);
+                                    drop(sink);
+                                    let now = chrono::Utc::now().to_rfc3339();
+                                    handle.set_execution_phase(SessionExecutionPhase::Idle).await;
+                                    let _ = store.update_status(&session_id, "idle", &now);
+                                    if let Err(error) = apply_pending_config_changes_if_idle(
+                                        &conn,
+                                        &native_session_id,
                                         &source_agent_kind,
+                                        &session_id,
+                                        &store,
+                                        &event_sink,
                                         &mut persisted_config_state,
                                         &mut startup_state,
-                                    ).await;
+                                    )
+                                    .await
+                                    {
+                                        tracing::warn!(session_id = %session_id, error = %error, "failed to apply pending config changes after turn end");
+                                    }
                                 }
-                                let stop = map_stop_reason(&resp.stop_reason);
-                                let mut sink = event_sink.lock().await;
-                                sink.turn_ended(stop);
-                                drop(sink);
-                                let now = chrono::Utc::now().to_rfc3339();
-                                handle.set_execution_phase(SessionExecutionPhase::Idle).await;
-                                let _ = store.update_status(&session_id, "idle", &now);
-                                if let Err(error) = apply_pending_config_changes_if_idle(
-                                    &conn,
-                                    &native_session_id,
-                                    &source_agent_kind,
-                                    &session_id,
-                                    &store,
-                                    &event_sink,
-                                    &mut persisted_config_state,
-                                    &mut startup_state,
-                                )
-                                .await
-                                {
-                                    tracing::warn!(session_id = %session_id, error = %error, "failed to apply pending config changes after turn end");
+                                Err(e) => {
+                                    let mut sink = event_sink.lock().await;
+                                    sink.error(e.to_string(), None);
+                                    drop(sink);
+                                    let now = chrono::Utc::now().to_rfc3339();
+                                    handle.set_execution_phase(SessionExecutionPhase::Errored).await;
+                                    let _ = store.update_status(&session_id, "errored", &now);
+                                    // Invariant 4: broken-session path — do not auto-drain.
+                                    broken_session = true;
                                 }
                             }
-                            Err(e) => {
-                                let mut sink = event_sink.lock().await;
-                                sink.error(e.to_string(), None);
-                                drop(sink);
-                                let now = chrono::Utc::now().to_rfc3339();
-                                handle.set_execution_phase(SessionExecutionPhase::Errored).await;
-                                let _ = store.update_status(&session_id, "errored", &now);
+
+                            resume_replay_filter.disable();
+
+                            // Suppress reference-unused warnings on latency locals so the
+                            // drain body behaves symmetrically across iterations.
+                            let _ = current_prompt_id.take();
+
+                            if exit_after_prompt.is_some() || broken_session {
+                                break 'drain;
+                            }
+
+                            // Invariant 2/3: peek the head of the queue BEFORE releasing
+                            // `busy`. If present, re-enter the prompt body with the new text;
+                            // begin_turn's event emission is what durably hands off the queue
+                            // row (see the delete_pending_prompt call above).
+                            match store.peek_head_pending_prompt(&session_id) {
+                                Ok(Some(next)) => {
+                                    current_text = next.text;
+                                    current_prompt_id = next.prompt_id;
+                                    current_latency = None;
+                                    current_queue_seq = Some(next.seq);
+                                    continue 'drain;
+                                }
+                                Ok(None) => break 'drain,
+                                Err(error) => {
+                                    tracing::warn!(
+                                        session_id = %session_id,
+                                        error = %error,
+                                        "failed to peek pending prompt queue after turn end",
+                                    );
+                                    break 'drain;
+                                }
                             }
                         }
 
-                        resume_replay_filter.disable();
                         busy.store(false, Ordering::Release);
                         if let Some(next_exit) = exit_after_prompt {
                             pending_exit = next_exit;
                             break;
                         }
+                    }
+                    Some(SessionCommand::EditPendingPrompt { seq, text, respond_to }) => {
+                        let _ = respond_to.send(handle_edit_pending_prompt(&store, &event_sink, &session_id, seq, text).await);
+                    }
+                    Some(SessionCommand::DeletePendingPrompt { seq, respond_to }) => {
+                        let _ = respond_to.send(handle_delete_pending_prompt(&store, &event_sink, &session_id, seq).await);
                     }
                     Some(SessionCommand::SetConfigOption {
                         config_id,
@@ -2336,6 +2507,60 @@ fn config_request_matches_current_state(
         .is_some_and(|current| current == desired_value)
         || (is_model_request && startup_state.current_model_id.as_deref() == Some(desired_value))
         || (is_mode_request && startup_state.current_mode_id.as_deref() == Some(desired_value))
+}
+
+async fn handle_edit_pending_prompt(
+    store: &SessionStore,
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    session_id: &str,
+    seq: i64,
+    text: String,
+) -> Result<(), QueueMutationError> {
+    match store.update_pending_prompt_text(session_id, seq, &text) {
+        Ok(true) => {
+            let mut sink = event_sink.lock().await;
+            sink.pending_prompt_updated(PendingPromptUpdatedPayload { seq, text });
+            Ok(())
+        }
+        Ok(false) => Err(QueueMutationError::NotFound),
+        Err(error) => {
+            tracing::warn!(
+                session_id = %session_id,
+                seq,
+                error = %error,
+                "failed to update pending prompt",
+            );
+            Err(QueueMutationError::NotFound)
+        }
+    }
+}
+
+async fn handle_delete_pending_prompt(
+    store: &SessionStore,
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    session_id: &str,
+    seq: i64,
+) -> Result<(), QueueMutationError> {
+    match store.delete_pending_prompt(session_id, seq) {
+        Ok(true) => {
+            let mut sink = event_sink.lock().await;
+            sink.pending_prompt_removed(PendingPromptRemovedPayload {
+                seq,
+                reason: PendingPromptRemovalReason::Deleted,
+            });
+            Ok(())
+        }
+        Ok(false) => Err(QueueMutationError::NotFound),
+        Err(error) => {
+            tracing::warn!(
+                session_id = %session_id,
+                seq,
+                error = %error,
+                "failed to delete pending prompt",
+            );
+            Err(QueueMutationError::NotFound)
+        }
+    }
 }
 
 async fn apply_pending_config_changes_if_idle(

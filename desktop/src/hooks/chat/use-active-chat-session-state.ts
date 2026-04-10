@@ -48,12 +48,12 @@ export function useActiveChatSessionState() {
     [pendingApproval?.options],
   );
   const transcript = activeSlot?.transcript ?? createTranscriptState(activeSessionId ?? "");
-  const pendingUserPrompt = activeSlot?.pendingUserPrompt ?? null;
+  const pendingPrompts = transcript.pendingPrompts;
   const totalItems = useMemo(() => transcript.turnOrder.reduce(
     (sum, turnId) => sum + (transcript.turnsById[turnId]?.itemOrder.length ?? 0),
     0,
   ), [transcript]);
-  const hasContent = totalItems > 0 || pendingUserPrompt !== null;
+  const hasContent = totalItems > 0 || pendingPrompts.length > 0;
   const sessionViewState = resolveSessionViewState(activeSlot);
   const isRunning = isSessionSlotBusy(activeSlot);
 
@@ -62,7 +62,7 @@ export function useActiveChatSessionState() {
     activeSlot,
     liveConfig: activeSlot?.liveConfig ?? null,
     transcript,
-    pendingUserPrompt,
+    pendingPrompts,
     currentLaunchIdentity,
     currentModelConfigId,
     currentModeId,

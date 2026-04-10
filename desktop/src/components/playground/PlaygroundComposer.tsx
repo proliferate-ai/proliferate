@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { ApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
 import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
+import { PendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
 import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerPanel";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
@@ -10,6 +11,9 @@ import type { ScenarioKey } from "@/config/playground";
 import {
   EDIT_OPTIONS,
   EXECUTE_OPTIONS,
+  PENDING_PROMPTS_MULTI,
+  PENDING_PROMPTS_SINGLE,
+  PENDING_PROMPTS_WITH_EDITING,
   PLAN_OPTIONS,
   TODOS_LONG,
   TODOS_MID,
@@ -71,6 +75,49 @@ function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
           onAllow={noop}
           onDeny={noop}
         />
+      );
+    case "pending-prompts-single":
+      return (
+        <PendingPromptList
+          entries={PENDING_PROMPTS_SINGLE}
+          onBeginEdit={noop}
+          onDelete={noop}
+        />
+      );
+    case "pending-prompts-multi":
+      return (
+        <PendingPromptList
+          entries={PENDING_PROMPTS_MULTI}
+          onBeginEdit={noop}
+          onDelete={noop}
+        />
+      );
+    case "pending-prompts-editing":
+      return (
+        <PendingPromptList
+          entries={PENDING_PROMPTS_WITH_EDITING}
+          onBeginEdit={noop}
+          onDelete={noop}
+        />
+      );
+    case "pending-prompts-with-approval":
+      return (
+        <>
+          <div className="mx-8 flex flex-col">
+            <ApprovalCard
+              title="wc -l /Users/pablo/proliferate/server/proliferate/**/*.py | tail -1"
+              actions={EXECUTE_OPTIONS}
+              onSelectOption={noop}
+              onAllow={noop}
+              onDeny={noop}
+            />
+          </div>
+          <PendingPromptList
+            entries={PENDING_PROMPTS_SINGLE}
+            onBeginEdit={noop}
+            onDelete={noop}
+          />
+        </>
       );
   }
 }

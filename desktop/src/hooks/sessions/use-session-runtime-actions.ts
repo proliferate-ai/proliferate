@@ -49,7 +49,6 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { persistDefaultSessionModePreference } from "@/hooks/sessions/session-mode-preferences";
 import {
-  buildPendingPrompt,
   isCurrentStreamHandle,
   shouldReconnectStream,
 } from "@/hooks/sessions/session-runtime-helpers";
@@ -135,7 +134,6 @@ export function useSessionRuntimeActions() {
       pendingConfigChanges: reconcileResult.pendingConfigChanges,
       status: resolveSessionStatus(patch.status, {
         executionSummary: patch.executionSummary,
-        pendingUserPrompt: existing.pendingUserPrompt,
         streamConnectionState: existing.streamConnectionState,
         transcript: nextTranscript,
       }),
@@ -190,7 +188,6 @@ export function useSessionRuntimeActions() {
           {
             events: currentSlot.events,
             transcript: currentSlot.transcript,
-            pendingUserPrompt: currentSlot.pendingUserPrompt,
           },
           events,
         );
@@ -202,10 +199,8 @@ export function useSessionRuntimeActions() {
         useHarnessStore.getState().patchSessionSlot(sessionId, {
           events: nextState.state.events,
           transcript: nextState.state.transcript,
-          pendingUserPrompt: nextState.state.pendingUserPrompt,
           status: resolveSessionStatus(currentSlot.status, {
             executionSummary: currentSlot.executionSummary,
-            pendingUserPrompt: nextState.state.pendingUserPrompt,
             streamConnectionState: currentSlot.streamConnectionState,
             transcript: nextState.state.transcript,
           }),
@@ -219,18 +214,12 @@ export function useSessionRuntimeActions() {
         return true;
       }
 
-      const nextState = replaySessionHistory(
-        sessionId,
-        events,
-        currentSlot.pendingUserPrompt,
-      );
+      const nextState = replaySessionHistory(sessionId, events);
       useHarnessStore.getState().patchSessionSlot(sessionId, {
         events: nextState.events,
         transcript: nextState.transcript,
-        pendingUserPrompt: nextState.pendingUserPrompt,
         status: resolveSessionStatus(currentSlot.status, {
           executionSummary: currentSlot.executionSummary,
-          pendingUserPrompt: nextState.pendingUserPrompt,
           streamConnectionState: currentSlot.streamConnectionState,
           transcript: nextState.transcript,
         }),
@@ -268,7 +257,6 @@ export function useSessionRuntimeActions() {
         options?.resumeIfActive
         && resolveSessionStatus(session.status, {
           executionSummary: session.executionSummary ?? null,
-          pendingUserPrompt: null,
           transcript: createTranscriptState(sessionId),
         }) === "running"
       ) {
@@ -427,7 +415,6 @@ export function useSessionRuntimeActions() {
           {
             events: slotState.events,
             transcript: slotState.transcript,
-            pendingUserPrompt: slotState.pendingUserPrompt,
           },
           envelope,
         );
@@ -457,7 +444,6 @@ export function useSessionRuntimeActions() {
         const patch = buildSessionStreamPatch({
           slot: slotState,
           nextTranscript: result.state.transcript,
-          nextPendingUserPrompt: result.state.pendingUserPrompt,
           envelope,
         });
         const reconcileResult = event.type === "config_option_update"
@@ -579,27 +565,11 @@ export function useSessionRuntimeActions() {
     showToast,
   ]);
 
-  const queuePendingUserPrompt = useCallback((
-    sessionId: string,
-    text: string,
-    options?: {
-      submittedAt?: string;
-      flowId?: string | null;
-      promptId?: string | null;
-    },
-  ) => {
-    useHarnessStore.getState().setPendingUserPrompt(
-      sessionId,
-      buildPendingPrompt(text, options),
-    );
-  }, []);
-
   return {
     activateSession,
     applySessionSummary,
     closeSessionSlotStream,
     ensureSessionStreamConnected,
-    queuePendingUserPrompt,
     rehydrateSessionSlotFromHistory,
     refreshSessionSlotMeta,
   };

@@ -47,6 +47,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0013_add_session_mcp_bindings_ciphertext",
         include_str!("sql/0013_add_session_mcp_bindings_ciphertext.sql"),
     ),
+    (
+        "0014_session_pending_prompts",
+        include_str!("sql/0014_session_pending_prompts.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

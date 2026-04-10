@@ -248,7 +248,7 @@ function HeaderTabs() {
                 }}
                 onClose={() => void dismissSession(tab.id)}
                 badge={
-                  tab.viewState === "sending" || tab.viewState === "working"
+                  tab.viewState === "working"
                     ? <BrailleSweepBadge className="text-[10px] text-muted-foreground" />
                     : tab.viewState === "needs_input"
                       ? <BrailleSweepBadge className="text-[10px] text-special" />

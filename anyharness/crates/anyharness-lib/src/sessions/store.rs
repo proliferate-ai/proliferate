@@ -1,8 +1,8 @@
 use rusqlite::{params, OptionalExtension};
 
 use super::model::{
-    PendingConfigChangeRecord, SessionEventRecord, SessionLiveConfigSnapshotRecord,
-    SessionRawNotificationRecord, SessionRecord,
+    PendingConfigChangeRecord, PendingPromptRecord, SessionEventRecord,
+    SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
 };
 use crate::persistence::Db;
 
@@ -380,6 +380,97 @@ impl SessionStore {
         })
     }
 
+    pub fn insert_pending_prompt(
+        &self,
+        session_id: &str,
+        text: &str,
+        prompt_id: Option<&str>,
+    ) -> anyhow::Result<PendingPromptRecord> {
+        let queued_at = chrono::Utc::now().to_rfc3339();
+        self.db.with_tx(|tx| {
+            let next_seq: i64 = tx.query_row(
+                "SELECT COALESCE(MAX(seq), 0) + 1 FROM session_pending_prompts WHERE session_id = ?1",
+                [session_id],
+                |row| row.get(0),
+            )?;
+            tx.execute(
+                "INSERT INTO session_pending_prompts (session_id, seq, prompt_id, text, queued_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![session_id, next_seq, prompt_id, text, queued_at],
+            )?;
+            Ok(PendingPromptRecord {
+                session_id: session_id.to_string(),
+                seq: next_seq,
+                prompt_id: prompt_id.map(|s| s.to_string()),
+                text: text.to_string(),
+                queued_at: queued_at.clone(),
+            })
+        })
+    }
+
+    pub fn list_pending_prompts(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Vec<PendingPromptRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT * FROM session_pending_prompts
+                 WHERE session_id = ?1
+                 ORDER BY seq ASC",
+            )?;
+            let rows = stmt.query_map([session_id], map_pending_prompt)?;
+            rows.collect()
+        })
+    }
+
+    pub fn peek_head_pending_prompt(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Option<PendingPromptRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM session_pending_prompts
+                 WHERE session_id = ?1
+                 ORDER BY seq ASC
+                 LIMIT 1",
+                [session_id],
+                map_pending_prompt,
+            )
+            .optional()
+        })
+    }
+
+    pub fn update_pending_prompt_text(
+        &self,
+        session_id: &str,
+        seq: i64,
+        text: &str,
+    ) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let rows = conn.execute(
+                "UPDATE session_pending_prompts
+                 SET text = ?3
+                 WHERE session_id = ?1 AND seq = ?2",
+                params![session_id, seq, text],
+            )?;
+            Ok(rows > 0)
+        })
+    }
+
+    pub fn delete_pending_prompt(
+        &self,
+        session_id: &str,
+        seq: i64,
+    ) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let rows = conn.execute(
+                "DELETE FROM session_pending_prompts WHERE session_id = ?1 AND seq = ?2",
+                params![session_id, seq],
+            )?;
+            Ok(rows > 0)
+        })
+    }
+
     pub fn next_event_seq(&self, session_id: &str) -> anyhow::Result<i64> {
         self.db.with_conn(|conn| {
             let max: Option<i64> = conn.query_row(
@@ -616,6 +707,16 @@ fn map_pending_config_change(row: &rusqlite::Row) -> rusqlite::Result<PendingCon
         session_id: row.get("session_id")?,
         config_id: row.get("config_id")?,
         value: row.get("value")?,
+        queued_at: row.get("queued_at")?,
+    })
+}
+
+fn map_pending_prompt(row: &rusqlite::Row) -> rusqlite::Result<PendingPromptRecord> {
+    Ok(PendingPromptRecord {
+        session_id: row.get("session_id")?,
+        seq: row.get("seq")?,
+        prompt_id: row.get("prompt_id")?,
+        text: row.get("text")?,
         queued_at: row.get("queued_at")?,
     })
 }

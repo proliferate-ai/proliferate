@@ -9,7 +9,8 @@ use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::{
     AvailableCommandsUpdatePayload, ConfigOptionUpdatePayload, ContentPart,
     CurrentModeUpdatePayload, ErrorEvent, FileChangeOperation, FileOpenTarget, FileReadScope,
-    ItemCompletedEvent, ItemDeltaEvent, ItemStartedEvent, PermissionOutcome,
+    ItemCompletedEvent, ItemDeltaEvent, ItemStartedEvent, PendingPromptAddedPayload,
+    PendingPromptRemovedPayload, PendingPromptUpdatedPayload, PermissionOutcome,
     PermissionRequestedEvent, PermissionResolvedEvent, PlanEntry, SessionEndReason,
     SessionEndedEvent, SessionEvent, SessionEventEnvelope, SessionInfoUpdatePayload,
     SessionStartedEvent, SessionStateUpdatePayload, StopReason, TranscriptItemDeltaPayload, TranscriptItemKind,
@@ -546,6 +547,18 @@ impl SessionEventSink {
 
     pub fn usage_update(&mut self, payload: UsageUpdatePayload) {
         self.emit_with_ids(SessionEvent::UsageUpdate(payload), None, None);
+    }
+
+    pub fn pending_prompt_added(&mut self, payload: PendingPromptAddedPayload) {
+        self.emit_with_ids(SessionEvent::PendingPromptAdded(payload), None, None);
+    }
+
+    pub fn pending_prompt_updated(&mut self, payload: PendingPromptUpdatedPayload) {
+        self.emit_with_ids(SessionEvent::PendingPromptUpdated(payload), None, None);
+    }
+
+    pub fn pending_prompt_removed(&mut self, payload: PendingPromptRemovedPayload) {
+        self.emit_with_ids(SessionEvent::PendingPromptRemoved(payload), None, None);
     }
 
     pub fn error(&mut self, message: String, code: Option<String>) {

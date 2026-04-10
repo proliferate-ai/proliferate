@@ -52,6 +52,10 @@ pub enum SessionEvent {
     SessionInfoUpdate(SessionInfoUpdatePayload),
     UsageUpdate(UsageUpdatePayload),
 
+    PendingPromptAdded(PendingPromptAddedPayload),
+    PendingPromptUpdated(PendingPromptUpdatedPayload),
+    PendingPromptRemoved(PendingPromptRemovedPayload),
+
     PermissionRequested(PermissionRequestedEvent),
     PermissionResolved(PermissionResolvedEvent),
     Error(ErrorEvent),
@@ -73,6 +77,9 @@ impl SessionEvent {
             Self::SessionStateUpdate(_) => "session_state_update",
             Self::SessionInfoUpdate(_) => "session_info_update",
             Self::UsageUpdate(_) => "usage_update",
+            Self::PendingPromptAdded(_) => "pending_prompt_added",
+            Self::PendingPromptUpdated(_) => "pending_prompt_updated",
+            Self::PendingPromptRemoved(_) => "pending_prompt_removed",
             Self::PermissionRequested(_) => "permission_requested",
             Self::PermissionResolved(_) => "permission_resolved",
             Self::Error(_) => "error",
@@ -396,6 +403,41 @@ pub struct UsageUpdatePayload {
     pub size: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cost: Option<serde_json::Value>,
+}
+
+// ---------------------------------------------------------------------------
+// Pending prompt (queue) events
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingPromptAddedPayload {
+    pub seq: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_id: Option<String>,
+    pub text: String,
+    pub queued_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingPromptUpdatedPayload {
+    pub seq: i64,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingPromptRemovedPayload {
+    pub seq: i64,
+    pub reason: PendingPromptRemovalReason,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PendingPromptRemovalReason {
+    Executed,
+    Deleted,
 }
 
 // ---------------------------------------------------------------------------

@@ -7,24 +7,6 @@ import {
 } from "./activity";
 
 describe("session activity", () => {
-  it("prefers local pending prompts over remote execution state", () => {
-    expect(resolveSessionViewState({
-      status: "idle",
-      executionSummary: {
-        phase: "idle",
-        hasLiveHandle: true,
-        pendingApproval: null,
-        updatedAt: "2026-04-06T00:00:00Z",
-      },
-      pendingUserPrompt: { text: "hello" },
-      streamConnectionState: "open",
-      transcript: {
-        isStreaming: false,
-        pendingApproval: null,
-      },
-    })).toBe("sending");
-  });
-
   it("maps awaiting permission to needs_input", () => {
     expect(resolveSessionViewState({
       status: "running",
@@ -39,7 +21,6 @@ describe("session activity", () => {
         },
         updatedAt: "2026-04-06T00:00:00Z",
       },
-      pendingUserPrompt: null,
       streamConnectionState: "open",
       transcript: {
         isStreaming: false,
@@ -59,7 +40,6 @@ describe("session activity", () => {
           pendingApproval: null,
           updatedAt: "2026-04-06T00:00:00Z",
         },
-        pendingUserPrompt: null,
         streamConnectionState: "open",
         transcript: {
           isStreaming: true,
@@ -70,21 +50,25 @@ describe("session activity", () => {
         workspaceId: "workspace-1",
         status: "idle",
         executionSummary: {
-          phase: "idle",
-          hasLiveHandle: false,
-          pendingApproval: null,
+          phase: "awaiting_permission",
+          hasLiveHandle: true,
+          pendingApproval: {
+            requestId: "request-1",
+            title: "Approve",
+            toolCallId: "tool-1",
+            toolKind: "exec",
+          },
           updatedAt: "2026-04-06T00:00:01Z",
         },
-        pendingUserPrompt: { text: "queued" },
-        streamConnectionState: "disconnected",
+        streamConnectionState: "open",
         transcript: {
           isStreaming: false,
-          pendingApproval: null,
+          pendingApproval: { requestId: "request-1" },
         },
       },
     });
 
-    expect(states["workspace-1"]).toBe("sending");
+    expect(states["workspace-1"]).toBe("needs_input");
   });
 
   it("maps workspace summaries to execution view states", () => {
@@ -108,7 +92,6 @@ describe("session activity", () => {
         pendingApproval: null,
         updatedAt: "2026-04-06T00:00:00Z",
       },
-      pendingUserPrompt: null,
       streamConnectionState: "disconnected",
       transcript: {
         isStreaming: false,
@@ -124,7 +107,6 @@ describe("session activity", () => {
         pendingApproval: null,
         updatedAt: "2026-04-06T00:00:00Z",
       },
-      pendingUserPrompt: null,
       streamConnectionState: "disconnected",
       transcript: {
         isStreaming: false,

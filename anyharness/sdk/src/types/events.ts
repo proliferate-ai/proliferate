@@ -20,6 +20,12 @@ type SessionStateUpdatePayload =
   components["schemas"]["SessionStateUpdatePayload"];
 type SessionInfoUpdatePayload = components["schemas"]["SessionInfoUpdatePayload"];
 type UsageUpdatePayload = components["schemas"]["UsageUpdatePayload"];
+type PendingPromptAddedPayload =
+  components["schemas"]["PendingPromptAddedPayload"];
+type PendingPromptUpdatedPayload =
+  components["schemas"]["PendingPromptUpdatedPayload"];
+type PendingPromptRemovedPayload =
+  components["schemas"]["PendingPromptRemovedPayload"];
 
 export type SessionEventEnvelope = Omit<
   components["schemas"]["SessionEventEnvelope"],
@@ -68,6 +74,18 @@ export type SessionInfoUpdateEvent = SessionInfoUpdatePayload & {
 export type UsageUpdateEvent = UsageUpdatePayload & {
   type: "usage_update";
 };
+export type PendingPromptAddedEvent = PendingPromptAddedPayload & {
+  type: "pending_prompt_added";
+};
+export type PendingPromptUpdatedEvent = PendingPromptUpdatedPayload & {
+  type: "pending_prompt_updated";
+};
+export type PendingPromptRemovedEvent = PendingPromptRemovedPayload & {
+  type: "pending_prompt_removed";
+};
+export type PendingPromptRemovalReason =
+  components["schemas"]["PendingPromptRemovalReason"];
+export type PendingPromptSummary = components["schemas"]["PendingPromptSummary"];
 export type PermissionRequestedEvent =
   components["schemas"]["PermissionRequestedEvent"] & {
     type: "permission_requested";
@@ -94,6 +112,9 @@ export type SessionEvent =
   | SessionStateUpdateEvent
   | SessionInfoUpdateEvent
   | UsageUpdateEvent
+  | PendingPromptAddedEvent
+  | PendingPromptUpdatedEvent
+  | PendingPromptRemovedEvent
   | PermissionRequestedEvent
   | PermissionResolvedEvent
   | ErrorEvent;

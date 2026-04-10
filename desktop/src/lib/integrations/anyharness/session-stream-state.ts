@@ -8,15 +8,9 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 
-export interface PendingUserPromptState {
-  text: string;
-  timestamp: string;
-}
-
 export interface SessionStreamState {
   events: SessionEventEnvelope[];
   transcript: TranscriptState;
-  pendingUserPrompt: PendingUserPromptState | null;
 }
 
 export type StreamEnvelopeApplyResult =
@@ -27,7 +21,6 @@ export type StreamEnvelopeApplyResult =
 export function replaySessionHistory(
   sessionId: string,
   events: SessionEventEnvelope[],
-  pendingUserPrompt: PendingUserPromptState | null,
 ): SessionStreamState {
   const transcript =
     events.length > 0
@@ -36,7 +29,6 @@ export function replaySessionHistory(
   return {
     events: [...events],
     transcript,
-    pendingUserPrompt: events.some(hasUserMessageEvent) ? null : pendingUserPrompt,
   };
 }
 
@@ -55,7 +47,6 @@ export function appendHistoryTail(
     nextState = {
       events: [...nextState.events, envelope],
       transcript: reduceEvent(nextState.transcript, envelope, { replayMode: true }),
-      pendingUserPrompt: hasUserMessageEvent(envelope) ? null : nextState.pendingUserPrompt,
     };
   }
 
@@ -79,14 +70,6 @@ export function applyStreamEnvelope(
     state: {
       events: [...state.events, envelope],
       transcript: reduceEvent(state.transcript, envelope),
-      pendingUserPrompt: hasUserMessageEvent(envelope) ? null : state.pendingUserPrompt,
     },
   };
-}
-
-function hasUserMessageEvent(envelope: SessionEventEnvelope): boolean {
-  return (
-    (envelope.event.type === "item_started" || envelope.event.type === "item_completed")
-    && envelope.event.item.kind === "user_message"
-  );
 }

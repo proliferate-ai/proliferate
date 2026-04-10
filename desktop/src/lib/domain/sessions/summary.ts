@@ -48,6 +48,12 @@ export function buildSessionSlotPatchFromSummary(
         ...transcript.sessionMeta,
         title: title ?? transcript.sessionMeta.title ?? null,
       },
+      pendingPrompts: (session.pendingPrompts ?? []).map((entry) => ({
+        seq: entry.seq,
+        promptId: entry.promptId ?? null,
+        text: entry.text,
+        queuedAt: entry.queuedAt,
+      })),
     },
   };
 }

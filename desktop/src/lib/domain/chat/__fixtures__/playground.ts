@@ -1,4 +1,5 @@
 import type { PlanEntry } from "@anyharness/sdk";
+import type { PendingPromptListEntry } from "@/components/workspace/chat/input/PendingPromptList";
 import type { PermissionOptionAction } from "@/lib/domain/chat/chat-input-helpers";
 
 export const TODOS_SHORT: PlanEntry[] = [
@@ -99,4 +100,23 @@ export const PLAN_OPTIONS: PermissionOptionAction[] = [
   { optionId: "acceptEdits", label: "Yes, and auto-accept edits", kind: "allow_always" },
   { optionId: "default", label: "Yes, and manually approve edits", kind: "allow_once" },
   { optionId: "plan", label: "No, keep planning", kind: "reject_once" },
+];
+
+export const PENDING_PROMPTS_SINGLE: PendingPromptListEntry[] = [
+  { seq: 1, text: "now please make fixes!", isBeingEdited: false },
+];
+
+export const PENDING_PROMPTS_MULTI: PendingPromptListEntry[] = [
+  { seq: 1, text: "now please make fixes!", isBeingEdited: false },
+  { seq: 2, text: "and rerun the server test suite after", isBeingEdited: false },
+  {
+    seq: 3,
+    text: "finally, bump the desktop version and cut a release — this text is intentionally long so we can see how overflow truncation behaves inside the queue row",
+    isBeingEdited: false,
+  },
+];
+
+export const PENDING_PROMPTS_WITH_EDITING: PendingPromptListEntry[] = [
+  { seq: 1, text: "now please make fixes!", isBeingEdited: true },
+  { seq: 2, text: "and rerun the server test suite after", isBeingEdited: false },
 ];

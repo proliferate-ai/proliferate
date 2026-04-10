@@ -68,6 +68,8 @@ export {
   useSetSessionConfigOptionMutation,
   usePromptSessionMutation,
   usePromptSessionTextMutation,
+  useEditPendingPromptMutation,
+  useDeletePendingPromptMutation,
   useResumeSessionMutation,
   useUpdateSessionTitleMutation,
   useCancelSessionMutation,

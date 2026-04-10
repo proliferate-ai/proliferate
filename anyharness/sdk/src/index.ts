@@ -83,6 +83,9 @@ export type {
   PromptInputBlock,
   PromptSessionRequest,
   PromptSessionResponse,
+  PromptSessionStatus,
+  PendingPromptSummary,
+  EditPendingPromptRequest,
   PermissionDecision,
   ListSessionEventsOptions,
   ResolvePermissionRequest,
@@ -127,6 +130,10 @@ export type {
   SessionStateUpdateEvent,
   SessionInfoUpdateEvent,
   UsageUpdateEvent,
+  PendingPromptAddedEvent,
+  PendingPromptUpdatedEvent,
+  PendingPromptRemovedEvent,
+  PendingPromptRemovalReason,
   PermissionRequestedEvent,
   PermissionResolvedEvent,
   PermissionOutcome,
@@ -150,6 +157,7 @@ export type {
   ErrorItem,
   UnknownItem,
   PendingApproval,
+  PendingPromptEntry,
   UsageState,
 } from "./types/reducer.js";
 

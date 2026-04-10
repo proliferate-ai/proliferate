@@ -7,7 +7,6 @@ import {
   type LatencyFlowStage,
   listActiveLatencyFlows,
 } from "@/lib/infra/latency-flow";
-import type { PendingUserPrompt } from "@/stores/sessions/harness-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 
 function isSurfaceReady(modeKind: string): boolean {
@@ -18,7 +17,6 @@ interface TelemetryLatencyFlowState {
   activeFlows: LatencyFlowRecord[];
   selectedWorkspaceId: string | null;
   activeSessionId: string | null;
-  pendingUserPrompt: PendingUserPrompt | null;
   sessionViewState: string;
   modeKind: string;
 }
@@ -36,19 +34,18 @@ export function collectTelemetryLatencyFlowCompletions(
   for (const flow of state.activeFlows) {
     switch (flow.flowKind) {
       case "prompt_submit": {
-        if (
-          state.pendingUserPrompt?.flowId === flow.flowId
-          && (!flow.promptId || state.pendingUserPrompt.promptId === flow.promptId)
-        ) {
-          completions.push({
-            flowId: flow.flowId,
-            stage: "optimistic_visible",
-          });
-        }
-
+        // `optimistic_visible` = server acknowledged intent. For the prompt
+        // submit flow this fires as soon as the target session view state
+        // becomes working/needs_input, which the client learns via either
+        // the HTTP 200 ack applying a status patch, or the first SSE event.
+        // `processing_started` = server is actively processing this prompt's
+        // turn, which maps to the same working/needs_input transition. In
+        // the current flow helpers these are emitted sequentially by
+        // `finishLatencyFlow`, so we only publish the terminal "processing
+        // started" signal and rely on the helper to collapse stages for the
+        // non-queued case.
         if (
           flow.targetSessionId === state.activeSessionId
-          && state.pendingUserPrompt?.flowId !== flow.flowId
           && (state.sessionViewState === "working" || state.sessionViewState === "needs_input")
         ) {
           completions.push({
@@ -98,7 +95,6 @@ export function useTelemetryLatencyFlows() {
   const { mode } = useChatSurfaceState();
   const {
     activeSessionId,
-    pendingUserPrompt,
     sessionViewState,
   } = useActiveChatSessionState();
 
@@ -107,7 +103,6 @@ export function useTelemetryLatencyFlows() {
       activeFlows: listActiveLatencyFlows(),
       selectedWorkspaceId,
       activeSessionId,
-      pendingUserPrompt,
       sessionViewState,
       modeKind: mode.kind,
     });
@@ -117,8 +112,6 @@ export function useTelemetryLatencyFlows() {
   }, [
     activeSessionId,
     mode.kind,
-    pendingUserPrompt?.flowId,
-    pendingUserPrompt?.promptId,
     selectedWorkspaceId,
     sessionViewState,
   ]);

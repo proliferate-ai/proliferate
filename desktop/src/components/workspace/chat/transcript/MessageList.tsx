@@ -28,12 +28,12 @@ import {
   FileText,
   FolderList,
   Settings,
-  Spinner,
   Sparkles,
   Terminal,
 } from "@/components/ui/icons";
 import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
 import { useMessageListScroll } from "@/hooks/chat/use-message-list-scroll";
+import { useBrailleFillsweep } from "@/hooks/ui/use-braille-sweep";
 import { buildTurnPresentation } from "@/lib/domain/chat/transcript-presentation";
 import {
   extractClaudePlanBody,
@@ -68,9 +68,6 @@ const TURN_HORIZONTAL_PADDING = "px-7";
  *     (24px, reserved via `pl-1 pt-0.5 h-6`)
  *   ----
  *   = 18px + 24px = 42px = 2.625rem
- *
- * The same constant is also used by the pendingUserPrompt TurnShell so the
- * user-bubble→turn transition preserves its slot height.
  */
 const TRAILING_STATUS_MIN_HEIGHT = "min-h-[2.625rem]";
 
@@ -78,7 +75,6 @@ interface MessageListProps {
   activeSessionId: string;
   selectedWorkspaceId: string | null;
   transcript: TranscriptState;
-  pendingUserPrompt: { text: string; timestamp: string } | null;
   sessionViewState: SessionViewState;
 }
 
@@ -86,7 +82,6 @@ export function MessageList({
   activeSessionId,
   selectedWorkspaceId,
   transcript,
-  pendingUserPrompt,
   sessionViewState,
 }: MessageListProps) {
   const latestTurnId = transcript.turnOrder[transcript.turnOrder.length - 1] ?? null;
@@ -98,7 +93,7 @@ export function MessageList({
   );
   const { scrollRef, contentRef } = useMessageListScroll({
     totalItems,
-    pendingPromptText: pendingUserPrompt?.text ?? null,
+    pendingPromptText: null,
     isSessionBusy: sessionViewState === "working" || sessionViewState === "needs_input",
     selectedWorkspaceId,
     activeSessionId,
@@ -112,9 +107,8 @@ export function MessageList({
             const turn = transcript.turnsById[turnId];
             if (!turn) return null;
             const isLatestTurn = turnId === latestTurnId;
-            const hasPendingReplacement = !!pendingUserPrompt;
             const isLatestTurnInProgress =
-              isLatestTurn && !hasPendingReplacement && !turn.completedAt;
+              isLatestTurn && !turn.completedAt;
             const hasFileBadges = turn.fileBadges.length > 0;
 
             // The trailing status indicator is only meaningful when the turn is
@@ -149,20 +143,6 @@ export function MessageList({
               </TurnShell>
             );
           })}
-
-          {pendingUserPrompt && (
-            <TurnShell isFirst={transcript.turnOrder.length === 0}>
-              <div className="flex flex-col gap-2">
-                <UserMessage
-                  content={pendingUserPrompt.text}
-                  showCopyButton
-                />
-                <div className={TRAILING_STATUS_MIN_HEIGHT}>
-                  <StreamingIndicator startedAt={pendingUserPrompt.timestamp} />
-                </div>
-              </div>
-            </TurnShell>
-          )}
         </div>
       </AutoHideScrollArea>
     </div>
@@ -793,11 +773,16 @@ function AgentGroupBlock({
 const AGENT_RESULT_COLLAPSED_HEIGHT = 200;
 
 function AgentHeaderIcon({ isRunning }: { isRunning: boolean }) {
-  if (!isRunning) {
-    return <Sparkles />;
-  }
+  return isRunning ? <AgentHeaderRunningIcon /> : <Sparkles />;
+}
 
-  return <Spinner className="size-3 text-muted-foreground/60" />;
+function AgentHeaderRunningIcon() {
+  const frame = useBrailleFillsweep();
+  return (
+    <span className="inline-block w-[1em] shrink-0 font-mono leading-none tracking-[-0.18em] text-muted-foreground/60">
+      {frame}
+    </span>
+  );
 }
 
 function AgentPromptBlock({ content }: { content: string }) {

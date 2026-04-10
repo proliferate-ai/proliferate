@@ -57,7 +57,6 @@ export function useChatPromptActions() {
     activeSessionId,
     activeSlot,
     currentLaunchIdentity,
-    isRunning,
   } = useActiveChatSessionState();
   const { isDisabled } = useChatAvailabilityState();
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
@@ -69,7 +68,7 @@ export function useChatPromptActions() {
 
     const currentDraft = useChatInputStore.getState().draftByWorkspaceId[selectedWorkspaceId] ?? "";
     const text = currentDraft.trim();
-    if (!text || isDisabled || isRunning) {
+    if (!text || isDisabled) {
       return;
     }
 
@@ -136,7 +135,6 @@ export function useChatPromptActions() {
     currentLaunchIdentity,
     findOrCreateSession,
     isDisabled,
-    isRunning,
     promptActiveSession,
     queryClient,
     runtimeUrl,

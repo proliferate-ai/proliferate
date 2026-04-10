@@ -199,6 +199,48 @@ export function usePromptSessionTextMutation(options?: { workspaceId?: string | 
   });
 }
 
+export function useEditPendingPromptMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const queryClient = useQueryClient();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (input: { sessionId: string; seq: number; text: string }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions.editPendingPrompt(input.sessionId, input.seq, {
+        text: input.text,
+      });
+    },
+    onSuccess: async (_response, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+      });
+    },
+  });
+}
+
+export function useDeletePendingPromptMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const queryClient = useQueryClient();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (input: { sessionId: string; seq: number }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions.deletePendingPrompt(input.sessionId, input.seq);
+    },
+    onSuccess: async (_response, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+      });
+    },
+  });
+}
+
 export function useResumeSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();

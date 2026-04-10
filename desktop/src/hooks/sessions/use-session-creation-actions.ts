@@ -299,15 +299,6 @@ export function useSessionCreationActions({
       targetWorkspaceId: workspaceId,
       targetSessionId: pendingSessionId,
     });
-    const pendingPrompt = hasPrompt
-      ? {
-        text: options.text,
-        timestamp: new Date().toISOString(),
-        submittedAt: new Date().toISOString(),
-        flowId: null,
-        promptId: null,
-      }
-      : null;
 
     const optimisticSlot: SessionSlot = {
       ...createEmptySessionSlot(pendingSessionId, options.agentKind, {
@@ -315,8 +306,7 @@ export function useSessionCreationActions({
         modelId: options.modelId,
         modeId: preferredModeId ?? null,
       }),
-      pendingUserPrompt: pendingPrompt,
-      status: hasPrompt ? "running" : "starting",
+      status: "starting",
       transcriptHydrated: true,
     };
 
@@ -343,8 +333,6 @@ export function useSessionCreationActions({
           systemPromptAppend,
         }, requestOptions);
 
-        const optimisticState = useHarnessStore.getState().sessionSlots[pendingSessionId] ?? null;
-        const effectivePendingPrompt = optimisticState?.pendingUserPrompt ?? pendingPrompt;
         annotateLatencyFlow(options.latencyFlowId, {
           targetSessionId: session.id,
         });
@@ -358,8 +346,7 @@ export function useSessionCreationActions({
             executionSummary: session.executionSummary ?? null,
             lastPromptAt: session.lastPromptAt ?? null,
           }),
-          pendingUserPrompt: effectivePendingPrompt,
-          status: effectivePendingPrompt
+          status: hasPrompt
             ? "running"
             : resolveStatusFromExecutionSummary(session.executionSummary, session.status ?? "idle"),
           transcriptHydrated: true,
@@ -370,12 +357,11 @@ export function useSessionCreationActions({
         upsertWorkspaceSessionRecord(workspaceId, session);
         reportConnectorLaunchWarnings(connectorWarnings, showToast);
 
-        if (effectivePendingPrompt?.text.trim()) {
+        if (hasPrompt) {
           await promptSession({
             sessionId: session.id,
-            text: effectivePendingPrompt.text,
+            text: options.text,
             workspaceId,
-            initializePendingPrompt: false,
             latencyFlowId: options.latencyFlowId,
           });
         } else {

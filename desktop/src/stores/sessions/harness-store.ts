@@ -14,14 +14,6 @@ import { DEFAULT_RUNTIME_URL } from "@/config/runtime";
 
 type ConnectionState = "connecting" | "healthy" | "failed";
 
-export interface PendingUserPrompt {
-  text: string;
-  timestamp: string;
-  submittedAt?: string;
-  flowId?: string | null;
-  promptId?: string | null;
-}
-
 export type SessionStreamConnectionState =
   | "disconnected"
   | "connecting"
@@ -39,7 +31,6 @@ export interface SessionSlot {
   executionSummary: SessionExecutionSummary | null;
   events: SessionEventEnvelope[];
   transcript: TranscriptState;
-  pendingUserPrompt: PendingUserPrompt | null;
   pendingConfigChanges: PendingSessionConfigChanges;
   status: SessionStatus | null;
   lastPromptAt: string | null;
@@ -66,7 +57,6 @@ interface HarnessState {
   putSessionSlot: (sessionId: string, slot: SessionSlot) => void;
   patchSessionSlot: (sessionId: string, patch: Partial<SessionSlot>) => void;
   setActiveSessionId: (sessionId: string | null) => void;
-  setPendingUserPrompt: (sessionId: string, prompt: PendingUserPrompt | null) => void;
 
   pendingWorkspaceEntry: PendingWorkspaceEntry | null;
   selectedWorkspaceId: string | null;
@@ -150,24 +140,6 @@ export const useHarnessStore = create<HarnessState>((set) => ({
   }),
 
   setActiveSessionId: (activeSessionId) => set({ activeSessionId }),
-
-  setPendingUserPrompt: (sessionId, pendingUserPrompt) => set((state) => {
-    const slot = state.sessionSlots[sessionId];
-    if (!slot) {
-      return state;
-    }
-
-    return {
-      sessionSlots: {
-        ...state.sessionSlots,
-        [sessionId]: {
-          ...slot,
-          pendingUserPrompt,
-          status: pendingUserPrompt ? "running" : slot.status,
-        },
-      },
-    };
-  }),
 
   pendingWorkspaceEntry: null,
   selectedWorkspaceId: null,

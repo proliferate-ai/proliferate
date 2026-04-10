@@ -35,6 +35,14 @@ export interface DesktopProductEventMap {
   auth_signed_out: {
     provider: AuthTelemetryProvider;
   };
+  chat_pending_prompt_deleted: {
+    agent_kind: string;
+    workspace_kind: DesktopWorkspaceKind;
+  };
+  chat_pending_prompt_edited: {
+    agent_kind: string;
+    workspace_kind: DesktopWorkspaceKind;
+  };
   chat_prompt_submitted: {
     agent_kind: string;
     reuse_session: boolean;

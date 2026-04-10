@@ -15,6 +15,10 @@ PROD_APP_SECRET ?= proliferate/prod/server-app
 PROD_DB_SECRET ?= proliferate/prod/database
 PROD_DB_INSTANCE ?= proliferate-prod
 SQL ?= select version_num from alembic_version;
+SERVER_ENV_SOURCE = set -a; \
+	[ ! -f server/.env ] || . server/.env; \
+	[ ! -f server/.env.local ] || . server/.env.local; \
+	set +a;
 
 .PHONY: dev dev-local dev-desktop dev-runtime dev-server server-db-up server-db-wait \
         server-db-down server-db-ready db db-local db-ah server-migrate serve install \
@@ -35,6 +39,7 @@ SQL ?= select version_num from alembic_version;
 dev: sdk-build server-migrate
 	@echo "Starting runtime on :8457, backend on :8000, and desktop app..."
 	@trap 'kill 0' EXIT; \
+	$(SERVER_ENV_SOURCE) \
 	RUST_LOG=info ANYHARNESS_DEV_CORS=1 $(CARGO) run --bin anyharness -- serve & \
 	cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port 8000 & \
 	sleep 2; \
@@ -52,9 +57,11 @@ dev-desktop:
 
 dev-runtime: export ANYHARNESS_DEV_CORS := 1
 dev-runtime: sdk-build
+	@$(SERVER_ENV_SOURCE) \
 	$(CARGO) run --bin anyharness -- serve
 
 serve:
+	@$(SERVER_ENV_SOURCE) \
 	$(CARGO) run --bin anyharness -- serve
 
 # --- Server (Python control plane) ---

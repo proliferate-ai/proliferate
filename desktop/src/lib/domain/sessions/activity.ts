@@ -8,7 +8,6 @@ import type {
 type StreamConnectionState = "disconnected" | "connecting" | "open" | "ended";
 
 export type SessionViewState =
-  | "sending"
   | "working"
   | "needs_input"
   | "idle"
@@ -18,7 +17,6 @@ export type SessionViewState =
 interface SessionActivitySnapshot {
   status: SessionStatus | null;
   executionSummary?: SessionExecutionSummary | null;
-  pendingUserPrompt: unknown | null;
   streamConnectionState?: StreamConnectionState;
   transcript: {
     isStreaming: boolean;
@@ -51,7 +49,7 @@ export function resolveSessionStatus(
   status: SessionStatus | null | undefined,
   input: Pick<
     SessionActivitySnapshot,
-    "executionSummary" | "pendingUserPrompt" | "streamConnectionState" | "transcript"
+    "executionSummary" | "streamConnectionState" | "transcript"
   >,
 ): SessionStatus | null {
   if (status === "completed") {
@@ -66,11 +64,9 @@ export function resolveSessionStatus(
   if (
     reconciledStatus === "starting"
     || reconciledStatus === "running"
-    || !!input.pendingUserPrompt
     || isSessionEffectivelyStreaming({
       status: reconciledStatus ?? null,
       executionSummary: input.executionSummary,
-      pendingUserPrompt: input.pendingUserPrompt,
       streamConnectionState: input.streamConnectionState,
       transcript: input.transcript,
     })
@@ -125,11 +121,7 @@ export function resolveSessionExecutionPhase(
   if (slot.status === "starting") {
     return "starting";
   }
-  if (
-    slot.status === "running"
-    || !!slot.pendingUserPrompt
-    || isSessionEffectivelyStreaming(slot)
-  ) {
+  if (slot.status === "running" || isSessionEffectivelyStreaming(slot)) {
     return "running";
   }
   return "idle";
@@ -140,10 +132,6 @@ export function resolveSessionViewState(
 ): SessionViewState {
   if (!slot) {
     return "idle";
-  }
-
-  if (slot.pendingUserPrompt) {
-    return "sending";
   }
 
   switch (resolveSessionExecutionPhase(slot)) {
@@ -194,9 +182,7 @@ export function isSessionSlotBusy(
   slot: SessionActivitySnapshot | null | undefined,
 ): boolean {
   const viewState = resolveSessionViewState(slot);
-  return viewState === "sending"
-    || viewState === "working"
-    || viewState === "needs_input";
+  return viewState === "working" || viewState === "needs_input";
 }
 
 export function sessionSlotBelongsToWorkspace(
@@ -236,8 +222,6 @@ export function collectWorkspaceSessionViewStates(
 
 function sessionViewStatePriority(state: SessionViewState): number {
   switch (state) {
-    case "sending":
-      return 5;
     case "needs_input":
       return 4;
     case "working":

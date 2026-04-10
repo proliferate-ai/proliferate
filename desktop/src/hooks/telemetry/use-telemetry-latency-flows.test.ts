@@ -17,34 +17,7 @@ function createFlow(overrides: Partial<LatencyFlowRecord>): LatencyFlowRecord {
 }
 
 describe("collectTelemetryLatencyFlowCompletions", () => {
-  it("marks prompt flows optimistic when the pending prompt is visible", () => {
-    const completions = collectTelemetryLatencyFlowCompletions({
-      activeFlows: [
-        createFlow({
-          flowId: "flow-prompt",
-          flowKind: "prompt_submit",
-          targetSessionId: "session-1",
-          promptId: "prompt-1",
-        }),
-      ],
-      selectedWorkspaceId: "workspace-1",
-      activeSessionId: "session-1",
-      pendingUserPrompt: {
-        text: "hello",
-        timestamp: "2026-04-07T00:00:00.000Z",
-        flowId: "flow-prompt",
-        promptId: "prompt-1",
-      },
-      sessionViewState: "sending",
-      modeKind: "session-transcript",
-    });
-
-    expect(completions).toEqual([
-      { flowId: "flow-prompt", stage: "optimistic_visible" },
-    ]);
-  });
-
-  it("marks prompt flows processing_started only after the pending prompt clears", () => {
+  it("marks prompt flows processing_started once the target session turns working", () => {
     const completions = collectTelemetryLatencyFlowCompletions({
       activeFlows: [
         createFlow({
@@ -55,7 +28,6 @@ describe("collectTelemetryLatencyFlowCompletions", () => {
       ],
       selectedWorkspaceId: "workspace-1",
       activeSessionId: "session-1",
-      pendingUserPrompt: null,
       sessionViewState: "working",
       modeKind: "session-transcript",
     });
@@ -76,7 +48,6 @@ describe("collectTelemetryLatencyFlowCompletions", () => {
       activeFlows: [sessionFlow],
       selectedWorkspaceId: "workspace-1",
       activeSessionId: "session-1",
-      pendingUserPrompt: null,
       sessionViewState: "idle",
       modeKind: "session-loading",
     })).toEqual([]);
@@ -85,7 +56,6 @@ describe("collectTelemetryLatencyFlowCompletions", () => {
       activeFlows: [sessionFlow],
       selectedWorkspaceId: "workspace-1",
       activeSessionId: "session-1",
-      pendingUserPrompt: null,
       sessionViewState: "idle",
       modeKind: "session-empty",
     })).toEqual([
@@ -104,7 +74,6 @@ describe("collectTelemetryLatencyFlowCompletions", () => {
       ],
       selectedWorkspaceId: "workspace-1",
       activeSessionId: "session-1",
-      pendingUserPrompt: null,
       sessionViewState: "idle",
       modeKind: "session-empty",
     });
@@ -125,7 +94,6 @@ describe("collectTelemetryLatencyFlowCompletions", () => {
       ],
       selectedWorkspaceId: "workspace-1",
       activeSessionId: null,
-      pendingUserPrompt: null,
       sessionViewState: "idle",
       modeKind: "session-empty",
     });
@@ -144,7 +112,6 @@ describe("collectTelemetryLatencyFlowCompletions", () => {
       ],
       selectedWorkspaceId: "workspace-1",
       activeSessionId: null,
-      pendingUserPrompt: null,
       sessionViewState: "idle",
       modeKind: "workspace-status",
     });

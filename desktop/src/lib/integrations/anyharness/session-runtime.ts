@@ -112,7 +112,6 @@ export function createEmptySessionSlot(
         title,
       },
     },
-    pendingUserPrompt: null,
     pendingConfigChanges: {},
     status: null,
     lastPromptAt: config?.lastPromptAt ?? null,
@@ -209,11 +208,7 @@ export function collectInactiveSessionStreamIds(
     }
 
     const viewState = resolveSessionViewState(slot);
-    if (
-      viewState === "sending"
-      || viewState === "working"
-      || viewState === "needs_input"
-    ) {
+    if (viewState === "working" || viewState === "needs_input") {
       continue;
     }
 

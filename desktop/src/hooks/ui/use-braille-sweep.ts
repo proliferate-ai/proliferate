@@ -59,3 +59,81 @@ export function useBrailleSweep(): string {
   const index = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return BRAILLE_SWEEP_FRAMES[index];
 }
+
+/* ─────────────────────────────────────────────────────
+ * Alternate braille loading animations.
+ *
+ * Each variant gets its own module-level ticker (constructed via
+ * `createBrailleAnimation`) so its cadence is independent of the others,
+ * but still frame-synchronized across all of its own consumers via the
+ * same lazy-start / lazy-stop / useSyncExternalStore pattern as the
+ * default sweep above. Adding a new variant is a single `createBrailleAnimation`
+ * call — do NOT modify the default sweep implementation above.
+ * ───────────────────────────────────────────────────── */
+
+function createBrailleAnimation(
+  frames: readonly string[],
+  intervalMs: number,
+): { use: () => string } {
+  let index = 0;
+  let timer: ReturnType<typeof setInterval> | null = null;
+  const subs = new Set<() => void>();
+
+  const start = () => {
+    if (timer !== null) return;
+    timer = setInterval(() => {
+      index = (index + 1) % frames.length;
+      subs.forEach((listener) => listener());
+    }, intervalMs);
+  };
+
+  const stop = () => {
+    if (timer === null) return;
+    clearInterval(timer);
+    timer = null;
+  };
+
+  const subscribe = (listener: () => void) => {
+    subs.add(listener);
+    start();
+    return () => {
+      subs.delete(listener);
+      if (subs.size === 0) stop();
+    };
+  };
+
+  const getSnapshot = () => index;
+
+  return {
+    use: () =>
+      frames[useSyncExternalStore(subscribe, getSnapshot, getSnapshot)],
+  };
+}
+
+/** fillsweep — fills the grid top-down in chunky horizontal bars, holds
+ *  fully-lit for three frames, then drains back to empty. 11 frames @ 100ms. */
+export const BRAILLE_FILLSWEEP_FRAMES = [
+  "⣀⣀", "⣤⣤", "⣶⣶", "⣿⣿", "⣿⣿", "⣿⣿", "⣶⣶", "⣤⣤", "⣀⣀", "⠀⠀", "⠀⠀",
+] as const;
+export const BRAILLE_FILLSWEEP_FRAME_INTERVAL_MS = 100;
+export const BRAILLE_FILLSWEEP_LANDED_FRAME = BRAILLE_FILLSWEEP_FRAMES[3];
+
+const fillsweepAnim = createBrailleAnimation(
+  BRAILLE_FILLSWEEP_FRAMES,
+  BRAILLE_FILLSWEEP_FRAME_INTERVAL_MS,
+);
+export const useBrailleFillsweep = fillsweepAnim.use;
+
+/** snake — a single curve that coils down through the two-char grid.
+ *  16 frames @ 80ms. No "fully lit" moment, so there is no landed frame. */
+export const BRAILLE_SNAKE_FRAMES = [
+  "⣁⡀", "⣉⠀", "⡉⠁", "⠉⠉", "⠈⠙", "⠀⠛", "⠐⠚", "⠒⠒",
+  "⠖⠂", "⠶⠀", "⠦⠄", "⠤⠤", "⠠⢤", "⠀⣤", "⢀⣠", "⣀⣀",
+] as const;
+export const BRAILLE_SNAKE_FRAME_INTERVAL_MS = 80;
+
+const snakeAnim = createBrailleAnimation(
+  BRAILLE_SNAKE_FRAMES,
+  BRAILLE_SNAKE_FRAME_INTERVAL_MS,
+);
+export const useBrailleSnake = snakeAnim.use;

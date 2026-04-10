@@ -79,6 +79,18 @@ pub struct Session {
     pub closed_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dismissed_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending_prompts: Vec<PendingPromptSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingPromptSummary {
+    pub seq: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_id: Option<String>,
+    pub text: String,
+    pub queued_at: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
@@ -141,6 +153,22 @@ pub struct PromptSessionRequest {
 #[serde(rename_all = "camelCase")]
 pub struct PromptSessionResponse {
     pub session: Session,
+    pub status: PromptSessionStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queued_seq: Option<i64>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptSessionStatus {
+    Running,
+    Queued,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EditPendingPromptRequest {
+    pub text: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

@@ -28,6 +28,14 @@ export interface TranscriptState {
   unknownEvents: SessionEventEnvelope[];
   isStreaming: boolean;
   lastSeq: number;
+  pendingPrompts: PendingPromptEntry[];
+}
+
+export interface PendingPromptEntry {
+  seq: number;
+  promptId: string | null;
+  text: string;
+  queuedAt: string;
 }
 
 export interface TurnRecord {

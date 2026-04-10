@@ -276,6 +276,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/pending-prompts/{seq}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["delete_pending_prompt"];
+        options?: never;
+        head?: never;
+        patch: operations["edit_pending_prompt"];
+        trace?: never;
+    };
     "/v1/sessions/{session_id}/permissions/{request_id}/resolve": {
         parameters: {
             query?: never;
@@ -870,6 +886,9 @@ export interface components {
         DetectProjectSetupResponse: {
             hints: components["schemas"]["SetupHint"][];
         };
+        EditPendingPromptRequest: {
+            text: string;
+        };
         ErrorEvent: {
             code?: string | null;
             message: string;
@@ -1087,6 +1106,32 @@ export interface components {
             toolCallId?: string | null;
             toolKind?: string | null;
         };
+        PendingPromptAddedPayload: {
+            promptId?: string | null;
+            queuedAt: string;
+            /** Format: int64 */
+            seq: number;
+            text: string;
+        };
+        /** @enum {string} */
+        PendingPromptRemovalReason: "executed" | "deleted";
+        PendingPromptRemovedPayload: {
+            reason: components["schemas"]["PendingPromptRemovalReason"];
+            /** Format: int64 */
+            seq: number;
+        };
+        PendingPromptSummary: {
+            promptId?: string | null;
+            queuedAt: string;
+            /** Format: int64 */
+            seq: number;
+            text: string;
+        };
+        PendingPromptUpdatedPayload: {
+            /** Format: int64 */
+            seq: number;
+            text: string;
+        };
         /** @enum {string} */
         PermissionDecision: "allow" | "deny";
         PermissionOutcome: {
@@ -1134,8 +1179,13 @@ export interface components {
             blocks: components["schemas"]["PromptInputBlock"][];
         };
         PromptSessionResponse: {
+            /** Format: int64 */
+            queuedSeq?: number | null;
             session: components["schemas"]["Session"];
+            status: components["schemas"]["PromptSessionStatus"];
         };
+        /** @enum {string} */
+        PromptSessionStatus: "running" | "queued";
         /**
          * @description Provider-level configuration metadata describing which models AnyHarness
          *     intentionally exposes for this agent.
@@ -1258,6 +1308,7 @@ export interface components {
             modeId?: string | null;
             modelId?: string | null;
             nativeSessionId?: string | null;
+            pendingPrompts?: components["schemas"]["PendingPromptSummary"][];
             requestedModeId?: string | null;
             requestedModelId?: string | null;
             status: components["schemas"]["SessionStatus"];
@@ -1314,6 +1365,15 @@ export interface components {
         }) | (components["schemas"]["UsageUpdatePayload"] & {
             /** @enum {string} */
             type: "usage_update";
+        }) | (components["schemas"]["PendingPromptAddedPayload"] & {
+            /** @enum {string} */
+            type: "pending_prompt_added";
+        }) | (components["schemas"]["PendingPromptUpdatedPayload"] & {
+            /** @enum {string} */
+            type: "pending_prompt_updated";
+        }) | (components["schemas"]["PendingPromptRemovedPayload"] & {
+            /** @enum {string} */
+            type: "pending_prompt_removed";
         }) | (components["schemas"]["PermissionRequestedEvent"] & {
             /** @enum {string} */
             type: "permission_requested";
@@ -2159,6 +2219,78 @@ export interface operations {
             };
         };
     };
+    delete_pending_prompt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+                /** @description Queue row sequence number */
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending prompt deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Session or pending prompt not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    edit_pending_prompt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+                /** @description Queue row sequence number */
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditPendingPromptRequest"];
+            };
+        };
+        responses: {
+            /** @description Pending prompt updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Session or pending prompt not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     resolve_permission: {
         parameters: {
             query?: never;
@@ -2211,7 +2343,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Prompt accepted */
+            /** @description Prompt accepted (running or queued) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2222,15 +2354,6 @@ export interface operations {
             };
             /** @description Session not found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Session busy */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };

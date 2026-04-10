@@ -99,6 +99,14 @@ export class AnyHarnessTransport {
     }
   }
 
+  async deleteJson<T>(path: string, options?: AnyHarnessRequestOptions): Promise<T> {
+    const res = await this.fetch(`${this.baseUrl}${path}`, {
+      method: "DELETE",
+      headers: this.buildHeaders({ accept: "application/json" }, options),
+    });
+    return this.handleResponse<T>(res);
+  }
+
   private async handleResponse<T>(res: Response): Promise<T> {
     if (!res.ok) {
       throw new AnyHarnessError(await toProblemDetails(res));

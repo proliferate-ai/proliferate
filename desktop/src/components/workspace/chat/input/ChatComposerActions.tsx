@@ -6,16 +6,21 @@ export function ChatComposerActions({
   isRunning,
   isEmpty,
   isDisabled,
+  isEditingQueuedPrompt = false,
   onSubmit,
   onCancel,
 }: {
   isRunning: boolean;
   isEmpty: boolean;
   isDisabled: boolean;
+  isEditingQueuedPrompt?: boolean;
   onSubmit: () => void;
   onCancel: () => void;
 }) {
-  if (isRunning) {
+  // While editing a queued prompt, the Save action takes over the primary
+  // button slot regardless of `isRunning` — the user must cancel the edit
+  // before they can reach the Stop control.
+  if (isRunning && !isEditingQueuedPrompt) {
     return (
       <button
         type="button"
@@ -29,13 +34,16 @@ export function ChatComposerActions({
   }
 
   const canSubmit = !isEmpty && !isDisabled;
+  const title = isEditingQueuedPrompt
+    ? `Save edit (${COMPOSER_SHORTCUTS.submitMessage.label})`
+    : `${CHAT_COMPOSER_LABELS.send} (${COMPOSER_SHORTCUTS.submitMessage.label})`;
 
   return (
     <button
       type="button"
       onClick={canSubmit ? onSubmit : undefined}
       disabled={!canSubmit}
-      title={`${CHAT_COMPOSER_LABELS.send} (${COMPOSER_SHORTCUTS.submitMessage.label})`}
+      title={title}
       className={`flex size-7 items-center justify-center rounded-full transition-colors disabled:cursor-default ${
         canSubmit
           ? "bg-foreground text-background hover:bg-foreground/90"

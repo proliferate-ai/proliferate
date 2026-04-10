@@ -1,10 +1,10 @@
 use std::time::Instant;
 
 use anyharness_contract::v1::{
-    CreateSessionRequest, GetSessionLiveConfigResponse, PermissionDecision, PromptInputBlock,
-    PromptSessionRequest, PromptSessionResponse, ResolvePermissionRequest, Session,
-    SessionEventEnvelope, SessionRawNotificationEnvelope, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse, UpdateSessionTitleRequest,
+    CreateSessionRequest, EditPendingPromptRequest, GetSessionLiveConfigResponse,
+    PermissionDecision, PromptInputBlock, PromptSessionRequest, PromptSessionResponse,
+    ResolvePermissionRequest, Session, SessionEventEnvelope, SessionRawNotificationEnvelope,
+    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, UpdateSessionTitleRequest,
 };
 use axum::{
     extract::{Path, Query, State},
@@ -18,8 +18,9 @@ use super::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::app::AppState;
 use crate::sessions::mcp::bindings_from_contract;
 use crate::sessions::runtime::{
-    CreateAndStartSessionError, EnsureLiveSessionError, PermissionResolution,
-    ResolvePermissionError, SendPromptError, SessionLifecycleError, SetSessionConfigOptionError,
+    CreateAndStartSessionError, EnsureLiveSessionError, PendingPromptMutationError,
+    PermissionResolution, ResolvePermissionError, SendPromptError, SendPromptOutcome,
+    SessionLifecycleError, SetSessionConfigOptionError,
 };
 use crate::sessions::service::{GetLiveConfigSnapshotError, UpdateSessionTitleError};
 
@@ -210,9 +211,8 @@ pub async fn set_session_config_option(
     params(("session_id" = String, Path, description = "Session ID")),
     request_body = anyharness_contract::v1::PromptSessionRequest,
     responses(
-        (status = 200, description = "Prompt accepted", body = anyharness_contract::v1::PromptSessionResponse),
+        (status = 200, description = "Prompt accepted (running or queued)", body = anyharness_contract::v1::PromptSessionResponse),
         (status = 404, description = "Session not found", body = anyharness_contract::v1::ProblemDetails),
-        (status = 409, description = "Session busy", body = anyharness_contract::v1::ProblemDetails),
     ),
     tag = "sessions"
 )]
@@ -236,7 +236,7 @@ pub async fn prompt_session(
         "[workspace-latency] session.http.prompt.request_received"
     );
 
-    let updated = state
+    let outcome = state
         .session_runtime
         .send_prompt(&session_id, text, latency.as_ref())
         .await
@@ -252,13 +252,84 @@ pub async fn prompt_session(
         "[workspace-latency] session.http.prompt.completed"
     );
 
+    let (record, status, queued_seq) = match outcome {
+        SendPromptOutcome::Running { session } => (
+            session,
+            anyharness_contract::v1::PromptSessionStatus::Running,
+            None,
+        ),
+        SendPromptOutcome::Queued { session, seq } => (
+            session,
+            anyharness_contract::v1::PromptSessionStatus::Queued,
+            Some(seq),
+        ),
+    };
+
     Ok(Json(PromptSessionResponse {
         session: state
             .session_runtime
-            .session_to_contract(&updated)
+            .session_to_contract(&record)
             .await
             .map_err(|error| ApiError::internal(error.to_string()))?,
+        status,
+        queued_seq,
     }))
+}
+
+// ---------------------------------------------------------------------------
+// Pending-prompt queue mutations — edit and delete queued prompts
+// ---------------------------------------------------------------------------
+
+#[utoipa::path(
+    patch,
+    path = "/v1/sessions/{session_id}/pending-prompts/{seq}",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("seq" = i64, Path, description = "Queue row sequence number"),
+    ),
+    request_body = anyharness_contract::v1::EditPendingPromptRequest,
+    responses(
+        (status = 200, description = "Pending prompt updated", body = Session),
+        (status = 404, description = "Session or pending prompt not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "sessions"
+)]
+pub async fn edit_pending_prompt(
+    State(state): State<AppState>,
+    Path((session_id, seq)): Path<(String, i64)>,
+    Json(req): Json<EditPendingPromptRequest>,
+) -> Result<Json<Session>, ApiError> {
+    let updated = state
+        .session_runtime
+        .edit_pending_prompt(&session_id, seq, req.text)
+        .await
+        .map_err(map_pending_prompt_mutation_error)?;
+    Ok(Json(session_to_contract(&state, &updated).await?))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/v1/sessions/{session_id}/pending-prompts/{seq}",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("seq" = i64, Path, description = "Queue row sequence number"),
+    ),
+    responses(
+        (status = 200, description = "Pending prompt deleted", body = Session),
+        (status = 404, description = "Session or pending prompt not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "sessions"
+)]
+pub async fn delete_pending_prompt(
+    State(state): State<AppState>,
+    Path((session_id, seq)): Path<(String, i64)>,
+) -> Result<Json<Session>, ApiError> {
+    let updated = state
+        .session_runtime
+        .delete_pending_prompt(&session_id, seq)
+        .await
+        .map_err(map_pending_prompt_mutation_error)?;
+    Ok(Json(session_to_contract(&state, &updated).await?))
 }
 
 // ---------------------------------------------------------------------------
@@ -713,11 +784,21 @@ fn map_send_prompt_error(error: SendPromptError) -> ApiError {
             "SESSION_NOT_FOUND",
         ),
         SendPromptError::EmptyPrompt => ApiError::bad_request("empty prompt", "EMPTY_PROMPT"),
-        SendPromptError::Busy => ApiError::conflict(
-            "A prompt is already in progress for this session",
-            "SESSION_BUSY",
-        ),
         SendPromptError::Internal(error) => ApiError::internal(error.to_string()),
+    }
+}
+
+fn map_pending_prompt_mutation_error(error: PendingPromptMutationError) -> ApiError {
+    match error {
+        PendingPromptMutationError::SessionNotFound(session_id) => ApiError::not_found(
+            format!("Session not found: {session_id}"),
+            "SESSION_NOT_FOUND",
+        ),
+        PendingPromptMutationError::NotFound => ApiError::not_found(
+            "Pending prompt not found",
+            "PENDING_PROMPT_NOT_FOUND",
+        ),
+        PendingPromptMutationError::Internal(error) => ApiError::internal(error.to_string()),
     }
 }
 

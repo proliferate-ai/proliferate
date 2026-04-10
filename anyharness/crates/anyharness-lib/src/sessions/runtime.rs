@@ -19,7 +19,8 @@ use super::model::SessionRecord;
 use super::service::SessionService;
 use crate::acp::manager::AcpManager;
 use crate::acp::session_actor::{
-    LiveSessionHandle, PromptAcceptError, SessionCommand, SetConfigOptionCommandError,
+    LiveSessionHandle, PromptAcceptError, PromptAcceptance, QueueMutationError, SessionCommand,
+    SetConfigOptionCommandError,
 };
 use crate::agents::model::{AgentKind, ResolvedAgent};
 use crate::agents::registry::built_in_registry;
@@ -62,7 +63,19 @@ pub enum SetSessionConfigOptionError {
 pub enum SendPromptError {
     SessionNotFound(String),
     EmptyPrompt,
-    Busy,
+    Internal(anyhow::Error),
+}
+
+#[derive(Debug)]
+pub enum SendPromptOutcome {
+    Running { session: SessionRecord },
+    Queued { session: SessionRecord, seq: i64 },
+}
+
+#[derive(Debug)]
+pub enum PendingPromptMutationError {
+    SessionNotFound(String),
+    NotFound,
     Internal(anyhow::Error),
 }
 
@@ -124,7 +137,15 @@ impl SessionRuntime {
         live_config: Option<SessionLiveConfigSnapshot>,
     ) -> anyhow::Result<Session> {
         let execution_summary = self.session_execution_summary(record).await;
-        Ok(record.to_contract_with_details(live_config, Some(execution_summary)))
+        let mut session = record.to_contract_with_details(live_config, Some(execution_summary));
+        session.pending_prompts = self
+            .session_service
+            .store()
+            .list_pending_prompts(&record.id)?
+            .into_iter()
+            .map(|record| record.to_contract())
+            .collect();
+        Ok(session)
     }
 
     pub async fn session_execution_summary(
@@ -454,12 +475,13 @@ impl SessionRuntime {
         session_id: &str,
         text: String,
         latency: Option<&LatencyRequestContext>,
-    ) -> Result<SessionRecord, SendPromptError> {
+    ) -> Result<SendPromptOutcome, SendPromptError> {
         if text.is_empty() {
             return Err(SendPromptError::EmptyPrompt);
         }
         let started = Instant::now();
         let latency_fields = latency_trace_fields(latency);
+        let prompt_id = latency_fields.prompt_id.map(|s| s.to_string());
         tracing::info!(
             session_id = %session_id,
             flow_id = latency_fields.flow_id,
@@ -489,22 +511,22 @@ impl SessionRuntime {
             "[workspace-latency] session.runtime.prompt.live_handle_ready"
         );
 
-        if !handle.try_begin_prompt() {
-            return Err(SendPromptError::Busy);
-        }
-
+        // Invariant 1/2: the actor is the sole writer of `busy` and the queue.
+        // The runtime no longer precaptures `busy`; it just forwards the command
+        // and awaits the actor's decision (Started vs Queued).
         let (tx, rx) = tokio::sync::oneshot::channel();
         if handle
             .command_tx
             .send(SessionCommand::Prompt {
                 text,
+                prompt_id,
                 latency: latency.cloned(),
+                from_queue_seq: None,
                 respond_to: tx,
             })
             .await
             .is_err()
         {
-            handle.finish_prompt();
             return Err(SendPromptError::Internal(anyhow::anyhow!(
                 "session actor channel closed"
             )));
@@ -519,16 +541,17 @@ impl SessionRuntime {
             "[workspace-latency] session.runtime.prompt.command_sent"
         );
 
-        rx.await
+        let acceptance = rx
+            .await
             .map_err(|_| {
-                handle.finish_prompt();
                 SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
             })?
             .map_err(|error| match error {
-                PromptAcceptError::Busy => SendPromptError::Busy,
                 PromptAcceptError::ActorDead => {
-                    handle.finish_prompt();
                     SendPromptError::Internal(anyhow::anyhow!("session actor is not responding"))
+                }
+                PromptAcceptError::EnqueueFailed(detail) => {
+                    SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
                 }
             })?;
         tracing::info!(
@@ -541,11 +564,129 @@ impl SessionRuntime {
             "[workspace-latency] session.runtime.prompt.actor_accepted"
         );
 
-        Ok(self
+        let session = self
             .session_service
             .get_session(session_id)
             .map_err(SendPromptError::Internal)?
-            .unwrap_or(record))
+            .unwrap_or(record);
+
+        Ok(match acceptance {
+            PromptAcceptance::Started => SendPromptOutcome::Running { session },
+            PromptAcceptance::Queued { seq } => SendPromptOutcome::Queued { session, seq },
+        })
+    }
+
+    pub async fn edit_pending_prompt(
+        &self,
+        session_id: &str,
+        seq: i64,
+        text: String,
+    ) -> Result<SessionRecord, PendingPromptMutationError> {
+        let record = self
+            .get_session_or_not_found(session_id)
+            .map_err(|error| match error {
+                SessionLifecycleError::SessionNotFound(id) => {
+                    PendingPromptMutationError::SessionNotFound(id)
+                }
+                SessionLifecycleError::Internal(error) => {
+                    PendingPromptMutationError::Internal(error)
+                }
+            })?;
+        let handle = self
+            .ensure_live_session_handle(&record, None)
+            .await
+            .map_err(|error| {
+                PendingPromptMutationError::Internal(anyhow::anyhow!(
+                    "failed to ensure live session handle: {error:?}"
+                ))
+            })?;
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        if handle
+            .command_tx
+            .send(SessionCommand::EditPendingPrompt {
+                seq,
+                text,
+                respond_to: tx,
+            })
+            .await
+            .is_err()
+        {
+            return Err(PendingPromptMutationError::Internal(anyhow::anyhow!(
+                "session actor channel closed"
+            )));
+        }
+        rx.await
+            .map_err(|_| {
+                PendingPromptMutationError::Internal(anyhow::anyhow!(
+                    "session actor dropped edit-pending-prompt response"
+                ))
+            })?
+            .map_err(|error| match error {
+                QueueMutationError::NotFound => PendingPromptMutationError::NotFound,
+                QueueMutationError::ActorDead => PendingPromptMutationError::Internal(
+                    anyhow::anyhow!("session actor is not responding"),
+                ),
+            })?;
+
+        self.session_service
+            .get_session(session_id)
+            .map_err(PendingPromptMutationError::Internal)?
+            .ok_or_else(|| PendingPromptMutationError::SessionNotFound(session_id.to_string()))
+    }
+
+    pub async fn delete_pending_prompt(
+        &self,
+        session_id: &str,
+        seq: i64,
+    ) -> Result<SessionRecord, PendingPromptMutationError> {
+        let record = self
+            .get_session_or_not_found(session_id)
+            .map_err(|error| match error {
+                SessionLifecycleError::SessionNotFound(id) => {
+                    PendingPromptMutationError::SessionNotFound(id)
+                }
+                SessionLifecycleError::Internal(error) => {
+                    PendingPromptMutationError::Internal(error)
+                }
+            })?;
+        let handle = self
+            .ensure_live_session_handle(&record, None)
+            .await
+            .map_err(|error| {
+                PendingPromptMutationError::Internal(anyhow::anyhow!(
+                    "failed to ensure live session handle: {error:?}"
+                ))
+            })?;
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        if handle
+            .command_tx
+            .send(SessionCommand::DeletePendingPrompt { seq, respond_to: tx })
+            .await
+            .is_err()
+        {
+            return Err(PendingPromptMutationError::Internal(anyhow::anyhow!(
+                "session actor channel closed"
+            )));
+        }
+        rx.await
+            .map_err(|_| {
+                PendingPromptMutationError::Internal(anyhow::anyhow!(
+                    "session actor dropped delete-pending-prompt response"
+                ))
+            })?
+            .map_err(|error| match error {
+                QueueMutationError::NotFound => PendingPromptMutationError::NotFound,
+                QueueMutationError::ActorDead => PendingPromptMutationError::Internal(
+                    anyhow::anyhow!("session actor is not responding"),
+                ),
+            })?;
+
+        self.session_service
+            .get_session(session_id)
+            .map_err(PendingPromptMutationError::Internal)?
+            .ok_or_else(|| PendingPromptMutationError::SessionNotFound(session_id.to_string()))
     }
 
     pub async fn cancel_live_session(

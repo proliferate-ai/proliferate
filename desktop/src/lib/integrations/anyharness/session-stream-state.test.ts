@@ -9,7 +9,7 @@ import {
 
 describe("session-stream-state", () => {
   it("ignores duplicate stream envelopes", () => {
-    const state = replaySessionHistory("session-1", [turnStarted(1)], null);
+    const state = replaySessionHistory("session-1", [turnStarted(1)]);
 
     const result = applyStreamEnvelope(state, turnStarted(1));
 
@@ -19,7 +19,7 @@ describe("session-stream-state", () => {
   });
 
   it("flags sequence gaps in the live stream", () => {
-    const state = replaySessionHistory("session-1", [turnStarted(1)], null);
+    const state = replaySessionHistory("session-1", [turnStarted(1)]);
 
     const result = applyStreamEnvelope(state, turnEnded(3));
 
@@ -36,7 +36,7 @@ describe("session-stream-state", () => {
       turnEnded(5),
     ];
 
-    const splitState = replaySessionHistory("session-1", events.slice(0, 2), null);
+    const splitState = replaySessionHistory("session-1", events.slice(0, 2));
     const tailResult = appendHistoryTail(splitState, events.slice(2));
 
     expect(tailResult.applied).toBe(true);

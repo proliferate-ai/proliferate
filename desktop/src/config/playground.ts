@@ -6,7 +6,11 @@ export type ScenarioKey =
   | "execute-approval"
   | "edit-approval"
   | "claude-plan-short"
-  | "claude-plan-long";
+  | "claude-plan-long"
+  | "pending-prompts-single"
+  | "pending-prompts-multi"
+  | "pending-prompts-editing"
+  | "pending-prompts-with-approval";
 
 interface Scenario {
   label: string;
@@ -21,6 +25,10 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "edit-approval": { label: "Edit approval" },
   "claude-plan-short": { label: "Plan approval (short)" },
   "claude-plan-long": { label: "Plan approval (long)" },
+  "pending-prompts-single": { label: "Queue (1 row)" },
+  "pending-prompts-multi": { label: "Queue (3 rows)" },
+  "pending-prompts-editing": { label: "Queue (editing row)" },
+  "pending-prompts-with-approval": { label: "Queue + approval" },
 };
 
 export const DEFAULT_SCENARIO: ScenarioKey = "clean";

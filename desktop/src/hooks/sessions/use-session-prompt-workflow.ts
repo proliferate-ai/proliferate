@@ -11,7 +11,6 @@ interface PromptSessionInput {
   sessionId: string;
   text: string;
   workspaceId?: string | null;
-  initializePendingPrompt?: boolean;
   latencyFlowId?: string | null;
   promptId?: string | null;
   onBeforePrompt?: (workspaceId: string) => Promise<void> | void;
@@ -19,7 +18,7 @@ interface PromptSessionInput {
 
 export function useSessionPromptWorkflow() {
   const { maybeGenerateSessionTitle } = useSessionTitleActions();
-  const { applySessionSummary, ensureSessionStreamConnected, queuePendingUserPrompt } =
+  const { applySessionSummary, ensureSessionStreamConnected } =
     useSessionRuntimeActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
 
@@ -27,22 +26,13 @@ export function useSessionPromptWorkflow() {
     sessionId,
     text,
     workspaceId,
-    initializePendingPrompt = true,
     latencyFlowId,
-    promptId,
     onBeforePrompt,
   }: PromptSessionInput) => {
     const slot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
     const resolvedWorkspaceId = workspaceId ?? slot?.workspaceId ?? null;
     const requestHeaders = getLatencyFlowRequestHeaders(latencyFlowId);
     const requestOptions = requestHeaders ? { headers: requestHeaders } : undefined;
-
-    if (initializePendingPrompt) {
-      queuePendingUserPrompt(sessionId, text, {
-        flowId: latencyFlowId ?? null,
-        promptId: promptId ?? null,
-      });
-    }
 
     if (isPendingSessionId(sessionId)) {
       return;
@@ -85,7 +75,6 @@ export function useSessionPromptWorkflow() {
     applySessionSummary,
     ensureSessionStreamConnected,
     maybeGenerateSessionTitle,
-    queuePendingUserPrompt,
     upsertWorkspaceSessionRecord,
   ]);
 

@@ -753,6 +753,116 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/pending-prompts/{seq}": {
+      "delete": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "delete_pending_prompt",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "seq",
+            "in": "path",
+            "description": "Queue row sequence number",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending prompt deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session or pending prompt not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "edit_pending_prompt",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "seq",
+            "in": "path",
+            "description": "Queue row sequence number",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditPendingPromptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Pending prompt updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session or pending prompt not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}/permissions/{request_id}/resolve": {
       "post": {
         "tags": [
@@ -835,7 +945,7 @@
         },
         "responses": {
           "200": {
-            "description": "Prompt accepted",
+            "description": "Prompt accepted (running or queued)",
             "content": {
               "application/json": {
                 "schema": {
@@ -846,16 +956,6 @@
           },
           "404": {
             "description": "Session not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Session busy",
             "content": {
               "application/json": {
                 "schema": {
@@ -2865,6 +2965,17 @@
           }
         }
       },
+      "EditPendingPromptRequest": {
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        }
+      },
       "ErrorEvent": {
         "type": "object",
         "required": [
@@ -3633,6 +3744,97 @@
           }
         }
       },
+      "PendingPromptAddedPayload": {
+        "type": "object",
+        "required": [
+          "seq",
+          "text",
+          "queuedAt"
+        ],
+        "properties": {
+          "promptId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queuedAt": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "PendingPromptRemovalReason": {
+        "type": "string",
+        "enum": [
+          "executed",
+          "deleted"
+        ]
+      },
+      "PendingPromptRemovedPayload": {
+        "type": "object",
+        "required": [
+          "seq",
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/PendingPromptRemovalReason"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "PendingPromptSummary": {
+        "type": "object",
+        "required": [
+          "seq",
+          "text",
+          "queuedAt"
+        ],
+        "properties": {
+          "promptId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queuedAt": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "PendingPromptUpdatedPayload": {
+        "type": "object",
+        "required": [
+          "seq",
+          "text"
+        ],
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
       "PermissionDecision": {
         "type": "string",
         "enum": [
@@ -3826,13 +4028,31 @@
       "PromptSessionResponse": {
         "type": "object",
         "required": [
-          "session"
+          "session",
+          "status"
         ],
         "properties": {
+          "queuedSeq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
           "session": {
             "$ref": "#/components/schemas/Session"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PromptSessionStatus"
           }
         }
+      },
+      "PromptSessionStatus": {
+        "type": "string",
+        "enum": [
+          "running",
+          "queued"
+        ]
       },
       "ProviderConfig": {
         "type": "object",
@@ -4291,6 +4511,12 @@
               "null"
             ]
           },
+          "pendingPrompts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PendingPromptSummary"
+            }
+          },
           "requestedModeId": {
             "type": [
               "string",
@@ -4614,6 +4840,69 @@
                     "type": "string",
                     "enum": [
                       "usage_update"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PendingPromptAddedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "pending_prompt_added"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PendingPromptUpdatedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "pending_prompt_updated"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PendingPromptRemovedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "pending_prompt_removed"
                     ]
                   }
                 }

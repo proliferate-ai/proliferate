@@ -9,6 +9,8 @@ interface UseChatComposerKeyboardArgs {
   isRunning: boolean;
   canSubmit: boolean;
   modeControl: LiveSessionControlDescriptor | null;
+  isEditingQueuedPrompt?: boolean;
+  onCancelEdit?: () => void;
 }
 
 export function useChatComposerKeyboard({
@@ -17,6 +19,8 @@ export function useChatComposerKeyboard({
   isRunning,
   canSubmit,
   modeControl,
+  isEditingQueuedPrompt = false,
+  onCancelEdit,
 }: UseChatComposerKeyboardArgs) {
   const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (
@@ -26,11 +30,17 @@ export function useChatComposerKeyboard({
       && !event.ctrlKey
       && !event.metaKey
       && !event.nativeEvent.isComposing
-      && isRunning
     ) {
-      event.preventDefault();
-      handleCancel();
-      return;
+      if (isEditingQueuedPrompt && onCancelEdit) {
+        event.preventDefault();
+        onCancelEdit();
+        return;
+      }
+      if (isRunning) {
+        event.preventDefault();
+        handleCancel();
+        return;
+      }
     }
 
     if (
@@ -64,7 +74,7 @@ export function useChatComposerKeyboard({
       event.preventDefault();
       void handleSubmit();
     }
-  }, [canSubmit, handleCancel, handleSubmit, isRunning, modeControl]);
+  }, [canSubmit, handleCancel, handleSubmit, isEditingQueuedPrompt, isRunning, modeControl, onCancelEdit]);
 
   return {
     handleKeyDown,

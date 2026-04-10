@@ -65,12 +65,16 @@ export type SetSessionConfigOptionResponse = Omit<
 };
 export type PromptInputBlock = components["schemas"]["PromptInputBlock"];
 export type PromptSessionRequest = components["schemas"]["PromptSessionRequest"];
+export type PromptSessionStatus = components["schemas"]["PromptSessionStatus"];
 export type PromptSessionResponse = Omit<
   GeneratedPromptSessionResponse,
   "session"
 > & {
   session: Session;
 };
+export type PendingPromptSummary = components["schemas"]["PendingPromptSummary"];
+export type EditPendingPromptRequest =
+  components["schemas"]["EditPendingPromptRequest"];
 export type PermissionDecision = components["schemas"]["PermissionDecision"];
 export type ResolvePermissionRequest =
   components["schemas"]["ResolvePermissionRequest"];

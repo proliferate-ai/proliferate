@@ -41,6 +41,43 @@ export interface paths {
         patch: operations["users_patch_user_users__id__patch"];
         trace?: never;
     };
+    "/auth/github/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Oauth:Github.Jwt.Authorize */
+        get: operations["oauth_github_jwt_authorize_auth_github_authorize_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/github/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Oauth:Github.Jwt.Callback
+         * @description The response varies based on the authentication backend used.
+         */
+        get: operations["oauth_github_jwt_callback_auth_github_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/desktop/authorize": {
         parameters: {
             query?: never;
@@ -908,6 +945,11 @@ export interface components {
              */
             version: string;
         };
+        /** OAuth2AuthorizeResponse */
+        OAuth2AuthorizeResponse: {
+            /** Authorization Url */
+            authorization_url: string;
+        };
         /** OAuthAvailabilityResponse */
         OAuthAvailabilityResponse: {
             /** Enabled */
@@ -1597,6 +1639,80 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_github_jwt_authorize_auth_github_authorize_get: {
+        parameters: {
+            query?: {
+                scopes?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuth2AuthorizeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_github_jwt_callback_auth_github_callback_get: {
+        parameters: {
+            query?: {
+                code?: string | null;
+                code_verifier?: string | null;
+                state?: string | null;
+                error?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
             };
             /** @description Validation Error */
             422: {

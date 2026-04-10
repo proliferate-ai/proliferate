@@ -4,6 +4,7 @@ import type {
 } from "../types/events.js";
 import type {
   CreateSessionRequest,
+  EditPendingPromptRequest,
   GetSessionLiveConfigResponse,
   ListSessionEventsOptions,
   PromptSessionRequest,
@@ -124,6 +125,34 @@ export class SessionsClient {
     return this.prompt(sessionId, {
       blocks: [{ type: "text", text }],
     }, options);
+  }
+
+  async editPendingPrompt(
+    sessionId: string,
+    seq: number,
+    input: EditPendingPromptRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<Session> {
+    return normalizeSession(
+      await this.transport.patch<Session>(
+        `/v1/sessions/${encodeURIComponent(sessionId)}/pending-prompts/${encodeURIComponent(String(seq))}`,
+        input,
+        options,
+      ),
+    );
+  }
+
+  async deletePendingPrompt(
+    sessionId: string,
+    seq: number,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<Session> {
+    return normalizeSession(
+      await this.transport.deleteJson<Session>(
+        `/v1/sessions/${encodeURIComponent(sessionId)}/pending-prompts/${encodeURIComponent(String(seq))}`,
+        options,
+      ),
+    );
   }
 
   async resume(sessionId: string, options?: AnyHarnessRequestOptions): Promise<Session> {

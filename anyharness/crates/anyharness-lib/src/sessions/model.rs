@@ -57,6 +57,18 @@ impl SessionRecord {
             last_prompt_at: self.last_prompt_at.clone(),
             closed_at: self.closed_at.clone(),
             dismissed_at: self.dismissed_at.clone(),
+            pending_prompts: Vec::new(),
+        }
+    }
+}
+
+impl PendingPromptRecord {
+    pub fn to_contract(&self) -> v1::PendingPromptSummary {
+        v1::PendingPromptSummary {
+            seq: self.seq,
+            prompt_id: self.prompt_id.clone(),
+            text: self.text.clone(),
+            queued_at: self.queued_at.clone(),
         }
     }
 }
@@ -75,6 +87,15 @@ pub struct PendingConfigChangeRecord {
     pub session_id: String,
     pub config_id: String,
     pub value: String,
+    pub queued_at: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingPromptRecord {
+    pub session_id: String,
+    pub seq: i64,
+    pub prompt_id: Option<String>,
+    pub text: String,
     pub queued_at: String,
 }
 

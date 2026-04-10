@@ -7,7 +7,6 @@ export function SessionTranscriptPane() {
   const {
     activeSessionId,
     transcript,
-    pendingUserPrompt,
     sessionViewState,
   } = useActiveChatSessionState();
 
@@ -20,7 +19,6 @@ export function SessionTranscriptPane() {
       activeSessionId={activeSessionId}
       selectedWorkspaceId={selectedWorkspaceId}
       transcript={transcript}
-      pendingUserPrompt={pendingUserPrompt}
       sessionViewState={sessionViewState}
     />
   );

@@ -114,7 +114,7 @@ export function WorkspaceItem({
   const [renameOpen, setRenameOpen] = useState(false);
 
   const slotIcon: { tooltip: string; element: ReactNode } =
-    activity === "sending" || activity === "working"
+    activity === "working"
       ? {
         tooltip: "Working",
         element: <BrailleSweepBadge className="text-sm text-muted-foreground" />,
