@@ -1,12 +1,16 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { useCallback } from "react";
+import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
 import { getCloudWorkspace } from "@/lib/integrations/cloud/workspaces";
+import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
 import { resolveRuntimeTargetForWorkspace } from "@/lib/integrations/anyharness/runtime-target";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
+import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { buildFirstSessionBranchNamingPrompt } from "@/lib/domain/workspaces/branch-naming";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import { useToastStore } from "@/stores/toast/toast-store";
 import {
   type SessionSlot,
   useHarnessStore,
@@ -120,6 +124,29 @@ function removeSessionSlot(sessionId: string): void {
   });
 }
 
+function reportConnectorLaunchWarnings(
+  warnings: ConnectorLaunchResolutionWarning[],
+  showToast: (message: string, type?: "error" | "info") => void,
+) {
+  if (warnings.length === 0) {
+    return;
+  }
+
+  for (const warning of warnings) {
+    trackProductEvent("connector_skipped_at_launch", {
+      connector_id: warning.catalogEntryId,
+      reason_kind: warning.kind,
+    });
+  }
+
+  if (warnings.length === 1) {
+    showToast(`${warnings[0]!.connectorName} wasn't available in this session because it needs a token.`, "info");
+    return;
+  }
+
+  showToast(`${warnings.length} connectors weren't available in this session.`, "info");
+}
+
 export function useSessionCreationActions({
   ensureWorkspaceSessions,
 }: SessionCreationDeps) {
@@ -127,6 +154,7 @@ export function useSessionCreationActions({
   const { promptSession } = useSessionPromptWorkflow();
   const { activateSession, ensureSessionStreamConnected } = useSessionRuntimeActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
+  const showToast = useToastStore((state) => state.show);
 
   const maybeStartFirstSessionBranchRenameTracking = useCallback(async (
     sessionId: string,
@@ -217,6 +245,7 @@ export function useSessionCreationActions({
       runtimeUrl: target.baseUrl,
       authToken: target.authToken,
     });
+    const { mcpServers, warnings: connectorWarnings } = await resolveSessionMcpServersForLaunch();
     const localWorkspace = cloudWorkspaceId
       ? null
       : await client.workspaces.get(target.anyharnessWorkspaceId, requestOptions);
@@ -292,6 +321,7 @@ export function useSessionCreationActions({
           agentKind: options.agentKind,
           modelId: options.modelId,
           modeId: preferredModeId,
+          mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
           systemPromptAppend,
         }, requestOptions);
 
@@ -320,6 +350,7 @@ export function useSessionCreationActions({
         replacePendingSessionSlot(pendingSessionId, session.id, realSlot);
         activateSession(session.id);
         upsertWorkspaceSessionRecord(workspaceId, session);
+        reportConnectorLaunchWarnings(connectorWarnings, showToast);
 
         if (effectivePendingPrompt?.text.trim()) {
           await promptSession({
@@ -370,6 +401,7 @@ export function useSessionCreationActions({
     ensureWorkspaceSessions,
     getWorkspaceRuntimeBlockReason,
     promptSession,
+    showToast,
     upsertWorkspaceSessionRecord,
   ]);
 

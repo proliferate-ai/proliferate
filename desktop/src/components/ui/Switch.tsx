@@ -1,8 +1,8 @@
-interface SwitchProps {
+import type { ButtonHTMLAttributes } from "react";
+
+interface SwitchProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onChange"> {
   checked: boolean;
   onChange: (value: boolean) => void;
-  id?: string;
-  disabled?: boolean;
 }
 
 export function Switch({
@@ -10,6 +10,8 @@ export function Switch({
   onChange,
   id,
   disabled = false,
+  className = "",
+  ...props
 }: SwitchProps) {
   return (
     <button
@@ -19,11 +21,12 @@ export function Switch({
       data-state={checked ? "checked" : "unchecked"}
       id={id}
       disabled={disabled}
+      className={`peer inline-flex h-5 w-10 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input ${className}`}
       onClick={() => {
         if (disabled) return;
         onChange(!checked);
       }}
-      className="peer inline-flex h-5 w-10 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input"
+      {...props}
     >
       <span
         data-state={checked ? "checked" : "unchecked"}

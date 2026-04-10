@@ -16,6 +16,7 @@ use serde::Deserialize;
 use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::app::AppState;
+use crate::sessions::mcp::bindings_from_contract;
 use crate::sessions::runtime::{
     CreateAndStartSessionError, EnsureLiveSessionError, PermissionResolution,
     ResolvePermissionError, SendPromptError, SessionLifecycleError, SetSessionConfigOptionError,
@@ -59,17 +60,20 @@ pub async fn create_session(
     let agent_kind = req.agent_kind.clone();
     let model_id = req.model_id.clone();
     let mode_id = req.mode_id.clone();
+    let mcp_servers = bindings_from_contract(req.mcp_servers.clone().unwrap_or_default());
     let system_prompt_append_count = req
         .system_prompt_append
         .as_ref()
         .map(|entries| entries.len())
         .unwrap_or(0);
+    let mcp_server_count = mcp_servers.len();
     tracing::info!(
         workspace_id = %workspace_id,
         agent_kind = %agent_kind,
         model_id = ?model_id,
         mode_id = ?mode_id,
         system_prompt_append_count,
+        mcp_server_count,
         flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
@@ -84,6 +88,7 @@ pub async fn create_session(
             model_id.as_deref(),
             mode_id.as_deref(),
             req.system_prompt_append,
+            mcp_servers,
             latency.as_ref(),
         )
         .await
@@ -663,6 +668,9 @@ fn map_create_session_error(error: CreateAndStartSessionError) -> ApiError {
         CreateAndStartSessionError::WorkspaceNotFound => {
             ApiError::bad_request("workspace not found", "WORKSPACE_NOT_FOUND")
         }
+        CreateAndStartSessionError::MissingDataKey => ApiError::internal(
+            crate::sessions::mcp::SessionMcpBindingsError::missing_data_key_detail(),
+        ),
         CreateAndStartSessionError::StartFailed(error) => {
             ApiError::internal(format!("ACP session start failed: {error}"))
         }
@@ -676,6 +684,9 @@ fn map_ensure_live_session_error(error: EnsureLiveSessionError) -> ApiError {
             format!("Session not found: {session_id}"),
             "SESSION_NOT_FOUND",
         ),
+        EnsureLiveSessionError::RestartRequired(detail) => {
+            ApiError::conflict(detail, "SESSION_RESTART_REQUIRED")
+        }
         EnsureLiveSessionError::Internal(error) => {
             ApiError::internal(format!("resume failed: {error}"))
         }

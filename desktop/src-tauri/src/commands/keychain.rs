@@ -1,14 +1,20 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::{mpsc, OnceLock};
 
 use anyharness_credential_discovery::{export_portable_auth, PortableAuthExport, ProviderId};
 use base64::Engine;
+use getrandom::getrandom;
 use serde::{Deserialize, Serialize};
 
 const SERVICE: &str = "com.proliferate.app.env";
 const AUTH_SERVICE: &str = "com.proliferate.app.auth";
+const CONNECTOR_SERVICE: &str = "com.proliferate.app.connectors";
+const RUNTIME_SERVICE: &str = "com.proliferate.app.runtime";
 const AUTH_SESSION_ACCOUNT: &str = "desktop_session";
 const PENDING_AUTH_ACCOUNT: &str = "desktop_pending_auth";
+const ANYHARNESS_DATA_KEY_ACCOUNT: &str = "anyharness_data_key";
+const ANYHARNESS_DATA_KEY_ENV: &str = "ANYHARNESS_DATA_KEY";
 
 const KNOWN_ENV_VARS: &[&str] = &[
     "ANTHROPIC_API_KEY",
@@ -76,12 +82,155 @@ pub enum ExportedCloudCredential {
 }
 
 fn read_env_secret(name: &str) -> Result<Option<String>, String> {
-    let entry = keyring::Entry::new(SERVICE, name).map_err(|e| e.to_string())?;
-    match entry.get_password() {
-        Ok(value) => Ok(Some(value)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(e.to_string()),
+    read_password(SERVICE, name)
+}
+
+fn connector_account(connection_id: &str, field_id: &str) -> String {
+    format!("{connection_id}:{field_id}")
+}
+
+enum KeychainRequest {
+    Read {
+        service: String,
+        account: String,
+        response: mpsc::SyncSender<Result<Option<String>, String>>,
+    },
+    Set {
+        service: String,
+        account: String,
+        value: String,
+        response: mpsc::SyncSender<Result<(), String>>,
+    },
+    Delete {
+        service: String,
+        account: String,
+        response: mpsc::SyncSender<Result<(), String>>,
+    },
+}
+
+fn get_or_create_entry<'a>(
+    entries: &'a mut HashMap<(String, String), keyring::Entry>,
+    service: &str,
+    account: &str,
+) -> Result<&'a keyring::Entry, String> {
+    let key = (service.to_string(), account.to_string());
+    if !entries.contains_key(&key) {
+        let entry = keyring::Entry::new(service, account).map_err(|e| e.to_string())?;
+        entries.insert(key.clone(), entry);
     }
+    entries
+        .get(&key)
+        .ok_or_else(|| "Keychain entry cache was not populated.".to_string())
+}
+
+fn keychain_sender() -> &'static mpsc::Sender<KeychainRequest> {
+    static KEYCHAIN_SENDER: OnceLock<mpsc::Sender<KeychainRequest>> = OnceLock::new();
+    KEYCHAIN_SENDER.get_or_init(|| {
+        let (tx, rx) = mpsc::channel::<KeychainRequest>();
+        std::thread::Builder::new()
+            .name("proliferate-keychain".to_string())
+            .spawn(move || {
+                let mut entries: HashMap<(String, String), keyring::Entry> = HashMap::new();
+                while let Ok(request) = rx.recv() {
+                    match request {
+                        KeychainRequest::Read {
+                            service,
+                            account,
+                            response,
+                        } => {
+                            let result = get_or_create_entry(&mut entries, &service, &account)
+                                .and_then(|entry| match entry.get_password() {
+                                    Ok(value) => Ok(Some(value)),
+                                    Err(keyring::Error::NoEntry) => Ok(None),
+                                    Err(error) => Err(error.to_string()),
+                                });
+                            let _ = response.send(result);
+                        }
+                        KeychainRequest::Set {
+                            service,
+                            account,
+                            value,
+                            response,
+                        } => {
+                            let result = get_or_create_entry(&mut entries, &service, &account)
+                                .and_then(|entry| {
+                                    entry.set_password(&value).map_err(|e| e.to_string())
+                                });
+                            let _ = response.send(result);
+                        }
+                        KeychainRequest::Delete {
+                            service,
+                            account,
+                            response,
+                        } => {
+                            let result = get_or_create_entry(&mut entries, &service, &account)
+                                .and_then(|entry| match entry.delete_credential() {
+                                    Ok(()) => Ok(()),
+                                    Err(keyring::Error::NoEntry) => Ok(()),
+                                    Err(error) => Err(error.to_string()),
+                                });
+                            let _ = response.send(result);
+                        }
+                    }
+                }
+            })
+            .expect("failed to start keychain worker");
+        tx
+    })
+}
+
+fn read_password(service: &str, account: &str) -> Result<Option<String>, String> {
+    let (response_tx, response_rx) = mpsc::sync_channel(1);
+    keychain_sender()
+        .send(KeychainRequest::Read {
+            service: service.to_string(),
+            account: account.to_string(),
+            response: response_tx,
+        })
+        .map_err(|_| "Keychain worker is unavailable.".to_string())?;
+    response_rx
+        .recv()
+        .map_err(|_| "Keychain worker did not return a result.".to_string())?
+}
+
+fn set_password(service: &str, account: &str, value: &str) -> Result<(), String> {
+    let (response_tx, response_rx) = mpsc::sync_channel(1);
+    keychain_sender()
+        .send(KeychainRequest::Set {
+            service: service.to_string(),
+            account: account.to_string(),
+            value: value.to_string(),
+            response: response_tx,
+        })
+        .map_err(|_| "Keychain worker is unavailable.".to_string())?;
+    response_rx
+        .recv()
+        .map_err(|_| "Keychain worker did not return a result.".to_string())?
+}
+
+fn delete_password(service: &str, account: &str) -> Result<(), String> {
+    let (response_tx, response_rx) = mpsc::sync_channel(1);
+    keychain_sender()
+        .send(KeychainRequest::Delete {
+            service: service.to_string(),
+            account: account.to_string(),
+            response: response_tx,
+        })
+        .map_err(|_| "Keychain worker is unavailable.".to_string())?;
+    response_rx
+        .recv()
+        .map_err(|_| "Keychain worker did not return a result.".to_string())?
+}
+
+fn ensure_runtime_data_key() -> Result<String, String> {
+    if let Some(value) = read_password(RUNTIME_SERVICE, ANYHARNESS_DATA_KEY_ACCOUNT)? {
+        return Ok(value);
+    }
+    let mut bytes = [0u8; 32];
+    getrandom(&mut bytes).map_err(|e| e.to_string())?;
+    let value = base64::engine::general_purpose::STANDARD.encode(bytes);
+    set_password(RUNTIME_SERVICE, ANYHARNESS_DATA_KEY_ACCOUNT, &value)?;
+    Ok(value)
 }
 
 fn home_dir() -> Result<PathBuf, String> {
@@ -95,8 +244,7 @@ fn home_dir() -> Result<PathBuf, String> {
 pub async fn list_configured_env_var_names() -> Result<Vec<String>, String> {
     let mut names = Vec::new();
     for &var in KNOWN_ENV_VARS {
-        let entry = keyring::Entry::new(SERVICE, var).map_err(|e| e.to_string())?;
-        if entry.get_password().is_ok() {
+        if read_password(SERVICE, var)?.is_some() {
             names.push(var.to_string());
         }
     }
@@ -105,82 +253,89 @@ pub async fn list_configured_env_var_names() -> Result<Vec<String>, String> {
 
 #[tauri::command]
 pub async fn set_env_var_secret(name: String, value: String) -> Result<(), String> {
-    let entry = keyring::Entry::new(SERVICE, &name).map_err(|e| e.to_string())?;
-    entry.set_password(&value).map_err(|e| e.to_string())
+    set_password(SERVICE, &name, &value)
 }
 
 #[tauri::command]
 pub async fn delete_env_var_secret(name: String) -> Result<(), String> {
-    let entry = keyring::Entry::new(SERVICE, &name).map_err(|e| e.to_string())?;
-    match entry.delete_credential() {
-        Ok(()) => Ok(()),
-        Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(e.to_string()),
-    }
+    delete_password(SERVICE, &name)
+}
+
+#[tauri::command]
+pub async fn get_connector_secret(
+    connection_id: String,
+    field_id: String,
+) -> Result<Option<String>, String> {
+    read_password(
+        CONNECTOR_SERVICE,
+        &connector_account(&connection_id, &field_id),
+    )
+}
+
+#[tauri::command]
+pub async fn set_connector_secret(
+    connection_id: String,
+    field_id: String,
+    value: String,
+) -> Result<(), String> {
+    set_password(
+        CONNECTOR_SERVICE,
+        &connector_account(&connection_id, &field_id),
+        &value,
+    )
+}
+
+#[tauri::command]
+pub async fn delete_connector_secret(
+    connection_id: String,
+    field_id: String,
+) -> Result<(), String> {
+    delete_password(
+        CONNECTOR_SERVICE,
+        &connector_account(&connection_id, &field_id),
+    )
 }
 
 #[tauri::command]
 pub async fn get_auth_session() -> Result<Option<AuthSessionRecord>, String> {
-    let entry =
-        keyring::Entry::new(AUTH_SERVICE, AUTH_SESSION_ACCOUNT).map_err(|e| e.to_string())?;
-    match entry.get_password() {
-        Ok(raw) => serde_json::from_str(&raw)
+    match read_password(AUTH_SERVICE, AUTH_SESSION_ACCOUNT)? {
+        Some(raw) => serde_json::from_str(&raw)
             .map(Some)
             .map_err(|e| e.to_string()),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(e.to_string()),
+        None => Ok(None),
     }
 }
 
 #[tauri::command]
 pub async fn set_auth_session(session: AuthSessionRecord) -> Result<(), String> {
-    let entry =
-        keyring::Entry::new(AUTH_SERVICE, AUTH_SESSION_ACCOUNT).map_err(|e| e.to_string())?;
     let raw = serde_json::to_string(&session).map_err(|e| e.to_string())?;
-    entry.set_password(&raw).map_err(|e| e.to_string())
+    set_password(AUTH_SERVICE, AUTH_SESSION_ACCOUNT, &raw)
 }
 
 #[tauri::command]
 pub async fn clear_auth_session() -> Result<(), String> {
-    let entry =
-        keyring::Entry::new(AUTH_SERVICE, AUTH_SESSION_ACCOUNT).map_err(|e| e.to_string())?;
-    match entry.delete_credential() {
-        Ok(()) => Ok(()),
-        Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(e.to_string()),
-    }
+    delete_password(AUTH_SERVICE, AUTH_SESSION_ACCOUNT)
 }
 
 #[tauri::command]
 pub async fn get_pending_auth() -> Result<Option<PendingAuthRecord>, String> {
-    let entry =
-        keyring::Entry::new(AUTH_SERVICE, PENDING_AUTH_ACCOUNT).map_err(|e| e.to_string())?;
-    match entry.get_password() {
-        Ok(raw) => serde_json::from_str(&raw)
+    match read_password(AUTH_SERVICE, PENDING_AUTH_ACCOUNT)? {
+        Some(raw) => serde_json::from_str(&raw)
             .map(Some)
             .map_err(|e| e.to_string()),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(e.to_string()),
+        None => Ok(None),
     }
 }
 
 #[tauri::command]
 pub async fn set_pending_auth(record: PendingAuthRecord) -> Result<(), String> {
-    let entry =
-        keyring::Entry::new(AUTH_SERVICE, PENDING_AUTH_ACCOUNT).map_err(|e| e.to_string())?;
     let raw = serde_json::to_string(&record).map_err(|e| e.to_string())?;
-    entry.set_password(&raw).map_err(|e| e.to_string())
+    set_password(AUTH_SERVICE, PENDING_AUTH_ACCOUNT, &raw)
 }
 
 #[tauri::command]
 pub async fn clear_pending_auth() -> Result<(), String> {
-    let entry =
-        keyring::Entry::new(AUTH_SERVICE, PENDING_AUTH_ACCOUNT).map_err(|e| e.to_string())?;
-    match entry.delete_credential() {
-        Ok(()) => Ok(()),
-        Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(e.to_string()),
-    }
+    delete_password(AUTH_SERVICE, PENDING_AUTH_ACCOUNT)
 }
 
 #[tauri::command]
@@ -307,11 +462,12 @@ fn portable_export_to_cloud_files(export: PortableAuthExport) -> Vec<ExportedClo
 pub fn load_all_secrets_for_sidecar() -> HashMap<String, String> {
     let mut env = HashMap::new();
     for &var in KNOWN_ENV_VARS {
-        if let Ok(entry) = keyring::Entry::new(SERVICE, var) {
-            if let Ok(password) = entry.get_password() {
-                env.insert(var.to_string(), password);
-            }
+        if let Ok(Some(password)) = read_password(SERVICE, var) {
+            env.insert(var.to_string(), password);
         }
+    }
+    if let Ok(data_key) = ensure_runtime_data_key() {
+        env.insert(ANYHARNESS_DATA_KEY_ENV.to_string(), data_key);
     }
     env
 }

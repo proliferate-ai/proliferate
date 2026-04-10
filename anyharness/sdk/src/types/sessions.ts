@@ -20,6 +20,9 @@ export type Session = Omit<GeneratedSession, "liveConfig"> & {
   liveConfig?: SessionLiveConfigSnapshot | null;
 };
 export type CreateSessionRequest = components["schemas"]["CreateSessionRequest"];
+export type SessionMcpHeader = components["schemas"]["SessionMcpHeader"];
+export type SessionMcpHttpServer = components["schemas"]["SessionMcpHttpServer"];
+export type SessionMcpServer = components["schemas"]["SessionMcpServer"];
 export type UpdateSessionTitleRequest =
   components["schemas"]["UpdateSessionTitleRequest"];
 export type RawSessionConfigValue = components["schemas"]["RawSessionConfigValue"];

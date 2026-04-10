@@ -43,6 +43,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0012_add_workspace_display_name",
         include_str!("sql/0012_add_workspace_display_name.sql"),
     ),
+    (
+        "0013_add_session_mcp_bindings_ciphertext",
+        include_str!("sql/0013_add_session_mcp_bindings_ciphertext.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

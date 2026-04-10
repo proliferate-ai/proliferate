@@ -841,6 +841,7 @@ export interface components {
         };
         CreateSessionRequest: {
             agentKind: string;
+            mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
             modeId?: string | null;
             modelId?: string | null;
             systemPromptAppend?: string[] | null;
@@ -1362,6 +1363,21 @@ export interface components {
             sourceSeq: number;
             /** @description Timestamp when this snapshot was last updated. */
             updatedAt: string;
+        };
+        SessionMcpHeader: {
+            name: string;
+            value: string;
+        };
+        SessionMcpHttpServer: {
+            catalogEntryId?: string | null;
+            connectionId: string;
+            headers?: components["schemas"]["SessionMcpHeader"][];
+            serverName: string;
+            url: string;
+        };
+        SessionMcpServer: components["schemas"]["SessionMcpHttpServer"] & {
+            /** @enum {string} */
+            transport: "http";
         };
         SessionRawNotificationEnvelope: {
             notification: unknown;

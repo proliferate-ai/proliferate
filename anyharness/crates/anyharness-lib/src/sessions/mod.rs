@@ -1,5 +1,6 @@
 pub mod execution_summary;
 pub mod live_config;
+pub mod mcp;
 pub mod model;
 pub mod runtime;
 pub mod service;

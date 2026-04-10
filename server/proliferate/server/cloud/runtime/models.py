@@ -50,6 +50,7 @@ class CloudProvisionInput:
     github_token: str
     git_user_name: str
     git_user_email: str
+    anyharness_data_key: str
     credentials: ProvisionCredentials
     repo_env_vars: dict[str, str]
 

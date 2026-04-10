@@ -1,7 +1,9 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::SessionLiveConfigSnapshot;
+use super::{SessionLiveConfigSnapshot, SessionMcpServer};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -79,7 +81,7 @@ pub struct Session {
     pub dismissed_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionRequest {
     pub workspace_id: String,
@@ -90,6 +92,27 @@ pub struct CreateSessionRequest {
     pub mode_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system_prompt_append: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_servers: Option<Vec<SessionMcpServer>>,
+}
+
+impl fmt::Debug for CreateSessionRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CreateSessionRequest")
+            .field("workspace_id", &self.workspace_id)
+            .field("agent_kind", &self.agent_kind)
+            .field("model_id", &self.model_id)
+            .field("mode_id", &self.mode_id)
+            .field(
+                "system_prompt_append_count",
+                &self.system_prompt_append.as_ref().map(|entries| entries.len()),
+            )
+            .field(
+                "mcp_server_count",
+                &self.mcp_servers.as_ref().map(|servers| servers.len()),
+            )
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -136,6 +159,7 @@ pub enum PermissionDecision {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::v1::{SessionMcpHeader, SessionMcpHttpServer};
 
     #[test]
     fn create_session_request_serializes_model_mode_and_prompt() {
@@ -145,6 +169,16 @@ mod tests {
             model_id: Some("default".to_string()),
             mode_id: Some("bypassPermissions".to_string()),
             system_prompt_append: Some(vec!["Rename the branch".to_string()]),
+            mcp_servers: Some(vec![SessionMcpServer::Http(SessionMcpHttpServer {
+                connection_id: "connection-1".to_string(),
+                catalog_entry_id: Some("github".to_string()),
+                server_name: "github".to_string(),
+                url: "https://api.github.com/mcp".to_string(),
+                headers: vec![SessionMcpHeader {
+                    name: "Authorization".to_string(),
+                    value: "Bearer secret".to_string(),
+                }],
+            })]),
         };
 
         let json = serde_json::to_value(&request).expect("serialize create request");
@@ -155,7 +189,22 @@ mod tests {
                 "agentKind": "claude",
                 "modelId": "default",
                 "modeId": "bypassPermissions",
-                "systemPromptAppend": ["Rename the branch"]
+                "systemPromptAppend": ["Rename the branch"],
+                "mcpServers": [
+                    {
+                        "transport": "http",
+                        "connectionId": "connection-1",
+                        "catalogEntryId": "github",
+                        "serverName": "github",
+                        "url": "https://api.github.com/mcp",
+                        "headers": [
+                            {
+                                "name": "Authorization",
+                                "value": "Bearer secret"
+                            }
+                        ]
+                    }
+                ]
             })
         );
 
@@ -170,6 +219,10 @@ mod tests {
             round_tripped.system_prompt_append,
             Some(vec!["Rename the branch".to_string()])
         );
+        let Some(mcp_servers) = round_tripped.mcp_servers else {
+            panic!("expected mcp servers");
+        };
+        assert_eq!(mcp_servers.len(), 1);
     }
 
     #[test]

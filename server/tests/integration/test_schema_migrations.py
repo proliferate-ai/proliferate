@@ -103,6 +103,7 @@ def _bootstrap_legacy_initial_schema(sync_conn) -> None:  # type: ignore[no-unty
             active_sandbox_id UUID,
             runtime_url TEXT,
             runtime_token_ciphertext TEXT,
+            anyharness_data_key_ciphertext TEXT,
             anyharness_workspace_id VARCHAR(255),
             created_at TIMESTAMPTZ NOT NULL,
             updated_at TIMESTAMPTZ NOT NULL,
@@ -192,6 +193,7 @@ async def test_alembic_upgrade_creates_current_schema() -> None:
                     "alembic_version",
                     "billing_entitlement",
                     "billing_grant",
+                    "cloud_mcp_connection",
                     "cloud_credential",
                     "cloud_sandbox",
                     "cloud_workspace",
@@ -209,6 +211,7 @@ async def test_alembic_upgrade_creates_current_schema() -> None:
                     }
                 )
                 assert "git_base_branch" in columns
+                assert "anyharness_data_key_ciphertext" in columns
 
                 version = await conn.scalar(text("SELECT version_num FROM alembic_version"))
                 assert version == HEAD_REVISION
@@ -265,6 +268,7 @@ async def test_alembic_upgrade_from_legacy_initial_revision() -> None:
                 )
                 assert "billing_grant" in tables
                 assert "billing_entitlement" in tables
+                assert "cloud_mcp_connection" in tables
                 assert "usage_segment" in tables
                 assert "sandbox_event_receipt" in tables
         finally:

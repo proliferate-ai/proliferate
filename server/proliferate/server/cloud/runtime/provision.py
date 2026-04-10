@@ -25,6 +25,7 @@ from proliferate.db.store.cloud_workspaces import (
     load_cloud_sandbox_by_id,
     load_cloud_workspace_by_id,
     mark_workspace_error_by_id,
+    save_workspace,
     update_sandbox_status,
     update_workspace_status_by_id,
 )
@@ -47,6 +48,7 @@ from proliferate.server.cloud.runtime.bootstrap import (
     install_node_runtime,
     stage_runtime_binary,
 )
+from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
 from proliferate.server.cloud.runtime.credentials import (
     normalize_provision_credentials,
     write_credential_files,
@@ -74,7 +76,7 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
     run_sandbox_command_logged,
     runtime_launcher_path,
 )
-from proliferate.utils.crypto import decrypt_json, encrypt_text
+from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_text
 from proliferate.utils.time import duration_ms, utcnow
 
 
@@ -138,6 +140,10 @@ async def _load_provision_input(workspace_id: UUID) -> CloudProvisionInput | Non
     if workspace is None:
         return None
 
+    if not workspace.anyharness_data_key_ciphertext:
+        workspace.anyharness_data_key_ciphertext = encrypt_text(generate_anyharness_data_key())
+        workspace = await save_workspace(workspace)
+
     user = await load_user_with_oauth_accounts_by_id(workspace.user_id)
     if user is None:
         return None
@@ -175,6 +181,7 @@ async def _load_provision_input(workspace_id: UUID) -> CloudProvisionInput | Non
         github_token=str(github_token),
         git_user_name=git_user_name,
         git_user_email=git_user_email,
+        anyharness_data_key=decrypt_text(workspace.anyharness_data_key_ciphertext),
         credentials=normalize_provision_credentials(credential_payloads),
         repo_env_vars=(
             decrypt_json(workspace.repo_env_vars_ciphertext)
@@ -401,6 +408,7 @@ async def _launch_and_connect_runtime(
     runtime_env = build_runtime_env(
         ctx.credentials,
         runtime_token,
+        anyharness_data_key=ctx.anyharness_data_key,
         repo_env_vars=ctx.repo_env_vars,
     )
 

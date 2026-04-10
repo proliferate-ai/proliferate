@@ -9,6 +9,7 @@ export type AuthSignInSource = "desktop_callback" | "dev_bypass" | "interactive_
 export type WorkspaceCreationKind = "repo" | "worktree" | "local";
 export type WorkspaceOpenSource = "filesystem";
 export type SetupScriptTelemetryStatus = "failed" | "not_run" | "succeeded";
+export type ConnectorSkipReasonKind = "missing_secret";
 
 export interface DesktopProductEventMap {
   app_update_available: { version: string };
@@ -79,6 +80,44 @@ export interface DesktopProductEventMap {
   cloud_workspace_setup_started: {
     has_saved_script: boolean;
   };
+  connector_connect_clicked: {
+    connector_id: string;
+    auth_style: string;
+    availability: string;
+  };
+  connector_deleted: {
+    connector_id: string;
+  };
+  connector_install_failed: {
+    connector_id: string;
+    failure_kind: TelemetryFailureKind;
+  };
+  connector_install_succeeded: {
+    connector_id: string;
+    result: "synced" | "degraded";
+  };
+  connector_skipped_at_launch: {
+    connector_id: string;
+    reason_kind: ConnectorSkipReasonKind;
+  };
+  connector_sync_degraded: {
+    connector_id: string;
+  };
+  connector_sync_recovered: {
+    connector_id: string;
+  };
+  connector_sync_retry_clicked: {
+    connector_id: string | "all";
+  };
+  connector_toggled: {
+    connector_id: string;
+    enabled: boolean;
+  };
+  connector_updated: {
+    connector_id: string;
+    result: "synced" | "degraded";
+  };
+  connectors_pane_viewed: undefined;
   runtime_connection_state_changed: {
     connection_state: RuntimeConnectionTelemetryState;
     has_error: boolean;

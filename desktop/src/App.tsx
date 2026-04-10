@@ -11,6 +11,7 @@ import { useExportRunningAgentCount } from "@/hooks/app/use-export-running-agent
 import { useAppShortcuts } from "@/hooks/app/use-app-shortcuts"
 import { useAuthBootstrap } from "@/hooks/auth/use-auth-bootstrap"
 import { useAgentAutoReconcile } from "@/hooks/agents/use-agent-auto-reconcile"
+import { useConnectorSyncRetryDaemon } from "@/hooks/mcp/use-connector-sync-retry-daemon"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/use-shortcut-dispatcher"
 import { useTurnEndSound } from "@/hooks/sessions/use-turn-end-sound"
 import { bootstrapHarnessRuntime } from "@/lib/integrations/anyharness/runtime-bootstrap"
@@ -47,6 +48,7 @@ function App() {
   useAppShortcuts()
   useTurnEndSound()
   useAgentAutoReconcile()
+  useConnectorSyncRetryDaemon()
 
   useEffect(() => {
     initializeTheme()

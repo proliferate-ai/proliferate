@@ -46,6 +46,7 @@ def build_runtime_env(
     credentials: ProvisionCredentials,
     runtime_token: str,
     *,
+    anyharness_data_key: str,
     repo_env_vars: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
     env: dict[str, str] = {"ANYHARNESS_DEV_CORS": "1"}
@@ -59,6 +60,7 @@ def build_runtime_env(
     if credentials.claude is not None and credentials.claude.api_key:
         env["ANTHROPIC_API_KEY"] = credentials.claude.api_key
     env["ANYHARNESS_BEARER_TOKEN"] = runtime_token
+    env["ANYHARNESS_DATA_KEY"] = anyharness_data_key
     if repo_env_vars:
         env.update(repo_env_vars)
     return env

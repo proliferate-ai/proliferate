@@ -11,6 +11,7 @@ use super::session_actor::{
 };
 use crate::agents::model::ResolvedAgent;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::sessions::mcp::SessionMcpServer;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::SessionEventEnvelope;
@@ -41,6 +42,7 @@ impl AcpManager {
         workspace_env: std::collections::BTreeMap<String, String>,
         session_launch_env: std::collections::BTreeMap<String, String>,
         session_store: SessionStore,
+        mcp_servers: Vec<SessionMcpServer>,
         is_resume: bool,
         last_seq: i64,
         system_prompt_append: Option<String>,
@@ -112,6 +114,7 @@ impl AcpManager {
             permission_broker: self.permission_broker.clone(),
             event_tx,
             session_store,
+            mcp_servers,
             is_resume,
             last_seq,
             system_prompt_append,

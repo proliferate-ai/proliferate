@@ -5,6 +5,7 @@ import { X } from "@/components/ui/icons";
 export interface ModalShellProps {
   open: boolean;
   onClose: () => void;
+  disableClose?: boolean;
   title: ReactNode;
   description?: ReactNode;
   footer?: ReactNode;
@@ -15,6 +16,7 @@ export interface ModalShellProps {
 export function ModalShell({
   open,
   onClose,
+  disableClose = false,
   title,
   description,
   footer,
@@ -35,6 +37,9 @@ export function ModalShell({
       }
 
       event.preventDefault();
+      if (disableClose) {
+        return;
+      }
       onClose();
     };
 
@@ -42,7 +47,7 @@ export function ModalShell({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose, open]);
+  }, [disableClose, onClose, open]);
 
   if (!open) {
     return null;
@@ -52,7 +57,7 @@ export function ModalShell({
     <>
       <div
         className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={disableClose ? undefined : onClose}
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
@@ -66,6 +71,7 @@ export function ModalShell({
           <button
             type="button"
             onClick={onClose}
+            disabled={disableClose}
             className="absolute top-4 right-4 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <X className="size-4" />

@@ -17,6 +17,7 @@ use crate::sessions::live_config::{
     snapshot_to_record, LegacyModeOption, LegacyModeState, NormalizedControlKind,
     LEGACY_MODE_COMPAT_CONFIG_ID,
 };
+use crate::sessions::mcp::{to_acp_servers, SessionMcpServer};
 use crate::sessions::model::PendingConfigChangeRecord;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::store::SessionStore;
@@ -233,6 +234,7 @@ pub struct SessionActorConfig {
     pub permission_broker: Arc<PermissionBroker>,
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,
     pub session_store: SessionStore,
+    pub mcp_servers: Vec<SessionMcpServer>,
     pub is_resume: bool,
     pub last_seq: i64,
     pub system_prompt_append: Option<String>,
@@ -811,10 +813,10 @@ async fn run_actor(
             })?;
         let load_started = Instant::now();
         match conn
-            .load_session(acp::LoadSessionRequest::new(
-                existing.clone(),
-                config.workspace_path.clone(),
-            ))
+            .load_session(
+                acp::LoadSessionRequest::new(existing.clone(), config.workspace_path.clone())
+                    .mcp_servers(to_acp_servers(&config.mcp_servers)),
+            )
             .await
         {
             Ok(resp) => {
@@ -839,6 +841,9 @@ async fn run_actor(
                 recovered_from_missing_load_session = true;
 
                 let mut request = acp::NewSessionRequest::new(config.workspace_path.clone());
+                if !config.mcp_servers.is_empty() {
+                    request = request.mcp_servers(to_acp_servers(&config.mcp_servers));
+                }
                 if let Some(meta) = build_system_prompt_meta(config.system_prompt_append.as_deref())
                 {
                     tracing::debug!(
@@ -899,6 +904,9 @@ async fn run_actor(
         }
     } else {
         let mut request = acp::NewSessionRequest::new(config.workspace_path.clone());
+        if !config.mcp_servers.is_empty() {
+            request = request.mcp_servers(to_acp_servers(&config.mcp_servers));
+        }
         if let Some(meta) = build_system_prompt_meta(config.system_prompt_append.as_deref()) {
             tracing::debug!(
                 session_id = %session_id,
@@ -2809,6 +2817,7 @@ mod tests {
                 last_prompt_at: None,
                 closed_at: None,
                 dismissed_at: None,
+                mcp_bindings_ciphertext: None,
             })
             .expect("insert session");
 
@@ -2939,6 +2948,7 @@ mod tests {
                 last_prompt_at: None,
                 closed_at: None,
                 dismissed_at: None,
+                mcp_bindings_ciphertext: None,
             })
             .expect("insert session");
 

@@ -7,6 +7,7 @@ import {
 import { AgentsPane } from "./AgentsPane";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { ConfigurationPane } from "./panes/ConfigurationPane";
+import { ConnectorsPane } from "./panes/ConnectorsPane";
 import { AccountPane } from "./panes/AccountPane";
 import { CloudAuthUnavailablePane } from "./panes/CloudAuthUnavailablePane";
 import { CloudPane } from "./panes/CloudPane";
@@ -48,6 +49,9 @@ function renderSettingsSection(
   }
   if (activeSection === "account") {
     return <AccountPane />;
+  }
+  if (activeSection === "connectors") {
+    return <ConnectorsPane />;
   }
   if (activeSection === "cloud") {
     if (!cloudEnabled) {

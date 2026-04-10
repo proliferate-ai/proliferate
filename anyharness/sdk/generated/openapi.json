@@ -2727,6 +2727,15 @@
           "agentKind": {
             "type": "string"
           },
+          "mcpServers": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SessionMcpServer"
+            }
+          },
           "modeId": {
             "type": [
               "string",
@@ -4800,6 +4809,77 @@
             "description": "Timestamp when this snapshot was last updated."
           }
         }
+      },
+      "SessionMcpHeader": {
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "SessionMcpHttpServer": {
+        "type": "object",
+        "required": [
+          "connectionId",
+          "serverName",
+          "url"
+        ],
+        "properties": {
+          "catalogEntryId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "connectionId": {
+            "type": "string"
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionMcpHeader"
+            }
+          },
+          "serverName": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "SessionMcpServer": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SessionMcpHttpServer"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "transport"
+                ],
+                "properties": {
+                  "transport": {
+                    "type": "string",
+                    "enum": [
+                      "http"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
       },
       "SessionRawNotificationEnvelope": {
         "type": "object",

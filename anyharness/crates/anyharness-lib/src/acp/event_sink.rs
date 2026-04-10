@@ -1990,6 +1990,7 @@ mod tests {
                 last_prompt_at: None,
                 closed_at: None,
                 dismissed_at: None,
+                mcp_bindings_ciphertext: None,
             })
             .expect("seed session");
         store

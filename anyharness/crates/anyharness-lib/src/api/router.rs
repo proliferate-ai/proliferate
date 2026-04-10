@@ -425,6 +425,7 @@ mod tests {
                 last_prompt_at: None,
                 closed_at: None,
                 dismissed_at: None,
+                mcp_bindings_ciphertext: None,
             })
             .expect("insert session");
         store
@@ -497,6 +498,7 @@ mod tests {
                 last_prompt_at: None,
                 closed_at: None,
                 dismissed_at: Some("2026-03-25T01:00:00Z".to_string()),
+                mcp_bindings_ciphertext: None,
             })
             .expect("insert dismissed session");
 

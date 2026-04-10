@@ -11,6 +11,10 @@ use anyharness_contract::v1::{
 use super::execution_summary::{
     idle_workspace_execution_summary, summarize_session_record, summarize_workspace_sessions,
 };
+use super::mcp::{
+    decrypt_bindings, encrypt_bindings, SessionDataCipher, SessionMcpBindingsError, SessionMcpServer,
+    SESSION_RESTART_REQUIRED_DETAIL,
+};
 use super::model::SessionRecord;
 use super::service::SessionService;
 use crate::acp::manager::AcpManager;
@@ -28,12 +32,14 @@ pub struct SessionRuntime {
     workspace_service: Arc<WorkspaceService>,
     acp_manager: AcpManager,
     runtime_home: PathBuf,
+    session_data_cipher: Option<SessionDataCipher>,
 }
 
 #[derive(Debug)]
 pub enum CreateAndStartSessionError {
     Invalid(String),
     WorkspaceNotFound,
+    MissingDataKey,
     StartFailed(anyhow::Error),
     Internal(anyhow::Error),
 }
@@ -41,6 +47,7 @@ pub enum CreateAndStartSessionError {
 #[derive(Debug)]
 pub enum EnsureLiveSessionError {
     SessionNotFound(String),
+    RestartRequired(String),
     Internal(anyhow::Error),
 }
 
@@ -82,6 +89,8 @@ pub enum ResolvePermissionError {
 enum StartSessionError {
     WorkspaceNotFound,
     AgentDescriptorNotFound(String),
+    MissingDataKey,
+    RestartRequired(String),
     Internal(anyhow::Error),
     AcpStart(anyhow::Error),
 }
@@ -92,12 +101,14 @@ impl SessionRuntime {
         workspace_service: Arc<WorkspaceService>,
         acp_manager: AcpManager,
         runtime_home: PathBuf,
+        session_data_cipher: Option<SessionDataCipher>,
     ) -> Self {
         Self {
             session_service,
             workspace_service,
             acp_manager,
             runtime_home,
+            session_data_cipher,
         }
     }
 
@@ -171,6 +182,7 @@ impl SessionRuntime {
         model_id: Option<&str>,
         mode_id: Option<&str>,
         system_prompt_append: Option<Vec<String>>,
+        mcp_servers: Vec<SessionMcpServer>,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
         let started = Instant::now();
@@ -193,9 +205,17 @@ impl SessionRuntime {
         );
 
         let durable_create_started = Instant::now();
+        let mcp_bindings_ciphertext = encrypt_bindings(self.session_data_cipher.as_ref(), &mcp_servers)
+            .map_err(map_encrypt_bindings_error_to_create)?;
         let mut record = self
             .session_service
-            .create_session(workspace_id, agent_kind, model_id, mode_id)
+            .create_session(
+                workspace_id,
+                agent_kind,
+                model_id,
+                mode_id,
+                mcp_bindings_ciphertext,
+            )
             .map_err(|error| CreateAndStartSessionError::Invalid(error.to_string()))?;
         tracing::info!(
             workspace_id = %workspace_id,
@@ -248,6 +268,10 @@ impl SessionRuntime {
                         CreateAndStartSessionError::Internal(anyhow::anyhow!(
                             "agent descriptor not found: {agent_kind}"
                         ))
+                    }
+                    StartSessionError::MissingDataKey => CreateAndStartSessionError::MissingDataKey,
+                    StartSessionError::RestartRequired(detail) => {
+                        CreateAndStartSessionError::Internal(anyhow::anyhow!(detail))
                     }
                     StartSessionError::Internal(error) => {
                         CreateAndStartSessionError::Internal(error)
@@ -305,6 +329,14 @@ impl SessionRuntime {
                         "agent descriptor not found: {agent_kind}"
                     ))
                 }
+                StartSessionError::MissingDataKey => {
+                    EnsureLiveSessionError::RestartRequired(
+                        SESSION_RESTART_REQUIRED_DETAIL.to_string(),
+                    )
+                }
+                StartSessionError::RestartRequired(detail) => {
+                    EnsureLiveSessionError::RestartRequired(detail)
+                }
                 StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
                     EnsureLiveSessionError::Internal(error)
                 }
@@ -359,6 +391,11 @@ impl SessionRuntime {
                 StartSessionError::AgentDescriptorNotFound(agent_kind) => {
                     SetSessionConfigOptionError::Internal(anyhow::anyhow!(
                         "agent descriptor not found: {agent_kind}"
+                    ))
+                }
+                StartSessionError::MissingDataKey | StartSessionError::RestartRequired(_) => {
+                    SetSessionConfigOptionError::Internal(anyhow::anyhow!(
+                        "{SESSION_RESTART_REQUIRED_DETAIL}"
                     ))
                 }
                 StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
@@ -835,6 +872,11 @@ impl SessionRuntime {
         let session_store = self.session_service.store().clone();
         let workspace_path = PathBuf::from(&workspace.path);
         let workspace_env = self.workspace_service.workspace_env(&workspace);
+        let mcp_servers = decrypt_bindings(
+            self.session_data_cipher.as_ref(),
+            record.mcp_bindings_ciphertext.as_deref(),
+        )
+        .map_err(map_decrypt_bindings_error_to_start)?;
         let acp_start_started = Instant::now();
         let (handle, ready) = self
             .acp_manager
@@ -845,6 +887,7 @@ impl SessionRuntime {
                 workspace_env,
                 session_launch_env,
                 session_store,
+                mcp_servers,
                 is_resume,
                 last_seq,
                 system_prompt_append,
@@ -960,8 +1003,32 @@ fn map_start_error_to_prompt(error: StartSessionError) -> SendPromptError {
         StartSessionError::AgentDescriptorNotFound(agent_kind) => {
             SendPromptError::Internal(anyhow::anyhow!("agent descriptor not found: {agent_kind}"))
         }
+        StartSessionError::MissingDataKey | StartSessionError::RestartRequired(_) => {
+            SendPromptError::Internal(anyhow::anyhow!(SESSION_RESTART_REQUIRED_DETAIL))
+        }
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
             SendPromptError::Internal(error)
+        }
+    }
+}
+
+fn map_encrypt_bindings_error_to_create(
+    error: SessionMcpBindingsError,
+) -> CreateAndStartSessionError {
+    match error {
+        SessionMcpBindingsError::MissingDataKey => CreateAndStartSessionError::MissingDataKey,
+        SessionMcpBindingsError::Encrypt(error) | SessionMcpBindingsError::Decrypt(error) => {
+            CreateAndStartSessionError::Internal(error)
+        }
+    }
+}
+
+fn map_decrypt_bindings_error_to_start(error: SessionMcpBindingsError) -> StartSessionError {
+    match error {
+        SessionMcpBindingsError::MissingDataKey => StartSessionError::MissingDataKey,
+        SessionMcpBindingsError::Encrypt(error) => StartSessionError::Internal(error),
+        SessionMcpBindingsError::Decrypt(_) => {
+            StartSessionError::RestartRequired(SESSION_RESTART_REQUIRED_DETAIL.to_string())
         }
     }
 }

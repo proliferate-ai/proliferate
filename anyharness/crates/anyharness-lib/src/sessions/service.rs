@@ -71,6 +71,7 @@ impl SessionService {
         agent_kind: &str,
         model_id: Option<&str>,
         mode_id: Option<&str>,
+        mcp_bindings_ciphertext: Option<String>,
     ) -> anyhow::Result<SessionRecord> {
         let started = Instant::now();
         tracing::info!(
@@ -168,6 +169,7 @@ impl SessionService {
             last_prompt_at: None,
             closed_at: None,
             dismissed_at: None,
+            mcp_bindings_ciphertext,
         };
 
         self.session_store.insert(&record)?;

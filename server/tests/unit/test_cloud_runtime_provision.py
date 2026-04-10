@@ -14,6 +14,7 @@ from proliferate.integrations.sandbox import SandboxProviderKind
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime import bootstrap as runtime_bootstrap
 from proliferate.server.cloud.runtime import provision as runtime_provision
+from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
 from proliferate.server.cloud.runtime.credentials import (
     ClaudeProvisionCredential,
     CodexProvisionCredential,
@@ -183,6 +184,7 @@ class TestLoadProvisionInput:
         assert result.github_token == "github-token"
         assert result.git_user_name == "Cloud Tester"
         assert result.git_user_email == "provision-input@example.com"
+        assert len(result.anyharness_data_key) > 10
         assert result.credentials.synced_providers == ("claude",)
         assert result.credentials.claude == ClaudeProvisionCredential(api_key="anthropic-key")
 
@@ -290,6 +292,7 @@ def _make_provision_input(*, codex_enabled: bool) -> CloudProvisionInput:
         github_token="github-token",
         git_user_name="Cloud Tester",
         git_user_email="cloud-tester@example.com",
+        anyharness_data_key=generate_anyharness_data_key(),
         credentials=ProvisionCredentials(
             claude=ClaudeProvisionCredential(api_key="anthropic-key"),
             codex=CodexProvisionCredential(auth_json="{}") if codex_enabled else None,

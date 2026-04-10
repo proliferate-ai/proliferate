@@ -32,6 +32,7 @@ class CloudWorkspace(Base):
     active_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     runtime_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     runtime_token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    anyharness_data_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     anyharness_workspace_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     repo_env_vars_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     repo_files_applied_version: Mapped[int] = mapped_column(Integer, default=0)
@@ -114,6 +115,27 @@ class CloudCredential(Base):
     )
     last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class CloudMcpConnection(Base):
+    __tablename__ = "cloud_mcp_connection"
+    __table_args__ = (
+        UniqueConstraint("user_id", "connection_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    connection_id: Mapped[str] = mapped_column(String(255))
+    catalog_entry_id: Mapped[str] = mapped_column(String(255))
+    payload_ciphertext: Mapped[str] = mapped_column(Text)
+    payload_format: Mapped[str] = mapped_column(String(32), default="json-v1")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+    last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class CloudRepoConfig(Base):

@@ -22,8 +22,8 @@ impl SessionStore {
                 "INSERT INTO sessions (id, workspace_id, agent_kind, native_session_id,
                  requested_model_id, current_model_id, requested_mode_id, current_mode_id,
                  title, thinking_level_id, thinking_budget_tokens, status, created_at,
-                 updated_at, last_prompt_at, closed_at, dismissed_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+                 updated_at, last_prompt_at, closed_at, dismissed_at, mcp_bindings_ciphertext)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
                 params![
                     record.id,
                     record.workspace_id,
@@ -42,6 +42,7 @@ impl SessionStore {
                     record.last_prompt_at,
                     record.closed_at,
                     record.dismissed_at,
+                    record.mcp_bindings_ciphertext,
                 ],
             )?;
             Ok(())
@@ -570,6 +571,7 @@ fn map_session(row: &rusqlite::Row) -> rusqlite::Result<SessionRecord> {
         last_prompt_at: row.get("last_prompt_at")?,
         closed_at: row.get("closed_at")?,
         dismissed_at: row.get("dismissed_at")?,
+        mcp_bindings_ciphertext: row.get("mcp_bindings_ciphertext")?,
     })
 }
 
@@ -654,6 +656,7 @@ mod tests {
             last_prompt_at: None,
             closed_at: None,
             dismissed_at: None,
+            mcp_bindings_ciphertext: None,
         }
     }
 

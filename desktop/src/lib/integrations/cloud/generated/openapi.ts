@@ -41,43 +41,6 @@ export interface paths {
         patch: operations["users_patch_user_users__id__patch"];
         trace?: never;
     };
-    "/auth/github/authorize": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Oauth:Github.Jwt.Authorize */
-        get: operations["oauth_github_jwt_authorize_auth_github_authorize_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/auth/github/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Oauth:Github.Jwt.Callback
-         * @description The response varies based on the authentication backend used.
-         */
-        get: operations["oauth_github_jwt_callback_auth_github_callback_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/auth/desktop/authorize": {
         parameters: {
             query?: never;
@@ -558,6 +521,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/mcp-connections/statuses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Cloud Mcp Connection Statuses Endpoint */
+        get: operations["list_cloud_mcp_connection_statuses_endpoint_v1_cloud_mcp_connections_statuses_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/mcp-connections/{connection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sync Cloud Mcp Connection Endpoint */
+        put: operations["sync_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__put"];
+        post?: never;
+        /** Delete Cloud Mcp Connection Endpoint */
+        delete: operations["delete_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/webhooks/e2b": {
         parameters: {
             query?: never;
@@ -717,6 +715,17 @@ export interface components {
             blocked: boolean;
             /** Blockedreason */
             blockedReason?: string | null;
+        };
+        /** CloudMcpConnectionSyncStatus */
+        CloudMcpConnectionSyncStatus: {
+            /** Connectionid */
+            connectionId: string;
+            /** Catalogentryid */
+            catalogEntryId: string;
+            /** Synced */
+            synced: boolean;
+            /** Lastsyncedat */
+            lastSyncedAt?: string | null;
         };
         /** CloudPlanInfo */
         CloudPlanInfo: {
@@ -899,15 +908,18 @@ export interface components {
              */
             version: string;
         };
-        /** OAuth2AuthorizeResponse */
-        OAuth2AuthorizeResponse: {
-            /** Authorization Url */
-            authorization_url: string;
-        };
         /** OAuthAvailabilityResponse */
         OAuthAvailabilityResponse: {
             /** Enabled */
             enabled: boolean;
+        };
+        /** OkResponse */
+        OkResponse: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
         };
         /**
          * PendingTokenRequest
@@ -1098,6 +1110,15 @@ export interface components {
             relativePath: string;
             /** Contentbase64 */
             contentBase64: string;
+        };
+        /** SyncCloudMcpConnectionRequest */
+        SyncCloudMcpConnectionRequest: {
+            /** Catalogentryid */
+            catalogEntryId: string;
+            /** Secretfields */
+            secretFields: {
+                [key: string]: string;
+            };
         };
         /** SyncCodexCredentialRequest */
         SyncCodexCredentialRequest: {
@@ -1576,80 +1597,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    oauth_github_jwt_authorize_auth_github_authorize_get: {
-        parameters: {
-            query?: {
-                scopes?: string[];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OAuth2AuthorizeResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    oauth_github_jwt_callback_auth_github_callback_get: {
-        parameters: {
-            query?: {
-                code?: string | null;
-                code_verifier?: string | null;
-                state?: string | null;
-                error?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorModel"];
-                };
             };
             /** @description Validation Error */
             422: {
@@ -2585,6 +2532,92 @@ export interface operations {
                     "application/json": {
                         [key: string]: boolean;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_cloud_mcp_connection_statuses_endpoint_v1_cloud_mcp_connections_statuses_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudMcpConnectionSyncStatus"][];
+                };
+            };
+        };
+    };
+    sync_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncCloudMcpConnectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_cloud_mcp_connection_endpoint_v1_cloud_mcp_connections__connection_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
                 };
             };
             /** @description Validation Error */
