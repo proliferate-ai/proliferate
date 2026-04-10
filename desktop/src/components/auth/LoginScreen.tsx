@@ -8,6 +8,7 @@ interface LoginScreenProps {
   busy: boolean;
   error: string | null;
   githubSignInAvailable: boolean;
+  githubSignInChecking: boolean;
   githubSignInUnavailableDescription: string;
   onGitHubSignIn: () => void;
   onContinueLocally: () => void;
@@ -19,6 +20,7 @@ export function LoginScreen({
   busy,
   error,
   githubSignInAvailable,
+  githubSignInChecking,
   githubSignInUnavailableDescription,
   onGitHubSignIn,
   onContinueLocally,
@@ -43,15 +45,19 @@ export function LoginScreen({
             size="md"
             loading={submitting}
             onClick={onGitHubSignIn}
-            disabled={busy || !githubSignInAvailable}
+            disabled={busy || githubSignInChecking || !githubSignInAvailable}
             className="h-11 w-full"
           >
             {!submitting && <GitHub className="h-4 w-4 shrink-0" />}
-            {submitting ? AUTH_LOGIN_LABELS.waiting : AUTH_LOGIN_LABELS.signIn}
+            {submitting
+              ? AUTH_LOGIN_LABELS.waiting
+              : githubSignInChecking
+                ? AUTH_LOGIN_LABELS.checking
+                : AUTH_LOGIN_LABELS.signIn}
             {!submitting && <ArrowRight className="h-4 w-4" />}
           </Button>
 
-          {!githubSignInAvailable && (
+          {(githubSignInChecking || !githubSignInAvailable) && (
             <p className="text-sm text-muted-foreground">
               {githubSignInUnavailableDescription}
             </p>

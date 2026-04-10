@@ -9,6 +9,7 @@ export function CloudSignInRequiredPane() {
   const {
     signIn,
     submitting: signingIn,
+    signInChecking,
     error: signInError,
   } = useGitHubSignIn();
 
@@ -34,11 +35,15 @@ export function CloudSignInRequiredPane() {
             type="button"
             variant="secondary"
             onClick={() => void signIn()}
-            disabled={signingIn}
+            disabled={signingIn || signInChecking}
             loading={signingIn}
             className="w-fit"
           >
-            {signingIn ? AUTH_ACCOUNT_LABELS.signingIn : AUTH_ACCOUNT_LABELS.signIn}
+            {signingIn
+              ? AUTH_ACCOUNT_LABELS.signingIn
+              : signInChecking
+                ? AUTH_ACCOUNT_LABELS.checkingSignIn
+                : AUTH_ACCOUNT_LABELS.signIn}
           </Button>
 
           {signInError && (

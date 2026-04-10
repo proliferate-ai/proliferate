@@ -14,6 +14,11 @@ import { useAgentAutoReconcile } from "@/hooks/agents/use-agent-auto-reconcile"
 import { useConnectorSyncRetryDaemon } from "@/hooks/mcp/use-connector-sync-retry-daemon"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/use-shortcut-dispatcher"
 import { useTurnEndSound } from "@/hooks/sessions/use-turn-end-sound"
+import {
+  elapsedStartupMs,
+  logStartupDebug,
+  startStartupTimer,
+} from "@/lib/infra/debug-startup"
 import { bootstrapHarnessRuntime } from "@/lib/integrations/anyharness/runtime-bootstrap"
 import { AppErrorBoundary } from "@/components/ui/AppErrorBoundary"
 import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"
@@ -51,6 +56,7 @@ function App() {
   useConnectorSyncRetryDaemon()
 
   useEffect(() => {
+    logStartupDebug("app.bootstrap.start")
     initializeTheme()
     const applyStoredTheme = () => {
       const { themePreset, colorMode } = useUserPreferencesStore.getState()
@@ -74,7 +80,15 @@ function App() {
     void bootstrapUserPreferences().then(applyStoredTheme)
     void bootstrapRepoPreferences()
     void bootstrapWorkspaceUi()
-    void bootstrapAuth()
+
+    const authBootstrapStartedAt = startStartupTimer()
+    logStartupDebug("app.auth_bootstrap.start")
+    void bootstrapAuth().finally(() => {
+      logStartupDebug("app.auth_bootstrap.completed", {
+        elapsedMs: elapsedStartupMs(authBootstrapStartedAt),
+        authStatus: useAuthStore.getState().status,
+      })
+    })
     return () => {
       unsubscribeTheme()
       systemModeQuery.removeEventListener("change", handleSystemModeChange)
@@ -83,7 +97,14 @@ function App() {
 
   useEffect(() => {
     if (authStatus !== "bootstrapping") {
-      void bootstrapHarnessRuntime()
+      const runtimeBootstrapStartedAt = startStartupTimer()
+      logStartupDebug("app.runtime_bootstrap.start", { authStatus })
+      void bootstrapHarnessRuntime().finally(() => {
+        logStartupDebug("app.runtime_bootstrap.completed", {
+          elapsedMs: elapsedStartupMs(runtimeBootstrapStartedAt),
+          authStatus,
+        })
+      })
     }
   }, [authStatus])
 

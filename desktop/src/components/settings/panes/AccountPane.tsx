@@ -20,14 +20,18 @@ export function AccountPane() {
   const {
     signIn: signInWithGitHub,
     submitting: signingIn,
+    signInChecking,
     error: signInError,
   } = useGitHubSignIn();
-  const { cloudSignInAvailable, cloudUnavailable } = useCloudAvailabilityState();
+  const { cloudSignInAvailable, cloudSignInChecking, cloudUnavailable } = useCloudAvailabilityState();
   const [signingOut, setSigningOut] = useState(false);
   const devAuthBypassed = isDevAuthBypassed();
   const isAuthenticated = status === "authenticated";
   const localMode = cloudUnavailable && !devAuthBypassed && !isAuthenticated;
-  const signInUnavailable = !cloudUnavailable && !cloudSignInAvailable && !isAuthenticated;
+  const signInUnavailable = !cloudUnavailable
+    && !cloudSignInChecking
+    && !cloudSignInAvailable
+    && !isAuthenticated;
   const signedInWhileCloudUnavailable = cloudUnavailable && isAuthenticated;
 
   async function handleSignOut() {
@@ -63,6 +67,8 @@ export function AccountPane() {
                 ? user?.email ?? "Signed in"
                 : localMode
                   ? CAPABILITY_COPY.accountLocalDescription
+                  : cloudSignInChecking
+                    ? CAPABILITY_COPY.githubAuthCheckingDescription
                   : signInUnavailable
                     ? CAPABILITY_COPY.accountAuthUnavailableDescription
                     : AUTH_ACCOUNT_LABELS.anonymousDescription
@@ -72,6 +78,8 @@ export function AccountPane() {
             <span className="text-sm text-muted-foreground">{AUTH_ACCOUNT_LABELS.localPill}</span>
           ) : localMode ? (
             <span className="text-sm text-muted-foreground">{AUTH_ACCOUNT_LABELS.localPill}</span>
+          ) : cloudSignInChecking ? (
+            <span className="text-sm text-muted-foreground">Checking…</span>
           ) : signInUnavailable ? (
             <span className="text-sm text-muted-foreground">Unavailable</span>
           ) : isAuthenticated ? (
@@ -87,10 +95,14 @@ export function AccountPane() {
             <Button
               variant="secondary"
               onClick={() => void signInWithGitHub()}
-              disabled={signingIn}
+              disabled={signingIn || signInChecking}
               loading={signingIn}
             >
-              {signingIn ? AUTH_ACCOUNT_LABELS.signingIn : AUTH_ACCOUNT_LABELS.signIn}
+              {signingIn
+                ? AUTH_ACCOUNT_LABELS.signingIn
+                : signInChecking
+                  ? AUTH_ACCOUNT_LABELS.checkingSignIn
+                  : AUTH_ACCOUNT_LABELS.signIn}
             </Button>
           )}
         </SettingsCardRow>
@@ -104,6 +116,8 @@ export function AccountPane() {
                 ? CAPABILITY_COPY.githubSignedInUnavailableDescription
               : localMode
                 ? CAPABILITY_COPY.githubLocalDescription
+                : cloudSignInChecking
+                  ? CAPABILITY_COPY.githubAuthCheckingDescription
                 : signInUnavailable
                   ? CAPABILITY_COPY.githubAuthUnavailableDescription
               : isAuthenticated
@@ -116,6 +130,8 @@ export function AccountPane() {
               ? "Bypassed"
               : localMode || signInUnavailable
                 ? "Unavailable"
+                : cloudSignInChecking
+                  ? "Checking…"
                 : isAuthenticated
                   ? "Connected"
                   : "Not connected"}

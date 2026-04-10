@@ -6,6 +6,12 @@ import {
 import {
   buildProliferateApiUrl,
 } from "@/lib/infra/proliferate-api"
+import {
+  elapsedStartupMs,
+  logStartupDebug,
+  startStartupTimer,
+  summarizeStartupError,
+} from "@/lib/infra/debug-startup"
 
 export interface AuthUser {
   id: string
@@ -235,18 +241,37 @@ export function sessionUser(session: StoredAuthSession): AuthUser {
 }
 
 export async function isGitHubDesktopAuthAvailable(): Promise<boolean> {
-  const response = await fetchAuthResponse(buildUrl("/auth/desktop/github/availability"), {
-    headers: {
-      Accept: "application/json",
-    },
-  })
+  const startedAt = startStartupTimer()
+  logStartupDebug("auth.github_desktop_availability.start")
 
-  if (!response.ok) {
-    throw await parseError(response)
+  try {
+    const response = await fetchAuthResponse(buildUrl("/auth/desktop/github/availability"), {
+      headers: {
+        Accept: "application/json",
+      },
+    })
+
+    if (!response.ok) {
+      logStartupDebug("auth.github_desktop_availability.failed", {
+        elapsedMs: elapsedStartupMs(startedAt),
+        status: response.status,
+      })
+      throw await parseError(response)
+    }
+
+    const payload = (await response.json()) as OAuthAvailabilityResponse
+    logStartupDebug("auth.github_desktop_availability.completed", {
+      elapsedMs: elapsedStartupMs(startedAt),
+      enabled: payload.enabled,
+    })
+    return payload.enabled
+  } catch (error) {
+    logStartupDebug("auth.github_desktop_availability.failed", {
+      elapsedMs: elapsedStartupMs(startedAt),
+      ...summarizeStartupError(error),
+    })
+    throw error
   }
-
-  const payload = (await response.json()) as OAuthAvailabilityResponse
-  return payload.enabled
 }
 
 export async function beginGitHubDesktopSignIn(
@@ -354,38 +379,78 @@ export async function pollGitHubDesktopSession(
 export async function refreshDesktopUserSession(
   refreshToken: string,
 ): Promise<StoredAuthSession> {
-  const response = await fetchAuthResponse(buildUrl("/auth/desktop/refresh"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({
-      refresh_token: refreshToken,
-      grant_type: "refresh_token",
-    }),
-  })
+  const startedAt = startStartupTimer()
+  logStartupDebug("auth.session_refresh.start")
 
-  if (!response.ok) {
-    throw await parseError(response)
+  try {
+    const response = await fetchAuthResponse(buildUrl("/auth/desktop/refresh"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        refresh_token: refreshToken,
+        grant_type: "refresh_token",
+      }),
+    })
+
+    if (!response.ok) {
+      logStartupDebug("auth.session_refresh.failed", {
+        elapsedMs: elapsedStartupMs(startedAt),
+        status: response.status,
+      })
+      throw await parseError(response)
+    }
+
+    const session = toStoredSession((await response.json()) as DesktopTokenResponse)
+    logStartupDebug("auth.session_refresh.completed", {
+      elapsedMs: elapsedStartupMs(startedAt),
+      expiresAt: session.expires_at,
+    })
+    return session
+  } catch (error) {
+    logStartupDebug("auth.session_refresh.failed", {
+      elapsedMs: elapsedStartupMs(startedAt),
+      ...summarizeStartupError(error),
+    })
+    throw error
   }
-
-  return toStoredSession((await response.json()) as DesktopTokenResponse)
 }
 
 export async function fetchCurrentDesktopUser(accessToken: string): Promise<AuthUser> {
-  const response = await fetchAuthResponse(buildUrl("/users/me"), {
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-  })
+  const startedAt = startStartupTimer()
+  logStartupDebug("auth.current_user.start")
 
-  if (!response.ok) {
-    throw await parseError(response)
+  try {
+    const response = await fetchAuthResponse(buildUrl("/users/me"), {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+    if (!response.ok) {
+      logStartupDebug("auth.current_user.failed", {
+        elapsedMs: elapsedStartupMs(startedAt),
+        status: response.status,
+      })
+      throw await parseError(response)
+    }
+
+    const user = (await response.json()) as AuthUser
+    logStartupDebug("auth.current_user.completed", {
+      elapsedMs: elapsedStartupMs(startedAt),
+      hasGitHubLogin: Boolean(user.github_login),
+    })
+    return user
+  } catch (error) {
+    logStartupDebug("auth.current_user.failed", {
+      elapsedMs: elapsedStartupMs(startedAt),
+      ...summarizeStartupError(error),
+    })
+    throw error
   }
-
-  return (await response.json()) as AuthUser
 }
 
 export { AuthRequestError }

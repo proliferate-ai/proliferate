@@ -12,7 +12,6 @@ export function useGitHubDesktopAuthAvailability() {
     queryKey: githubDesktopAuthAvailabilityKey(apiBaseUrl),
     queryFn: isGitHubDesktopAuthAvailable,
     enabled: controlPlaneReachable,
-    initialData: false,
     staleTime: 15_000,
     refetchInterval: 15_000,
     retry: 1,

@@ -6,6 +6,7 @@ export const AUTH_GATE_LABELS = {
 export const AUTH_LOGIN_LABELS = {
   intro: "Welcome! Sign in to get started.",
   signIn: "Sign in with GitHub",
+  checking: "Checking GitHub sign-in...",
   waiting: "Waiting for GitHub...",
   continueLocally: "Continue locally",
 } as const;
@@ -23,6 +24,7 @@ export const AUTH_ACCOUNT_LABELS = {
     "Local workspaces are available without an account. Sign in to use cloud workspaces and credential sync.",
   localPill: "Local",
   signIn: "Sign in",
+  checkingSignIn: "Checking GitHub...",
   signingIn: "Waiting for GitHub...",
   signOut: "Sign out",
   signingOut: "Signing out...",

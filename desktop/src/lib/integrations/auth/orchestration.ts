@@ -43,6 +43,12 @@ import {
   captureTelemetryException,
 } from "@/lib/integrations/telemetry/client";
 import { checkControlPlaneReachable } from "@/lib/integrations/cloud/health";
+import {
+  elapsedStartupMs,
+  logStartupDebug,
+  startStartupTimer,
+  summarizeStartupError,
+} from "@/lib/infra/debug-startup";
 
 function applyDevBypassState(): void {
   const session = createDevBypassSession();
@@ -221,11 +227,16 @@ async function restorePendingCallbackMarker(
 }
 
 export async function bootstrapAuth(): Promise<void> {
+  const startedAt = startStartupTimer();
   useAuthStore.setState({ status: "bootstrapping", error: null });
+  logStartupDebug("auth.bootstrap.start");
 
   if (isDevAuthBypassed()) {
     await clearStoredPendingAuthSession();
     applyDevBypassState();
+    logStartupDebug("auth.bootstrap.dev_bypass", {
+      elapsedMs: elapsedStartupMs(startedAt),
+    });
     return;
   }
 
@@ -243,6 +254,9 @@ export async function bootstrapAuth(): Promise<void> {
         user: sessionUser(storedSession),
         error: null,
       });
+      logStartupDebug("auth.bootstrap.control_plane_unreachable.cached_session", {
+        elapsedMs: elapsedStartupMs(startedAt),
+      });
       return;
     }
 
@@ -251,6 +265,9 @@ export async function bootstrapAuth(): Promise<void> {
       session: null,
       user: null,
       error: null,
+    });
+    logStartupDebug("auth.bootstrap.control_plane_unreachable.anonymous", {
+      elapsedMs: elapsedStartupMs(startedAt),
     });
     return;
   }
@@ -272,10 +289,14 @@ export async function bootstrapAuth(): Promise<void> {
       user: null,
       error: null,
     });
+    logStartupDebug("auth.bootstrap.no_stored_session", {
+      elapsedMs: elapsedStartupMs(startedAt),
+    });
     return;
   }
 
   try {
+    logStartupDebug("auth.bootstrap.validate_stored_session.start");
     const { session, user } = await validateSession(storedSession);
     const persistedSession = persistValidatedSession(session, user);
     await setStoredAuthSession(persistedSession);
@@ -285,6 +306,9 @@ export async function bootstrapAuth(): Promise<void> {
       user,
       error: null,
     });
+    logStartupDebug("auth.bootstrap.validate_stored_session.completed", {
+      elapsedMs: elapsedStartupMs(startedAt),
+    });
   } catch (error) {
     if (isTransientBootstrapError(error)) {
       useAuthStore.setState({
@@ -293,11 +317,19 @@ export async function bootstrapAuth(): Promise<void> {
         user: sessionUser(storedSession),
         error: null,
       });
+      logStartupDebug("auth.bootstrap.transient_failure_background_recovery", {
+        elapsedMs: elapsedStartupMs(startedAt),
+        ...summarizeStartupError(error),
+      });
       void recoverValidatedSessionAfterTransientFailure(storedSession);
       return;
     }
 
     await applyAnonymousState();
+    logStartupDebug("auth.bootstrap.failed_anonymous", {
+      elapsedMs: elapsedStartupMs(startedAt),
+      ...summarizeStartupError(error),
+    });
     throw toError(error, "Auth bootstrap failed");
   }
 }

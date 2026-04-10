@@ -42,6 +42,7 @@ function renderSettingsSection(
   repositories: SettingsRepositoryEntry[],
   cloudEnabled: boolean,
   cloudActive: boolean,
+  cloudSignInChecking: boolean,
   cloudSignInAvailable: boolean,
 ): ReactNode {
   if (activeSection === "configuration") {
@@ -62,6 +63,10 @@ function renderSettingsSection(
       return <CloudPane repositories={repositories} />;
     }
 
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
   if (activeSection === "cloudRepo") {
@@ -71,6 +76,10 @@ function renderSettingsSection(
 
     if (cloudActive) {
       return <CloudRepoSettingsScreen repository={cloudRepository} />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
     }
 
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
@@ -91,7 +100,7 @@ export function SettingsScreen({
   onSelectSection,
   onSelectRepo,
 }: SettingsScreenProps) {
-  const { cloudActive, cloudEnabled, cloudSignInAvailable } = useCloudAvailabilityState();
+  const { cloudActive, cloudEnabled, cloudSignInAvailable, cloudSignInChecking } = useCloudAvailabilityState();
   const {
     phase,
     availableVersion,
@@ -148,6 +157,7 @@ export function SettingsScreen({
                   repositories,
                   cloudEnabled,
                   cloudActive,
+                  cloudSignInChecking,
                   cloudSignInAvailable,
                 )}
               </SettingsContentBoundary>

@@ -21,6 +21,7 @@ function SignInGateView() {
     submitting,
     error,
     signInAvailable,
+    signInChecking,
     signInUnavailableDescription,
   } = useGitHubSignIn();
 
@@ -30,6 +31,7 @@ function SignInGateView() {
       busy={submitting}
       error={error}
       githubSignInAvailable={signInAvailable}
+      githubSignInChecking={signInChecking}
       githubSignInUnavailableDescription={signInUnavailableDescription}
       onGitHubSignIn={() => {
         void signIn();

@@ -13,6 +13,7 @@ export function useLoginPage() {
     submitting,
     error,
     signInAvailable: githubSignInAvailable,
+    signInChecking: githubSignInChecking,
     signInUnavailableDescription: githubSignInUnavailableDescription,
   } = useGitHubSignIn();
   const canContinueLocally = !isProductAuthRequired();
@@ -38,6 +39,7 @@ export function useLoginPage() {
     error,
     busy,
     githubSignInAvailable,
+    githubSignInChecking,
     githubSignInUnavailableDescription,
     handleGitHubSignIn,
     handleContinueLocally,

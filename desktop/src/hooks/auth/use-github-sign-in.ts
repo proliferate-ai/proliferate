@@ -9,6 +9,7 @@ export interface UseGitHubSignInResult {
   submitting: boolean;
   error: string | null;
   signInAvailable: boolean;
+  signInChecking: boolean;
   signInUnavailableDescription: string;
   clearError: () => void;
 }
@@ -16,13 +17,19 @@ export interface UseGitHubSignInResult {
 export function useGitHubSignIn(): UseGitHubSignInResult {
   const { signInWithGitHub } = useAuthActions();
   const { cloudEnabled } = useAppCapabilities();
-  const { data: githubDesktopAuthAvailable = false } = useGitHubDesktopAuthAvailability();
+  const {
+    data: githubDesktopAuthAvailable,
+    isPending: githubDesktopAuthAvailabilityPending,
+  } = useGitHubDesktopAuthAvailability();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const signInAvailable = cloudEnabled && githubDesktopAuthAvailable;
-  const signInUnavailableDescription = cloudEnabled
-    ? CAPABILITY_COPY.githubAuthUnavailableDescription
+  const signInChecking = cloudEnabled && githubDesktopAuthAvailabilityPending;
+  const signInAvailable = cloudEnabled && githubDesktopAuthAvailable === true;
+  const signInUnavailableDescription = signInChecking
+    ? CAPABILITY_COPY.githubAuthCheckingDescription
+    : cloudEnabled
+      ? CAPABILITY_COPY.githubAuthUnavailableDescription
     : CAPABILITY_COPY.githubLocalDescription;
 
   const signIn = useCallback(async () => {
@@ -52,6 +59,7 @@ export function useGitHubSignIn(): UseGitHubSignInResult {
     submitting,
     error,
     signInAvailable,
+    signInChecking,
     signInUnavailableDescription,
     clearError,
   };

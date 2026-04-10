@@ -7,6 +7,7 @@ export function LoginPage() {
     busy,
     error,
     githubSignInAvailable,
+    githubSignInChecking,
     githubSignInUnavailableDescription,
     handleGitHubSignIn,
     handleContinueLocally,
@@ -19,6 +20,7 @@ export function LoginPage() {
       busy={busy}
       error={error}
       githubSignInAvailable={githubSignInAvailable}
+      githubSignInChecking={githubSignInChecking}
       githubSignInUnavailableDescription={githubSignInUnavailableDescription}
       onGitHubSignIn={() => void handleGitHubSignIn()}
       onContinueLocally={handleContinueLocally}

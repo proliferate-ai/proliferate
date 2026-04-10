@@ -29,6 +29,8 @@ export const CAPABILITY_COPY = {
     "This environment can reach the control plane, but desktop GitHub sign-in is not configured.",
   githubLocalDescription:
     "GitHub sign-in is unavailable while the control plane is unreachable.",
+  githubAuthCheckingDescription:
+    "Checking whether GitHub sign-in is configured for this environment.",
   githubAuthUnavailableDescription:
     "GitHub sign-in is not configured for this environment.",
   githubSignedInUnavailableDescription:

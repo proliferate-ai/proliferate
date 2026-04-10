@@ -1,4 +1,10 @@
 import { buildProliferateApiUrl } from "@/lib/infra/proliferate-api";
+import {
+  elapsedStartupMs,
+  logStartupDebug,
+  startStartupTimer,
+  summarizeStartupError,
+} from "@/lib/infra/debug-startup";
 
 let lastKnownControlPlaneReachable: boolean | null = null;
 
@@ -7,6 +13,9 @@ export function getLastKnownControlPlaneReachable(): boolean | null {
 }
 
 export async function checkControlPlaneReachable(): Promise<boolean> {
+  const startedAt = startStartupTimer();
+  logStartupDebug("control_plane.health.start");
+
   try {
     const response = await fetch(buildProliferateApiUrl("/health"), {
       headers: {
@@ -15,9 +24,18 @@ export async function checkControlPlaneReachable(): Promise<boolean> {
     });
     const reachable = response.ok;
     lastKnownControlPlaneReachable = reachable;
+    logStartupDebug("control_plane.health.completed", {
+      elapsedMs: elapsedStartupMs(startedAt),
+      reachable,
+      status: response.status,
+    });
     return reachable;
-  } catch {
+  } catch (error) {
     lastKnownControlPlaneReachable = false;
+    logStartupDebug("control_plane.health.failed", {
+      elapsedMs: elapsedStartupMs(startedAt),
+      ...summarizeStartupError(error),
+    });
     return false;
   }
 }
