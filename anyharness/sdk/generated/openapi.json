@@ -1,0 +1,5514 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AnyHarness Runtime API",
+    "description": "Local sidecar runtime for managing coding agent installations, credentials, and ACP sessions.",
+    "license": {
+      "name": "AGPL-3.0",
+      "identifier": "AGPL-3.0"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "operationId": "get_health",
+        "responses": {
+          "200": {
+            "description": "Runtime health check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "list_agents",
+        "responses": {
+          "200": {
+            "description": "List all supported agents with readiness state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/reconcile": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "get_reconcile_status",
+        "responses": {
+          "200": {
+            "description": "Current agent reconcile status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcileAgentsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "reconcile_agents",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconcileAgentsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Agent reconcile started or reused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcileAgentsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "get_agent",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent readiness summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}/install": {
+      "post": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "install_agent",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallAgentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Agent installed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallAgentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Agent not installable or not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Install failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Download or registry failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}/login/start": {
+      "post": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "start_agent_login",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartAgentLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Login instructions returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartAgentLoginResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Login not supported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/model-registries": {
+      "get": {
+        "tags": [
+          "model-registries"
+        ],
+        "operationId": "list_model_registries",
+        "responses": {
+          "200": {
+            "description": "Backend-owned model registries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ModelRegistry"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/model-registries/{kind}": {
+      "get": {
+        "tags": [
+          "model-registries"
+        ],
+        "operationId": "get_model_registry",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Harness kind",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Model registry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelRegistry"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Model registry not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/provider-configs": {
+      "get": {
+        "tags": [
+          "provider-configs"
+        ],
+        "operationId": "list_provider_configs",
+        "responses": {
+          "200": {
+            "description": "Provider configuration catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderConfig"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "list_sessions",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "description": "Filter by workspace",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List sessions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Session"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "create_session",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Created session with live ACP actor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "get_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/cancel": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "cancel_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/close": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "close_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/config-options": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "set_session_config_option",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSessionConfigOptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Session config option applied or queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetSessionConfigOptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid config option",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/dismiss": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "dismiss_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session dismissed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/events": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "list_session_events",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after_seq",
+            "in": "query",
+            "description": "Return only events with seq greater than this value",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session event history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SessionEventEnvelope"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/live-config": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "get_live_session_config",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current live config snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSessionLiveConfigResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/permissions/{request_id}/resolve": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "resolve_permission",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "Permission request ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolvePermissionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Permission resolved"
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/prompt": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "prompt_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Prompt accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptSessionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session busy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/raw-notifications": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "list_session_raw_notifications",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after_seq",
+            "in": "query",
+            "description": "Return only raw notifications with seq greater than this value",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Raw ACP notification history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SessionRawNotificationEnvelope"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/resume": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "resume_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/title": {
+      "patch": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "update_session_title",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSessionTitleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated session title",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid title",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "list_workspaces",
+        "responses": {
+          "200": {
+            "description": "List workspaces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Workspace"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "create_workspace",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkspaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Created workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid path",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/repos": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "register_repo_workspace",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRepoWorkspaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Registered repo workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid repo path",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/resolve": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "resolve_workspace",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveWorkspaceFromPathRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Resolved workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid path",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/worktrees": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "create_worktree",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorktreeWorkspaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Created worktree workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateWorktreeWorkspaceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Source workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "get_workspace",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/detect-setup": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "detect_project_setup",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detected project setup hints",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectProjectSetupResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/display-name": {
+      "patch": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "update_workspace_display_name",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkspaceDisplayNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated workspace display name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid display name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/git/branches": {
+      "get": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "list_git_branches",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Branch list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GitBranchRef"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/git/commit": {
+      "post": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "commit",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Commit created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Commit failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Nothing staged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/git/diff": {
+      "get": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "get_git_diff",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "File path relative to repo root",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File diff",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitDiffResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/git/push": {
+      "post": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "push",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Push result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Push failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Push rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/git/stage": {
+      "post": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "stage_paths",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StagePathsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Files staged"
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/git/status": {
+      "get": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "get_git_status",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Git status snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitStatusSnapshot"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/git/unstage": {
+      "post": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "unstage_paths",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnstagePathsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Files unstaged"
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/hosting/pull-requests": {
+      "post": {
+        "tags": [
+          "hosting"
+        ],
+        "operationId": "create_pull_request",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePullRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Pull request created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatePullRequestResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Hosting error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/hosting/pull-requests/current": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "operationId": "get_current_pull_request",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current pull request for the active branch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentPullRequestResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Hosting error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/processes/run": {
+      "post": {
+        "tags": [
+          "processes"
+        ],
+        "operationId": "run_command",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunCommandRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Command completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunCommandResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid command request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Command execution failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/session-launch": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "get_workspace_session_launch_catalog",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace session launch catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSessionLaunchCatalog"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/sessions/restore": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "restore_dismissed_session",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Restored most recently dismissed session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Session"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/setup-rerun": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "rerun_setup",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Setup execution restarted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSetupStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No setup script configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/setup-start": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "start_setup",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartWorkspaceSetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Setup execution started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSetupStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid setup command",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/setup-status": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "get_setup_status",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Setup execution status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSetupStatusResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No setup execution found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AgentCredentialState": {
+        "type": "string",
+        "enum": [
+          "ready",
+          "missing_env",
+          "login_required",
+          "unknown"
+        ]
+      },
+      "AgentInstallState": {
+        "type": "string",
+        "enum": [
+          "installed",
+          "install_required",
+          "installing",
+          "failed"
+        ]
+      },
+      "AgentReadinessState": {
+        "type": "string",
+        "enum": [
+          "ready",
+          "install_required",
+          "credentials_required",
+          "login_required",
+          "unsupported",
+          "error"
+        ]
+      },
+      "AgentSummary": {
+        "type": "object",
+        "required": [
+          "kind",
+          "displayName",
+          "installState",
+          "nativeRequired",
+          "agentProcess",
+          "credentialState",
+          "readiness",
+          "supportsLogin",
+          "expectedEnvVars"
+        ],
+        "properties": {
+          "agentProcess": {
+            "$ref": "#/components/schemas/ArtifactStatus"
+          },
+          "credentialState": {
+            "$ref": "#/components/schemas/AgentCredentialState"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "docsUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expectedEnvVars": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "installState": {
+            "$ref": "#/components/schemas/AgentInstallState"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "native": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ArtifactStatus"
+              }
+            ]
+          },
+          "nativeRequired": {
+            "type": "boolean"
+          },
+          "readiness": {
+            "$ref": "#/components/schemas/AgentReadinessState"
+          },
+          "supportsLogin": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ArtifactStatus": {
+        "type": "object",
+        "required": [
+          "role",
+          "installed"
+        ],
+        "properties": {
+          "installed": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "type": "string"
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "AvailableCommandsUpdatePayload": {
+        "type": "object",
+        "required": [
+          "availableCommands"
+        ],
+        "properties": {
+          "availableCommands": {
+            "type": "array",
+            "items": {}
+          }
+        }
+      },
+      "CommitRequest": {
+        "type": "object",
+        "required": [
+          "summary"
+        ],
+        "properties": {
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      },
+      "CommitResponse": {
+        "type": "object",
+        "required": [
+          "oid",
+          "summary"
+        ],
+        "properties": {
+          "oid": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      },
+      "ConfigApplyState": {
+        "type": "string",
+        "description": "Whether a live config change was applied immediately or queued for later.",
+        "enum": [
+          "applied",
+          "queued"
+        ]
+      },
+      "ConfigOptionUpdatePayload": {
+        "type": "object",
+        "required": [
+          "liveConfig"
+        ],
+        "properties": {
+          "liveConfig": {
+            "$ref": "#/components/schemas/SessionLiveConfigSnapshot"
+          }
+        }
+      },
+      "ContentPart": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "text",
+              "type"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "text"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "text",
+              "visibility",
+              "type"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "reasoning"
+                ]
+              },
+              "visibility": {
+                "$ref": "#/components/schemas/ReasoningVisibility"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "toolCallId",
+              "title",
+              "type"
+            ],
+            "properties": {
+              "nativeToolName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "toolCallId": {
+                "type": "string"
+              },
+              "toolKind": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "tool_call"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "terminalId",
+              "event",
+              "type"
+            ],
+            "properties": {
+              "data": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "event": {
+                "$ref": "#/components/schemas/TerminalLifecycleEvent"
+              },
+              "exitCode": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "signal": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "terminalId": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "terminal_output"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "path",
+              "type"
+            ],
+            "properties": {
+              "basename": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "endLine": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "line": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "path": {
+                "type": "string"
+              },
+              "preview": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "scope": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/FileReadScope"
+                  }
+                ]
+              },
+              "startLine": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "file_read"
+                ]
+              },
+              "workspacePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "operation",
+              "path",
+              "type"
+            ],
+            "properties": {
+              "additions": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "basename": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "deletions": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "nativeToolName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "newBasename": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "newPath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "newWorkspacePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "openTarget": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/FileOpenTarget"
+                  }
+                ]
+              },
+              "operation": {
+                "$ref": "#/components/schemas/FileChangeOperation"
+              },
+              "patch": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "path": {
+                "type": "string"
+              },
+              "preview": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "file_change"
+                ]
+              },
+              "workspacePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "entries",
+              "type"
+            ],
+            "properties": {
+              "entries": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PlanEntry"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "plan"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "text",
+              "type"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "tool_input_text"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "text",
+              "type"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "tool_result_text"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "CreatePullRequestRequest": {
+        "type": "object",
+        "required": [
+          "title",
+          "baseBranch"
+        ],
+        "properties": {
+          "baseBranch": {
+            "type": "string"
+          },
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "draft": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatePullRequestResponse": {
+        "type": "object",
+        "required": [
+          "pullRequest"
+        ],
+        "properties": {
+          "manualUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pullRequest": {
+            "$ref": "#/components/schemas/PullRequestSummary"
+          }
+        }
+      },
+      "CreateSessionRequest": {
+        "type": "object",
+        "required": [
+          "workspaceId",
+          "agentKind"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "modeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "systemPromptAppend": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateWorkspaceRequest": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateWorktreeWorkspaceRequest": {
+        "type": "object",
+        "required": [
+          "sourceWorkspaceId",
+          "targetPath",
+          "newBranchName"
+        ],
+        "properties": {
+          "baseBranch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "newBranchName": {
+            "type": "string"
+          },
+          "setupScript": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceWorkspaceId": {
+            "type": "string"
+          },
+          "targetPath": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateWorktreeWorkspaceResponse": {
+        "type": "object",
+        "required": [
+          "workspace"
+        ],
+        "properties": {
+          "setupScript": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SetupScriptExecution"
+              }
+            ]
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
+          }
+        }
+      },
+      "CurrentModeUpdatePayload": {
+        "type": "object",
+        "required": [
+          "currentModeId"
+        ],
+        "properties": {
+          "currentModeId": {
+            "type": "string"
+          }
+        }
+      },
+      "CurrentPullRequestResponse": {
+        "type": "object",
+        "properties": {
+          "pullRequest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PullRequestSummary"
+              }
+            ]
+          }
+        }
+      },
+      "DetectProjectSetupResponse": {
+        "type": "object",
+        "required": [
+          "hints"
+        ],
+        "properties": {
+          "hints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SetupHint"
+            }
+          }
+        }
+      },
+      "ErrorEvent": {
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "FileChangeOperation": {
+        "type": "string",
+        "enum": [
+          "create",
+          "edit",
+          "delete",
+          "move"
+        ]
+      },
+      "FileOpenTarget": {
+        "type": "string",
+        "enum": [
+          "file",
+          "diff"
+        ]
+      },
+      "FileReadScope": {
+        "type": "string",
+        "enum": [
+          "full",
+          "line",
+          "range",
+          "unknown"
+        ]
+      },
+      "GetSessionLiveConfigResponse": {
+        "type": "object",
+        "description": "Response payload for fetching the current live session config snapshot.",
+        "properties": {
+          "liveConfig": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionLiveConfigSnapshot",
+                "description": "Current live session config snapshot, if the runtime has observed one."
+              }
+            ]
+          }
+        }
+      },
+      "GetSetupStatusResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "durationMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "exitCode": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SetupScriptStatus"
+          },
+          "stderr": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stdout": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "GitActionAvailability": {
+        "type": "object",
+        "required": [
+          "canCommit",
+          "canPush",
+          "pushLabel",
+          "canCreatePullRequest",
+          "canCreateDraftPullRequest",
+          "canCreateBranchWorkspace"
+        ],
+        "properties": {
+          "canCommit": {
+            "type": "boolean"
+          },
+          "canCreateBranchWorkspace": {
+            "type": "boolean"
+          },
+          "canCreateDraftPullRequest": {
+            "type": "boolean"
+          },
+          "canCreatePullRequest": {
+            "type": "boolean"
+          },
+          "canPush": {
+            "type": "boolean"
+          },
+          "pushLabel": {
+            "type": "string"
+          },
+          "reasonIfBlocked": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "GitBranchRef": {
+        "type": "object",
+        "required": [
+          "name",
+          "isRemote",
+          "isHead",
+          "isDefault"
+        ],
+        "properties": {
+          "isDefault": {
+            "type": "boolean"
+          },
+          "isHead": {
+            "type": "boolean"
+          },
+          "isRemote": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "upstream": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "GitChangedFile": {
+        "type": "object",
+        "required": [
+          "path",
+          "status",
+          "additions",
+          "deletions",
+          "binary",
+          "includedState"
+        ],
+        "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "binary": {
+            "type": "boolean"
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "includedState": {
+            "$ref": "#/components/schemas/GitIncludedState"
+          },
+          "oldPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GitFileStatus"
+          }
+        }
+      },
+      "GitDiffResponse": {
+        "type": "object",
+        "required": [
+          "path",
+          "binary",
+          "truncated",
+          "additions",
+          "deletions"
+        ],
+        "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "binary": {
+            "type": "boolean"
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "patch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "GitFileStatus": {
+        "type": "string",
+        "enum": [
+          "modified",
+          "added",
+          "deleted",
+          "renamed",
+          "copied",
+          "untracked",
+          "conflicted"
+        ]
+      },
+      "GitIncludedState": {
+        "type": "string",
+        "enum": [
+          "included",
+          "excluded",
+          "partial"
+        ]
+      },
+      "GitOperation": {
+        "type": "string",
+        "enum": [
+          "none",
+          "merge",
+          "rebase",
+          "cherry_pick",
+          "revert"
+        ]
+      },
+      "GitStatusSnapshot": {
+        "type": "object",
+        "required": [
+          "workspaceId",
+          "workspacePath",
+          "repoRootPath",
+          "headOid",
+          "detached",
+          "ahead",
+          "behind",
+          "operation",
+          "conflicted",
+          "clean",
+          "summary",
+          "actions",
+          "files"
+        ],
+        "properties": {
+          "actions": {
+            "$ref": "#/components/schemas/GitActionAvailability"
+          },
+          "ahead": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "behind": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "clean": {
+            "type": "boolean"
+          },
+          "conflicted": {
+            "type": "boolean"
+          },
+          "currentBranch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detached": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitChangedFile"
+            }
+          },
+          "headOid": {
+            "type": "string"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/GitOperation"
+          },
+          "repoRootPath": {
+            "type": "string"
+          },
+          "suggestedBaseBranch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "$ref": "#/components/schemas/GitStatusSummary"
+          },
+          "upstreamBranch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "workspacePath": {
+            "type": "string"
+          }
+        }
+      },
+      "GitStatusSummary": {
+        "type": "object",
+        "required": [
+          "changedFiles",
+          "additions",
+          "deletions",
+          "includedFiles",
+          "conflictedFiles"
+        ],
+        "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "changedFiles": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "conflictedFiles": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "includedFiles": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "version",
+          "runtimeHome"
+        ],
+        "properties": {
+          "runtimeHome": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "InstallAgentRequest": {
+        "type": "object",
+        "properties": {
+          "agentProcessVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nativeVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reinstall": {
+            "type": "boolean"
+          }
+        }
+      },
+      "InstallAgentResponse": {
+        "type": "object",
+        "required": [
+          "agent",
+          "alreadyInstalled",
+          "installedArtifacts"
+        ],
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentSummary"
+          },
+          "alreadyInstalled": {
+            "type": "boolean"
+          },
+          "installedArtifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactStatus"
+            }
+          }
+        }
+      },
+      "ItemCompletedEvent": {
+        "type": "object",
+        "required": [
+          "item"
+        ],
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/TranscriptItemPayload"
+          }
+        }
+      },
+      "ItemDeltaEvent": {
+        "type": "object",
+        "required": [
+          "delta"
+        ],
+        "properties": {
+          "delta": {
+            "$ref": "#/components/schemas/TranscriptItemDeltaPayload"
+          }
+        }
+      },
+      "ItemStartedEvent": {
+        "type": "object",
+        "required": [
+          "item"
+        ],
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/TranscriptItemPayload"
+          }
+        }
+      },
+      "LoginCommand": {
+        "type": "object",
+        "required": [
+          "program",
+          "args"
+        ],
+        "properties": {
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "program": {
+            "type": "string"
+          }
+        }
+      },
+      "ModelEntry": {
+        "type": "object",
+        "description": "A known model in the AnyHarness catalog for a given provider.",
+        "required": [
+          "id",
+          "displayName",
+          "isDefault"
+        ],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "Human-readable name (e.g. \"Claude Opus 4.6\")"
+          },
+          "id": {
+            "type": "string",
+            "description": "Session-level model ID exposed by the harness (e.g. \"opus[1m]\")"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "Whether this is the default model for the provider"
+          }
+        }
+      },
+      "ModelRegistry": {
+        "type": "object",
+        "description": "Backend-owned model registry for a harness.",
+        "required": [
+          "kind",
+          "displayName",
+          "models"
+        ],
+        "properties": {
+          "defaultModelId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Default session-level model selector ID for this harness"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Human-readable harness name"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Which agent this registry is for"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelRegistryModel"
+            },
+            "description": "Known models for this harness"
+          }
+        }
+      },
+      "ModelRegistryModel": {
+        "type": "object",
+        "description": "A model row in the backend-owned registry for a given harness.",
+        "required": [
+          "id",
+          "displayName",
+          "isDefault"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional descriptive copy surfaced in launch/settings UIs"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Human-readable name for the model"
+          },
+          "id": {
+            "type": "string",
+            "description": "Session-level model selector ID accepted by the harness"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "Whether this is the default model for the registry"
+          }
+        }
+      },
+      "NormalizedSessionControl": {
+        "type": "object",
+        "description": "A product-normalized live session control derived from raw ACP config options.\n\nThis is the product semantics layer used by clients to render consistent\ncontrols such as model, mode, reasoning, effort, and fast mode across\ndifferent harnesses.",
+        "required": [
+          "key",
+          "rawConfigId",
+          "label",
+          "settable",
+          "values"
+        ],
+        "properties": {
+          "currentValue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Currently selected raw value identifier, if any."
+          },
+          "key": {
+            "type": "string",
+            "description": "Product-level semantic key such as `model`, `mode`, `reasoning`, or `effort`."
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable control label shown to users."
+          },
+          "rawConfigId": {
+            "type": "string",
+            "description": "Identifier sent back when mutating this control.\n\nThis is usually the raw ACP config option identifier, but compatibility\ncontrols may use a reserved synthetic identifier such as `mode`."
+          },
+          "settable": {
+            "type": "boolean",
+            "description": "Whether the control currently exposes more than one selectable value."
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NormalizedSessionControlValue"
+            },
+            "description": "Selectable values currently available for this control."
+          }
+        }
+      },
+      "NormalizedSessionControlValue": {
+        "type": "object",
+        "description": "A normalized selectable value for product-facing live session controls.\n\nThis intentionally remains distinct from `RawSessionConfigValue` even though\nthe current shapes are similar. The normalized layer is expected to evolve\nindependently from the raw ACP wire shape as product-facing control metadata\ngrows over time.",
+        "required": [
+          "value",
+          "label"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional user-facing description."
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable label shown to users."
+          },
+          "value": {
+            "type": "string",
+            "description": "Stable raw value identifier to send back when mutating this control."
+          }
+        }
+      },
+      "NormalizedSessionControls": {
+        "type": "object",
+        "description": "The normalized live session controls currently recognized by AnyHarness.",
+        "properties": {
+          "collaborationMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NormalizedSessionControl",
+                "description": "Normalized collaboration-mode selector, if exposed by the active session."
+              }
+            ]
+          },
+          "effort": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NormalizedSessionControl",
+                "description": "Normalized reasoning effort/intensity selector, if exposed by the active session."
+              }
+            ]
+          },
+          "extras": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NormalizedSessionControl"
+            },
+            "description": "Additional live controls not mapped into the standard normalized set."
+          },
+          "fastMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NormalizedSessionControl",
+                "description": "Normalized fast-mode selector, if exposed by the active session."
+              }
+            ]
+          },
+          "mode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NormalizedSessionControl",
+                "description": "Normalized mode selector, if exposed by the active session."
+              }
+            ]
+          },
+          "model": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NormalizedSessionControl",
+                "description": "Normalized model selector, if exposed by the active session."
+              }
+            ]
+          },
+          "reasoning": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NormalizedSessionControl",
+                "description": "Normalized reasoning on/off style control, if exposed by the active session."
+              }
+            ]
+          }
+        }
+      },
+      "PendingApprovalSummary": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "title"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "toolCallId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "toolKind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "PermissionDecision": {
+        "type": "string",
+        "enum": [
+          "allow",
+          "deny"
+        ]
+      },
+      "PermissionOutcome": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "optionId",
+              "outcome"
+            ],
+            "properties": {
+              "optionId": {
+                "type": "string"
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "selected"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "outcome"
+            ],
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "cancelled"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "PermissionRequestedEvent": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "title"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "options": {},
+          "rawInput": {},
+          "rawOutput": {},
+          "requestId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "toolCallId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "toolKind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "toolStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "PermissionResolvedEvent": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "outcome"
+        ],
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/PermissionOutcome"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
+      "PlanEntry": {
+        "type": "object",
+        "required": [
+          "content",
+          "status"
+        ],
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status"
+        ],
+        "properties": {
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "instance": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "PromptInputBlock": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "text",
+              "type"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "text"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "PromptSessionRequest": {
+        "type": "object",
+        "required": [
+          "blocks"
+        ],
+        "properties": {
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromptInputBlock"
+            }
+          }
+        }
+      },
+      "PromptSessionResponse": {
+        "type": "object",
+        "required": [
+          "session"
+        ],
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          }
+        }
+      },
+      "ProviderConfig": {
+        "type": "object",
+        "description": "Provider-level configuration metadata describing which models AnyHarness\nintentionally exposes for this agent.",
+        "required": [
+          "kind",
+          "displayName",
+          "models"
+        ],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "Human-readable provider name (e.g. \"Claude\")"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Which agent this config is for"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelEntry"
+            },
+            "description": "Known models for this provider"
+          }
+        }
+      },
+      "PullRequestState": {
+        "type": "string",
+        "enum": [
+          "open",
+          "closed",
+          "merged"
+        ]
+      },
+      "PullRequestSummary": {
+        "type": "object",
+        "required": [
+          "number",
+          "title",
+          "url",
+          "state",
+          "draft",
+          "headBranch",
+          "baseBranch"
+        ],
+        "properties": {
+          "baseBranch": {
+            "type": "string"
+          },
+          "draft": {
+            "type": "boolean"
+          },
+          "headBranch": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "state": {
+            "$ref": "#/components/schemas/PullRequestState"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "PushRequest": {
+        "type": "object",
+        "properties": {
+          "remote": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "PushResponse": {
+        "type": "object",
+        "required": [
+          "remote",
+          "branch",
+          "published"
+        ],
+        "properties": {
+          "branch": {
+            "type": "string"
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "remote": {
+            "type": "string"
+          }
+        }
+      },
+      "RawSessionConfigOption": {
+        "type": "object",
+        "description": "A raw ACP session configuration option as exposed by the active session.\n\nThis is the transport-fidelity layer. It should match the live ACP state as\nclosely as possible without applying product-specific interpretation.",
+        "required": [
+          "id",
+          "name",
+          "type",
+          "currentValue",
+          "options"
+        ],
+        "properties": {
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional ACP semantic category such as `model`, `mode`, or `thought_level`."
+          },
+          "currentValue": {
+            "type": "string",
+            "description": "Currently selected raw value identifier."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional description supplied by the agent."
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable ACP configuration option identifier."
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable label shown to users."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RawSessionConfigValue"
+            },
+            "description": "Selectable raw values currently exposed by the agent."
+          },
+          "type": {
+            "$ref": "#/components/schemas/SessionConfigOptionType",
+            "description": "Input control type for this option."
+          }
+        }
+      },
+      "RawSessionConfigValue": {
+        "type": "object",
+        "description": "A raw selectable value exposed by an active ACP session configuration option.",
+        "required": [
+          "value",
+          "name"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional description supplied by the agent."
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable label shown to users."
+          },
+          "value": {
+            "type": "string",
+            "description": "Stable ACP value identifier used when setting this option."
+          }
+        }
+      },
+      "ReasoningVisibility": {
+        "type": "string",
+        "enum": [
+          "private"
+        ]
+      },
+      "ReconcileAgentResult": {
+        "type": "object",
+        "required": [
+          "kind",
+          "outcome",
+          "installedArtifacts"
+        ],
+        "properties": {
+          "installedArtifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactStatus"
+            }
+          },
+          "kind": {
+            "type": "string"
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ReconcileOutcome"
+          }
+        }
+      },
+      "ReconcileAgentsRequest": {
+        "type": "object",
+        "properties": {
+          "reinstall": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ReconcileAgentsResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "reinstall",
+          "results"
+        ],
+        "properties": {
+          "finishedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "jobId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reinstall": {
+            "type": "boolean"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReconcileAgentResult"
+            }
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReconcileJobStatus"
+          }
+        }
+      },
+      "ReconcileJobStatus": {
+        "type": "string",
+        "enum": [
+          "idle",
+          "queued",
+          "running",
+          "completed",
+          "failed"
+        ]
+      },
+      "ReconcileOutcome": {
+        "type": "string",
+        "enum": [
+          "installed",
+          "already_installed",
+          "skipped",
+          "failed"
+        ]
+      },
+      "RegisterRepoWorkspaceRequest": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "ResolvePermissionRequest": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PermissionDecision"
+              }
+            ]
+          },
+          "optionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ResolveWorkspaceFromPathRequest": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "RunCommandRequest": {
+        "type": "object",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cwd": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "maxOutputBytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "timeoutMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "RunCommandResponse": {
+        "type": "object",
+        "required": [
+          "stdout",
+          "stderr",
+          "exitCode"
+        ],
+        "properties": {
+          "exitCode": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "stderr": {
+            "type": "string"
+          },
+          "stdout": {
+            "type": "string"
+          }
+        }
+      },
+      "Session": {
+        "type": "object",
+        "required": [
+          "id",
+          "workspaceId",
+          "agentKind",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "dismissedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "executionSummary": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionExecutionSummary"
+              }
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "lastPromptAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "liveConfig": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionLiveConfigSnapshot"
+              }
+            ]
+          },
+          "modeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nativeSessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requestedModeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requestedModelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatus"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "SessionConfigOptionType": {
+        "type": "string",
+        "description": "Supported ACP session configuration input types.",
+        "enum": [
+          "select"
+        ]
+      },
+      "SessionEndReason": {
+        "type": "string",
+        "enum": [
+          "closed",
+          "error"
+        ]
+      },
+      "SessionEndedEvent": {
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/SessionEndReason"
+          }
+        }
+      },
+      "SessionEvent": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SessionStartedEvent"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "session_started"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SessionEndedEvent"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "session_ended"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TurnStartedEvent"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "turn_started"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TurnEndedEvent"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "turn_ended"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ItemStartedEvent"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "item_started"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ItemDeltaEvent"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "item_delta"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ItemCompletedEvent"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "item_completed"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AvailableCommandsUpdatePayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "available_commands_update"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CurrentModeUpdatePayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "current_mode_update"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigOptionUpdatePayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "config_option_update"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SessionStateUpdatePayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "session_state_update"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SessionInfoUpdatePayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "session_info_update"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UsageUpdatePayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "usage_update"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PermissionRequestedEvent"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "permission_requested"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PermissionResolvedEvent"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "permission_resolved"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ErrorEvent"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "error"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "SessionEventEnvelope": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "seq",
+          "timestamp",
+          "event"
+        ],
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/SessionEvent"
+          },
+          "itemId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "turnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SessionExecutionPhase": {
+        "type": "string",
+        "enum": [
+          "starting",
+          "running",
+          "awaiting_permission",
+          "idle",
+          "errored",
+          "closed"
+        ]
+      },
+      "SessionExecutionSummary": {
+        "type": "object",
+        "required": [
+          "phase",
+          "hasLiveHandle",
+          "updatedAt"
+        ],
+        "properties": {
+          "hasLiveHandle": {
+            "type": "boolean"
+          },
+          "pendingApproval": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PendingApprovalSummary"
+              }
+            ]
+          },
+          "phase": {
+            "$ref": "#/components/schemas/SessionExecutionPhase"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "SessionInfoUpdatePayload": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SessionLiveConfigSnapshot": {
+        "type": "object",
+        "description": "The current live session configuration snapshot persisted by AnyHarness.\n\nThis contains both the exact raw ACP config state and AnyHarness's\nnormalized control view for convenient client rendering.",
+        "required": [
+          "rawConfigOptions",
+          "normalizedControls",
+          "sourceSeq",
+          "updatedAt"
+        ],
+        "properties": {
+          "normalizedControls": {
+            "$ref": "#/components/schemas/NormalizedSessionControls",
+            "description": "Product-normalized view of the current live controls."
+          },
+          "rawConfigOptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RawSessionConfigOption"
+            },
+            "description": "Exact raw ACP config options currently exposed by the active session."
+          },
+          "sourceSeq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Session event sequence number from which this snapshot was produced."
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "Timestamp when this snapshot was last updated."
+          }
+        }
+      },
+      "SessionRawNotificationEnvelope": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "seq",
+          "timestamp",
+          "notificationKind",
+          "notification"
+        ],
+        "properties": {
+          "notification": {},
+          "notificationKind": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        }
+      },
+      "SessionStartedEvent": {
+        "type": "object",
+        "required": [
+          "nativeSessionId",
+          "sourceAgentKind"
+        ],
+        "properties": {
+          "nativeSessionId": {
+            "type": "string"
+          },
+          "sourceAgentKind": {
+            "type": "string"
+          }
+        }
+      },
+      "SessionStateUpdatePayload": {
+        "type": "object",
+        "properties": {
+          "modeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requestedModeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requestedModelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SessionStatus": {
+        "type": "string",
+        "enum": [
+          "starting",
+          "idle",
+          "running",
+          "completed",
+          "errored",
+          "closed"
+        ]
+      },
+      "SetSessionConfigOptionRequest": {
+        "type": "object",
+        "description": "Request payload for changing a single live session config option.",
+        "required": [
+          "configId",
+          "value"
+        ],
+        "properties": {
+          "configId": {
+            "type": "string",
+            "description": "Raw ACP config option identifier to mutate."
+          },
+          "value": {
+            "type": "string",
+            "description": "Raw ACP value identifier to apply."
+          }
+        }
+      },
+      "SetSessionConfigOptionResponse": {
+        "type": "object",
+        "description": "Response payload for changing a single live session config option.",
+        "required": [
+          "session",
+          "applyState"
+        ],
+        "properties": {
+          "applyState": {
+            "$ref": "#/components/schemas/ConfigApplyState",
+            "description": "Whether the change was applied immediately or queued for later application."
+          },
+          "liveConfig": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionLiveConfigSnapshot",
+                "description": "Latest known live config snapshot after the change was applied or queued."
+              }
+            ]
+          },
+          "session": {
+            "$ref": "#/components/schemas/Session",
+            "description": "Updated session summary after accepting the change."
+          }
+        }
+      },
+      "SetupHint": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "suggestedCommand",
+          "detectedFile",
+          "category"
+        ],
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/SetupHintCategory"
+          },
+          "detectedFile": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "suggestedCommand": {
+            "type": "string"
+          }
+        }
+      },
+      "SetupHintCategory": {
+        "type": "string",
+        "enum": [
+          "build_tool",
+          "secret_sync"
+        ]
+      },
+      "SetupScriptExecution": {
+        "type": "object",
+        "required": [
+          "command",
+          "status",
+          "exitCode",
+          "stdout",
+          "stderr",
+          "durationMs"
+        ],
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "exitCode": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SetupScriptStatus"
+          },
+          "stderr": {
+            "type": "string"
+          },
+          "stdout": {
+            "type": "string"
+          }
+        }
+      },
+      "SetupScriptStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed"
+        ]
+      },
+      "StagePathsRequest": {
+        "type": "object",
+        "required": [
+          "paths"
+        ],
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "StartAgentLoginRequest": {
+        "type": "object"
+      },
+      "StartAgentLoginResponse": {
+        "type": "object",
+        "required": [
+          "kind",
+          "label",
+          "mode",
+          "command",
+          "reusesUserState"
+        ],
+        "properties": {
+          "command": {
+            "$ref": "#/components/schemas/LoginCommand"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mode": {
+            "type": "string"
+          },
+          "reusesUserState": {
+            "type": "boolean"
+          }
+        }
+      },
+      "StartWorkspaceSetupRequest": {
+        "type": "object",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "baseRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "command": {
+            "type": "string"
+          }
+        }
+      },
+      "StopReason": {
+        "type": "string",
+        "enum": [
+          "end_turn",
+          "max_tokens",
+          "max_turn_requests",
+          "refusal",
+          "cancelled"
+        ]
+      },
+      "TerminalLifecycleEvent": {
+        "type": "string",
+        "enum": [
+          "start",
+          "output",
+          "exit"
+        ]
+      },
+      "TranscriptItemDeltaPayload": {
+        "type": "object",
+        "properties": {
+          "appendContentParts": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ContentPart"
+            }
+          },
+          "appendReasoning": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "appendText": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nativeToolName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parentToolCallId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rawInput": {},
+          "rawOutput": {},
+          "replaceContentParts": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ContentPart"
+            }
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TranscriptItemStatus"
+              }
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "TranscriptItemKind": {
+        "type": "string",
+        "enum": [
+          "user_message",
+          "assistant_message",
+          "reasoning",
+          "tool_invocation",
+          "plan",
+          "error_item"
+        ]
+      },
+      "TranscriptItemPayload": {
+        "type": "object",
+        "required": [
+          "kind",
+          "status",
+          "sourceAgentKind"
+        ],
+        "properties": {
+          "contentParts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContentPart"
+            }
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TranscriptItemKind"
+          },
+          "messageId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nativeToolName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parentToolCallId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rawInput": {},
+          "rawOutput": {},
+          "sourceAgentKind": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TranscriptItemStatus"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "toolCallId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "TranscriptItemStatus": {
+        "type": "string",
+        "enum": [
+          "in_progress",
+          "completed",
+          "failed"
+        ]
+      },
+      "TurnEndedEvent": {
+        "type": "object",
+        "required": [
+          "stopReason"
+        ],
+        "properties": {
+          "stopReason": {
+            "$ref": "#/components/schemas/StopReason"
+          }
+        }
+      },
+      "TurnStartedEvent": {
+        "type": "object"
+      },
+      "UnstagePathsRequest": {
+        "type": "object",
+        "required": [
+          "paths"
+        ],
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UpdateSessionTitleRequest": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateWorkspaceDisplayNameRequest": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "New display name. `null` or an empty string clears the override and\nrestores the default branch- or repo-derived label."
+          }
+        }
+      },
+      "UsageUpdatePayload": {
+        "type": "object",
+        "required": [
+          "used",
+          "size"
+        ],
+        "properties": {
+          "cost": {},
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "used": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "Workspace": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "path",
+          "sourceRepoRootPath",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "currentBranch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "executionSummary": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceExecutionSummary"
+              }
+            ]
+          },
+          "gitOwner": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gitProvider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gitRepoName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/WorkspaceKind"
+          },
+          "originalBranch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "sourceRepoRootPath": {
+            "type": "string"
+          },
+          "sourceWorkspaceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkspaceExecutionPhase": {
+        "type": "string",
+        "enum": [
+          "running",
+          "awaiting_permission",
+          "idle",
+          "errored"
+        ]
+      },
+      "WorkspaceExecutionSummary": {
+        "type": "object",
+        "required": [
+          "phase",
+          "totalSessionCount",
+          "liveSessionCount",
+          "runningCount",
+          "awaitingPermissionCount",
+          "idleCount",
+          "erroredCount"
+        ],
+        "properties": {
+          "awaitingPermissionCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "erroredCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "idleCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "liveSessionCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "phase": {
+            "$ref": "#/components/schemas/WorkspaceExecutionPhase"
+          },
+          "runningCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalSessionCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "WorkspaceKind": {
+        "type": "string",
+        "enum": [
+          "repo",
+          "worktree",
+          "local"
+        ]
+      },
+      "WorkspaceSessionLaunchAgent": {
+        "type": "object",
+        "required": [
+          "kind",
+          "displayName",
+          "models"
+        ],
+        "properties": {
+          "defaultModelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceSessionLaunchModel"
+            }
+          }
+        }
+      },
+      "WorkspaceSessionLaunchCatalog": {
+        "type": "object",
+        "required": [
+          "workspaceId",
+          "agents"
+        ],
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceSessionLaunchAgent"
+            }
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkspaceSessionLaunchModel": {
+        "type": "object",
+        "required": [
+          "id",
+          "displayName",
+          "isDefault"
+        ],
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "isDefault": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

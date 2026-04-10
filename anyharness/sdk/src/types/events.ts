@@ -1,19 +1,84 @@
-export interface SessionEventEnvelope {
-  sessionId: string;
-  seq: number;
-  timestamp: string;
-  turnId?: string | null;
-  itemId?: string | null;
-  event: SessionEvent;
-}
+import type { components } from "../generated/openapi.js";
+import {
+  normalizeSessionLiveConfigSnapshot,
+  type SessionLiveConfigSnapshot,
+} from "./sessions.js";
 
-export interface SessionRawNotificationEnvelope {
-  sessionId: string;
-  seq: number;
-  timestamp: string;
-  notificationKind: string;
-  notification: unknown;
-}
+type SessionStartedPayload = components["schemas"]["SessionStartedEvent"];
+type SessionEndedPayload = components["schemas"]["SessionEndedEvent"];
+type TurnEndedPayload = components["schemas"]["TurnEndedEvent"];
+type ItemStartedPayload = components["schemas"]["ItemStartedEvent"];
+type ItemDeltaPayload = components["schemas"]["ItemDeltaEvent"];
+type ItemCompletedPayload = components["schemas"]["ItemCompletedEvent"];
+type AvailableCommandsUpdatePayload =
+  components["schemas"]["AvailableCommandsUpdatePayload"];
+type CurrentModeUpdatePayload =
+  components["schemas"]["CurrentModeUpdatePayload"];
+type ConfigOptionUpdatePayload =
+  components["schemas"]["ConfigOptionUpdatePayload"];
+type SessionStateUpdatePayload =
+  components["schemas"]["SessionStateUpdatePayload"];
+type SessionInfoUpdatePayload = components["schemas"]["SessionInfoUpdatePayload"];
+type UsageUpdatePayload = components["schemas"]["UsageUpdatePayload"];
+
+export type SessionEventEnvelope = Omit<
+  components["schemas"]["SessionEventEnvelope"],
+  "event"
+> & {
+  event: SessionEvent;
+};
+export type SessionRawNotificationEnvelope =
+  components["schemas"]["SessionRawNotificationEnvelope"];
+
+export type SessionStartedEvent = SessionStartedPayload & {
+  type: "session_started";
+};
+export type SessionEndedEvent = SessionEndedPayload & {
+  type: "session_ended";
+};
+export type TurnStartedEvent = { type: "turn_started" };
+export type TurnEndedEvent = TurnEndedPayload & {
+  type: "turn_ended";
+};
+export type ItemStartedEvent = ItemStartedPayload & {
+  type: "item_started";
+};
+export type ItemDeltaEvent = ItemDeltaPayload & {
+  type: "item_delta";
+};
+export type ItemCompletedEvent = ItemCompletedPayload & {
+  type: "item_completed";
+};
+export type AvailableCommandsUpdateEvent = AvailableCommandsUpdatePayload & {
+  type: "available_commands_update";
+};
+export type CurrentModeUpdateEvent = CurrentModeUpdatePayload & {
+  type: "current_mode_update";
+};
+export type ConfigOptionUpdateEvent = Omit<ConfigOptionUpdatePayload, "liveConfig"> & {
+  liveConfig: SessionLiveConfigSnapshot;
+  type: "config_option_update";
+};
+export type SessionStateUpdateEvent = SessionStateUpdatePayload & {
+  type: "session_state_update";
+};
+export type SessionInfoUpdateEvent = SessionInfoUpdatePayload & {
+  type: "session_info_update";
+};
+export type UsageUpdateEvent = UsageUpdatePayload & {
+  type: "usage_update";
+};
+export type PermissionRequestedEvent =
+  components["schemas"]["PermissionRequestedEvent"] & {
+    type: "permission_requested";
+  };
+export type PermissionResolvedEvent =
+  components["schemas"]["PermissionResolvedEvent"] & {
+    type: "permission_resolved";
+  };
+export type ErrorEvent = components["schemas"]["ErrorEvent"] & {
+  type: "error";
+};
 
 export type SessionEvent =
   | SessionStartedEvent
@@ -33,246 +98,48 @@ export type SessionEvent =
   | PermissionResolvedEvent
   | ErrorEvent;
 
-export interface SessionStartedEvent {
-  type: "session_started";
-  nativeSessionId: string;
-  sourceAgentKind: string;
-}
+export type SessionEndReason = components["schemas"]["SessionEndReason"];
+export type StopReason = components["schemas"]["StopReason"];
 
-export interface SessionEndedEvent {
-  type: "session_ended";
-  reason: SessionEndReason;
-}
+export type TranscriptItemPayload = components["schemas"]["TranscriptItemPayload"];
+export type TranscriptItemKind = components["schemas"]["TranscriptItemKind"];
+export type TranscriptItemStatus = components["schemas"]["TranscriptItemStatus"];
+export type TranscriptItemDeltaPayload =
+  components["schemas"]["TranscriptItemDeltaPayload"];
 
-export type SessionEndReason = "closed" | "error";
+export type ContentPart = components["schemas"]["ContentPart"];
+export type TextContentPart = Extract<ContentPart, { type: "text" }>;
+export type ReasoningContentPart = Extract<ContentPart, { type: "reasoning" }>;
+export type ToolCallContentPart = Extract<ContentPart, { type: "tool_call" }>;
+export type TerminalOutputContentPart = Extract<ContentPart, { type: "terminal_output" }>;
+export type FileReadContentPart = Extract<ContentPart, { type: "file_read" }>;
+export type FileChangeContentPart = Extract<ContentPart, { type: "file_change" }>;
+export type PlanContentPart = Extract<ContentPart, { type: "plan" }>;
+export type ToolInputTextContentPart = Extract<ContentPart, { type: "tool_input_text" }>;
+export type ToolResultTextContentPart = Extract<ContentPart, { type: "tool_result_text" }>;
 
-export interface TurnStartedEvent {
-  type: "turn_started";
-}
+export type ReasoningVisibility = components["schemas"]["ReasoningVisibility"];
+export type TerminalLifecycleEvent =
+  components["schemas"]["TerminalLifecycleEvent"];
+export type FileReadScope = components["schemas"]["FileReadScope"];
+export type FileChangeOperation = components["schemas"]["FileChangeOperation"];
+export type FileOpenTarget = components["schemas"]["FileOpenTarget"];
 
-export interface TurnEndedEvent {
-  type: "turn_ended";
-  stopReason: StopReason;
-}
+export type PlanEntry = components["schemas"]["PlanEntry"];
+export type PermissionOutcome = components["schemas"]["PermissionOutcome"];
 
-export type StopReason =
-  | "end_turn"
-  | "max_tokens"
-  | "max_turn_requests"
-  | "refusal"
-  | "cancelled";
+export function normalizeSessionEventEnvelope(
+  envelope: SessionEventEnvelope,
+): SessionEventEnvelope {
+  if (envelope.event.type !== "config_option_update") {
+    return envelope;
+  }
 
-export interface ItemStartedEvent {
-  type: "item_started";
-  item: TranscriptItemPayload;
-}
-
-export interface ItemDeltaEvent {
-  type: "item_delta";
-  delta: TranscriptItemDeltaPayload;
-}
-
-export interface ItemCompletedEvent {
-  type: "item_completed";
-  item: TranscriptItemPayload;
-}
-
-export interface TranscriptItemPayload {
-  kind: TranscriptItemKind;
-  status: TranscriptItemStatus;
-  sourceAgentKind: string;
-  messageId?: string | null;
-  title?: string | null;
-  toolCallId?: string | null;
-  nativeToolName?: string | null;
-  parentToolCallId?: string | null;
-  rawInput?: unknown;
-  rawOutput?: unknown;
-  contentParts?: ContentPart[];
-}
-
-export type TranscriptItemKind =
-  | "user_message"
-  | "assistant_message"
-  | "reasoning"
-  | "tool_invocation"
-  | "plan"
-  | "error_item";
-
-export type TranscriptItemStatus = "in_progress" | "completed" | "failed";
-
-export interface TranscriptItemDeltaPayload {
-  status?: TranscriptItemStatus | null;
-  title?: string | null;
-  nativeToolName?: string | null;
-  parentToolCallId?: string | null;
-  rawInput?: unknown;
-  rawOutput?: unknown;
-  appendText?: string | null;
-  appendReasoning?: string | null;
-  replaceContentParts?: ContentPart[] | null;
-  appendContentParts?: ContentPart[] | null;
-}
-
-export type ContentPart =
-  | TextContentPart
-  | ReasoningContentPart
-  | ToolCallContentPart
-  | TerminalOutputContentPart
-  | FileReadContentPart
-  | FileChangeContentPart
-  | PlanContentPart
-  | ToolInputTextContentPart
-  | ToolResultTextContentPart;
-
-export interface TextContentPart {
-  type: "text";
-  text: string;
-}
-
-export interface ReasoningContentPart {
-  type: "reasoning";
-  text: string;
-  visibility: ReasoningVisibility;
-}
-
-export type ReasoningVisibility = "private";
-
-export interface ToolCallContentPart {
-  type: "tool_call";
-  toolCallId: string;
-  title: string;
-  toolKind?: string | null;
-  nativeToolName?: string | null;
-}
-
-export interface TerminalOutputContentPart {
-  type: "terminal_output";
-  terminalId: string;
-  event: TerminalLifecycleEvent;
-  data?: string | null;
-  exitCode?: number | null;
-  signal?: string | null;
-}
-
-export type TerminalLifecycleEvent = "start" | "output" | "exit";
-
-export interface FileReadContentPart {
-  type: "file_read";
-  path: string;
-  workspacePath?: string | null;
-  basename?: string | null;
-  line?: number | null;
-  scope?: FileReadScope | null;
-  startLine?: number | null;
-  endLine?: number | null;
-  preview?: string | null;
-}
-
-export type FileReadScope = "full" | "line" | "range" | "unknown";
-
-export interface FileChangeContentPart {
-  type: "file_change";
-  operation: FileChangeOperation;
-  path: string;
-  workspacePath?: string | null;
-  basename?: string | null;
-  newPath?: string | null;
-  newWorkspacePath?: string | null;
-  newBasename?: string | null;
-  openTarget?: FileOpenTarget | null;
-  additions?: number | null;
-  deletions?: number | null;
-  patch?: string | null;
-  preview?: string | null;
-  nativeToolName?: string | null;
-}
-
-export type FileChangeOperation = "create" | "edit" | "delete" | "move";
-
-export type FileOpenTarget = "file" | "diff";
-
-export interface PlanContentPart {
-  type: "plan";
-  entries: PlanEntry[];
-}
-
-export interface ToolInputTextContentPart {
-  type: "tool_input_text";
-  text: string;
-}
-
-export interface ToolResultTextContentPart {
-  type: "tool_result_text";
-  text: string;
-}
-
-export interface PlanEntry {
-  content: string;
-  status: string;
-}
-
-export interface AvailableCommandsUpdateEvent {
-  type: "available_commands_update";
-  availableCommands: unknown[];
-}
-
-export interface CurrentModeUpdateEvent {
-  type: "current_mode_update";
-  currentModeId: string;
-}
-
-export interface ConfigOptionUpdateEvent {
-  type: "config_option_update";
-  liveConfig: import("./sessions.js").SessionLiveConfigSnapshot;
-}
-
-export interface SessionStateUpdateEvent {
-  type: "session_state_update";
-  modelId?: string | null;
-  requestedModelId?: string | null;
-  modeId?: string | null;
-  requestedModeId?: string | null;
-}
-
-export interface SessionInfoUpdateEvent {
-  type: "session_info_update";
-  title?: string | null;
-  updatedAt?: string | null;
-}
-
-export interface UsageUpdateEvent {
-  type: "usage_update";
-  used: number;
-  size: number;
-  cost?: unknown;
-}
-
-export interface PermissionRequestedEvent {
-  type: "permission_requested";
-  requestId: string;
-  title: string;
-  description?: string | null;
-  toolCallId?: string | null;
-  toolKind?: string | null;
-  toolStatus?: string | null;
-  rawInput?: unknown;
-  rawOutput?: unknown;
-  options?: unknown;
-}
-
-export interface PermissionResolvedEvent {
-  type: "permission_resolved";
-  requestId: string;
-  outcome: PermissionOutcome;
-}
-
-export type PermissionOutcome =
-  | { outcome: "selected"; optionId: string }
-  | { outcome: "cancelled" };
-
-export interface ErrorEvent {
-  type: "error";
-  message: string;
-  code?: string | null;
+  return {
+    ...envelope,
+    event: {
+      ...envelope.event,
+      liveConfig: normalizeSessionLiveConfigSnapshot(envelope.event.liveConfig),
+    },
+  };
 }

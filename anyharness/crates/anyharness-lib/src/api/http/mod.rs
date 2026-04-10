@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod blocking;
 pub mod error;
 pub mod files;
 pub mod git;

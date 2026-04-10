@@ -14,13 +14,20 @@ import type {
   Session,
   UpdateSessionTitleRequest,
 } from "../types/sessions.js";
+import { normalizeSessionEventEnvelope } from "../types/events.js";
+import {
+  normalizeSession,
+  normalizeSessionLiveConfigSnapshot,
+} from "../types/sessions.js";
 import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
 
 export class SessionsClient {
   constructor(private readonly transport: AnyHarnessTransport) {}
 
   async create(input: CreateSessionRequest, options?: AnyHarnessRequestOptions): Promise<Session> {
-    return this.transport.post<Session>("/v1/sessions", input, options);
+    return normalizeSession(
+      await this.transport.post<Session>("/v1/sessions", input, options),
+    );
   }
 
   async list(
@@ -35,42 +42,62 @@ export class SessionsClient {
       params.set("include_dismissed", "true");
     }
     const query = params.size > 0 ? `?${params.toString()}` : "";
-    return this.transport.get<Session[]>(`/v1/sessions${query}`, options);
+    return (
+      await this.transport.get<Session[]>(`/v1/sessions${query}`, options)
+    ).map(normalizeSession);
   }
 
   async get(sessionId: string, options?: AnyHarnessRequestOptions): Promise<Session> {
-    return this.transport.get<Session>(
+    return normalizeSession(await this.transport.get<Session>(
       `/v1/sessions/${encodeURIComponent(sessionId)}`,
       options,
-    );
+    ));
   }
 
   async updateTitle(
     sessionId: string,
     input: UpdateSessionTitleRequest,
   ): Promise<Session> {
-    return this.transport.patch<Session>(
+    return normalizeSession(await this.transport.patch<Session>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/title`,
       input,
-    );
+    ));
   }
 
   async getLiveConfig(
     sessionId: string,
   ): Promise<GetSessionLiveConfigResponse> {
-    return this.transport.get<GetSessionLiveConfigResponse>(
+    const response = await this.transport.get<GetSessionLiveConfigResponse>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/live-config`,
     );
+    if (!response.liveConfig) {
+      return response;
+    }
+    return {
+      ...response,
+      liveConfig: normalizeSessionLiveConfigSnapshot(response.liveConfig),
+    };
   }
 
   async setConfigOption(
     sessionId: string,
     input: SetSessionConfigOptionRequest,
   ): Promise<SetSessionConfigOptionResponse> {
-    return this.transport.post<SetSessionConfigOptionResponse>(
+    const response = await this.transport.post<SetSessionConfigOptionResponse>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/config-options`,
       input,
     );
+    if (!response.liveConfig) {
+      return {
+        ...response,
+        session: normalizeSession(response.session),
+      };
+    }
+    return {
+      ...response,
+      liveConfig: normalizeSessionLiveConfigSnapshot(response.liveConfig),
+      session: normalizeSession(response.session),
+    };
   }
 
   async prompt(
@@ -78,11 +105,15 @@ export class SessionsClient {
     input: PromptSessionRequest,
     options?: AnyHarnessRequestOptions,
   ): Promise<PromptSessionResponse> {
-    return this.transport.post<PromptSessionResponse>(
+    const response = await this.transport.post<PromptSessionResponse>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/prompt`,
       input,
       options,
     );
+    return {
+      ...response,
+      session: normalizeSession(response.session),
+    };
   }
 
   async promptText(
@@ -96,44 +127,45 @@ export class SessionsClient {
   }
 
   async resume(sessionId: string, options?: AnyHarnessRequestOptions): Promise<Session> {
-    return this.transport.post<Session>(
+    return normalizeSession(await this.transport.post<Session>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/resume`,
       {},
       options,
-    );
+    ));
   }
 
   async cancel(sessionId: string): Promise<Session> {
-    return this.transport.post<Session>(
+    return normalizeSession(await this.transport.post<Session>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/cancel`,
       {},
-    );
+    ));
   }
 
   async dismiss(sessionId: string, options?: AnyHarnessRequestOptions): Promise<Session> {
-    return this.transport.post<Session>(
+    return normalizeSession(await this.transport.post<Session>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/dismiss`,
       {},
       options,
-    );
+    ));
   }
 
   async close(sessionId: string): Promise<Session> {
-    return this.transport.post<Session>(
+    return normalizeSession(await this.transport.post<Session>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/close`,
       {},
-    );
+    ));
   }
 
   async restoreDismissed(
     workspaceId: string,
     options?: AnyHarnessRequestOptions,
   ): Promise<Session | null> {
-    return this.transport.post<Session | null>(
+    const session = await this.transport.post<Session | null>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/sessions/restore`,
       {},
       options,
     );
+    return session ? normalizeSession(session) : null;
   }
 
   async listEvents(
@@ -143,10 +175,11 @@ export class SessionsClient {
     const query = options?.afterSeq != null
       ? `?after_seq=${encodeURIComponent(String(options.afterSeq))}`
       : "";
-    return this.transport.get<SessionEventEnvelope[]>(
+    const envelopes = await this.transport.get<SessionEventEnvelope[]>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/events${query}`,
       options?.request,
     );
+    return envelopes.map(normalizeSessionEventEnvelope);
   }
 
   async listRawNotifications(

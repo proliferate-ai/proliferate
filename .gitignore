@@ -34,10 +34,6 @@ e2b-connection.json
 .env.*.local
 
 references/
-# Generated SDK artifacts (regenerated from Rust)
-anyharness/sdk/generated/
-anyharness/sdk/src/generated/
-
 # Generated cloud client OpenAPI spec (intermediate artifact, regenerated from Python)
 server/openapi.json
 

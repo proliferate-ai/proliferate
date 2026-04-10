@@ -1,4 +1,7 @@
-import type { SessionEventEnvelope } from "../types/events.js";
+import {
+  normalizeSessionEventEnvelope,
+  type SessionEventEnvelope,
+} from "../types/events.js";
 
 export interface SessionStreamOptions {
   baseUrl: string;
@@ -55,20 +58,19 @@ export function streamSession(options: SessionStreamOptions): SessionStreamHandl
 
       const decoder = new TextDecoder();
       let buffer = "";
-      let eventType = "";
       let dataLines: string[] = [];
 
       const flushEvent = () => {
         if (dataLines.length === 0) {
-          eventType = "";
           return;
         }
         const payload = dataLines.join("\n");
         dataLines = [];
-        eventType = "";
         if (!payload) return;
         try {
-          const envelope = JSON.parse(payload) as SessionEventEnvelope;
+          const envelope = normalizeSessionEventEnvelope(
+            JSON.parse(payload) as SessionEventEnvelope,
+          );
           options.onEvent(envelope);
         } catch {
           // Ignore malformed payloads.
@@ -95,7 +97,8 @@ export function streamSession(options: SessionStreamOptions): SessionStreamHandl
           if (line === "") {
             flushEvent();
           } else if (line.startsWith("event:")) {
-            eventType = line.slice(6).trim();
+            // Event names are not used for dispatch; the JSON payload is the
+            // source of truth for normalized session events.
           } else if (line.startsWith("data:")) {
             dataLines.push(line.slice(5).trimStart());
           } else if (line.startsWith(":")) {
@@ -103,10 +106,6 @@ export function streamSession(options: SessionStreamOptions): SessionStreamHandl
           }
 
           lineBreakIndex = buffer.indexOf("\n");
-        }
-
-        if (eventType && dataLines.length === 0) {
-          // Keep event type until matching data arrives.
         }
       }
     } catch (error) {

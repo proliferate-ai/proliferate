@@ -1,156 +1,107 @@
-/**
- * Session contract types.
- */
+import type { components } from "../generated/openapi.js";
 
-export type SessionStatus =
-  | "starting"
-  | "idle"
-  | "running"
-  | "completed"
-  | "errored"
-  | "closed";
+type GeneratedNormalizedSessionControls =
+  components["schemas"]["NormalizedSessionControls"];
+type GeneratedSessionLiveConfigSnapshot =
+  components["schemas"]["SessionLiveConfigSnapshot"];
+type GeneratedGetSessionLiveConfigResponse =
+  components["schemas"]["GetSessionLiveConfigResponse"];
+type GeneratedSetSessionConfigOptionResponse =
+  components["schemas"]["SetSessionConfigOptionResponse"];
+type GeneratedSession = components["schemas"]["Session"];
+type GeneratedPromptSessionResponse =
+  components["schemas"]["PromptSessionResponse"];
 
-export type SessionExecutionPhase =
-  | "starting"
-  | "running"
-  | "awaiting_permission"
-  | "idle"
-  | "errored"
-  | "closed";
-
-export interface PendingApprovalSummary {
-  requestId: string;
-  title: string;
-  toolCallId?: string | null;
-  toolKind?: string | null;
-}
-
-export interface SessionExecutionSummary {
-  phase: SessionExecutionPhase;
-  hasLiveHandle: boolean;
-  pendingApproval?: PendingApprovalSummary | null;
-  updatedAt: string;
-}
-
-export interface Session {
-  id: string;
-  workspaceId: string;
-  agentKind: string;
-  nativeSessionId?: string | null;
-  modelId?: string | null;
-  requestedModelId?: string | null;
-  modeId?: string | null;
-  requestedModeId?: string | null;
-  title?: string | null;
+export type SessionStatus = components["schemas"]["SessionStatus"];
+export type SessionExecutionPhase = components["schemas"]["SessionExecutionPhase"];
+export type PendingApprovalSummary = components["schemas"]["PendingApprovalSummary"];
+export type SessionExecutionSummary = components["schemas"]["SessionExecutionSummary"];
+export type Session = Omit<GeneratedSession, "liveConfig"> & {
   liveConfig?: SessionLiveConfigSnapshot | null;
-  executionSummary?: SessionExecutionSummary | null;
-  status: SessionStatus;
-  createdAt: string;
-  updatedAt: string;
-  lastPromptAt?: string | null;
-  closedAt?: string | null;
-  dismissedAt?: string | null;
-}
-
-export interface CreateSessionRequest {
-  workspaceId: string;
-  agentKind: string;
-  modelId?: string;
-  modeId?: string;
-  systemPromptAppend?: string[];
-}
-
-export interface UpdateSessionTitleRequest {
-  title: string;
-}
-
-export interface RawSessionConfigValue {
-  value: string;
-  name: string;
-  description?: string | null;
-}
-
-export type SessionConfigOptionType = "select";
-
-export interface RawSessionConfigOption {
-  id: string;
-  name: string;
-  description?: string | null;
-  category?: string | null;
-  type: SessionConfigOptionType;
-  currentValue: string;
-  options: RawSessionConfigValue[];
-}
-
-export interface NormalizedSessionControlValue {
-  value: string;
-  label: string;
-  description?: string | null;
-}
-
-export interface NormalizedSessionControl {
-  key: string;
-  rawConfigId: string;
-  label: string;
-  currentValue?: string | null;
-  settable: boolean;
-  values: NormalizedSessionControlValue[];
-}
-
-export interface NormalizedSessionControls {
-  model?: NormalizedSessionControl | null;
-  collaborationMode?: NormalizedSessionControl | null;
-  mode?: NormalizedSessionControl | null;
-  reasoning?: NormalizedSessionControl | null;
-  effort?: NormalizedSessionControl | null;
-  fastMode?: NormalizedSessionControl | null;
+};
+export type CreateSessionRequest = components["schemas"]["CreateSessionRequest"];
+export type UpdateSessionTitleRequest =
+  components["schemas"]["UpdateSessionTitleRequest"];
+export type RawSessionConfigValue = components["schemas"]["RawSessionConfigValue"];
+export type SessionConfigOptionType =
+  components["schemas"]["SessionConfigOptionType"];
+export type RawSessionConfigOption = components["schemas"]["RawSessionConfigOption"];
+export type NormalizedSessionControlValue =
+  components["schemas"]["NormalizedSessionControlValue"];
+export type NormalizedSessionControl =
+  components["schemas"]["NormalizedSessionControl"];
+export type NormalizedSessionControls = Omit<
+  GeneratedNormalizedSessionControls,
+  "extras"
+> & {
   extras: NormalizedSessionControl[];
-}
-
-export interface SessionLiveConfigSnapshot {
-  rawConfigOptions: RawSessionConfigOption[];
+};
+export type SessionLiveConfigSnapshot = Omit<
+  GeneratedSessionLiveConfigSnapshot,
+  "normalizedControls"
+> & {
   normalizedControls: NormalizedSessionControls;
-  sourceSeq: number;
-  updatedAt: string;
-}
-
-export interface GetSessionLiveConfigResponse {
+};
+export type GetSessionLiveConfigResponse = Omit<
+  GeneratedGetSessionLiveConfigResponse,
+  "liveConfig"
+> & {
   liveConfig?: SessionLiveConfigSnapshot | null;
-}
-
-export interface SetSessionConfigOptionRequest {
-  configId: string;
-  value: string;
-}
-
-export type ConfigApplyState = "applied" | "queued";
-
-export interface SetSessionConfigOptionResponse {
-  session: Session;
+};
+export type SetSessionConfigOptionRequest =
+  components["schemas"]["SetSessionConfigOptionRequest"];
+export type ConfigApplyState = components["schemas"]["ConfigApplyState"];
+export type SetSessionConfigOptionResponse = Omit<
+  GeneratedSetSessionConfigOptionResponse,
+  "liveConfig" | "session"
+> & {
   liveConfig?: SessionLiveConfigSnapshot | null;
-  applyState: ConfigApplyState;
-}
-
-export interface PromptInputBlock {
-  type: "text";
-  text: string;
-}
-
-export interface PromptSessionRequest {
-  blocks: PromptInputBlock[];
-}
-
-export interface PromptSessionResponse {
   session: Session;
-}
-
-export type PermissionDecision = "allow" | "deny";
+};
+export type PromptInputBlock = components["schemas"]["PromptInputBlock"];
+export type PromptSessionRequest = components["schemas"]["PromptSessionRequest"];
+export type PromptSessionResponse = Omit<
+  GeneratedPromptSessionResponse,
+  "session"
+> & {
+  session: Session;
+};
+export type PermissionDecision = components["schemas"]["PermissionDecision"];
+export type ResolvePermissionRequest =
+  components["schemas"]["ResolvePermissionRequest"];
 
 export interface ListSessionEventsOptions {
   afterSeq?: number;
 }
 
-export interface ResolvePermissionRequest {
-  decision?: PermissionDecision;
-  optionId?: string;
+export function normalizeSessionControls(
+  controls: GeneratedNormalizedSessionControls,
+): NormalizedSessionControls {
+  return {
+    ...controls,
+    extras: controls.extras ?? [],
+  };
+}
+
+export function normalizeSessionLiveConfigSnapshot(
+  liveConfig: GeneratedSessionLiveConfigSnapshot,
+): SessionLiveConfigSnapshot {
+  return {
+    ...liveConfig,
+    normalizedControls: normalizeSessionControls(liveConfig.normalizedControls),
+  };
+}
+
+export function normalizeSession(session: GeneratedSession): Session {
+  if (!session.liveConfig) {
+    return {
+      ...session,
+      liveConfig: session.liveConfig ?? null,
+    };
+  }
+
+  return {
+    ...session,
+    liveConfig: normalizeSessionLiveConfigSnapshot(session.liveConfig),
+  };
 }

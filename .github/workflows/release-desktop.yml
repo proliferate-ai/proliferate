@@ -121,10 +121,9 @@ jobs:
         if: steps.filter.outputs.skip != 'true'
         shell: bash
         run: |
-          mkdir -p anyharness/sdk/generated anyharness/sdk/src/generated
-          cargo run --bin anyharness -- print-openapi > anyharness/sdk/generated/openapi.json
           pnpm install
-          cd anyharness/sdk && pnpm run generate:types && pnpm run build
+          cd anyharness/sdk && pnpm run generate && pnpm run build
+          cd ../sdk-react && pnpm run build
 
       - name: Prepare Sentry CLI
         if: steps.filter.outputs.skip != 'true'

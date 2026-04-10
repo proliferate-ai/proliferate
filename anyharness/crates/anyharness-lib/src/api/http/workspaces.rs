@@ -13,6 +13,7 @@ use axum::{
     Json,
 };
 
+use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::app::AppState;
@@ -44,10 +45,11 @@ pub async fn resolve_workspace(
 ) -> Result<Json<Workspace>, ApiError> {
     let workspace_service = state.workspace_service.clone();
     let path = req.path;
-    let record = tokio::task::spawn_blocking(move || workspace_service.resolve_from_path(&path))
-        .await
-        .map_err(|e| ApiError::internal(format!("resolve task failed: {e}")))?
-        .map_err(|e| ApiError::bad_request(e.to_string(), "WORKSPACE_RESOLVE_FAILED"))?;
+    let record = run_blocking("resolve", move || {
+        workspace_service.resolve_from_path(&path)
+    })
+    .await?
+    .map_err(|e| ApiError::bad_request(e.to_string(), "WORKSPACE_RESOLVE_FAILED"))?;
     Ok(Json(workspace_to_contract(&state, record).await?))
 }
 
@@ -67,9 +69,8 @@ pub async fn create_workspace(
 ) -> Result<Json<Workspace>, ApiError> {
     let workspace_service = state.workspace_service.clone();
     let path = req.path;
-    let record = tokio::task::spawn_blocking(move || workspace_service.create_workspace(&path))
-        .await
-        .map_err(|e| ApiError::internal(format!("create task failed: {e}")))?
+    let record = run_blocking("create", move || workspace_service.create_workspace(&path))
+        .await?
         .map_err(|e| ApiError::bad_request(e.to_string(), "WORKSPACE_CREATE_FAILED"))?;
     Ok(Json(workspace_to_contract(&state, record).await?))
 }
@@ -90,11 +91,11 @@ pub async fn register_repo_workspace(
 ) -> Result<Json<Workspace>, ApiError> {
     let workspace_service = state.workspace_service.clone();
     let path = req.path;
-    let record =
-        tokio::task::spawn_blocking(move || workspace_service.register_repo_from_path(&path))
-            .await
-            .map_err(|e| ApiError::internal(format!("register repo task failed: {e}")))?
-            .map_err(map_register_repo_workspace_error)?;
+    let record = run_blocking("register repo", move || {
+        workspace_service.register_repo_from_path(&path)
+    })
+    .await?
+    .map_err(map_register_repo_workspace_error)?;
     Ok(Json(workspace_to_contract(&state, record).await?))
 }
 
@@ -142,7 +143,7 @@ pub async fn create_worktree(
 
     // Create the worktree synchronously (fast — just git worktree add + DB insert).
     // Setup script is NOT run here anymore — it's fired async below.
-    let result = tokio::task::spawn_blocking({
+    let result = run_blocking("worktree", {
         let base_branch = base_branch.clone();
         move || {
             workspace_service.create_worktree(
@@ -154,8 +155,7 @@ pub async fn create_worktree(
             )
         }
     })
-    .await
-    .map_err(|e| ApiError::internal(format!("worktree task failed: {e}")))?
+    .await?
     .map_err(|e| ApiError::bad_request(e.to_string(), "WORKTREE_CREATE_FAILED"))?;
 
     // Fire setup script in background if provided.
@@ -216,9 +216,8 @@ pub async fn list_workspaces(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<Workspace>>, ApiError> {
     let workspace_service = state.workspace_service.clone();
-    let records = tokio::task::spawn_blocking(move || workspace_service.list_workspaces())
-        .await
-        .map_err(|e| ApiError::internal(format!("list task failed: {e}")))?
+    let records = run_blocking("list", move || workspace_service.list_workspaces())
+        .await?
         .map_err(|e| ApiError::internal(e.to_string()))?;
     let summaries = state
         .session_runtime
@@ -257,14 +256,12 @@ pub async fn get_workspace(
     Path(workspace_id): Path<String>,
 ) -> Result<Json<Workspace>, ApiError> {
     let workspace_service = state.workspace_service.clone();
-    let record =
-        tokio::task::spawn_blocking(move || workspace_service.get_workspace(&workspace_id))
-            .await
-            .map_err(|e| ApiError::internal(format!("get task failed: {e}")))?
-            .map_err(|e| ApiError::internal(e.to_string()))?
-            .ok_or_else(|| {
-                ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
-            })?;
+    let record = run_blocking("get", move || {
+        workspace_service.get_workspace(&workspace_id)
+    })
+    .await?
+    .map_err(|e| ApiError::internal(e.to_string()))?
+    .ok_or_else(|| ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND"))?;
     Ok(Json(workspace_to_contract(&state, record).await?))
 }
 
@@ -288,11 +285,10 @@ pub async fn update_workspace_display_name(
     let workspace_service = state.workspace_service.clone();
     let workspace_id_for_task = workspace_id.clone();
     let display_name = req.display_name;
-    let record = tokio::task::spawn_blocking(move || {
+    let record = run_blocking("display-name", move || {
         workspace_service.set_display_name(&workspace_id_for_task, display_name.as_deref())
     })
-    .await
-    .map_err(|e| ApiError::internal(format!("display-name task failed: {e}")))?
+    .await?
     .map_err(map_set_workspace_display_name_error)?;
 
     Ok(Json(workspace_to_contract(&state, record).await?))
@@ -314,11 +310,10 @@ pub async fn get_workspace_session_launch_catalog(
 ) -> Result<Json<WorkspaceSessionLaunchCatalog>, ApiError> {
     let session_service = state.session_service.clone();
     let workspace_id_for_task = workspace_id.clone();
-    let catalog = tokio::task::spawn_blocking(move || {
+    let catalog = run_blocking("session launch", move || {
         session_service.get_workspace_session_launch_catalog(&workspace_id_for_task)
     })
-    .await
-    .map_err(|e| ApiError::internal(format!("session launch task failed: {e}")))?
+    .await?
     .map_err(|error| {
         if error.to_string().contains("workspace not found") {
             ApiError::not_found(error.to_string(), "WORKSPACE_NOT_FOUND")
@@ -345,16 +340,17 @@ pub async fn detect_project_setup(
     Path(workspace_id): Path<String>,
 ) -> Result<Json<DetectProjectSetupResponse>, ApiError> {
     let workspace_service = state.workspace_service.clone();
-    let result = tokio::task::spawn_blocking(move || workspace_service.detect_setup(&workspace_id))
-        .await
-        .map_err(|e| ApiError::internal(format!("detect-setup task failed: {e}")))?
-        .map_err(|e| {
-            if e.to_string().contains("not found") {
-                ApiError::not_found(e.to_string(), "WORKSPACE_NOT_FOUND")
-            } else {
-                ApiError::internal(e.to_string())
-            }
-        })?;
+    let result = run_blocking("detect-setup", move || {
+        workspace_service.detect_setup(&workspace_id)
+    })
+    .await?
+    .map_err(|e| {
+        if e.to_string().contains("not found") {
+            ApiError::not_found(e.to_string(), "WORKSPACE_NOT_FOUND")
+        } else {
+            ApiError::internal(e.to_string())
+        }
+    })?;
     Ok(Json(detection_result_to_contract(result)))
 }
 
@@ -413,13 +409,7 @@ pub async fn rerun_setup(
             )
         })?;
 
-    let snapshot = start_setup_for_workspace(
-        &state,
-        workspace_id,
-        previous.command,
-        None,
-    )
-    .await?;
+    let snapshot = start_setup_for_workspace(&state, workspace_id, previous.command, None).await?;
 
     Ok(Json(snapshot))
 }
@@ -461,13 +451,12 @@ async fn start_setup_for_workspace(
 ) -> Result<GetSetupStatusResponse, ApiError> {
     let workspace_service = state.workspace_service.clone();
     let ws_id = workspace_id.clone();
-    let record = tokio::task::spawn_blocking(move || workspace_service.get_workspace(&ws_id))
-        .await
-        .map_err(|e| ApiError::internal(format!("workspace lookup failed: {e}")))?
-        .map_err(|e| ApiError::internal(e.to_string()))?
-        .ok_or_else(|| {
-            ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
-        })?;
+    let record = run_blocking("workspace lookup", move || {
+        workspace_service.get_workspace(&ws_id)
+    })
+    .await?
+    .map_err(|e| ApiError::internal(e.to_string()))?
+    .ok_or_else(|| ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND"))?;
 
     let env_vars = {
         let ws = state.workspace_service.clone();

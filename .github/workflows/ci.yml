@@ -61,20 +61,26 @@ jobs:
       - name: Setup Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Generate OpenAPI spec
-        run: |
-          mkdir -p anyharness/sdk/generated
-          cargo run --bin anyharness -- print-openapi > anyharness/sdk/generated/openapi.json
-
       - name: Install dependencies
         run: pnpm install
 
-      - name: Generate TypeScript types
+      - name: Regenerate SDK artifacts
         working-directory: anyharness/sdk
-        run: pnpm run generate:types
+        run: pnpm run generate
+
+      - name: Verify generated SDK artifacts are committed
+        run: git diff --exit-code -- anyharness/sdk/generated/openapi.json anyharness/sdk/src/generated/openapi.ts
+
+      - name: Typecheck SDK
+        working-directory: anyharness/sdk
+        run: pnpm run typecheck
 
       - name: Build SDK
         working-directory: anyharness/sdk
+        run: pnpm run build
+
+      - name: Build sdk-react
+        working-directory: anyharness/sdk-react
         run: pnpm run build
 
   desktop-frontend:
@@ -96,10 +102,9 @@ jobs:
 
       - name: Generate and build SDK
         run: |
-          mkdir -p anyharness/sdk/generated
-          cargo run --bin anyharness -- print-openapi > anyharness/sdk/generated/openapi.json
           pnpm install
-          cd anyharness/sdk && pnpm run generate:types && pnpm run build
+          cd anyharness/sdk && pnpm run generate && pnpm run build
+          cd ../sdk-react && pnpm run build
 
       - name: Build desktop frontend
         working-directory: desktop

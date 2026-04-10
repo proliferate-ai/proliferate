@@ -86,9 +86,14 @@ on top of it.
   methods or duplicate wrapper layers.
 - `src/index.ts` is the curated public surface for each package.
 - Generated OpenAPI files must not be hand-edited.
-- Prefer thin aliases over generated contract types.
+- Rust contract types are the source of truth for HTTP request, response, and
+  resource shapes.
+- `generated/openapi.json` and `src/generated/openapi.ts` are checked-in
+  generated artifacts and must be regenerated when the Rust contract changes.
+- SDK HTTP wrapper types in `src/types/*.ts` must alias generated OpenAPI
+  schemas instead of hand-maintained mirrors.
 - Hand-authored public types should exist only when they materially improve the
-  API.
+  API for non-contract client helpers, reducer state, or streaming helpers.
 - Low-level streaming helpers and transcript reducers stay in
   `@anyharness/sdk`.
 - Generic React providers, query hooks, mutation hooks, and query keys stay in
@@ -127,6 +132,10 @@ which package should own the behavior.
 - `anyharness/sdk/src/types/`: public SDK types and aliases only; no duplicate
   handwritten mirrors of generated types or UI state; add an authored type
   only when it materially improves the public contract.
+- `anyharness/sdk/generated/openapi.json` and
+  `anyharness/sdk/src/generated/openapi.ts`: generated transport truth only;
+  do not hand-edit; keep HTTP wrapper aliases in `src/types/*.ts` thin and
+  direct over these generated schemas.
 - `anyharness/sdk/src/streams/`: low-level session and terminal transport only;
   no React or app reconnect policy; expose generic handles and callbacks.
 - `anyharness/sdk/src/reducer/`: transcript and event reduction only; no React

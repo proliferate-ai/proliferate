@@ -88,7 +88,9 @@ export function findNormalizedSessionControlByRawConfigId(
   ];
 
   return directControls.find((control) => control?.rawConfigId === rawConfigId)
-    ?? normalizedControls.extras.find((control) => control.rawConfigId === rawConfigId)
+    ?? normalizedControls.extras.find(
+      (control) => control.rawConfigId === rawConfigId,
+    )
     ?? null;
 }
 
