@@ -169,6 +169,12 @@ export {
   isFileChangePart,
 } from "./reducer/transcript.js";
 export type { ReduceOptions } from "./reducer/transcript.js";
+export type {
+  ToolBackgroundWorkMetadata,
+  ToolBackgroundWorkState,
+  ToolBackgroundWorkTrackerKind,
+} from "./reducer/background-work.js";
+export { parseToolBackgroundWork } from "./reducer/background-work.js";
 
 export { deriveCanonicalPlan } from "./reducer/canonical-plan.js";
 

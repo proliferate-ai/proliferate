@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AssistantMessage } from "./AssistantMessage";
 import { ClaudePlanCard } from "./ClaudePlanCard";
 import { SystemMessage } from "./SystemMessage";
@@ -39,6 +39,15 @@ import {
   extractClaudePlanBody,
   isClaudeExitPlanModeCall,
 } from "@/lib/domain/chat/claude-plan-tool-call";
+import {
+  parseAsyncSubagentLaunch,
+  resolveSubagentExecutionState,
+  type SubagentExecutionState,
+} from "@/lib/domain/chat/subagent-launch";
+import {
+  buildSubagentBrailleColorMap,
+  resolveSubagentBrailleColor,
+} from "@/lib/domain/chat/subagent-braille-color";
 import type {
   FileChangeContentPart,
   FileReadContentPart,
@@ -86,6 +95,10 @@ export function MessageList({
 }: MessageListProps) {
   const latestTurnId = transcript.turnOrder[transcript.turnOrder.length - 1] ?? null;
   const { openFileDiff } = useWorkspaceFileActions();
+  const subagentBrailleColors = useMemo(
+    () => buildSubagentBrailleColorMap(transcript),
+    [transcript],
+  );
 
   const totalItems = transcript.turnOrder.reduce(
     (sum, tid) => sum + (transcript.turnsById[tid]?.itemOrder.length ?? 0),
@@ -128,6 +141,7 @@ export function MessageList({
                     turnId={turnId}
                     transcript={transcript}
                     isTurnComplete={!!turn.completedAt}
+                    subagentBrailleColors={subagentBrailleColors}
                   />
                   {turn.completedAt && hasFileBadges && (
                     <TurnDiffPanel
@@ -197,10 +211,12 @@ function TurnItemSequence({
   turnId,
   transcript,
   isTurnComplete,
+  subagentBrailleColors,
 }: {
   turnId: string;
   transcript: TranscriptState;
   isTurnComplete: boolean;
+  subagentBrailleColors: Map<string, string>;
 }) {
   const turn = transcript.turnsById[turnId];
   if (!turn) {
@@ -259,6 +275,7 @@ function TurnItemSequence({
                     itemId={collapsedRootId}
                     transcript={transcript}
                     childrenByParentId={presentation.childrenByParentId}
+                    subagentBrailleColors={subagentBrailleColors}
                   />
                 ))}
               </div>
@@ -278,6 +295,7 @@ function TurnItemSequence({
                   itemId={memberId}
                   transcript={transcript}
                   childrenByParentId={presentation.childrenByParentId}
+                  subagentBrailleColors={subagentBrailleColors}
                 />
               ))}
             </ReadGroupBlock>
@@ -291,6 +309,7 @@ function TurnItemSequence({
             transcript={transcript}
             childrenByParentId={presentation.childrenByParentId}
             isLastAssistantProse={isTurnComplete && itemId === lastAssistantProseRootId}
+            subagentBrailleColors={subagentBrailleColors}
           />
         );
       })}
@@ -395,11 +414,13 @@ function TranscriptTreeNode({
   transcript,
   childrenByParentId,
   isLastAssistantProse = false,
+  subagentBrailleColors,
 }: {
   itemId: string;
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
   isLastAssistantProse?: boolean;
+  subagentBrailleColors: Map<string, string>;
 }) {
   const item = transcript.itemsById[itemId];
   if (!item) return null;
@@ -412,6 +433,7 @@ function TranscriptTreeNode({
         childIds={childIds}
         transcript={transcript}
         childrenByParentId={childrenByParentId}
+        subagentBrailleColors={subagentBrailleColors}
       />
     );
   }
@@ -573,11 +595,13 @@ function ToolCallGroupBlock({
   childIds,
   transcript,
   childrenByParentId,
+  subagentBrailleColors,
 }: {
   item: ToolCallItem;
   childIds: string[];
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
+  subagentBrailleColors: Map<string, string>;
 }) {
   const isAgent = isSubagentItem(item);
 
@@ -588,6 +612,7 @@ function ToolCallGroupBlock({
         childIds={childIds}
         transcript={transcript}
         childrenByParentId={childrenByParentId}
+        subagentBrailleColors={subagentBrailleColors}
       />
     );
   }
@@ -639,6 +664,7 @@ function ToolCallGroupBlock({
               itemId={childId}
               transcript={transcript}
               childrenByParentId={childrenByParentId}
+              subagentBrailleColors={subagentBrailleColors}
             />
           ))}
         </div>
@@ -652,13 +678,19 @@ function AgentGroupBlock({
   childIds,
   transcript,
   childrenByParentId,
+  subagentBrailleColors,
 }: {
   item: ToolCallItem;
   childIds: string[];
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
+  subagentBrailleColors: Map<string, string>;
 }) {
-  const isRunning = item.status === "in_progress";
+  const executionState = resolveSubagentExecutionState(item);
+  const asyncLaunch = parseAsyncSubagentLaunch(item);
+  const brailleColor = resolveSubagentBrailleColor(subagentBrailleColors, item);
+  const isRunning =
+    executionState === "running" || executionState === "background";
   const [expanded, setExpanded] = useState(false);
   const [workExpanded, setWorkExpanded] = useState(false);
 
@@ -692,7 +724,17 @@ function AgentGroupBlock({
   const description = item.title ?? "Agent task";
   const hasWork = childIds.length > 0;
   const hasBodyContent = hasWork || !!normalizedPrompt || !!normalizedAgentResult;
-  const collapsedSummary = workSummary || (isRunning ? "Working" : null);
+  const collapsedSummary =
+    workSummary
+    || (executionState === "background"
+      ? "Running in background"
+      : executionState === "expired_background"
+        ? "Stopped updating in background"
+      : executionState === "completed_background"
+        ? "Completed in background"
+      : isRunning
+        ? "Working"
+        : null);
   const headerExpandable = hasBodyContent;
 
   return (
@@ -707,7 +749,7 @@ function AgentGroupBlock({
         }`}
       >
         <ToolCallLeadingAffordance
-          icon={<AgentHeaderIcon isRunning={isRunning} />}
+          icon={<AgentHeaderIcon state={executionState} color={brailleColor} />}
           expandable={headerExpandable}
           expanded={expanded}
         />
@@ -733,6 +775,7 @@ function AgentGroupBlock({
                   itemId={childId}
                   transcript={transcript}
                   childrenByParentId={childrenByParentId}
+                  subagentBrailleColors={subagentBrailleColors}
                 />
               ))}
             </div>
@@ -752,6 +795,7 @@ function AgentGroupBlock({
                       itemId={childId}
                       transcript={transcript}
                       childrenByParentId={childrenByParentId}
+                      subagentBrailleColors={subagentBrailleColors}
                     />
                   ))}
                 </div>
@@ -762,7 +806,9 @@ function AgentGroupBlock({
 
         {/* Agent's synthesis / result */}
         {normalizedAgentResult && (
-          <AgentResultBlock content={normalizedAgentResult} />
+          asyncLaunch
+            ? <AsyncAgentLaunchBlock launch={asyncLaunch} color={brailleColor} />
+            : <AgentResultBlock content={normalizedAgentResult} />
         )}
       </div>}
     </div>
@@ -772,16 +818,77 @@ function AgentGroupBlock({
 
 const AGENT_RESULT_COLLAPSED_HEIGHT = 200;
 
-function AgentHeaderIcon({ isRunning }: { isRunning: boolean }) {
-  return isRunning ? <AgentHeaderRunningIcon /> : <Sparkles />;
+function AgentHeaderIcon({
+  state,
+  color,
+}: {
+  state: SubagentExecutionState;
+  color?: string;
+}) {
+  return state === "running" || state === "background"
+    ? <AgentHeaderRunningIcon color={color} />
+    : state === "expired_background"
+      ? <CircleQuestion className="size-4 text-muted-foreground" />
+    : <Sparkles />;
 }
 
-function AgentHeaderRunningIcon() {
+function AgentHeaderRunningIcon({ color }: { color?: string }) {
   const frame = useBrailleFillsweep();
   return (
-    <span className="inline-block w-[1em] shrink-0 font-mono leading-none tracking-[-0.18em] text-muted-foreground/60">
+    <span
+      className="inline-block w-[1em] shrink-0 font-mono leading-none tracking-[-0.18em] opacity-80"
+      style={color ? { color } : undefined}
+    >
       {frame}
     </span>
+  );
+}
+
+function AsyncAgentLaunchBlock({
+  launch,
+  color,
+}: {
+  launch: { rawText: string; agentId: string | null; outputFile: string | null };
+  color?: string;
+}) {
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const hasLaunchDetails = !!launch.agentId || !!launch.outputFile;
+
+  return (
+    <div className="mt-1 rounded-md border border-border/60 bg-muted/25 px-3 py-2">
+      <div className="flex items-center gap-2 text-sm font-medium text-foreground/90">
+        <AgentHeaderRunningIcon color={color} />
+        <span>Running in background</span>
+      </div>
+      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+        Async subagent launched successfully. You&apos;ll be notified automatically when it completes.
+      </p>
+      {hasLaunchDetails && (
+        <div className="mt-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="-ml-2 h-auto px-2 py-1 text-xs"
+            onClick={() => setDetailsExpanded((expanded) => !expanded)}
+          >
+            {detailsExpanded ? "Hide launch details" : "Show launch details"}
+          </Button>
+          {detailsExpanded && (
+            <div className="mt-2 overflow-hidden rounded-md border border-border/60 bg-background/60">
+              <AutoHideScrollArea
+                className="w-full"
+                viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+              >
+                <div className="whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-relaxed text-muted-foreground">
+                  {launch.rawText}
+                </div>
+              </AutoHideScrollArea>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

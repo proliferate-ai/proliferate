@@ -4,7 +4,7 @@ use std::path::{Component, Path, PathBuf};
 use serde::Deserialize;
 use tokio::sync::broadcast;
 
-use crate::sessions::model::SessionEventRecord;
+use crate::sessions::model::{SessionBackgroundWorkState, SessionEventRecord};
 use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::{
     AvailableCommandsUpdatePayload, ConfigOptionUpdatePayload, ContentPart,
@@ -114,6 +114,16 @@ struct TerminalExitMeta {
     signal: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+struct BackgroundWorkMetadata {
+    state: SessionBackgroundWorkState,
+    agent_id: Option<String>,
+    output_file: String,
+}
+
+const ANYHARNESS_META_KEY: &str = "_anyharness";
+const BACKGROUND_WORK_TRACKER_KIND: &str = "claude_async_agent";
+
 pub struct SessionEventSink {
     session_id: String,
     source_agent_kind: String,
@@ -188,6 +198,10 @@ impl SessionEventSink {
 
     pub fn next_seq(&self) -> i64 {
         self.next_seq
+    }
+
+    pub fn current_turn_id(&self) -> Option<String> {
+        self.current_turn_id.clone()
     }
 
     pub fn session_ended(&mut self, reason: SessionEndReason) {
@@ -604,6 +618,66 @@ impl SessionEventSink {
         );
     }
 
+    pub fn resolve_background_tool_call(
+        &mut self,
+        turn_id: String,
+        tool_call_id: String,
+        state: SessionBackgroundWorkState,
+        agent_id: Option<String>,
+        output_file: String,
+        result_text: String,
+    ) {
+        self.tool_items.remove(&tool_call_id);
+        let raw_output = Some(background_work_raw_output(
+            None,
+            BackgroundWorkMetadata {
+                state,
+                agent_id,
+                output_file,
+            },
+        ));
+
+        let replacement_parts = vec![ContentPart::ToolResultText { text: result_text }];
+        self.emit_with_ids(
+            SessionEvent::ItemDelta(ItemDeltaEvent {
+                delta: TranscriptItemDeltaPayload {
+                    status: Some(TranscriptItemStatus::Completed),
+                    title: None,
+                    native_tool_name: None,
+                    parent_tool_call_id: None,
+                    raw_input: None,
+                    raw_output: raw_output.clone(),
+                    append_text: None,
+                    append_reasoning: None,
+                    replace_content_parts: Some(replacement_parts.clone()),
+                    append_content_parts: None,
+                },
+            }),
+            Some(turn_id.clone()),
+            Some(tool_call_id.clone()),
+        );
+
+        self.emit_with_ids(
+            SessionEvent::ItemCompleted(ItemCompletedEvent {
+                item: TranscriptItemPayload {
+                    kind: TranscriptItemKind::ToolInvocation,
+                    status: TranscriptItemStatus::Completed,
+                    source_agent_kind: self.source_agent_kind.clone(),
+                    message_id: None,
+                    title: None,
+                    tool_call_id: Some(tool_call_id.clone()),
+                    native_tool_name: None,
+                    parent_tool_call_id: None,
+                    raw_input: None,
+                    raw_output,
+                    content_parts: replacement_parts,
+                },
+            }),
+            Some(turn_id),
+            Some(tool_call_id),
+        );
+    }
+
     fn meta_parent_tool_call_id(&self, meta: Option<&serde_json::Value>) -> Option<String> {
         if self.source_agent_kind != "claude" {
             return None;
@@ -659,6 +733,16 @@ impl SessionEventSink {
             .raw_output
             .clone()
             .or_else(|| previous.and_then(|prev| prev.item.raw_output.clone()));
+        let background_work = extract_background_work_metadata(raw_input.as_ref(), &meta)
+            .or_else(|| {
+                previous.and_then(|prev| {
+                    extract_existing_background_work_metadata(prev.item.raw_output.as_ref())
+                })
+            });
+        let raw_output = match background_work {
+            Some(background_work) => Some(background_work_raw_output(raw_output, background_work)),
+            None => raw_output,
+        };
 
         let mut terminal_parts = previous
             .map(|prev| prev.terminal_parts.clone())
@@ -1805,6 +1889,129 @@ fn extract_claude_tool_response_content(meta: &ParsedMeta) -> Option<String> {
         .and_then(|value| extract_preview(Some(value)))
 }
 
+fn extract_background_work_metadata(
+    raw_input: Option<&serde_json::Value>,
+    meta: &ParsedMeta,
+) -> Option<BackgroundWorkMetadata> {
+    if !matches!(
+        raw_input,
+        Some(value) if value.get("run_in_background").and_then(serde_json::Value::as_bool) == Some(true)
+    ) {
+        return None;
+    }
+
+    let tool_response = meta.claude_code.as_ref()?.tool_response.as_ref()?;
+    if meta.claude_code.as_ref()?.tool_name.as_deref() != Some("Agent") {
+        return None;
+    }
+    if tool_response
+        .get("isAsync")
+        .and_then(serde_json::Value::as_bool)
+        != Some(true)
+    {
+        return None;
+    }
+
+    let output_file = tool_response
+        .get("outputFile")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?
+        .to_string();
+
+    let agent_id = tool_response
+        .get("agentId")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(String::from);
+
+    Some(BackgroundWorkMetadata {
+        state: SessionBackgroundWorkState::Pending,
+        agent_id,
+        output_file,
+    })
+}
+
+fn extract_existing_background_work_metadata(
+    raw_output: Option<&serde_json::Value>,
+) -> Option<BackgroundWorkMetadata> {
+    let raw_output = raw_output?.as_object()?;
+    let anyharness = raw_output.get(ANYHARNESS_META_KEY)?.as_object()?;
+    let background_work = anyharness.get("backgroundWork")?.as_object()?;
+
+    let state = background_work
+        .get("state")
+        .and_then(serde_json::Value::as_str)
+        .map(SessionBackgroundWorkState::parse)?;
+    let output_file = raw_output
+        .get("outputFile")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?
+        .to_string();
+    let agent_id = raw_output
+        .get("agentId")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(String::from);
+
+    Some(BackgroundWorkMetadata {
+        state,
+        agent_id,
+        output_file,
+    })
+}
+
+fn background_work_raw_output(
+    existing: Option<serde_json::Value>,
+    metadata: BackgroundWorkMetadata,
+) -> serde_json::Value {
+    let mut base = match existing {
+        Some(serde_json::Value::Object(map)) => serde_json::Value::Object(map),
+        Some(value) => {
+            let mut map = serde_json::Map::new();
+            map.insert("value".to_string(), value);
+            serde_json::Value::Object(map)
+        }
+        None => serde_json::Value::Object(serde_json::Map::new()),
+    };
+
+    let map = base
+        .as_object_mut()
+        .expect("background work raw output is always object-backed");
+    map.insert("isAsync".to_string(), serde_json::Value::Bool(true));
+    map.insert(
+        "agentId".to_string(),
+        metadata
+            .agent_id
+            .clone()
+            .map(serde_json::Value::String)
+            .unwrap_or(serde_json::Value::Null),
+    );
+    map.insert(
+        "outputFile".to_string(),
+        serde_json::Value::String(metadata.output_file.clone()),
+    );
+
+    let anyharness_meta = map
+        .entry(ANYHARNESS_META_KEY.to_string())
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+    let anyharness_meta = anyharness_meta
+        .as_object_mut()
+        .expect("_anyharness metadata must be an object");
+    anyharness_meta.insert(
+        "backgroundWork".to_string(),
+        serde_json::json!({
+            "trackerKind": BACKGROUND_WORK_TRACKER_KIND,
+            "state": metadata.state.as_str(),
+        }),
+    );
+
+    base
+}
+
 fn extract_result_text(
     payload: &AcpToolPayload,
     raw_output: Option<&serde_json::Value>,
@@ -1866,9 +2073,9 @@ mod tests {
 
     use super::{AcpChunkPayload, SessionEventSink};
     use crate::persistence::Db;
-    use crate::sessions::model::SessionRecord;
+    use crate::sessions::model::{SessionBackgroundWorkState, SessionRecord};
     use crate::sessions::store::SessionStore;
-    use anyharness_contract::v1::{SessionEventEnvelope, StopReason};
+    use anyharness_contract::v1::{SessionEvent, SessionEventEnvelope, StopReason};
 
     #[test]
     fn assistant_chunking_emits_one_item_lifecycle_with_monotonic_seq() {
@@ -1968,6 +2175,210 @@ mod tests {
                 .expect("persisted events")
                 .len(),
             events.len()
+        );
+    }
+
+    #[test]
+    fn background_resolution_reuses_existing_tool_item_id() {
+        let store = seeded_store();
+        let (tx, mut rx) = broadcast::channel(32);
+        let mut sink = SessionEventSink::new(
+            "session-1".to_string(),
+            "claude".to_string(),
+            PathBuf::from("/tmp/workspace"),
+            tx,
+            store.clone(),
+        );
+
+        sink.begin_turn("delegate".to_string());
+        sink.tool_call(super::AcpToolPayload {
+            tool_call_id: "tool-1".to_string(),
+            title: Some("Launch investigator".to_string()),
+            kind: Some("other".to_string()),
+            status: Some("in_progress".to_string()),
+            raw_input: Some(json!({ "run_in_background": true })),
+            meta: Some(json!({
+                "claudeCode": {
+                    "toolName": "Agent",
+                    "toolResponse": {
+                        "isAsync": true,
+                        "agentId": "agent-1",
+                        "outputFile": "/tmp/agent.output"
+                    }
+                }
+            })),
+            ..Default::default()
+        });
+        sink.tool_call_update(super::AcpToolPayload {
+            tool_call_id: "tool-1".to_string(),
+            status: Some("completed".to_string()),
+            content: Some(vec![json!({
+                "type": "tool_result_text",
+                "text": "Async agent launched successfully.\nThe agent is working in the background."
+            })]),
+            ..Default::default()
+        });
+
+        let turn_id = sink.current_turn_id().expect("turn id");
+        sink.resolve_background_tool_call(
+            turn_id,
+            "tool-1".to_string(),
+            SessionBackgroundWorkState::Completed,
+            Some("agent-1".to_string()),
+            "/tmp/agent.output".to_string(),
+            "Final synthesized result.".to_string(),
+        );
+
+        let events = drain_events(&mut rx);
+        let background_delta = events
+            .iter()
+            .rev()
+            .find(|event| event.event.event_type() == "item_delta")
+            .expect("background delta");
+        let background_completed = events
+            .iter()
+            .rev()
+            .find(|event| event.event.event_type() == "item_completed")
+            .expect("background completion");
+
+        assert_eq!(background_delta.item_id.as_deref(), Some("tool-1"));
+        assert_eq!(background_completed.item_id.as_deref(), Some("tool-1"));
+        let delta_payload = match &background_delta.event {
+            SessionEvent::ItemDelta(event) => &event.delta,
+            other => panic!("expected item_delta, got {}", other.event_type()),
+        };
+        let raw_output = delta_payload
+            .raw_output
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .expect("background raw_output");
+        assert_eq!(
+            raw_output
+                .get("_anyharness")
+                .and_then(serde_json::Value::as_object)
+                .and_then(|value| value.get("backgroundWork"))
+                .and_then(serde_json::Value::as_object)
+                .and_then(|value| value.get("state"))
+                .and_then(serde_json::Value::as_str),
+            Some("completed")
+        );
+        assert_eq!(
+            store
+                .list_events("session-1")
+                .expect("persisted events")
+                .last()
+                .expect("last event")
+                .item_id
+                .as_deref(),
+            Some("tool-1")
+        );
+    }
+
+    #[test]
+    fn async_launch_completion_preserves_background_metadata_on_completed_item() {
+        let store = seeded_store();
+        let (tx, mut rx) = broadcast::channel(32);
+        let mut sink = SessionEventSink::new(
+            "session-1".to_string(),
+            "claude".to_string(),
+            PathBuf::from("/tmp/workspace"),
+            tx,
+            store,
+        );
+
+        sink.begin_turn("delegate".to_string());
+        sink.tool_call(super::AcpToolPayload {
+            tool_call_id: "tool-1".to_string(),
+            title: Some("Task".to_string()),
+            kind: Some("think".to_string()),
+            status: Some("in_progress".to_string()),
+            raw_input: Some(json!({})),
+            meta: Some(json!({
+                "claudeCode": {
+                    "toolName": "Agent"
+                }
+            })),
+            ..Default::default()
+        });
+        sink.tool_call_update(super::AcpToolPayload {
+            tool_call_id: "tool-1".to_string(),
+            title: Some("Pick favorite file from desktop".to_string()),
+            status: Some("in_progress".to_string()),
+            raw_input: Some(json!({
+                "description": "Pick favorite file from desktop",
+                "run_in_background": true,
+            })),
+            meta: Some(json!({
+                "claudeCode": {
+                    "toolName": "Agent"
+                }
+            })),
+            ..Default::default()
+        });
+        sink.tool_call_update(super::AcpToolPayload {
+            tool_call_id: "tool-1".to_string(),
+            status: Some("in_progress".to_string()),
+            meta: Some(json!({
+                "claudeCode": {
+                    "toolName": "Agent",
+                    "toolResponse": {
+                        "isAsync": true,
+                        "agentId": "agent-1",
+                        "outputFile": "/tmp/agent.output"
+                    }
+                }
+            })),
+            ..Default::default()
+        });
+        sink.tool_call_update(super::AcpToolPayload {
+            tool_call_id: "tool-1".to_string(),
+            status: Some("completed".to_string()),
+            raw_output: Some(json!([
+                {
+                    "type": "text",
+                    "text": "Async agent launched successfully.\nThe agent is working in the background."
+                }
+            ])),
+            content: Some(vec![json!({
+                "type": "tool_result_text",
+                "text": "Async agent launched successfully.\nThe agent is working in the background."
+            })]),
+            meta: Some(json!({
+                "claudeCode": {
+                    "toolName": "Agent"
+                }
+            })),
+            ..Default::default()
+        });
+
+        let events = drain_events(&mut rx);
+        let completed = events
+            .iter()
+            .rev()
+            .find_map(|event| match &event.event {
+                SessionEvent::ItemCompleted(completed) if event.item_id.as_deref() == Some("tool-1") => Some(&completed.item),
+                _ => None,
+            })
+            .expect("completed tool item");
+
+        let raw_output = completed
+            .raw_output
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .expect("completed raw_output");
+        assert_eq!(
+            raw_output
+                .get("_anyharness")
+                .and_then(serde_json::Value::as_object)
+                .and_then(|value| value.get("backgroundWork"))
+                .and_then(serde_json::Value::as_object)
+                .and_then(|value| value.get("state"))
+                .and_then(serde_json::Value::as_str),
+            Some("pending")
+        );
+        assert_eq!(
+            raw_output.get("outputFile").and_then(serde_json::Value::as_str),
+            Some("/tmp/agent.output")
         );
     }
 

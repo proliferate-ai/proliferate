@@ -7,6 +7,7 @@ use agent_client_protocol as acp;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
+use super::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry, BackgroundWorkUpdate};
 use super::event_sink::{AcpChunkPayload, AcpToolPayload, SessionEventSink};
 use super::permission_broker::PermissionBroker;
 use super::runtime_client::RuntimeClient;
@@ -25,9 +26,9 @@ use anyharness_contract::v1::{
     AvailableCommandsUpdatePayload, ConfigApplyState, ConfigOptionUpdatePayload,
     CurrentModeUpdatePayload, NormalizedSessionControl, PendingApprovalSummary,
     PendingPromptAddedPayload, PendingPromptRemovalReason, PendingPromptRemovedPayload,
-    PendingPromptUpdatedPayload, SessionEndReason, SessionEventEnvelope, SessionExecutionPhase,
-    SessionExecutionSummary, SessionInfoUpdatePayload, SessionStateUpdatePayload, StopReason,
-    UsageUpdatePayload,
+    PendingPromptUpdatedPayload, PermissionOutcome, SessionEndReason, SessionEventEnvelope,
+    SessionExecutionPhase, SessionExecutionSummary, SessionInfoUpdatePayload,
+    SessionStateUpdatePayload, StopReason, UsageUpdatePayload,
 };
 
 #[derive(Debug)]
@@ -88,8 +89,12 @@ pub enum SessionCommand {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PendingExit {
+#[derive(Debug, Clone)]
+enum ActorExitDisposition {
+    Error {
+        message: String,
+        code: Option<String>,
+    },
     Close,
     Dismiss,
 }
@@ -117,10 +122,7 @@ struct ResumeReplayFilter {
 
 impl ResumeReplayFilter {
     fn new(source_agent_kind: &str, is_resume: bool, session_status: &str) -> Self {
-        let state = if is_resume
-            && source_agent_kind == "claude"
-            && session_status == "idle"
-        {
+        let state = if is_resume && source_agent_kind == "claude" && session_status == "idle" {
             ResumeReplayFilterState::Monitoring
         } else {
             ResumeReplayFilterState::Disabled
@@ -140,11 +142,7 @@ impl ResumeReplayFilter {
         self.state = ResumeReplayFilterState::Disabled;
     }
 
-    fn should_suppress(
-        &mut self,
-        notification: &acp::SessionNotification,
-        now: Instant,
-    ) -> bool {
+    fn should_suppress(&mut self, notification: &acp::SessionNotification, now: Instant) -> bool {
         if let ResumeReplayFilterState::Suppressing { last_transcript_at } = self.state {
             if now.duration_since(last_transcript_at) >= IDLE_RESUME_REPLAY_QUIET_WINDOW {
                 self.state = ResumeReplayFilterState::Monitoring;
@@ -738,6 +736,15 @@ async fn run_actor(
             config.session_store.clone(),
         )
     }));
+    let (background_work_tx, mut background_work_rx) =
+        mpsc::unbounded_channel::<BackgroundWorkUpdate>();
+    let mut background_work_registry = BackgroundWorkRegistry::new(
+        session_id.clone(),
+        source_agent_kind.clone(),
+        config.session_store.clone(),
+        background_work_tx,
+        BackgroundWorkOptions::default(),
+    );
 
     let client = RuntimeClient::new(
         session_id.clone(),
@@ -757,7 +764,6 @@ async fn run_actor(
             tracing::warn!(error = %e, "ACP IO task ended");
         }
     });
-
     let initialize_started = Instant::now();
     let init_response = match conn
         .initialize(
@@ -905,11 +911,11 @@ async fn run_actor(
                             "[workspace-latency] session.actor.new_session_after_missing_load.failed"
                         );
                         let _ = ready_tx.send(Err(anyhow::anyhow!(
-                            "ACP new_session after missing load_session resource: {new_session_error}"
-                        )));
+                                "ACP new_session after missing load_session resource: {new_session_error}"
+                            )));
                         return Err(anyhow::anyhow!(
-                            "ACP new_session after missing load_session resource: {new_session_error}"
-                        ));
+                                "ACP new_session after missing load_session resource: {new_session_error}"
+                            ));
                     }
                 };
 
@@ -1111,6 +1117,7 @@ async fn run_actor(
     handle
         .set_execution_phase(SessionExecutionPhase::Idle)
         .await;
+    background_work_registry.rehydrate_pending().await;
     tracing::info!(
         session_id = %session_id,
         workspace_id = %workspace_id,
@@ -1122,11 +1129,8 @@ async fn run_actor(
             prompt_id = actor_latency_fields.prompt_id,
         "[workspace-latency] session.actor.startup_ready"
     );
-    let mut resume_replay_filter = ResumeReplayFilter::new(
-        &source_agent_kind,
-        config.is_resume,
-        &config.session.status,
-    );
+    let mut resume_replay_filter =
+        ResumeReplayFilter::new(&source_agent_kind, config.is_resume, &config.session.status);
 
     // Invariant 5: startup drain. If the durable queue is non-empty, self-dispatch
     // a Prompt command for the head row carrying `from_queue_seq`. The first
@@ -1172,7 +1176,7 @@ async fn run_actor(
         }
     }
 
-    let mut pending_exit = PendingExit::Close;
+    let mut exit_reason = ActorExitDisposition::Close;
     loop {
         tokio::select! {
             cmd = command_rx.recv() => {
@@ -1186,7 +1190,7 @@ async fn run_actor(
                         let mut current_prompt_id = prompt_id;
                         let mut current_latency = latency;
                         let mut current_queue_seq: Option<i64> = from_queue_seq;
-                        let mut exit_after_prompt: Option<PendingExit> = None;
+                        let mut exit_after_prompt: Option<ActorExitDisposition> = None;
                         let mut broken_session = false;
 
                         'drain: loop {
@@ -1263,12 +1267,18 @@ async fn run_actor(
                                                 &notif,
                                                 &mut resume_replay_filter,
                                                 &event_sink,
+                                                &mut background_work_registry,
                                                 &store,
                                                 &session_id,
                                                 &source_agent_kind,
                                                 &mut persisted_config_state,
                                                 &mut startup_state,
                                             ).await;
+                                        }
+                                    }
+                                    background_update = background_work_rx.recv() => {
+                                        if let Some(update) = background_update {
+                                            handle_background_work_update(&event_sink, &store, &session_id, update).await;
                                         }
                                     }
                                     cmd = command_rx.recv() => {
@@ -1283,7 +1293,7 @@ async fn run_actor(
                                                     .cancel(acp::CancelNotification::new(native_session_id.clone()))
                                                     .await;
                                                 let _ = respond_to.send(Ok(()));
-                                                exit_after_prompt = Some(PendingExit::Dismiss);
+                                                exit_after_prompt = Some(ActorExitDisposition::Dismiss);
                                             }
                                             Some(SessionCommand::SetConfigOption { config_id, value, respond_to }) => {
                                                 let option = find_select_option_for_request(&startup_state.config_options, &config_id);
@@ -1319,7 +1329,7 @@ async fn run_actor(
                                             }
                                             Some(SessionCommand::Close { respond_to }) => {
                                                 let _ = respond_to.send(Ok(()));
-                                                exit_after_prompt = Some(PendingExit::Close);
+                                                exit_after_prompt = Some(ActorExitDisposition::Close);
                                             }
                                             Some(SessionCommand::Prompt { text: queued_text, prompt_id: queued_prompt_id, latency: _, from_queue_seq: _, respond_to }) => {
                                                 // Invariant 2/3: busy-path enqueue. Insert durably,
@@ -1366,12 +1376,16 @@ async fn run_actor(
                                             &notif,
                                             &mut resume_replay_filter,
                                             &event_sink,
+                                            &mut background_work_registry,
                                             &store,
                                             &session_id,
                                             &source_agent_kind,
                                             &mut persisted_config_state,
                                             &mut startup_state,
                                         ).await;
+                                    }
+                                    while let Ok(update) = background_work_rx.try_recv() {
+                                        handle_background_work_update(&event_sink, &store, &session_id, update).await;
                                     }
                                     let stop = map_stop_reason(&resp.stop_reason);
                                     let mut sink = event_sink.lock().await;
@@ -1402,7 +1416,6 @@ async fn run_actor(
                                     let now = chrono::Utc::now().to_rfc3339();
                                     handle.set_execution_phase(SessionExecutionPhase::Errored).await;
                                     let _ = store.update_status(&session_id, "errored", &now);
-                                    // Invariant 4: broken-session path — do not auto-drain.
                                     broken_session = true;
                                 }
                             }
@@ -1443,7 +1456,7 @@ async fn run_actor(
 
                         busy.store(false, Ordering::Release);
                         if let Some(next_exit) = exit_after_prompt {
-                            pending_exit = next_exit;
+                            exit_reason = next_exit;
                             break;
                         }
                     }
@@ -1488,12 +1501,12 @@ async fn run_actor(
                     }
                     Some(SessionCommand::Dismiss { respond_to }) => {
                         let _ = respond_to.send(Ok(()));
-                        pending_exit = PendingExit::Dismiss;
+                        exit_reason = ActorExitDisposition::Dismiss;
                         break;
                     }
                     Some(SessionCommand::Close { respond_to }) => {
                         let _ = respond_to.send(Ok(()));
-                        pending_exit = PendingExit::Close;
+                        exit_reason = ActorExitDisposition::Close;
                         break;
                     }
                     None => break,
@@ -1505,6 +1518,7 @@ async fn run_actor(
                         &notif,
                         &mut resume_replay_filter,
                         &event_sink,
+                        &mut background_work_registry,
                         &store,
                         &session_id,
                         &source_agent_kind,
@@ -1513,21 +1527,108 @@ async fn run_actor(
                     ).await;
                 }
             }
+            background_update = background_work_rx.recv() => {
+                if let Some(update) = background_update {
+                    handle_background_work_update(&event_sink, &store, &session_id, update).await;
+                }
+            }
         }
     }
-
-    if pending_exit == PendingExit::Close {
-        {
-            let mut sink = event_sink.lock().await;
-            sink.session_ended(SessionEndReason::Closed);
-        }
-        handle
-            .set_execution_phase(SessionExecutionPhase::Closed)
-            .await;
-    }
+    background_work_registry.shutdown();
+    finalize_established_actor_exit(&handle, &event_sink, &store, &session_id, exit_reason).await;
     handle.finish_prompt();
     drop(child);
     Ok(())
+}
+
+async fn finalize_established_actor_exit(
+    handle: &Arc<LiveSessionHandle>,
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    store: &SessionStore,
+    session_id: &str,
+    disposition: ActorExitDisposition,
+) {
+    let pending_approval = handle.execution_snapshot().await.pending_approval;
+    let now = chrono::Utc::now().to_rfc3339();
+
+    {
+        let mut sink = event_sink.lock().await;
+        if let Some(pending_approval) = &pending_approval {
+            sink.permission_resolved(
+                pending_approval.request_id.clone(),
+                PermissionOutcome::Cancelled,
+            );
+        }
+
+        match &disposition {
+            ActorExitDisposition::Error { message, code } => {
+                sink.error(message.clone(), code.clone());
+                sink.session_ended(SessionEndReason::Error);
+            }
+            ActorExitDisposition::Close => {
+                sink.session_ended(SessionEndReason::Closed);
+            }
+            ActorExitDisposition::Dismiss => {}
+        }
+    }
+
+    match disposition {
+        ActorExitDisposition::Error { .. } => {
+            handle
+                .set_execution_phase(SessionExecutionPhase::Errored)
+                .await;
+            let _ = store.update_status(session_id, "errored", &now);
+        }
+        ActorExitDisposition::Close => {
+            handle
+                .set_execution_phase(SessionExecutionPhase::Closed)
+                .await;
+        }
+        ActorExitDisposition::Dismiss => {
+            handle
+                .set_execution_phase(SessionExecutionPhase::Idle)
+                .await;
+        }
+    }
+}
+
+async fn handle_background_work_update(
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    store: &SessionStore,
+    session_id: &str,
+    update: BackgroundWorkUpdate,
+) {
+    let marked_terminal = match store.mark_background_work_terminal(
+        session_id,
+        &update.tool_call_id,
+        update.state,
+        &chrono::Utc::now().to_rfc3339(),
+    ) {
+        Ok(marked_terminal) => marked_terminal,
+        Err(error) => {
+            tracing::warn!(
+                session_id = %session_id,
+                tool_call_id = %update.tool_call_id,
+                error = %error,
+                "failed to mark background work terminal"
+            );
+            return;
+        }
+    };
+
+    if !marked_terminal {
+        return;
+    }
+
+    let mut sink = event_sink.lock().await;
+    sink.resolve_background_tool_call(
+        update.turn_id.clone(),
+        update.tool_call_id.clone(),
+        update.state,
+        update.agent_id,
+        update.output_file,
+        update.result_text,
+    );
 }
 
 fn merge_spawn_env(
@@ -1609,6 +1710,7 @@ fn strip_ansi_escape_codes(input: &str) -> String {
 async fn handle_notification(
     notif: &acp::SessionNotification,
     event_sink: &Arc<Mutex<SessionEventSink>>,
+    background_work_registry: &mut BackgroundWorkRegistry,
     session_store: &SessionStore,
     session_id: &str,
     source_agent_kind: &str,
@@ -1620,6 +1722,7 @@ async fn handle_notification(
         notif,
         &mut replay_filter,
         event_sink,
+        background_work_registry,
         session_store,
         session_id,
         source_agent_kind,
@@ -1633,6 +1736,7 @@ async fn handle_notification_with_resume_replay_filter(
     notif: &acp::SessionNotification,
     replay_filter: &mut ResumeReplayFilter,
     event_sink: &Arc<Mutex<SessionEventSink>>,
+    background_work_registry: &mut BackgroundWorkRegistry,
     session_store: &SessionStore,
     session_id: &str,
     source_agent_kind: &str,
@@ -1668,6 +1772,7 @@ async fn handle_notification_with_resume_replay_filter(
     normalize_notification(
         notif,
         event_sink,
+        background_work_registry,
         session_store,
         session_id,
         source_agent_kind,
@@ -1680,6 +1785,7 @@ async fn handle_notification_with_resume_replay_filter(
 async fn normalize_notification(
     notif: &acp::SessionNotification,
     event_sink: &Arc<Mutex<SessionEventSink>>,
+    background_work_registry: &mut BackgroundWorkRegistry,
     session_store: &SessionStore,
     session_id: &str,
     source_agent_kind: &str,
@@ -1705,8 +1811,7 @@ async fn normalize_notification(
             });
         }
         ToolCall(tc) => {
-            let mut sink = event_sink.lock().await;
-            sink.tool_call(AcpToolPayload {
+            let payload = AcpToolPayload {
                 tool_call_id: tc.tool_call_id.to_string(),
                 title: Some(tc.title.clone()),
                 kind: serde_json::to_value(tc.kind)
@@ -1736,11 +1841,18 @@ async fn normalize_notification(
                     .as_ref()
                     .and_then(|v| serde_json::to_value(v).ok()),
                 meta: serialize_meta(tc.meta.as_ref()),
-            });
+            };
+            let turn_id = {
+                let mut sink = event_sink.lock().await;
+                sink.tool_call(payload.clone());
+                sink.current_turn_id()
+            };
+            background_work_registry
+                .observe_tool_payload(turn_id, &payload)
+                .await;
         }
         ToolCallUpdate(tcu) => {
-            let mut sink = event_sink.lock().await;
-            sink.tool_call_update(AcpToolPayload {
+            let payload = AcpToolPayload {
                 tool_call_id: tcu.tool_call_id.to_string(),
                 title: tcu.fields.title.clone(),
                 kind: tcu
@@ -1776,7 +1888,15 @@ async fn normalize_notification(
                     .as_ref()
                     .and_then(|v| serde_json::to_value(v).ok()),
                 meta: serialize_meta(tcu.meta.as_ref()),
-            });
+            };
+            let turn_id = {
+                let mut sink = event_sink.lock().await;
+                sink.tool_call_update(payload.clone());
+                sink.current_turn_id()
+            };
+            background_work_registry
+                .observe_tool_payload(turn_id, &payload)
+                .await;
         }
         Plan(plan) => {
             let entries = plan
@@ -2949,18 +3069,22 @@ fn select_option_contains_value(option: &acp::SessionConfigOption, desired_value
 mod tests {
     use std::collections::BTreeMap;
     use std::path::PathBuf;
+    use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
     use std::time::{Duration, Instant};
 
     use super::{
-        build_system_prompt_meta, classify_agent_stderr_line, find_select_option_for_request,
-        handle_notification, handle_notification_with_resume_replay_filter,
-        is_missing_load_session_resource, is_mode_config_request, is_model_config_request,
-        merge_spawn_env, normalized_key_rank, pending_config_rank, persisted_control_values,
-        sanitize_agent_stderr_line, serialize_meta, should_try_direct_claude_model_setter,
-        tracked_config_purpose, AgentStderrSeverity, PersistedSessionConfigState,
-        ResumeReplayFilter, SessionStartupState, IDLE_RESUME_REPLAY_QUIET_WINDOW,
+        build_system_prompt_meta, classify_agent_stderr_line, finalize_established_actor_exit,
+        find_select_option_for_request, handle_notification,
+        handle_notification_with_resume_replay_filter, is_missing_load_session_resource,
+        is_mode_config_request, is_model_config_request, merge_spawn_env, normalized_key_rank,
+        pending_config_rank, persisted_control_values, sanitize_agent_stderr_line, serialize_meta,
+        should_try_direct_claude_model_setter, tracked_config_purpose, ActorExitDisposition,
+        AgentStderrSeverity, LiveSessionExecutionSnapshot, LiveSessionHandle,
+        PersistedSessionConfigState, ResumeReplayFilter, SessionCommand, SessionStartupState,
+        IDLE_RESUME_REPLAY_QUIET_WINDOW,
     };
+    use crate::acp::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
     use crate::acp::event_sink::SessionEventSink;
     use crate::persistence::Db;
     use crate::sessions::live_config::NormalizedControlKind;
@@ -2968,8 +3092,9 @@ mod tests {
     use agent_client_protocol as acp;
     use anyharness_contract::v1::{
         NormalizedSessionControl, NormalizedSessionControlValue, NormalizedSessionControls,
+        PendingApprovalSummary, SessionEventEnvelope, SessionExecutionPhase,
     };
-    use tokio::sync::{broadcast, Mutex};
+    use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 
     #[test]
     fn sanitize_agent_stderr_line_strips_ansi_sequences() {
@@ -3067,6 +3192,7 @@ mod tests {
             requested_mode_id: None,
             current_mode_id: None,
         };
+        let mut background_work_registry = test_background_work_registry(&store);
 
         let notif = acp::SessionNotification::new(
             "native-1",
@@ -3076,6 +3202,7 @@ mod tests {
         handle_notification(
             &notif,
             &event_sink,
+            &mut background_work_registry,
             &store,
             "session-1",
             "claude",
@@ -3199,6 +3326,7 @@ mod tests {
             current_mode_id: None,
         };
         let mut replay_filter = ResumeReplayFilter::new("claude", true, "idle");
+        let mut background_work_registry = test_background_work_registry(&store);
 
         let replay_user = acp::SessionNotification::new(
             "native-1",
@@ -3208,6 +3336,7 @@ mod tests {
             &replay_user,
             &mut replay_filter,
             &event_sink,
+            &mut background_work_registry,
             &store,
             "session-1",
             "claude",
@@ -3216,7 +3345,13 @@ mod tests {
         )
         .await;
 
-        assert_eq!(store.list_raw_notifications("session-1").expect("raw").len(), 1);
+        assert_eq!(
+            store
+                .list_raw_notifications("session-1")
+                .expect("raw")
+                .len(),
+            1
+        );
         assert!(store.list_events("session-1").expect("events").is_empty());
 
         let available_commands = acp::SessionNotification::new(
@@ -3227,6 +3362,7 @@ mod tests {
             &available_commands,
             &mut replay_filter,
             &event_sink,
+            &mut background_work_registry,
             &store,
             "session-1",
             "claude",
@@ -3235,11 +3371,153 @@ mod tests {
         )
         .await;
 
-        let raw = store.list_raw_notifications("session-1").expect("raw after passthrough");
-        let events = store.list_events("session-1").expect("events after passthrough");
+        let raw = store
+            .list_raw_notifications("session-1")
+            .expect("raw after passthrough");
+        let events = store
+            .list_events("session-1")
+            .expect("events after passthrough");
         assert_eq!(raw.len(), 2);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event_type, "available_commands_update");
+    }
+
+    #[tokio::test]
+    async fn finalize_error_exit_cancels_pending_permission_and_marks_session_errored() {
+        let (store, event_sink, handle) = actor_exit_test_context(Some(PendingApprovalSummary {
+            request_id: "perm-1".to_string(),
+            title: "Run command".to_string(),
+            tool_call_id: Some("tool-1".to_string()),
+            tool_kind: Some("execute".to_string()),
+        }));
+
+        finalize_established_actor_exit(
+            &handle,
+            &event_sink,
+            &store,
+            "session-1",
+            ActorExitDisposition::Error {
+                message: "server shut down unexpectedly".to_string(),
+                code: None,
+            },
+        )
+        .await;
+
+        let events = store.list_events("session-1").expect("list events");
+        let event_types = events
+            .iter()
+            .map(|event| event.event_type.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            event_types,
+            vec!["permission_resolved", "error", "session_ended"]
+        );
+
+        let payload: serde_json::Value =
+            serde_json::from_str(&events[0].payload_json).expect("deserialize permission resolved");
+        assert_eq!(payload["requestId"], "perm-1");
+        assert_eq!(payload["outcome"]["outcome"], "cancelled");
+
+        let snapshot = handle.execution_snapshot().await;
+        assert_eq!(snapshot.phase, SessionExecutionPhase::Errored);
+        assert!(snapshot.pending_approval.is_none());
+
+        let record = store
+            .find_by_id("session-1")
+            .expect("fetch session")
+            .expect("session exists");
+        assert_eq!(record.status, "errored");
+    }
+
+    #[tokio::test]
+    async fn finalize_close_exit_cancels_pending_permission_and_emits_closed_event() {
+        let (store, event_sink, handle) = actor_exit_test_context(Some(PendingApprovalSummary {
+            request_id: "perm-1".to_string(),
+            title: "Run command".to_string(),
+            tool_call_id: Some("tool-1".to_string()),
+            tool_kind: Some("execute".to_string()),
+        }));
+
+        finalize_established_actor_exit(
+            &handle,
+            &event_sink,
+            &store,
+            "session-1",
+            ActorExitDisposition::Close,
+        )
+        .await;
+
+        let events = store.list_events("session-1").expect("list events");
+        let event_types = events
+            .iter()
+            .map(|event| event.event_type.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(event_types, vec!["permission_resolved", "session_ended"]);
+
+        let snapshot = handle.execution_snapshot().await;
+        assert_eq!(snapshot.phase, SessionExecutionPhase::Closed);
+        assert!(snapshot.pending_approval.is_none());
+
+        let record = store
+            .find_by_id("session-1")
+            .expect("fetch session")
+            .expect("session exists");
+        assert_eq!(record.status, "idle");
+    }
+
+    #[tokio::test]
+    async fn finalize_dismiss_exit_cancels_pending_permission_without_terminal_event() {
+        let (store, event_sink, handle) = actor_exit_test_context(Some(PendingApprovalSummary {
+            request_id: "perm-1".to_string(),
+            title: "Run command".to_string(),
+            tool_call_id: Some("tool-1".to_string()),
+            tool_kind: Some("execute".to_string()),
+        }));
+
+        finalize_established_actor_exit(
+            &handle,
+            &event_sink,
+            &store,
+            "session-1",
+            ActorExitDisposition::Dismiss,
+        )
+        .await;
+
+        let events = store.list_events("session-1").expect("list events");
+        let event_types = events
+            .iter()
+            .map(|event| event.event_type.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(event_types, vec!["permission_resolved"]);
+
+        let snapshot = handle.execution_snapshot().await;
+        assert_eq!(snapshot.phase, SessionExecutionPhase::Idle);
+        assert!(snapshot.pending_approval.is_none());
+    }
+
+    #[tokio::test]
+    async fn finalize_exit_without_pending_permission_skips_permission_resolved_event() {
+        let (store, event_sink, handle) = actor_exit_test_context(None);
+
+        finalize_established_actor_exit(
+            &handle,
+            &event_sink,
+            &store,
+            "session-1",
+            ActorExitDisposition::Error {
+                message: "server shut down unexpectedly".to_string(),
+                code: None,
+            },
+        )
+        .await;
+
+        let event_types = store
+            .list_events("session-1")
+            .expect("list events")
+            .into_iter()
+            .map(|event| event.event_type)
+            .collect::<Vec<_>>();
+        assert_eq!(event_types, vec!["error", "session_ended"]);
     }
 
     #[test]
@@ -3540,5 +3818,83 @@ mod tests {
             "uri": "session-123",
         }));
         assert!(!is_missing_load_session_resource(&error, "session-123"));
+    }
+
+    fn actor_exit_test_context(
+        pending_approval: Option<PendingApprovalSummary>,
+    ) -> (
+        SessionStore,
+        Arc<Mutex<SessionEventSink>>,
+        Arc<LiveSessionHandle>,
+    ) {
+        let db = Db::open_in_memory().expect("open db");
+        db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
+                 VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
+                rusqlite::params!["workspace-1", "2026-03-25T00:00:00Z"],
+            )?;
+            Ok(())
+        })
+        .expect("seed workspace");
+
+        let store = SessionStore::new(db.clone());
+        store
+            .insert(&SessionRecord {
+                id: "session-1".to_string(),
+                workspace_id: "workspace-1".to_string(),
+                agent_kind: "claude".to_string(),
+                native_session_id: Some("native-1".to_string()),
+                requested_model_id: None,
+                current_model_id: None,
+                requested_mode_id: None,
+                current_mode_id: None,
+                title: None,
+                thinking_level_id: None,
+                thinking_budget_tokens: None,
+                status: "idle".to_string(),
+                created_at: "2026-03-25T00:00:00Z".to_string(),
+                updated_at: "2026-03-25T00:00:00Z".to_string(),
+                last_prompt_at: None,
+                closed_at: None,
+                dismissed_at: None,
+                mcp_bindings_ciphertext: None,
+            })
+            .expect("insert session");
+
+        let (command_tx, _command_rx) = mpsc::channel::<SessionCommand>(4);
+        let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(16);
+        let mut execution =
+            LiveSessionExecutionSnapshot::new(SessionExecutionPhase::AwaitingPermission);
+        execution.pending_approval = pending_approval;
+
+        let handle = Arc::new(LiveSessionHandle {
+            session_id: "session-1".to_string(),
+            command_tx,
+            event_tx: event_tx.clone(),
+            busy: Arc::new(AtomicBool::new(false)),
+            execution: Arc::new(RwLock::new(execution)),
+        });
+
+        let event_sink = Arc::new(Mutex::new(SessionEventSink::new(
+            "session-1".to_string(),
+            "claude".to_string(),
+            PathBuf::from("/tmp/workspace"),
+            event_tx,
+            store.clone(),
+        )));
+
+        (store, event_sink, handle)
+    }
+
+    fn test_background_work_registry(store: &SessionStore) -> BackgroundWorkRegistry {
+        let (updates_tx, _updates_rx) = mpsc::unbounded_channel();
+        BackgroundWorkRegistry::new(
+            "session-1".to_string(),
+            "claude".to_string(),
+            store.clone(),
+            updates_tx,
+            BackgroundWorkOptions::default(),
+        )
     }
 }

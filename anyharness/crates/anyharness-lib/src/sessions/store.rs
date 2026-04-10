@@ -1,7 +1,8 @@
 use rusqlite::{params, OptionalExtension};
 
 use super::model::{
-    PendingConfigChangeRecord, PendingPromptRecord, SessionEventRecord,
+    PendingConfigChangeRecord, PendingPromptRecord, SessionBackgroundWorkRecord,
+    SessionBackgroundWorkState, SessionBackgroundWorkTrackerKind, SessionEventRecord,
     SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
 };
 use crate::persistence::Db;
@@ -471,6 +472,100 @@ impl SessionStore {
         })
     }
 
+    pub fn upsert_or_refresh_pending_background_work(
+        &self,
+        record: &SessionBackgroundWorkRecord,
+    ) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let rows = conn.execute(
+                "INSERT INTO session_background_work (
+                    session_id, tool_call_id, turn_id, tracker_kind, source_agent_kind, agent_id,
+                    output_file, state, created_at, updated_at, launched_at, last_activity_at, completed_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                 ON CONFLICT(session_id, tool_call_id) DO UPDATE SET
+                    turn_id = excluded.turn_id,
+                    tracker_kind = excluded.tracker_kind,
+                    source_agent_kind = excluded.source_agent_kind,
+                    agent_id = excluded.agent_id,
+                    output_file = excluded.output_file,
+                    updated_at = excluded.updated_at,
+                    launched_at = excluded.launched_at,
+                    last_activity_at = excluded.last_activity_at,
+                    completed_at = excluded.completed_at
+                 WHERE session_background_work.state = 'pending'",
+                params![
+                    record.session_id,
+                    record.tool_call_id,
+                    record.turn_id,
+                    record.tracker_kind.as_str(),
+                    record.source_agent_kind,
+                    record.agent_id,
+                    record.output_file,
+                    record.state.as_str(),
+                    record.created_at,
+                    record.updated_at,
+                    record.launched_at,
+                    record.last_activity_at,
+                    record.completed_at,
+                ],
+            )?;
+            Ok(rows > 0)
+        })
+    }
+
+    pub fn list_pending_background_work(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Vec<SessionBackgroundWorkRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT * FROM session_background_work
+                 WHERE session_id = ?1 AND state = 'pending'
+                 ORDER BY launched_at ASC, tool_call_id ASC",
+            )?;
+            let rows = stmt.query_map([session_id], map_background_work)?;
+            rows.collect()
+        })
+    }
+
+    pub fn touch_background_work_activity(
+        &self,
+        session_id: &str,
+        tool_call_id: &str,
+        last_activity_at: &str,
+    ) -> anyhow::Result<()> {
+        self.db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE session_background_work
+                 SET last_activity_at = ?3,
+                     updated_at = ?3
+                 WHERE session_id = ?1 AND tool_call_id = ?2 AND state = 'pending'",
+                params![session_id, tool_call_id, last_activity_at],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn mark_background_work_terminal(
+        &self,
+        session_id: &str,
+        tool_call_id: &str,
+        state: SessionBackgroundWorkState,
+        completed_at: &str,
+    ) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let rows = conn.execute(
+                "UPDATE session_background_work
+                 SET state = ?3,
+                     updated_at = ?4,
+                     completed_at = ?4
+                 WHERE session_id = ?1 AND tool_call_id = ?2 AND state = 'pending'",
+                params![session_id, tool_call_id, state.as_str(), completed_at],
+            )?;
+            Ok(rows > 0)
+        })
+    }
+
     pub fn next_event_seq(&self, session_id: &str) -> anyhow::Result<i64> {
         self.db.with_conn(|conn| {
             let max: Option<i64> = conn.query_row(
@@ -718,6 +813,29 @@ fn map_pending_prompt(row: &rusqlite::Row) -> rusqlite::Result<PendingPromptReco
         prompt_id: row.get("prompt_id")?,
         text: row.get("text")?,
         queued_at: row.get("queued_at")?,
+    })
+}
+
+fn map_background_work(
+    row: &rusqlite::Row,
+) -> rusqlite::Result<SessionBackgroundWorkRecord> {
+    let tracker_kind: String = row.get("tracker_kind")?;
+    let state: String = row.get("state")?;
+
+    Ok(SessionBackgroundWorkRecord {
+        session_id: row.get("session_id")?,
+        tool_call_id: row.get("tool_call_id")?,
+        turn_id: row.get("turn_id")?,
+        tracker_kind: SessionBackgroundWorkTrackerKind::parse(&tracker_kind),
+        source_agent_kind: row.get("source_agent_kind")?,
+        agent_id: row.get("agent_id")?,
+        output_file: row.get("output_file")?,
+        state: SessionBackgroundWorkState::parse(&state),
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+        launched_at: row.get("launched_at")?,
+        last_activity_at: row.get("last_activity_at")?,
+        completed_at: row.get("completed_at")?,
     })
 }
 
@@ -981,5 +1099,64 @@ mod tests {
             .pop_last_dismissed_in_workspace("workspace-1", "2026-03-25T06:00:00Z")
             .expect("pop empty dismissed stack");
         assert!(none.is_none());
+    }
+
+    #[test]
+    fn background_work_round_trips_and_marks_terminal() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        store.insert(&session_record()).expect("insert session");
+
+        let pending = SessionBackgroundWorkRecord {
+            session_id: "session-1".to_string(),
+            tool_call_id: "tool-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            tracker_kind: SessionBackgroundWorkTrackerKind::ClaudeAsyncAgent,
+            source_agent_kind: "claude".to_string(),
+            agent_id: Some("agent-1".to_string()),
+            output_file: "/tmp/agent.output".to_string(),
+            state: SessionBackgroundWorkState::Pending,
+            created_at: "2026-03-25T01:00:00Z".to_string(),
+            updated_at: "2026-03-25T01:00:00Z".to_string(),
+            launched_at: "2026-03-25T01:00:00Z".to_string(),
+            last_activity_at: "2026-03-25T01:00:00Z".to_string(),
+            completed_at: None,
+        };
+
+        assert!(
+            store
+                .upsert_or_refresh_pending_background_work(&pending)
+                .expect("upsert pending background work")
+        );
+        store
+            .touch_background_work_activity("session-1", "tool-1", "2026-03-25T01:05:00Z")
+            .expect("touch background work activity");
+
+        let pending_rows = store
+            .list_pending_background_work("session-1")
+            .expect("list pending background work");
+        assert_eq!(pending_rows.len(), 1);
+        assert_eq!(pending_rows[0].last_activity_at, "2026-03-25T01:05:00Z");
+        assert_eq!(pending_rows[0].updated_at, "2026-03-25T01:05:00Z");
+
+        assert!(
+            store
+            .mark_background_work_terminal(
+                "session-1",
+                "tool-1",
+                SessionBackgroundWorkState::Completed,
+                "2026-03-25T01:06:00Z",
+            )
+            .expect("mark background work terminal")
+        );
+
+        assert!(
+            store
+                .list_pending_background_work("session-1")
+                .expect("list pending background work")
+                .is_empty()
+        );
     }
 }

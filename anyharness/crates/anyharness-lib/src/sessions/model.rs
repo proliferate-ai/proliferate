@@ -99,6 +99,81 @@ pub struct PendingPromptRecord {
     pub queued_at: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionBackgroundWorkTrackerKind {
+    ClaudeAsyncAgent,
+}
+
+impl SessionBackgroundWorkTrackerKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ClaudeAsyncAgent => "claude_async_agent",
+        }
+    }
+
+    pub fn parse(value: &str) -> Self {
+        match value {
+            "claude_async_agent" => Self::ClaudeAsyncAgent,
+            _ => {
+                tracing::warn!(
+                    tracker_kind = %value,
+                    "unknown background work tracker kind; defaulting to claude_async_agent"
+                );
+                Self::ClaudeAsyncAgent
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionBackgroundWorkState {
+    Pending,
+    Completed,
+    Expired,
+}
+
+impl SessionBackgroundWorkState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Completed => "completed",
+            Self::Expired => "expired",
+        }
+    }
+
+    pub fn parse(value: &str) -> Self {
+        match value {
+            "completed" => Self::Completed,
+            "expired" => Self::Expired,
+            "pending" => Self::Pending,
+            _ => {
+                tracing::warn!(
+                    background_work_state = %value,
+                    "unknown background work state; defaulting to pending"
+                );
+                Self::Pending
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SessionBackgroundWorkRecord {
+    pub session_id: String,
+    pub tool_call_id: String,
+    pub turn_id: String,
+    pub tracker_kind: SessionBackgroundWorkTrackerKind,
+    pub source_agent_kind: String,
+    pub agent_id: Option<String>,
+    pub output_file: String,
+    pub state: SessionBackgroundWorkState,
+    pub created_at: String,
+    pub updated_at: String,
+    pub launched_at: String,
+    pub last_activity_at: String,
+    pub completed_at: Option<String>,
+}
+
 fn parse_status(s: &str) -> v1::SessionStatus {
     match s {
         "starting" => v1::SessionStatus::Starting,

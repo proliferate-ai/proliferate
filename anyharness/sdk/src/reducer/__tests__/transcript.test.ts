@@ -126,21 +126,7 @@ describe("transcript reducer", () => {
       [
         turnStarted(1),
         completedToolItem(2, "tool-1"),
-        {
-          sessionId: "session-1",
-          seq: 3,
-          timestamp: "2026-04-04T00:00:03Z",
-          turnId: "turn-1",
-          itemId: "tool-1",
-          event: {
-            type: "permission_requested",
-            requestId: "perm-1",
-            title: "Run command",
-            toolCallId: "tool-1",
-            toolKind: "execute",
-            options: [{ id: "allow", label: "Allow" }],
-          },
-        },
+        permissionRequested(3, "tool-1"),
         {
           sessionId: "session-1",
           seq: 4,
@@ -161,6 +147,33 @@ describe("transcript reducer", () => {
 
     expect(state.pendingApproval).toBeNull();
     expect((state.itemsById["tool-1"] as ToolCallItem).approvalState).toBe("approved");
+  });
+
+  it("treats cancelled permission resolutions as cleared rather than rejected", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        completedToolItem(2, "tool-1"),
+        permissionRequested(3, "tool-1"),
+        {
+          sessionId: "session-1",
+          seq: 4,
+          timestamp: "2026-04-04T00:00:04Z",
+          turnId: "turn-1",
+          event: {
+            type: "permission_resolved",
+            requestId: "perm-1",
+            outcome: {
+              outcome: "cancelled",
+            },
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    expect(state.pendingApproval).toBeNull();
+    expect((state.itemsById["tool-1"] as ToolCallItem).approvalState).toBe("none");
   });
 
   it("preserves toolKind on pendingApproval", () => {
@@ -253,6 +266,120 @@ describe("transcript reducer", () => {
         deletions: 4,
       },
     ]);
+  });
+
+  it("clears pending approval on error as a defensive fallback", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        completedToolItem(2, "tool-1"),
+        permissionRequested(3, "tool-1"),
+        {
+          sessionId: "session-1",
+          seq: 4,
+          timestamp: "2026-04-04T00:00:04Z",
+          turnId: "turn-1",
+          itemId: "error-1",
+          event: {
+            type: "error",
+            message: "server shut down unexpectedly",
+            code: null,
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    expect(state.pendingApproval).toBeNull();
+    expect((state.itemsById["tool-1"] as ToolCallItem).approvalState).toBe("none");
+  });
+
+  it("clears pending approval on session_ended fallback replay", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        completedToolItem(2, "tool-1"),
+        permissionRequested(3, "tool-1"),
+        {
+          sessionId: "session-1",
+          seq: 4,
+          timestamp: "2026-04-04T00:00:04Z",
+          event: {
+            type: "session_ended",
+            reason: "error",
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    expect(state.pendingApproval).toBeNull();
+    expect((state.itemsById["tool-1"] as ToolCallItem).approvalState).toBe("none");
+    expect(state.isStreaming).toBe(false);
+  });
+
+  it("replaces async launch text in place without reordering the turn", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        backgroundLaunchToolItem(2, "tool-1"),
+        assistantCompleted(3, "assistant-1", "Waiting on results now."),
+        {
+          sessionId: "session-1",
+          seq: 4,
+          timestamp: "2026-04-04T00:00:04Z",
+          turnId: "turn-1",
+          itemId: "tool-1",
+          event: {
+            type: "item_delta",
+            delta: {
+              status: "completed",
+              rawOutput: backgroundWorkRawOutput("completed"),
+              replaceContentParts: [
+                {
+                  type: "tool_result_text",
+                  text: "Final synthesized subagent report.",
+                },
+              ],
+            },
+          },
+        },
+        {
+          sessionId: "session-1",
+          seq: 5,
+          timestamp: "2026-04-04T00:00:05Z",
+          turnId: "turn-1",
+          itemId: "tool-1",
+          event: {
+            type: "item_completed",
+            item: {
+              kind: "tool_invocation",
+              status: "completed",
+              sourceAgentKind: "claude",
+              toolCallId: "tool-1",
+              rawOutput: backgroundWorkRawOutput("completed"),
+              contentParts: [
+                {
+                  type: "tool_result_text",
+                  text: "Final synthesized subagent report.",
+                },
+              ],
+            },
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["tool-1"] as ToolCallItem;
+    const resultTexts = item.contentParts
+      .filter((part): part is Extract<typeof item.contentParts[number], { type: "tool_result_text" }> => part.type === "tool_result_text")
+      .map((part) => part.text);
+
+    expect(resultTexts).toEqual(["Final synthesized subagent report."]);
+    expect(state.turnsById["turn-1"].itemOrder).toEqual(["tool-1", "assistant-1"]);
+    expect(item.lastUpdatedSeq).toBe(5);
+    expect((item.rawOutput as { _anyharness?: { backgroundWork?: { state?: string } } })._anyharness?.backgroundWork?.state).toBe("completed");
   });
 });
 
@@ -401,6 +528,81 @@ function completedToolItem(
           ...(extraContentPart ? [extraContentPart] : []),
         ],
       },
+    },
+  };
+}
+
+function backgroundLaunchToolItem(
+  seq: number,
+  itemId: string,
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:0${seq}Z`,
+    turnId: "turn-1",
+    itemId,
+    event: {
+      type: "item_completed",
+      item: {
+        kind: "tool_invocation",
+        status: "completed",
+        sourceAgentKind: "claude",
+        toolCallId: itemId,
+        title: "Agent task",
+        rawOutput: backgroundWorkRawOutput("pending"),
+        contentParts: [
+          {
+            type: "tool_call",
+            toolCallId: itemId,
+            title: "Agent task",
+            toolKind: "other",
+          },
+          {
+            type: "tool_input_text",
+            text: "Investigate this repo.",
+          },
+          {
+            type: "tool_result_text",
+            text: "Async agent launched successfully.\nThe agent is working in the background.",
+          },
+        ],
+      },
+    },
+  };
+}
+
+function backgroundWorkRawOutput(state: "pending" | "completed" | "expired") {
+  return {
+    isAsync: true,
+    agentId: "agent-1",
+    outputFile: "/tmp/agent.output",
+    _anyharness: {
+      backgroundWork: {
+        trackerKind: "claude_async_agent",
+        state,
+      },
+    },
+  };
+}
+
+function permissionRequested(
+  seq: number,
+  toolCallId: string,
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:0${seq}Z`,
+    turnId: "turn-1",
+    itemId: toolCallId,
+    event: {
+      type: "permission_requested",
+      requestId: "perm-1",
+      title: "Run command",
+      toolCallId,
+      toolKind: "execute",
+      options: [{ id: "allow", label: "Allow" }],
     },
   };
 }

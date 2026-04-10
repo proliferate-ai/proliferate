@@ -96,6 +96,7 @@ export function reduceEvent(
       break;
 
     case "session_ended":
+      clearPendingApproval(s, "none");
       s.isStreaming = false;
       break;
 
@@ -221,6 +222,7 @@ export function reduceEvent(
     case "error": {
       ensureTurn(s, turnId, ts);
       closeStreamingItems(s);
+      clearPendingApproval(s, "none");
       const item: ErrorItem = {
         kind: "error",
         itemId,
@@ -501,10 +503,18 @@ function applyPermissionResolved(
   outcome: "selected" | "cancelled",
 ): void {
   if (s.pendingApproval?.requestId !== requestId) return;
-  if (s.pendingApproval.toolCallId) {
+
+  clearPendingApproval(s, outcome === "selected" ? "approved" : "none");
+}
+
+function clearPendingApproval(
+  s: TranscriptState,
+  toolApprovalState: ToolCallItem["approvalState"],
+): void {
+  if (s.pendingApproval?.toolCallId) {
     const item = findToolItemByToolCallId(s, s.pendingApproval.toolCallId);
     if (item) {
-      item.approvalState = outcome === "selected" ? "approved" : "rejected";
+      item.approvalState = toolApprovalState;
     }
   }
   s.pendingApproval = null;
