@@ -164,11 +164,12 @@ async function createRemoteWorkspaceFixture(
   name: string,
 ): Promise<TestWorkspace> {
   const sourceWorkspace = await client.workspaces.resolveFromPath(sourceWorkspacePath);
+  const sourceWorkspaceId = sourceWorkspace.workspace.id;
   const fixturePath = buildRemoteFixturePath(sourceWorkspacePath, name);
 
   await runRemotePython(
     client,
-    sourceWorkspace.id,
+    sourceWorkspaceId,
     sourceWorkspacePath,
     fixturePath,
     [
@@ -186,7 +187,7 @@ async function createRemoteWorkspaceFixture(
     cleanup: async () => {
       await runRemotePython(
         client,
-        sourceWorkspace.id,
+        sourceWorkspaceId,
         sourceWorkspacePath,
         fixturePath,
         [

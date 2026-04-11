@@ -109,7 +109,11 @@ export function useMainScreenState(): MainScreenState {
       : false
   );
   const { data: gitStatus } = useGitStatusQuery({ enabled: hasRuntimeReadyWorkspace });
-  const { data: currentPullRequest } = useCurrentPullRequestQuery({ enabled: hasRuntimeReadyWorkspace });
+  const shouldQueryCurrentPullRequest =
+    hasRuntimeReadyWorkspace && Boolean(gitStatus?.currentBranch?.trim());
+  const { data: currentPullRequest } = useCurrentPullRequestQuery({
+    enabled: shouldQueryCurrentPullRequest,
+  });
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId),

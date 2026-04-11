@@ -46,7 +46,10 @@ export function UserMessage({ content, showCopyButton = false }: UserMessageProp
         </div>
         {showCopyButton && content && (
           <div className="pr-1 pt-0.5">
-            <CopyMessageButton content={content} />
+            <CopyMessageButton
+              content={content}
+              visibilityClassName="opacity-0 group-hover/msg:opacity-100"
+            />
           </div>
         )}
       </div>

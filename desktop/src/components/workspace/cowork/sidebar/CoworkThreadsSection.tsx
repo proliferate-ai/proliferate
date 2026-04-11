@@ -1,13 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { BrailleSweepBadge, MiniPlus } from "@/components/ui/icons";
-import { SidebarActionButton } from "@/components/workspace/shell/sidebar/SidebarActionButton";
+import { BrailleSweepBadge, CollapseAll, ExpandAll, Plus } from "@/components/ui/icons";
 import { SidebarShowToggleRow } from "@/components/workspace/shell/sidebar/SidebarShowToggleRow";
 import { useCoworkStatus } from "@/hooks/cowork/use-cowork-status";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/use-cowork-thread-workflow";
 import { useCoworkThreads } from "@/hooks/cowork/use-cowork-threads";
 import { collectWorkspaceSessionViewStates } from "@/lib/domain/sessions/activity";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { SidebarActionButton } from "@/components/workspace/shell/sidebar/SidebarActionButton";
 import { CoworkThreadRow } from "./CoworkThreadRow";
 
 const DEFAULT_VISIBLE_THREAD_COUNT = 5;
@@ -21,6 +22,11 @@ export function CoworkThreadsSection() {
   const { threads, isLoading: threadsLoading } = useCoworkThreads(status?.enabled ?? false);
   const { createThread, openThread, isCreatingThread } = useCoworkThreadWorkflow();
   const [expanded, setExpanded] = useState(false);
+  const threadsCollapsed = useWorkspaceUiStore((s) => s.threadsCollapsed);
+  const setThreadsCollapsed = useWorkspaceUiStore((s) => s.setThreadsCollapsed);
+  const handleToggleCollapsed = useCallback(() => {
+    setThreadsCollapsed(!threadsCollapsed);
+  }, [setThreadsCollapsed, threadsCollapsed]);
 
   const overLimit = threads.length > DEFAULT_VISIBLE_THREAD_COUNT;
   const selectedThreadIndex = useMemo(() => (
@@ -49,49 +55,66 @@ export function CoworkThreadsSection() {
   }
 
   return (
-    <div className="px-2 pb-2">
-      <div className="flex items-center justify-between gap-2 pl-2 pr-1 pb-1 pt-3 text-base text-foreground/50 opacity-75">
+    <div className="pb-2">
+      <div className="flex items-center justify-between gap-2 pl-2 pb-1 pt-3 text-base text-foreground/50 opacity-75">
         <span>Threads</span>
-        <SidebarActionButton
-          title="New thread"
-          alwaysVisible
-          disabled={isCreatingThread}
-          onClick={() => { void createThread(); }}
-        >
-          <MiniPlus className="size-3" />
-        </SidebarActionButton>
+        <div className="flex shrink-0 items-center gap-1">
+          {threads.length > 0 && (
+            <SidebarActionButton
+              onClick={handleToggleCollapsed}
+              title={threadsCollapsed ? "Expand threads" : "Collapse threads"}
+              variant="section"
+            >
+              {threadsCollapsed ? (
+                <ExpandAll className="size-3" />
+              ) : (
+                <CollapseAll className="size-3" />
+              )}
+            </SidebarActionButton>
+          )}
+          <SidebarActionButton
+            onClick={() => { void createThread(); }}
+            disabled={isCreatingThread}
+            title="Start a new thread"
+            variant="section"
+          >
+            <Plus className="size-3" />
+          </SidebarActionButton>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-px">
-        {statusLoading || threadsLoading ? (
-          <div className="flex flex-col items-center gap-2 px-3 py-4 text-center">
-            <BrailleSweepBadge className="text-base text-foreground" />
-            <p className="text-xs text-sidebar-muted-foreground">Loading threads</p>
-          </div>
-        ) : threads.length === 0 ? (
-          <div className="px-2 py-2 text-xs text-sidebar-muted-foreground">
-            {isCreatingThread ? "Creating chat" : "No chats yet"}
-          </div>
-        ) : (
-          <>
-            {visibleThreads.map((thread) => (
-              <CoworkThreadRow
-                key={thread.id}
-                thread={thread}
-                active={selectedWorkspaceId === thread.workspaceId}
-                activity={workspaceActivities[thread.workspaceId]}
-                onSelect={() => { void openThread(thread.workspaceId); }}
-              />
-            ))}
-            {toggleLabel && (
-              <SidebarShowToggleRow
-                label={toggleLabel}
-                onClick={handleToggleExpanded}
-              />
-            )}
-          </>
-        )}
-      </div>
+      {!threadsCollapsed && (
+        <div className="flex flex-col gap-px">
+          {statusLoading || threadsLoading ? (
+            <div className="flex flex-col items-center gap-2 px-3 py-4 text-center">
+              <BrailleSweepBadge className="text-base text-foreground" />
+              <p className="text-xs text-sidebar-muted-foreground">Loading threads</p>
+            </div>
+          ) : threads.length === 0 ? (
+            <div className="px-2 py-2 text-xs text-sidebar-muted-foreground">
+              {isCreatingThread ? "Creating chat" : "No chats yet"}
+            </div>
+          ) : (
+            <>
+              {visibleThreads.map((thread) => (
+                <CoworkThreadRow
+                  key={thread.id}
+                  thread={thread}
+                  active={selectedWorkspaceId === thread.workspaceId}
+                  activity={workspaceActivities[thread.workspaceId]}
+                  onSelect={() => { void openThread(thread.workspaceId); }}
+                />
+              ))}
+              {toggleLabel && (
+                <SidebarShowToggleRow
+                  label={toggleLabel}
+                  onClick={handleToggleExpanded}
+                />
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

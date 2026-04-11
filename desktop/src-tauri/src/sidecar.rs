@@ -209,6 +209,10 @@ fn env_value(key: &str) -> Option<String> {
 fn default_anyharness_launch_env() -> HashMap<String, String> {
     let mut env = HashMap::new();
 
+    if should_use_local_proliferate_home(cfg!(debug_assertions)) {
+        env.insert("PROLIFERATE_DEV".to_string(), "1".to_string());
+    }
+
     for key in [
         "ANYHARNESS_SENTRY_DSN",
         "ANYHARNESS_SENTRY_ENVIRONMENT",
@@ -221,6 +225,10 @@ fn default_anyharness_launch_env() -> HashMap<String, String> {
     }
 
     env
+}
+
+fn should_use_local_proliferate_home(debug_build: bool) -> bool {
+    std::env::var_os("PROLIFERATE_DEV").is_some() || debug_build
 }
 
 fn pick_port() -> u16 {
@@ -272,17 +280,6 @@ fn build_spawn_command(binary: &str, port: u16, launch_env: &HashMap<String, Str
     }
 
     cmd.args(["serve", "--host", DEFAULT_HOST, "--port", &port.to_string()]);
-
-    // In debug builds, isolate the runtime data directory so dev instances
-    // don't collide with a production Proliferate install (separate SQLite DB,
-    // agent configs, logs, etc.).
-    if cfg!(debug_assertions) {
-        let home = std::env::var("HOME")
-            .or_else(|_| std::env::var("USERPROFILE"))
-            .unwrap_or_else(|_| ".".into());
-        let dev_home = format!("{home}/.proliferate-dev/anyharness");
-        cmd.args(["--runtime-home", &dev_home]);
-    }
 
     cmd.stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::inherit())

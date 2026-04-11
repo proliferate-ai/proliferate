@@ -1,7 +1,14 @@
 import { useState } from "react";
+import { IconButton } from "@/components/ui/IconButton";
 import { Check, Copy } from "@/components/ui/icons";
 
-export function CopyMessageButton({ content }: { content: string }) {
+export function CopyMessageButton({
+  content,
+  visibilityClassName,
+}: {
+  content: string;
+  visibilityClassName: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -12,14 +19,14 @@ export function CopyMessageButton({ content }: { content: string }) {
   };
 
   return (
-    <button
-      type="button"
+    <IconButton
       onClick={handleCopy}
-      className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/msg:opacity-100"
+      title={copied ? "Copied" : "Copy message"}
+      className={`rounded-md text-muted-foreground transition-opacity duration-200 hover:text-foreground ${visibilityClassName}`}
     >
       {copied
         ? <Check className="size-3" />
         : <Copy className="size-3" />}
-    </button>
+    </IconButton>
   );
 }

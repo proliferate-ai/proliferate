@@ -12,12 +12,18 @@ interface ToastStore {
   dismiss: (id: string) => void;
 }
 
-let nextId = 0;
+function createToastId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export const useToastStore = create<ToastStore>((set) => ({
   toasts: [],
   show: (message, type = "error") => {
-    const id = String(++nextId);
+    const id = createToastId();
     set((s) => ({ toasts: [...s.toasts, { id, message, type }] }));
   },
   dismiss: (id) => {

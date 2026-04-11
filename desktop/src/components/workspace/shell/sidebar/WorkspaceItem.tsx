@@ -7,10 +7,7 @@ import {
   Archive,
   BrailleSweepBadge,
   CircleAlert,
-  CloudIcon,
-  Monitor,
   Pencil,
-  Tree,
 } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -18,19 +15,9 @@ import type { SessionViewState } from "@/lib/domain/sessions/activity";
 import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar";
 import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/workspace-display";
 import { SidebarActionButton } from "./SidebarActionButton";
+import { SidebarRowSurface } from "./SidebarRowSurface";
+import { SidebarWorkspaceVariantIcon } from "./SidebarWorkspaceVariantIcon";
 import { WorkspaceRenamePopover } from "./WorkspaceRenamePopover";
-
-const VARIANT_ICONS: Record<SidebarWorkspaceVariant, typeof Monitor> = {
-  local: Monitor,
-  worktree: Tree,
-  cloud: CloudIcon,
-};
-
-const VARIANT_TOOLTIPS: Record<SidebarWorkspaceVariant, string> = {
-  local: "Local · runs in the repo's working directory",
-  worktree: "Worktree · isolated branch in a separate checkout",
-  cloud: "Cloud · runs on remote infrastructure",
-};
 
 const CONTEXT_ROW =
   "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-accent";
@@ -84,6 +71,7 @@ export function WorkspaceItem({
   onUnarchive,
   onRename,
 }: WorkspaceItemProps) {
+  const hasArchiveAction = !!(onArchive || onUnarchive);
   // Suppress the "ready" status badge — the cloud variant icon already
   // conveys "this is a cloud workspace". Non-ready statuses (queued,
   // provisioning, syncing, cloning, starting, stopped, error) still show
@@ -92,10 +80,9 @@ export function WorkspaceItem({
     variant === "cloud" && cloudStatus && cloudStatus !== "ready"
       ? CLOUD_SIDEBAR_STATUS_DEFINITIONS[cloudStatus]
       : null;
-  const VariantIcon = VARIANT_ICONS[variant];
   const [renameOpen, setRenameOpen] = useState(false);
 
-  const slotIcon: { tooltip: string; element: ReactNode } =
+  const statusSlot: { tooltip: string; element: ReactNode } | null =
     activity === "working"
       ? {
         tooltip: "Working",
@@ -116,31 +103,22 @@ export function WorkspaceItem({
               tooltip: "Unread",
               element: <div className="size-1.5 rounded-full bg-unread" />,
             }
-            : {
-              tooltip: VARIANT_TOOLTIPS[variant],
-              element: (
-                <VariantIcon
-                  className={`size-3 ${
-                    archived ? "text-sidebar-muted-foreground/40" : "text-sidebar-muted-foreground"
-                  }`}
-                />
-              ),
-            };
+            : null;
+  const variantMetaIcon = (
+    <SidebarWorkspaceVariantIcon
+      variant={variant}
+      withTooltip
+      className={`size-3 ${
+        archived ? "text-sidebar-muted-foreground/40" : "text-sidebar-muted-foreground"
+      }`}
+    />
+  );
 
   const row = (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect?.();
-        }
-      }}
-      className={`group relative cursor-pointer select-none rounded-lg px-2 py-1 hover:bg-sidebar-accent focus-visible:outline-offset-[-2px] h-[30px] ${
-        active ? "bg-sidebar-accent" : ""
-      }`}
+    <SidebarRowSurface
+      active={active}
+      onPress={onSelect}
+      className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
     >
       {/* Archive button — absolutely positioned right edge, visible on hover */}
       {(onArchive || onUnarchive) && (
@@ -159,47 +137,68 @@ export function WorkspaceItem({
         </div>
       )}
 
-      <div className="flex w-full items-center gap-1.5 text-sm leading-4">
-        {/* Leading icon — variant by default, replaced by activity / unread
-            indicators when present. One slot, not two columns. */}
-        <div className="flex w-4 shrink-0 items-center justify-center">
-          <Tooltip content={slotIcon.tooltip} className="inline-flex shrink-0 items-center justify-center">
-            {slotIcon.element}
+      {/* Leading status slot. Idle variants render with the right-side metadata
+          instead so the icon sits next to the relative-time / git summary. */}
+      <div className="flex w-4 shrink-0 items-center justify-center">
+        {statusSlot && (
+          <Tooltip content={statusSlot.tooltip} className="inline-flex shrink-0 items-center justify-center">
+            {statusSlot.element}
           </Tooltip>
-        </div>
+        )}
+      </div>
 
-        {/* Title */}
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className={`flex flex-1 items-center gap-2 truncate text-base leading-5 ${
-            archived ? "text-foreground/30" : "text-foreground"
-          }`}>
-            <span className="truncate select-none" draggable={false}>{name}</span>
+      {/* Title */}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className={`flex flex-1 items-center gap-2 truncate text-base leading-5 ${
+          archived ? "text-foreground/30" : "text-foreground"
+        }`}>
+          <span className="truncate select-none" draggable={false}>{name}</span>
+        </div>
+        {cloudStatusDefinition && (
+          <div className="flex min-w-[24px] items-center justify-end gap-2">
+            <span className={`shrink-0 rounded-full border px-1.5 py-0 text-xs uppercase tracking-[0.12em] ${cloudStatusDefinition.className}`}>
+              {cloudStatusDefinition.label}
+            </span>
           </div>
-          {cloudStatusDefinition && (
-            <div className="flex min-w-[24px] items-center justify-end gap-2">
-              <span className={`shrink-0 rounded-full border px-1.5 py-0 text-xs uppercase tracking-[0.12em] ${cloudStatusDefinition.className}`}>
-                {cloudStatusDefinition.label}
-              </span>
-            </div>
-          )}
-        </div>
+        )}
+      </div>
 
-        {/* Right-side info — timestamp or git stats */}
-        <div className="flex items-stretch justify-end gap-1 min-w-[24px]">
-          {active && additions !== undefined && deletions !== undefined && (additions > 0 || deletions > 0) && (
-            <div className="text-sm leading-4 tabular-nums group-focus-within:opacity-0 group-hover:opacity-0">
-              <span className="text-git-green">+{additions}</span>{" "}
-              <span className="text-git-red">-{deletions}</span>
-            </div>
-          )}
-          {!active && lastInteracted && (
-            <div className="text-foreground/40 text-sm leading-4 tabular-nums truncate text-right group-focus-within:opacity-0 group-hover:opacity-0">
-              {formatSidebarRelativeTime(lastInteracted)}
-            </div>
-          )}
+      {/* Right-side info — timestamp or git stats */}
+      <div className="flex shrink-0 items-stretch justify-end gap-1 min-w-[24px]">
+        {active && additions !== undefined && deletions !== undefined && (additions > 0 || deletions > 0) && (
+          <div
+            className={`overflow-hidden whitespace-nowrap text-sm leading-4 tabular-nums transition-[max-width,opacity,margin] duration-150 ease-out ${
+              hasArchiveAction
+                ? "max-w-12 opacity-100 group-hover:max-w-0 group-hover:opacity-0 group-focus-within:max-w-0 group-focus-within:opacity-0"
+                : ""
+            }`}
+          >
+            <span className="text-git-green">+{additions}</span>{" "}
+            <span className="text-git-red">-{deletions}</span>
+          </div>
+        )}
+        {!active && lastInteracted && (
+          <div
+            className={`overflow-hidden whitespace-nowrap text-foreground/40 text-sm leading-4 tabular-nums truncate text-right transition-[max-width,opacity,margin] duration-150 ease-out ${
+              hasArchiveAction
+                ? "max-w-10 opacity-100 group-hover:max-w-0 group-hover:opacity-0 group-focus-within:max-w-0 group-focus-within:opacity-0"
+                : ""
+            }`}
+          >
+            {formatSidebarRelativeTime(lastInteracted)}
+          </div>
+        )}
+        <div
+          className={`flex items-center justify-end text-sidebar-muted-foreground transition-transform duration-150 ease-out ${
+            hasArchiveAction
+              ? "group-hover:-translate-x-4 group-focus-within:-translate-x-4"
+              : ""
+          }`}
+        >
+          {variantMetaIcon}
         </div>
       </div>
-    </div>
+    </SidebarRowSurface>
   );
 
   const contextMenu = (

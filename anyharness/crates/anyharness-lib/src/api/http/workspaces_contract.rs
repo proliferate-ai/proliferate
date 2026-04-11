@@ -32,7 +32,7 @@ pub(super) fn setup_snapshot_to_contract(snapshot: SetupJobSnapshot) -> GetSetup
     }
 }
 
-pub(super) fn detection_result_to_contract(
+pub(crate) fn detection_result_to_contract(
     result: ProjectSetupDetectionResult,
 ) -> DetectProjectSetupResponse {
     DetectProjectSetupResponse {
@@ -64,7 +64,10 @@ pub(super) fn workspace_to_contract_with_summary(
     record: WorkspaceRecord,
     execution_summary: anyharness_contract::v1::WorkspaceExecutionSummary,
 ) -> Workspace {
-    let repo_root_id = record.effective_repo_root_id();
+    let repo_root_id = record
+        .repo_root_id
+        .clone()
+        .unwrap_or_else(|| record.id.clone());
     Workspace {
         id: record.id,
         kind: match record.kind.as_str() {

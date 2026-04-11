@@ -11,7 +11,7 @@ export function RepoSetupModalHost() {
 
   return (
     <RepoSetupModal
-      workspaceId={repoSetupModal.workspaceId}
+      repoRootId={repoSetupModal.repoRootId}
       sourceRoot={repoSetupModal.sourceRoot}
       repoName={repoSetupModal.repoName}
       onClose={closeRepoSetupModal}

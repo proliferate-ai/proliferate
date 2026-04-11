@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Workspace } from "@anyharness/sdk";
 import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useAddRepo } from "@/hooks/workspaces/use-add-repo";
@@ -54,8 +54,11 @@ function getRepoForSelectedWorkspace(
 export function useAppShortcuts(): void {
   const navigate = useNavigate();
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const { data: workspaceCollections } = useWorkspaces();
-  const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
+  const {
+    localWorkspaces,
+    cloudWorkspaces,
+  } = useStandardRepoProjection();
+  const workspaces = localWorkspaces ?? EMPTY_WORKSPACES;
   const {
     createLocalWorkspaceAndEnter,
     isCreatingLocalWorkspace,
@@ -67,14 +70,14 @@ export function useAppShortcuts(): void {
   const showToast = useToastStore((state) => state.show);
 
   const orderedWorkspaceIds = useMemo(() => {
-    const entries = buildSidebarWorkspaceEntries(workspaces, []);
+    const entries = buildSidebarWorkspaceEntries(workspaces, cloudWorkspaces);
     const groups = groupSidebarEntries(entries);
     return groups.flatMap((group) =>
       group.entries
         .filter((entry) => entry.source === "cloud" || isUsableWorkspace(entry.workspace))
         .map((entry) => entry.id)
     );
-  }, [workspaces]);
+  }, [cloudWorkspaces, workspaces]);
 
   useShortcutHandler("app.open-settings", () => {
     navigate("/settings");
@@ -131,12 +134,20 @@ export function useAppShortcuts(): void {
       return;
     }
 
+    const repoRootId = ctx.repoWs.repoRootId?.trim();
+    if (!repoRootId) {
+      return;
+    }
+
     const latencyFlowId = startLatencyFlow({
       flowKind: "worktree_enter",
       source: "shortcut",
-      targetWorkspaceId: ctx.repoWs.id,
+      targetWorkspaceId: repoRootId,
     });
-    void createWorktreeAndEnter(ctx.repoWs.id, {
+    void createWorktreeAndEnter({
+      repoRootId,
+      sourceWorkspaceId: ctx.repoWs.id,
+    }, {
       lightweight: true,
       latencyFlowId,
     }).catch((error) => {

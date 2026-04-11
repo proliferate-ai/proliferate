@@ -56,9 +56,9 @@ export function WorkspaceMobilityActionBar() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => navigate("/settings?section=connectors")}
+                onClick={() => navigate("/powers")}
               >
-                Open settings
+                Open Powers
                 <ArrowUpRight className="ml-1 size-3.5" />
               </Button>
               <Button

@@ -36,8 +36,11 @@ export type {
 export type {
   RepoRootKind,
   RepoRoot,
+  ResolveRepoRootFromPathRequest,
   PrepareRepoRootMobilityDestinationRequest,
   PrepareRepoRootMobilityDestinationResponse,
+  GitBranchRef as RepoRootGitBranchRef,
+  DetectProjectSetupResponse as RepoRootDetectProjectSetupResponse,
 } from "./types/repo-roots.js";
 
 export type {

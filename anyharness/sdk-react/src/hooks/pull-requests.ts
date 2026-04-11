@@ -26,6 +26,7 @@ export function useCurrentPullRequestQuery(options?: WorkspaceQueryOptions) {
   return useQuery({
     queryKey: anyHarnessPullRequestKey(runtimeUrl, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
+    retry: false,
     queryFn: async () => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);

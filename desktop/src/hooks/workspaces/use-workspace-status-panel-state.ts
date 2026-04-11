@@ -9,6 +9,7 @@ import {
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { summarizeSetupFailure } from "@/lib/domain/workspaces/arrival";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useWorkspaceArrivalState } from "@/hooks/workspaces/use-workspace-arrival-state";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -94,12 +95,25 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
   const arrival = useWorkspaceArrivalState();
   const mobility = useWorkspaceMobilityState();
   const dismissedSetupFailures = useWorkspaceUiStore((s) => s.dismissedSetupFailures);
+  const selectedWorkspace = workspaceCollections?.workspaces.find(
+    (workspace) => workspace.id === selectedWorkspaceId,
+  ) ?? null;
+  const configuredSetupScript = useRepoPreferencesStore((state) => {
+    const sourceRepoRootPath = selectedWorkspace?.sourceRepoRootPath;
+    if (!sourceRepoRootPath) {
+      return "";
+    }
+    return state.repoConfigs[sourceRepoRootPath]?.setupScript?.trim() ?? "";
+  });
 
   // Query setup status for the selected workspace. Used to show persistent
   // failure banners on workspace re-entry (after the arrival event is gone).
   const { data: setupStatus } = useSetupStatusQuery({
     workspaceId: selectedWorkspaceId,
-    enabled: !!selectedWorkspaceId && !arrival.viewModel,
+    enabled:
+      !!selectedWorkspaceId
+      && !arrival.viewModel
+      && configuredSetupScript.length > 0,
     refetchWhileRunning: false,
   });
 
@@ -188,6 +202,7 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
     mobility.status.phase,
     pendingWorkspaceEntry,
     selectedCloudWorkspace,
+    selectedWorkspace,
     selectedWorkspaceId,
     setupStatus,
   ]);

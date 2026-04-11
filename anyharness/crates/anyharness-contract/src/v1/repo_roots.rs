@@ -32,6 +32,12 @@ pub struct RepoRoot {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct ResolveRepoRootFromPathRequest {
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct PrepareRepoRootMobilityDestinationRequest {
     pub requested_branch: String,
     pub requested_base_sha: String,

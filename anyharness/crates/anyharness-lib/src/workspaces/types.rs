@@ -1,6 +1,16 @@
 use super::model::WorkspaceRecord;
 
 #[derive(Debug, thiserror::Error)]
+pub enum ResolveRepoRootError {
+    #[error("Selected folder is not a Git repository.")]
+    NotGitRepo,
+    #[error("Select the main repository root, not a worktree.")]
+    WorktreeNotAllowed,
+    #[error(transparent)]
+    Unexpected(#[from] anyhow::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum RegisterRepoWorkspaceError {
     #[error("Selected folder is not a Git repository.")]
     NotGitRepo,

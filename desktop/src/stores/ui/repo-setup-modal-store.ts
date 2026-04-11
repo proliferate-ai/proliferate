@@ -2,11 +2,11 @@ import { create } from "zustand";
 
 interface RepoSetupModalState {
   modal: {
-    workspaceId: string;
+    repoRootId: string;
     sourceRoot: string;
     repoName: string;
   } | null;
-  open: (state: { workspaceId: string; sourceRoot: string; repoName: string }) => void;
+  open: (state: { repoRootId: string; sourceRoot: string; repoName: string }) => void;
   close: () => void;
 }
 

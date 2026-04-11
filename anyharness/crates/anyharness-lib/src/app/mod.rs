@@ -193,7 +193,16 @@ pub fn default_runtime_home() -> PathBuf {
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| ".".into());
-    PathBuf::from(home).join(".proliferate").join("anyharness")
+    let dir = proliferate_home_dir_name(cfg!(debug_assertions));
+    PathBuf::from(home).join(dir).join("anyharness")
+}
+
+fn proliferate_home_dir_name(debug_build: bool) -> &'static str {
+    if std::env::var_os("PROLIFERATE_DEV").is_some() || debug_build {
+        ".proliferate-local"
+    } else {
+        ".proliferate"
+    }
 }
 
 pub fn ensure_runtime_home(path: &std::path::Path) -> std::io::Result<()> {
@@ -257,6 +266,28 @@ pub(crate) mod test_support {
         }
         DataKeyEnvGuard { previous }
     }
+
+    pub(crate) struct ProliferateDevEnvGuard {
+        previous: Option<OsString>,
+    }
+
+    impl Drop for ProliferateDevEnvGuard {
+        fn drop(&mut self) {
+            match self.previous.as_ref() {
+                Some(value) => std::env::set_var("PROLIFERATE_DEV", value),
+                None => std::env::remove_var("PROLIFERATE_DEV"),
+            }
+        }
+    }
+
+    pub(crate) fn set_proliferate_dev_env(value: Option<&str>) -> ProliferateDevEnvGuard {
+        let previous = std::env::var_os("PROLIFERATE_DEV");
+        match value {
+            Some(flag) => std::env::set_var("PROLIFERATE_DEV", flag),
+            None => std::env::remove_var("PROLIFERATE_DEV"),
+        }
+        ProliferateDevEnvGuard { previous }
+    }
 }
 
 #[cfg(test)]
@@ -264,7 +295,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Mutex;
 
-    use super::{test_support, AppState};
+    use super::{proliferate_home_dir_name, test_support, AppState};
     use crate::persistence::Db;
 
     #[test]
@@ -361,5 +392,38 @@ environment variable is missing or empty. Refusing to start without authenticati
                 .starts_with("Invalid ANYHARNESS_DATA_KEY:"),
             "unexpected error: {error}"
         );
+    }
+
+    #[test]
+    fn proliferate_home_dir_name_uses_local_dir_for_debug_builds() {
+        let _lock = test_support::ENV_MUTEX
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("expected env mutex");
+        let _dev_guard = test_support::set_proliferate_dev_env(None);
+
+        assert_eq!(proliferate_home_dir_name(true), ".proliferate-local");
+    }
+
+    #[test]
+    fn proliferate_home_dir_name_uses_local_dir_when_env_is_set() {
+        let _lock = test_support::ENV_MUTEX
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("expected env mutex");
+        let _dev_guard = test_support::set_proliferate_dev_env(Some("1"));
+
+        assert_eq!(proliferate_home_dir_name(false), ".proliferate-local");
+    }
+
+    #[test]
+    fn proliferate_home_dir_name_uses_production_dir_for_release_without_env() {
+        let _lock = test_support::ENV_MUTEX
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("expected env mutex");
+        let _dev_guard = test_support::set_proliferate_dev_env(None);
+
+        assert_eq!(proliferate_home_dir_name(false), ".proliferate");
     }
 }

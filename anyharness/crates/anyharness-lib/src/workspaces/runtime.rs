@@ -6,13 +6,14 @@ use std::time::Instant;
 
 use uuid::Uuid;
 
-use super::model::WorkspaceRecord;
+use super::detector;
+use super::model::{ResolvedGitContext, WorkspaceRecord};
 use super::resolver;
 use super::service::WorkspaceService;
 use super::store::WorkspaceStore;
 use super::types::{
-    CreateWorktreeResult, ProjectSetupDetectionResult, SetWorkspaceDisplayNameError,
-    SetupScriptExecutionResult, SetupScriptExecutionStatus,
+    CreateWorktreeResult, ProjectSetupDetectionResult, ResolveRepoRootError,
+    SetWorkspaceDisplayNameError, SetupScriptExecutionResult, SetupScriptExecutionStatus,
 };
 use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;
@@ -51,6 +52,20 @@ impl WorkspaceRuntime {
 
     pub fn create_workspace(&self, path: &str) -> anyhow::Result<WorkspaceResolution> {
         self.resolve_or_create_workspace(path, false)
+    }
+
+    pub fn resolve_repo_root_from_path(
+        &self,
+        path: &str,
+    ) -> Result<RepoRootRecord, ResolveRepoRootError> {
+        let ctx =
+            resolver::resolve_git_context(path).map_err(|_| ResolveRepoRootError::NotGitRepo)?;
+        if ctx.is_worktree {
+            return Err(ResolveRepoRootError::WorktreeNotAllowed);
+        }
+
+        self.ensure_repo_root_from_context(&ctx)
+            .map_err(ResolveRepoRootError::Unexpected)
     }
 
     pub fn create_worktree(
@@ -222,8 +237,10 @@ impl WorkspaceRuntime {
             .repo_root_service
             .get_repo_root(repo_root_id)?
             .ok_or_else(|| anyhow::anyhow!("repo root not found: {repo_root_id}"))?;
-        let default_branch = detect_repo_default_branch(Path::new(&repo_root.path))
-            .ok_or_else(|| anyhow::anyhow!("canonical repo default branch could not be resolved"))?;
+        let default_branch =
+            detect_repo_default_branch(Path::new(&repo_root.path)).ok_or_else(|| {
+                anyhow::anyhow!("canonical repo default branch could not be resolved")
+            })?;
 
         if repo_root.default_branch.as_deref() != Some(default_branch.as_str()) {
             let _ = self
@@ -234,10 +251,20 @@ impl WorkspaceRuntime {
         Ok(default_branch)
     }
 
+    pub fn detect_repo_root_setup(
+        &self,
+        repo_root_id: &str,
+    ) -> anyhow::Result<ProjectSetupDetectionResult> {
+        let repo_root = self
+            .repo_root_service
+            .get_repo_root(repo_root_id)?
+            .ok_or_else(|| anyhow::anyhow!("repo root not found: {repo_root_id}"))?;
+        Ok(detector::detect_project_setup(Path::new(&repo_root.path)))
+    }
+
     pub fn get_workspace(&self, workspace_id: &str) -> anyhow::Result<Option<WorkspaceRecord>> {
         self.store
             .find_by_id(workspace_id)?
-            .filter(|record| record.kind != "repo")
             .map(reconcile_current_branch)
             .transpose()
     }
@@ -281,10 +308,13 @@ impl WorkspaceRuntime {
         workspace: &WorkspaceRecord,
         base_ref: Option<&str>,
     ) -> anyhow::Result<Vec<(String, String)>> {
-        let repo_root_id = workspace.effective_repo_root_id();
+        let repo_root_id = workspace
+            .repo_root_id
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("workspace missing repo_root_id: {}", workspace.id))?;
         let repo_root = self
             .repo_root_service
-            .get_repo_root(&repo_root_id)?
+            .get_repo_root(repo_root_id)?
             .ok_or_else(|| anyhow::anyhow!("repo root not found: {repo_root_id}"))?;
 
         let mut env = BTreeMap::new();
@@ -352,7 +382,9 @@ impl WorkspaceRuntime {
                 let branch = default_branch
                     .map(str::trim)
                     .filter(|value| !value.is_empty())
-                    .ok_or_else(|| anyhow::anyhow!("default branch is required to park a local workspace"))?;
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("default branch is required to park a local workspace")
+                    })?;
                 self.park_local_workspace(workspace, branch)
             }
             kind => anyhow::bail!("unsupported workspace kind for mobility source destroy: {kind}"),
@@ -395,7 +427,8 @@ impl WorkspaceRuntime {
         default_branch: &str,
     ) -> anyhow::Result<()> {
         let workspace_path = Path::new(&workspace.path);
-        let local_branch_exists = git_ref_exists(workspace_path, &format!("refs/heads/{default_branch}"));
+        let local_branch_exists =
+            git_ref_exists(workspace_path, &format!("refs/heads/{default_branch}"));
         let remote_branch_exists = git_ref_exists(
             workspace_path,
             &format!("refs/remotes/origin/{default_branch}"),
@@ -412,7 +445,9 @@ impl WorkspaceRuntime {
                 format!("origin/{default_branch}"),
             ]
         } else {
-            anyhow::bail!("default branch '{default_branch}' is not available locally or on origin");
+            anyhow::bail!(
+                "default branch '{default_branch}' is not available locally or on origin"
+            );
         };
 
         let output = Command::new("git")
@@ -438,38 +473,7 @@ impl WorkspaceRuntime {
         let started = Instant::now();
         tracing::info!(path = %path, allow_existing, "[workspace-latency] workspace.runtime.resolve.start");
         let ctx = resolver::resolve_git_context(path)?;
-        let repo_root_path = ctx
-            .main_worktree_path
-            .clone()
-            .unwrap_or_else(|| ctx.repo_root.clone());
-        let remote = ctx
-            .remote_url
-            .as_deref()
-            .and_then(resolver::parse_remote_url);
-        let detected_default_branch = detect_repo_default_branch(Path::new(&repo_root_path));
-        let repo_root = self
-            .repo_root_service
-            .ensure_repo_root(CreateRepoRootInput {
-                kind: "external".into(),
-                path: repo_root_path,
-                display_name: None,
-                default_branch: detected_default_branch,
-                remote_provider: remote.as_ref().map(|value| value.provider.clone()),
-                remote_owner: remote.as_ref().map(|value| value.owner.clone()),
-                remote_repo_name: remote.as_ref().map(|value| value.repo.clone()),
-                remote_url: ctx.remote_url.clone(),
-            })?;
-        let repo_root = if let Some(default_branch) = detect_repo_default_branch(Path::new(&repo_root.path)) {
-            if repo_root.default_branch.as_deref() != Some(default_branch.as_str()) {
-                self.repo_root_service
-                    .update_default_branch(&repo_root.id, Some(&default_branch))?
-                    .unwrap_or(repo_root)
-            } else {
-                repo_root
-            }
-        } else {
-            repo_root
-        };
+        let repo_root = self.ensure_repo_root_from_context(&ctx)?;
 
         let workspace_kind = if ctx.is_worktree { "worktree" } else { "local" };
         let workspace_path = ctx.repo_root.clone();
@@ -505,6 +509,44 @@ impl WorkspaceRuntime {
             repo_root,
             workspace: record,
         })
+    }
+
+    fn ensure_repo_root_from_context(
+        &self,
+        ctx: &ResolvedGitContext,
+    ) -> anyhow::Result<RepoRootRecord> {
+        let repo_root_path = ctx
+            .main_worktree_path
+            .clone()
+            .unwrap_or_else(|| ctx.repo_root.clone());
+        let remote = ctx
+            .remote_url
+            .as_deref()
+            .and_then(resolver::parse_remote_url);
+        let detected_default_branch = detect_repo_default_branch(Path::new(&repo_root_path));
+        let repo_root = self
+            .repo_root_service
+            .ensure_repo_root(CreateRepoRootInput {
+                kind: "external".into(),
+                path: repo_root_path,
+                display_name: None,
+                default_branch: detected_default_branch,
+                remote_provider: remote.as_ref().map(|value| value.provider.clone()),
+                remote_owner: remote.as_ref().map(|value| value.owner.clone()),
+                remote_repo_name: remote.as_ref().map(|value| value.repo.clone()),
+                remote_url: ctx.remote_url.clone(),
+            })?;
+
+        if let Some(default_branch) = detect_repo_default_branch(Path::new(&repo_root.path)) {
+            if repo_root.default_branch.as_deref() != Some(default_branch.as_str()) {
+                return Ok(self
+                    .repo_root_service
+                    .update_default_branch(&repo_root.id, Some(&default_branch))?
+                    .unwrap_or(repo_root));
+            }
+        }
+
+        Ok(repo_root)
     }
 
     fn run_setup_script(
@@ -608,7 +650,12 @@ fn sanitize_mobility_destination_name(value: &str) -> String {
 
 fn detect_repo_default_branch(repo_root: &Path) -> Option<String> {
     let output = Command::new("git")
-        .args(["-C", &repo_root.display().to_string(), "symbolic-ref", "refs/remotes/origin/HEAD"])
+        .args([
+            "-C",
+            &repo_root.display().to_string(),
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+        ])
         .output()
         .ok()?;
     if output.status.success() {
@@ -631,7 +678,13 @@ fn detect_repo_default_branch(repo_root: &Path) -> Option<String> {
 
 fn git_ref_exists(repo_root: &Path, ref_name: &str) -> bool {
     Command::new("git")
-        .args(["-C", &repo_root.display().to_string(), "rev-parse", "--verify", ref_name])
+        .args([
+            "-C",
+            &repo_root.display().to_string(),
+            "rev-parse",
+            "--verify",
+            ref_name,
+        ])
         .output()
         .map(|output| output.status.success())
         .unwrap_or(false)

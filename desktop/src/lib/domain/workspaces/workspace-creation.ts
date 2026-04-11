@@ -1,10 +1,11 @@
-import type { Workspace } from "@anyharness/sdk";
+import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { buildBranchName } from "@/lib/domain/workspaces/branch-naming";
 import type { AuthUser } from "@/lib/integrations/auth/proliferate-auth";
 import type { BranchPrefixType } from "@/stores/preferences/user-preferences-store";
 
 export interface CreateWorktreeWorkspaceInput {
-  sourceWorkspaceId: string;
+  repoRootId: string;
+  sourceWorkspaceId?: string | null;
   branchName?: string;
   baseBranch?: string;
   targetPath?: string;
@@ -22,12 +23,13 @@ export interface WorktreeCreationParams {
 
 export interface ResolvedWorktreeCreation {
   params: WorktreeCreationParams;
-  source: Workspace;
+  source: Workspace | null;
   repoName: string;
 }
 
 export function resolveWorktreeCreationParams(input: {
-  source: Workspace;
+  repoRoot: RepoRoot;
+  sourceWorkspace: Workspace | null;
   rawInput: CreateWorktreeWorkspaceInput;
   homeDir: string;
   branchPrefixType: BranchPrefixType;
@@ -37,22 +39,30 @@ export function resolveWorktreeCreationParams(input: {
     setupScript?: string | null;
   } | null;
 }): ResolvedWorktreeCreation {
-  const { source, rawInput, homeDir, branchPrefixType, authUser, repoConfig } = input;
+  const {
+    repoRoot,
+    sourceWorkspace,
+    rawInput,
+    homeDir,
+    branchPrefixType,
+    authUser,
+    repoConfig,
+  } = input;
 
   const workspaceName = rawInput.workspaceName?.trim() || "workspace";
-  const repoName = source.gitRepoName ?? source.path.split("/").pop() ?? "repo";
+  const repoName = repoRoot.remoteRepoName?.trim()
+    || sourceWorkspace?.gitRepoName
+    || repoRoot.path.split("/").pop()
+    || "repo";
   const targetPath = rawInput.targetPath?.trim()
     || `${homeDir}/.proliferate/worktrees/${repoName}/${workspaceName}`;
   const baseRef = rawInput.baseBranch?.trim()
     || repoConfig?.defaultBranch?.trim()
-    || source.currentBranch
-    || source.originalBranch
+    || repoRoot.defaultBranch?.trim()
+    || sourceWorkspace?.currentBranch
+    || sourceWorkspace?.originalBranch
     || "HEAD";
-  const repoRootId = source.repoRootId?.trim();
-
-  if (!repoRootId) {
-    throw new Error("Source workspace is missing repo root context.");
-  }
+  const repoRootId = rawInput.repoRootId.trim();
 
   return {
     params: {
@@ -67,7 +77,7 @@ export function resolveWorktreeCreationParams(input: {
       baseRef,
       setupScript: repoConfig?.setupScript?.trim() || null,
     },
-    source,
+    source: sourceWorkspace,
     repoName,
   };
 }

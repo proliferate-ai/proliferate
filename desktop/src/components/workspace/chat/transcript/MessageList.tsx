@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AssistantMessage } from "./AssistantMessage";
 import { ClaudePlanCard } from "./ClaudePlanCard";
+import { CopyMessageButton } from "./CopyMessageButton";
 import { SystemMessage } from "./SystemMessage";
 import { UserMessage } from "./UserMessage";
 import { StreamingIndicator } from "./StreamingIndicator";
@@ -68,11 +69,13 @@ import type {
   ToolInputTextContentPart,
   ToolResultTextContentPart,
   TranscriptItem,
+  TurnRecord,
   TerminalOutputContentPart,
 } from "@anyharness/sdk";
 import type { SessionViewState } from "@/lib/domain/sessions/activity";
 
 const TURN_HORIZONTAL_PADDING = "px-7";
+const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
 
 /**
  * Minimum height of the trailing-status slot at the bottom of an in-progress
@@ -84,8 +87,9 @@ const TURN_HORIZONTAL_PADDING = "px-7";
  * Value derivation (keep in sync if any of these move):
  *   • text-chat single-line height — `--text-chat--line-height` in index.css
  *     (currently `1.125rem` / 18px)
- *   • assistant-message copy-button slot — `h-6` in AssistantMessage.tsx
- *     (24px, reserved via `pl-1 pt-0.5 h-6`)
+ *   • trailing assistant action slot — `h-6` in this file
+ *     (24px, reserved only once the latest in-progress turn has tail
+ *     assistant prose and `lastTopLevelItemIsProse(...)` is true)
  *   ----
  *   = 18px + 24px = 42px = 2.625rem
  */
@@ -135,6 +139,19 @@ export function MessageList({
             const isLatestTurnInProgress =
               isLatestTurn && !turn.completedAt;
             const hasFileBadges = turn.fileBadges.length > 0;
+            const presentation = buildTurnPresentation(turn, transcript);
+            const tailAssistantProseRootId = findTailAssistantProseRootId(
+              presentation,
+              transcript,
+            );
+            const tailAssistantCopyContent = getAssistantProseContent(
+              tailAssistantProseRootId,
+              transcript,
+            );
+            const shouldReserveTurnAssistantActionSlot =
+              isLatestTurnInProgress
+              && !!tailAssistantCopyContent
+              && lastTopLevelItemIsProse(turn, transcript);
 
             // The trailing status indicator is only meaningful when the turn is
             // in progress and the final prose answer hasn't started landing yet.
@@ -148,11 +165,14 @@ export function MessageList({
 
             return (
               <TurnShell key={turnId} isFirst={turnIdx === 0}>
-                <div className="flex flex-col gap-2">
+                <div className={`flex flex-col gap-2 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
                   <TurnItemSequence
                     turnId={turnId}
+                    turn={turn}
                     transcript={transcript}
                     isTurnComplete={!!turn.completedAt}
+                    presentation={presentation}
+                    tailAssistantProseRootId={tailAssistantProseRootId}
                     workspaceId={selectedWorkspaceId}
                     onOpenArtifact={openArtifact}
                     subagentBrailleColors={subagentBrailleColors}
@@ -164,6 +184,11 @@ export function MessageList({
                       onOpenFile={(filePath) => void openFileDiff(filePath)}
                     />
                   )}
+                  <TurnAssistantActionRow
+                    content={tailAssistantCopyContent}
+                    showCopyButton={!!turn.completedAt}
+                    reserveSlot={shouldReserveTurnAssistantActionSlot}
+                  />
                   {trailingStatus && (
                     <div className={TRAILING_STATUS_MIN_HEIGHT}>{trailingStatus}</div>
                   )}
@@ -221,44 +246,58 @@ function lastTopLevelItemIsProse(
   return false;
 }
 
-function TurnItemSequence({
-  turnId,
-  transcript,
-  isTurnComplete,
-  workspaceId,
-  onOpenArtifact,
-  subagentBrailleColors,
-}: {
-  turnId: string;
-  transcript: TranscriptState;
-  isTurnComplete: boolean;
-  workspaceId: string | null;
-  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
-  subagentBrailleColors: Map<string, string>;
-}) {
-  const turn = transcript.turnsById[turnId];
-  if (!turn) {
-    return null;
-  }
-
-  const presentation = buildTurnPresentation(turn, transcript);
-  const artifactToolCalls = collectTurnCoworkArtifactToolCalls(turn, transcript);
-  const completedArtifactToolCalls = isTurnComplete
-    ? artifactToolCalls.filter((item) => item.status === "completed")
-    : [];
-  let hasRenderedSummary = false;
-
-  // Find the last visible assistant_prose root id in this turn
-  let lastAssistantProseRootId: string | null = null;
+function findTailAssistantProseRootId(
+  presentation: ReturnType<typeof buildTurnPresentation>,
+  transcript: TranscriptState,
+): string | null {
   for (let i = presentation.rootIds.length - 1; i >= 0; i--) {
     const rootId = presentation.rootIds[i];
     if (presentation.collapsedRootIds.has(rootId)) continue;
     const item = transcript.itemsById[rootId];
     if (item?.kind === "assistant_prose" && item.text) {
-      lastAssistantProseRootId = rootId;
-      break;
+      return rootId;
     }
   }
+  return null;
+}
+
+function getAssistantProseContent(
+  itemId: string | null,
+  transcript: TranscriptState,
+): string | null {
+  if (!itemId) {
+    return null;
+  }
+  const item = transcript.itemsById[itemId];
+  return item?.kind === "assistant_prose" && item.text ? item.text : null;
+}
+
+function TurnItemSequence({
+  turnId,
+  turn,
+  transcript,
+  isTurnComplete,
+  presentation,
+  tailAssistantProseRootId,
+  workspaceId,
+  onOpenArtifact,
+  subagentBrailleColors,
+}: {
+  turnId: string;
+  turn: TurnRecord;
+  transcript: TranscriptState;
+  isTurnComplete: boolean;
+  presentation: ReturnType<typeof buildTurnPresentation>;
+  tailAssistantProseRootId: string | null;
+  workspaceId: string | null;
+  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
+  subagentBrailleColors: Map<string, string>;
+}) {
+  const artifactToolCalls = collectTurnCoworkArtifactToolCalls(turn, transcript);
+  const completedArtifactToolCalls = isTurnComplete
+    ? artifactToolCalls.filter((item) => item.status === "completed")
+    : [];
+  let hasRenderedSummary = false;
 
   return (
     <>
@@ -334,17 +373,16 @@ function TurnItemSequence({
             itemId={itemId}
             transcript={transcript}
             childrenByParentId={presentation.childrenByParentId}
-            isLastAssistantProse={isTurnComplete && itemId === lastAssistantProseRootId}
             subagentBrailleColors={subagentBrailleColors}
             artifactToolCalls={
-              itemId === lastAssistantProseRootId ? completedArtifactToolCalls : null
+              itemId === tailAssistantProseRootId ? completedArtifactToolCalls : null
             }
             workspaceId={workspaceId}
             onOpenArtifact={onOpenArtifact}
           />
         );
       })}
-      {lastAssistantProseRootId === null && completedArtifactToolCalls.length > 0 && (
+      {tailAssistantProseRootId === null && completedArtifactToolCalls.length > 0 && (
         <div className="space-y-1.5">
           {completedArtifactToolCalls.map((item) => (
             <CoworkArtifactTurnCard
@@ -365,7 +403,6 @@ function FragmentWithArtifacts({
   itemId,
   transcript,
   childrenByParentId,
-  isLastAssistantProse = false,
   subagentBrailleColors,
   artifactToolCalls,
   workspaceId,
@@ -374,7 +411,6 @@ function FragmentWithArtifacts({
   itemId: string;
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
-  isLastAssistantProse?: boolean;
   subagentBrailleColors: Map<string, string>;
   artifactToolCalls: ToolCallItem[] | null;
   workspaceId: string | null;
@@ -386,7 +422,6 @@ function FragmentWithArtifacts({
         itemId={itemId}
         transcript={transcript}
         childrenByParentId={childrenByParentId}
-        isLastAssistantProse={isLastAssistantProse}
         workspaceId={workspaceId}
         onOpenArtifact={onOpenArtifact}
         subagentBrailleColors={subagentBrailleColors}
@@ -424,12 +459,10 @@ function TurnShell({
 
 function TranscriptItemBlock({
   item,
-  isLastAssistantProse = false,
   workspaceId,
   onOpenArtifact,
 }: {
   item: TranscriptItem;
-  isLastAssistantProse?: boolean;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
 }) {
@@ -437,20 +470,20 @@ function TranscriptItemBlock({
     case "user_message":
       return <UserMessage content={item.text} showCopyButton />;
 
-    case "assistant_prose":
+    case "assistant_prose": {
       if (!item.text) return null;
 
       return (
         <div className="flex justify-start relative">
-          <div className="flex flex-col w-full min-w-0 max-w-full break-words">
+          <div data-chat-selection-unit className="flex flex-col w-full min-w-0 max-w-full break-words">
             <AssistantMessage
               content={item.text}
               isStreaming={item.isStreaming}
-              showCopyButton={isLastAssistantProse}
             />
           </div>
         </div>
       );
+    }
 
     case "thought":
       return (
@@ -512,7 +545,6 @@ function TranscriptTreeNode({
   itemId,
   transcript,
   childrenByParentId,
-  isLastAssistantProse = false,
   workspaceId,
   onOpenArtifact,
   subagentBrailleColors,
@@ -520,7 +552,6 @@ function TranscriptTreeNode({
   itemId: string;
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
-  isLastAssistantProse?: boolean;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   subagentBrailleColors: Map<string, string>;
@@ -546,10 +577,36 @@ function TranscriptTreeNode({
   return (
     <TranscriptItemBlock
       item={item}
-      isLastAssistantProse={isLastAssistantProse}
       workspaceId={workspaceId}
       onOpenArtifact={onOpenArtifact}
     />
+  );
+}
+
+function TurnAssistantActionRow({
+  content,
+  showCopyButton = false,
+  reserveSlot = false,
+}: {
+  content: string | null;
+  showCopyButton?: boolean;
+  reserveSlot?: boolean;
+}) {
+  if (!content || (!showCopyButton && !reserveSlot)) {
+    return null;
+  }
+
+  return (
+    <div className="flex justify-start relative">
+      <div className={`pl-1 pt-0.5 ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
+        {showCopyButton && (
+          <CopyMessageButton
+            content={content}
+            visibilityClassName="opacity-0 group-hover/turn:opacity-100"
+          />
+        )}
+      </div>
+    </div>
   );
 }
 

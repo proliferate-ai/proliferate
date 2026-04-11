@@ -1,6 +1,8 @@
 import { forwardRef, type MouseEventHandler, type ReactNode } from "react";
 import { IconButton } from "@/components/ui/IconButton";
 
+type SidebarActionButtonVariant = "default" | "section";
+
 interface SidebarActionButtonProps {
   children: ReactNode;
   title: string;
@@ -9,6 +11,7 @@ interface SidebarActionButtonProps {
   alwaysVisible?: boolean;
   active?: boolean;
   disabled?: boolean;
+  variant?: SidebarActionButtonVariant;
 }
 
 export const SidebarActionButton = forwardRef<HTMLButtonElement, SidebarActionButtonProps>(
@@ -20,7 +23,10 @@ export const SidebarActionButton = forwardRef<HTMLButtonElement, SidebarActionBu
     alwaysVisible = false,
     active = false,
     disabled = false,
+    variant = "default",
   }, ref) {
+    const isAlwaysVisible = alwaysVisible || variant === "section";
+
     return (
       <IconButton
         ref={ref}
@@ -32,7 +38,11 @@ export const SidebarActionButton = forwardRef<HTMLButtonElement, SidebarActionBu
         className={`size-6 rounded-md border border-transparent transition-all ${
           active ? "bg-sidebar-accent/60 text-sidebar-foreground" : ""
         } ${
-          alwaysVisible ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          isAlwaysVisible ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+        } ${
+          variant === "section"
+            ? "opacity-75 hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+            : ""
         } ${className}`}
       >
         {children}

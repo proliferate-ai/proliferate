@@ -7,6 +7,11 @@ const HOURLY_RETRY_MS = 3_600_000;
 export function useConnectorSyncRetryDaemon() {
   const { retryPendingConnectorSync } = useConnectorSyncRetry();
   const inFlightRef = useRef(false);
+  const retryPendingConnectorSyncRef = useRef(retryPendingConnectorSync.mutateAsync);
+
+  useEffect(() => {
+    retryPendingConnectorSyncRef.current = retryPendingConnectorSync.mutateAsync;
+  }, [retryPendingConnectorSync.mutateAsync]);
 
   const runRetry = useCallback(async () => {
     if (inFlightRef.current) {
@@ -14,11 +19,11 @@ export function useConnectorSyncRetryDaemon() {
     }
     inFlightRef.current = true;
     try {
-      await retryPendingConnectorSync.mutateAsync({ silent: true });
+      await retryPendingConnectorSyncRef.current({ silent: true });
     } finally {
       inFlightRef.current = false;
     }
-  }, [retryPendingConnectorSync]);
+  }, []);
 
   useEffect(() => {
     void runRetry();

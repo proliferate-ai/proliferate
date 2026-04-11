@@ -45,6 +45,20 @@ export function anyHarnessRepoRootsKey(runtimeUrl: string | null | undefined) {
   return [...anyHarnessRuntimeKey(runtimeUrl), "repo-roots"] as const;
 }
 
+export function anyHarnessRepoRootGitBranchesKey(
+  runtimeUrl: string | null | undefined,
+  repoRootId: string | null | undefined,
+) {
+  return [...anyHarnessRepoRootsKey(runtimeUrl), repoRootId ?? null, "git-branches"] as const;
+}
+
+export function anyHarnessRepoRootDetectSetupKey(
+  runtimeUrl: string | null | undefined,
+  repoRootId: string | null | undefined,
+) {
+  return [...anyHarnessRepoRootsKey(runtimeUrl), repoRootId ?? null, "detect-setup"] as const;
+}
+
 export function anyHarnessWorkspaceMobilityKey(
   runtimeUrl: string | null | undefined,
   workspaceId: string | null | undefined,

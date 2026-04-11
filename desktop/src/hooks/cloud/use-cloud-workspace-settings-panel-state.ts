@@ -65,13 +65,18 @@ export function useCloudWorkspaceSettingsPanelState(): CloudWorkspaceSettingsPan
     cloudWorkspace?.repo.name,
     !!cloudWorkspace,
   );
+  const setupScript = repoConfig?.setupScript?.trim() ?? "";
   const { data: repoConfigStatus } = useCloudWorkspaceRepoConfigStatus(
     cloudWorkspaceId,
     !!cloudWorkspaceId,
   );
   const setupStatus = useSetupStatusQuery({
     workspaceId: selectedWorkspaceId,
-    enabled: !!selectedWorkspaceId && !!cloudWorkspaceId && cloudWorkspace?.status === "ready",
+    enabled:
+      !!selectedWorkspaceId
+      && !!cloudWorkspaceId
+      && cloudWorkspace?.status === "ready"
+      && setupScript.length > 0,
     refetchWhileRunning: true,
   });
   const resyncFilesMutation = useResyncCloudWorkspaceFiles(cloudWorkspaceId);
@@ -81,8 +86,6 @@ export function useCloudWorkspaceSettingsPanelState(): CloudWorkspaceSettingsPan
   if (!cloudWorkspaceId || !cloudWorkspace) {
     return { kind: "placeholder" };
   }
-
-  const setupScript = repoConfig?.setupScript ?? "";
 
   const navigateToRepoSettings = useCallback(() => {
     navigate(buildCloudRepoSettingsHref(

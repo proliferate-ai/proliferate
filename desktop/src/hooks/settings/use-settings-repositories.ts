@@ -1,22 +1,23 @@
 import { useMemo } from "react";
-import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import {
   buildSettingsRepositoryEntries,
 } from "@/lib/domain/settings/repositories";
-
-const EMPTY_WORKSPACES: Workspace[] = [];
-const EMPTY_REPO_ROOTS: RepoRoot[] = [];
+import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 export function useSettingsRepositories() {
-  const { data: workspaceCollections } = useWorkspaces();
-  const localWorkspaces = workspaceCollections?.localWorkspaces ?? EMPTY_WORKSPACES;
-  const repoRoots = workspaceCollections?.repoRoots ?? EMPTY_REPO_ROOTS;
+  const { localWorkspaces, repoRoots } = useStandardRepoProjection();
+  const hiddenRepoRootIds = useWorkspaceUiStore((state) => state.hiddenRepoRootIds);
 
-  const repositories = useMemo(
-    () => buildSettingsRepositoryEntries(localWorkspaces, repoRoots),
-    [localWorkspaces, repoRoots],
-  );
+  const repositories = useMemo(() => {
+    const hiddenRepoRootIdSet = new Set(hiddenRepoRootIds);
+    return buildSettingsRepositoryEntries(
+      localWorkspaces.filter((workspace) =>
+        workspace.repoRootId ? !hiddenRepoRootIdSet.has(workspace.repoRootId) : true
+      ),
+      repoRoots.filter((repoRoot) => !hiddenRepoRootIdSet.has(repoRoot.id)),
+    );
+  }, [hiddenRepoRootIds, localWorkspaces, repoRoots]);
 
   return {
     repositories,

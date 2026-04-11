@@ -134,7 +134,7 @@ export function CloudRepoSettingsScreen({
     data: savedConfig,
     isLoading: isLoadingConfig,
   } = useCloudRepoConfig(repository?.gitOwner, repository?.gitRepoName);
-  const { suggestedPaths } = useCloudRepoSetupSuggestions(repository?.repoWorkspaceId);
+  const { suggestedPaths } = useCloudRepoSetupSuggestions(repository?.repoRootId);
 
   if (!isCloudRepository(repository)) {
     return (

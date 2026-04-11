@@ -25,6 +25,7 @@ import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupM
 import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
 import { LoginPage } from "@/pages/LoginPage"
 import { MainPage } from "@/pages/MainPage"
+import { PowersPage } from "@/pages/PowersPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { SetupPage } from "@/pages/SetupPage"
 import { useAuthStore } from "@/stores/auth/auth-store"
@@ -125,6 +126,7 @@ function App() {
               </Route>
               <Route element={<SetupGate />}>
                 <Route path="/" element={<MainPage />} />
+                <Route path="/powers" element={<PowersPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>
             </Route>

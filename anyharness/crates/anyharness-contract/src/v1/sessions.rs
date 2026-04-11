@@ -302,6 +302,7 @@ mod tests {
             last_prompt_at: None,
             closed_at: None,
             dismissed_at: None,
+            pending_prompts: vec![],
         };
 
         let json = serde_json::to_value(&session).expect("serialize session");

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GitBranchRef } from "@anyharness/sdk";
-import { useDetectProjectSetupQuery, useGitBranchesQuery } from "@anyharness/sdk-react";
+import {
+  useDetectRepoRootSetupQuery,
+  useRepoRootGitBranchesQuery,
+} from "@anyharness/sdk-react";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Check, ChevronUpDown } from "@/components/ui/icons";
 import { useRepoSetupModalState } from "@/hooks/workspaces/use-repo-setup-modal-state";
@@ -20,14 +23,14 @@ function resolveAutoDetectedBranch(branchRefs: GitBranchRef[]): string | null {
 }
 
 interface RepoSetupModalProps {
-  workspaceId: string;
+  repoRootId: string;
   sourceRoot: string;
   repoName: string;
   onClose: () => void;
 }
 
 export function RepoSetupModal({
-  workspaceId,
+  repoRootId,
   sourceRoot,
   repoName,
   onClose,
@@ -45,8 +48,8 @@ export function RepoSetupModal({
   } = useRepoSetupModalState(sourceRoot);
 
   const { data: detectionResult, isLoading: isDetecting } =
-    useDetectProjectSetupQuery({ workspaceId });
-  const { data: branchRefs = EMPTY_BRANCHES } = useGitBranchesQuery({ workspaceId });
+    useDetectRepoRootSetupQuery({ repoRootId });
+  const { data: branchRefs = EMPTY_BRANCHES } = useRepoRootGitBranchesQuery({ repoRootId });
 
   // Initialize script from hints once (build tools ON, secrets OFF)
   useEffect(() => {

@@ -2,7 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PrepareRepoRootMobilityDestinationRequest } from "@anyharness/sdk";
 import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
-import { anyHarnessRepoRootsKey, anyHarnessRuntimeWorkspacesKey } from "../lib/query-keys.js";
+import {
+  anyHarnessRepoRootDetectSetupKey,
+  anyHarnessRepoRootGitBranchesKey,
+  anyHarnessRepoRootsKey,
+  anyHarnessRuntimeWorkspacesKey,
+} from "../lib/query-keys.js";
 
 interface RuntimeQueryOptions {
   enabled?: boolean;
@@ -18,6 +23,61 @@ export function useRepoRootsQuery(options?: RuntimeQueryOptions) {
     queryFn: async () => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
       return client.repoRoots.list();
+    },
+  });
+}
+
+export function useResolveRepoRootFromPathMutation() {
+  const runtime = useAnyHarnessRuntimeContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+
+  return useMutation({
+    mutationFn: async (path: string) => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      return client.repoRoots.resolveFromPath(path);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessRepoRootsKey(runtimeUrl),
+      });
+    },
+  });
+}
+
+export function useRepoRootGitBranchesQuery(options: {
+  repoRootId?: string | null;
+  enabled?: boolean;
+}) {
+  const runtime = useAnyHarnessRuntimeContext();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const repoRootId = options.repoRootId?.trim() ?? "";
+
+  return useQuery({
+    queryKey: anyHarnessRepoRootGitBranchesKey(runtimeUrl, repoRootId),
+    enabled: (options.enabled ?? true) && repoRootId.length > 0 && runtimeUrl.length > 0,
+    queryFn: async () => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      return client.repoRoots.listBranches(repoRootId);
+    },
+  });
+}
+
+export function useDetectRepoRootSetupQuery(options: {
+  repoRootId?: string | null;
+  enabled?: boolean;
+}) {
+  const runtime = useAnyHarnessRuntimeContext();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const repoRootId = options.repoRootId?.trim() ?? "";
+
+  return useQuery({
+    queryKey: anyHarnessRepoRootDetectSetupKey(runtimeUrl, repoRootId),
+    enabled: (options.enabled ?? true) && repoRootId.length > 0 && runtimeUrl.length > 0,
+    staleTime: Infinity,
+    queryFn: async () => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      return client.repoRoots.detectSetup(repoRootId);
     },
   });
 }

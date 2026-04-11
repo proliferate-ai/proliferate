@@ -37,6 +37,7 @@ SERVER_ENV_SOURCE = set -a; \
 
 # --- Dev (builds SDK, starts runtime + desktop together) ---
 
+dev: export PROLIFERATE_DEV := 1
 dev: sdk-build server-migrate
 	@echo "Starting runtime on :8457, backend on :8000, and desktop app..."
 	@trap 'kill 0' EXIT; \
@@ -46,6 +47,7 @@ dev: sdk-build server-migrate
 	sleep 2; \
 	cd desktop && ANYHARNESS_DEV_URL=http://127.0.0.1:8457 pnpm tauri dev --config src-tauri/tauri.dev.json
 
+dev-local: export PROLIFERATE_DEV := 1
 dev-local: sdk-build
 	@echo "Starting desktop app with the bundled AnyHarness sidecar and no control plane..."
 	cd desktop && pnpm tauri dev --config src-tauri/tauri.dev.json
@@ -53,10 +55,12 @@ dev-local: sdk-build
 # --- Individual dev targets ---
 
 dev-desktop: export ANYHARNESS_DEV_URL := http://127.0.0.1:8457
+dev-desktop: export PROLIFERATE_DEV := 1
 dev-desktop:
 	cd desktop && pnpm tauri dev --config src-tauri/tauri.dev.json
 
 dev-runtime: export ANYHARNESS_DEV_CORS := 1
+dev-runtime: export PROLIFERATE_DEV := 1
 dev-runtime: sdk-build
 	@$(SERVER_ENV_SOURCE) \
 	$(CARGO) run --bin anyharness -- serve
@@ -107,7 +111,7 @@ db-local:
 		-d "$(LOCAL_PGDATABASE)"
 
 db-ah:
-	@sqlite3 -cmd ".headers on" -cmd ".mode column" $(HOME)/.proliferate/anyharness/db.sqlite
+	@sqlite3 -cmd ".headers on" -cmd ".mode column" $(HOME)/.proliferate-local/anyharness/db.sqlite
 
 # --- Production ops shortcuts ---
 

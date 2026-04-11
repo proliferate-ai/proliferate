@@ -2,6 +2,7 @@ import { useModelRegistriesQuery, useCreateCoworkThreadMutation } from "@anyharn
 import type { ModelRegistry } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { resolveEffectiveChatDefaults } from "@/lib/domain/chat/preference-resolvers";
 import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
@@ -21,6 +22,8 @@ import { useToastStore } from "@/stores/toast/toast-store";
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 
 export function useCoworkThreadWorkflow() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
   const { agents } = useAgentCatalog();
@@ -35,6 +38,12 @@ export function useCoworkThreadWorkflow() {
   const setDraft = useChatInputStore((state) => state.setDraft);
   const clearDraft = useChatInputStore((state) => state.clearDraft);
   const createCoworkThreadMutation = useCreateCoworkThreadMutation();
+
+  const navigateToWorkspaceShell = useCallback(() => {
+    if (location.pathname !== "/") {
+      navigate("/");
+    }
+  }, [location.pathname, navigate]);
 
   const createThreadWithResolvedConfig = useCallback(async (input: {
     agentKind: string;
@@ -60,11 +69,13 @@ export function useCoworkThreadWorkflow() {
         clearDraft(input.sourceWorkspaceId);
       }
     }
+    navigateToWorkspaceShell();
     await selectWorkspace(result.workspace.id, { force: true });
     return result;
   }, [
     createCoworkThreadMutation,
     clearDraft,
+    navigateToWorkspaceShell,
     queryClient,
     runtimeUrl,
     selectWorkspace,
@@ -115,8 +126,9 @@ export function useCoworkThreadWorkflow() {
   }, [createThreadWithResolvedConfig]);
 
   const openThread = useCallback(async (workspaceId: string) => {
+    navigateToWorkspaceShell();
     await selectWorkspace(workspaceId, { force: true });
-  }, [selectWorkspace]);
+  }, [navigateToWorkspaceShell, selectWorkspace]);
 
   return {
     createThread,

@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
-import { CopyMessageButton } from "./CopyMessageButton";
 
 const STREAM_FLUSH_MS = 32;
 const MIN_STREAM_STEP = 20;
@@ -9,7 +8,6 @@ const MAX_STREAM_STEP = 120;
 export interface AssistantMessageProps {
   content: string;
   isStreaming?: boolean;
-  showCopyButton?: boolean;
 }
 
 function hasOpenCodeFence(content: string): boolean {
@@ -255,38 +253,10 @@ function findTextBoundary(
 export function AssistantMessage({
   content,
   isStreaming = false,
-  showCopyButton = false,
 }: AssistantMessageProps) {
   return (
-    <div
-      data-chat-selection-unit
-      className={showCopyButton ? "group/msg" : undefined}
-    >
-      <div
-        className="text-chat leading-relaxed select-text text-foreground"
-      >
-        <AssistantMessageContent content={content} isStreaming={isStreaming} />
-      </div>
-      {content && (
-        // NOTE: `h-6` is load-bearing and the slot is rendered for *every*
-        // assistant prose with content, not just the one that will host the
-        // copy button. Three invariants depend on this:
-        //   1. It reserves the copy-button slot during streaming so that
-        //      mounting the button on turn completion doesn't shift layout.
-        //   2. It keeps the slot anchored to the prose that renders it, so
-        //      when a later prose becomes "last" mid-turn the slot on the
-        //      earlier prose doesn't unmount and cause a layout jump.
-        //   3. It is part of the TRAILING_STATUS_MIN_HEIGHT derivation in
-        //      MessageList.tsx (text-chat line-height + this slot = 42px),
-        //      which keeps the StreamingIndicator→first-prose-line swap a
-        //      zero-delta transition. If you change this value, update
-        //      TRAILING_STATUS_MIN_HEIGHT in MessageList.tsx to match.
-        // The actual CopyMessageButton is only mounted on the last prose of
-        // a completed turn (see `showCopyButton` flow from MessageList).
-        <div className="pl-1 pt-0.5 h-6">
-          {showCopyButton && !isStreaming && <CopyMessageButton content={content} />}
-        </div>
-      )}
+    <div className="text-chat leading-relaxed select-text text-foreground">
+      <AssistantMessageContent content={content} isStreaming={isStreaming} />
     </div>
   );
 }

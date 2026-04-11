@@ -17,15 +17,6 @@ pub struct WorkspaceRecord {
     pub updated_at: String,
 }
 
-impl WorkspaceRecord {
-    pub fn effective_repo_root_id(&self) -> String {
-        self.repo_root_id
-            .clone()
-            .or_else(|| self.source_workspace_id.clone())
-            .unwrap_or_else(|| self.id.clone())
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ResolvedGitContext {
     pub repo_root: String,

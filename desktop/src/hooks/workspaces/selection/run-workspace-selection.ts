@@ -26,6 +26,72 @@ export async function runWorkspaceSelection(
 ): Promise<void> {
   const logicalWorkspace = findLogicalWorkspace(deps.logicalWorkspaces, request.workspaceId);
   if (!logicalWorkspace) {
+    const directWorkspace = deps.rawWorkspaces.find(
+      (workspace) => workspace.id === request.workspaceId,
+    ) ?? null;
+    if (directWorkspace?.surface === "cowork") {
+      const selectionStartedAt = startLatencyTimer();
+      const currentId = useHarnessStore.getState().selectedWorkspaceId;
+      if (currentId === directWorkspace.id && !request.options?.force) {
+        cancelLatencyFlow(request.options?.latencyFlowId, "workspace_already_selected");
+        return;
+      }
+
+      logLatency("workspace.select.start", {
+        workspaceId: directWorkspace.id,
+        logicalWorkspaceId: null,
+        force: !!request.options?.force,
+        preservePending: !!request.options?.preservePending,
+      });
+
+      const cachedSessionId =
+        useWorkspaceUiStore.getState().lastViewedSessionByWorkspace[directWorkspace.id] ?? null;
+      deps.setSelectedLogicalWorkspaceId(null);
+      deps.setSelectedWorkspace(directWorkspace.id, {
+        clearPending: !request.options?.preservePending,
+        initialActiveSessionId: cachedSessionId,
+      });
+
+      const context: WorkspaceSelectionContext = {
+        workspaceId: directWorkspace.id,
+        logicalWorkspaceId: directWorkspace.id,
+        selectionNonce: useHarnessStore.getState().workspaceSelectionNonce,
+        selectionStartedAt,
+        cloudWorkspaceId: null,
+      };
+      if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
+        cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
+        return;
+      }
+
+      const connectionResult = await resolveSelectionConnection(deps, context, { kind: "local" });
+      if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
+        cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
+        return;
+      }
+
+      const bootstrapResult = await deps.bootstrapWorkspace({
+        workspaceId: context.workspaceId,
+        logicalWorkspaceId: context.logicalWorkspaceId,
+        runtimeUrl: connectionResult.runtimeUrl,
+        workspaceConnection: connectionResult.workspaceConnection,
+        startedAt: context.selectionStartedAt,
+        latencyFlowId: request.options?.latencyFlowId,
+        isCurrent: () => isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce),
+      });
+      if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
+        cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
+        return;
+      }
+
+      const latestSessionTimestamp = getLatestWorkspaceInteractionTimestamp(bootstrapResult.sessions);
+      if (latestSessionTimestamp) {
+        trackWorkspaceInteraction(context.logicalWorkspaceId, latestSessionTimestamp);
+      }
+      markWorkspaceViewed(context.logicalWorkspaceId);
+      return;
+    }
+
     cancelLatencyFlow(request.options?.latencyFlowId, "workspace_not_found");
     throw new Error("Workspace not found.");
   }

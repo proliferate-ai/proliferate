@@ -7,9 +7,10 @@ import { workspaceDisplayName } from "@/lib/domain/workspaces/workspace-display"
 import { useActiveChatSessionState } from "./use-active-chat-session-state";
 
 /**
- * Disambiguates the four sub-states that all funnel into `session-loading`
- * inside useChatSurfaceState. Each sub-state has a human-facing caption that
- * the loading hero renders under the braille sweep.
+ * Disambiguates the loading sub-states that feed ChatLoadingHero. The loading
+ * hero is reused by both `workspace-status` and `session-loading` while the
+ * selected workspace/session is still being prepared, and each sub-state maps
+ * to a human-facing caption under the braille sweep.
  *
  * The four sub-states map roughly to phases of the workspace → session
  * → stream → history → first-turn pipeline:
@@ -111,8 +112,7 @@ function resolveSubstep(args: {
     return "awaiting-first-turn";
   }
 
-  // Defensive default — caller only renders this hook inside the
-  // session-loading branch of useChatSurfaceState, so this is unreachable
-  // unless the surface state machine drifts.
+  // Defensive default for unexpected loading-state drift. The surface hook
+  // should normally keep ready/idle states out of ChatLoadingHero.
   return "loading-history";
 }

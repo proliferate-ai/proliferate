@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { useRepositorySettings } from "@/hooks/settings/use-repository-settings";
-import { useDetectProjectSetupQuery } from "@anyharness/sdk-react";
+import { useDetectRepoRootSetupQuery } from "@anyharness/sdk-react";
 import { Check, ChevronUpDown } from "@/components/ui/icons";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { SettingsCard } from "@/components/settings/SettingsCard";
@@ -23,8 +23,8 @@ export function RepositoryPane({ repository }: RepositoryPaneProps) {
     setExplicitDefaultBranch,
   } = useRepositorySettings(repository);
 
-  const { data: detectionResult, isLoading: isDetecting } = useDetectProjectSetupQuery({
-    workspaceId: repository?.repoWorkspaceId ?? undefined,
+  const { data: detectionResult, isLoading: isDetecting } = useDetectRepoRootSetupQuery({
+    repoRootId: repository?.repoRootId ?? undefined,
     enabled: !!repository,
   });
 

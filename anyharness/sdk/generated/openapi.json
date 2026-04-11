@@ -485,6 +485,46 @@
         }
       }
     },
+    "/v1/repo-roots/resolve": {
+      "post": {
+        "tags": [
+          "repo-roots"
+        ],
+        "operationId": "resolve_repo_root",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveRepoRootFromPathRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Resolved repo root",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoRoot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid path",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/repo-roots/{repo_root_id}": {
       "get": {
         "tags": [
@@ -509,6 +549,91 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RepoRoot"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Repo root not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repo-roots/{repo_root_id}/detect-setup": {
+      "get": {
+        "tags": [
+          "repo-roots"
+        ],
+        "operationId": "detect_repo_root_setup",
+        "parameters": [
+          {
+            "name": "repo_root_id",
+            "in": "path",
+            "description": "Repo root ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detected project setup hints",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectProjectSetupResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Repo root not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repo-roots/{repo_root_id}/git/branches": {
+      "get": {
+        "tags": [
+          "repo-roots"
+        ],
+        "operationId": "list_repo_root_git_branches",
+        "parameters": [
+          {
+            "name": "repo_root_id",
+            "in": "path",
+            "description": "Repo root ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Branch list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GitBranchRef"
+                  }
                 }
               }
             }
@@ -5587,6 +5712,17 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "ResolveRepoRootFromPathRequest": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
           }
         }
       },

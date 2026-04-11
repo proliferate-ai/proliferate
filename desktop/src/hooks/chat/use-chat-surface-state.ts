@@ -62,7 +62,14 @@ export function useChatSurfaceState(): {
   const isArrivalWorkspace = workspaceArrivalEvent?.workspaceId === selectedWorkspaceId;
   const shouldShowCloudStatus = selectedCloudWorkspace
     && shouldShowCloudWorkspaceStatusScreen(selectedCloudWorkspace);
-  if (shouldShowCloudStatus || (isArrivalWorkspace && !hasContent)) {
+  const shouldShowArrivalStatus = isArrivalWorkspace
+    && !hasContent
+    // Keep the arrival/status hero only while the selected workspace is still
+    // bootstrapping, hydrating, or actively running its first empty turn.
+    // Once the session is already hydrated and idle, fall through to
+    // `session-empty` so the ready hero renders instead of a stale loader.
+    && (!hasSlot || !transcriptHydrated || isRunning);
+  if (shouldShowCloudStatus || shouldShowArrivalStatus) {
     return { mode: { kind: "workspace-status" }, selectedWorkspaceId };
   }
 

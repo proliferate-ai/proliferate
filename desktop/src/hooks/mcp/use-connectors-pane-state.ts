@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ConnectorCatalogEntry, ConnectorCatalogId, InstalledConnectorRecord } from "@/lib/domain/mcp/types";
 import { trackConnectorConnectClicked } from "@/hooks/mcp/use-install-connector";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
@@ -17,11 +17,16 @@ export function useConnectorsPaneState() {
   const { data } = useConnectors();
   const [modal, setModal] = useState<ConnectorsPaneModalState>(null);
   const { retryPendingConnectorSync } = useConnectorSyncRetry();
+  const retryPendingConnectorSyncRef = useRef(retryPendingConnectorSync.mutateAsync);
+
+  useEffect(() => {
+    retryPendingConnectorSyncRef.current = retryPendingConnectorSync.mutateAsync;
+  }, [retryPendingConnectorSync.mutateAsync]);
 
   useEffect(() => {
     trackProductEvent("connectors_pane_viewed", undefined);
-    void retryPendingConnectorSync.mutateAsync({ silent: true });
-  }, [retryPendingConnectorSync]);
+    void retryPendingConnectorSyncRef.current({ silent: true });
+  }, []);
 
   const installed = data?.installed ?? EMPTY_INSTALLED;
   const available = data?.available ?? EMPTY_AVAILABLE;

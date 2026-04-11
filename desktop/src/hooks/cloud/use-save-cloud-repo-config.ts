@@ -25,12 +25,17 @@ async function buildTrackedFilesPayload(
   repository: SettingsRepositoryEntry,
   trackedFilePaths: string[],
 ) {
+  const localWorkspaceId = repository.localWorkspaceId?.trim();
+  if (!localWorkspaceId) {
+    throw new Error("A local workspace is required to read tracked files.");
+  }
+
   return await Promise.all(
     trackedFilePaths.map(async (relativePath) => ({
       relativePath,
       content: await readWorkspaceTextFile(
         runtimeUrl,
-        repository.repoWorkspaceId,
+        localWorkspaceId,
         relativePath,
       ),
     })),

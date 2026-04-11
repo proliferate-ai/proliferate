@@ -72,6 +72,7 @@ describe("runWorkspaceSelection", () => {
     await runWorkspaceSelection({
       queryClient: {} as never,
       logicalWorkspaces,
+      rawWorkspaces: [],
       setSelectedLogicalWorkspaceId: vi.fn(),
       setSelectedWorkspace: useHarnessStore.getState().setSelectedWorkspace,
       removeWorkspaceSlots: vi.fn(),
@@ -114,6 +115,7 @@ describe("runWorkspaceSelection", () => {
           updatedAt: new Date().toISOString(),
         },
       ],
+      rawWorkspaces: [],
       setSelectedLogicalWorkspaceId: vi.fn(),
       setSelectedWorkspace: useHarnessStore.getState().setSelectedWorkspace,
       removeWorkspaceSlots: vi.fn(),

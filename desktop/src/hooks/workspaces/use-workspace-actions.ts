@@ -179,29 +179,51 @@ export function useWorkspaceActions() {
     resolveWorktreeCreationInput: async (
       input: CreateWorktreeWorkspaceInput,
     ): Promise<ResolvedWorktreeCreation> => {
-      if (isCloudWorkspaceId(input.sourceWorkspaceId)) {
+      if (input.sourceWorkspaceId && isCloudWorkspaceId(input.sourceWorkspaceId)) {
         throw new Error("Branch workspaces can only be created from local repositories.");
       }
 
-      const source = workspaceCollections?.workspaces.find(
-        (workspace) => workspace.id === input.sourceWorkspaceId,
-      );
-      if (!source || !source.repoRootId || (source.kind !== "local" && source.kind !== "worktree")) {
-        throw new Error("Source must be a local or worktree workspace.");
+      const repoRoot = workspaceCollections?.repoRoots.find(
+        (candidate) => candidate.id === input.repoRootId,
+      ) ?? null;
+      if (!repoRoot) {
+        throw new Error("Repository root not found.");
       }
+
+      const sourceWorkspace = input.sourceWorkspaceId
+        ? workspaceCollections?.localWorkspaces.find((workspace) =>
+          workspace.id === input.sourceWorkspaceId
+          && workspace.repoRootId === input.repoRootId
+          && (workspace.kind === "local" || workspace.kind === "worktree")
+        ) ?? null
+        : workspaceCollections?.localWorkspaces.find((workspace) =>
+          workspace.repoRootId === input.repoRootId && workspace.kind === "local"
+        ) ?? workspaceCollections?.localWorkspaces.find((workspace) =>
+          workspace.repoRootId === input.repoRootId && workspace.kind === "worktree"
+        ) ?? null;
 
       const homeDir = await getHomeDir();
       const userPreferences = useUserPreferencesStore.getState();
       const authUser = useAuthStore.getState().user;
       const repoPreferences = useRepoPreferencesStore.getState();
 
-      const existingWorktreeBasenames = collectWorktreeBasenamesForRepo(
-        workspaceCollections?.workspaces ?? [],
-        source,
-      );
+      const existingWorktreeBasenames = sourceWorkspace
+        ? collectWorktreeBasenamesForRepo(
+          workspaceCollections?.localWorkspaces ?? [],
+          sourceWorkspace,
+        )
+        : new Set(
+          (workspaceCollections?.localWorkspaces ?? [])
+            .filter((workspace) =>
+              workspace.kind === "worktree" && workspace.repoRootId === input.repoRootId
+            )
+            .map((workspace) => workspace.path.split("/").filter(Boolean).pop())
+            .filter((basename): basename is string => Boolean(basename)),
+        );
 
       return resolveWorktreeCreationParams({
-        source,
+        repoRoot,
+        sourceWorkspace,
         rawInput: {
           ...input,
           workspaceName: input.workspaceName?.trim() || generateWorkspaceSlug(existingWorktreeBasenames),
@@ -209,9 +231,7 @@ export function useWorkspaceActions() {
         homeDir,
         branchPrefixType: userPreferences.branchPrefixType,
         authUser,
-        repoConfig: source.sourceRepoRootPath
-          ? (repoPreferences.repoConfigs[source.sourceRepoRootPath] ?? null)
-          : null,
+        repoConfig: repoPreferences.repoConfigs[repoRoot.path] ?? null,
       });
     },
     createLocalWorkspace: createLocalWorkspaceMutation.mutateAsync,

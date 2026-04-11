@@ -1,13 +1,22 @@
 import type { SetStateAction } from "react";
 import { create } from "zustand";
+import {
+  DEFAULT_SIDEBAR_WORKSPACE_TYPES,
+  resolveSidebarWorkspaceTypes,
+  toggleSidebarWorkspaceTypeSelection,
+  type SidebarWorkspaceVariant,
+} from "@/lib/domain/workspaces/sidebar";
 import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persistence";
 
 export interface WorkspaceUiState {
   _hydrated: boolean;
   archivedWorkspaceIds: string[];
+  hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
+  threadsCollapsed: boolean;
   sidebarOpen: boolean;
   sidebarWidth: number;
+  workspaceTypes: SidebarWorkspaceVariant[];
   lastViewedAt: Record<string, string>;
   lastViewedSessionByWorkspace: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
@@ -15,10 +24,16 @@ export interface WorkspaceUiState {
   archiveWorkspace: (id: string) => void;
   archiveWorkspaces: (ids: string[]) => void;
   unarchiveWorkspace: (id: string) => void;
+  unarchiveWorkspaces: (ids: string[]) => void;
+  hideRepoRoot: (repoRootId: string) => void;
+  unhideRepoRoot: (repoRootId: string) => void;
   toggleRepoGroupCollapsed: (repoKey: string) => void;
   ensureRepoGroupExpanded: (repoKey: string) => void;
+  setCollapsedRepoGroups: (keys: string[]) => void;
+  setThreadsCollapsed: (value: boolean) => void;
   setSidebarOpen: (value: SetStateAction<boolean>) => void;
   setSidebarWidth: (value: SetStateAction<number>) => void;
+  toggleSidebarWorkspaceType: (type: SidebarWorkspaceVariant) => void;
   markWorkspaceViewed: (workspaceId: string) => void;
   setLastViewedSessionForWorkspace: (workspaceId: string, sessionId: string) => void;
   clearLastViewedSessionForWorkspace: (workspaceId: string, sessionId?: string) => void;
@@ -32,8 +47,10 @@ export interface WorkspaceUiState {
  * reset across identity-model changes.
  * v1: reset false-unread state caused by wall-clock interaction timestamps.
  * v2: reset user-facing workspace-keyed state for logical-workspace cutover.
+ * v3: reset archived workspace ids after removing repositories stopped
+ * polluting the archive model.
  */
-const WORKSPACE_UI_MIGRATION_VERSION = 2;
+const WORKSPACE_UI_MIGRATION_VERSION = 3;
 export const WORKSPACE_SIDEBAR_DEFAULT_WIDTH = 280;
 export const WORKSPACE_SIDEBAR_MIN_WIDTH = 220;
 export const WORKSPACE_SIDEBAR_MAX_WIDTH = 420;
@@ -41,9 +58,12 @@ export const WORKSPACE_SIDEBAR_MAX_WIDTH = 420;
 interface PersistedWorkspaceUiState {
   migrationVersion?: number;
   archivedWorkspaceIds: string[];
+  hiddenRepoRootIds: string[];
   collapsedRepoGroups: string[];
+  threadsCollapsed: boolean;
   sidebarOpen: boolean;
   sidebarWidth: number;
+  workspaceTypes: SidebarWorkspaceVariant[];
   lastViewedAt: Record<string, string>;
   lastViewedSessionByWorkspace: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
@@ -53,9 +73,12 @@ interface PersistedWorkspaceUiState {
 const WORKSPACE_UI_KEY = "workspace_ui";
 const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
   archivedWorkspaceIds: [],
+  hiddenRepoRootIds: [],
   collapsedRepoGroups: [],
+  threadsCollapsed: false,
   sidebarOpen: false,
   sidebarWidth: WORKSPACE_SIDEBAR_DEFAULT_WIDTH,
+  workspaceTypes: DEFAULT_SIDEBAR_WORKSPACE_TYPES,
   lastViewedAt: {},
   lastViewedSessionByWorkspace: {},
   workspaceLastInteracted: {},
@@ -86,8 +109,10 @@ async function readAll(): Promise<{ state: PersistedWorkspaceUiState; didMigrate
       archivedWorkspaceIds:
         (await readPersistedValue<string[]>("archivedWorkspaceIds"))
         ?? WORKSPACE_UI_DEFAULTS.archivedWorkspaceIds,
+      hiddenRepoRootIds: WORKSPACE_UI_DEFAULTS.hiddenRepoRootIds,
       sidebarOpen: WORKSPACE_UI_DEFAULTS.sidebarOpen,
       sidebarWidth: WORKSPACE_UI_DEFAULTS.sidebarWidth,
+      workspaceTypes: WORKSPACE_UI_DEFAULTS.workspaceTypes,
       lastViewedAt:
         (await readPersistedValue<Record<string, string>>("lastViewedAt"))
         ?? WORKSPACE_UI_DEFAULTS.lastViewedAt,
@@ -98,6 +123,7 @@ async function readAll(): Promise<{ state: PersistedWorkspaceUiState; didMigrate
         (await readPersistedValue<Record<string, string>>("workspaceLastInteracted"))
         ?? WORKSPACE_UI_DEFAULTS.workspaceLastInteracted,
       collapsedRepoGroups: WORKSPACE_UI_DEFAULTS.collapsedRepoGroups,
+      threadsCollapsed: WORKSPACE_UI_DEFAULTS.threadsCollapsed,
       dismissedSetupFailures: WORKSPACE_UI_DEFAULTS.dismissedSetupFailures,
     };
   }
@@ -105,9 +131,11 @@ async function readAll(): Promise<{ state: PersistedWorkspaceUiState; didMigrate
   let didMigrate = false;
   if ((state.migrationVersion ?? 0) < WORKSPACE_UI_MIGRATION_VERSION) {
     state.archivedWorkspaceIds = [];
-    state.lastViewedAt = {};
-    state.lastViewedSessionByWorkspace = {};
-    state.workspaceLastInteracted = {};
+    if ((state.migrationVersion ?? 0) < 2) {
+      state.lastViewedAt = {};
+      state.lastViewedSessionByWorkspace = {};
+      state.workspaceLastInteracted = {};
+    }
     state.migrationVersion = WORKSPACE_UI_MIGRATION_VERSION;
     didMigrate = true;
   }
@@ -135,6 +163,15 @@ async function readAll(): Promise<{ state: PersistedWorkspaceUiState; didMigrate
     didMigrate = true;
   }
 
+  const resolvedWorkspaceTypes = resolveSidebarWorkspaceTypes(state.workspaceTypes);
+  if (
+    resolvedWorkspaceTypes.length !== state.workspaceTypes.length
+    || resolvedWorkspaceTypes.some((type, index) => type !== state.workspaceTypes[index])
+  ) {
+    state.workspaceTypes = resolvedWorkspaceTypes;
+    didMigrate = true;
+  }
+
   return { state, didMigrate };
 }
 
@@ -142,9 +179,12 @@ function selectPersistedSlice(state: WorkspaceUiState): PersistedWorkspaceUiStat
   return {
     migrationVersion: WORKSPACE_UI_MIGRATION_VERSION,
     archivedWorkspaceIds: state.archivedWorkspaceIds,
+    hiddenRepoRootIds: state.hiddenRepoRootIds,
     collapsedRepoGroups: state.collapsedRepoGroups,
+    threadsCollapsed: state.threadsCollapsed,
     sidebarOpen: state.sidebarOpen,
     sidebarWidth: state.sidebarWidth,
+    workspaceTypes: state.workspaceTypes,
     lastViewedAt: state.lastViewedAt,
     lastViewedSessionByWorkspace: state.lastViewedSessionByWorkspace,
     workspaceLastInteracted: state.workspaceLastInteracted,
@@ -174,6 +214,14 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
     set({ archivedWorkspaceIds: [...current, ...newIds] });
   },
 
+  hideRepoRoot: (repoRootId) => {
+    const current = get().hiddenRepoRootIds;
+    if (current.includes(repoRootId)) {
+      return;
+    }
+    set({ hiddenRepoRootIds: [...current, repoRootId] });
+  },
+
   toggleRepoGroupCollapsed: (repoKey) => {
     const current = get().collapsedRepoGroups;
     set({
@@ -189,6 +237,14 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
     set({ collapsedRepoGroups: current.filter((k) => k !== repoKey) });
   },
 
+  setCollapsedRepoGroups: (keys) => {
+    set({ collapsedRepoGroups: keys });
+  },
+
+  setThreadsCollapsed: (value) => {
+    set({ threadsCollapsed: value });
+  },
+
   setSidebarOpen: (value) => {
     set((state) => ({
       sidebarOpen: resolveStateValue(value, state.sidebarOpen),
@@ -201,6 +257,12 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
     }));
   },
 
+  toggleSidebarWorkspaceType: (type) => {
+    set((state) => ({
+      workspaceTypes: toggleSidebarWorkspaceTypeSelection(state.workspaceTypes, type),
+    }));
+  },
+
   unarchiveWorkspace: (id) => {
     const current = get().archivedWorkspaceIds;
     const next = current.filter((workspaceId) => workspaceId !== id);
@@ -208,6 +270,28 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
       return;
     }
     set({ archivedWorkspaceIds: next });
+  },
+
+  unarchiveWorkspaces: (ids) => {
+    if (ids.length === 0) {
+      return;
+    }
+    const idSet = new Set(ids);
+    const current = get().archivedWorkspaceIds;
+    const next = current.filter((workspaceId) => !idSet.has(workspaceId));
+    if (next.length === current.length) {
+      return;
+    }
+    set({ archivedWorkspaceIds: next });
+  },
+
+  unhideRepoRoot: (repoRootId) => {
+    const current = get().hiddenRepoRootIds;
+    const next = current.filter((id) => id !== repoRootId);
+    if (next.length === current.length) {
+      return;
+    }
+    set({ hiddenRepoRootIds: next });
   },
 
   markWorkspaceViewed: (workspaceId) => {

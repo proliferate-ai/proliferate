@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -13,6 +13,7 @@ import {
 } from "@/lib/infra/latency-flow";
 
 export function useWorkspaceSidebarActions() {
+  const location = useLocation();
   const navigate = useNavigate();
   const setPendingWorkspaceEntry = useHarnessStore((state) => state.setPendingWorkspaceEntry);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
@@ -31,7 +32,13 @@ export function useWorkspaceSidebarActions() {
     void addRepoFromPicker();
   }, [addRepoFromPicker]);
 
-  const handleGoHome = useCallback(() => {
+  const navigateToWorkspaceShell = useCallback(() => {
+    if (location.pathname !== "/") {
+      navigate("/");
+    }
+  }, [location.pathname, navigate]);
+
+  const goToTopLevelRoute = useCallback((path: "/" | "/powers") => {
     if (mobility.selectionLocked) {
       showToast("Finish the current workspace move before leaving this workspace.");
       return;
@@ -43,7 +50,7 @@ export function useWorkspaceSidebarActions() {
       setPendingWorkspaceEntry(null);
       useWorkspaceFilesStore.getState().reset();
     }
-    navigate("/");
+    navigate(path);
   }, [
     clearWorkspaceRuntimeState,
     mobility.selectionLocked,
@@ -54,12 +61,21 @@ export function useWorkspaceSidebarActions() {
     showToast,
   ]);
 
+  const handleGoHome = useCallback(() => {
+    goToTopLevelRoute("/");
+  }, [goToTopLevelRoute]);
+
+  const handleGoPowers = useCallback(() => {
+    goToTopLevelRoute("/powers");
+  }, [goToTopLevelRoute]);
+
   const handleSelectWorkspace = useCallback((workspaceId: string) => {
     if (mobility.selectionLocked && workspaceId !== mobility.selectedLogicalWorkspaceId) {
       showToast("Finish the current workspace move before switching workspaces.");
       return;
     }
 
+    navigateToWorkspaceShell();
     const latencyFlowId = startLatencyFlow({
       flowKind: "workspace_switch",
       source: "sidebar",
@@ -73,6 +89,7 @@ export function useWorkspaceSidebarActions() {
   }, [
     mobility.selectedLogicalWorkspaceId,
     mobility.selectionLocked,
+    navigateToWorkspaceShell,
     selectWorkspace,
     showToast,
   ]);
@@ -82,6 +99,7 @@ export function useWorkspaceSidebarActions() {
       return;
     }
 
+    navigateToWorkspaceShell();
     // Use lightweight path when already in a workspace (sidebar creation)
     // to avoid disrupting the current workspace with a pending shell.
     const lightweight = !!selectedWorkspaceId;
@@ -91,22 +109,23 @@ export function useWorkspaceSidebarActions() {
         showToast(message);
       }
     });
-  }, [createLocalWorkspaceAndEnter, selectedWorkspaceId, showToast]);
+  }, [createLocalWorkspaceAndEnter, navigateToWorkspaceShell, selectedWorkspaceId, showToast]);
 
-  const handleCreateWorktreeWorkspace = useCallback((repoWorkspaceId: string | null) => {
-    if (!repoWorkspaceId || isCreatingWorktreeWorkspace) {
+  const handleCreateWorktreeWorkspace = useCallback((repoRootId: string | null) => {
+    if (!repoRootId || isCreatingWorktreeWorkspace) {
       return;
     }
 
+    navigateToWorkspaceShell();
     // Use lightweight path when already in a workspace (sidebar creation)
     // to avoid disrupting the current workspace with a pending shell.
     const lightweight = !!selectedWorkspaceId;
     const latencyFlowId = startLatencyFlow({
       flowKind: "worktree_enter",
       source: "sidebar",
-      targetWorkspaceId: repoWorkspaceId,
+      targetWorkspaceId: repoRootId,
     });
-    void createWorktreeAndEnter(repoWorkspaceId, {
+    void createWorktreeAndEnter({ repoRootId }, {
       lightweight,
       latencyFlowId,
     }).catch((error) => {
@@ -116,11 +135,18 @@ export function useWorkspaceSidebarActions() {
         showToast(message);
       }
     });
-  }, [createWorktreeAndEnter, isCreatingWorktreeWorkspace, selectedWorkspaceId, showToast]);
+  }, [
+    createWorktreeAndEnter,
+    isCreatingWorktreeWorkspace,
+    navigateToWorkspaceShell,
+    selectedWorkspaceId,
+    showToast,
+  ]);
 
   return {
     handleAddRepo,
     handleGoHome,
+    handleGoPowers,
     handleSelectWorkspace,
     handleCreateLocalWorkspace,
     handleCreateWorktreeWorkspace,

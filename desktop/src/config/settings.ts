@@ -4,7 +4,6 @@ import {
   Blocks,
   CircleUser,
   CloudIcon,
-  Link2,
   RefreshCw,
   Tree,
 } from "@/components/ui/icons";
@@ -13,7 +12,6 @@ import type { IconProps } from "@/components/ui/icons";
 export const SETTINGS_CONTENT_SECTIONS = [
   "configuration",
   "cowork",
-  "connectors",
   "account",
   "cloud",
   "cloudRepo",
@@ -42,7 +40,6 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     items: [
       { kind: "section", id: "configuration", label: "Configuration", icon: Settings },
       { kind: "section", id: "cowork", label: "Cowork", icon: Tree },
-      { kind: "section", id: "connectors", label: "Connectors", icon: Link2 },
       { kind: "section", id: "agents", label: "Agents", icon: Blocks },
       { kind: "section", id: "account", label: "Account", icon: CircleUser },
     ],

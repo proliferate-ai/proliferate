@@ -26,13 +26,16 @@ export function useResyncCloudRepoFile(repository: SettingsRepositoryEntry | nul
       if (!repository?.gitOwner || !repository.gitRepoName) {
         throw new Error("A GitHub-backed repository is required.");
       }
+      if (!repository.localWorkspaceId) {
+        throw new Error("A local workspace is required to resync files from disk.");
+      }
       if (!runtimeUrl.trim()) {
         throw new Error("Local runtime is not connected.");
       }
 
       const content = await readWorkspaceTextFile(
         runtimeUrl,
-        repository.repoWorkspaceId,
+        repository.localWorkspaceId,
         relativePath,
       );
       return await resyncCloudRepoFileFromLocal(repository.gitOwner, repository.gitRepoName, {

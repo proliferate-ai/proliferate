@@ -1,22 +1,34 @@
 import { useCallback, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useShallow } from "zustand/react/shallow";
 import { SidebarFooter } from "./SidebarFooter";
 import { SidebarRowSurface } from "./SidebarRowSurface";
+import { SidebarActionButton } from "./SidebarActionButton";
+import { SidebarWorkspaceVariantIcon } from "./SidebarWorkspaceVariantIcon";
 import {
   DEFAULT_REPO_GROUP_ITEM_LIMIT,
   SidebarWorkspaceContent,
 } from "./SidebarWorkspaceContent";
 import { CoworkThreadsSection } from "@/components/workspace/cowork/sidebar/CoworkThreadsSection";
 import { NewCloudWorkspaceModal } from "@/components/workspace/cloud/NewCloudWorkspaceModal";
+import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import type { NewCloudWorkspaceSeed } from "@/lib/domain/workspaces/cloud-workspace-creation";
 import {
+  getEffectiveExpandedSidebarGroupKeys,
+  isDefaultSidebarWorkspaceTypes,
+  type SidebarWorkspaceVariant,
+} from "@/lib/domain/workspaces/sidebar";
+import {
   Archive,
   Check,
+  CollapseAll,
+  ExpandAll,
   Filter,
   FolderPlusFilled,
-  ProliferateIcon,
+  Grid,
+  Home,
 } from "@/components/ui/icons";
 import { CAPABILITY_COPY } from "@/config/capabilities";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
@@ -30,8 +42,14 @@ import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";
 import { RepoSetupModal } from "@/components/workspace/repo-setup/RepoSetupModal";
 import { useStartCloudWorkspaceFlow } from "@/hooks/cloud/use-start-cloud-workspace-flow";
 
-const SECTION_BTN =
-  "flex h-6 w-6 items-center justify-center overflow-hidden rounded-md p-1 text-foreground opacity-75 hover:opacity-100 hover:bg-sidebar-accent";
+const SIDEBAR_WORKSPACE_TYPE_OPTIONS: Array<{
+  label: string;
+  variant: SidebarWorkspaceVariant;
+}> = [
+  { label: "Local", variant: "local" },
+  { label: "Worktrees", variant: "worktree" },
+  { label: "Cloud", variant: "cloud" },
+];
 
 export function MainSidebar() {
   const actions = useWorkspaceSidebarActions();
@@ -45,14 +63,30 @@ export function MainSidebar() {
   const {
     groups,
     selectedWorkspaceId,
-    isEmpty,
+    selectedLogicalWorkspaceId,
+    emptyState,
     isLoading,
   } = useWorkspaceSidebarState({ showArchived });
 
   const navigate = useNavigate();
+  const location = useLocation();
+  const isOnPowers = location.pathname === "/powers";
+  const isOnHome = location.pathname === "/";
   const archiveWorkspace = useWorkspaceUiStore((s) => s.archiveWorkspace);
-  const archiveWorkspaces = useWorkspaceUiStore((s) => s.archiveWorkspaces);
+  const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
   const unarchiveWorkspace = useWorkspaceUiStore((s) => s.unarchiveWorkspace);
+  const unarchiveWorkspaces = useWorkspaceUiStore((s) => s.unarchiveWorkspaces);
+  const {
+    collapsedRepoGroups,
+    setCollapsedRepoGroups,
+    workspaceTypes,
+    toggleSidebarWorkspaceType,
+  } = useWorkspaceUiStore(useShallow((state) => ({
+    collapsedRepoGroups: state.collapsedRepoGroups,
+    setCollapsedRepoGroups: state.setCollapsedRepoGroups,
+    workspaceTypes: state.workspaceTypes,
+    toggleSidebarWorkspaceType: state.toggleSidebarWorkspaceType,
+  })));
   const { updateWorkspaceDisplayName } = useWorkspaceDisplayNameActions();
   const handleRenameWorkspace = useCallback(
     (workspaceId: string, displayName: string | null) =>
@@ -87,33 +121,44 @@ export function MainSidebar() {
   // Force-expand any group whose currently selected workspace would be
   // hidden by the cap, so the selection is always visible. Unions the
   // user's explicit expansions with the force-expansion set.
-  const effectiveExpandedRepoKeys = useMemo(() => {
-    if (!selectedWorkspaceId) return explicitlyExpandedRepoKeys;
-    let next: Set<string> | null = null;
-    for (const group of groups) {
-      if (group.items.length <= DEFAULT_REPO_GROUP_ITEM_LIMIT) continue;
-      if (explicitlyExpandedRepoKeys.has(group.sourceRoot)) continue;
-      const idx = group.items.findIndex((item) => item.id === selectedWorkspaceId);
-      if (idx >= DEFAULT_REPO_GROUP_ITEM_LIMIT) {
-        if (!next) next = new Set(explicitlyExpandedRepoKeys);
-        next.add(group.sourceRoot);
-      }
-    }
-    return next ?? explicitlyExpandedRepoKeys;
-  }, [explicitlyExpandedRepoKeys, groups, selectedWorkspaceId]);
+  const effectiveExpandedRepoKeys = useMemo(() => getEffectiveExpandedSidebarGroupKeys({
+    groups,
+    explicitlyExpandedRepoKeys,
+    selectedLogicalWorkspaceId,
+    itemLimit: DEFAULT_REPO_GROUP_ITEM_LIMIT,
+  }), [explicitlyExpandedRepoKeys, groups, selectedLogicalWorkspaceId]);
 
   const handleRemoveRepo = useCallback((sourceRoot: string) => {
-    // Archive all workspaces in this repo group to hide it from the sidebar.
-    // This is a soft remove — workspaces are archived, not deleted.
     const group = groups.find((g) => g.sourceRoot === sourceRoot);
     if (group) {
-      archiveWorkspaces(group.items.map((item) => item.id));
+      unarchiveWorkspaces(group.allLogicalWorkspaceIds);
+      if (group.repoRootId) {
+        hideRepoRoot(group.repoRootId);
+      }
     }
-  }, [groups, archiveWorkspaces]);
+  }, [groups, hideRepoRoot, unarchiveWorkspaces]);
 
   const handleOpenRepoSettings = useCallback((sourceRoot: string) => {
     navigate(`/settings?section=repo&repo=${encodeURIComponent(sourceRoot)}`);
   }, [navigate]);
+
+  // Smart collapse toggle: if any repo group is currently expanded (i.e.
+  // collapsedRepoGroups doesn't already contain every visible group key),
+  // one click collapses them all. Otherwise, one click expands them all.
+  const allRepoKeys = useMemo(
+    () => groups.map((g) => g.sourceRoot),
+    [groups],
+  );
+  const allRepoGroupsCollapsed =
+    allRepoKeys.length > 0
+    && allRepoKeys.every((key) => collapsedRepoGroups.includes(key));
+  const handleToggleAllRepoGroups = useCallback(() => {
+    if (allRepoGroupsCollapsed) {
+      setCollapsedRepoGroups([]);
+    } else {
+      setCollapsedRepoGroups(allRepoKeys);
+    }
+  }, [allRepoGroupsCollapsed, allRepoKeys, setCollapsedRepoGroups]);
 
   const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.blocked;
   const cloudWorkspaceTooltip = cloudUnavailable
@@ -121,6 +166,7 @@ export function MainSidebar() {
     : cloudWorkspaceBlocked
       ? billingPlan?.blockedReason ?? "Cloud usage is paused. Reach out to Pablo for unlimited cloud."
       : CAPABILITY_COPY.cloudSignInTooltip;
+  const filtersActive = showArchived || !isDefaultSidebarWorkspaceTypes(workspaceTypes);
 
   return (
     <div className="h-full bg-sidebar select-none flex flex-col gap-2 pb-2 pt-2">
@@ -129,13 +175,27 @@ export function MainSidebar() {
         <div className="px-2">
           <div className="flex flex-col gap-px">
             <SidebarRowSurface
-              active={!selectedWorkspaceId && !pendingWorkspaceEntry}
+              active={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
               onPress={actions.handleGoHome}
-              className="px-2 py-1"
+              className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
             >
-              <div className="flex min-w-0 items-center text-base gap-2 flex-1 text-foreground">
-                <ProliferateIcon className="size-3 shrink-0" />
+              <div className="flex w-4 shrink-0 items-center justify-center">
+                <Home className="size-3" />
+              </div>
+              <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-foreground">
                 <span className="truncate">Home</span>
+              </div>
+            </SidebarRowSurface>
+            <SidebarRowSurface
+              active={isOnPowers}
+              onPress={actions.handleGoPowers}
+              className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
+            >
+              <div className="flex w-4 shrink-0 items-center justify-center">
+                <Grid className="size-4" />
+              </div>
+              <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-foreground">
+                <span className="truncate">Powers</span>
               </div>
             </SidebarRowSurface>
           </div>
@@ -149,51 +209,81 @@ export function MainSidebar() {
           >
             <CoworkThreadsSection />
 
-            {/* Repositories heading */}
-            <div className="text-foreground/50 text-base opacity-75 pl-4 pr-2 pt-3 pb-1">
+            {/* Repositories heading — text left-aligned with the row icon column (8px row-pl inside the 8px viewport gutter). */}
+            <div className="text-foreground/50 text-base opacity-75 pl-2 pt-3 pb-1">
               <div className="flex items-center justify-between gap-2">
                 <span>Repositories</span>
-                <div className="flex items-center gap-1">
+                <div className="flex shrink-0 items-center gap-1">
+                  {allRepoKeys.length > 0 && (
+                    <SidebarActionButton
+                      onClick={handleToggleAllRepoGroups}
+                      title={allRepoGroupsCollapsed ? "Expand all repositories" : "Collapse all repositories"}
+                      variant="section"
+                    >
+                      {allRepoGroupsCollapsed ? (
+                        <ExpandAll className="size-3" />
+                      ) : (
+                        <CollapseAll className="size-3" />
+                      )}
+                    </SidebarActionButton>
+                  )}
                   <PopoverButton
                     trigger={
-                      <button
-                        type="button"
-                        title="Filter repositories"
-                        className={SECTION_BTN}
+                      <SidebarActionButton
+                        title="Filter workspaces"
+                        active={filtersActive}
+                        variant="section"
                       >
                         <Filter className="size-3" />
-                      </button>
+                      </SidebarActionButton>
                     }
                   >
-                    {(close) => (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowArchived((v) => !v);
-                          close();
-                        }}
-                        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-accent"
-                      >
-                        <Archive className="size-3.5 shrink-0" />
-                        <span className="flex-1 truncate text-left">Archived workspaces</span>
-                        {showArchived && <Check className="size-3.5 shrink-0 text-foreground/60" />}
-                      </button>
+                    {() => (
+                      <>
+                        <PopoverMenuItem
+                          onClick={() => {
+                            setShowArchived((value) => !value);
+                          }}
+                          variant="sidebar"
+                          icon={<Archive className="size-3.5 text-muted-foreground" />}
+                          label="Archived workspaces"
+                          trailing={showArchived ? <Check className="size-3.5 text-foreground/60" /> : null}
+                        />
+                        <div className="my-1 h-px bg-border" />
+                        {SIDEBAR_WORKSPACE_TYPE_OPTIONS.map(({ label, variant }) => {
+                          const selected = workspaceTypes.includes(variant);
+                          const disabled = selected && workspaceTypes.length === 1;
+
+                          return (
+                            <PopoverMenuItem
+                              key={variant}
+                              onClick={() => {
+                                toggleSidebarWorkspaceType(variant);
+                              }}
+                              disabled={disabled}
+                              variant="sidebar"
+                              icon={<SidebarWorkspaceVariantIcon variant={variant} className="size-3.5 text-muted-foreground" />}
+                              label={label}
+                              trailing={selected ? <Check className="size-3.5 text-foreground/60" /> : null}
+                            />
+                          );
+                        })}
+                      </>
                     )}
                   </PopoverButton>
-                  <button
-                    type="button"
+                  <SidebarActionButton
                     onClick={actions.handleAddRepo}
                     title="Add repository"
-                    className={SECTION_BTN}
+                    variant="section"
                   >
                     <FolderPlusFilled className="size-3" />
-                  </button>
+                  </SidebarActionButton>
                 </div>
               </div>
             </div>
 
             <SidebarWorkspaceContent
-              isEmpty={isEmpty}
+              emptyState={emptyState}
               isLoading={isLoading}
               groups={groups}
               explicitlyExpandedRepoKeys={explicitlyExpandedRepoKeys}
@@ -228,7 +318,7 @@ export function MainSidebar() {
 
       {repoSetupModal && (
         <RepoSetupModal
-          workspaceId={repoSetupModal.workspaceId}
+          repoRootId={repoSetupModal.repoRootId}
           sourceRoot={repoSetupModal.sourceRoot}
           repoName={repoSetupModal.repoName}
           onClose={closeRepoSetupModal}

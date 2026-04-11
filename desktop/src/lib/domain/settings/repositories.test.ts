@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
-import type { Workspace } from "@anyharness/sdk";
+import type { RepoRoot, Workspace } from "@anyharness/sdk";
 
 function makeWorkspace(overrides: Partial<Workspace>): Workspace {
   return {
@@ -10,6 +10,17 @@ function makeWorkspace(overrides: Partial<Workspace>): Workspace {
     path: "/tmp/repo",
     surface: "standard",
     sourceRepoRootPath: "/tmp/repo",
+    createdAt: "2025-01-01T00:00:00.000Z",
+    updatedAt: "2025-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function makeRepoRoot(overrides: Partial<RepoRoot> = {}): RepoRoot {
+  return {
+    id: "repo-root-1",
+    kind: "external",
+    path: "/tmp/repo",
     createdAt: "2025-01-01T00:00:00.000Z",
     updatedAt: "2025-01-01T00:00:00.000Z",
     ...overrides,
@@ -31,11 +42,12 @@ describe("buildSettingsRepositoryEntries", () => {
         sourceWorkspaceId: "repo-1",
         gitRepoName: "proliferate",
       }),
-    ]);
+    ], [makeRepoRoot()]);
 
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
-      repoWorkspaceId: "repo-1",
+      repoRootId: "repo-root-1",
+      localWorkspaceId: "repo-1",
       workspaceCount: 2,
       sourceRoot: "/tmp/repo",
     });
@@ -48,7 +60,7 @@ describe("buildSettingsRepositoryEntries", () => {
         kind: "local",
         gitRepoName: "proliferate",
       }),
-    ]);
+    ], [makeRepoRoot()]);
 
     expect(entries).toHaveLength(1);
     expect(entries[0].workspaceCount).toBe(1);

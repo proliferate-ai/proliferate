@@ -1,6 +1,5 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
-import { cloudWorkspaceSyntheticId } from "./cloud-ids";
 
 function sortWorkspacesByUpdatedAtDesc<T extends Pick<Workspace, "updatedAt">>(workspaces: T[]): T[] {
   return [...workspaces].sort((a, b) => {
@@ -16,24 +15,17 @@ export function cloudWorkspaceGroupKey(
   return `${workspace.repo.provider}:${workspace.repo.owner}:${workspace.repo.name}`;
 }
 
-function toSyntheticCloudWorkspace(workspace: CloudWorkspaceSummary): Workspace {
-  return {
-    id: cloudWorkspaceSyntheticId(workspace.id),
-    kind: "repo",
-    repoRootId: cloudWorkspaceGroupKey(workspace),
-    path: `${workspace.repo.owner}/${workspace.repo.name}`,
-    surface: "standard",
-    sourceRepoRootPath: cloudWorkspaceGroupKey(workspace),
-    gitProvider: workspace.repo.provider,
-    gitOwner: workspace.repo.owner,
-    gitRepoName: workspace.repo.name,
-    originalBranch: workspace.repo.branch,
-    currentBranch: workspace.repo.branch,
-    displayName: workspace.displayName ?? null,
-    executionSummary: null,
-    createdAt: workspace.createdAt ?? "",
-    updatedAt: workspace.updatedAt ?? "",
-  };
+export function repoRootGroupKey(
+  repoRoot: Pick<
+    RepoRoot,
+    "path" | "remoteProvider" | "remoteOwner" | "remoteRepoName"
+  >,
+): string {
+  if (repoRoot.remoteProvider && repoRoot.remoteOwner && repoRoot.remoteRepoName) {
+    return `${repoRoot.remoteProvider}:${repoRoot.remoteOwner}:${repoRoot.remoteRepoName}`;
+  }
+
+  return repoRoot.path.trim();
 }
 
 function buildRepresentativeWorkspaceIds(
@@ -108,18 +100,6 @@ export function workspaceFileTreeStateKey(workspace: Workspace): string {
   return localWorkspaceGroupKey(workspace);
 }
 
-export function mergeWorkspaceCollections(
-  localWorkspaces: Workspace[],
-  cloudWorkspaces: CloudWorkspaceSummary[],
-): Workspace[] {
-  const merged = [
-    ...localWorkspaces,
-    ...cloudWorkspaces.map(toSyntheticCloudWorkspace),
-  ];
-
-  return sortWorkspacesByUpdatedAtDesc(merged);
-}
-
 export interface WorkspaceCollections {
   localWorkspaces: Workspace[];
   repoRoots: RepoRoot[];
@@ -140,7 +120,7 @@ export function buildWorkspaceCollections(
     localWorkspaces: enrichedLocalWorkspaces,
     repoRoots,
     cloudWorkspaces,
-    workspaces: mergeWorkspaceCollections(enrichedLocalWorkspaces, cloudWorkspaces),
+    workspaces: enrichedLocalWorkspaces,
   };
 }
 
@@ -166,4 +146,22 @@ export function upsertLocalWorkspaceCollections(
   ];
 
   return buildWorkspaceCollections(localWorkspaces, repoRoots, collections.cloudWorkspaces);
+}
+
+export function upsertRepoRootCollections(
+  collections: WorkspaceCollections | undefined,
+  repoRoot: RepoRoot,
+): WorkspaceCollections | undefined {
+  if (!collections) {
+    return collections;
+  }
+
+  return buildWorkspaceCollections(
+    collections.localWorkspaces,
+    [
+      repoRoot,
+      ...collections.repoRoots.filter((existing) => existing.id !== repoRoot.id),
+    ],
+    collections.cloudWorkspaces,
+  );
 }

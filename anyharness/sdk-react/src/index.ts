@@ -16,6 +16,8 @@ export {
   anyHarnessProviderConfigsKey,
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessRepoRootsKey,
+  anyHarnessRepoRootGitBranchesKey,
+  anyHarnessRepoRootDetectSetupKey,
   anyHarnessWorkspaceMobilityKey,
   anyHarnessWorkspaceMobilityPreflightKey,
   anyHarnessCoworkStatusKey,
@@ -62,6 +64,9 @@ export {
 export { useProviderConfigsQuery } from "./hooks/providers.js";
 export {
   useRepoRootsQuery,
+  useResolveRepoRootFromPathMutation,
+  useRepoRootGitBranchesQuery,
+  useDetectRepoRootSetupQuery,
   usePrepareRepoRootMobilityDestinationMutation,
 } from "./hooks/repo-roots.js";
 export {

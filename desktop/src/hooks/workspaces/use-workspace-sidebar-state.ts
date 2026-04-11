@@ -7,10 +7,13 @@ import {
 } from "@/lib/domain/sessions/activity";
 import {
   buildSidebarGroupStates,
+  resolveSidebarEmptyState,
+  type SidebarEmptyState,
   type SidebarGroupState,
 } from "@/lib/domain/workspaces/sidebar";
 import { getEffectiveSessionTitle } from "@/lib/domain/sessions/title";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
+import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
 import { useWorkspaceBranchRenameMonitor } from "@/hooks/workspaces/use-workspace-branch-rename-monitor";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -25,9 +28,10 @@ interface WorkspaceSidebarState {
   workspaceActivities: Record<string, SessionViewState>;
   archivedCount: number;
   selectedWorkspaceId: string | null;
+  selectedLogicalWorkspaceId: string | null;
   gitStatus: GitStatusSnapshot | undefined;
   transcriptTitle: string | null;
-  isEmpty: boolean;
+  emptyState: SidebarEmptyState;
   isLoading: boolean;
 }
 
@@ -45,18 +49,31 @@ export function useWorkspaceSidebarState({
     return slot ? getEffectiveSessionTitle(slot) : null;
   });
 
-  const archivedWorkspaceIds = useWorkspaceUiStore((state) => state.archivedWorkspaceIds);
-  const lastViewedAt = useWorkspaceUiStore((state) => state.lastViewedAt);
-  const workspaceLastInteracted = useWorkspaceUiStore(
-    (state) => state.workspaceLastInteracted,
-  );
+  const {
+    archivedWorkspaceIds,
+    hiddenRepoRootIds,
+    lastViewedAt,
+    workspaceLastInteracted,
+    workspaceTypes,
+  } = useWorkspaceUiStore(useShallow((state) => ({
+    archivedWorkspaceIds: state.archivedWorkspaceIds,
+    hiddenRepoRootIds: state.hiddenRepoRootIds,
+    lastViewedAt: state.lastViewedAt,
+    workspaceLastInteracted: state.workspaceLastInteracted,
+    workspaceTypes: state.workspaceTypes,
+  })));
 
   const { logicalWorkspaces, isLoading: workspacesLoading } = useLogicalWorkspaces();
+  const { repoRoots } = useStandardRepoProjection();
   const { data: gitStatus } = useWorkspaceBranchRenameMonitor();
 
   const archivedSet = useMemo(
     () => new Set(archivedWorkspaceIds),
     [archivedWorkspaceIds],
+  );
+  const hiddenRepoRootSet = useMemo(
+    () => new Set(hiddenRepoRootIds),
+    [hiddenRepoRootIds],
   );
 
   const archivedCount = useMemo(
@@ -65,9 +82,12 @@ export function useWorkspaceSidebarState({
   );
 
   const groups = useMemo(() => buildSidebarGroupStates({
+    repoRoots,
     logicalWorkspaces,
     showArchived,
+    workspaceTypes,
     archivedSet,
+    hiddenRepoRootIds: hiddenRepoRootSet,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     workspaceActivities,
@@ -79,23 +99,28 @@ export function useWorkspaceSidebarState({
     activeSessionTitle,
     archivedSet,
     gitStatus,
+    hiddenRepoRootSet,
     lastViewedAt,
     logicalWorkspaces,
+    repoRoots,
+    workspaceTypes,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     showArchived,
     workspaceActivities,
     workspaceLastInteracted,
   ]);
+  const emptyState = resolveSidebarEmptyState(logicalWorkspaces.length, groups.length);
 
   return {
     groups,
     workspaceActivities,
     archivedCount,
     selectedWorkspaceId,
+    selectedLogicalWorkspaceId,
     gitStatus,
     transcriptTitle: activeSessionTitle,
-    isEmpty: groups.length === 0,
+    emptyState,
     isLoading: workspacesLoading,
   };
 }

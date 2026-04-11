@@ -3,8 +3,8 @@ import type { SetupScriptExecution, Workspace } from "@anyharness/sdk";
 import { useSetupStatusQuery } from "@anyharness/sdk-react";
 import { buildWorkspaceArrivalViewModel } from "@/lib/domain/workspaces/arrival";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
+import { useHarnessStore } from "@/stores/sessions/harness-store";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
@@ -22,6 +22,13 @@ export function useWorkspaceArrivalState(): {
     () => workspaces.find((candidate) => candidate.id === selectedWorkspaceId) ?? null,
     [selectedWorkspaceId, workspaces],
   );
+  const configuredSetupScript = useRepoPreferencesStore((state) => {
+    const sourceRepoRootPath = workspace?.sourceRepoRootPath;
+    if (!sourceRepoRootPath) {
+      return "";
+    }
+    return state.repoConfigs[sourceRepoRootPath]?.setupScript?.trim() ?? "";
+  });
 
   // Poll setup status for freshly created worktrees. The create_worktree
   // endpoint fires setup async and returns null — the frontend discovers
@@ -31,16 +38,12 @@ export function useWorkspaceArrivalState(): {
     || workspaceArrivalEvent?.source === "local-created";
   const { data: liveSetupStatus } = useSetupStatusQuery({
     workspaceId: workspace?.id ?? null,
-    enabled: !!workspace && !!workspaceArrivalEvent && isNewWorkspaceArrival,
+    enabled:
+      !!workspace
+      && !!workspaceArrivalEvent
+      && isNewWorkspaceArrival
+      && configuredSetupScript.length > 0,
     refetchWhileRunning: true,
-  });
-
-  const configuredSetupScript = useRepoPreferencesStore((state) => {
-    const sourceRepoRootPath = workspace?.sourceRepoRootPath;
-    if (!sourceRepoRootPath) {
-      return "";
-    }
-    return state.repoConfigs[sourceRepoRootPath]?.setupScript?.trim() ?? "";
   });
 
   const viewModel = useMemo(() => {

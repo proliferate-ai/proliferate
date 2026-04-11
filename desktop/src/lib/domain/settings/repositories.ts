@@ -1,13 +1,12 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
-import { isStructuralRepoWorkspace } from "@/lib/domain/workspaces/usability";
 
 export interface SettingsRepositoryEntry {
   sourceRoot: string;
   name: string;
   secondaryLabel: string | null;
   workspaceCount: number;
-  repoWorkspaceId: string;
-  repoRootId: string | null;
+  repoRootId: string;
+  localWorkspaceId: string | null;
   gitProvider: string | null;
   gitOwner: string | null;
   gitRepoName: string | null;
@@ -18,14 +17,13 @@ export interface CloudSettingsRepositoryEntry extends SettingsRepositoryEntry {
   gitRepoName: string;
 }
 
-function resolveRepoSourceRoot(workspace: Workspace): string {
-  return workspace.sourceRepoRootPath?.trim()
-    || workspace.path?.trim()
-    || workspace.id;
+function resolveRepoSourceRoot(repoRoot: RepoRoot): string {
+  return repoRoot.path.trim() || repoRoot.id;
 }
 
-function resolveRepoName(workspace: Workspace, sourceRoot: string): string {
-  return workspace.gitRepoName?.trim()
+function resolveRepoName(repoRoot: RepoRoot, sourceRoot: string): string {
+  return repoRoot.displayName?.trim()
+    || repoRoot.remoteRepoName?.trim()
     || sourceRoot.split("/").filter(Boolean).pop()
     || sourceRoot;
 }
@@ -34,64 +32,39 @@ export function buildSettingsRepositoryEntries(
   workspaces: Workspace[],
   repoRoots: RepoRoot[] = [],
 ): SettingsRepositoryEntry[] {
-  const repoRootsById = new Map(repoRoots.map((repoRoot) => [repoRoot.id, repoRoot]));
-  const entries = new Map<string, SettingsRepositoryEntry>();
-
+  const workspacesByRepoRootId = new Map<string, Workspace[]>();
   for (const workspace of workspaces) {
-    if (workspace.surface === "cowork" || isStructuralRepoWorkspace(workspace)) {
+    const repoRootId = workspace.repoRootId?.trim();
+    if (!repoRootId || workspace.surface === "cowork") {
       continue;
     }
-
-    const repoRoot = workspace.repoRootId
-      ? repoRootsById.get(workspace.repoRootId) ?? null
-      : null;
-    const sourceRoot = resolveRepoSourceRoot(workspace);
-    const entryKey = workspace.repoRootId ?? sourceRoot;
-    const existing = entries.get(entryKey);
-    if (!existing) {
-      entries.set(entryKey, {
-        sourceRoot: repoRoot?.path ?? sourceRoot,
-        name: repoRoot?.displayName?.trim()
-          || resolveRepoName(workspace, repoRoot?.path ?? sourceRoot),
-        secondaryLabel: null,
-        workspaceCount: 1,
-        repoWorkspaceId: workspace.sourceWorkspaceId ?? workspace.id,
-        repoRootId: workspace.repoRootId ?? null,
-        gitProvider:
-          repoRoot?.remoteProvider?.trim()
-          ?? workspace.gitProvider?.trim()
-          ?? null,
-        gitOwner:
-          repoRoot?.remoteOwner?.trim()
-          ?? workspace.gitOwner?.trim()
-          ?? null,
-        gitRepoName:
-          repoRoot?.remoteRepoName?.trim()
-          ?? workspace.gitRepoName?.trim()
-          ?? null,
-      });
-      continue;
+    const repoWorkspaces = workspacesByRepoRootId.get(repoRootId);
+    if (repoWorkspaces) {
+      repoWorkspaces.push(workspace);
+    } else {
+      workspacesByRepoRootId.set(repoRootId, [workspace]);
     }
-
-    existing.workspaceCount += 1;
-    if (workspace.kind === "local") {
-      existing.repoWorkspaceId = workspace.id;
-    }
-    existing.gitProvider = existing.gitProvider
-      ?? repoRoot?.remoteProvider?.trim()
-      ?? workspace.gitProvider?.trim()
-      ?? null;
-    existing.gitOwner = existing.gitOwner
-      ?? repoRoot?.remoteOwner?.trim()
-      ?? workspace.gitOwner?.trim()
-      ?? null;
-    existing.gitRepoName = existing.gitRepoName
-      ?? repoRoot?.remoteRepoName?.trim()
-      ?? workspace.gitRepoName?.trim()
-      ?? null;
   }
 
-  const repos = Array.from(entries.values()).sort((a, b) => {
+  const repos = repoRoots.map((repoRoot) => {
+    const repoWorkspaces = workspacesByRepoRootId.get(repoRoot.id) ?? [];
+    const localWorkspace = repoWorkspaces.find((workspace) => workspace.kind === "local")
+      ?? repoWorkspaces[0]
+      ?? null;
+    const sourceRoot = resolveRepoSourceRoot(repoRoot);
+
+    return {
+      sourceRoot,
+      name: resolveRepoName(repoRoot, sourceRoot),
+      secondaryLabel: null,
+      workspaceCount: repoWorkspaces.length,
+      repoRootId: repoRoot.id,
+      localWorkspaceId: localWorkspace?.id ?? null,
+      gitProvider: repoRoot.remoteProvider?.trim() ?? localWorkspace?.gitProvider?.trim() ?? null,
+      gitOwner: repoRoot.remoteOwner?.trim() ?? localWorkspace?.gitOwner?.trim() ?? null,
+      gitRepoName: repoRoot.remoteRepoName?.trim() ?? localWorkspace?.gitRepoName?.trim() ?? null,
+    } satisfies SettingsRepositoryEntry;
+  }).sort((a, b) => {
     const byName = a.name.localeCompare(b.name);
     return byName !== 0 ? byName : a.sourceRoot.localeCompare(b.sourceRoot);
   });

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
 import { useAddRepo } from "@/hooks/workspaces/use-add-repo";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import {
   type HomeActionId,
@@ -12,9 +12,6 @@ import {
 } from "@/lib/domain/home/home-screen";
 import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-
-const EMPTY_LOCAL_WORKSPACES: NonNullable<ReturnType<typeof useWorkspaces>["data"]>["localWorkspaces"] = [];
-const EMPTY_REPO_ROOTS: NonNullable<ReturnType<typeof useWorkspaces>["data"]>["repoRoots"] = [];
 
 export function useHomeScreen() {
   const navigate = useNavigate();
@@ -26,30 +23,43 @@ export function useHomeScreen() {
     isLoading: agentsLoading,
   } = useAgentCatalog();
   const { logicalWorkspaces } = useLogicalWorkspaces();
-  const { data: workspaceCollections } = useWorkspaces();
+  const { localWorkspaces, repoRoots } = useStandardRepoProjection();
   const workspaceLastInteracted = useWorkspaceUiStore((s) => s.workspaceLastInteracted);
   const archivedWorkspaceIds = useWorkspaceUiStore((s) => s.archivedWorkspaceIds);
+  const hiddenRepoRootIds = useWorkspaceUiStore((s) => s.hiddenRepoRootIds);
   const { selectWorkspace } = useWorkspaceSelection();
-
-  const localWorkspaces = workspaceCollections?.localWorkspaces ?? EMPTY_LOCAL_WORKSPACES;
-  const repoRoots = workspaceCollections?.repoRoots ?? EMPTY_REPO_ROOTS;
 
   const recentLogicalWorkspaces = useMemo(() => {
     const archivedSet = new Set(archivedWorkspaceIds);
+    const hiddenRepoRootIdSet = new Set(hiddenRepoRootIds);
     return [...logicalWorkspaces]
-      .filter((workspace) => !archivedSet.has(workspace.id))
+      .filter((workspace) =>
+        !archivedSet.has(workspace.id)
+        && !(
+          workspace.repoRoot?.id && hiddenRepoRootIdSet.has(workspace.repoRoot.id)
+        )
+        && !(
+          workspace.localWorkspace?.repoRootId
+          && hiddenRepoRootIdSet.has(workspace.localWorkspace.repoRootId)
+        )
+      )
       .sort((a, b) => {
         const aTime = new Date(workspaceLastInteracted[a.id] ?? a.updatedAt).getTime();
         const bTime = new Date(workspaceLastInteracted[b.id] ?? b.updatedAt).getTime();
         return bTime - aTime;
       })
       .slice(0, 4);
-  }, [archivedWorkspaceIds, logicalWorkspaces, workspaceLastInteracted]);
+  }, [archivedWorkspaceIds, hiddenRepoRootIds, logicalWorkspaces, workspaceLastInteracted]);
 
-  const repositories = useMemo(
-    () => buildSettingsRepositoryEntries(localWorkspaces, repoRoots),
-    [localWorkspaces, repoRoots],
-  );
+  const repositories = useMemo(() => {
+    const hiddenRepoRootIdSet = new Set(hiddenRepoRootIds);
+    return buildSettingsRepositoryEntries(
+      localWorkspaces.filter((workspace) =>
+        workspace.repoRootId ? !hiddenRepoRootIdSet.has(workspace.repoRootId) : true
+      ),
+      repoRoots.filter((repoRoot) => !hiddenRepoRootIdSet.has(repoRoot.id)),
+    );
+  }, [hiddenRepoRootIds, localWorkspaces, repoRoots]);
   const latestLogicalWorkspace = recentLogicalWorkspaces[0] ?? null;
   const latestWorkspace = latestLogicalWorkspace?.localWorkspace ?? null;
   const actionCards = useMemo(

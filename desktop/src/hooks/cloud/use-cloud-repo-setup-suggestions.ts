@@ -1,13 +1,13 @@
 import { useMemo } from "react";
 import type { SetupHint } from "@anyharness/sdk";
-import { useDetectProjectSetupQuery } from "@anyharness/sdk-react";
+import { useDetectRepoRootSetupQuery } from "@anyharness/sdk-react";
 
 const EMPTY_HINTS: SetupHint[] = [];
 
-export function useCloudRepoSetupSuggestions(repoWorkspaceId: string | null | undefined) {
-  const detectionQuery = useDetectProjectSetupQuery({
-    workspaceId: repoWorkspaceId ?? undefined,
-    enabled: !!repoWorkspaceId,
+export function useCloudRepoSetupSuggestions(repoRootId: string | null | undefined) {
+  const detectionQuery = useDetectRepoRootSetupQuery({
+    repoRootId: repoRootId ?? undefined,
+    enabled: !!repoRootId,
   });
 
   const suggestedPaths = useMemo(() => {

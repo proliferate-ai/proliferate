@@ -1,5 +1,6 @@
 import type { NewCloudWorkspaceSeed } from "@/lib/domain/workspaces/cloud-workspace-creation";
 import type {
+  SidebarEmptyState,
   SidebarGroupState,
 } from "@/lib/domain/workspaces/sidebar";
 import { BrailleSweepBadge } from "@/components/ui/icons";
@@ -10,7 +11,7 @@ import { WorkspaceItem } from "./WorkspaceItem";
 export const DEFAULT_REPO_GROUP_ITEM_LIMIT = 6;
 
 interface SidebarWorkspaceContentProps {
-  isEmpty: boolean;
+  emptyState: SidebarEmptyState;
   isLoading: boolean;
   groups: SidebarGroupState[];
   /**
@@ -27,7 +28,7 @@ interface SidebarWorkspaceContentProps {
   onToggleRepoExpansion: (sourceRoot: string) => void;
   cloudWorkspaceEnabled: boolean;
   cloudWorkspaceTooltip: string;
-  onCreateWorktreeWorkspace: (repoWorkspaceId: string | null) => void;
+  onCreateWorktreeWorkspace: (repoRootId: string | null) => void;
   onCreateLocalWorkspace: (sourceRoot: string | null) => void;
   onOpenCloudDialog: (cloudDialogState: NewCloudWorkspaceSeed) => void;
   onSelectWorkspace: (workspaceId: string) => void;
@@ -51,7 +52,7 @@ function SidebarLoadingState() {
 }
 
 export function SidebarWorkspaceContent({
-  isEmpty,
+  emptyState,
   isLoading,
   groups,
   explicitlyExpandedRepoKeys,
@@ -69,11 +70,11 @@ export function SidebarWorkspaceContent({
   onRemoveRepo,
   onOpenRepoSettings,
 }: SidebarWorkspaceContentProps) {
-  if (isLoading && isEmpty) {
+  if (isLoading && emptyState === "noWorkspaces") {
     return <SidebarLoadingState />;
   }
 
-  if (isEmpty) {
+  if (emptyState === "noWorkspaces") {
     return (
       <div className="px-3 py-6 text-center">
         <p className="text-xs text-sidebar-muted-foreground">
@@ -81,6 +82,19 @@ export function SidebarWorkspaceContent({
         </p>
         <p className="text-xs text-sidebar-muted-foreground mt-1">
           Add a repository to get started
+        </p>
+      </div>
+    );
+  }
+
+  if (emptyState === "filteredOut") {
+    return (
+      <div className="px-3 py-6 text-center">
+        <p className="text-xs text-sidebar-muted-foreground">
+          No workspaces match the current filters
+        </p>
+        <p className="text-xs text-sidebar-muted-foreground mt-1">
+          Adjust the sidebar filters to show more workspaces
         </p>
       </div>
     );
@@ -111,7 +125,7 @@ export function SidebarWorkspaceContent({
         name={group.name}
         sourceRoot={group.sourceRoot}
         count={group.items.length}
-        onNewWorkspace={() => onCreateWorktreeWorkspace(group.repoWorkspaceId)}
+        onNewWorkspace={() => onCreateWorktreeWorkspace(group.repoRootId)}
         onNewLocalWorkspace={() => onCreateLocalWorkspace(group.localSourceRoot)}
         cloudWorkspaceEnabled={cloudWorkspaceEnabled}
         cloudWorkspaceTooltip={cloudWorkspaceTooltip}
@@ -128,7 +142,7 @@ export function SidebarWorkspaceContent({
       >
         {group.items.length === 0 ? (
           <p className="px-3 py-2 text-xs text-sidebar-muted-foreground">
-            This workspace has no sessions.
+            This repository has no workspaces yet.
           </p>
         ) : (
           <>

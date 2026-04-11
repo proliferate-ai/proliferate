@@ -37,7 +37,7 @@ describe("runtime agent planning compatibility", () => {
       try {
         const resolved = await harness.client.workspaces.resolveFromPath(workspace.path);
         const session = await harness.client.sessions.create({
-          workspaceId: resolved.id,
+          workspaceId: resolved.workspace.id,
           agentKind,
         });
 
@@ -58,7 +58,7 @@ describe("runtime agent planning compatibility", () => {
       try {
         const resolved = await harness.client.workspaces.resolveFromPath(workspace.path);
         const session = await harness.client.sessions.create({
-          workspaceId: resolved.id,
+          workspaceId: resolved.workspace.id,
           agentKind: planningCase.agentKind,
         });
 

@@ -1,6 +1,6 @@
 {
-  "productName": "Proliferate Dev",
-  "identifier": "com.proliferate.app.dev",
+  "productName": "Proliferate Local",
+  "identifier": "com.proliferate.app.local",
   "app": {
     "windows": [
       {
@@ -19,7 +19,7 @@
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": ["proliferate-dev"]
+        "schemes": ["proliferate-local"]
       }
     },
     "updater": {

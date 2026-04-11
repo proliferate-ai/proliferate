@@ -94,6 +94,7 @@ export function WorkspaceArrivalAttachedPanel() {
     workspaceId: panelState?.kind === "cloud-status" ? panelState.workspaceId : "",
     mode: panelState?.kind === "cloud-status" ? panelState.model.mode : "pending",
   });
+  const rerunSetup = useRerunSetupMutation();
 
   if (!panelState) {
     return null;
@@ -102,8 +103,6 @@ export function WorkspaceArrivalAttachedPanel() {
   if (panelState.kind === "mobility") {
     return <WorkspaceMobilityAttachedPanel />;
   }
-
-  const rerunSetup = useRerunSetupMutation();
 
   if (panelState.kind === "arrival") {
     const { viewModel } = panelState;

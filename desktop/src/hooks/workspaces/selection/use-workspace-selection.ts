@@ -1,8 +1,11 @@
 import { useCallback } from "react";
+import { type CoworkStatus } from "@anyharness/sdk";
+import { anyHarnessCoworkStatusKey } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspaceBootstrapActions } from "@/hooks/workspaces/use-workspace-bootstrap-actions";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/integrations/cloud/client";
 import { buildLogicalWorkspaces } from "@/lib/domain/workspaces/logical-workspaces";
+import { buildStandardRepoProjection } from "@/lib/domain/workspaces/standard-projection";
 import { cloudMobilityWorkspacesKey } from "@/hooks/cloud/query-keys";
 import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/query-keys";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -30,11 +33,22 @@ export function useWorkspaceSelection() {
       const cloudMobilityWorkspaces = queryClient.getQueryData<CloudMobilityWorkspaceSummary[]>(
         cloudMobilityWorkspacesKey(),
       );
+      const coworkStatus = queryClient.getQueryData<CoworkStatus>(
+        anyHarnessCoworkStatusKey(runtimeUrl),
+      );
+      const standardProjection = workspaceCollections
+        ? buildStandardRepoProjection({
+          repoRoots: workspaceCollections.repoRoots,
+          localWorkspaces: workspaceCollections.localWorkspaces,
+          cloudWorkspaces: workspaceCollections.cloudWorkspaces,
+          coworkRootRepoRootId: coworkStatus?.root?.repoRootId ?? null,
+        })
+        : null;
       const logicalWorkspaces = workspaceCollections
         ? buildLogicalWorkspaces({
-          localWorkspaces: workspaceCollections.localWorkspaces,
-          repoRoots: workspaceCollections.repoRoots,
-          cloudWorkspaces: workspaceCollections.cloudWorkspaces,
+          localWorkspaces: standardProjection?.localWorkspaces ?? [],
+          repoRoots: standardProjection?.repoRoots ?? [],
+          cloudWorkspaces: standardProjection?.cloudWorkspaces ?? [],
           cloudMobilityWorkspaces,
           currentSelectionId: useHarnessStore.getState().selectedWorkspaceId,
         })
@@ -43,6 +57,7 @@ export function useWorkspaceSelection() {
       await runWorkspaceSelection({
         queryClient,
         logicalWorkspaces,
+        rawWorkspaces: workspaceCollections?.localWorkspaces ?? [],
         setSelectedLogicalWorkspaceId,
         setSelectedWorkspace,
         removeWorkspaceSlots,

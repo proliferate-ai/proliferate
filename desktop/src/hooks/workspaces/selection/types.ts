@@ -1,4 +1,5 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
+import type { Workspace } from "@anyharness/sdk";
 import type { WorkspaceSession } from "@/hooks/sessions/use-session-selection-actions";
 import type { QueryClient } from "@tanstack/react-query";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
@@ -25,6 +26,7 @@ export interface WorkspaceSelectionContext {
 export interface WorkspaceSelectionDeps {
   queryClient: QueryClient;
   logicalWorkspaces: LogicalWorkspace[];
+  rawWorkspaces: Workspace[];
   setSelectedLogicalWorkspaceId: (logicalWorkspaceId: string | null) => void;
   setSelectedWorkspace: (
     id: string,

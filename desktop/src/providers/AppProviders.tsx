@@ -1,4 +1,9 @@
-import { AnyHarnessRuntime, AnyHarnessWorkspace } from "@anyharness/sdk-react";
+import {
+  AnyHarnessRuntime,
+  AnyHarnessWorkspace,
+  anyHarnessCoworkStatusKey,
+} from "@anyharness/sdk-react";
+import type { CoworkStatus } from "@anyharness/sdk";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/integrations/cloud/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useCallback, type ReactNode } from "react";
@@ -10,6 +15,7 @@ import {
   logicalWorkspaceCloudMaterializationId,
   resolveLogicalWorkspaceMaterializationId,
 } from "@/lib/domain/workspaces/logical-workspaces";
+import { buildStandardRepoProjection } from "@/lib/domain/workspaces/standard-projection";
 import { cloudMobilityWorkspacesKey } from "@/hooks/cloud/query-keys";
 import { cloudWorkspaceConnectionQueryOptions } from "@/hooks/cloud/use-cloud-workspace-connection";
 import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/query-keys";
@@ -37,11 +43,22 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
       const cloudMobilityWorkspaces = appQueryClient.getQueryData<CloudMobilityWorkspaceSummary[]>(
         cloudMobilityWorkspacesKey(),
       );
+      const coworkStatus = appQueryClient.getQueryData<CoworkStatus>(
+        anyHarnessCoworkStatusKey(runtimeUrl),
+      );
+      const standardProjection = workspaceCollections
+        ? buildStandardRepoProjection({
+          repoRoots: workspaceCollections.repoRoots,
+          localWorkspaces: workspaceCollections.localWorkspaces,
+          cloudWorkspaces: workspaceCollections.cloudWorkspaces,
+          coworkRootRepoRootId: coworkStatus?.root?.repoRootId ?? null,
+        })
+        : null;
       const logicalWorkspaces = workspaceCollections
         ? buildLogicalWorkspaces({
-          localWorkspaces: workspaceCollections.localWorkspaces,
-          repoRoots: workspaceCollections.repoRoots,
-          cloudWorkspaces: workspaceCollections.cloudWorkspaces,
+          localWorkspaces: standardProjection?.localWorkspaces ?? [],
+          repoRoots: standardProjection?.repoRoots ?? [],
+          cloudWorkspaces: standardProjection?.cloudWorkspaces ?? [],
           cloudMobilityWorkspaces,
           currentSelectionId: selectedWorkspaceId,
         })

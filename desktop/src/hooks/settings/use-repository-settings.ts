@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { GitBranchRef } from "@anyharness/sdk";
-import { useGitBranchesQuery } from "@anyharness/sdk-react";
+import {
+  useRepoRootGitBranchesQuery,
+} from "@anyharness/sdk-react";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 
@@ -24,8 +26,8 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     sourceRoot ? state.repoConfigs[sourceRoot] : undefined,
   );
   const setRepoConfig = useRepoPreferencesStore((state) => state.setRepoConfig);
-  const { data: branchRefs = EMPTY_BRANCHES } = useGitBranchesQuery({
-    workspaceId: repository?.repoWorkspaceId ?? null,
+  const { data: branchRefs = EMPTY_BRANCHES } = useRepoRootGitBranchesQuery({
+    repoRootId: repository?.repoRootId ?? null,
     enabled: !!repository,
   });
 

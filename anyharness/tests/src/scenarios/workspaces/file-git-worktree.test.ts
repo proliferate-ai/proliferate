@@ -20,36 +20,38 @@ describe("runtime workspace operations", () => {
 
     try {
       const resolved = await harness.client.workspaces.resolveFromPath(workspace.path);
+      const workspaceId = resolved.workspace.id;
+      const repoRootId = resolved.repoRoot.id;
 
-      const write = await harness.client.files.write(resolved.id, {
+      const write = await harness.client.files.write(workspaceId, {
         path: "notes.txt",
         content: "hello from anyharness\n",
         expectedVersionToken: "",
       });
       expect(write.path).toBe("notes.txt");
 
-      const read = await harness.client.files.read(resolved.id, "notes.txt");
+      const read = await harness.client.files.read(workspaceId, "notes.txt");
       expect(read.content).toBe("hello from anyharness\n");
 
-      const statusBeforeStage = await harness.client.git.getStatus(resolved.id);
+      const statusBeforeStage = await harness.client.git.getStatus(workspaceId);
       expect(statusBeforeStage.files.length).toBeGreaterThan(0);
 
-      await harness.client.git.stagePaths(resolved.id, ["notes.txt"]);
-      const commit = await harness.client.git.commit(resolved.id, {
+      await harness.client.git.stagePaths(workspaceId, ["notes.txt"]);
+      const commit = await harness.client.git.commit(workspaceId, {
         summary: "Add notes",
       });
       expect(commit.summary).toBe("Add notes");
 
-      const statusAfterCommit = await harness.client.git.getStatus(resolved.id);
+      const statusAfterCommit = await harness.client.git.getStatus(workspaceId);
       expect(statusAfterCommit.files.length).toBe(0);
 
       const worktreeResponse = await harness.client.workspaces.createWorktree({
-        sourceWorkspaceId: resolved.id,
+        repoRootId,
         targetPath: worktreePath,
         newBranchName: "feature/test-worktree",
       });
       expect(worktreeResponse.workspace.kind).toBe("worktree");
-      expect(worktreeResponse.workspace.sourceWorkspaceId).toBe(resolved.id);
+      expect(worktreeResponse.workspace.repoRootId).toBe(repoRootId);
     } finally {
       if (workspace.pathAccess === "local") {
         await rm(worktreePath, { recursive: true, force: true });

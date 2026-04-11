@@ -171,18 +171,22 @@ impl MobilityService {
         }
 
         let default_branch = if workspace.kind == "local" {
+            let repo_root_id = workspace.repo_root_id.clone().ok_or_else(|| {
+                MobilityError::Internal(anyhow::anyhow!(
+                    "workspace missing repo_root_id: {}",
+                    workspace.id
+                ))
+            })?;
             match self
                 .workspace_runtime
-                .resolve_repo_root_default_branch(&workspace.effective_repo_root_id())
+                .resolve_repo_root_default_branch(&repo_root_id)
             {
                 Ok(branch) => Some(branch),
                 Err(_) => {
                     blockers.push(MobilityBlocker {
                         code: "default_branch_unknown".to_string(),
-                        message: (
-                            "Main local workspaces require a resolved repo default branch "
-                                .to_string()
-                        ),
+                        message: ("Main local workspaces require a resolved repo default branch "
+                            .to_string()),
                         session_id: None,
                     });
                     None
@@ -204,10 +208,8 @@ impl MobilityService {
             match workspace_is_clean(&repo_root) {
                 Ok(false) => blockers.push(MobilityBlocker {
                     code: "workspace_dirty".to_string(),
-                    message: (
-                        "Main local workspaces must be committed and clean before moving"
-                            .to_string()
-                    ),
+                    message: ("Main local workspaces must be committed and clean before moving"
+                        .to_string()),
                     session_id: None,
                 }),
                 Ok(true) => {}
@@ -427,9 +429,15 @@ impl MobilityService {
         let workspace = self.load_workspace(workspace_id)?;
         let workspace_path = PathBuf::from(&workspace.path);
         let default_branch = if workspace.kind == "local" {
+            let repo_root_id = workspace.repo_root_id.clone().ok_or_else(|| {
+                MobilityError::Internal(anyhow::anyhow!(
+                    "workspace missing repo_root_id: {}",
+                    workspace.id
+                ))
+            })?;
             Some(
                 self.workspace_runtime
-                    .resolve_repo_root_default_branch(&workspace.effective_repo_root_id())
+                    .resolve_repo_root_default_branch(&repo_root_id)
                     .map_err(MobilityError::Internal)?,
             )
         } else {
@@ -637,9 +645,12 @@ fn is_active_terminal(terminal: &TerminalRecord) -> bool {
 }
 
 fn workspace_is_clean(repo_root: &Path) -> anyhow::Result<bool> {
-    Ok(run_git_ok(repo_root, &["status", "--porcelain", "--untracked-files=all"])?
-        .trim()
-        .is_empty())
+    Ok(run_git_ok(
+        repo_root,
+        &["status", "--porcelain", "--untracked-files=all"],
+    )?
+    .trim()
+    .is_empty())
 }
 
 fn map_access_error(error: WorkspaceAccessError) -> MobilityError {

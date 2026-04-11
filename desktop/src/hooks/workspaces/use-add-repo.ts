@@ -1,5 +1,5 @@
 import { AnyHarnessError } from "@anyharness/sdk";
-import { useResolveWorkspaceFromPathMutation } from "@anyharness/sdk-react";
+import { useResolveRepoRootFromPathMutation } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { useLocation } from "react-router-dom";
@@ -15,8 +15,10 @@ import { ensureRuntimeReady } from "./runtime-ready";
 function describeAddRepoFailure(error: unknown): string {
   if (error instanceof AnyHarnessError) {
     switch (error.problem.code) {
+      case "REPO_ROOT_NOT_GIT_REPO":
       case "REPO_WORKSPACE_NOT_GIT_REPO":
         return "Selected folder is not a Git repository.";
+      case "REPO_ROOT_WORKTREE_UNSUPPORTED":
       case "REPO_WORKSPACE_WORKTREE_UNSUPPORTED":
         return "Select the main repository root, not a worktree.";
       default:
@@ -36,8 +38,8 @@ export function useAddRepo() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { isHydrated, requiresSetup } = useSetupRequirements();
-  const resolveWorkspaceFromPath = useResolveWorkspaceFromPathMutation().mutateAsync;
-  const unarchiveWorkspace = useWorkspaceUiStore((state) => state.unarchiveWorkspace);
+  const resolveRepoRootFromPath = useResolveRepoRootFromPathMutation().mutateAsync;
+  const unhideRepoRoot = useWorkspaceUiStore((state) => state.unhideRepoRoot);
   const openRepoSetupModal = useRepoSetupModalStore((state) => state.open);
   const showToast = useToastStore((state) => state.show);
   const [isAddingRepo, setIsAddingRepo] = useState(false);
@@ -54,8 +56,8 @@ export function useAddRepo() {
         path,
         queryClient,
         ensureRuntimeReady,
-        resolveWorkspaceFromPath: (repoPath) => resolveWorkspaceFromPath(repoPath),
-        unarchiveWorkspace,
+        resolveRepoRootFromPath: (repoPath) => resolveRepoRootFromPath(repoPath),
+        unhideRepoRoot,
         openRepoSetupModal,
         workspaceCollectionsScopeKey,
       });
@@ -64,7 +66,7 @@ export function useAddRepo() {
     } finally {
       setIsAddingRepo(false);
     }
-  }, [canAddRepo, openRepoSetupModal, queryClient, resolveWorkspaceFromPath, showToast, unarchiveWorkspace]);
+  }, [canAddRepo, openRepoSetupModal, queryClient, resolveRepoRootFromPath, showToast, unhideRepoRoot]);
 
   const addRepoFromPicker = useCallback(async () => {
     if (!canAddRepo) {

@@ -3,28 +3,28 @@ import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspace
 import { useCloudMobilityWorkspaces } from "@/hooks/cloud/use-cloud-mobility-workspaces";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { buildLogicalWorkspaces } from "@/lib/domain/workspaces/logical-workspaces";
-import { useWorkspaces } from "./use-workspaces";
+import { useStandardRepoProjection } from "./use-standard-repo-projection";
 
 const EMPTY_LOGICAL_WORKSPACES: LogicalWorkspace[] = [];
 
 export function useLogicalWorkspaces() {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const { data: workspaceCollections, isLoading } = useWorkspaces();
+  const { repoRoots, localWorkspaces, cloudWorkspaces, isLoading } = useStandardRepoProjection();
   const { data: cloudMobilityWorkspaces } = useCloudMobilityWorkspaces();
 
   const logicalWorkspaces = useMemo(() => {
-    if (!workspaceCollections) {
+    if (repoRoots.length === 0 && localWorkspaces.length === 0 && cloudWorkspaces.length === 0) {
       return EMPTY_LOGICAL_WORKSPACES;
     }
 
     return buildLogicalWorkspaces({
-      localWorkspaces: workspaceCollections.localWorkspaces,
-      repoRoots: workspaceCollections.repoRoots,
-      cloudWorkspaces: workspaceCollections.cloudWorkspaces,
+      localWorkspaces,
+      repoRoots,
+      cloudWorkspaces,
       cloudMobilityWorkspaces,
       currentSelectionId: selectedWorkspaceId,
     });
-  }, [cloudMobilityWorkspaces, selectedWorkspaceId, workspaceCollections]);
+  }, [cloudMobilityWorkspaces, cloudWorkspaces, localWorkspaces, repoRoots, selectedWorkspaceId]);
 
   return {
     logicalWorkspaces,

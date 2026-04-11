@@ -60,7 +60,7 @@ function normalizeWorktreeInput(
 
   if (typeof input === "string") {
     return {
-      sourceWorkspaceId: input,
+      repoRootId: input,
       workspaceName: generateWorkspaceSlug(existingBasenames),
     };
   }
@@ -301,9 +301,13 @@ export function useWorkspaceEntryActions() {
     options?: { lightweight?: boolean; latencyFlowId?: string | null },
   ) => {
     const startedAt = startLatencyTimer();
-    const allWorkspaces = workspaceCollections?.workspaces ?? [];
-    const sourceWorkspaceId = typeof input === "string" ? input : input.sourceWorkspaceId;
-    const source = allWorkspaces.find((workspace) => workspace.id === sourceWorkspaceId) ?? null;
+    const allWorkspaces = workspaceCollections?.localWorkspaces ?? [];
+    const repoRootId = typeof input === "string" ? input : input.repoRootId;
+    const sourceWorkspaceId = typeof input === "string" ? null : input.sourceWorkspaceId ?? null;
+    const source = sourceWorkspaceId
+      ? allWorkspaces.find((workspace) => workspace.id === sourceWorkspaceId) ?? null
+      : allWorkspaces.find((workspace) => workspace.repoRootId === repoRootId && workspace.kind === "local")
+        ?? allWorkspaces.find((workspace) => workspace.repoRootId === repoRootId) ?? null;
     const normalizedInput = normalizeWorktreeInput(input, source, allWorkspaces);
 
     // Lightweight path: skip pending shell, keep current workspace visible.
@@ -353,13 +357,15 @@ export function useWorkspaceEntryActions() {
       const resolveStartedAt = startLatencyTimer();
       logLatency("workspace.worktree.resolve.start", {
         attemptId: entry.attemptId,
-        sourceWorkspaceId: normalizedInput.sourceWorkspaceId,
+        repoRootId: normalizedInput.repoRootId,
+        sourceWorkspaceId: normalizedInput.sourceWorkspaceId ?? null,
       });
       const resolved = await resolveWorktreeCreationInput(normalizedInput);
       params = resolved.params;
       logLatency("workspace.worktree.resolve.success", {
         attemptId: entry.attemptId,
-        sourceWorkspaceId: normalizedInput.sourceWorkspaceId,
+        repoRootId: normalizedInput.repoRootId,
+        sourceWorkspaceId: normalizedInput.sourceWorkspaceId ?? null,
         repoLabel: resolved.repoName,
         branchName: resolved.params.branchName,
         baseRef: resolved.params.baseRef,
@@ -381,7 +387,8 @@ export function useWorkspaceEntryActions() {
       const createStartedAt = startLatencyTimer();
       logLatency("workspace.worktree.create.request.start", {
         attemptId: entry.attemptId,
-        sourceWorkspaceId: normalizedInput.sourceWorkspaceId,
+        repoRootId: normalizedInput.repoRootId,
+        sourceWorkspaceId: normalizedInput.sourceWorkspaceId ?? null,
         targetPath: resolved.params.targetPath,
         branchName: resolved.params.branchName,
         baseRef: resolved.params.baseRef,
