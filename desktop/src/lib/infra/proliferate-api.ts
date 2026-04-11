@@ -1,18 +1,31 @@
 import { OFFICIAL_HOSTED_API_ORIGINS } from "@/config/capabilities";
-import { getDesktopAppConfig } from "@/platform/tauri/config";
+import {
+  type DesktopAppConfig,
+  getDesktopAppConfig,
+} from "@/platform/tauri/config";
 
 const DEFAULT_PROLIFERATE_API_BASE_URL = "http://127.0.0.1:8000";
+const DEFAULT_DESKTOP_APP_CONFIG: DesktopAppConfig = {
+  apiBaseUrl: null,
+  telemetryDisabled: false,
+  nativeDevProfile: false,
+};
 let runtimeApiBaseUrl: string | null = null;
+let runtimeAppConfig: DesktopAppConfig = DEFAULT_DESKTOP_APP_CONFIG;
 
 function normalizeBaseUrl(raw: string): string {
   return raw.trim().replace(/\/$/, "");
 }
 
 export async function bootstrapProliferateApiConfig(): Promise<void> {
-  const config = await getDesktopAppConfig();
-  runtimeApiBaseUrl = config.apiBaseUrl
-    ? normalizeBaseUrl(config.apiBaseUrl)
+  runtimeAppConfig = await getDesktopAppConfig();
+  runtimeApiBaseUrl = runtimeAppConfig.apiBaseUrl
+    ? normalizeBaseUrl(runtimeAppConfig.apiBaseUrl)
     : null;
+}
+
+export function getRuntimeDesktopAppConfig(): DesktopAppConfig {
+  return runtimeAppConfig;
 }
 
 export function getProliferateApiBaseUrl(): string {

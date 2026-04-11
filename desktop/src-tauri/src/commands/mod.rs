@@ -1,3 +1,4 @@
+pub mod anonymous_telemetry;
 pub mod config;
 pub mod keychain;
 pub mod mcp_oauth;

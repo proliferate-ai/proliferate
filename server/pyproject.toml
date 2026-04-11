@@ -20,7 +20,6 @@ dependencies = [
     "python-multipart>=0.0.18",
     "e2b>=1.5.6",
     "daytona>=0.29.0",
-    "posthog>=6.7.6",
     "sentry-sdk[fastapi]>=2.28.0",
 ]
 
@@ -63,7 +62,7 @@ disallow_untyped_defs = true
 disallow_any_explicit = true
 
 [[tool.mypy.overrides]]
-# integrations/ wraps untyped third-party SDKs (e2b, sentry, posthog) where
+# integrations/ wraps untyped third-party SDKs (e2b, sentry) where
 # Any is the only honest annotation at the adapter boundary. Sentry uses
 # conditional imports that produce assignment/misc errors due to optional deps.
 module = ["proliferate.integrations.*"]

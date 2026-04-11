@@ -1,3 +1,5 @@
+import { buildProliferateApiUrl } from "@/lib/infra/proliferate-api";
+
 function envFlagEnabled(value: string | undefined, defaultValue: boolean): boolean {
   if (value === undefined) return defaultValue;
   const normalized = value.trim().toLowerCase();
@@ -14,7 +16,6 @@ function envFloat(value: string | undefined, defaultValue: number): number {
 }
 
 export interface DesktopTelemetryConfig {
-  disabled: boolean;
   environment: string;
   release: string;
   sentry: {
@@ -36,7 +37,6 @@ export function getDesktopTelemetryConfig(): DesktopTelemetryConfig {
   const posthogKey = import.meta.env.VITE_PROLIFERATE_POSTHOG_KEY?.trim() || null;
 
   return {
-    disabled: envFlagEnabled(import.meta.env.VITE_PROLIFERATE_TELEMETRY_DISABLED, false),
     environment:
       import.meta.env.VITE_PROLIFERATE_ENVIRONMENT?.trim()
       || (import.meta.env.DEV ? "development" : "trusted-beta"),
@@ -67,4 +67,15 @@ export function getDesktopTelemetryConfig(): DesktopTelemetryConfig {
       ),
     },
   };
+}
+
+export function isBuildTelemetryDisabled(): boolean {
+  return envFlagEnabled(import.meta.env.VITE_PROLIFERATE_TELEMETRY_DISABLED, false);
+}
+
+export function getAnonymousTelemetryEndpoint(): string {
+  return (
+    import.meta.env.VITE_PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT?.trim()
+    || buildProliferateApiUrl("/v1/telemetry/anonymous")
+  );
 }

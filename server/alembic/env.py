@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import context
 from proliferate.config import settings
+import proliferate.db.models.anonymous_telemetry  # noqa: F401
 from proliferate.db.models.base import Base
 
 config = context.config

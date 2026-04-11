@@ -15,6 +15,10 @@ except ImportError:  # pragma: no cover - optional dependency in local/test envs
     StarletteIntegration = None
 
 from proliferate.config import settings
+from proliferate.utils.telemetry_mode import (
+    get_server_telemetry_mode,
+    is_vendor_telemetry_enabled,
+)
 from proliferate.utils.telemetry_scrub import scrub_mapping, scrub_text
 
 _sentry_initialized = False
@@ -76,14 +80,19 @@ def _scrub_event(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]
 def init_server_sentry() -> None:
     global _sentry_initialized
 
-    if _sentry_initialized or not settings.sentry_dsn or sentry_sdk is None:
+    if (
+        _sentry_initialized
+        or not settings.sentry_dsn
+        or sentry_sdk is None
+        or not is_vendor_telemetry_enabled()
+    ):
         return
 
     _sentry_initialized = True
 
     logging_integration = LoggingIntegration(
         level=logging.INFO,
-        event_level=logging.ERROR,
+        event_level=None,
     )
 
     sentry_sdk.init(
@@ -103,34 +112,65 @@ def init_server_sentry() -> None:
         before_breadcrumb=_scrub_breadcrumb,
     )
     sentry_sdk.set_tag("surface", "cloud_api")
+    sentry_sdk.set_tag("telemetry_mode", get_server_telemetry_mode())
 
 
-def set_server_sentry_user(
-    user_id: str,
-    email: str,
-    display_name: str | None,
-) -> None:
-    if not settings.sentry_dsn or sentry_sdk is None:
+def set_server_sentry_user(user_id: str) -> None:
+    if not settings.sentry_dsn or sentry_sdk is None or not is_vendor_telemetry_enabled():
         return
 
     sentry_sdk.set_user(
         {
             "id": user_id,
-            "email": email,
-            "username": display_name,
         }
     )
 
 
 def set_server_sentry_tag(key: str, value: str) -> None:
-    if not settings.sentry_dsn or sentry_sdk is None:
+    if not settings.sentry_dsn or sentry_sdk is None or not is_vendor_telemetry_enabled():
         return
 
     sentry_sdk.set_tag(key, value)
 
 
+def capture_server_sentry_exception(
+    error: Any,
+    *,
+    level: str | None = None,
+    tags: dict[str, str] | None = None,
+    extras: dict[str, Any] | None = None,
+    fingerprint: list[str] | None = None,
+) -> None:
+    if not settings.sentry_dsn or sentry_sdk is None or not is_vendor_telemetry_enabled():
+        return
+
+    normalized = (
+        error
+        if isinstance(error, Exception)
+        else Exception(str(error or "Unknown error"))
+    )
+
+    with sentry_sdk.push_scope() as scope:
+        if level is not None:
+            scope.level = level
+
+        if fingerprint is not None:
+            scope.fingerprint = fingerprint
+
+        if tags:
+            for key, value in tags.items():
+                scope.set_tag(key, value)
+
+        if extras:
+            for key, value in extras.items():
+                scrubbed = scrub_mapping({key: value}) or {}
+                scope.set_extra(key, scrubbed.get(key))
+
+        sentry_sdk.capture_exception(normalized)
+
+
 def flush_server_sentry(timeout: float = 2.0) -> None:
-    if not settings.sentry_dsn or sentry_sdk is None:
+    if not settings.sentry_dsn or sentry_sdk is None or not is_vendor_telemetry_enabled():
         return
 
     sentry_sdk.flush(timeout=timeout)

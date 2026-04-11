@@ -13,6 +13,7 @@ from uuid import UUID
 from proliferate.config import settings
 from proliferate.integrations.sandbox import SandboxProvider, SandboxRuntimeContext
 from proliferate.server.cloud.runtime.credentials import ProvisionCredentials
+from proliferate.utils.telemetry_mode import is_vendor_telemetry_enabled
 from proliferate.server.cloud.runtime.sandbox_exec import (
     assert_command_succeeded,
     result_exit_code,
@@ -59,13 +60,14 @@ def build_runtime_env(
     repo_env_vars: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
     env: dict[str, str] = {"ANYHARNESS_DEV_CORS": "1"}
-    if _runtime_sentry_dsn():
+    if is_vendor_telemetry_enabled() and _runtime_sentry_dsn():
         env["ANYHARNESS_SENTRY_DSN"] = _runtime_sentry_dsn()
-    if _runtime_sentry_environment():
+    if is_vendor_telemetry_enabled() and _runtime_sentry_environment():
         env["ANYHARNESS_SENTRY_ENVIRONMENT"] = _runtime_sentry_environment()
-    if _runtime_sentry_release():
+    if is_vendor_telemetry_enabled() and _runtime_sentry_release():
         env["ANYHARNESS_SENTRY_RELEASE"] = _runtime_sentry_release()
-    env["ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE"] = str(_runtime_sentry_traces_sample_rate())
+    if is_vendor_telemetry_enabled():
+        env["ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE"] = str(_runtime_sentry_traces_sample_rate())
     for item in credentials.iter_env_vars():
         env[item.name] = item.value
     env["ANYHARNESS_BEARER_TOKEN"] = runtime_token

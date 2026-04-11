@@ -931,6 +931,9 @@ Resources:
                 # Leave blank to auto-generate and persist on first bootstrap.
                 JWT_SECRET=
                 CLOUD_SECRET_KEY=
+                PROLIFERATE_TELEMETRY_MODE=self_managed
+                PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT=https://api.proliferate.com/v1/telemetry/anonymous
+                PROLIFERATE_ANONYMOUS_TELEMETRY_DISABLED=false
                 CORS_ALLOW_ORIGINS=http://localhost:1420,http://127.0.0.1:1420,http://localhost:3000,http://127.0.0.1:3000,http://tauri.localhost,tauri://localhost
                 # For advanced auth-flow overrides such as DESKTOP_GITHUB_AUTH_ENABLED,
                 # DESKTOP_REDIRECT_SCHEME, or token lifetimes, see
@@ -952,8 +955,6 @@ Resources:
                 STRIPE_CHECKOUT_SUCCESS_URL=
                 STRIPE_CHECKOUT_CANCEL_URL=
                 STRIPE_CUSTOMER_PORTAL_RETURN_URL=
-                POSTHOG_PROJECT_API_KEY=
-                POSTHOG_HOST=https://us.i.posthog.com
                 SENTRY_DSN=
                 SENTRY_ENVIRONMENT=self-hosted
                 SENTRY_RELEASE=proliferate-server@self-hosted

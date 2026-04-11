@@ -3,7 +3,10 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { bootstrapProliferateApiConfig } from "./lib/infra/proliferate-api";
+import { initializeAnonymousTelemetry } from "./lib/integrations/telemetry/anonymous";
+import { getAnonymousTelemetryEndpoint } from "./lib/integrations/telemetry/config";
 import {
+  getDesktopTelemetryRuntimeState,
   getDesktopTelemetryRootHandlers,
   initializeDesktopTelemetry,
 } from "./lib/integrations/telemetry/client";
@@ -63,8 +66,6 @@ if (!import.meta.env.DEV) {
   });
 }
 
-initializeDesktopTelemetry();
-
 function renderApp() {
   ReactDOM.createRoot(
     document.getElementById("root") as HTMLElement,
@@ -80,8 +81,28 @@ function renderApp() {
   );
 }
 
-void bootstrapProliferateApiConfig()
-  .catch(() => {
+void (async () => {
+  try {
+    await bootstrapProliferateApiConfig();
+  } catch {
     // Fall back to env/default resolution when no runtime override is available.
-  })
-  .finally(renderApp);
+  }
+
+  initializeDesktopTelemetry();
+
+  const runtimeState = getDesktopTelemetryRuntimeState();
+  if (runtimeState.anonymousEnabled) {
+    try {
+      await initializeAnonymousTelemetry({
+        endpoint: getAnonymousTelemetryEndpoint(),
+        telemetryMode: runtimeState.telemetryMode,
+      });
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn("Failed to initialize anonymous telemetry", error);
+      }
+    }
+  }
+
+  renderApp();
+})();

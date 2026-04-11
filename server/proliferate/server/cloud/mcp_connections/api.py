@@ -15,7 +15,6 @@ from proliferate.server.cloud.mcp_connections.service import (
     list_cloud_mcp_connection_statuses,
     sync_cloud_mcp_connection_for_user,
 )
-from proliferate.utils.telemetry import track_cloud_event
 
 router = APIRouter()
 
@@ -36,24 +35,7 @@ async def sync_cloud_mcp_connection_endpoint(
     try:
         await sync_cloud_mcp_connection_for_user(user.id, connection_id, body)
     except CloudApiError as error:
-        track_cloud_event(
-            user,
-            "cloud_api_mcp_connection_sync",
-            {
-                "outcome": "failure",
-                "status_code": error.status_code,
-                "error_code": error.code,
-            },
-        )
         raise_cloud_error(error)
-    track_cloud_event(
-        user,
-        "cloud_api_mcp_connection_sync",
-        {
-            "outcome": "success",
-            "catalog_entry_id": body.catalog_entry_id,
-        },
-    )
     return OkResponse()
 
 
@@ -65,21 +47,5 @@ async def delete_cloud_mcp_connection_endpoint(
     try:
         await delete_cloud_mcp_connection_for_user(user.id, connection_id)
     except CloudApiError as error:
-        track_cloud_event(
-            user,
-            "cloud_api_mcp_connection_delete",
-            {
-                "outcome": "failure",
-                "status_code": error.status_code,
-                "error_code": error.code,
-            },
-        )
         raise_cloud_error(error)
-    track_cloud_event(
-        user,
-        "cloud_api_mcp_connection_delete",
-        {
-            "outcome": "success",
-        },
-    )
     return OkResponse()

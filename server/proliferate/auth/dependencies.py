@@ -21,9 +21,5 @@ _current_active_user = fastapi_users.current_user(active=True)
 async def current_active_user(
     user: User = Depends(_current_active_user),
 ) -> User:
-    set_server_sentry_user(
-        user_id=str(user.id),
-        email=user.email,
-        display_name=user.display_name,
-    )
+    set_server_sentry_user(user_id=str(user.id))
     return user

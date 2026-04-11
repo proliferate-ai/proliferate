@@ -27,7 +27,6 @@ from proliferate.server.cloud.workspaces.service import (
     sync_cloud_workspace_credentials,
     sync_cloud_workspace_display_name,
 )
-from proliferate.utils.telemetry import track_cloud_event
 
 router = APIRouter()
 
@@ -55,28 +54,7 @@ async def create_cloud_workspace_endpoint(
             display_name=body.display_name,
         )
     except CloudApiError as error:
-        track_cloud_event(
-            user,
-            "cloud_api_workspace_create",
-            {
-                "outcome": "failure",
-                "git_provider": body.git_provider,
-                "status_code": error.status_code,
-                "error_code": error.code,
-            },
-        )
         raise_cloud_error(error)
-    track_cloud_event(
-        user,
-        "cloud_api_workspace_create",
-        {
-            "outcome": "success",
-            "git_provider": body.git_provider,
-            "workspace_status": payload.status,
-            "runtime_generation": payload.runtime_generation,
-            "has_display_name": body.display_name is not None,
-        },
-    )
     return payload
 
 
@@ -110,25 +88,7 @@ async def start_cloud_workspace_endpoint(
     try:
         payload = await start_cloud_workspace(user, workspace_id)
     except CloudApiError as error:
-        track_cloud_event(
-            user,
-            "cloud_api_workspace_start",
-            {
-                "outcome": "failure",
-                "status_code": error.status_code,
-                "error_code": error.code,
-            },
-        )
         raise_cloud_error(error)
-    track_cloud_event(
-        user,
-        "cloud_api_workspace_start",
-        {
-            "outcome": "success",
-            "workspace_status": payload.status,
-            "runtime_generation": payload.runtime_generation,
-        },
-    )
     return payload
 
 
@@ -145,26 +105,7 @@ async def update_cloud_workspace_branch_endpoint(
             branch_name=body.branch_name,
         )
     except CloudApiError as error:
-        track_cloud_event(
-            user,
-            "cloud_api_workspace_branch_sync",
-            {
-                "outcome": "failure",
-                "status_code": error.status_code,
-                "error_code": error.code,
-            },
-        )
         raise_cloud_error(error)
-
-    track_cloud_event(
-        user,
-        "cloud_api_workspace_branch_sync",
-        {
-            "outcome": "success",
-            "workspace_status": payload.status,
-            "runtime_generation": payload.runtime_generation,
-        },
-    )
     return payload
 
 
@@ -181,25 +122,7 @@ async def update_cloud_workspace_display_name_endpoint(
             display_name=body.display_name,
         )
     except CloudApiError as error:
-        track_cloud_event(
-            user,
-            "cloud_api_workspace_display_name_set",
-            {
-                "outcome": "failure",
-                "status_code": error.status_code,
-                "error_code": error.code,
-            },
-        )
         raise_cloud_error(error)
-
-    track_cloud_event(
-        user,
-        "cloud_api_workspace_display_name_set",
-        {
-            "outcome": "success",
-            "cleared": body.display_name is None or not body.display_name.strip(),
-        },
-    )
     return payload
 
 
@@ -211,25 +134,7 @@ async def sync_cloud_workspace_credentials_endpoint(
     try:
         payload = await sync_cloud_workspace_credentials(user.id, workspace_id)
     except CloudApiError as error:
-        track_cloud_event(
-            user,
-            "cloud_api_workspace_sync_credentials",
-            {
-                "outcome": "failure",
-                "status_code": error.status_code,
-                "error_code": error.code,
-            },
-        )
         raise_cloud_error(error)
-    track_cloud_event(
-        user,
-        "cloud_api_workspace_sync_credentials",
-        {
-            "outcome": "success",
-            "workspace_status": payload.status,
-            "runtime_generation": payload.runtime_generation,
-        },
-    )
     return payload
 
 
@@ -241,25 +146,7 @@ async def stop_cloud_workspace_endpoint(
     try:
         payload = await stop_cloud_workspace(user.id, workspace_id)
     except CloudApiError as error:
-        track_cloud_event(
-            user,
-            "cloud_api_workspace_stop",
-            {
-                "outcome": "failure",
-                "status_code": error.status_code,
-                "error_code": error.code,
-            },
-        )
         raise_cloud_error(error)
-    track_cloud_event(
-        user,
-        "cloud_api_workspace_stop",
-        {
-            "outcome": "success",
-            "workspace_status": payload.status,
-            "runtime_generation": payload.runtime_generation,
-        },
-    )
     return payload
 
 
@@ -271,21 +158,5 @@ async def delete_cloud_workspace_endpoint(
     try:
         await delete_cloud_workspace(user.id, workspace_id)
     except CloudApiError as error:
-        track_cloud_event(
-            user,
-            "cloud_api_workspace_delete",
-            {
-                "outcome": "failure",
-                "status_code": error.status_code,
-                "error_code": error.code,
-            },
-        )
         raise_cloud_error(error)
-    track_cloud_event(
-        user,
-        "cloud_api_workspace_delete",
-        {
-            "outcome": "success",
-        },
-    )
     return {"ok": True}

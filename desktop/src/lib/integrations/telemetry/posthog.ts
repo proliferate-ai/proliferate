@@ -1,20 +1,23 @@
 import posthog from "posthog-js";
 import type { PostHogInterface } from "posthog-js/lib/src/types";
-import { getDesktopTelemetryConfig } from "./config";
+import type { DesktopTelemetryConfig } from "./config";
 import type { DesktopProductEventMap } from "@/lib/domain/telemetry/events";
 import { scrubTelemetryData } from "./scrub";
 
-const config = getDesktopTelemetryConfig();
-
 let posthogInitialized = false;
 
-export function initializeDesktopPostHog(): void {
-  if (posthogInitialized) return;
-  posthogInitialized = true;
+interface DesktopPostHogInitConfig {
+  posthog: DesktopTelemetryConfig["posthog"];
+}
 
-  if (config.disabled || !config.posthog.enabled || !config.posthog.apiKey) {
+export function initializeDesktopPostHog(config: DesktopPostHogInitConfig): void {
+  if (posthogInitialized) return;
+
+  if (!config.posthog.enabled || !config.posthog.apiKey) {
     return;
   }
+
+  posthogInitialized = true;
 
   posthog.init(config.posthog.apiKey, {
     api_host: config.posthog.apiHost,
@@ -42,7 +45,7 @@ export function trackDesktopPostHogEvent<E extends keyof DesktopProductEventMap>
   name: E,
   properties: DesktopProductEventMap[E],
 ): void {
-  if (config.disabled || !config.posthog.enabled) return;
+  if (!posthogInitialized) return;
   posthog.capture(name, scrubTelemetryData(properties));
 }
 
@@ -51,7 +54,7 @@ export function identifyDesktopPostHogUser(user: {
   email: string;
   display_name: string | null;
 }): void {
-  if (config.disabled || !config.posthog.enabled) return;
+  if (!posthogInitialized) return;
 
   posthog.identify(
     user.id,
@@ -63,6 +66,6 @@ export function identifyDesktopPostHogUser(user: {
 }
 
 export function resetDesktopPostHogUser(): void {
-  if (config.disabled || !config.posthog.enabled) return;
+  if (!posthogInitialized) return;
   posthog.reset(true);
 }

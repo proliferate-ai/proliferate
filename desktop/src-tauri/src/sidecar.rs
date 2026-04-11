@@ -5,6 +5,8 @@ use std::time::Duration;
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 
+use crate::desktop_telemetry_mode::{resolve_desktop_telemetry_mode, DesktopTelemetryMode};
+
 const DEFAULT_HOST: &str = "127.0.0.1";
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const HEALTH_POLL_TIMEOUT: Duration = Duration::from_secs(60);
@@ -206,7 +208,17 @@ fn env_value(key: &str) -> Option<String> {
         })
 }
 
-fn default_anyharness_launch_env() -> HashMap<String, String> {
+fn default_anyharness_launch_env_for_mode<F>(
+    mode: DesktopTelemetryMode,
+    env_lookup: F,
+) -> HashMap<String, String>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    if mode != DesktopTelemetryMode::HostedProduct {
+        return HashMap::new();
+    }
+
     let mut env = HashMap::new();
 
     if should_use_local_proliferate_home(cfg!(debug_assertions)) {
@@ -219,7 +231,7 @@ fn default_anyharness_launch_env() -> HashMap<String, String> {
         "ANYHARNESS_SENTRY_RELEASE",
         "ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE",
     ] {
-        if let Some(value) = env_value(key) {
+        if let Some(value) = env_lookup(key) {
             env.insert(key.to_string(), value);
         }
     }
@@ -229,6 +241,10 @@ fn default_anyharness_launch_env() -> HashMap<String, String> {
 
 fn should_use_local_proliferate_home(debug_build: bool) -> bool {
     std::env::var_os("PROLIFERATE_DEV").is_some() || debug_build
+}
+
+fn default_anyharness_launch_env() -> HashMap<String, String> {
+    default_anyharness_launch_env_for_mode(resolve_desktop_telemetry_mode(), env_value)
 }
 
 fn pick_port() -> u16 {
@@ -267,6 +283,65 @@ pub(crate) fn resolve_shell_path() -> Option<String> {
         None
     } else {
         Some(path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn hosted_env_lookup(key: &str) -> Option<String> {
+        match key {
+            "ANYHARNESS_SENTRY_DSN" => Some("https://example.invalid/1".to_string()),
+            "ANYHARNESS_SENTRY_ENVIRONMENT" => Some("production".to_string()),
+            "ANYHARNESS_SENTRY_RELEASE" => Some("anyharness@1.2.3".to_string()),
+            "ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE" => Some("0.5".to_string()),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn sidecar_launch_env_is_empty_outside_hosted_product() {
+        assert!(default_anyharness_launch_env_for_mode(
+            DesktopTelemetryMode::Disabled,
+            hosted_env_lookup
+        )
+        .is_empty());
+        assert!(default_anyharness_launch_env_for_mode(
+            DesktopTelemetryMode::LocalDev,
+            hosted_env_lookup
+        )
+        .is_empty());
+        assert!(default_anyharness_launch_env_for_mode(
+            DesktopTelemetryMode::SelfManaged,
+            hosted_env_lookup,
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn sidecar_launch_env_includes_sentry_values_in_hosted_product() {
+        let env = default_anyharness_launch_env_for_mode(
+            DesktopTelemetryMode::HostedProduct,
+            hosted_env_lookup,
+        );
+
+        assert_eq!(
+            env.get("ANYHARNESS_SENTRY_DSN"),
+            Some(&"https://example.invalid/1".to_string())
+        );
+        assert_eq!(
+            env.get("ANYHARNESS_SENTRY_ENVIRONMENT"),
+            Some(&"production".to_string())
+        );
+        assert_eq!(
+            env.get("ANYHARNESS_SENTRY_RELEASE"),
+            Some(&"anyharness@1.2.3".to_string())
+        );
+        assert_eq!(
+            env.get("ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE"),
+            Some(&"0.5".to_string())
+        );
     }
 }
 

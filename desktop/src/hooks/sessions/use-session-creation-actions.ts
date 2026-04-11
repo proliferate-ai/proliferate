@@ -366,6 +366,10 @@ export function useSessionCreationActions({
         replacePendingSessionSlot(pendingSessionId, session.id, realSlot);
         activateSession(session.id);
         upsertWorkspaceSessionRecord(workspaceId, session);
+        trackProductEvent("chat_session_created", {
+          workspace_kind: cloudWorkspaceId ? "cloud" : "local",
+          agent_kind: options.agentKind,
+        });
         reportConnectorLaunchWarnings(connectorWarnings, showToast);
 
         if (hasPrompt) {

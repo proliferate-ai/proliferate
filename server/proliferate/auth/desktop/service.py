@@ -6,6 +6,8 @@ GitHub OAuth completion for the desktop auth boundary.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import secrets
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -52,9 +54,16 @@ from proliferate.db.store.auth import (
     create_auth_code_for_user,
 )
 from proliferate.db.store.users import load_active_user_by_id
+from proliferate.integrations.customerio import (
+    identify_customerio_user,
+    track_customerio_desktop_authenticated,
+)
 
 if TYPE_CHECKING:
     from proliferate.auth.users import UserManager
+
+
+logger = logging.getLogger(__name__)
 
 
 def github_oauth_enabled() -> bool:
@@ -163,6 +172,39 @@ async def get_active_user_or_400(user_id: UUID) -> User:
             detail="User not found",
         )
     return user
+
+
+async def sync_customerio_desktop_authenticated_user(user: User) -> None:
+    await identify_customerio_user(
+        user_id=str(user.id),
+        email=user.email,
+        display_name=user.display_name,
+    )
+    await track_customerio_desktop_authenticated(
+        user_id=str(user.id),
+    )
+
+
+def _handle_customerio_sync_task_completion(task: asyncio.Task[None]) -> None:
+    if task.cancelled():
+        return
+
+    exc = task.exception()
+    if exc is None:
+        return
+
+    logger.exception(
+        "Customer.io desktop auth sync task failed unexpectedly",
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
+
+
+def schedule_customerio_desktop_authenticated_user_sync(user: User) -> None:
+    task = asyncio.create_task(
+        sync_customerio_desktop_authenticated_user(user),
+        name=f"customerio-desktop-auth-{user.id}",
+    )
+    task.add_done_callback(_handle_customerio_sync_task_completion)
 
 
 async def create_desktop_auth_code(
@@ -293,6 +335,7 @@ async def finish_github_desktop_callback(
         state=state_data["desktop_state"],
         redirect_uri=state_data["redirect_uri"],
     )
+    schedule_customerio_desktop_authenticated_user_sync(user)
     deep_link_url = build_redirect_url(
         state_data["redirect_uri"],
         code=auth_code.code,

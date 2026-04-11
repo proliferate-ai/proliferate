@@ -4077,6 +4077,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "uuid",
  "which",
  "window-vibrancy",
 ]

@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_PROLIFERATE_API_BASE_URL?: string;
+  readonly VITE_PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT?: string;
   readonly VITE_PROLIFERATE_ENVIRONMENT?: string;
   readonly VITE_PROLIFERATE_RELEASE?: string;
   readonly VITE_PROLIFERATE_TELEMETRY_DISABLED?: string;
@@ -11,6 +12,7 @@ interface ImportMetaEnv {
   readonly VITE_PROLIFERATE_SENTRY_ENABLE_LOGS?: string;
   readonly VITE_PROLIFERATE_POSTHOG_KEY?: string;
   readonly VITE_PROLIFERATE_POSTHOG_HOST?: string;
+  readonly VITE_PROLIFERATE_POSTHOG_SESSION_RECORDING_ENABLED?: string;
 }
 
 interface ImportMeta {

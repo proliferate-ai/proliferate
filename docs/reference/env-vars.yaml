@@ -21,6 +21,12 @@
   description: Debug mode flag
   tags: [local-dev]
 
+- name: PROLIFERATE_TELEMETRY_MODE
+  secret: false
+  default: "local_dev"
+  description: "Telemetry runtime mode: local_dev, self_managed, or hosted_product"
+  tags: [local-dev, self-hosted, production]
+
 - name: API_BASE_URL
   secret: false
   default: ""
@@ -219,16 +225,16 @@
   description: Server Sentry traces sample rate
   tags: [self-hosted, production]
 
-- name: POSTHOG_PROJECT_API_KEY
-  secret: true
-  default: ""
-  description: Server-side PostHog analytics key
+- name: PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT
+  secret: false
+  default: "https://api.proliferate.com/v1/telemetry/anonymous"
+  description: Anonymous telemetry collector endpoint
   tags: [self-hosted, production]
 
-- name: POSTHOG_HOST
+- name: PROLIFERATE_ANONYMOUS_TELEMETRY_DISABLED
   secret: false
-  default: "https://us.i.posthog.com"
-  description: PostHog ingest host
+  default: "false"
+  description: Disable anonymous telemetry emission from the server
   tags: [self-hosted, production]
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -296,8 +302,14 @@
 - name: VITE_PROLIFERATE_TELEMETRY_DISABLED
   secret: false
   default: "false"
-  description: Disable all renderer telemetry
+  description: Disable both vendor and anonymous renderer telemetry
   tags: [local-dev]
+
+- name: VITE_PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT
+  secret: false
+  default: "https://api.proliferate.com/v1/telemetry/anonymous"
+  description: Renderer anonymous telemetry collector endpoint
+  tags: [local-dev, ci]
 
 - name: VITE_DEV_DISABLE_AUTH
   secret: false

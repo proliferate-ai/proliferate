@@ -191,6 +191,9 @@ async def test_alembic_upgrade_creates_current_schema() -> None:
                 )
                 assert tables >= {
                     "alembic_version",
+                    "anonymous_telemetry_event",
+                    "anonymous_telemetry_install",
+                    "anonymous_telemetry_local_install",
                     "billing_entitlement",
                     "billing_grant",
                     "cloud_mcp_connection",

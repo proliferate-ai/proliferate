@@ -29,6 +29,8 @@ fn propagate_native_telemetry_env() {
         "ANYHARNESS_SENTRY_ENVIRONMENT",
         "ANYHARNESS_SENTRY_RELEASE",
         "ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE",
+        "VITE_PROLIFERATE_API_BASE_URL",
+        "VITE_PROLIFERATE_TELEMETRY_DISABLED",
     ];
 
     for key in NATIVE_TELEMETRY_ENV_KEYS {
@@ -36,7 +38,12 @@ fn propagate_native_telemetry_env() {
 
         if let Ok(value) = env::var(key) {
             if !value.trim().is_empty() {
-                println!("cargo:rustc-env={key}={value}");
+                let propagated_key = match *key {
+                    "VITE_PROLIFERATE_API_BASE_URL" => "PROLIFERATE_DEFAULT_API_BASE_URL",
+                    "VITE_PROLIFERATE_TELEMETRY_DISABLED" => "PROLIFERATE_BUILD_TELEMETRY_DISABLED",
+                    _ => key,
+                };
+                println!("cargo:rustc-env={propagated_key}={value}");
             }
         }
     }

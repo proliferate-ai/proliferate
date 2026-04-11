@@ -37,6 +37,7 @@ control plane env surface.
 | --- | --- | --- | --- |
 | `API_BASE_URL` | No | Recommended for public/proxied deployments | Canonical public API base URL used for absolute auth callback generation |
 | `DEBUG` | No | No | Debug mode flag |
+| `PROLIFERATE_TELEMETRY_MODE` | No | Yes for explicit telemetry routing | Telemetry runtime mode: `local_dev`, `self_managed`, or `hosted_product` |
 | `DATABASE_URL` | Yes | Yes | PostgreSQL connection |
 | `DATABASE_ECHO` | No | No | SQLAlchemy query echo/logging |
 | `CORS_ALLOW_ORIGINS` | No | Yes for browser/desktop API access | Allowed browser/webview origins |
@@ -53,6 +54,16 @@ The desktop redirect scheme, callback path, deep-link launch behavior, and auth
 token lifetimes now live in `server/proliferate/constants/auth.py`. They are
 code defaults on this branch, not env overrides.
 
+Desktop runtime overrides live in `~/.proliferate/config.json` (or
+`~/.proliferate-local/config.json` in dev). The supported fields are:
+
+```json
+{
+  "apiBaseUrl": "https://api.company.com",
+  "telemetryDisabled": false
+}
+```
+
 ## Auth and Token Lifetimes
 
 No env overrides are currently supported for token lifetimes or desktop PKCE
@@ -68,8 +79,8 @@ timers on this branch. These values are defined in
 | `CUSTOMERIO_APP_API_KEY` | Yes | No | Customer.io app API auth |
 | `CUSTOMERIO_FROM_EMAIL` | No | No | Customer.io sender email address |
 | `FRONTEND_BASE_URL` | No | No | Frontend base URL for email links etc. |
-| `POSTHOG_PROJECT_API_KEY` | Yes | No | Server-side PostHog analytics |
-| `POSTHOG_HOST` | No | No | PostHog ingest host |
+| `PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT` | No | No | First-party anonymous telemetry collector endpoint |
+| `PROLIFERATE_ANONYMOUS_TELEMETRY_DISABLED` | No | No | Disable server-side anonymous telemetry emission |
 | `SENTRY_DSN` | Yes | No | Server Sentry |
 | `SENTRY_ENVIRONMENT` | No | No | Server Sentry environment |
 | `SENTRY_RELEASE` | No | No | Server Sentry release |

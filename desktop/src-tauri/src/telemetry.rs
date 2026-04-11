@@ -1,5 +1,7 @@
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+use crate::desktop_telemetry_mode::{resolve_desktop_telemetry_mode, DesktopTelemetryMode};
+
 fn baked_env(key: &str) -> Option<&'static str> {
     match key {
         "PROLIFERATE_DESKTOP_SENTRY_DSN" => option_env!("PROLIFERATE_DESKTOP_SENTRY_DSN"),
@@ -36,11 +38,29 @@ fn sample_rate(key: &str, default: f32) -> f32 {
         .unwrap_or(default)
 }
 
+fn vendor_sentry_enabled(mode: DesktopTelemetryMode) -> bool {
+    mode == DesktopTelemetryMode::HostedProduct
+}
+
+fn telemetry_mode_tag(mode: DesktopTelemetryMode) -> Option<&'static str> {
+    match mode {
+        DesktopTelemetryMode::Disabled => None,
+        DesktopTelemetryMode::LocalDev => Some("local_dev"),
+        DesktopTelemetryMode::SelfManaged => Some("self_managed"),
+        DesktopTelemetryMode::HostedProduct => Some("hosted_product"),
+    }
+}
+
 pub fn init() -> Option<sentry::ClientInitGuard> {
     let env_filter =
         tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
 
-    let dsn = env_value("PROLIFERATE_DESKTOP_SENTRY_DSN");
+    let telemetry_mode = resolve_desktop_telemetry_mode();
+    let dsn = if vendor_sentry_enabled(telemetry_mode) {
+        env_value("PROLIFERATE_DESKTOP_SENTRY_DSN")
+    } else {
+        None
+    };
     let telemetry = dsn.map(|dsn| {
         sentry::init((
             dsn,
@@ -74,8 +94,41 @@ pub fn init() -> Option<sentry::ClientInitGuard> {
     if telemetry.is_some() {
         sentry::configure_scope(|scope| {
             scope.set_tag("surface", "desktop_native");
+            if let Some(mode_tag) = telemetry_mode_tag(telemetry_mode) {
+                scope.set_tag("telemetry_mode", mode_tag);
+            }
         });
     }
 
     telemetry
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vendor_sentry_is_hosted_product_only() {
+        assert!(!vendor_sentry_enabled(DesktopTelemetryMode::Disabled));
+        assert!(!vendor_sentry_enabled(DesktopTelemetryMode::LocalDev));
+        assert!(!vendor_sentry_enabled(DesktopTelemetryMode::SelfManaged));
+        assert!(vendor_sentry_enabled(DesktopTelemetryMode::HostedProduct));
+    }
+
+    #[test]
+    fn telemetry_mode_tag_matches_runtime_mode() {
+        assert_eq!(telemetry_mode_tag(DesktopTelemetryMode::Disabled), None);
+        assert_eq!(
+            telemetry_mode_tag(DesktopTelemetryMode::LocalDev),
+            Some("local_dev")
+        );
+        assert_eq!(
+            telemetry_mode_tag(DesktopTelemetryMode::SelfManaged),
+            Some("self_managed")
+        );
+        assert_eq!(
+            telemetry_mode_tag(DesktopTelemetryMode::HostedProduct),
+            Some("hosted_product")
+        );
+    }
 }

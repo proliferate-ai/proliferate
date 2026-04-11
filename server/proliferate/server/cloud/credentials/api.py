@@ -15,7 +15,6 @@ from proliferate.server.cloud.credentials.service import (
     sync_cloud_credential_for_user,
 )
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
-from proliferate.utils.telemetry import track_cloud_event
 
 router = APIRouter()
 
@@ -34,29 +33,9 @@ async def sync_cloud_credential_endpoint(
     user: User = Depends(current_active_user),
 ) -> dict[str, bool]:
     try:
-        auth_mode = await sync_cloud_credential_for_user(user.id, provider, body)
+        await sync_cloud_credential_for_user(user.id, provider, body)
     except CloudApiError as error:
-        track_cloud_event(
-            user,
-            "cloud_api_credential_sync",
-            {
-                "outcome": "failure",
-                "provider": provider,
-                "auth_mode": body.auth_mode,
-                "status_code": error.status_code,
-                "error_code": error.code,
-            },
-        )
         raise_cloud_error(error)
-    track_cloud_event(
-        user,
-        "cloud_api_credential_sync",
-        {
-            "outcome": "success",
-            "provider": provider,
-            "auth_mode": auth_mode,
-        },
-    )
     return {"ok": True}
 
 
@@ -68,23 +47,5 @@ async def delete_cloud_credential_endpoint(
     try:
         await delete_cloud_credential_for_user(user.id, provider)
     except CloudApiError as error:
-        track_cloud_event(
-            user,
-            "cloud_api_credential_delete",
-            {
-                "outcome": "failure",
-                "provider": provider,
-                "status_code": error.status_code,
-                "error_code": error.code,
-            },
-        )
         raise_cloud_error(error)
-    track_cloud_event(
-        user,
-        "cloud_api_credential_delete",
-        {
-            "outcome": "success",
-            "provider": provider,
-        },
-    )
     return {"ok": True}

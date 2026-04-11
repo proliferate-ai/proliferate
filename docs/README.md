@@ -44,6 +44,15 @@ start of the task, not after implementation has already started.
   - start here for release workflows, deployment infra, updater publishing, and
     the desktop in-app update flow
 
+## Analytics and lifecycle reference
+
+- `docs/analytics/anonymous-telemetry.md`
+  - first-party install-level analytics records, routing, and storage
+- `docs/analytics/posthog.md`
+  - hosted-product desktop vendor analytics and replay
+- `docs/analytics/customerio.md`
+  - Customer.io lifecycle messaging integration
+
 ## Deployment and environment reference
 
 - `docs/reference/deployment-self-hosting.md`

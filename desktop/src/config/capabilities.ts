@@ -1,6 +1,6 @@
 export const OFFICIAL_HOSTED_API_ORIGINS = [
   "https://app.proliferate.com",
-  "https://api.proliferate.dev",
+  "https://api.proliferate.com",
 ] as const;
 
 export const CAPABILITY_COPY = {

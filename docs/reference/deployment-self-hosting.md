@@ -179,12 +179,13 @@ RUNTIME_BINARY_URL=https://github.com/proliferate-ai/proliferate/releases/downlo
 RUNTIME_BINARY_SHA256_URL=https://github.com/proliferate-ai/proliferate/releases/download/server-v0.1.0/self-hosted-assets.SHA256SUMS
 
 # ── Optional observability ────────────────────────────────
-# POSTHOG_PROJECT_API_KEY=
-# POSTHOG_HOST=https://us.i.posthog.com
+# PROLIFERATE_TELEMETRY_MODE=self_managed
+# PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT=https://api.proliferate.com/v1/telemetry/anonymous
+# PROLIFERATE_ANONYMOUS_TELEMETRY_DISABLED=false
 # SENTRY_DSN=
 # SENTRY_ENVIRONMENT=self-hosted
 # ANTHROPIC_API_KEY=               # AI session title generation
-# CLOUD_RUNTIME_SENTRY_DSN=       # Sentry for remote AnyHarness
+# CLOUD_RUNTIME_SENTRY_DSN=       # Hosted-product only; self-managed omits runtime Sentry injection
 ```
 
 Run the bootstrap:
@@ -366,6 +367,7 @@ production surface for internal reference.
 | Variable | Purpose |
 | --- | --- |
 | `VITE_PROLIFERATE_API_BASE_URL` | Production API endpoint |
+| `VITE_PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT` | Anonymous telemetry collector |
 | `VITE_PROLIFERATE_ENVIRONMENT` | `production` |
 | `VITE_PROLIFERATE_SENTRY_DSN` | Renderer Sentry DSN |
 | `VITE_PROLIFERATE_POSTHOG_KEY` | Renderer PostHog key |
@@ -376,7 +378,9 @@ production surface for internal reference.
 
 All vars from [env-secrets-matrix.md](env-secrets-matrix.md) apply, plus:
 
-- All observability vars (`SENTRY_*`, `POSTHOG_*`, `CUSTOMERIO_*`)
+- `PROLIFERATE_TELEMETRY_MODE=self_managed`
+- Anonymous telemetry vars (`PROLIFERATE_ANONYMOUS_TELEMETRY_*`)
+- Observability vars (`SENTRY_*`, `CUSTOMERIO_*`)
 - `SUPPORT_SLACK_WEBHOOK_URL` — routes support messages to Proliferate's Slack
 - `CLOUD_BILLING_MODE=enforce` for usage-based billing
 - `E2B_WEBHOOK_SIGNATURE_SECRET` — E2B webhook verification (when using E2B)
@@ -390,5 +394,5 @@ All vars from [env-secrets-matrix.md](env-secrets-matrix.md) apply, plus:
 | Apple Developer Program | macOS code signing + notarization |
 | Cloudflare | DNS for `downloads.proliferate.com` |
 | Sentry | Error tracking (server + desktop) |
-| PostHog | Analytics |
+| PostHog | Hosted-product desktop analytics + replay |
 | Customer.io | User messaging |

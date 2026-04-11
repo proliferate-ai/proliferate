@@ -6,6 +6,8 @@ This is the canonical self-hosted deployment story for Proliferate:
 - the control plane runs from `server/deploy/docker-compose.production.yml`
 - updates are image pull + migrate + restart
 - the AWS one-click stack bootstraps this exact Docker deployment
+- self-hosted control planes use anonymous telemetry by default; vendor telemetry
+  stays off unless the deployment is explicitly marked as `hosted_product`
 
 ## Desktop Runtime Override
 
@@ -14,6 +16,15 @@ Desktop users point the official app at a self-hosted control plane with:
 ```json
 {
   "apiBaseUrl": "https://api.company.com"
+}
+```
+
+Desktop users can also disable desktop telemetry entirely with:
+
+```json
+{
+  "apiBaseUrl": "https://api.company.com",
+  "telemetryDisabled": true
 }
 ```
 
@@ -79,6 +90,7 @@ Cloud workspace runtimes are still provider-hosted. The control plane returns a
 3. Copy `server/deploy/.env.production.example` to `server/deploy/.env.static`.
 4. Fill in the required values:
    - `SITE_ADDRESS`
+   - `PROLIFERATE_TELEMETRY_MODE`
    - `PROLIFERATE_HOST_BIN_DIR`
    - `PROLIFERATE_SERVER_IMAGE`
    - `PROLIFERATE_SERVER_IMAGE_TAG`

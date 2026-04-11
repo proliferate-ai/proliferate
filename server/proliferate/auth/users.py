@@ -17,7 +17,7 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
     verification_token_secret = settings.jwt_secret
 
     async def on_after_register(self, user: User, request: Request | None = None) -> None:
-        # TODO: Customer.io identify call
+        # Customer.io lifecycle sync is owned by the desktop GitHub auth flow in v1.
         pass
 
     async def on_after_login(  # type: ignore[override]  # fastapi-users signature mismatch
@@ -26,19 +26,19 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
         request: Request | None = None,
         response: None = None,
     ) -> None:
-        # TODO: Customer.io track "logged_in"
+        # Login hooks are intentionally unused for Customer.io in v1.
         pass
 
     async def on_after_forgot_password(
         self, user: User, token: str, request: Request | None = None
     ) -> None:
-        # TODO: send password reset email
+        # Password reset lifecycle messaging is out of scope for Customer.io v1.
         pass
 
     async def on_after_request_verify(
         self, user: User, token: str, request: Request | None = None
     ) -> None:
-        # TODO: send verification email
+        # Verification lifecycle messaging is out of scope for Customer.io v1.
         pass
 
 

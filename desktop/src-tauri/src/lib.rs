@@ -1,11 +1,13 @@
+mod app_config;
 mod commands;
+mod desktop_telemetry_mode;
 mod editors;
 mod quit_flow;
 mod sidecar;
 mod state;
 mod telemetry;
 
-use commands::{config, keychain, mcp_oauth, process, runtime, shell};
+use commands::{anonymous_telemetry, config, keychain, mcp_oauth, process, runtime, shell};
 use quit_flow::QuitFlowState;
 use tauri::Manager;
 #[cfg(target_os = "macos")]
@@ -115,6 +117,8 @@ pub fn run() {
         .manage(sc.clone())
         .manage(QuitFlowState::default())
         .invoke_handler(tauri::generate_handler![
+            anonymous_telemetry::load_anonymous_telemetry_bootstrap,
+            anonymous_telemetry::save_anonymous_telemetry_state,
             config::get_app_config,
             runtime::get_runtime_info,
             runtime::restart_runtime,

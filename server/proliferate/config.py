@@ -1,4 +1,4 @@
-from pydantic import model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILES = (
@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     # App
     debug: bool = False
     api_base_url: str = ""
+    telemetry_mode: str = Field(
+        default="local_dev",
+        validation_alias=AliasChoices("PROLIFERATE_TELEMETRY_MODE", "TELEMETRY_MODE"),
+    )
     cors_allow_origins: str = (
         "http://localhost:1420,"
         "http://127.0.0.1:1420,"
@@ -44,8 +48,20 @@ class Settings(BaseSettings):
     customerio_app_api_key: str = ""
     customerio_from_email: str = "hello@proliferate.dev"
     frontend_base_url: str = ""
-    posthog_project_api_key: str = ""
-    posthog_host: str = "https://us.i.posthog.com"
+    anonymous_telemetry_endpoint: str = Field(
+        default="https://api.proliferate.com/v1/telemetry/anonymous",
+        validation_alias=AliasChoices(
+            "PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT",
+            "ANONYMOUS_TELEMETRY_ENDPOINT",
+        ),
+    )
+    anonymous_telemetry_disabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "PROLIFERATE_ANONYMOUS_TELEMETRY_DISABLED",
+            "ANONYMOUS_TELEMETRY_DISABLED",
+        ),
+    )
 
     # Observability
     sentry_dsn: str = ""
@@ -78,6 +94,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_secrets_in_production(self) -> "Settings":
+        if self.telemetry_mode not in {"local_dev", "self_managed", "hosted_product"}:
+            raise ValueError(
+                "telemetry_mode must be one of: local_dev, self_managed, hosted_product"
+            )
         if not self.debug:
             if self.jwt_secret == "CHANGE-ME-IN-PRODUCTION":
                 raise ValueError("jwt_secret must be set in production (debug=False)")

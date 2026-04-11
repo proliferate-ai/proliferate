@@ -8,19 +8,18 @@ import {
   Routes,
 } from "react-router-dom";
 import type { SeverityLevel } from "@sentry/react";
-import { getDesktopTelemetryConfig } from "./config";
 import {
   scrubSentryBreadcrumb,
   scrubSentryEvent,
   scrubTelemetryData,
 } from "./scrub";
+import type { DesktopTelemetryConfig } from "./config";
 
-const config = getDesktopTelemetryConfig();
 const InstrumentedRoutes = Sentry.withSentryReactRouterV7Routing(Routes);
 
 let sentryInitialized = false;
 
-function buildTracePropagationTargets(): Array<string | RegExp> {
+function buildTracePropagationTargets(apiBaseUrl: string): Array<string | RegExp> {
   const targets: Array<string | RegExp> = [
     "localhost",
     "127.0.0.1",
@@ -28,21 +27,29 @@ function buildTracePropagationTargets(): Array<string | RegExp> {
     /^https?:\/\/127\.0\.0\.1(?::\d+)?$/,
   ];
 
-  const cloudApiBaseUrl = import.meta.env.VITE_PROLIFERATE_API_BASE_URL?.trim();
-  if (cloudApiBaseUrl) {
-    targets.push(cloudApiBaseUrl);
+  if (apiBaseUrl.trim()) {
+    targets.push(apiBaseUrl.trim());
   }
 
   return targets;
 }
 
-export function initializeDesktopSentry(): void {
-  if (sentryInitialized) return;
-  sentryInitialized = true;
+interface DesktopSentryInitConfig {
+  environment: string;
+  release: string;
+  sentry: DesktopTelemetryConfig["sentry"];
+  apiBaseUrl: string;
+  telemetryMode: "local_dev" | "self_managed" | "hosted_product";
+}
 
-  if (config.disabled || !config.sentry.enabled || !config.sentry.dsn) {
+export function initializeDesktopSentry(config: DesktopSentryInitConfig): void {
+  if (sentryInitialized) return;
+
+  if (!config.sentry.enabled || !config.sentry.dsn) {
     return;
   }
+
+  sentryInitialized = true;
 
   Sentry.init({
     dsn: config.sentry.dsn,
@@ -53,7 +60,7 @@ export function initializeDesktopSentry(): void {
     sendDefaultPii: false,
     enableLogs: config.sentry.enableLogs,
     tracesSampleRate: config.sentry.tracesSampleRate,
-    tracePropagationTargets: buildTracePropagationTargets(),
+    tracePropagationTargets: buildTracePropagationTargets(config.apiBaseUrl),
     integrations: [
       Sentry.reactRouterV7BrowserTracingIntegration({
         useEffect: React.useEffect,
@@ -70,12 +77,17 @@ export function initializeDesktopSentry(): void {
     initialScope: {
       tags: {
         surface: "desktop_renderer",
+        telemetry_mode: config.telemetryMode,
       },
     },
   });
 }
 
 export function getDesktopRootErrorHandlers() {
+  if (!sentryInitialized) {
+    return {};
+  }
+
   return {
     onUncaughtError: Sentry.reactErrorHandler(),
     onCaughtError: Sentry.reactErrorHandler(),
@@ -83,27 +95,21 @@ export function getDesktopRootErrorHandlers() {
   };
 }
 
-export function setDesktopSentryUser(user: {
-  id: string;
-  email: string;
-  display_name: string | null;
-}): void {
-  if (config.disabled || !config.sentry.enabled) return;
+export function setDesktopSentryUser(userId: string): void {
+  if (!sentryInitialized) return;
 
   Sentry.setUser({
-    id: user.id,
-    email: user.email,
-    username: user.display_name ?? undefined,
+    id: userId,
   });
 }
 
 export function clearDesktopSentryUser(): void {
-  if (config.disabled || !config.sentry.enabled) return;
+  if (!sentryInitialized) return;
   Sentry.setUser(null);
 }
 
 export function setDesktopSentryTag(key: string, value: string): void {
-  if (config.disabled || !config.sentry.enabled) return;
+  if (!sentryInitialized) return;
   Sentry.setTag(key, value);
 }
 
@@ -111,7 +117,7 @@ export function addDesktopSentryBreadcrumb(
   message: string,
   data?: Record<string, unknown>,
 ): void {
-  if (config.disabled || !config.sentry.enabled) return;
+  if (!sentryInitialized) return;
 
   Sentry.addBreadcrumb({
     category: "product",
@@ -130,7 +136,7 @@ export function captureDesktopSentryException(
     fingerprint?: string[];
   },
 ): void {
-  if (config.disabled || !config.sentry.enabled) return;
+  if (!sentryInitialized) return;
 
   const normalized =
     error instanceof Error ? error : new Error(typeof error === "string" ? error : "Unknown error");

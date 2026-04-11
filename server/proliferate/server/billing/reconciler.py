@@ -31,6 +31,7 @@ from proliferate.db.store.cloud_workspaces import (
     save_sandbox_provider_state,
 )
 from proliferate.integrations.sandbox import ProviderSandboxState, get_configured_sandbox_provider
+from proliferate.integrations.sentry import capture_server_sentry_exception
 from proliferate.server.billing.models import BillingSnapshot
 from proliferate.server.billing.service import get_billing_snapshot
 from proliferate.utils.time import utcnow
@@ -183,7 +184,14 @@ async def _billing_reconciler_loop() -> None:
             await run_billing_reconcile_pass()
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
+            capture_server_sentry_exception(
+                exc,
+                tags={
+                    "domain": "billing",
+                    "action": "reconcile_loop",
+                },
+            )
             logger.exception("billing reconciler pass failed")
         await asyncio.sleep(max(BILLING_RECONCILE_INTERVAL_SECONDS, 30))
 

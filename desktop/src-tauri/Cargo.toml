@@ -35,3 +35,4 @@ base64 = "0.22"
 getrandom = "0.2"
 which = "7"
 window-vibrancy = "0.6"
+uuid.workspace = true

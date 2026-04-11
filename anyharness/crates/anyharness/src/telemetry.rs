@@ -1,5 +1,7 @@
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+const ANYHARNESS_TELEMETRY_MODE: &str = "hosted_product";
+
 fn env_or_default(key: &str, default: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| default.to_string())
 }
@@ -43,9 +45,34 @@ pub fn init() -> Option<sentry::ClientInitGuard> {
 
     if telemetry.is_some() {
         sentry::configure_scope(|scope| {
-            scope.set_tag("surface", "anyharness_runtime");
+            for (key, value) in sentry_scope_tags() {
+                scope.set_tag(key, value);
+            }
         });
     }
 
     telemetry
+}
+
+fn sentry_scope_tags() -> [(&'static str, &'static str); 2] {
+    [
+        ("surface", "anyharness_runtime"),
+        ("telemetry_mode", ANYHARNESS_TELEMETRY_MODE),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sentry_scope_tags;
+
+    #[test]
+    fn sentry_scope_tags_include_runtime_surface_and_mode() {
+        assert_eq!(
+            sentry_scope_tags(),
+            [
+                ("surface", "anyharness_runtime"),
+                ("telemetry_mode", "hosted_product"),
+            ]
+        );
+    }
 }
