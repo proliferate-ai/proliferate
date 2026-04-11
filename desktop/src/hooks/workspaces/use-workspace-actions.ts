@@ -107,7 +107,10 @@ export function useWorkspaceActions() {
     },
     mutationFn: async (sourceRoot) => {
       const readyRuntimeUrl = await ensureRuntimeReady();
-      return getAnyHarnessClient({ runtimeUrl: readyRuntimeUrl }).workspaces.create({ path: sourceRoot });
+      const response = await getAnyHarnessClient({ runtimeUrl: readyRuntimeUrl }).workspaces.create({
+        path: sourceRoot,
+      });
+      return response.workspace;
     },
     onSuccess: (workspace) => {
       primeWorkspaceCollections(workspace, "local_create");
@@ -139,7 +142,7 @@ export function useWorkspaceActions() {
     mutationFn: async ({ params, latencyFlowId }) => {
       const readyRuntimeUrl = await ensureRuntimeReady();
       return getAnyHarnessClient({ runtimeUrl: readyRuntimeUrl }).workspaces.createWorktree({
-        sourceWorkspaceId: params.sourceWorkspaceId,
+        repoRootId: params.repoRootId,
         targetPath: params.targetPath,
         newBranchName: params.branchName,
         baseBranch: params.baseRef || undefined,
@@ -183,8 +186,8 @@ export function useWorkspaceActions() {
       const source = workspaceCollections?.workspaces.find(
         (workspace) => workspace.id === input.sourceWorkspaceId,
       );
-      if (!source || (source.kind !== "repo" && source.kind !== "local")) {
-        throw new Error("Source must be a repo or local workspace.");
+      if (!source || !source.repoRootId || (source.kind !== "local" && source.kind !== "worktree")) {
+        throw new Error("Source must be a local or worktree workspace.");
       }
 
       const homeDir = await getHomeDir();
@@ -206,7 +209,9 @@ export function useWorkspaceActions() {
         homeDir,
         branchPrefixType: userPreferences.branchPrefixType,
         authUser,
-        repoConfig: repoPreferences.repoConfigs[source.sourceRepoRootPath] ?? null,
+        repoConfig: source.sourceRepoRootPath
+          ? (repoPreferences.repoConfigs[source.sourceRepoRootPath] ?? null)
+          : null,
       });
     },
     createLocalWorkspace: createLocalWorkspaceMutation.mutateAsync,

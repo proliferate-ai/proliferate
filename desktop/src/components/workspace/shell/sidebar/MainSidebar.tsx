@@ -6,6 +6,7 @@ import {
   DEFAULT_REPO_GROUP_ITEM_LIMIT,
   SidebarWorkspaceContent,
 } from "./SidebarWorkspaceContent";
+import { CoworkThreadsSection } from "@/components/workspace/cowork/sidebar/CoworkThreadsSection";
 import { NewCloudWorkspaceModal } from "@/components/workspace/cloud/NewCloudWorkspaceModal";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { PopoverButton } from "@/components/ui/PopoverButton";
@@ -140,56 +141,57 @@ export function MainSidebar() {
           </div>
         </div>
 
-        {/* Repositories heading */}
-        <div className="text-foreground/50 text-base opacity-75 pl-4 pr-2 pt-3 pb-1">
-          <div className="flex items-center justify-between gap-2">
-            <span>Repositories</span>
-            <div className="flex items-center gap-1">
-              <PopoverButton
-                trigger={
-                  <button
-                    type="button"
-                    title="Filter repositories"
-                    className={SECTION_BTN}
-                  >
-                    <Filter className="size-3" />
-                  </button>
-                }
-              >
-                {(close) => (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowArchived((v) => !v);
-                      close();
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-accent"
-                  >
-                    <Archive className="size-3.5 shrink-0" />
-                    <span className="flex-1 truncate text-left">Archived workspaces</span>
-                    {showArchived && <Check className="size-3.5 shrink-0 text-foreground/60" />}
-                  </button>
-                )}
-              </PopoverButton>
-              <button
-                type="button"
-                onClick={actions.handleAddRepo}
-                title="Add repository"
-                className={SECTION_BTN}
-              >
-                <FolderPlusFilled className="size-3" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Workspace list */}
         <div className="relative overflow-hidden flex-1 w-full min-w-0 min-h-0">
           <AutoHideScrollArea
             className="h-full"
             viewportClassName="px-2 pt-0.5 pb-4"
             contentClassName="w-full min-w-0 flex flex-col gap-px"
           >
+            <CoworkThreadsSection />
+
+            {/* Repositories heading */}
+            <div className="text-foreground/50 text-base opacity-75 pl-4 pr-2 pt-3 pb-1">
+              <div className="flex items-center justify-between gap-2">
+                <span>Repositories</span>
+                <div className="flex items-center gap-1">
+                  <PopoverButton
+                    trigger={
+                      <button
+                        type="button"
+                        title="Filter repositories"
+                        className={SECTION_BTN}
+                      >
+                        <Filter className="size-3" />
+                      </button>
+                    }
+                  >
+                    {(close) => (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowArchived((v) => !v);
+                          close();
+                        }}
+                        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-accent"
+                      >
+                        <Archive className="size-3.5 shrink-0" />
+                        <span className="flex-1 truncate text-left">Archived workspaces</span>
+                        {showArchived && <Check className="size-3.5 shrink-0 text-foreground/60" />}
+                      </button>
+                    )}
+                  </PopoverButton>
+                  <button
+                    type="button"
+                    onClick={actions.handleAddRepo}
+                    title="Add repository"
+                    className={SECTION_BTN}
+                  >
+                    <FolderPlusFilled className="size-3" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <SidebarWorkspaceContent
               isEmpty={isEmpty}
               isLoading={isLoading}

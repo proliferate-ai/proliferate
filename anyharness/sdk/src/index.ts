@@ -34,16 +34,34 @@ export type {
 } from "./types/providers.js";
 
 export type {
+  RepoRootKind,
+  RepoRoot,
+} from "./types/repo-roots.js";
+
+export type {
+  CoworkRoot,
+  CoworkStatus,
+  CoworkArtifactType,
+  CoworkArtifactSummary,
+  CoworkArtifactManifestResponse,
+  CoworkArtifactDetailResponse,
+  CoworkThread,
+  CreateCoworkThreadRequest,
+  CreateCoworkThreadResponse,
+} from "./types/cowork.js";
+
+export type {
   WorkspaceKind,
+  WorkspaceSurface,
   WorkspaceExecutionPhase,
   WorkspaceExecutionSummary,
   Workspace,
+  ResolveWorkspaceResponse,
   WorkspaceSessionLaunchModel,
   WorkspaceSessionLaunchAgent,
   WorkspaceSessionLaunchCatalog,
   ResolveWorkspaceFromPathRequest,
   CreateWorkspaceRequest,
-  RegisterRepoWorkspaceRequest,
   CreateWorktreeWorkspaceRequest,
   SetupScriptStatus,
   SetupScriptExecution,

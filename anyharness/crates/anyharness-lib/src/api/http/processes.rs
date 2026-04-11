@@ -25,7 +25,7 @@ pub async fn run_command(
     Json(request): Json<RunCommandRequest>,
 ) -> Result<Json<RunCommandResponse>, ApiError> {
     let ws = state
-        .workspace_service
+        .workspace_runtime
         .get_workspace(&workspace_id)
         .map_err(|e| ApiError::internal(e.to_string()))?
         .ok_or_else(|| {

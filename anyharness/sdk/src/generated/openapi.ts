@@ -100,6 +100,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cowork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_cowork_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cowork/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["enable_cowork"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cowork/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_cowork_threads"];
+        put?: never;
+        post: operations["create_cowork_thread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/model-registries": {
         parameters: {
             query?: never;
@@ -140,6 +188,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_provider_configs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repo-roots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_repo_roots"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/repo-roots/{repo_root_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_repo_root"];
         put?: never;
         post?: never;
         delete?: never;
@@ -388,22 +468,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/repos": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["register_repo_workspace"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/workspaces/resolve": {
         parameters: {
             query?: never;
@@ -444,6 +508,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get_workspace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/cowork/artifacts/{artifact_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_cowork_artifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/cowork/manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_cowork_manifest"];
         put?: never;
         post?: never;
         delete?: never;
@@ -845,6 +941,66 @@ export interface components {
             /** @enum {string} */
             type: "tool_result_text";
         };
+        CoworkArtifactDetailResponse: {
+            artifact: components["schemas"]["CoworkArtifactSummary"];
+            content: string;
+        };
+        CoworkArtifactManifestResponse: {
+            artifacts: components["schemas"]["CoworkArtifactSummary"][];
+            /** Format: int32 */
+            version: number;
+        };
+        CoworkArtifactSummary: {
+            createdAt: string;
+            description?: string | null;
+            exists: boolean;
+            id: string;
+            modifiedAt?: string | null;
+            path: string;
+            /** Format: int64 */
+            sizeBytes?: number | null;
+            title: string;
+            type: string;
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        CoworkArtifactType: "text/markdown" | "text/html" | "image/svg+xml" | "application/vnd.proliferate.react";
+        CoworkRoot: {
+            createdAt: string;
+            defaultBranch: string;
+            id: string;
+            repoRootId: string;
+            repoRootPath: string;
+            updatedAt: string;
+        };
+        CoworkStatus: {
+            enabled: boolean;
+            root?: null | components["schemas"]["CoworkRoot"];
+            threadCount: number;
+        };
+        CoworkThread: {
+            agentKind: string;
+            branchName: string;
+            createdAt: string;
+            id: string;
+            lastActivityAt?: string | null;
+            repoRootId: string;
+            requestedModelId?: string | null;
+            sessionId: string;
+            title?: string | null;
+            updatedAt: string;
+            workspaceId: string;
+        };
+        CreateCoworkThreadRequest: {
+            agentKind: string;
+            modeId?: string | null;
+            modelId?: string | null;
+        };
+        CreateCoworkThreadResponse: {
+            session: components["schemas"]["Session"];
+            thread: components["schemas"]["CoworkThread"];
+            workspace: components["schemas"]["Workspace"];
+        };
         CreatePullRequestRequest: {
             baseBranch: string;
             body?: string | null;
@@ -869,8 +1025,8 @@ export interface components {
         CreateWorktreeWorkspaceRequest: {
             baseBranch?: string | null;
             newBranchName: string;
+            repoRootId: string;
             setupScript?: string | null;
-            sourceWorkspaceId: string;
             targetPath: string;
         };
         CreateWorktreeWorkspaceResponse: {
@@ -1273,15 +1429,31 @@ export interface components {
         ReconcileJobStatus: "idle" | "queued" | "running" | "completed" | "failed";
         /** @enum {string} */
         ReconcileOutcome: "installed" | "already_installed" | "skipped" | "failed";
-        RegisterRepoWorkspaceRequest: {
+        RepoRoot: {
+            createdAt: string;
+            defaultBranch?: string | null;
+            displayName?: string | null;
+            id: string;
+            kind: components["schemas"]["RepoRootKind"];
             path: string;
+            remoteOwner?: string | null;
+            remoteProvider?: string | null;
+            remoteRepoName?: string | null;
+            remoteUrl?: string | null;
+            updatedAt: string;
         };
+        /** @enum {string} */
+        RepoRootKind: "external" | "managed";
         ResolvePermissionRequest: {
             decision?: null | components["schemas"]["PermissionDecision"];
             optionId?: string | null;
         };
         ResolveWorkspaceFromPathRequest: {
             path: string;
+        };
+        ResolveWorkspaceResponse: {
+            repoRoot: components["schemas"]["RepoRoot"];
+            workspace: components["schemas"]["Workspace"];
         };
         RunCommandRequest: {
             command: string[];
@@ -1588,15 +1760,12 @@ export interface components {
             currentBranch?: string | null;
             displayName?: string | null;
             executionSummary?: null | components["schemas"]["WorkspaceExecutionSummary"];
-            gitOwner?: string | null;
-            gitProvider?: string | null;
-            gitRepoName?: string | null;
             id: string;
             kind: components["schemas"]["WorkspaceKind"];
             originalBranch?: string | null;
             path: string;
-            sourceRepoRootPath: string;
-            sourceWorkspaceId?: string | null;
+            repoRootId: string;
+            surface: components["schemas"]["WorkspaceSurface"];
             updatedAt: string;
         };
         /** @enum {string} */
@@ -1611,7 +1780,7 @@ export interface components {
             totalSessionCount: number;
         };
         /** @enum {string} */
-        WorkspaceKind: "repo" | "worktree" | "local";
+        WorkspaceKind: "worktree" | "local";
         WorkspaceSessionLaunchAgent: {
             defaultModelId?: string | null;
             displayName: string;
@@ -1627,6 +1796,8 @@ export interface components {
             id: string;
             isDefault: boolean;
         };
+        /** @enum {string} */
+        WorkspaceSurface: "standard" | "cowork";
     };
     responses: never;
     parameters: never;
@@ -1851,6 +2022,99 @@ export interface operations {
             };
         };
     };
+    get_cowork_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cowork status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoworkStatus"];
+                };
+            };
+        };
+    };
+    enable_cowork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Enabled cowork */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoworkStatus"];
+                };
+            };
+        };
+    };
+    list_cowork_threads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cowork threads */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoworkThread"][];
+                };
+            };
+        };
+    };
+    create_cowork_thread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCoworkThreadRequest"];
+            };
+        };
+        responses: {
+            /** @description Created cowork thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateCoworkThreadResponse"];
+                };
+            };
+            /** @description Cowork not enabled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     list_model_registries: {
         parameters: {
             query?: never;
@@ -1919,6 +2183,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderConfig"][];
+                };
+            };
+        };
+    };
+    list_repo_roots: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List repo roots */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoRoot"][];
+                };
+            };
+        };
+    };
+    get_repo_root: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repo root ID */
+                repo_root_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repo root */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoRoot"];
+                };
+            };
+            /** @description Repo root not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -2514,43 +2830,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Workspace"];
+                    "application/json": components["schemas"]["ResolveWorkspaceResponse"];
                 };
             };
             /** @description Invalid path */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    register_repo_workspace: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterRepoWorkspaceRequest"];
-            };
-        };
-        responses: {
-            /** @description Registered repo workspace */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Workspace"];
-                };
-            };
-            /** @description Invalid repo path */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2580,7 +2863,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Workspace"];
+                    "application/json": components["schemas"]["ResolveWorkspaceResponse"];
                 };
             };
             /** @description Invalid path */
@@ -2659,6 +2942,81 @@ export interface operations {
             };
             /** @description Workspace not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_cowork_artifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace id */
+                workspace_id: string;
+                /** @description Artifact id */
+                artifact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cowork artifact detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoworkArtifactDetailResponse"];
+                };
+            };
+            /** @description Artifact not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Artifact invalid */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_cowork_manifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace id */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cowork artifact manifest */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoworkArtifactManifestResponse"];
+                };
+            };
+            /** @description Manifest invalid */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -8,6 +8,7 @@ import {
   type PendingSessionConfigChanges,
 } from "@/lib/domain/sessions/pending-config";
 import { persistDefaultSessionModePreference } from "@/hooks/sessions/session-mode-preferences";
+import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { sessionSlotBelongsToWorkspace } from "@/lib/domain/sessions/activity";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
@@ -84,6 +85,7 @@ export function useSessionControlActions({
   selectSession,
 }: SessionControlDeps) {
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
+  const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const showToast = useToastStore((state) => state.show);
   const { promptSession } = useSessionPromptWorkflow();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
@@ -200,12 +202,13 @@ export function useSessionControlActions({
       }
 
       if (isLatestMutation && response.applyState === "applied") {
-        persistDefaultSessionModePreference(
-          response.session.agentKind ?? latestSlot.agentKind,
-          effectiveLiveConfig?.normalizedControls.mode?.rawConfigId ?? null,
-          configId,
-          getAuthoritativeConfigValue(effectiveLiveConfig, configId) ?? value,
-        );
+        persistDefaultSessionModePreference({
+          agentKind: response.session.agentKind ?? latestSlot.agentKind,
+          liveConfigRawConfigId: effectiveLiveConfig?.normalizedControls.mode?.rawConfigId ?? null,
+          rawConfigId: configId,
+          modeId: getAuthoritativeConfigValue(effectiveLiveConfig, configId) ?? value,
+          workspaceSurface: getWorkspaceSurface(workspaceId),
+        });
       }
 
       return response;
@@ -221,7 +224,7 @@ export function useSessionControlActions({
       }
       throw error;
     }
-  }, [getWorkspaceRuntimeBlockReason, showToast, upsertWorkspaceSessionRecord]);
+  }, [getWorkspaceRuntimeBlockReason, getWorkspaceSurface, showToast, upsertWorkspaceSessionRecord]);
 
   const promptActiveSession = useCallback(async (
     text: string,

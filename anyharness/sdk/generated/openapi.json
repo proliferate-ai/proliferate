@@ -274,6 +274,107 @@
         }
       }
     },
+    "/v1/cowork": {
+      "get": {
+        "tags": [
+          "cowork"
+        ],
+        "operationId": "get_cowork_status",
+        "responses": {
+          "200": {
+            "description": "Cowork status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoworkStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/cowork/enable": {
+      "post": {
+        "tags": [
+          "cowork"
+        ],
+        "operationId": "enable_cowork",
+        "responses": {
+          "200": {
+            "description": "Enabled cowork",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoworkStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/cowork/threads": {
+      "get": {
+        "tags": [
+          "cowork"
+        ],
+        "operationId": "list_cowork_threads",
+        "responses": {
+          "200": {
+            "description": "Cowork threads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CoworkThread"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "cowork"
+        ],
+        "operationId": "create_cowork_thread",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCoworkThreadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Created cowork thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCoworkThreadResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Cowork not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/model-registries": {
       "get": {
         "tags": [
@@ -354,6 +455,70 @@
                   "items": {
                     "$ref": "#/components/schemas/ProviderConfig"
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repo-roots": {
+      "get": {
+        "tags": [
+          "repo-roots"
+        ],
+        "operationId": "list_repo_roots",
+        "responses": {
+          "200": {
+            "description": "List repo roots",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RepoRoot"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/repo-roots/{repo_root_id}": {
+      "get": {
+        "tags": [
+          "repo-roots"
+        ],
+        "operationId": "get_repo_root",
+        "parameters": [
+          {
+            "name": "repo_root_id",
+            "in": "path",
+            "description": "Repo root ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Repo root",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoRoot"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Repo root not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -1166,53 +1331,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Workspace"
+                  "$ref": "#/components/schemas/ResolveWorkspaceResponse"
                 }
               }
             }
           },
           "400": {
             "description": "Invalid path",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/workspaces/repos": {
-      "post": {
-        "tags": [
-          "workspaces"
-        ],
-        "operationId": "register_repo_workspace",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegisterRepoWorkspaceRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Registered repo workspace",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Workspace"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid repo path",
             "content": {
               "application/json": {
                 "schema": {
@@ -1246,7 +1371,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Workspace"
+                  "$ref": "#/components/schemas/ResolveWorkspaceResponse"
                 }
               }
             }
@@ -1344,6 +1469,107 @@
           },
           "404": {
             "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/cowork/artifacts/{artifact_id}": {
+      "get": {
+        "tags": [
+          "cowork"
+        ],
+        "operationId": "get_cowork_artifact",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "artifact_id",
+            "in": "path",
+            "description": "Artifact id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cowork artifact detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoworkArtifactDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Artifact not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Artifact invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/cowork/manifest": {
+      "get": {
+        "tags": [
+          "cowork"
+        ],
+        "operationId": "get_cowork_manifest",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cowork artifact manifest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoworkArtifactManifestResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Manifest invalid",
             "content": {
               "application/json": {
                 "schema": {
@@ -2776,6 +3002,261 @@
           }
         ]
       },
+      "CoworkArtifactDetailResponse": {
+        "type": "object",
+        "required": [
+          "artifact",
+          "content"
+        ],
+        "properties": {
+          "artifact": {
+            "$ref": "#/components/schemas/CoworkArtifactSummary"
+          },
+          "content": {
+            "type": "string"
+          }
+        }
+      },
+      "CoworkArtifactManifestResponse": {
+        "type": "object",
+        "required": [
+          "version",
+          "artifacts"
+        ],
+        "properties": {
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CoworkArtifactSummary"
+            }
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "CoworkArtifactSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "path",
+          "type",
+          "title",
+          "createdAt",
+          "updatedAt",
+          "exists"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "exists": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "modifiedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "CoworkArtifactType": {
+        "type": "string",
+        "enum": [
+          "text/markdown",
+          "text/html",
+          "image/svg+xml",
+          "application/vnd.proliferate.react"
+        ]
+      },
+      "CoworkRoot": {
+        "type": "object",
+        "required": [
+          "id",
+          "repoRootId",
+          "repoRootPath",
+          "defaultBranch",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "defaultBranch": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "repoRootId": {
+            "type": "string"
+          },
+          "repoRootPath": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "CoworkStatus": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "threadCount"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "root": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CoworkRoot"
+              }
+            ]
+          },
+          "threadCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "CoworkThread": {
+        "type": "object",
+        "required": [
+          "id",
+          "repoRootId",
+          "workspaceId",
+          "sessionId",
+          "agentKind",
+          "branchName",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "branchName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lastActivityAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "repoRootId": {
+            "type": "string"
+          },
+          "requestedModelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateCoworkThreadRequest": {
+        "type": "object",
+        "required": [
+          "agentKind"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "modeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "CreateCoworkThreadResponse": {
+        "type": "object",
+        "required": [
+          "thread",
+          "workspace",
+          "session"
+        ],
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "thread": {
+            "$ref": "#/components/schemas/CoworkThread"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
+          }
+        }
+      },
       "CreatePullRequestRequest": {
         "type": "object",
         "required": [
@@ -2876,7 +3357,7 @@
       "CreateWorktreeWorkspaceRequest": {
         "type": "object",
         "required": [
-          "sourceWorkspaceId",
+          "repoRootId",
           "targetPath",
           "newBranchName"
         ],
@@ -2890,14 +3371,14 @@
           "newBranchName": {
             "type": "string"
           },
+          "repoRootId": {
+            "type": "string"
+          },
           "setupScript": {
             "type": [
               "string",
               "null"
             ]
-          },
-          "sourceWorkspaceId": {
-            "type": "string"
           },
           "targetPath": {
             "type": "string"
@@ -4337,16 +4818,75 @@
           "failed"
         ]
       },
-      "RegisterRepoWorkspaceRequest": {
+      "RepoRoot": {
         "type": "object",
         "required": [
-          "path"
+          "id",
+          "kind",
+          "path",
+          "createdAt",
+          "updatedAt"
         ],
         "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "defaultBranch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RepoRootKind"
+          },
           "path": {
+            "type": "string"
+          },
+          "remoteOwner": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remoteProvider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remoteRepoName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remoteUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
             "type": "string"
           }
         }
+      },
+      "RepoRootKind": {
+        "type": "string",
+        "enum": [
+          "external",
+          "managed"
+        ]
       },
       "ResolvePermissionRequest": {
         "type": "object",
@@ -4377,6 +4917,21 @@
         "properties": {
           "path": {
             "type": "string"
+          }
+        }
+      },
+      "ResolveWorkspaceResponse": {
+        "type": "object",
+        "required": [
+          "repoRoot",
+          "workspace"
+        ],
+        "properties": {
+          "repoRoot": {
+            "$ref": "#/components/schemas/RepoRoot"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
           }
         }
       },
@@ -5750,8 +6305,9 @@
         "required": [
           "id",
           "kind",
+          "repoRootId",
           "path",
-          "sourceRepoRootPath",
+          "surface",
           "createdAt",
           "updatedAt"
         ],
@@ -5781,24 +6337,6 @@
               }
             ]
           },
-          "gitOwner": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "gitProvider": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "gitRepoName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "id": {
             "type": "string"
           },
@@ -5814,14 +6352,11 @@
           "path": {
             "type": "string"
           },
-          "sourceRepoRootPath": {
+          "repoRootId": {
             "type": "string"
           },
-          "sourceWorkspaceId": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "surface": {
+            "$ref": "#/components/schemas/WorkspaceSurface"
           },
           "updatedAt": {
             "type": "string"
@@ -5881,7 +6416,6 @@
       "WorkspaceKind": {
         "type": "string",
         "enum": [
-          "repo",
           "worktree",
           "local"
         ]
@@ -5950,6 +6484,13 @@
             "type": "boolean"
           }
         }
+      },
+      "WorkspaceSurface": {
+        "type": "string",
+        "enum": [
+          "standard",
+          "cowork"
+        ]
       }
     }
   }

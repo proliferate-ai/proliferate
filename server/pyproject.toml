@@ -109,6 +109,7 @@ markers = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["proliferate"]
+artifacts = ["proliferate/server/artifact_runtime/static/**"]
 
 [build-system]
 requires = ["hatchling"]

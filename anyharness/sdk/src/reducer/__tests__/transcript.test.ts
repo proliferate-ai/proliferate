@@ -381,6 +381,78 @@ describe("transcript reducer", () => {
     expect(item.lastUpdatedSeq).toBe(5);
     expect((item.rawOutput as { _anyharness?: { backgroundWork?: { state?: string } } })._anyharness?.backgroundWork?.state).toBe("completed");
   });
+
+  it("classifies Claude cowork artifact create tool calls from captured MCP names", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        claudeCoworkArtifactCreateStarted(),
+        claudeCoworkArtifactCreateCompleted(),
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["tool-artifact-create"] as ToolCallItem;
+    expect(item.kind).toBe("tool_call");
+    expect(item.semanticKind).toBe("cowork_artifact_create");
+    expect(item.nativeToolName).toBe("mcp__cowork__create_artifact");
+  });
+
+  it("classifies Claude cowork artifact update tool calls from captured MCP names", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        claudeCoworkArtifactUpdateStarted(),
+        claudeCoworkArtifactUpdateCompleted(),
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["tool-artifact-update"] as ToolCallItem;
+    expect(item.kind).toBe("tool_call");
+    expect(item.semanticKind).toBe("cowork_artifact_update");
+    expect(item.nativeToolName).toBe("mcp__cowork__update_artifact");
+  });
+
+  it("does not classify unverified plain create_artifact names as cowork artifact tools", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        {
+          sessionId: "session-1",
+          seq: 2,
+          timestamp: "2026-04-04T00:00:02Z",
+          turnId: "turn-1",
+          itemId: "tool-plain-artifact",
+          event: {
+            type: "item_completed",
+            item: {
+              kind: "tool_invocation",
+              status: "completed",
+              sourceAgentKind: "claude",
+              toolCallId: "tool-plain-artifact",
+              title: "create_artifact",
+              nativeToolName: "create_artifact",
+              contentParts: [
+                {
+                  type: "tool_call",
+                  toolCallId: "tool-plain-artifact",
+                  title: "create_artifact",
+                  toolKind: "other",
+                  nativeToolName: "create_artifact",
+                },
+              ],
+            },
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["tool-plain-artifact"] as ToolCallItem;
+    expect(item.kind).toBe("tool_call");
+    expect(item.semanticKind).toBe("other");
+  });
 });
 
 function turnStarted(seq: number): SessionEventEnvelope {
@@ -603,6 +675,154 @@ function permissionRequested(
       toolCallId,
       toolKind: "execute",
       options: [{ id: "allow", label: "Allow" }],
+    },
+  };
+}
+
+function claudeCoworkArtifactCreateStarted(): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq: 2,
+    timestamp: "2026-04-12T19:13:00.100000+00:00",
+    turnId: "turn-1",
+    itemId: "tool-artifact-create",
+    event: {
+      type: "item_started",
+      item: {
+        kind: "tool_invocation",
+        status: "in_progress",
+        sourceAgentKind: "claude",
+        title: "mcp__cowork__create_artifact",
+        toolCallId: "tool-artifact-create",
+        nativeToolName: "mcp__cowork__create_artifact",
+        rawInput: {},
+        contentParts: [
+          {
+            type: "tool_call",
+            toolCallId: "tool-artifact-create",
+            title: "mcp__cowork__create_artifact",
+            toolKind: "other",
+            nativeToolName: "mcp__cowork__create_artifact",
+          },
+        ],
+      },
+    },
+  };
+}
+
+function claudeCoworkArtifactCreateCompleted(): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq: 3,
+    timestamp: "2026-04-12T19:13:01.353997+00:00",
+    turnId: "turn-1",
+    itemId: "tool-artifact-create",
+    event: {
+      type: "item_completed",
+      item: {
+        kind: "tool_invocation",
+        status: "completed",
+        sourceAgentKind: "claude",
+        title: "mcp__cowork__create_artifact",
+        toolCallId: "tool-artifact-create",
+        nativeToolName: "mcp__cowork__create_artifact",
+        rawInput: {
+          path: "aurora.jsx",
+          title: "Aurora - Interactive Ambient Display",
+          description:
+            "A beautiful interactive ambient display with flowing aurora gradients, floating particles, and a real-time clock.",
+        },
+        rawOutput:
+          "{\"createdAt\":\"2026-04-12T19:13:01.353997+00:00\",\"description\":\"A beautiful interactive ambient display with flowing aurora gradients, floating particles, and a real-time clock.\",\"exists\":true,\"id\":\"art_001386b254d0414a8f96f2baa8d976c2\",\"modifiedAt\":\"2026-04-12T19:13:01.354198186+00:00\",\"path\":\"aurora.jsx\",\"sizeBytes\":9792,\"title\":\"Aurora - Interactive Ambient Display\",\"type\":\"application/vnd.proliferate.react\",\"updatedAt\":\"2026-04-12T19:13:01.353997+00:00\"}",
+        contentParts: [
+          {
+            type: "tool_call",
+            toolCallId: "tool-artifact-create",
+            title: "mcp__cowork__create_artifact",
+            toolKind: "other",
+            nativeToolName: "mcp__cowork__create_artifact",
+          },
+          {
+            type: "tool_result_text",
+            text:
+              "{\"createdAt\":\"2026-04-12T19:13:01.353997+00:00\",\"description\":\"A beautiful interactive ambient display with flowing aurora gradients, floating particles, and a real-time clock.\",\"exists\":true,\"id\":\"art_001386b254d0414a8f96f2baa8d976c2\",\"modifiedAt\":\"2026-04-12T19:13:01.354198186+00:00\",\"path\":\"aurora.jsx\",\"sizeBytes\":9792,\"title\":\"Aurora - Interactive Ambient Display\",\"type\":\"application/vnd.proliferate.react\",\"updatedAt\":\"2026-04-12T19:13:01.353997+00:00\"}",
+          },
+        ],
+      },
+    },
+  };
+}
+
+function claudeCoworkArtifactUpdateStarted(): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq: 2,
+    timestamp: "2026-04-12T19:14:10.100000+00:00",
+    turnId: "turn-1",
+    itemId: "tool-artifact-update",
+    event: {
+      type: "item_started",
+      item: {
+        kind: "tool_invocation",
+        status: "in_progress",
+        sourceAgentKind: "claude",
+        title: "mcp__cowork__update_artifact",
+        toolCallId: "tool-artifact-update",
+        nativeToolName: "mcp__cowork__update_artifact",
+        rawInput: {},
+        contentParts: [
+          {
+            type: "tool_call",
+            toolCallId: "tool-artifact-update",
+            title: "mcp__cowork__update_artifact",
+            toolKind: "other",
+            nativeToolName: "mcp__cowork__update_artifact",
+          },
+        ],
+      },
+    },
+  };
+}
+
+function claudeCoworkArtifactUpdateCompleted(): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq: 3,
+    timestamp: "2026-04-12T19:14:11.353997+00:00",
+    turnId: "turn-1",
+    itemId: "tool-artifact-update",
+    event: {
+      type: "item_completed",
+      item: {
+        kind: "tool_invocation",
+        status: "completed",
+        sourceAgentKind: "claude",
+        title: "mcp__cowork__update_artifact",
+        toolCallId: "tool-artifact-update",
+        nativeToolName: "mcp__cowork__update_artifact",
+        rawInput: {
+          id: "art_001386b254d0414a8f96f2baa8d976c2",
+          title: "Aurora - Interactive Ambient Display",
+          description:
+            "A beautiful interactive ambient display with flowing aurora gradients, floating particles, and a real-time clock.",
+        },
+        rawOutput:
+          "{\"createdAt\":\"2026-04-12T19:13:01.353997+00:00\",\"description\":\"A beautiful interactive ambient display with flowing aurora gradients, floating particles, and a real-time clock.\",\"exists\":true,\"id\":\"art_001386b254d0414a8f96f2baa8d976c2\",\"modifiedAt\":\"2026-04-12T19:14:11.354198186+00:00\",\"path\":\"aurora.jsx\",\"sizeBytes\":9792,\"title\":\"Aurora - Interactive Ambient Display\",\"type\":\"application/vnd.proliferate.react\",\"updatedAt\":\"2026-04-12T19:14:11.353997+00:00\"}",
+        contentParts: [
+          {
+            type: "tool_call",
+            toolCallId: "tool-artifact-update",
+            title: "mcp__cowork__update_artifact",
+            toolKind: "other",
+            nativeToolName: "mcp__cowork__update_artifact",
+          },
+          {
+            type: "tool_result_text",
+            text:
+              "{\"createdAt\":\"2026-04-12T19:13:01.353997+00:00\",\"description\":\"A beautiful interactive ambient display with flowing aurora gradients, floating particles, and a real-time clock.\",\"exists\":true,\"id\":\"art_001386b254d0414a8f96f2baa8d976c2\",\"modifiedAt\":\"2026-04-12T19:14:11.354198186+00:00\",\"path\":\"aurora.jsx\",\"sizeBytes\":9792,\"title\":\"Aurora - Interactive Ambient Display\",\"type\":\"application/vnd.proliferate.react\",\"updatedAt\":\"2026-04-12T19:14:11.353997+00:00\"}",
+          },
+        ],
+      },
     },
   };
 }

@@ -1,4 +1,4 @@
-import type { Workspace } from "@anyharness/sdk";
+import type { RepoRoot, ResolveWorkspaceResponse, Workspace } from "@anyharness/sdk";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/collections";
 import { upsertLocalWorkspaceCollections } from "@/lib/domain/workspaces/collections";
 import {
@@ -7,10 +7,13 @@ import {
   startLatencyTimer,
 } from "@/lib/infra/debug-latency";
 
-function resolveRepoName(workspace: Workspace): string {
-  return workspace.gitRepoName
-    ?? workspace.sourceRepoRootPath.split("/").filter(Boolean).pop()
-    ?? "Repository";
+function resolveRepoName(workspace: Workspace, repoRoot: RepoRoot): string {
+  return repoRoot.displayName?.trim()
+    || repoRoot.remoteRepoName?.trim()
+    || workspace.gitRepoName
+    || workspace.sourceRepoRootPath?.split("/").filter(Boolean).pop()
+    || repoRoot.path.split("/").filter(Boolean).pop()
+    || "Repository";
 }
 
 export interface AddRepoWorkflowQueryClient {
@@ -26,10 +29,7 @@ export interface RunAddRepoWorkflowArgs {
   path: string;
   queryClient: AddRepoWorkflowQueryClient;
   ensureRuntimeReady: () => Promise<string>;
-  registerRepoWorkspace: (input: {
-    path: string;
-    connection: { runtimeUrl: string };
-  }) => Promise<Workspace>;
+  resolveWorkspaceFromPath: (path: string) => Promise<ResolveWorkspaceResponse>;
   unarchiveWorkspace: (workspaceId: string) => void;
   openRepoSetupModal: (state: {
     workspaceId: string;
@@ -43,22 +43,19 @@ export async function runAddRepoWorkflow({
   path,
   queryClient,
   ensureRuntimeReady,
-  registerRepoWorkspace,
+  resolveWorkspaceFromPath,
   unarchiveWorkspace,
   openRepoSetupModal,
   workspaceCollectionsScopeKey,
 }: RunAddRepoWorkflowArgs): Promise<void> {
   const runtimeUrl = await ensureRuntimeReady();
-  const workspace = await registerRepoWorkspace({
-    path,
-    connection: { runtimeUrl },
-  });
+  const { repoRoot, workspace } = await resolveWorkspaceFromPath(path);
   const collectionsScopeKey = workspaceCollectionsScopeKey(runtimeUrl);
 
   const cacheUpsertStartedAt = startLatencyTimer();
   queryClient.setQueriesData(
     { queryKey: collectionsScopeKey },
-    (collections) => upsertLocalWorkspaceCollections(collections, workspace),
+    (collections) => upsertLocalWorkspaceCollections(collections, workspace, repoRoot),
   );
   logLatency("workspace.collections.cache_upsert", {
     source: "repo_register",
@@ -80,7 +77,7 @@ export async function runAddRepoWorkflow({
   });
   openRepoSetupModal({
     workspaceId: workspace.id,
-    sourceRoot: workspace.sourceRepoRootPath,
-    repoName: resolveRepoName(workspace),
+    sourceRoot: repoRoot.path,
+    repoName: resolveRepoName(workspace, repoRoot),
   });
 }

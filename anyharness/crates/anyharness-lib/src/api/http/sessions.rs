@@ -739,6 +739,10 @@ fn map_create_session_error(error: CreateAndStartSessionError) -> ApiError {
         CreateAndStartSessionError::WorkspaceNotFound => {
             ApiError::bad_request("workspace not found", "WORKSPACE_NOT_FOUND")
         }
+        CreateAndStartSessionError::WorkspaceSingleSession { session_id } => ApiError::conflict(
+            format!("workspace only allows a single session; existing session: {session_id}"),
+            "WORKSPACE_SINGLE_SESSION",
+        ),
         CreateAndStartSessionError::MissingDataKey => ApiError::internal(
             crate::sessions::mcp::SessionMcpBindingsError::missing_data_key_detail(),
         ),
@@ -794,10 +798,9 @@ fn map_pending_prompt_mutation_error(error: PendingPromptMutationError) -> ApiEr
             format!("Session not found: {session_id}"),
             "SESSION_NOT_FOUND",
         ),
-        PendingPromptMutationError::NotFound => ApiError::not_found(
-            "Pending prompt not found",
-            "PENDING_PROMPT_NOT_FOUND",
-        ),
+        PendingPromptMutationError::NotFound => {
+            ApiError::not_found("Pending prompt not found", "PENDING_PROMPT_NOT_FOUND")
+        }
         PendingPromptMutationError::Internal(error) => ApiError::internal(error.to_string()),
     }
 }

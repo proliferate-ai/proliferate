@@ -40,7 +40,9 @@ anyharness/
         api/
         acp/
         agents/
+        cowork/
         sessions/
+        repo_roots/
         workspaces/
         files/
         git/
@@ -93,9 +95,11 @@ Use the lowest crate or runtime area that can own the logic cleanly.
 | Composition root and shared runtime object graph | `anyharness-lib/src/app/` | Build `AppState` here and keep it focused on injected dependencies. |
 | HTTP, SSE, WS, router, auth middleware, OpenAPI translation | `anyharness-lib/src/api/` | Transport boundary only. |
 | Durable session truth and session-domain invariants | `anyharness-lib/src/sessions/` | Session rows, event rows, validation, and durable configuration rules. |
+| Durable cowork truth and cowork thread invariants | `anyharness-lib/src/cowork/` | Cowork root/thread rows, artifact lifecycle, built-in MCP, and cowork-specific orchestration. |
+| Durable repo-root truth | `anyharness-lib/src/repo_roots/` | Canonical repo roots, remote metadata, and repo-level identity. |
 | Live ACP-backed session execution | `anyharness-lib/src/acp/` | In-memory actors, live session registry, permission mediation, and event normalization. |
 | Agent metadata, readiness, installation, and provider catalog | `anyharness-lib/src/agents/` | Descriptor, registry, resolver, installer, and credential discovery flow. |
-| Workspace identity, registration, resolution, worktrees, and env derivation | `anyharness-lib/src/workspaces/` | Workspace-domain truth and worktree semantics. |
+| Workspace identity, registration, resolution, worktrees, and env derivation | `anyharness-lib/src/workspaces/` | Execution-surface truth and worktree semantics. |
 | Focused workspace-facing adapters | `anyharness-lib/src/files/`, `git/`, `hosting/`, `processes/` | Keep them narrow and scoped to one capability. |
 | Live PTY lifecycle and terminal state | `anyharness-lib/src/terminals/` | Long-lived in-memory PTY handles and WS bridge behavior. |
 | SQLite bootstrap, migrations, and DB wiring | `anyharness-lib/src/persistence/` | Shared DB/runtime persistence boundary. |
@@ -179,8 +183,9 @@ Then read:
    touches runtime logic:
    - `src/agents.md`
    - `src/acp.md`
-   - `src/sessions.md`
-   - `src/workspaces.md`
+   - `src/cowork-artifacts.md`
    - `src/git.md`
    - `src/files.md`
    - `src/persistence.md`
+   - `src/workspaces.md`
+   - `src/sessions.md`

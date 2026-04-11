@@ -1,5 +1,5 @@
 import { AnyHarnessError } from "@anyharness/sdk";
-import { useRegisterRepoWorkspaceMutation } from "@anyharness/sdk-react";
+import { useResolveWorkspaceFromPathMutation } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { useLocation } from "react-router-dom";
@@ -36,7 +36,7 @@ export function useAddRepo() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { isHydrated, requiresSetup } = useSetupRequirements();
-  const registerRepoWorkspace = useRegisterRepoWorkspaceMutation().mutateAsync;
+  const resolveWorkspaceFromPath = useResolveWorkspaceFromPathMutation().mutateAsync;
   const unarchiveWorkspace = useWorkspaceUiStore((state) => state.unarchiveWorkspace);
   const openRepoSetupModal = useRepoSetupModalStore((state) => state.open);
   const showToast = useToastStore((state) => state.show);
@@ -54,7 +54,7 @@ export function useAddRepo() {
         path,
         queryClient,
         ensureRuntimeReady,
-        registerRepoWorkspace,
+        resolveWorkspaceFromPath: (repoPath) => resolveWorkspaceFromPath(repoPath),
         unarchiveWorkspace,
         openRepoSetupModal,
         workspaceCollectionsScopeKey,
@@ -64,7 +64,7 @@ export function useAddRepo() {
     } finally {
       setIsAddingRepo(false);
     }
-  }, [canAddRepo, openRepoSetupModal, queryClient, registerRepoWorkspace, showToast, unarchiveWorkspace]);
+  }, [canAddRepo, openRepoSetupModal, queryClient, resolveWorkspaceFromPath, showToast, unarchiveWorkspace]);
 
   const addRepoFromPicker = useCallback(async () => {
     if (!canAddRepo) {

@@ -15,7 +15,7 @@ use anyharness_contract::v1::terminals::{
 
 fn resolve_workspace(state: &AppState, workspace_id: &str) -> Result<(String, String), ApiError> {
     let ws = state
-        .workspace_service
+        .workspace_runtime
         .get_workspace(workspace_id)
         .map_err(|e| ApiError::internal(e.to_string()))?
         .ok_or_else(|| {

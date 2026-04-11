@@ -26,12 +26,19 @@ export function useWorkspaces() {
         runtimeUrl,
         cloudActive,
       });
-      const localWorkspaces = await getAnyHarnessClient({ runtimeUrl }).workspaces.list().catch(() => []);
-      const cloudWorkspaces = cloudActive
-        ? await listCloudWorkspaces().catch(() => null)
-        : [];
-
-      const collections = buildWorkspaceCollections(localWorkspaces, cloudWorkspaces ?? []);
+      const client = getAnyHarnessClient({ runtimeUrl });
+      const [localWorkspaces, repoRoots, cloudWorkspaces] = await Promise.all([
+        client.workspaces.list().catch(() => []),
+        client.repoRoots.list().catch(() => []),
+        cloudActive
+          ? listCloudWorkspaces().catch(() => null)
+          : Promise.resolve([]),
+      ]);
+      const collections = buildWorkspaceCollections(
+        localWorkspaces,
+        repoRoots,
+        cloudWorkspaces ?? [],
+      );
       logLatency("workspace.collections.fetch.success", {
         runtimeUrl,
         cloudActive,

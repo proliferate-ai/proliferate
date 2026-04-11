@@ -2,7 +2,9 @@
 pub struct WorkspaceRecord {
     pub id: String,
     pub kind: String,
+    pub repo_root_id: Option<String>,
     pub path: String,
+    pub surface: String,
     pub source_repo_root_path: String,
     pub source_workspace_id: Option<String>,
     pub git_provider: Option<String>,
@@ -13,6 +15,15 @@ pub struct WorkspaceRecord {
     pub display_name: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+impl WorkspaceRecord {
+    pub fn effective_repo_root_id(&self) -> String {
+        self.repo_root_id
+            .clone()
+            .or_else(|| self.source_workspace_id.clone())
+            .unwrap_or_else(|| self.id.clone())
+    }
 }
 
 #[derive(Debug, Clone)]

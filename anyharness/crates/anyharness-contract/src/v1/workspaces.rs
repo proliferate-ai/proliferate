@@ -25,9 +25,15 @@ pub struct WorkspaceExecutionSummary {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkspaceKind {
-    Repo,
     Worktree,
     Local,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceSurface {
+    Standard,
+    Cowork,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -35,16 +41,9 @@ pub enum WorkspaceKind {
 pub struct Workspace {
     pub id: String,
     pub kind: WorkspaceKind,
+    pub repo_root_id: String,
     pub path: String,
-    pub source_repo_root_path: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_workspace_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub git_provider: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub git_owner: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub git_repo_name: Option<String>,
+    pub surface: WorkspaceSurface,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub original_branch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -55,6 +54,13 @@ pub struct Workspace {
     pub execution_summary: Option<WorkspaceExecutionSummary>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveWorkspaceResponse {
+    pub repo_root: crate::v1::RepoRoot,
+    pub workspace: Workspace,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -105,14 +111,8 @@ pub struct CreateWorkspaceRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct RegisterRepoWorkspaceRequest {
-    pub path: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct CreateWorktreeWorkspaceRequest {
-    pub source_workspace_id: String,
+    pub repo_root_id: String,
     pub target_path: String,
     pub new_branch_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]

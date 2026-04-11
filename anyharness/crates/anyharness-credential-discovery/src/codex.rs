@@ -161,9 +161,7 @@ fn read_keychain_codex_auth(home_dir: &Path) -> Result<Option<(String, Value)>, 
 }
 
 #[cfg(not(target_os = "macos"))]
-fn read_keychain_codex_auth(
-    _home_dir: &Path,
-) -> Result<Option<(String, Value)>, DiscoveryError> {
+fn read_keychain_codex_auth(_home_dir: &Path) -> Result<Option<(String, Value)>, DiscoveryError> {
     Ok(None)
 }
 
@@ -219,8 +217,11 @@ mod tests {
     #[test]
     fn exports_codex_auth_file() {
         let home = make_temp_home();
-        fs::write(home.join(CODEX_AUTH_PATH), r#"{"OPENAI_API_KEY":"sk-test"}"#)
-            .expect("write codex auth");
+        fs::write(
+            home.join(CODEX_AUTH_PATH),
+            r#"{"OPENAI_API_KEY":"sk-test"}"#,
+        )
+        .expect("write codex auth");
 
         let export = export_portable_auth(&home)
             .expect("export")

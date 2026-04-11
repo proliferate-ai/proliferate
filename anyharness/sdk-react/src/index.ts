@@ -15,6 +15,11 @@ export {
   anyHarnessReconcileAgentsMutationKey,
   anyHarnessProviderConfigsKey,
   anyHarnessRuntimeWorkspacesKey,
+  anyHarnessRepoRootsKey,
+  anyHarnessCoworkStatusKey,
+  anyHarnessCoworkThreadsKey,
+  anyHarnessCoworkManifestKey,
+  anyHarnessCoworkArtifactKey,
   anyHarnessWorkspaceSessionLaunchKey,
   anyHarnessSessionsKey,
   anyHarnessSessionKey,
@@ -47,6 +52,15 @@ export {
   useModelRegistryQuery,
 } from "./hooks/model-registries.js";
 export { useProviderConfigsQuery } from "./hooks/providers.js";
+export { useRepoRootsQuery } from "./hooks/repo-roots.js";
+export {
+  useCoworkStatusQuery,
+  useCoworkThreadsQuery,
+  useCoworkArtifactManifestQuery,
+  useCoworkArtifactQuery,
+  useEnableCoworkMutation,
+  useCreateCoworkThreadMutation,
+} from "./hooks/cowork.js";
 export {
   useRuntimeWorkspacesQuery,
   useDetectProjectSetupQuery,
@@ -56,7 +70,6 @@ export {
   useWorkspaceSessionLaunchQuery,
   useResolveWorkspaceFromPathMutation,
   useCreateWorkspaceMutation,
-  useRegisterRepoWorkspaceMutation,
   useCreateWorktreeWorkspaceMutation,
 } from "./hooks/workspaces.js";
 export {

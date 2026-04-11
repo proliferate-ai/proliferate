@@ -3,6 +3,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use super::model::WorkspaceRecord;
 use crate::persistence::Db;
 
+#[derive(Clone)]
 pub struct WorkspaceStore {
     db: Db,
 }
@@ -72,6 +73,18 @@ impl WorkspaceStore {
         })
     }
 
+    pub fn list_execution_surfaces(&self) -> anyhow::Result<Vec<WorkspaceRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT * FROM workspaces
+                 WHERE kind IN ('local', 'worktree')
+                 ORDER BY updated_at DESC",
+            )?;
+            let rows = stmt.query_map([], map_row)?;
+            rows.collect()
+        })
+    }
+
     pub fn update_current_branch(
         &self,
         workspace_id: &str,
@@ -109,18 +122,28 @@ impl WorkspaceStore {
     pub fn insert(&self, record: &WorkspaceRecord) -> anyhow::Result<()> {
         self.db.with_conn(|conn| insert_workspace(conn, record))
     }
+
+    pub fn delete_by_id(&self, workspace_id: &str) -> anyhow::Result<()> {
+        self.db.with_conn(|conn| {
+            conn.execute("DELETE FROM workspaces WHERE id = ?1", [workspace_id])?;
+            Ok(())
+        })
+    }
 }
 
 fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<()> {
     conn.execute(
-        "INSERT INTO workspaces (id, kind, path, source_repo_root_path, source_workspace_id,
-         git_provider, git_owner, git_repo_name, original_branch, current_branch, display_name,
-         created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        "INSERT INTO workspaces (
+            id, kind, repo_root_id, path, surface, source_repo_root_path, source_workspace_id,
+            git_provider, git_owner, git_repo_name, original_branch, current_branch, display_name,
+            created_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         params![
             r.id,
             r.kind,
+            r.repo_root_id,
             r.path,
+            r.surface,
             r.source_repo_root_path,
             r.source_workspace_id,
             r.git_provider,
@@ -140,7 +163,9 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceRecord> {
     Ok(WorkspaceRecord {
         id: row.get("id")?,
         kind: row.get("kind")?,
+        repo_root_id: row.get("repo_root_id")?,
         path: row.get("path")?,
+        surface: row.get("surface")?,
         source_repo_root_path: row.get("source_repo_root_path")?,
         source_workspace_id: row.get("source_workspace_id")?,
         git_provider: row.get("git_provider")?,

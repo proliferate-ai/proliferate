@@ -1,0 +1,70 @@
+use uuid::Uuid;
+
+use super::model::{CreateRepoRootInput, RepoRootRecord};
+use super::store::RepoRootStore;
+
+#[derive(Clone)]
+pub struct RepoRootService {
+    store: RepoRootStore,
+}
+
+impl RepoRootService {
+    pub fn new(store: RepoRootStore) -> Self {
+        Self { store }
+    }
+
+    pub fn get_repo_root(&self, repo_root_id: &str) -> anyhow::Result<Option<RepoRootRecord>> {
+        self.store.find_by_id(repo_root_id)
+    }
+
+    pub fn find_by_path(&self, path: &str) -> anyhow::Result<Option<RepoRootRecord>> {
+        self.store.find_by_path(path)
+    }
+
+    pub fn list_repo_roots(&self) -> anyhow::Result<Vec<RepoRootRecord>> {
+        self.store.list_all()
+    }
+
+    pub fn ensure_repo_root(&self, input: CreateRepoRootInput) -> anyhow::Result<RepoRootRecord> {
+        if let Some(existing) = self.store.find_by_path(&input.path)? {
+            return Ok(existing);
+        }
+
+        let now = chrono::Utc::now().to_rfc3339();
+        let record = RepoRootRecord {
+            id: Uuid::new_v4().to_string(),
+            kind: input.kind,
+            path: input.path,
+            display_name: input.display_name,
+            default_branch: input.default_branch,
+            remote_provider: input.remote_provider,
+            remote_owner: input.remote_owner,
+            remote_repo_name: input.remote_repo_name,
+            remote_url: input.remote_url,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+
+        match self.store.insert(&record) {
+            Ok(()) => Ok(record),
+            Err(error) if is_unique_violation(&error) => {
+                self.store.find_by_path(&record.path)?.ok_or(error)
+            }
+            Err(error) => Err(error),
+        }
+    }
+}
+
+fn is_unique_violation(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<rusqlite::Error>()
+        .and_then(|inner| match inner {
+            rusqlite::Error::SqliteFailure(code, _) => Some(code.extended_code),
+            _ => None,
+        })
+        .is_some_and(|code| {
+            code == rusqlite::ffi::SQLITE_CONSTRAINT
+                || code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE
+                || code == rusqlite::ffi::SQLITE_CONSTRAINT_PRIMARYKEY
+        })
+}

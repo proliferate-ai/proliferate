@@ -48,6 +48,7 @@ import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { persistDefaultSessionModePreference } from "@/hooks/sessions/session-mode-preferences";
+import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
 import {
   isCurrentStreamHandle,
   shouldReconnectStream,
@@ -59,23 +60,27 @@ import {
 
 export function useSessionRuntimeActions() {
   const queryClient = useQueryClient();
+  const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const showToast = useToastStore((state) => state.show);
 
   const persistReconciledModePreferences = useCallback((
+    workspaceId: string | null | undefined,
     agentKind: string | null | undefined,
     liveConfigRawConfigId: string | null | undefined,
     reconciledChanges: PendingSessionConfigChange[],
     liveConfigValueResolver: (rawConfigId: string) => string | null,
   ) => {
+    const workspaceSurface = getWorkspaceSurface(workspaceId);
     for (const change of reconciledChanges) {
-      persistDefaultSessionModePreference(
+      persistDefaultSessionModePreference({
         agentKind,
         liveConfigRawConfigId,
-        change.rawConfigId,
-        liveConfigValueResolver(change.rawConfigId),
-      );
+        rawConfigId: change.rawConfigId,
+        modeId: liveConfigValueResolver(change.rawConfigId),
+        workspaceSurface,
+      });
     }
-  }, []);
+  }, [getWorkspaceSurface]);
 
   const activateSession = useCallback((sessionId: string | null) => {
     const state = useHarnessStore.getState();
@@ -140,6 +145,7 @@ export function useSessionRuntimeActions() {
     });
 
     persistReconciledModePreferences(
+      existing.workspaceId ?? workspaceId,
       patch.agentKind,
       effectiveLiveConfig?.normalizedControls.mode?.rawConfigId ?? null,
       reconcileResult.reconciledChanges,
@@ -464,6 +470,7 @@ export function useSessionRuntimeActions() {
 
         if (reconcileResult.reconciledChanges.length > 0) {
           persistReconciledModePreferences(
+            slotState.workspaceId,
             slotState.agentKind,
             event.type === "config_option_update"
               ? event.liveConfig.normalizedControls.mode?.rawConfigId ?? null

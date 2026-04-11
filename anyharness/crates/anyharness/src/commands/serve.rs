@@ -39,7 +39,13 @@ pub async fn run(args: ServeArgs) -> Result<()> {
     ensure_runtime_home(&runtime_home)?;
 
     let db = Db::open(&runtime_home)?;
-    let state = AppState::new(runtime_home.clone(), db, args.require_bearer_auth)?;
+    let runtime_base_url = runtime_base_url(&args.host, args.port);
+    let state = AppState::new(
+        runtime_home.clone(),
+        runtime_base_url,
+        db,
+        args.require_bearer_auth,
+    )?;
     let app = build_app(state, args.disable_cors);
 
     let addr = format!("{}:{}", args.host, args.port);
@@ -54,6 +60,14 @@ pub async fn run(args: ServeArgs) -> Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+fn runtime_base_url(host: &str, port: u16) -> String {
+    let resolved_host = match host.trim() {
+        "0.0.0.0" | "::" | "[::]" => "127.0.0.1",
+        other => other,
+    };
+    format!("http://{resolved_host}:{port}")
 }
 
 fn build_app(state: AppState, disable_cors: bool) -> Router {
@@ -121,6 +135,7 @@ mod tests {
         let runtime_home = PathBuf::from(format!("/tmp/anyharness-cors-test-{unique_suffix}"));
         AppState::new(
             runtime_home,
+            "http://127.0.0.1:8457".to_string(),
             Db::open_in_memory().expect("expected in-memory db"),
             false,
         )

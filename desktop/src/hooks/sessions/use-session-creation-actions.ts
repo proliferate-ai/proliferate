@@ -17,6 +17,8 @@ import {
 } from "@/stores/sessions/harness-store";
 import { useBranchRenameStore } from "@/stores/workspaces/branch-rename-store";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
+import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
 import {
   createEmptySessionSlot,
@@ -168,6 +170,7 @@ export function useSessionCreationActions({
   ensureWorkspaceSessions,
 }: SessionCreationDeps) {
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
+  const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const { promptSession } = useSessionPromptWorkflow();
   const { activateSession, ensureSessionStreamConnected } = useSessionRuntimeActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
@@ -288,6 +291,10 @@ export function useSessionCreationActions({
     const preferredModeId = useUserPreferencesStore.getState()
       .defaultSessionModeByAgentKind[options.agentKind]
       ?.trim() || undefined;
+    const workspaceSurface = getWorkspaceSurface(workspaceId);
+    const resolvedModeId = workspaceSurface === "cowork"
+      ? resolveCoworkDefaultSessionModeId(options.agentKind)
+      : preferredModeId;
     const authUser = useAuthStore.getState().user;
     const systemPromptAppend = shouldInjectBranchNaming
       ? [
@@ -308,7 +315,7 @@ export function useSessionCreationActions({
       ...createEmptySessionSlot(pendingSessionId, options.agentKind, {
         workspaceId,
         modelId: options.modelId,
-        modeId: preferredModeId ?? null,
+        modeId: resolvedModeId ?? null,
       }),
       status: "starting",
       transcriptHydrated: true,
@@ -332,7 +339,7 @@ export function useSessionCreationActions({
           workspaceId: target.anyharnessWorkspaceId,
           agentKind: options.agentKind,
           modelId: options.modelId,
-          modeId: preferredModeId,
+          ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
           mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
           systemPromptAppend,
         }, requestOptions);
@@ -344,7 +351,7 @@ export function useSessionCreationActions({
           ...createEmptySessionSlot(session.id, options.agentKind, {
             workspaceId,
             modelId: session.modelId ?? options.modelId,
-            modeId: session.modeId ?? preferredModeId ?? null,
+            modeId: session.modeId ?? resolvedModeId ?? null,
             title: session.title ?? null,
             liveConfig: session.liveConfig ?? null,
             executionSummary: session.executionSummary ?? null,
@@ -408,6 +415,7 @@ export function useSessionCreationActions({
     ensureSessionStreamConnected,
     ensureWorkspaceSessions,
     getWorkspaceRuntimeBlockReason,
+    getWorkspaceSurface,
     promptSession,
     showToast,
     upsertWorkspaceSessionRecord,

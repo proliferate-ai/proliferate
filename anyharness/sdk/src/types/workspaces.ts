@@ -1,9 +1,22 @@
 import type { components } from "../generated/openapi.js";
 
-export type WorkspaceKind = components["schemas"]["WorkspaceKind"];
+type GeneratedWorkspace = components["schemas"]["Workspace"];
+
+export type WorkspaceKind = components["schemas"]["WorkspaceKind"] | "repo";
+export type WorkspaceSurface = components["schemas"]["WorkspaceSurface"];
 export type WorkspaceExecutionPhase = components["schemas"]["WorkspaceExecutionPhase"];
 export type WorkspaceExecutionSummary = components["schemas"]["WorkspaceExecutionSummary"];
-export type Workspace = components["schemas"]["Workspace"];
+export type Workspace = Omit<GeneratedWorkspace, "kind" | "repoRootId" | "surface"> & {
+  kind: WorkspaceKind;
+  repoRootId?: string;
+  surface?: WorkspaceSurface;
+  sourceRepoRootPath?: string;
+  sourceWorkspaceId?: string | null;
+  gitProvider?: string | null;
+  gitOwner?: string | null;
+  gitRepoName?: string | null;
+};
+export type ResolveWorkspaceResponse = components["schemas"]["ResolveWorkspaceResponse"];
 export type UpdateWorkspaceDisplayNameRequest =
   components["schemas"]["UpdateWorkspaceDisplayNameRequest"];
 export type WorkspaceSessionLaunchModel =
@@ -15,8 +28,6 @@ export type WorkspaceSessionLaunchCatalog =
 export type ResolveWorkspaceFromPathRequest =
   components["schemas"]["ResolveWorkspaceFromPathRequest"];
 export type CreateWorkspaceRequest = components["schemas"]["CreateWorkspaceRequest"];
-export type RegisterRepoWorkspaceRequest =
-  components["schemas"]["RegisterRepoWorkspaceRequest"];
 export type CreateWorktreeWorkspaceRequest =
   components["schemas"]["CreateWorktreeWorkspaceRequest"];
 export type SetupScriptStatus = components["schemas"]["SetupScriptStatus"];

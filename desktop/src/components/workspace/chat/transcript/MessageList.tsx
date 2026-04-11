@@ -18,6 +18,8 @@ import { FileChangeCall } from "@/components/workspace/chat/tool-calls/FileChang
 import { FileReadCall } from "@/components/workspace/chat/tool-calls/FileReadCall";
 import { ReadGroupBlock } from "@/components/workspace/chat/tool-calls/ReadGroupBlock";
 import { ToolCallSummary } from "@/components/workspace/chat/tool-calls/ToolCallSummary";
+import { CoworkArtifactToolCallBlock } from "@/components/workspace/chat/tool-calls/CoworkArtifactToolCallBlock";
+import { CoworkArtifactTurnCard } from "@/components/workspace/chat/tool-calls/CoworkArtifactTurnCard";
 import { TurnDiffPanel } from "./TurnDiffPanel";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import {
@@ -27,13 +29,22 @@ import {
   FilePlus,
   FileText,
   FolderList,
+  ProliferateIcon,
   Settings,
   Sparkles,
   Terminal,
 } from "@/components/ui/icons";
 import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
 import { useMessageListScroll } from "@/hooks/chat/use-message-list-scroll";
+import { useOpenCoworkArtifact } from "@/hooks/cowork/use-open-cowork-artifact";
 import { useBrailleFillsweep } from "@/hooks/ui/use-braille-sweep";
+import {
+  collectTurnCoworkArtifactToolCalls,
+} from "@/lib/domain/chat/cowork-artifact-tool-presentation";
+import {
+  describeToolCallDisplay,
+  type ToolDisplayIconKey,
+} from "@/lib/domain/chat/tool-call-display";
 import { buildTurnPresentation } from "@/lib/domain/chat/transcript-presentation";
 import {
   extractClaudePlanBody,
@@ -95,6 +106,7 @@ export function MessageList({
 }: MessageListProps) {
   const latestTurnId = transcript.turnOrder[transcript.turnOrder.length - 1] ?? null;
   const { openFileDiff } = useWorkspaceFileActions();
+  const { openArtifact } = useOpenCoworkArtifact();
   const subagentBrailleColors = useMemo(
     () => buildSubagentBrailleColorMap(transcript),
     [transcript],
@@ -141,6 +153,8 @@ export function MessageList({
                     turnId={turnId}
                     transcript={transcript}
                     isTurnComplete={!!turn.completedAt}
+                    workspaceId={selectedWorkspaceId}
+                    onOpenArtifact={openArtifact}
                     subagentBrailleColors={subagentBrailleColors}
                   />
                   {turn.completedAt && hasFileBadges && (
@@ -211,11 +225,15 @@ function TurnItemSequence({
   turnId,
   transcript,
   isTurnComplete,
+  workspaceId,
+  onOpenArtifact,
   subagentBrailleColors,
 }: {
   turnId: string;
   transcript: TranscriptState;
   isTurnComplete: boolean;
+  workspaceId: string | null;
+  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   subagentBrailleColors: Map<string, string>;
 }) {
   const turn = transcript.turnsById[turnId];
@@ -224,6 +242,10 @@ function TurnItemSequence({
   }
 
   const presentation = buildTurnPresentation(turn, transcript);
+  const artifactToolCalls = collectTurnCoworkArtifactToolCalls(turn, transcript);
+  const completedArtifactToolCalls = isTurnComplete
+    ? artifactToolCalls.filter((item) => item.status === "completed")
+    : [];
   let hasRenderedSummary = false;
 
   // Find the last visible assistant_prose root id in this turn
@@ -275,6 +297,8 @@ function TurnItemSequence({
                     itemId={collapsedRootId}
                     transcript={transcript}
                     childrenByParentId={presentation.childrenByParentId}
+                    workspaceId={workspaceId}
+                    onOpenArtifact={onOpenArtifact}
                     subagentBrailleColors={subagentBrailleColors}
                   />
                 ))}
@@ -295,6 +319,8 @@ function TurnItemSequence({
                   itemId={memberId}
                   transcript={transcript}
                   childrenByParentId={presentation.childrenByParentId}
+                  workspaceId={workspaceId}
+                  onOpenArtifact={onOpenArtifact}
                   subagentBrailleColors={subagentBrailleColors}
                 />
               ))}
@@ -303,16 +329,81 @@ function TurnItemSequence({
         }
 
         return (
-          <TranscriptTreeNode
+          <FragmentWithArtifacts
             key={itemId}
             itemId={itemId}
             transcript={transcript}
             childrenByParentId={presentation.childrenByParentId}
             isLastAssistantProse={isTurnComplete && itemId === lastAssistantProseRootId}
             subagentBrailleColors={subagentBrailleColors}
+            artifactToolCalls={
+              itemId === lastAssistantProseRootId ? completedArtifactToolCalls : null
+            }
+            workspaceId={workspaceId}
+            onOpenArtifact={onOpenArtifact}
           />
         );
       })}
+      {lastAssistantProseRootId === null && completedArtifactToolCalls.length > 0 && (
+        <div className="space-y-1.5">
+          {completedArtifactToolCalls.map((item) => (
+            <CoworkArtifactTurnCard
+              key={`turn-artifact-${item.itemId}`}
+              item={item}
+              onOpenArtifact={
+                workspaceId ? (artifactId) => onOpenArtifact(workspaceId, artifactId) : undefined
+              }
+            />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function FragmentWithArtifacts({
+  itemId,
+  transcript,
+  childrenByParentId,
+  isLastAssistantProse = false,
+  subagentBrailleColors,
+  artifactToolCalls,
+  workspaceId,
+  onOpenArtifact,
+}: {
+  itemId: string;
+  transcript: TranscriptState;
+  childrenByParentId: Map<string, string[]>;
+  isLastAssistantProse?: boolean;
+  subagentBrailleColors: Map<string, string>;
+  artifactToolCalls: ToolCallItem[] | null;
+  workspaceId: string | null;
+  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
+}) {
+  return (
+    <>
+      <TranscriptTreeNode
+        itemId={itemId}
+        transcript={transcript}
+        childrenByParentId={childrenByParentId}
+        isLastAssistantProse={isLastAssistantProse}
+        workspaceId={workspaceId}
+        onOpenArtifact={onOpenArtifact}
+        subagentBrailleColors={subagentBrailleColors}
+      />
+      {artifactToolCalls && artifactToolCalls.length > 0 && (
+        <div className="space-y-1.5">
+          {artifactToolCalls.map((item) => (
+            <CoworkArtifactTurnCard
+              key={`artifact-inline-${item.itemId}`}
+              item={item}
+              onOpenArtifact={
+                workspaceId ? (artifactId) => onOpenArtifact(workspaceId, artifactId) : undefined
+              }
+            />
+          ))}
+        </div>
+      )}
     </>
   );
 }
@@ -334,9 +425,13 @@ function TurnShell({
 function TranscriptItemBlock({
   item,
   isLastAssistantProse = false,
+  workspaceId,
+  onOpenArtifact,
 }: {
   item: TranscriptItem;
   isLastAssistantProse?: boolean;
+  workspaceId: string | null;
+  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
 }) {
   switch (item.kind) {
     case "user_message":
@@ -383,7 +478,11 @@ function TranscriptItemBlock({
       return (
         <div className="flex justify-start relative">
           <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
-            <ToolCallItemBlock item={item} />
+            <ToolCallItemBlock
+              item={item}
+              workspaceId={workspaceId}
+              onOpenArtifact={onOpenArtifact}
+            />
           </div>
         </div>
       );
@@ -414,12 +513,16 @@ function TranscriptTreeNode({
   transcript,
   childrenByParentId,
   isLastAssistantProse = false,
+  workspaceId,
+  onOpenArtifact,
   subagentBrailleColors,
 }: {
   itemId: string;
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
   isLastAssistantProse?: boolean;
+  workspaceId: string | null;
+  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   subagentBrailleColors: Map<string, string>;
 }) {
   const item = transcript.itemsById[itemId];
@@ -433,6 +536,8 @@ function TranscriptTreeNode({
         childIds={childIds}
         transcript={transcript}
         childrenByParentId={childrenByParentId}
+        workspaceId={workspaceId}
+        onOpenArtifact={onOpenArtifact}
         subagentBrailleColors={subagentBrailleColors}
       />
     );
@@ -442,15 +547,37 @@ function TranscriptTreeNode({
     <TranscriptItemBlock
       item={item}
       isLastAssistantProse={isLastAssistantProse}
+      workspaceId={workspaceId}
+      onOpenArtifact={onOpenArtifact}
     />
   );
 }
 
 function ToolCallItemBlock({
   item,
+  workspaceId,
+  onOpenArtifact,
 }: {
   item: ToolCallItem;
+  workspaceId: string | null;
+  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
 }) {
+  if (
+    item.semanticKind === "cowork_artifact_create"
+    || item.semanticKind === "cowork_artifact_update"
+  ) {
+    return (
+      <CoworkArtifactToolCallBlock
+        item={item}
+        onOpenArtifact={
+          workspaceId
+            ? (artifactId) => onOpenArtifact(workspaceId, artifactId)
+            : undefined
+        }
+      />
+    );
+  }
+
   const fileChanges = item.contentParts.filter(
     (part): part is FileChangeContentPart => part.type === "file_change",
   );
@@ -472,7 +599,7 @@ function ToolCallItemBlock({
   const rawInput = isRecord(item.rawInput);
   const bashDescription = readString(rawInput?.description) ?? undefined;
   const bashCommand = readString(rawInput?.command) ?? toolName;
-  const fallbackDisplay = describeToolCall(item, toolName);
+  const fallbackDisplay = describeToolCallDisplay(item, toolName);
   const rows: React.ReactNode[] = [];
   const status = mapStatus(item.status);
 
@@ -559,7 +686,7 @@ function ToolCallItemBlock({
     rows.push(
       <ToolCallBlock
         key="result"
-        icon={<ToolKindIcon kind={item.toolKind} nativeToolName={item.nativeToolName} title={toolName} />}
+        icon={<ToolKindIcon iconKey={fallbackDisplay.iconKey} />}
         name={<span className="font-[460] text-foreground/90">{fallbackDisplay.label}</span>}
         status={status}
         hint={fallbackDisplay.hint}
@@ -579,7 +706,7 @@ function ToolCallItemBlock({
     rows.push(
       <ToolCallBlock
         key="tool"
-        icon={<ToolKindIcon kind={item.toolKind} nativeToolName={item.nativeToolName} title={toolName} />}
+        icon={<ToolKindIcon iconKey={fallbackDisplay.iconKey} />}
         name={<span className="font-[460] text-foreground/90">{fallbackDisplay.label}</span>}
         status={status}
         hint={fallbackDisplay.hint}
@@ -595,12 +722,16 @@ function ToolCallGroupBlock({
   childIds,
   transcript,
   childrenByParentId,
+  workspaceId,
+  onOpenArtifact,
   subagentBrailleColors,
 }: {
   item: ToolCallItem;
   childIds: string[];
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
+  workspaceId: string | null;
+  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   subagentBrailleColors: Map<string, string>;
 }) {
   const isAgent = isSubagentItem(item);
@@ -612,6 +743,8 @@ function ToolCallGroupBlock({
         childIds={childIds}
         transcript={transcript}
         childrenByParentId={childrenByParentId}
+        workspaceId={workspaceId}
+        onOpenArtifact={onOpenArtifact}
         subagentBrailleColors={subagentBrailleColors}
       />
     );
@@ -633,17 +766,15 @@ function ToolCallGroupBlock({
     subagents: subagentCount,
   });
   const renderableItemCount = (hasRenderableToolDetails(item) ? 1 : 0) + childIds.length;
+  const display = describeToolCallDisplay(
+    item,
+    item.title ?? item.nativeToolName ?? "Tool group",
+  );
 
   return (
     <ToolCallSummary
-      icon={
-        <ToolKindIcon
-          kind={item.toolKind}
-          nativeToolName={item.nativeToolName}
-          title={item.title ?? item.nativeToolName ?? null}
-        />
-      }
-      label={item.title ?? item.nativeToolName ?? "Tool group"}
+      icon={<ToolKindIcon iconKey={display.iconKey} />}
+      label={display.label}
       summary={summary}
       defaultExpanded={item.status === "in_progress"}
       itemCount={renderableItemCount}
@@ -655,7 +786,11 @@ function ToolCallGroupBlock({
     >
       <div className="space-y-1.5">
         {hasRenderableToolDetails(item) && (
-          <ToolCallItemBlock item={item} />
+          <ToolCallItemBlock
+            item={item}
+            workspaceId={workspaceId}
+            onOpenArtifact={onOpenArtifact}
+          />
         )}
         <div className="ml-1 space-y-1.5">
           {childIds.map((childId) => (
@@ -664,6 +799,8 @@ function ToolCallGroupBlock({
               itemId={childId}
               transcript={transcript}
               childrenByParentId={childrenByParentId}
+              workspaceId={workspaceId}
+              onOpenArtifact={onOpenArtifact}
               subagentBrailleColors={subagentBrailleColors}
             />
           ))}
@@ -678,12 +815,16 @@ function AgentGroupBlock({
   childIds,
   transcript,
   childrenByParentId,
+  workspaceId,
+  onOpenArtifact,
   subagentBrailleColors,
 }: {
   item: ToolCallItem;
   childIds: string[];
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
+  workspaceId: string | null;
+  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   subagentBrailleColors: Map<string, string>;
 }) {
   const executionState = resolveSubagentExecutionState(item);
@@ -775,6 +916,8 @@ function AgentGroupBlock({
                   itemId={childId}
                   transcript={transcript}
                   childrenByParentId={childrenByParentId}
+                  workspaceId={workspaceId}
+                  onOpenArtifact={onOpenArtifact}
                   subagentBrailleColors={subagentBrailleColors}
                 />
               ))}
@@ -795,6 +938,8 @@ function AgentGroupBlock({
                       itemId={childId}
                       transcript={transcript}
                       childrenByParentId={childrenByParentId}
+                      workspaceId={workspaceId}
+                      onOpenArtifact={onOpenArtifact}
                       subagentBrailleColors={subagentBrailleColors}
                     />
                   ))}
@@ -1024,79 +1169,6 @@ function isSubagentItem(item: ToolCallItem): boolean {
   return item.nativeToolName === "Agent" || item.semanticKind === "subagent";
 }
 
-function describeToolCall(
-  item: ToolCallItem,
-  toolName: string,
-): { label: string; hint?: string } {
-  const cleanedToolName = toolName.trim();
-  const nativeName = item.nativeToolName?.trim() ?? "";
-  const normalizedToolName = cleanedToolName.toLowerCase();
-  const raw = isRecord(item.rawInput);
-
-  switch (item.semanticKind) {
-    case "subagent": {
-      const description = readString(raw?.description) ?? undefined;
-      return {
-        label: "Agent task",
-        hint: description
-          ?? (cleanedToolName && normalizedToolName !== "agent" ? cleanedToolName : undefined),
-      };
-    }
-    case "search": {
-      const pattern = readString(raw?.pattern) ?? undefined;
-      return {
-        label: "Search",
-        hint: pattern
-          ?? (cleanedToolName && normalizedToolName !== "search" ? cleanedToolName : undefined),
-      };
-    }
-    case "fetch":
-      return {
-        label: "Fetch",
-        hint: cleanedToolName && normalizedToolName !== "fetch" ? cleanedToolName : undefined,
-      };
-    case "mode_switch":
-      return {
-        label: "Mode change",
-        hint: cleanedToolName || nativeName || undefined,
-      };
-    case "terminal": {
-      const description = readString(raw?.description) ?? undefined;
-      return {
-        label: description ?? "Command",
-        hint: cleanedToolName || nativeName || undefined,
-      };
-    }
-    case "file_read":
-      return {
-        label: "Read",
-        hint: cleanedToolName && normalizedToolName !== "read" ? cleanedToolName : undefined,
-      };
-    case "file_change":
-      return {
-        label: "Changed file",
-        hint: cleanedToolName && normalizedToolName !== "edit" ? cleanedToolName : undefined,
-      };
-    default:
-      if (nativeName && nativeName !== cleanedToolName) {
-        return {
-          label: nativeName,
-          hint: cleanedToolName || undefined,
-        };
-      }
-      if (cleanedToolName) {
-        return {
-          label: cleanedToolName,
-          hint: item.toolKind !== "other" ? item.toolKind : undefined,
-        };
-      }
-      return {
-        label: "Tool call",
-        hint: item.toolKind !== "other" ? item.toolKind : undefined,
-      };
-  }
-}
-
 function deriveReadPath(item: ToolCallItem, fallback: string): string {
   const rawInput = isRecord(item.rawInput);
   const fromInput =
@@ -1122,42 +1194,26 @@ function mapStatus(
   return "running";
 }
 
-function ToolKindIcon({
-  kind,
-  nativeToolName,
-  title,
-}: {
-  kind: string;
-  nativeToolName: string | null;
-  title?: string | null;
-}) {
+function ToolKindIcon({ iconKey }: { iconKey: ToolDisplayIconKey }) {
   const className = "size-3 text-faint";
-  const normalizedNativeToolName = nativeToolName?.toLowerCase() ?? "";
-  const normalizedTitle = title?.toLowerCase() ?? "";
 
-  if (nativeToolName === "Bash" || kind === "execute") {
-    return <Terminal className={className} />;
+  switch (iconKey) {
+    case "terminal":
+      return <Terminal className={className} />;
+    case "folder-list":
+      return <FolderList className={className} />;
+    case "file-text":
+      return <FileText className={className} />;
+    case "file-plus":
+      return <FilePlus className={className} />;
+    case "file-pen":
+      return <FilePen className={className} />;
+    case "clipboard-list":
+      return <ClipboardList className={className} />;
+    case "proliferate":
+      return <ProliferateIcon className={className} />;
+    case "settings":
+    default:
+      return <Settings className={className} />;
   }
-  if (
-    normalizedNativeToolName === "ls"
-    || kind === "list"
-    || normalizedTitle.startsWith("list ")
-    || normalizedTitle.startsWith("listing")
-    || normalizedTitle.includes(" listing")
-  ) {
-    return <FolderList className={className} />;
-  }
-  if (nativeToolName === "Read" || kind === "read") {
-    return <FileText className={className} />;
-  }
-  if (nativeToolName === "Write") {
-    return <FilePlus className={className} />;
-  }
-  if (nativeToolName === "Edit" || kind === "edit") {
-    return <FilePen className={className} />;
-  }
-  if (nativeToolName === "Agent" || kind === "think") {
-    return <ClipboardList className={className} />;
-  }
-  return <Settings className={className} />;
 }

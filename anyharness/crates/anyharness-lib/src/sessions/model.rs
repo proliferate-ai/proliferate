@@ -20,6 +20,7 @@ pub struct SessionRecord {
     pub closed_at: Option<String>,
     pub dismissed_at: Option<String>,
     pub mcp_bindings_ciphertext: Option<String>,
+    pub system_prompt_append: Option<String>,
 }
 
 impl SessionRecord {

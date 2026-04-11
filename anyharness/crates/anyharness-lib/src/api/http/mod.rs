@@ -1,5 +1,6 @@
 pub mod agents;
 pub mod blocking;
+pub mod cowork;
 pub mod error;
 pub mod files;
 pub mod git;
@@ -9,6 +10,7 @@ pub mod latency;
 pub mod model_registries;
 pub mod processes;
 pub mod provider_configs;
+pub mod repo_roots;
 pub mod sessions;
 pub mod terminals;
 pub mod workspaces;

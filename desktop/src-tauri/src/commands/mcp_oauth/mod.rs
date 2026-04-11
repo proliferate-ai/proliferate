@@ -47,7 +47,8 @@ pub async fn connect_oauth_connector(
         })?;
 
     let result = async {
-        let client = http_client().map_err(|detail| scrubbed_error(OAuthCommandErrorKind::Unexpected, detail))?;
+        let client = http_client()
+            .map_err(|detail| scrubbed_error(OAuthCommandErrorKind::Unexpected, detail))?;
         let discovery = discover_protected_resource_metadata(&client, &input.server_url)
             .await
             .map_err(|detail| scrubbed_error(OAuthCommandErrorKind::DiscoveryFailed, detail))?;
@@ -85,7 +86,10 @@ pub async fn connect_oauth_connector(
             "http://127.0.0.1:{}/callback",
             listener
                 .local_addr()
-                .map_err(|detail| scrubbed_error(OAuthCommandErrorKind::Unexpected, detail.to_string()))?
+                .map_err(|detail| scrubbed_error(
+                    OAuthCommandErrorKind::Unexpected,
+                    detail.to_string()
+                ))?
                 .port()
         );
 
@@ -98,14 +102,13 @@ pub async fn connect_oauth_connector(
             .map_err(|detail| scrubbed_error(OAuthCommandErrorKind::Unexpected, detail))?;
         let challenge = code_challenge(&verifier);
 
-        let mut authorize_url = Url::parse(&auth_metadata.authorization_endpoint).map_err(
-            |detail| {
+        let mut authorize_url =
+            Url::parse(&auth_metadata.authorization_endpoint).map_err(|detail| {
                 scrubbed_error(
                     OAuthCommandErrorKind::DiscoveryFailed,
                     format!("Invalid authorization endpoint: {detail}"),
                 )
-            },
-        )?;
+            })?;
         {
             let mut params = authorize_url.query_pairs_mut();
             params.append_pair("response_type", "code");
@@ -138,7 +141,10 @@ pub async fn connect_oauth_connector(
                 ))
             }
             Err(CallbackWaitError::Failed(detail)) => {
-                return Err(scrubbed_error(OAuthCommandErrorKind::ExchangeFailed, detail))
+                return Err(scrubbed_error(
+                    OAuthCommandErrorKind::ExchangeFailed,
+                    detail,
+                ))
             }
         };
         if callback.state != state {
@@ -216,13 +222,12 @@ pub async fn get_valid_oauth_access_token(
         });
     }
 
-    let client = http_client().map_err(|detail| scrubbed_error(OAuthCommandErrorKind::Unexpected, detail))?;
+    let client = http_client()
+        .map_err(|detail| scrubbed_error(OAuthCommandErrorKind::Unexpected, detail))?;
     match refresh_token(&client, &bundle).await {
         Ok(outcome) => {
-            let next_bundle = bundle.apply_token_response(
-                &outcome.response,
-                Some(outcome.token_endpoint),
-            );
+            let next_bundle =
+                bundle.apply_token_response(&outcome.response, Some(outcome.token_endpoint));
             if let Err(detail) = write_oauth_bundle(&input.connection_id, &next_bundle) {
                 tracing::warn!(
                     connection_id = %input.connection_id,
@@ -255,7 +260,9 @@ pub async fn delete_oauth_connector_bundle(connection_id: String) -> Result<(), 
 }
 
 #[tauri::command]
-pub async fn cancel_oauth_connector_connect(connection_id: String) -> Result<(), OAuthCommandError> {
+pub async fn cancel_oauth_connector_connect(
+    connection_id: String,
+) -> Result<(), OAuthCommandError> {
     cancel_connect(connection_id).await;
     Ok(())
 }

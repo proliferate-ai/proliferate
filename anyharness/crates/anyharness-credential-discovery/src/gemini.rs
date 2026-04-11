@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 #[cfg(target_os = "macos")]
 use std::process::Command;
 
+use serde_json::Value;
 #[cfg(target_os = "macos")]
 use serde_json::{Map, Number};
-use serde_json::Value;
 
 use crate::{
     util::{home_matches_process_home, resolve_process_override_dir},
@@ -26,7 +26,9 @@ pub fn detect_local_auth_state(home_dir: &Path) -> Result<LocalAuthState, Discov
     if let Some(data) = read_json_file(&oauth_path)? {
         if has_google_oauth_credentials(&data) {
             tracing::debug!(path = %oauth_path.display(), "Gemini OAuth credential file detected");
-            return Ok(LocalAuthState::Present(LocalAuthSource::File { path: oauth_path }));
+            return Ok(LocalAuthState::Present(LocalAuthSource::File {
+                path: oauth_path,
+            }));
         }
     }
 
@@ -182,7 +184,10 @@ fn google_credentials_from_keychain_entry(entry: &Value) -> Option<Value> {
         google_creds.insert("access_token".to_string(), Value::String(value.to_string()));
     }
     if let Some(value) = refresh_token.filter(|value| !value.is_empty()) {
-        google_creds.insert("refresh_token".to_string(), Value::String(value.to_string()));
+        google_creds.insert(
+            "refresh_token".to_string(),
+            Value::String(value.to_string()),
+        );
     }
     if let Some(value) = token
         .get("tokenType")
@@ -199,7 +204,10 @@ fn google_credentials_from_keychain_entry(entry: &Value) -> Option<Value> {
         google_creds.insert("scope".to_string(), Value::String(value.to_string()));
     }
     if let Some(value) = token.get("expiresAt").and_then(Value::as_i64) {
-        google_creds.insert("expiry_date".to_string(), Value::Number(Number::from(value)));
+        google_creds.insert(
+            "expiry_date".to_string(),
+            Value::Number(Number::from(value)),
+        );
     }
 
     Some(Value::Object(google_creds))
@@ -254,7 +262,10 @@ mod tests {
             .expect("export")
             .expect("portable auth");
         assert_eq!(export.files.len(), 2);
-        assert_eq!(export.files[0].relative_path.as_str(), GEMINI_OAUTH_FILE_PATH);
+        assert_eq!(
+            export.files[0].relative_path.as_str(),
+            GEMINI_OAUTH_FILE_PATH
+        );
         assert_eq!(export.files[1].relative_path.as_str(), GEMINI_SETTINGS_PATH);
 
         let settings = serde_json::from_slice::<Value>(&export.files[1].content).expect("settings");

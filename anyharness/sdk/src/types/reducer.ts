@@ -162,4 +162,6 @@ export type ToolCallSemanticKind =
   | "search"
   | "fetch"
   | "mode_switch"
+  | "cowork_artifact_create"
+  | "cowork_artifact_update"
   | "other";

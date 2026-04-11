@@ -25,10 +25,10 @@ use crate::git::types::{
 use crate::git::GitService;
 
 fn resolve_workspace_path(
-    workspace_service: &crate::workspaces::service::WorkspaceService,
+    workspace_runtime: &crate::workspaces::runtime::WorkspaceRuntime,
     workspace_id: &str,
 ) -> Result<std::path::PathBuf, ApiError> {
-    let workspace = workspace_service
+    let workspace = workspace_runtime
         .get_workspace(workspace_id)
         .map_err(|e| ApiError::internal(e.to_string()))?
         .ok_or_else(|| ApiError::not_found("Workspace not found", "WORKSPACE_NOT_FOUND"))?;
@@ -46,9 +46,9 @@ where
     T: Send + 'static,
     F: FnOnce(String, std::path::PathBuf) -> Result<T, ApiError> + Send + 'static,
 {
-    let workspace_service = state.workspace_service.clone();
+    let workspace_runtime = state.workspace_runtime.clone();
     tokio::task::spawn_blocking(move || {
-        let workspace_path = resolve_workspace_path(&workspace_service, &workspace_id)?;
+        let workspace_path = resolve_workspace_path(&workspace_runtime, &workspace_id)?;
         task(workspace_id, workspace_path)
     })
     .await

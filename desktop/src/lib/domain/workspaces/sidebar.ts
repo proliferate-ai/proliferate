@@ -233,9 +233,7 @@ export function buildSidebarGroupStates(args: {
   return groupSidebarEntries(args.sidebarEntries)
     .map((group): SidebarGroupState | null => {
       const visibleEntries = group.entries.filter(
-        (entry) =>
-          (args.showArchived || !args.archivedSet.has(entry.id))
-          && !(entry.source === "local" && entry.workspace.kind === "repo"),
+        (entry) => args.showArchived || !args.archivedSet.has(entry.id),
       );
       if (
         visibleEntries.length === 0
@@ -263,8 +261,13 @@ export function buildSidebarGroupStates(args: {
         name: group.name,
         repoWorkspaceId:
           group.entries.find(
-            (entry) => entry.source === "local" && entry.workspace.kind === "repo",
-          )?.id ?? null,
+            (entry): entry is LocalSidebarWorkspaceEntry =>
+              entry.source === "local" && entry.workspace.kind === "local",
+          )?.id
+          ?? group.entries.find(
+            (entry): entry is LocalSidebarWorkspaceEntry => entry.source === "local",
+          )?.id
+          ?? null,
         localSourceRoot:
           group.entries.find((entry) => entry.source === "local")
             ?.workspace.sourceRepoRootPath ?? null,
@@ -343,6 +346,7 @@ function sidebarEntryGroupName(entry: SidebarWorkspaceEntry): string {
   }
 
   return entry.workspace.gitRepoName
-    ?? entry.workspace.sourceRepoRootPath.split("/").pop()
-    ?? entry.workspace.sourceRepoRootPath;
+    ?? entry.workspace.sourceRepoRootPath?.split("/").pop()
+    ?? entry.workspace.sourceRepoRootPath
+    ?? entry.workspace.path;
 }

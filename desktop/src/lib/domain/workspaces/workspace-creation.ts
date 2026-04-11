@@ -12,7 +12,7 @@ export interface CreateWorktreeWorkspaceInput {
 }
 
 export interface WorktreeCreationParams {
-  sourceWorkspaceId: string;
+  repoRootId: string;
   workspaceName: string;
   branchName: string;
   targetPath: string;
@@ -48,10 +48,15 @@ export function resolveWorktreeCreationParams(input: {
     || source.currentBranch
     || source.originalBranch
     || "HEAD";
+  const repoRootId = source.repoRootId?.trim();
+
+  if (!repoRootId) {
+    throw new Error("Source workspace is missing repo root context.");
+  }
 
   return {
     params: {
-      sourceWorkspaceId: rawInput.sourceWorkspaceId,
+      repoRootId,
       workspaceName,
       branchName: buildBranchName(
         rawInput.branchName?.trim() || workspaceName,

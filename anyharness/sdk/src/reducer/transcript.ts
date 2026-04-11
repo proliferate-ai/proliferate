@@ -943,6 +943,17 @@ function deriveToolCallSemanticKind(
   const normalizedToolKind = toolKind.toLowerCase();
   const normalizedNativeToolName = (nativeToolName ?? "").toLowerCase();
   const normalizedTitle = (title ?? "").toLowerCase();
+  const normalizedEffectiveToolName = normalizeToolNameForSemanticKind(
+    nativeToolName,
+    title,
+  );
+
+  if (normalizedEffectiveToolName === "mcp__cowork__create_artifact") {
+    return "cowork_artifact_create";
+  }
+  if (normalizedEffectiveToolName === "mcp__cowork__update_artifact") {
+    return "cowork_artifact_update";
+  }
 
   if (nativeToolName === "Agent" || normalizedToolKind === "think") {
     return "subagent";
@@ -988,6 +999,18 @@ function deriveToolCallSemanticKind(
     return "mode_switch";
   }
   return "other";
+}
+
+function normalizeToolNameForSemanticKind(
+  nativeToolName: string | null,
+  title: string | null,
+): string {
+  const normalizedNativeToolName = (nativeToolName ?? "").trim().toLowerCase();
+  if (normalizedNativeToolName.length > 0) {
+    return normalizedNativeToolName;
+  }
+
+  return (title ?? "").trim().toLowerCase();
 }
 
 function collectFileBadges(s: TranscriptState, turnId: string) {

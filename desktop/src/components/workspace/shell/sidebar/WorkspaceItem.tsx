@@ -16,6 +16,7 @@ import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { SessionViewState } from "@/lib/domain/sessions/activity";
 import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar";
+import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/workspace-display";
 import { SidebarActionButton } from "./SidebarActionButton";
 import { WorkspaceRenamePopover } from "./WorkspaceRenamePopover";
 
@@ -30,25 +31,6 @@ const VARIANT_TOOLTIPS: Record<SidebarWorkspaceVariant, string> = {
   worktree: "Worktree · isolated branch in a separate checkout",
   cloud: "Cloud · runs on remote infrastructure",
 };
-
-function formatRelativeTime(date: string): string {
-  const now = Date.now();
-  const then = new Date(date).getTime();
-  const diff = now - then;
-
-  const seconds = Math.floor(diff / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-  const weeks = Math.floor(days / 7);
-
-  if (seconds < 60) return "now";
-  if (minutes < 60) return `${minutes}m`;
-  if (hours < 24) return `${hours}h`;
-  if (days < 7) return `${days}d`;
-  if (weeks < 5) return `${weeks}w`;
-  return `${Math.floor(days / 30)}mo`;
-}
 
 const CONTEXT_ROW =
   "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-accent";
@@ -212,7 +194,7 @@ export function WorkspaceItem({
           )}
           {!active && lastInteracted && (
             <div className="text-foreground/40 text-sm leading-4 tabular-nums truncate text-right group-focus-within:opacity-0 group-hover:opacity-0">
-              {formatRelativeTime(lastInteracted)}
+              {formatSidebarRelativeTime(lastInteracted)}
             </div>
           )}
         </div>

@@ -4,6 +4,7 @@ import {
   type LiveSessionControlDescriptor,
 } from "@/lib/domain/chat/session-controls";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -17,6 +18,7 @@ export function useChatSessionControls(): {
   const activeSlot = useHarnessStore((state) =>
     state.activeSessionId ? state.sessionSlots[state.activeSessionId] ?? null : null,
   );
+  const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const showToast = useToastStore((state) => state.show);
   const { setActiveSessionConfigOption } = useSessionActions();
 
@@ -32,12 +34,27 @@ export function useChatSessionControls(): {
       return EMPTY_CONTROLS;
     }
 
-    return buildLiveSessionControlDescriptors(
+    const nextControls = buildLiveSessionControlDescriptors(
       activeSlot.liveConfig.normalizedControls,
       activeSlot.pendingConfigChanges,
       onSelect,
     );
-  }, [activeSlot?.liveConfig?.normalizedControls, activeSlot?.pendingConfigChanges, onSelect]);
+    if (getWorkspaceSurface(activeSlot.workspaceId) !== "cowork") {
+      return nextControls;
+    }
+
+    // Cowork hides both permission mode controls and always uses product-defined
+    // defaults for new sessions instead of user-managed mode preferences.
+    return nextControls.filter((control) =>
+      control.key !== "mode" && control.key !== "collaboration_mode"
+    );
+  }, [
+    activeSlot?.liveConfig?.normalizedControls,
+    activeSlot?.pendingConfigChanges,
+    activeSlot?.workspaceId,
+    getWorkspaceSurface,
+    onSelect,
+  ]);
 
   const modeControl = useMemo(
     () =>

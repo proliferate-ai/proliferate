@@ -18,6 +18,17 @@ pub struct SessionService {
 }
 
 #[derive(Debug)]
+pub enum CreateSessionError {
+    WorkspaceNotFound(String),
+    WorkspaceSingleSession {
+        workspace_id: String,
+        session_id: String,
+    },
+    Invalid(String),
+    Internal(anyhow::Error),
+}
+
+#[derive(Debug)]
 pub enum GetLiveConfigSnapshotError {
     SessionNotFound(String),
     Internal(anyhow::Error),
@@ -72,7 +83,8 @@ impl SessionService {
         model_id: Option<&str>,
         mode_id: Option<&str>,
         mcp_bindings_ciphertext: Option<String>,
-    ) -> anyhow::Result<SessionRecord> {
+        system_prompt_append: Option<String>,
+    ) -> Result<SessionRecord, CreateSessionError> {
         let started = Instant::now();
         tracing::info!(
             workspace_id = %workspace_id,
@@ -83,22 +95,40 @@ impl SessionService {
         );
 
         let workspace_lookup_started = Instant::now();
-        let _workspace = self
+        let workspace = self
             .workspace_store
-            .find_by_id(workspace_id)?
-            .ok_or_else(|| anyhow::anyhow!("workspace not found: {workspace_id}"))?;
+            .find_by_id(workspace_id)
+            .map_err(CreateSessionError::Internal)?
+            .ok_or_else(|| CreateSessionError::WorkspaceNotFound(workspace_id.to_string()))?;
         tracing::info!(
             workspace_id = %workspace_id,
             elapsed_ms = workspace_lookup_started.elapsed().as_millis(),
             "[workspace-latency] session.create.workspace_validated"
         );
 
+        if workspace.surface == "cowork" {
+            if let Some(existing) = self
+                .session_store
+                .list_with_dismissed_by_workspace(workspace_id)
+                .map_err(CreateSessionError::Internal)?
+                .into_iter()
+                .next()
+            {
+                return Err(CreateSessionError::WorkspaceSingleSession {
+                    workspace_id: workspace_id.to_string(),
+                    session_id: existing.id,
+                });
+            }
+        }
+
         let registry_lookup_started = Instant::now();
         let registry = built_in_registry();
         let descriptor = registry
             .iter()
             .find(|d| d.kind.as_str() == agent_kind)
-            .ok_or_else(|| anyhow::anyhow!("unknown agent kind: {agent_kind}"))?;
+            .ok_or_else(|| {
+                CreateSessionError::Invalid(format!("unknown agent kind: {agent_kind}"))
+            })?;
         tracing::info!(
             workspace_id = %workspace_id,
             agent_kind = %agent_kind,
@@ -116,15 +146,15 @@ impl SessionService {
                     .and_then(|artifact| artifact.message.clone())
             });
             if let Some(detail) = detail {
-                anyhow::bail!(
+                return Err(CreateSessionError::Invalid(format!(
                     "agent '{agent_kind}' is not ready (status: {:?}): {detail}",
                     resolved.status
-                );
+                )));
             }
-            anyhow::bail!(
+            return Err(CreateSessionError::Invalid(format!(
                 "agent '{agent_kind}' is not ready (status: {:?})",
                 resolved.status
-            );
+            )));
         }
         tracing::info!(
             workspace_id = %workspace_id,
@@ -135,8 +165,10 @@ impl SessionService {
 
         let model_resolution_started = Instant::now();
         let registries = model_registries();
-        let model_registry = find_model_registry(&registries, agent_kind)?;
-        let resolved_model_id = resolve_model_id(model_registry, model_id)?;
+        let model_registry = find_model_registry(&registries, agent_kind)
+            .map_err(|error| CreateSessionError::Invalid(error.to_string()))?;
+        let resolved_model_id = resolve_model_id(model_registry, model_id)
+            .map_err(|error| CreateSessionError::Invalid(error.to_string()))?;
         let resolved_mode_id = mode_id
             .map(str::trim)
             .filter(|value| !value.is_empty())
@@ -170,9 +202,12 @@ impl SessionService {
             closed_at: None,
             dismissed_at: None,
             mcp_bindings_ciphertext,
+            system_prompt_append,
         };
 
-        self.session_store.insert(&record)?;
+        self.session_store
+            .insert(&record)
+            .map_err(CreateSessionError::Internal)?;
         tracing::info!(
             workspace_id = %workspace_id,
             session_id = %record.id,

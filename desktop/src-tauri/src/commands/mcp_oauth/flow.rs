@@ -136,10 +136,7 @@ pub async fn receive_callback(
     cancel_rx: oneshot::Receiver<()>,
 ) -> Result<CallbackPayload, CallbackWaitError> {
     let callback_future = async move {
-        let (mut stream, _) = listener
-            .accept()
-            .await
-            .map_err(|error| error.to_string())?;
+        let (mut stream, _) = listener.accept().await.map_err(|error| error.to_string())?;
         let mut buffer = [0u8; 4096];
         let bytes_read = stream
             .read(&mut buffer)
@@ -245,10 +242,9 @@ pub async fn refresh_token(
             .token_endpoint
     };
 
-    let refresh_token = bundle
-        .refresh_token
-        .as_ref()
-        .ok_or_else(|| RefreshTokenError::Failed("This connector doesn't have a refresh token.".to_string()))?;
+    let refresh_token = bundle.refresh_token.as_ref().ok_or_else(|| {
+        RefreshTokenError::Failed("This connector doesn't have a refresh token.".to_string())
+    })?;
     let response = client
         .post(&token_endpoint)
         .form(&[
@@ -259,7 +255,9 @@ pub async fn refresh_token(
         ])
         .send()
         .await
-        .map_err(|error| RefreshTokenError::Failed(format!("Couldn't refresh the OAuth token: {error}")))?;
+        .map_err(|error| {
+            RefreshTokenError::Failed(format!("Couldn't refresh the OAuth token: {error}"))
+        })?;
 
     let status = response.status();
     if status == reqwest::StatusCode::BAD_REQUEST {
@@ -272,9 +270,9 @@ pub async fn refresh_token(
         )));
     }
 
-    let response = response
-        .error_for_status()
-        .map_err(|error| RefreshTokenError::Failed(format!("Couldn't refresh the OAuth token: {error}")))?;
+    let response = response.error_for_status().map_err(|error| {
+        RefreshTokenError::Failed(format!("Couldn't refresh the OAuth token: {error}"))
+    })?;
     let response = response
         .json::<OAuthTokenResponse>()
         .await

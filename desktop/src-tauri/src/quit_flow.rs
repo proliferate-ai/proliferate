@@ -4,9 +4,7 @@ use std::sync::Mutex;
 #[cfg(target_os = "macos")]
 use std::sync::atomic::Ordering;
 #[cfg(target_os = "macos")]
-use tauri::{
-    AppHandle, Manager, RunEvent, Runtime, Window, WindowEvent, RESTART_EXIT_CODE,
-};
+use tauri::{AppHandle, Manager, RunEvent, Runtime, Window, WindowEvent, RESTART_EXIT_CODE};
 #[cfg(target_os = "macos")]
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
@@ -111,7 +109,8 @@ pub fn handle_run_event<R: Runtime>(app_handle: &AppHandle<R>, event: RunEvent) 
             show_quit_dialog(app_handle);
         }
         RunEvent::Reopen {
-            has_visible_windows, ..
+            has_visible_windows,
+            ..
         } => {
             if !has_visible_windows {
                 if let Some(window) = app_handle.get_webview_window("main") {

@@ -12,8 +12,8 @@ use super::execution_summary::{
     idle_workspace_execution_summary, summarize_session_record, summarize_workspace_sessions,
 };
 use super::mcp::{
-    decrypt_bindings, encrypt_bindings, SessionDataCipher, SessionMcpBindingsError, SessionMcpServer,
-    SESSION_RESTART_REQUIRED_DETAIL,
+    decrypt_bindings, encrypt_bindings, SessionDataCipher, SessionMcpBindingsError,
+    SessionMcpServer, SESSION_RESTART_REQUIRED_DETAIL,
 };
 use super::model::SessionRecord;
 use super::service::SessionService;
@@ -26,20 +26,23 @@ use crate::agents::model::{AgentKind, ResolvedAgent};
 use crate::agents::registry::built_in_registry;
 use crate::agents::resolver::resolve_agent;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
-use crate::workspaces::service::WorkspaceService;
+use crate::cowork::runtime::CoworkSessionHooks;
+use crate::workspaces::runtime::WorkspaceRuntime;
 
 pub struct SessionRuntime {
     session_service: Arc<SessionService>,
-    workspace_service: Arc<WorkspaceService>,
+    workspace_runtime: Arc<WorkspaceRuntime>,
     acp_manager: AcpManager,
     runtime_home: PathBuf,
     session_data_cipher: Option<SessionDataCipher>,
+    cowork_session_hooks: Arc<CoworkSessionHooks>,
 }
 
 #[derive(Debug)]
 pub enum CreateAndStartSessionError {
     Invalid(String),
     WorkspaceNotFound,
+    WorkspaceSingleSession { session_id: String },
     MissingDataKey,
     StartFailed(anyhow::Error),
     Internal(anyhow::Error),
@@ -111,17 +114,19 @@ enum StartSessionError {
 impl SessionRuntime {
     pub fn new(
         session_service: Arc<SessionService>,
-        workspace_service: Arc<WorkspaceService>,
+        workspace_runtime: Arc<WorkspaceRuntime>,
         acp_manager: AcpManager,
         runtime_home: PathBuf,
         session_data_cipher: Option<SessionDataCipher>,
+        cowork_session_hooks: Arc<CoworkSessionHooks>,
     ) -> Self {
         Self {
             session_service,
-            workspace_service,
+            workspace_runtime,
             acp_manager,
             runtime_home,
             session_data_cipher,
+            cowork_session_hooks,
         }
     }
 
@@ -164,7 +169,9 @@ impl SessionRuntime {
         &self,
         workspace_id: &str,
     ) -> anyhow::Result<WorkspaceExecutionSummary> {
-        let records = self.session_service.list_sessions(Some(workspace_id), false)?;
+        let records = self
+            .session_service
+            .list_sessions(Some(workspace_id), false)?;
         Ok(self
             .summarize_workspace_session_records(records)
             .await
@@ -226,18 +233,14 @@ impl SessionRuntime {
         );
 
         let durable_create_started = Instant::now();
-        let mcp_bindings_ciphertext = encrypt_bindings(self.session_data_cipher.as_ref(), &mcp_servers)
-            .map_err(map_encrypt_bindings_error_to_create)?;
-        let mut record = self
-            .session_service
-            .create_session(
-                workspace_id,
-                agent_kind,
-                model_id,
-                mode_id,
-                mcp_bindings_ciphertext,
-            )
-            .map_err(|error| CreateAndStartSessionError::Invalid(error.to_string()))?;
+        let mut record = self.create_durable_session(
+            workspace_id,
+            agent_kind,
+            model_id,
+            mode_id,
+            system_prompt_append,
+            mcp_servers,
+        )?;
         tracing::info!(
             workspace_id = %workspace_id,
             session_id = %record.id,
@@ -248,72 +251,11 @@ impl SessionRuntime {
             prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.durable_session_created"
         );
-
-        let system_prompt_append = join_system_prompt_append(system_prompt_append);
-        let live_start_started = Instant::now();
-        let start_result = self
-            .start_live_session(&record, false, 0, system_prompt_append, latency)
-            .await;
-        let (_handle, native_session_id) = match start_result {
-            Ok(result) => {
-                tracing::info!(
-                        workspace_id = %workspace_id,
-                        session_id = %record.id,
-                        native_session_id = %result.1,
-                        elapsed_ms = live_start_started.elapsed().as_millis(),
-                        flow_id = latency_fields.flow_id,
-                flow_kind = latency_fields.flow_kind,
-                flow_source = latency_fields.flow_source,
-                prompt_id = latency_fields.prompt_id,
-                        "[workspace-latency] session.runtime.live_session_started"
-                    );
-                result
-            }
-            Err(error) => {
-                tracing::warn!(
-                        workspace_id = %workspace_id,
-                        session_id = %record.id,
-                        elapsed_ms = live_start_started.elapsed().as_millis(),
-                        error = ?error,
-                        flow_id = latency_fields.flow_id,
-                flow_kind = latency_fields.flow_kind,
-                flow_source = latency_fields.flow_source,
-                prompt_id = latency_fields.prompt_id,
-                        "[workspace-latency] session.runtime.live_session_failed"
-                    );
-                return Err(match error {
-                    StartSessionError::WorkspaceNotFound => {
-                        CreateAndStartSessionError::WorkspaceNotFound
-                    }
-                    StartSessionError::AgentDescriptorNotFound(agent_kind) => {
-                        CreateAndStartSessionError::Internal(anyhow::anyhow!(
-                            "agent descriptor not found: {agent_kind}"
-                        ))
-                    }
-                    StartSessionError::MissingDataKey => CreateAndStartSessionError::MissingDataKey,
-                    StartSessionError::RestartRequired(detail) => {
-                        CreateAndStartSessionError::Internal(anyhow::anyhow!(detail))
-                    }
-                    StartSessionError::Internal(error) => {
-                        CreateAndStartSessionError::Internal(error)
-                    }
-                    StartSessionError::AcpStart(error) => {
-                        self.mark_session_errored(&record.id);
-                        CreateAndStartSessionError::StartFailed(error)
-                    }
-                });
-            }
-        };
-
-        let persist_started = Instant::now();
-        self.persist_live_session_state(&record.id, &native_session_id);
-        record.native_session_id = Some(native_session_id);
-        record.status = "idle".into();
+        record = self.start_persisted_session(&record, latency).await?;
         tracing::info!(
             workspace_id = %workspace_id,
             session_id = %record.id,
             native_session_id = %record.native_session_id.as_deref().unwrap_or_default(),
-            elapsed_ms = persist_started.elapsed().as_millis(),
             total_elapsed_ms = started.elapsed().as_millis(),
             flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
@@ -323,6 +265,98 @@ impl SessionRuntime {
         );
 
         Ok(record)
+    }
+
+    pub fn create_durable_session(
+        &self,
+        workspace_id: &str,
+        agent_kind: &str,
+        model_id: Option<&str>,
+        mode_id: Option<&str>,
+        system_prompt_append: Option<Vec<String>>,
+        mcp_servers: Vec<SessionMcpServer>,
+    ) -> Result<SessionRecord, CreateAndStartSessionError> {
+        let system_prompt_append = join_system_prompt_append(system_prompt_append);
+        let mcp_bindings_ciphertext =
+            encrypt_bindings(self.session_data_cipher.as_ref(), &mcp_servers)
+                .map_err(map_encrypt_bindings_error_to_create)?;
+        self.session_service
+            .create_session(
+                workspace_id,
+                agent_kind,
+                model_id,
+                mode_id,
+                mcp_bindings_ciphertext,
+                system_prompt_append,
+            )
+            .map_err(map_create_session_service_error)
+    }
+
+    pub async fn start_persisted_session(
+        &self,
+        record: &SessionRecord,
+        latency: Option<&LatencyRequestContext>,
+    ) -> Result<SessionRecord, CreateAndStartSessionError> {
+        let live_start_started = Instant::now();
+        let latency_fields = latency_trace_fields(latency);
+        let (_handle, native_session_id) = match self
+            .start_live_session(
+                record,
+                false,
+                0,
+                record.system_prompt_append.clone(),
+                latency,
+            )
+            .await
+        {
+            Ok(result) => {
+                tracing::info!(
+                    workspace_id = %record.workspace_id,
+                    session_id = %record.id,
+                    native_session_id = %result.1,
+                    elapsed_ms = live_start_started.elapsed().as_millis(),
+                    flow_id = latency_fields.flow_id,
+                    flow_kind = latency_fields.flow_kind,
+                    flow_source = latency_fields.flow_source,
+                    prompt_id = latency_fields.prompt_id,
+                    "[workspace-latency] session.runtime.live_session_started"
+                );
+                result
+            }
+            Err(error) => {
+                self.mark_session_errored(&record.id);
+                tracing::warn!(
+                    workspace_id = %record.workspace_id,
+                    session_id = %record.id,
+                    elapsed_ms = live_start_started.elapsed().as_millis(),
+                    error = ?error,
+                    flow_id = latency_fields.flow_id,
+                    flow_kind = latency_fields.flow_kind,
+                    flow_source = latency_fields.flow_source,
+                    prompt_id = latency_fields.prompt_id,
+                    "[workspace-latency] session.runtime.live_session_failed"
+                );
+                return Err(map_start_session_error_to_create(error));
+            }
+        };
+
+        let persist_started = Instant::now();
+        self.persist_live_session_state(&record.id, &native_session_id);
+        let mut updated = record.clone();
+        updated.native_session_id = Some(native_session_id);
+        updated.status = "idle".into();
+        tracing::info!(
+            workspace_id = %updated.workspace_id,
+            session_id = %updated.id,
+            native_session_id = %updated.native_session_id.as_deref().unwrap_or_default(),
+            elapsed_ms = persist_started.elapsed().as_millis(),
+            flow_id = latency_fields.flow_id,
+            flow_kind = latency_fields.flow_kind,
+            flow_source = latency_fields.flow_source,
+            prompt_id = latency_fields.prompt_id,
+            "[workspace-latency] session.runtime.live_session_persisted"
+        );
+        Ok(updated)
     }
 
     pub async fn ensure_live_session(
@@ -350,11 +384,9 @@ impl SessionRuntime {
                         "agent descriptor not found: {agent_kind}"
                     ))
                 }
-                StartSessionError::MissingDataKey => {
-                    EnsureLiveSessionError::RestartRequired(
-                        SESSION_RESTART_REQUIRED_DETAIL.to_string(),
-                    )
-                }
+                StartSessionError::MissingDataKey => EnsureLiveSessionError::RestartRequired(
+                    SESSION_RESTART_REQUIRED_DETAIL.to_string(),
+                ),
                 StartSessionError::RestartRequired(detail) => {
                     EnsureLiveSessionError::RestartRequired(detail)
                 }
@@ -662,7 +694,10 @@ impl SessionRuntime {
         let (tx, rx) = tokio::sync::oneshot::channel();
         if handle
             .command_tx
-            .send(SessionCommand::DeletePendingPrompt { seq, respond_to: tx })
+            .send(SessionCommand::DeletePendingPrompt {
+                seq,
+                respond_to: tx,
+            })
             .await
             .is_err()
         {
@@ -919,7 +954,7 @@ impl SessionRuntime {
                 record,
                 record.native_session_id.is_some(),
                 last_seq,
-                None,
+                record.system_prompt_append.clone(),
                 latency,
             )
             .await?;
@@ -965,7 +1000,7 @@ impl SessionRuntime {
 
         let workspace_lookup_started = Instant::now();
         let workspace = self
-            .workspace_service
+            .workspace_runtime
             .get_workspace(&record.workspace_id)
             .map_err(StartSessionError::Internal)?
             .ok_or(StartSessionError::WorkspaceNotFound)?;
@@ -1012,12 +1047,22 @@ impl SessionRuntime {
         let session_launch_env = build_session_launch_env(&resolved_agent);
         let session_store = self.session_service.store().clone();
         let workspace_path = PathBuf::from(&workspace.path);
-        let workspace_env = self.workspace_service.workspace_env(&workspace);
-        let mcp_servers = decrypt_bindings(
+        let workspace_env = self
+            .workspace_runtime
+            .workspace_env(&workspace)
+            .map_err(StartSessionError::Internal)?;
+        let mut mcp_servers = decrypt_bindings(
             self.session_data_cipher.as_ref(),
             record.mcp_bindings_ciphertext.as_deref(),
         )
         .map_err(map_decrypt_bindings_error_to_start)?;
+        let launch_extras = self
+            .cowork_session_hooks
+            .resolve_launch_extras(&workspace, &record.id)
+            .map_err(StartSessionError::Internal)?;
+        let system_prompt_append =
+            merge_system_prompt_append(system_prompt_append, launch_extras.system_prompt_append);
+        mcp_servers.extend(launch_extras.mcp_servers);
         let acp_start_started = Instant::now();
         let (handle, ready) = self
             .acp_manager
@@ -1032,6 +1077,16 @@ impl SessionRuntime {
                 is_resume,
                 last_seq,
                 system_prompt_append,
+                Some(Arc::new({
+                    let cowork_session_hooks = self.cowork_session_hooks.clone();
+                    let workspace = workspace.clone();
+                    move |result| {
+                        if result.turn_finished {
+                            cowork_session_hooks
+                                .notify_turn_finished(&workspace, &result.session_id);
+                        }
+                    }
+                })),
                 latency.cloned(),
             )
             .await
@@ -1127,6 +1182,27 @@ fn join_system_prompt_append(system_prompt_append: Option<Vec<String>>) -> Optio
     Some(parts.join("\n\n"))
 }
 
+fn merge_system_prompt_append(
+    persisted: Option<String>,
+    extra_lines: Vec<String>,
+) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(persisted) = persisted
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+    {
+        parts.push(persisted);
+    }
+    if let Some(extra) = join_system_prompt_append(Some(extra_lines)) {
+        parts.push(extra);
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("\n\n"))
+    }
+}
+
 fn map_lifecycle_error_to_prompt(error: SessionLifecycleError) -> SendPromptError {
     match error {
         SessionLifecycleError::SessionNotFound(session_id) => {
@@ -1170,6 +1246,42 @@ fn map_decrypt_bindings_error_to_start(error: SessionMcpBindingsError) -> StartS
         SessionMcpBindingsError::Encrypt(error) => StartSessionError::Internal(error),
         SessionMcpBindingsError::Decrypt(_) => {
             StartSessionError::RestartRequired(SESSION_RESTART_REQUIRED_DETAIL.to_string())
+        }
+    }
+}
+
+fn map_start_session_error_to_create(error: StartSessionError) -> CreateAndStartSessionError {
+    match error {
+        StartSessionError::WorkspaceNotFound => CreateAndStartSessionError::WorkspaceNotFound,
+        StartSessionError::AgentDescriptorNotFound(agent_kind) => {
+            CreateAndStartSessionError::Internal(anyhow::anyhow!(
+                "agent descriptor not found: {agent_kind}"
+            ))
+        }
+        StartSessionError::MissingDataKey => CreateAndStartSessionError::MissingDataKey,
+        StartSessionError::RestartRequired(detail) => {
+            CreateAndStartSessionError::Internal(anyhow::anyhow!(detail))
+        }
+        StartSessionError::Internal(error) => CreateAndStartSessionError::Internal(error),
+        StartSessionError::AcpStart(error) => CreateAndStartSessionError::StartFailed(error),
+    }
+}
+
+fn map_create_session_service_error(
+    error: crate::sessions::service::CreateSessionError,
+) -> CreateAndStartSessionError {
+    match error {
+        crate::sessions::service::CreateSessionError::WorkspaceNotFound(_) => {
+            CreateAndStartSessionError::WorkspaceNotFound
+        }
+        crate::sessions::service::CreateSessionError::WorkspaceSingleSession {
+            session_id, ..
+        } => CreateAndStartSessionError::WorkspaceSingleSession { session_id },
+        crate::sessions::service::CreateSessionError::Invalid(detail) => {
+            CreateAndStartSessionError::Invalid(detail)
+        }
+        crate::sessions::service::CreateSessionError::Internal(error) => {
+            CreateAndStartSessionError::Internal(error)
         }
     }
 }

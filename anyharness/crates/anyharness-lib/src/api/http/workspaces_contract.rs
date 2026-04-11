@@ -1,7 +1,7 @@
 use anyharness_contract::v1::{
     DetectProjectSetupResponse, GetSetupStatusResponse, SetupHint, SetupHintCategory,
     SetupScriptStatus, Workspace, WorkspaceKind, WorkspaceSessionLaunchAgent,
-    WorkspaceSessionLaunchCatalog, WorkspaceSessionLaunchModel,
+    WorkspaceSessionLaunchCatalog, WorkspaceSessionLaunchModel, WorkspaceSurface,
 };
 
 use super::error::ApiError;
@@ -13,7 +13,7 @@ use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::setup_execution::{SetupJobSnapshot, SetupJobStatus};
 use crate::workspaces::types::{
     DetectedHintCategory, DetectedSetupHint, ProjectSetupDetectionResult,
-    RegisterRepoWorkspaceError, SetWorkspaceDisplayNameError,
+    SetWorkspaceDisplayNameError,
 };
 
 pub(super) fn setup_snapshot_to_contract(snapshot: SetupJobSnapshot) -> GetSetupStatusResponse {
@@ -44,20 +44,6 @@ pub(super) fn detection_result_to_contract(
     }
 }
 
-pub(super) fn map_register_repo_workspace_error(error: RegisterRepoWorkspaceError) -> ApiError {
-    match error {
-        RegisterRepoWorkspaceError::NotGitRepo => ApiError::bad_request(
-            "Selected folder is not a Git repository.",
-            "REPO_WORKSPACE_NOT_GIT_REPO",
-        ),
-        RegisterRepoWorkspaceError::WorktreeNotAllowed => ApiError::bad_request(
-            "Select the main repository root, not a worktree.",
-            "REPO_WORKSPACE_WORKTREE_UNSUPPORTED",
-        ),
-        RegisterRepoWorkspaceError::Unexpected(error) => ApiError::internal(error.to_string()),
-    }
-}
-
 pub(super) fn map_set_workspace_display_name_error(
     error: SetWorkspaceDisplayNameError,
 ) -> ApiError {
@@ -78,19 +64,19 @@ pub(super) fn workspace_to_contract_with_summary(
     record: WorkspaceRecord,
     execution_summary: anyharness_contract::v1::WorkspaceExecutionSummary,
 ) -> Workspace {
+    let repo_root_id = record.effective_repo_root_id();
     Workspace {
         id: record.id,
         kind: match record.kind.as_str() {
             "worktree" => WorkspaceKind::Worktree,
-            "local" => WorkspaceKind::Local,
-            _ => WorkspaceKind::Repo,
+            _ => WorkspaceKind::Local,
         },
+        repo_root_id,
         path: record.path,
-        source_repo_root_path: record.source_repo_root_path,
-        source_workspace_id: record.source_workspace_id,
-        git_provider: record.git_provider,
-        git_owner: record.git_owner,
-        git_repo_name: record.git_repo_name,
+        surface: match record.surface.as_str() {
+            "cowork" => WorkspaceSurface::Cowork,
+            _ => WorkspaceSurface::Standard,
+        },
         original_branch: record.original_branch,
         current_branch: record.current_branch,
         display_name: record.display_name,

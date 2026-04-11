@@ -41,6 +41,33 @@ export function anyHarnessRuntimeWorkspacesKey(runtimeUrl: string | null | undef
   return [...anyHarnessRuntimeKey(runtimeUrl), "workspaces"] as const;
 }
 
+export function anyHarnessRepoRootsKey(runtimeUrl: string | null | undefined) {
+  return [...anyHarnessRuntimeKey(runtimeUrl), "repo-roots"] as const;
+}
+
+export function anyHarnessCoworkStatusKey(runtimeUrl: string | null | undefined) {
+  return [...anyHarnessRuntimeKey(runtimeUrl), "cowork", "status"] as const;
+}
+
+export function anyHarnessCoworkThreadsKey(runtimeUrl: string | null | undefined) {
+  return [...anyHarnessRuntimeKey(runtimeUrl), "cowork", "threads"] as const;
+}
+
+export function anyHarnessCoworkManifestKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+) {
+  return [...anyHarnessRuntimeKey(runtimeUrl), "cowork", workspaceId ?? null, "manifest"] as const;
+}
+
+export function anyHarnessCoworkArtifactKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+  artifactId: string | null | undefined,
+) {
+  return [...anyHarnessCoworkManifestKey(runtimeUrl, workspaceId), "artifact", artifactId ?? null] as const;
+}
+
 export function anyHarnessWorkspaceSessionLaunchKey(
   runtimeUrl: string | null | undefined,
   workspaceId: string | null | undefined,

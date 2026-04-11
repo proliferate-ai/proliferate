@@ -162,21 +162,16 @@ impl OAuthCommandError {
                 "Couldn't finish the OAuth authorization for this connector.",
                 true,
             ),
-            OAuthCommandErrorKind::RefreshFailed => (
-                "Couldn't refresh the OAuth token for this connector.",
-                true,
-            ),
-            OAuthCommandErrorKind::CallbackTimeout => {
-                ("OAuth authorization timed out.", true)
+            OAuthCommandErrorKind::RefreshFailed => {
+                ("Couldn't refresh the OAuth token for this connector.", true)
             }
-            OAuthCommandErrorKind::StateMismatch => (
-                "OAuth authorization couldn't be verified.",
-                false,
-            ),
-            OAuthCommandErrorKind::Unexpected => (
-                "Couldn't complete OAuth for this connector.",
-                false,
-            ),
+            OAuthCommandErrorKind::CallbackTimeout => ("OAuth authorization timed out.", true),
+            OAuthCommandErrorKind::StateMismatch => {
+                ("OAuth authorization couldn't be verified.", false)
+            }
+            OAuthCommandErrorKind::Unexpected => {
+                ("Couldn't complete OAuth for this connector.", false)
+            }
         };
         Self {
             kind,
@@ -185,7 +180,11 @@ impl OAuthCommandError {
         }
     }
 
-    pub fn custom(kind: OAuthCommandErrorKind, message: impl Into<String>, retryable: bool) -> Self {
+    pub fn custom(
+        kind: OAuthCommandErrorKind,
+        message: impl Into<String>,
+        retryable: bool,
+    ) -> Self {
         Self {
             kind,
             message: message.into(),

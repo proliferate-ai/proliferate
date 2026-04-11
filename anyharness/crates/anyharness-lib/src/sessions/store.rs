@@ -23,8 +23,9 @@ impl SessionStore {
                 "INSERT INTO sessions (id, workspace_id, agent_kind, native_session_id,
                  requested_model_id, current_model_id, requested_mode_id, current_mode_id,
                  title, thinking_level_id, thinking_budget_tokens, status, created_at,
-                 updated_at, last_prompt_at, closed_at, dismissed_at, mcp_bindings_ciphertext)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+                 updated_at, last_prompt_at, closed_at, dismissed_at, mcp_bindings_ciphertext,
+                 system_prompt_append)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
                 params![
                     record.id,
                     record.workspace_id,
@@ -44,8 +45,16 @@ impl SessionStore {
                     record.closed_at,
                     record.dismissed_at,
                     record.mcp_bindings_ciphertext,
+                    record.system_prompt_append,
                 ],
             )?;
+            Ok(())
+        })
+    }
+
+    pub fn delete_session(&self, id: &str) -> anyhow::Result<()> {
+        self.db.with_conn(|conn| {
+            conn.execute("DELETE FROM sessions WHERE id = ?1", [id])?;
             Ok(())
         })
     }
@@ -272,7 +281,11 @@ impl SessionStore {
             )?;
 
             let restored = conn
-                .query_row("SELECT * FROM sessions WHERE id = ?1", [&record.id], map_session)
+                .query_row(
+                    "SELECT * FROM sessions WHERE id = ?1",
+                    [&record.id],
+                    map_session,
+                )
                 .optional()?;
             Ok(restored)
         })
@@ -458,11 +471,7 @@ impl SessionStore {
         })
     }
 
-    pub fn delete_pending_prompt(
-        &self,
-        session_id: &str,
-        seq: i64,
-    ) -> anyhow::Result<bool> {
+    pub fn delete_pending_prompt(&self, session_id: &str, seq: i64) -> anyhow::Result<bool> {
         self.db.with_conn(|conn| {
             let rows = conn.execute(
                 "DELETE FROM session_pending_prompts WHERE session_id = ?1 AND seq = ?2",
@@ -758,6 +767,7 @@ fn map_session(row: &rusqlite::Row) -> rusqlite::Result<SessionRecord> {
         closed_at: row.get("closed_at")?,
         dismissed_at: row.get("dismissed_at")?,
         mcp_bindings_ciphertext: row.get("mcp_bindings_ciphertext")?,
+        system_prompt_append: row.get("system_prompt_append")?,
     })
 }
 
@@ -816,9 +826,7 @@ fn map_pending_prompt(row: &rusqlite::Row) -> rusqlite::Result<PendingPromptReco
     })
 }
 
-fn map_background_work(
-    row: &rusqlite::Row,
-) -> rusqlite::Result<SessionBackgroundWorkRecord> {
+fn map_background_work(row: &rusqlite::Row) -> rusqlite::Result<SessionBackgroundWorkRecord> {
     let tracker_kind: String = row.get("tracker_kind")?;
     let state: String = row.get("state")?;
 
@@ -876,6 +884,7 @@ mod tests {
             closed_at: None,
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
+            system_prompt_append: None,
         }
     }
 
@@ -1031,7 +1040,10 @@ mod tests {
             .find_by_id("session-1")
             .expect("find first session")
             .expect("first session exists");
-        assert_eq!(first_stored.dismissed_at.as_deref(), Some("2026-03-25T01:00:00Z"));
+        assert_eq!(
+            first_stored.dismissed_at.as_deref(),
+            Some("2026-03-25T01:00:00Z")
+        );
         assert_eq!(first_stored.updated_at, "2026-03-25T01:00:00Z");
 
         let last_dismissed = store
@@ -1125,11 +1137,9 @@ mod tests {
             completed_at: None,
         };
 
-        assert!(
-            store
-                .upsert_or_refresh_pending_background_work(&pending)
-                .expect("upsert pending background work")
-        );
+        assert!(store
+            .upsert_or_refresh_pending_background_work(&pending)
+            .expect("upsert pending background work"));
         store
             .touch_background_work_activity("session-1", "tool-1", "2026-03-25T01:05:00Z")
             .expect("touch background work activity");
@@ -1141,22 +1151,18 @@ mod tests {
         assert_eq!(pending_rows[0].last_activity_at, "2026-03-25T01:05:00Z");
         assert_eq!(pending_rows[0].updated_at, "2026-03-25T01:05:00Z");
 
-        assert!(
-            store
+        assert!(store
             .mark_background_work_terminal(
                 "session-1",
                 "tool-1",
                 SessionBackgroundWorkState::Completed,
                 "2026-03-25T01:06:00Z",
             )
-            .expect("mark background work terminal")
-        );
+            .expect("mark background work terminal"));
 
-        assert!(
-            store
-                .list_pending_background_work("session-1")
-                .expect("list pending background work")
-                .is_empty()
-        );
+        assert!(store
+            .list_pending_background_work("session-1")
+            .expect("list pending background work")
+            .is_empty());
     }
 }

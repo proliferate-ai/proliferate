@@ -17,6 +17,7 @@ use super::types::{
 
 const MAX_WORKSPACE_DISPLAY_NAME_CHARS: usize = 160;
 
+#[derive(Clone)]
 pub struct WorkspaceService {
     store: WorkspaceStore,
     runtime_home: PathBuf,
@@ -76,7 +77,9 @@ impl WorkspaceService {
             let record = WorkspaceRecord {
                 id: Uuid::new_v4().to_string(),
                 kind: "worktree".into(),
+                repo_root_id: None,
                 path: workspace_path.clone(),
+                surface: "standard".into(),
                 source_repo_root_path: main_path.to_string(),
                 source_workspace_id: Some(source_ws.id.clone()),
                 git_provider: remote.as_ref().map(|r| r.provider.clone()),
@@ -187,7 +190,9 @@ impl WorkspaceService {
             WorkspaceRecord {
                 id: Uuid::new_v4().to_string(),
                 kind: "worktree".into(),
+                repo_root_id: None,
                 path: workspace_path.clone(),
+                surface: "standard".into(),
                 source_repo_root_path: main_path.to_string(),
                 source_workspace_id: Some(source_ws.id.clone()),
                 git_provider: remote.as_ref().map(|r| r.provider.clone()),
@@ -261,9 +266,7 @@ impl WorkspaceService {
                 .ok_or_else(|| anyhow::anyhow!("local workspace has no source_workspace_id"))?;
             self.store
                 .find_by_id(parent_id)?
-                .ok_or_else(|| {
-                    anyhow::anyhow!("parent repo workspace not found: {parent_id}")
-                })?
+                .ok_or_else(|| anyhow::anyhow!("parent repo workspace not found: {parent_id}"))?
         } else if source.kind == "repo" {
             source
         } else {
@@ -289,7 +292,12 @@ impl WorkspaceService {
             anyhow::bail!("a workspace record already exists for path: {canonical_str}");
         }
 
-        resolver::create_git_worktree(&effective_source.path, target_path, new_branch_name, base_branch)?;
+        resolver::create_git_worktree(
+            &effective_source.path,
+            target_path,
+            new_branch_name,
+            base_branch,
+        )?;
 
         let context_started = Instant::now();
         let ctx = resolver::resolve_git_context(target_path)?;
@@ -311,7 +319,9 @@ impl WorkspaceService {
         let record = WorkspaceRecord {
             id: Uuid::new_v4().to_string(),
             kind: "worktree".into(),
+            repo_root_id: None,
             path: ctx.repo_root,
+            surface: "standard".into(),
             source_repo_root_path: effective_source.source_repo_root_path.clone(),
             source_workspace_id: Some(effective_source.id.clone()),
             git_provider: remote.as_ref().map(|r| r.provider.clone()),
@@ -415,7 +425,7 @@ impl WorkspaceService {
 
     pub fn list_workspaces(&self) -> anyhow::Result<Vec<WorkspaceRecord>> {
         self.store
-            .list_all()?
+            .list_execution_surfaces()?
             .into_iter()
             .map(|record| self.reconcile_current_branch(record))
             .collect()
@@ -592,7 +602,9 @@ fn build_repo_workspace_record(ctx: &ResolvedGitContext) -> WorkspaceRecord {
     WorkspaceRecord {
         id: Uuid::new_v4().to_string(),
         kind: "repo".into(),
+        repo_root_id: None,
         path: ctx.repo_root.clone(),
+        surface: "standard".into(),
         source_repo_root_path: ctx.repo_root.clone(),
         source_workspace_id: None,
         git_provider: remote.as_ref().map(|r| r.provider.clone()),
@@ -620,7 +632,9 @@ fn build_local_workspace_record(
     WorkspaceRecord {
         id: Uuid::new_v4().to_string(),
         kind: "local".into(),
+        repo_root_id: None,
         path: ctx.repo_root.clone(),
+        surface: "standard".into(),
         source_repo_root_path: source_repo.source_repo_root_path.clone(),
         source_workspace_id: Some(source_repo.id.clone()),
         git_provider: remote.as_ref().map(|r| r.provider.clone()),

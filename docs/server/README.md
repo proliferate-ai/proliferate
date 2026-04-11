@@ -217,3 +217,8 @@ Persistence rule:
 - `main.py`
   - App bootstrap and route registration only.
   - Keep app construction separate from product behavior and persistence logic.
+
+When a change touches `server/artifact-runtime/**`, also read
+`server/artifact-runtime/README.md`. That README owns the hosted artifact
+viewer contract, the desktop/runtime `postMessage` protocol, and the per-type
+renderer behavior.

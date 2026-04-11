@@ -8,6 +8,7 @@ use tokio::sync::{broadcast, RwLock};
 use super::permission_broker::PermissionBroker;
 use super::session_actor::{
     spawn_session_actor, ActorReadyResult, LiveSessionHandle, SessionActorConfig,
+    SessionTurnFinishResult,
 };
 use crate::agents::model::ResolvedAgent;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
@@ -46,6 +47,7 @@ impl AcpManager {
         is_resume: bool,
         last_seq: i64,
         system_prompt_append: Option<String>,
+        on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync + 'static>>,
         latency: Option<LatencyRequestContext>,
     ) -> anyhow::Result<(Arc<LiveSessionHandle>, ActorReadyResult)> {
         let session_id = session.id.clone();
@@ -118,6 +120,7 @@ impl AcpManager {
             is_resume,
             last_seq,
             system_prompt_append,
+            on_turn_finish,
             latency,
             on_exit: Some(on_exit),
         };

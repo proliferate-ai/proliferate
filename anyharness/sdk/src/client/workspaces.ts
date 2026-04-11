@@ -4,8 +4,8 @@ import type {
   CreateWorktreeWorkspaceResponse,
   DetectProjectSetupResponse,
   GetSetupStatusResponse,
-  RegisterRepoWorkspaceRequest,
   ResolveWorkspaceFromPathRequest,
+  ResolveWorkspaceResponse,
   StartWorkspaceSetupRequest,
   UpdateWorkspaceDisplayNameRequest,
   Workspace,
@@ -16,22 +16,15 @@ import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
 export class WorkspacesClient {
   constructor(private readonly transport: AnyHarnessTransport) {}
 
-  async resolveFromPath(path: string): Promise<Workspace> {
-    return this.transport.post<Workspace>(
+  async resolveFromPath(path: string): Promise<ResolveWorkspaceResponse> {
+    return this.transport.post<ResolveWorkspaceResponse>(
       "/v1/workspaces/resolve",
       { path } satisfies ResolveWorkspaceFromPathRequest,
     );
   }
 
-  async create(input: CreateWorkspaceRequest): Promise<Workspace> {
-    return this.transport.post<Workspace>("/v1/workspaces", input);
-  }
-
-  async registerRepoFromPath(path: string): Promise<Workspace> {
-    return this.transport.post<Workspace>(
-      "/v1/workspaces/repos",
-      { path } satisfies RegisterRepoWorkspaceRequest,
-    );
+  async create(input: CreateWorkspaceRequest): Promise<ResolveWorkspaceResponse> {
+    return this.transport.post<ResolveWorkspaceResponse>("/v1/workspaces", input);
   }
 
   async createWorktree(

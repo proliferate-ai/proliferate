@@ -124,6 +124,7 @@ mod tests {
             closed_at: None,
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
+            system_prompt_append: None,
         }
     }
 

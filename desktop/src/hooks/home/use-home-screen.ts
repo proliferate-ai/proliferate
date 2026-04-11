@@ -15,6 +15,7 @@ import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 const EMPTY_WORKSPACES: NonNullable<ReturnType<typeof useWorkspaces>["data"]>["workspaces"] = [];
 const EMPTY_LOCAL_WORKSPACES: NonNullable<ReturnType<typeof useWorkspaces>["data"]>["localWorkspaces"] = [];
+const EMPTY_REPO_ROOTS: NonNullable<ReturnType<typeof useWorkspaces>["data"]>["repoRoots"] = [];
 
 export function useHomeScreen() {
   const navigate = useNavigate();
@@ -32,6 +33,7 @@ export function useHomeScreen() {
 
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
   const localWorkspaces = workspaceCollections?.localWorkspaces ?? EMPTY_LOCAL_WORKSPACES;
+  const repoRoots = workspaceCollections?.repoRoots ?? EMPTY_REPO_ROOTS;
 
   const recentWorkspaces = useMemo(() => {
     const archivedSet = new Set(archivedWorkspaceIds);
@@ -46,8 +48,8 @@ export function useHomeScreen() {
   }, [archivedWorkspaceIds, workspaceLastInteracted, workspaces]);
 
   const repositories = useMemo(
-    () => buildSettingsRepositoryEntries(localWorkspaces),
-    [localWorkspaces],
+    () => buildSettingsRepositoryEntries(localWorkspaces, repoRoots),
+    [localWorkspaces, repoRoots],
   );
   const latestWorkspace = recentWorkspaces[0] ?? null;
   const actionCards = useMemo(

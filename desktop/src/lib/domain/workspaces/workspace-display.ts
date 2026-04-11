@@ -21,6 +21,25 @@ export function formatRelativeTime(date: string): string {
   return `${Math.floor(days / 30)}mo ago`;
 }
 
+export function formatSidebarRelativeTime(date: string): string {
+  const now = Date.now();
+  const then = new Date(date).getTime();
+  const diff = now - then;
+
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  const weeks = Math.floor(days / 7);
+
+  if (seconds < 60) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  if (hours < 24) return `${hours}h`;
+  if (days < 7) return `${days}d`;
+  if (weeks < 5) return `${weeks}w`;
+  return `${Math.floor(days / 30)}mo`;
+}
+
 export function workspaceBranchName(workspace: Workspace): string {
   return workspaceCurrentBranchName(workspace)
     ?? workspace.path.split("/").pop()
@@ -63,7 +82,7 @@ export function workspaceDefaultDisplayName(workspace: Workspace): string {
 
 export function workspaceRepoName(workspace: Workspace): string {
   return workspace.gitRepoName
-    ?? workspace.sourceRepoRootPath.split("/").pop()
+    ?? workspace.sourceRepoRootPath?.split("/").pop()
     ?? workspace.path.split("/").pop()
     ?? workspace.path;
 }

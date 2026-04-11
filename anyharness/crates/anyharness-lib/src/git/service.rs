@@ -323,6 +323,32 @@ impl GitService {
 
         Ok((remote_name.to_string(), branch, published))
     }
+
+    pub fn autosave_cowork_workspace(
+        workspace_path: &Path,
+        summary: &str,
+    ) -> anyhow::Result<Option<String>> {
+        let repo_root = run_git_ok(workspace_path, &["rev-parse", "--show-toplevel"])?
+            .trim()
+            .to_string();
+        let repo_root_path = PathBuf::from(&repo_root);
+
+        let unstaged = run_git(&repo_root_path, &["diff", "--quiet"])?;
+        let staged = run_git(&repo_root_path, &["diff", "--cached", "--quiet"])?;
+        if unstaged.success && staged.success {
+            return Ok(None);
+        }
+
+        run_git_ok(&repo_root_path, &["add", "-A"])?;
+        let staged_check = run_git_ok(&repo_root_path, &["diff", "--cached", "--stat"])?;
+        if staged_check.trim().is_empty() {
+            return Ok(None);
+        }
+
+        let (oid, _) =
+            Self::commit_staged(&repo_root_path, summary, None).map_err(anyhow::Error::from)?;
+        Ok(Some(oid))
+    }
 }
 
 fn detect_operation(repo_root: &Path) -> GitOperation {

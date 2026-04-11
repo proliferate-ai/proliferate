@@ -3,6 +3,7 @@ packages:
   - "anyharness/sdk-react"
   - "anyharness/tests"
   - "desktop"
+  - "server/artifact-runtime"
 
 onlyBuiltDependencies:
   - "@sentry/cli"

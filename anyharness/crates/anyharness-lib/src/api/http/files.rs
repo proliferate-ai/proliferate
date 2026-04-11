@@ -11,7 +11,7 @@ use anyharness_contract::v1::{
 };
 
 use crate::app::AppState;
-use crate::files::service::{FileServiceError, WorkspaceFilesService};
+use crate::files::service::FileServiceError;
 use crate::files::types::{
     ListWorkspaceFilesResult, ReadWorkspaceFileResult, StatWorkspaceFileResult,
     WorkspaceFileEntry as InternalWorkspaceFileEntry,
@@ -39,39 +39,14 @@ fn default_search_limit() -> usize {
     50
 }
 
-fn resolve_workspace_root(
-    workspace_service: &crate::workspaces::service::WorkspaceService,
-    workspace_id: &str,
-) -> Result<std::path::PathBuf, ApiError> {
-    let ws = workspace_service
-        .get_workspace(workspace_id)
-        .map_err(|e| ApiError::internal(e.to_string()))?
-        .ok_or_else(|| {
-            ApiError::not_found(
-                format!("workspace not found: {workspace_id}"),
-                "WORKSPACE_NOT_FOUND",
-            )
-        })?;
-    Ok(std::path::PathBuf::from(&ws.path))
-}
-
-async fn run_files_task<T, F>(
-    state: &AppState,
-    workspace_id: String,
-    task_label: &'static str,
-    task: F,
-) -> Result<T, ApiError>
+async fn run_files_task<T, F>(task_label: &'static str, task: F) -> Result<T, ApiError>
 where
     T: Send + 'static,
-    F: FnOnce(std::path::PathBuf) -> Result<T, ApiError> + Send + 'static,
+    F: FnOnce() -> Result<T, ApiError> + Send + 'static,
 {
-    let workspace_service = state.workspace_service.clone();
-    tokio::task::spawn_blocking(move || {
-        let root = resolve_workspace_root(&workspace_service, &workspace_id)?;
-        task(root)
-    })
-    .await
-    .map_err(|e| ApiError::internal(format!("{task_label} task failed: {e}")))?
+    tokio::task::spawn_blocking(task)
+        .await
+        .map_err(|e| ApiError::internal(format!("{task_label} task failed: {e}")))?
 }
 
 fn map_service_error(e: FileServiceError) -> ApiError {
@@ -91,8 +66,10 @@ pub async fn list_entries(
     Query(query): Query<FilePathQuery>,
 ) -> Result<Json<ListWorkspaceFilesResponse>, ApiError> {
     let path = query.path;
-    let response = run_files_task(&state, workspace_id, "list files", move |root| {
-        WorkspaceFilesService::list_entries(&root, &path)
+    let files_runtime = state.files_runtime.clone();
+    let response = run_files_task("list files", move || {
+        files_runtime
+            .list_entries(&workspace_id, &path)
             .map(list_response_to_contract)
             .map_err(map_service_error)
     })
@@ -106,8 +83,10 @@ pub async fn read_file(
     Query(query): Query<FilePathQuery>,
 ) -> Result<Json<ReadWorkspaceFileResponse>, ApiError> {
     let path = query.path;
-    let response = run_files_task(&state, workspace_id, "read file", move |root| {
-        WorkspaceFilesService::read_file(&root, &path)
+    let files_runtime = state.files_runtime.clone();
+    let response = run_files_task("read file", move || {
+        files_runtime
+            .read_file(&workspace_id, &path)
             .map(read_response_to_contract)
             .map_err(map_service_error)
     })
@@ -120,16 +99,15 @@ pub async fn search_files(
     Path(workspace_id): Path<String>,
     Query(query): Query<FileSearchQuery>,
 ) -> Result<Json<SearchWorkspaceFilesResponse>, ApiError> {
-    let cache = state.workspace_file_search_cache.clone();
-    let search_workspace_id = workspace_id.clone();
+    let files_runtime = state.files_runtime.clone();
     let search_query = query.q;
     let limit = query.limit.clamp(1, 200);
 
-    let response = run_files_task(&state, workspace_id, "search files", move |root| {
-        cache
-            .search(&search_workspace_id, &root, &search_query, limit)
+    let response = run_files_task("search files", move || {
+        files_runtime
+            .search_files(&workspace_id, &search_query, limit)
             .map(search_response_to_contract)
-            .map_err(|error| ApiError::internal(error.to_string()))
+            .map_err(map_service_error)
     })
     .await?;
 
@@ -144,14 +122,11 @@ pub async fn write_file(
     let path = body.path;
     let content = body.content;
     let expected_version_token = body.expected_version_token;
-    let cache = state.workspace_file_search_cache.clone();
-    let invalidate_workspace_id = workspace_id.clone();
-    let response = run_files_task(&state, workspace_id, "write file", move |root| {
-        WorkspaceFilesService::write_file(&root, &path, &content, &expected_version_token)
-            .map(|result| {
-                cache.invalidate(&invalidate_workspace_id);
-                write_response_to_contract(result)
-            })
+    let files_runtime = state.files_runtime.clone();
+    let response = run_files_task("write file", move || {
+        files_runtime
+            .write_file(&workspace_id, &path, &content, &expected_version_token)
+            .map(write_response_to_contract)
             .map_err(map_service_error)
     })
     .await?;
@@ -164,8 +139,10 @@ pub async fn stat_file(
     Query(query): Query<FilePathQuery>,
 ) -> Result<Json<StatWorkspaceFileResponse>, ApiError> {
     let path = query.path;
-    let response = run_files_task(&state, workspace_id, "stat file", move |root| {
-        WorkspaceFilesService::stat_file(&root, &path)
+    let files_runtime = state.files_runtime.clone();
+    let response = run_files_task("stat file", move || {
+        files_runtime
+            .stat_file(&workspace_id, &path)
             .map(stat_response_to_contract)
             .map_err(map_service_error)
     })

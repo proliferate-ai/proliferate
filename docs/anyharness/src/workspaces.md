@@ -1,32 +1,35 @@
 # Workspaces
 
-`anyharness-lib/src/workspaces/**` owns workspace identity, repo vs worktree
-semantics, registration from paths, worktree creation, and workspace-derived
-environment.
+`anyharness-lib/src/workspaces/**` owns execution-surface identity, workspace
+registration from paths, worktree creation, and workspace-derived environment.
+
+`anyharness-lib/src/repo_roots/**` owns repo-root identity and repo-level
+metadata.
 
 ## Core Concepts
 
 A workspace in AnyHarness is not just an arbitrary path.
 
-It is a durable runtime record describing either:
+It is a durable runtime record describing an execution surface:
 
-- a repo workspace
+- a local workspace
 - a worktree workspace
 
 The workspaces area owns:
 
 - identifying the canonical repo root for a path
-- distinguishing repo roots from git worktrees
+- distinguishing local roots from git worktrees
 - durable workspace records
-- source-workspace relationships
+- linking each workspace to a repo root
 - worktree creation
-- runtime env derivation from workspace metadata
+- runtime env derivation from workspace + repo-root metadata
 
 ## Core Models
 
-Core model and service files:
+Core model and runtime files:
 
 - `anyharness/crates/anyharness-lib/src/workspaces/model.rs`
+- `anyharness/crates/anyharness-lib/src/workspaces/runtime.rs`
 - `anyharness/crates/anyharness-lib/src/workspaces/service.rs`
 - `anyharness/crates/anyharness-lib/src/workspaces/store.rs`
 - `anyharness/crates/anyharness-lib/src/workspaces/resolver.rs`
@@ -39,14 +42,24 @@ It includes:
 
 - `id`
 - `kind`
+- `repo_root_id`
 - `path`
-- `source_repo_root_path`
-- `source_workspace_id`
-- git provider/owner/repo metadata
+- `surface`
 - original branch
+- current branch
+- display name
 - timestamps
 
 This is the source of truth for workspace identity inside the runtime.
+
+Repo-level metadata such as:
+
+- canonical repo path
+- remote provider/owner/repo
+- remote URL
+- default branch
+
+now lives on `RepoRootRecord` in `repo_roots/**`, not on `WorkspaceRecord`.
 
 ### `ResolvedGitContext` (`anyharness/crates/anyharness-lib/src/workspaces/model.rs`)
 
@@ -67,34 +80,34 @@ This is the bridge from raw filesystem path to durable workspace record.
 ### Resolve From Path
 
 `resolve_from_path(...)`
-(`anyharness/crates/anyharness-lib/src/workspaces/service.rs`)
+(`anyharness/crates/anyharness-lib/src/workspaces/runtime.rs`)
 is the idempotent lookup-or-create path.
 
 It:
 
 1. canonicalizes the input path
 2. resolves git context
-3. checks for an existing workspace by canonical path
-4. if the path is a worktree:
-   - ensures the source repo workspace exists
-   - creates a worktree record linked to the source workspace
-5. otherwise creates a repo record
+3. ensures a repo root exists for the canonical repo root path
+4. checks for an existing workspace by canonical path
+5. if the path is a worktree:
+   - creates or returns a `kind=worktree` workspace for that repo root
+6. otherwise creates or returns a `kind=local` workspace for that repo root
 
 This is the main registration path when a client points AnyHarness at a repo.
 
 ### Create Workspace
 
 `create_workspace(...)`
-(`anyharness/crates/anyharness-lib/src/workspaces/service.rs`)
+(`anyharness/crates/anyharness-lib/src/workspaces/runtime.rs`)
 is the explicit create path and follows the same
-repo-vs-worktree logic without the early return for an existing record.
+local-vs-worktree logic without the early return for an existing record.
 
 ### Create Worktree
 
 `create_worktree(...)`
-(`anyharness/crates/anyharness-lib/src/workspaces/service.rs`):
+(`anyharness/crates/anyharness-lib/src/workspaces/runtime.rs`):
 
-1. loads the source workspace and requires it to be a repo workspace
+1. loads the repo root and requires it to resolve to a managed repo path
 2. runs `git worktree add -b ...`
 3. resolves git context for the new path
 4. inserts a new durable worktree workspace record
@@ -106,8 +119,9 @@ execution output.
 ### Workspace Environment
 
 `workspace_env(...)`
-(`anyharness/crates/anyharness-lib/src/workspaces/service.rs`)
-derives the runtime env for workspace-scoped operations.
+(`anyharness/crates/anyharness-lib/src/workspaces/runtime.rs`)
+derives the runtime env for workspace-scoped operations from the durable
+workspace row plus its owning repo root.
 
 It includes metadata such as:
 
@@ -115,10 +129,10 @@ It includes metadata such as:
 - workspace dir
 - repo dir
 - runtime home
+- repo root id
 - repo name
 - branch
 - base ref when present
-- source workspace id
 - git provider/owner/repo
 - worktree dir for worktree workspaces
 
@@ -137,15 +151,15 @@ The durable workspace rows are loaded and stored through:
 
 ### Workspaces Owns
 
-- canonical workspace identity
-- repo vs worktree distinction
-- remote parsing into provider/owner/repo metadata
+- canonical execution-surface identity
+- local vs worktree distinction
 - worktree creation
 - workspace-derived env
 - setup-script execution for new worktrees
 
 ### Workspaces Does Not Own
 
+- repo-root durable metadata
 - git status and diff normalization
 - session validation or live runtime state
 - file path safety
@@ -153,21 +167,24 @@ The durable workspace rows are loaded and stored through:
 
 ## Important Invariants
 
-- Repo and worktree workspaces are different durable kinds.
-- A worktree workspace must point back to its source repo workspace.
+- Local and worktree workspaces are different durable kinds.
+- Every workspace must point at exactly one repo root.
 - Workspace paths should be canonicalized before identity decisions.
-- Workspace env should be derived from the durable record, not reconstructed
-  ad hoc by callers.
+- Workspace env should be derived from durable workspace + repo-root records,
+  not reconstructed ad hoc by callers.
 
 ## Extension Points
 
 Add behavior here when it changes workspace identity or workspace setup, for
 example:
 
-- richer remote parsing
-- more workspace metadata
+- richer worktree setup behavior
+- more workspace execution metadata
 - different setup-script policy
 - new worktree creation behavior
 
-Do not add behavior here when it belongs to git status, file safety, or live
-session execution.
+Add behavior to `repo_roots/**` instead when it changes repo-level durable
+metadata or repo-root lookup semantics.
+
+Do not add behavior here when it belongs to git status, file safety, repo-root
+durability, or live session execution.

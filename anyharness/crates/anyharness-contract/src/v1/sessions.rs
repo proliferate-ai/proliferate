@@ -271,10 +271,7 @@ mod tests {
         let round_tripped: CreateSessionRequest =
             serde_json::from_value(json).expect("deserialize create request");
         assert_eq!(round_tripped.model_id.as_deref(), Some("default"));
-        assert_eq!(
-            round_tripped.mode_id.as_deref(),
-            Some("bypassPermissions")
-        );
+        assert_eq!(round_tripped.mode_id.as_deref(), Some("bypassPermissions"));
         assert_eq!(
             round_tripped.system_prompt_append,
             Some(vec!["Rename the branch".to_string()])

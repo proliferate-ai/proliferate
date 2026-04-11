@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Workspace } from "@anyharness/sdk";
+import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
 import {
   buildWorkspaceCollections,
@@ -11,7 +11,9 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
     id: overrides.id ?? "workspace-1",
     kind: overrides.kind ?? "worktree",
+    repoRootId: overrides.repoRootId ?? "repo-root-1",
     path: overrides.path ?? "/tmp/repo/workspace-1",
+    surface: overrides.surface ?? "standard",
     sourceRepoRootPath: overrides.sourceRepoRootPath ?? "/tmp/repo",
     sourceWorkspaceId: overrides.sourceWorkspaceId ?? "repo-1",
     gitProvider: "gitProvider" in overrides ? overrides.gitProvider : "github",
@@ -22,6 +24,22 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
     executionSummary: overrides.executionSummary,
     createdAt: overrides.createdAt ?? "2026-04-06T10:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-04-06T10:00:00.000Z",
+  };
+}
+
+function makeRepoRoot(overrides: Partial<RepoRoot> = {}): RepoRoot {
+  return {
+    id: overrides.id ?? "repo-root-1",
+    kind: overrides.kind ?? "external",
+    path: overrides.path ?? "/tmp/repo",
+    displayName: overrides.displayName ?? "proliferate",
+    defaultBranch: overrides.defaultBranch ?? "main",
+    remoteProvider: overrides.remoteProvider ?? "github",
+    remoteOwner: overrides.remoteOwner ?? "proliferate-ai",
+    remoteRepoName: overrides.remoteRepoName ?? "proliferate",
+    remoteUrl: overrides.remoteUrl ?? null,
+    createdAt: overrides.createdAt ?? "2026-04-06T09:00:00.000Z",
+    updatedAt: overrides.updatedAt ?? "2026-04-06T09:00:00.000Z",
   };
 }
 
@@ -56,6 +74,7 @@ describe("upsertLocalWorkspaceCollections", () => {
   it("inserts a new local workspace and preserves cloud workspaces", () => {
     const existing = buildWorkspaceCollections(
       [makeWorkspace({ id: "workspace-1", updatedAt: "2026-04-06T10:00:00.000Z" })],
+      [makeRepoRoot()],
       [makeCloudWorkspace()],
     );
     const inserted = makeWorkspace({
@@ -82,6 +101,7 @@ describe("upsertLocalWorkspaceCollections", () => {
   it("replaces an existing local workspace in place", () => {
     const existing = buildWorkspaceCollections(
       [makeWorkspace({ id: "workspace-1", updatedAt: "2026-04-06T10:00:00.000Z" })],
+      [makeRepoRoot()],
       [],
     );
     const updated = makeWorkspace({
@@ -113,6 +133,7 @@ describe("workspaceFileTreeStateKey", () => {
     });
     const collections = buildWorkspaceCollections(
       [localWorkspace],
+      [makeRepoRoot()],
       [makeCloudWorkspace()],
     );
     const cloudWorkspace = collections.workspaces.find((workspace) => workspace.id === "cloud:cloud-1");

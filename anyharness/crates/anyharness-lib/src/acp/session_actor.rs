@@ -89,6 +89,7 @@ pub enum SessionCommand {
     },
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone)]
 enum ActorExitDisposition {
     Error {
@@ -265,6 +266,7 @@ pub struct SessionActorConfig {
     pub is_resume: bool,
     pub last_seq: i64,
     pub system_prompt_append: Option<String>,
+    pub on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync + 'static>>,
     pub latency: Option<LatencyRequestContext>,
     /// Called after the actor loop exits (normal or error). The bool indicates
     /// whether the actor exited with an error (true = errored).
@@ -273,6 +275,13 @@ pub struct SessionActorConfig {
 
 pub struct ActorReadyResult {
     pub native_session_id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct SessionTurnFinishResult {
+    pub session_id: String,
+    pub turn_finished: bool,
+    pub errored: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -602,6 +611,7 @@ async fn run_actor(
     let actor_latency_fields = latency_trace_fields(actor_latency.as_ref());
     let startup_started = Instant::now();
     let busy = handle.busy.clone();
+    let on_turn_finish = config.on_turn_finish.clone();
 
     let resolved_path = config
         .agent
@@ -850,7 +860,10 @@ async fn run_actor(
         match conn
             .load_session(
                 acp::LoadSessionRequest::new(existing.clone(), config.workspace_path.clone())
-                    .mcp_servers(to_acp_servers(&config.mcp_servers)),
+                    .mcp_servers(to_acp_servers(&config.mcp_servers))
+                    .meta(build_system_prompt_meta(
+                        config.system_prompt_append.as_deref(),
+                    )),
             )
             .await
         {
@@ -1394,6 +1407,13 @@ async fn run_actor(
                                     let now = chrono::Utc::now().to_rfc3339();
                                     handle.set_execution_phase(SessionExecutionPhase::Idle).await;
                                     let _ = store.update_status(&session_id, "idle", &now);
+                                    if let Some(callback) = on_turn_finish.as_ref() {
+                                        callback(SessionTurnFinishResult {
+                                            session_id: session_id.clone(),
+                                            turn_finished: true,
+                                            errored: false,
+                                        });
+                                    }
                                     if let Err(error) = apply_pending_config_changes_if_idle(
                                         &conn,
                                         &native_session_id,
@@ -1416,6 +1436,13 @@ async fn run_actor(
                                     let now = chrono::Utc::now().to_rfc3339();
                                     handle.set_execution_phase(SessionExecutionPhase::Errored).await;
                                     let _ = store.update_status(&session_id, "errored", &now);
+                                    if let Some(callback) = on_turn_finish.as_ref() {
+                                        callback(SessionTurnFinishResult {
+                                            session_id: session_id.clone(),
+                                            turn_finished: true,
+                                            errored: true,
+                                        });
+                                    }
                                     broken_session = true;
                                 }
                             }
@@ -3168,6 +3195,7 @@ mod tests {
                 closed_at: None,
                 dismissed_at: None,
                 mcp_bindings_ciphertext: None,
+                system_prompt_append: None,
             })
             .expect("insert session");
 
@@ -3301,6 +3329,7 @@ mod tests {
                 closed_at: None,
                 dismissed_at: None,
                 mcp_bindings_ciphertext: None,
+                system_prompt_append: None,
             })
             .expect("insert session");
 
@@ -3859,6 +3888,7 @@ mod tests {
                 closed_at: None,
                 dismissed_at: None,
                 mcp_bindings_ciphertext: None,
+                system_prompt_append: None,
             })
             .expect("insert session");
 

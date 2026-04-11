@@ -33,7 +33,9 @@ export function PullRequestDialog({ open, onClose }: PullRequestDialogProps) {
   const repoDefaultBranch = useMemo(() => {
     const ws = workspaces.find((w) => w.id === selectedWorkspaceId);
     if (!ws) return "";
-    return repoConfigs[ws.sourceRepoRootPath]?.defaultBranch ?? "";
+    const sourceRoot = ws.sourceRepoRootPath?.trim();
+    if (!sourceRoot) return "";
+    return repoConfigs[sourceRoot]?.defaultBranch ?? "";
   }, [workspaces, selectedWorkspaceId, repoConfigs]);
 
   const [title, setTitle] = useState("");

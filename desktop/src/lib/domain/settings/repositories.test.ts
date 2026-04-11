@@ -5,8 +5,10 @@ import type { Workspace } from "@anyharness/sdk";
 function makeWorkspace(overrides: Partial<Workspace>): Workspace {
   return {
     id: "workspace-1",
-    kind: "repo",
+    kind: "local",
+    repoRootId: "repo-root-1",
     path: "/tmp/repo",
+    surface: "standard",
     sourceRepoRootPath: "/tmp/repo",
     createdAt: "2025-01-01T00:00:00.000Z",
     updatedAt: "2025-01-01T00:00:00.000Z",
@@ -15,11 +17,11 @@ function makeWorkspace(overrides: Partial<Workspace>): Workspace {
 }
 
 describe("buildSettingsRepositoryEntries", () => {
-  it("does not count the repo anchor row as a usable workspace", () => {
+  it("prefers the local workspace as the repository workspace anchor", () => {
     const entries = buildSettingsRepositoryEntries([
       makeWorkspace({
         id: "repo-1",
-        kind: "repo",
+        kind: "local",
         gitRepoName: "proliferate",
       }),
       makeWorkspace({
@@ -34,21 +36,21 @@ describe("buildSettingsRepositoryEntries", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       repoWorkspaceId: "repo-1",
-      workspaceCount: 1,
+      workspaceCount: 2,
       sourceRoot: "/tmp/repo",
     });
   });
 
-  it("keeps repo-only groups at zero usable workspaces", () => {
+  it("keeps local-only groups as repositories", () => {
     const entries = buildSettingsRepositoryEntries([
       makeWorkspace({
         id: "repo-1",
-        kind: "repo",
+        kind: "local",
         gitRepoName: "proliferate",
       }),
     ]);
 
     expect(entries).toHaveLength(1);
-    expect(entries[0].workspaceCount).toBe(0);
+    expect(entries[0].workspaceCount).toBe(1);
   });
 });

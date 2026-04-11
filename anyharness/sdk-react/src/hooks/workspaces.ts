@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateWorkspaceRequest,
   CreateWorktreeWorkspaceRequest,
-  RegisterRepoWorkspaceRequest,
   StartWorkspaceSetupRequest,
 } from "@anyharness/sdk";
 import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
@@ -12,9 +11,9 @@ import {
 } from "../context/AnyHarnessWorkspace.js";
 import {
   getAnyHarnessClient,
-  type AnyHarnessClientConnection,
 } from "../lib/client-cache.js";
 import {
+  anyHarnessRepoRootsKey,
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessWorkspaceDetectSetupKey,
   anyHarnessWorkspaceSessionLaunchKey,
@@ -63,6 +62,9 @@ export function useResolveWorkspaceFromPathMutation() {
       await queryClient.invalidateQueries({
         queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
       });
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessRepoRootsKey(runtimeUrl),
+      });
     },
   });
 }
@@ -81,29 +83,8 @@ export function useCreateWorkspaceMutation() {
       await queryClient.invalidateQueries({
         queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
       });
-    },
-  });
-}
-
-export function useRegisterRepoWorkspaceMutation() {
-  const runtime = useAnyHarnessRuntimeContext();
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (input: RegisterRepoWorkspaceRequest & {
-      connection?: AnyHarnessClientConnection;
-    }) => {
-      const client = getAnyHarnessClient(
-        input.connection ?? resolveRuntimeConnection(runtime),
-      );
-      return client.workspaces.registerRepoFromPath(input.path);
-    },
-    onSuccess: async (_data, input) => {
-      const runtimeUrl = input.connection?.runtimeUrl?.trim()
-        ?? runtime.runtimeUrl?.trim()
-        ?? "";
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+        queryKey: anyHarnessRepoRootsKey(runtimeUrl),
       });
     },
   });

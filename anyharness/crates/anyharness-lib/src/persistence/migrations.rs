@@ -56,14 +56,28 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0015_session_background_work",
         include_str!("sql/0015_session_background_work.sql"),
     ),
-];
-
-const CUSTOM_MIGRATIONS: &[(&str, fn(&Transaction<'_>) -> rusqlite::Result<()>)]=&[
     (
-        "0016_backfill_session_background_work_timestamps",
-        migrate_session_background_work_timestamps,
+        "0017_repo_roots_additive",
+        include_str!("sql/0017_repo_roots_additive.sql"),
+    ),
+    (
+        "0018_workspaces_repo_root_link",
+        include_str!("sql/0018_workspaces_repo_root_link.sql"),
+    ),
+    (
+        "0019_session_system_prompt_append",
+        include_str!("sql/0019_session_system_prompt_append.sql"),
+    ),
+    (
+        "0020_cowork_tables",
+        include_str!("sql/0020_cowork_tables.sql"),
     ),
 ];
+
+const CUSTOM_MIGRATIONS: &[(&str, fn(&Transaction<'_>) -> rusqlite::Result<()>)] = &[(
+    "0016_backfill_session_background_work_timestamps",
+    migrate_session_background_work_timestamps,
+)];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
@@ -84,11 +98,7 @@ pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
-fn run_named_migration<F>(
-    conn: &mut Connection,
-    name: &str,
-    apply: F,
-) -> rusqlite::Result<()>
+fn run_named_migration<F>(conn: &mut Connection, name: &str, apply: F) -> rusqlite::Result<()>
 where
     F: FnOnce(&Transaction<'_>) -> rusqlite::Result<()>,
 {
@@ -232,9 +242,7 @@ fn pending_background_work_from_completed_event(
     let tool_call_id = item.get("toolCallId")?.as_str()?.trim();
     let source_agent_kind = item.get("sourceAgentKind")?.as_str()?.trim();
     let raw_output = item.get("rawOutput")?;
-    let background_work = raw_output
-        .get("_anyharness")?
-        .get("backgroundWork")?;
+    let background_work = raw_output.get("_anyharness")?.get("backgroundWork")?;
     let state = background_work.get("state")?.as_str()?.trim();
     if state != "pending" {
         return None;

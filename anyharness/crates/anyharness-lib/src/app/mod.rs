@@ -3,14 +3,23 @@ use std::sync::Arc;
 
 use crate::acp::manager::AcpManager;
 use crate::agents::reconcile_execution::AgentReconcileService;
+use crate::cowork::artifacts::CoworkArtifactRuntime;
+use crate::cowork::mcp_auth::CoworkMcpAuth;
+use crate::cowork::runtime::{CoworkRuntime, CoworkSessionHooks};
+use crate::cowork::service::CoworkService;
+use crate::cowork::store::CoworkStore;
+use crate::files::runtime::WorkspaceFilesRuntime;
 use crate::git::WorkspaceFileSearchCache;
 use crate::persistence::Db;
 use crate::processes::ProcessService;
+use crate::repo_roots::service::RepoRootService;
+use crate::repo_roots::store::RepoRootStore;
 use crate::sessions::mcp::{load_data_cipher_from_env, DATA_KEY_ENV_VAR};
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
 use crate::sessions::store::SessionStore;
 use crate::terminals::TerminalService;
+use crate::workspaces::runtime::WorkspaceRuntime;
 use crate::workspaces::service::WorkspaceService;
 use crate::workspaces::setup_execution::SetupExecutionService;
 use crate::workspaces::store::WorkspaceStore;
@@ -29,12 +38,19 @@ pub enum AppStateInitError {
 #[derive(Clone)]
 pub struct AppState {
     pub runtime_home: PathBuf,
+    pub runtime_base_url: String,
     pub db: Db,
     pub bearer_token: Option<String>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
-    pub workspace_service: Arc<WorkspaceService>,
+    pub repo_root_service: Arc<RepoRootService>,
+    pub workspace_runtime: Arc<WorkspaceRuntime>,
+    pub files_runtime: Arc<WorkspaceFilesRuntime>,
     pub process_service: Arc<ProcessService>,
     pub workspace_file_search_cache: Arc<WorkspaceFileSearchCache>,
+    pub cowork_service: Arc<CoworkService>,
+    pub cowork_artifact_runtime: Arc<CoworkArtifactRuntime>,
+    pub cowork_session_hooks: Arc<CoworkSessionHooks>,
+    pub cowork_runtime: Arc<CoworkRuntime>,
     pub session_service: Arc<SessionService>,
     pub session_runtime: Arc<SessionRuntime>,
     pub acp_manager: AcpManager,
@@ -45,19 +61,40 @@ pub struct AppState {
 impl AppState {
     pub fn new(
         runtime_home: PathBuf,
+        runtime_base_url: String,
         db: Db,
         require_bearer_auth: bool,
     ) -> Result<Self, AppStateInitError> {
         let bearer_token = load_bearer_token(require_bearer_auth)?;
         let session_data_cipher =
             load_data_cipher_from_env().map_err(AppStateInitError::InvalidDataKey)?;
+        let repo_root_service = Arc::new(RepoRootService::new(RepoRootStore::new(db.clone())));
         let workspace_service = Arc::new(WorkspaceService::new(
             WorkspaceStore::new(db.clone()),
+            runtime_home.clone(),
+        ));
+        let workspace_runtime = Arc::new(WorkspaceRuntime::new(
+            (*workspace_service).clone(),
+            WorkspaceStore::new(db.clone()),
+            (*repo_root_service).clone(),
             runtime_home.clone(),
         ));
         let agent_reconcile_service = Arc::new(AgentReconcileService::new());
         let process_service = Arc::new(ProcessService::new());
         let workspace_file_search_cache = Arc::new(WorkspaceFileSearchCache::new());
+        let cowork_service = Arc::new(CoworkService::new(CoworkStore::new(db.clone())));
+        let cowork_artifact_runtime = Arc::new(CoworkArtifactRuntime::new());
+        let cowork_mcp_auth = Arc::new(CoworkMcpAuth::new(runtime_home.clone()));
+        let cowork_session_hooks = Arc::new(CoworkSessionHooks::new(
+            runtime_base_url.clone(),
+            bearer_token.clone(),
+            cowork_mcp_auth,
+        ));
+        let files_runtime = Arc::new(WorkspaceFilesRuntime::new(
+            workspace_runtime.clone(),
+            cowork_artifact_runtime.clone(),
+            workspace_file_search_cache.clone(),
+        ));
         let session_service = Arc::new(SessionService::new(
             SessionStore::new(db.clone()),
             WorkspaceStore::new(db.clone()),
@@ -66,21 +103,37 @@ impl AppState {
         let acp_manager = AcpManager::new();
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
-            workspace_service.clone(),
+            workspace_runtime.clone(),
             acp_manager.clone(),
             runtime_home.clone(),
             session_data_cipher,
+            cowork_session_hooks.clone(),
+        ));
+        let cowork_runtime = Arc::new(CoworkRuntime::new(
+            (*cowork_service).clone(),
+            (*repo_root_service).clone(),
+            workspace_runtime.clone(),
+            session_service.clone(),
+            session_runtime.clone(),
+            runtime_home.clone(),
         ));
         let terminal_service = Arc::new(TerminalService::new());
         let setup_execution_service = Arc::new(SetupExecutionService::new());
         Ok(Self {
             runtime_home,
+            runtime_base_url,
             db,
             bearer_token,
             agent_reconcile_service,
-            workspace_service,
+            repo_root_service,
+            workspace_runtime,
+            files_runtime,
             process_service,
             workspace_file_search_cache,
+            cowork_service,
+            cowork_artifact_runtime,
+            cowork_session_hooks,
+            cowork_runtime,
             session_service,
             session_runtime,
             acp_manager,
@@ -124,6 +177,7 @@ pub fn ensure_runtime_home(path: &std::path::Path) -> std::io::Result<()> {
     std::fs::create_dir_all(path)?;
     std::fs::create_dir_all(path.join("agents"))?;
     std::fs::create_dir_all(path.join("logs"))?;
+    std::fs::create_dir_all(path.join("secrets"))?;
     std::fs::create_dir_all(path.join("tmp"))?;
     Ok(())
 }
@@ -201,6 +255,7 @@ mod tests {
 
         let state = AppState::new(
             PathBuf::from("/tmp/anyharness-app-state-no-token"),
+            "http://127.0.0.1:8457".to_string(),
             Db::open_in_memory().expect("expected in-memory db"),
             false,
         )
@@ -220,6 +275,7 @@ mod tests {
 
         let error = AppState::new(
             PathBuf::from("/tmp/anyharness-app-state-required-token"),
+            "http://127.0.0.1:8457".to_string(),
             Db::open_in_memory().expect("expected in-memory db"),
             true,
         )
@@ -244,6 +300,7 @@ environment variable is missing or empty. Refusing to start without authenticati
 
         let error = AppState::new(
             PathBuf::from("/tmp/anyharness-app-state-blank-token"),
+            "http://127.0.0.1:8457".to_string(),
             Db::open_in_memory().expect("expected in-memory db"),
             true,
         )
@@ -268,6 +325,7 @@ environment variable is missing or empty. Refusing to start without authenticati
 
         let error = AppState::new(
             PathBuf::from("/tmp/anyharness-app-state-invalid-data-key"),
+            "http://127.0.0.1:8457".to_string(),
             Db::open_in_memory().expect("expected in-memory db"),
             false,
         )
@@ -275,7 +333,9 @@ environment variable is missing or empty. Refusing to start without authenticati
         .expect("expected invalid data key error");
 
         assert!(
-            error.to_string().starts_with("Invalid ANYHARNESS_DATA_KEY:"),
+            error
+                .to_string()
+                .starts_with("Invalid ANYHARNESS_DATA_KEY:"),
             "unexpected error: {error}"
         );
     }

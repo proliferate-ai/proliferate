@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod cowork;
 pub mod errors;
 pub mod events;
 pub mod files;
@@ -8,12 +9,14 @@ pub mod hosting;
 pub mod mcp;
 pub mod models;
 pub mod processes;
+pub mod repo_roots;
 pub mod session_config;
 pub mod sessions;
 pub mod terminals;
 pub mod workspaces;
 
 pub use agents::*;
+pub use cowork::*;
 pub use errors::*;
 pub use events::*;
 pub use files::*;
@@ -23,6 +26,7 @@ pub use hosting::*;
 pub use mcp::*;
 pub use models::*;
 pub use processes::*;
+pub use repo_roots::*;
 pub use session_config::*;
 pub use sessions::*;
 pub use terminals::*;

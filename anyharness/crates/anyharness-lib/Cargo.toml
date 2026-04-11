@@ -34,3 +34,4 @@ portable-pty.workspace = true
 nucleo-matcher.workspace = true
 aes-gcm-siv.workspace = true
 base64.workspace = true
+sha2.workspace = true

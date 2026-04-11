@@ -12,6 +12,7 @@ import {
 } from "@/lib/domain/workspaces/sidebar";
 import { getEffectiveSessionTitle } from "@/lib/domain/sessions/title";
 import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
+import { isStandardWorkspace } from "@/lib/domain/workspaces/usability";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useWorkspaceBranchRenameMonitor } from "@/hooks/workspaces/use-workspace-branch-rename-monitor";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -57,7 +58,11 @@ export function useWorkspaceSidebarState({
   const { data: workspaceCollections, isLoading: workspacesLoading } = useWorkspaces();
   const { data: gitStatus } = useWorkspaceBranchRenameMonitor();
 
-  const localWorkspaces = workspaceCollections?.localWorkspaces ?? EMPTY_LOCAL_WORKSPACES;
+  const localWorkspaces = useMemo(
+    () => (workspaceCollections?.localWorkspaces ?? EMPTY_LOCAL_WORKSPACES)
+      .filter(isStandardWorkspace),
+    [workspaceCollections?.localWorkspaces],
+  );
   const cloudWorkspaces = workspaceCollections?.cloudWorkspaces ?? EMPTY_CLOUD_WORKSPACES;
 
   const archivedSet = useMemo(

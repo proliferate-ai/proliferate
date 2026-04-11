@@ -12,7 +12,10 @@ import {
   buildSidebarWorkspaceEntries,
   groupSidebarEntries,
 } from "@/lib/domain/workspaces/sidebar";
-import { isUsableWorkspace } from "@/lib/domain/workspaces/usability";
+import {
+  isStandardWorkspace,
+  isUsableWorkspace,
+} from "@/lib/domain/workspaces/usability";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
@@ -29,14 +32,21 @@ function getRepoForSelectedWorkspace(
   if (!selectedWorkspaceId) return null;
 
   const selectedWs = workspaces.find((workspace) => workspace.id === selectedWorkspaceId);
-  if (!selectedWs) return null;
+  if (!selectedWs || !isStandardWorkspace(selectedWs)) return null;
 
-  const repoWs = workspaces.find(
-    (workspace) =>
-      workspace.kind === "repo"
-      && !isCloudWorkspaceId(workspace.id)
-      && localWorkspaceGroupKey(workspace) === localWorkspaceGroupKey(selectedWs),
-  );
+  const repoWs = workspaces
+    .filter(
+      (workspace) =>
+        !isCloudWorkspaceId(workspace.id)
+        && isStandardWorkspace(workspace)
+        && localWorkspaceGroupKey(workspace) === localWorkspaceGroupKey(selectedWs),
+    )
+    .sort((a, b) => {
+      if (a.kind === b.kind) {
+        return a.id.localeCompare(b.id);
+      }
+      return a.kind === "local" ? -1 : 1;
+    })[0] ?? null;
 
   return { selectedWs, repoWs: repoWs ?? null };
 }
@@ -99,7 +109,12 @@ export function useAppShortcuts(): void {
       return;
     }
 
-    void createLocalWorkspaceAndEnter(ctx.repoWs.sourceRepoRootPath, {
+    const sourceRoot = ctx.repoWs.sourceRepoRootPath?.trim();
+    if (!sourceRoot) {
+      return;
+    }
+
+    void createLocalWorkspaceAndEnter(sourceRoot, {
       lightweight: true,
     }).catch((error) => {
       showToast(error instanceof Error ? error.message : "Failed to create workspace.");

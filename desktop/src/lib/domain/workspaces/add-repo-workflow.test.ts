@@ -1,22 +1,47 @@
-import type { Workspace } from "@anyharness/sdk";
+import type { RepoRoot, ResolveWorkspaceResponse } from "@anyharness/sdk";
 import { describe, expect, it, vi } from "vitest";
 import { runAddRepoWorkflow } from "./add-repo-workflow";
 
-function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
+function makeResolvedWorkspace(
+  overrides: Partial<ResolveWorkspaceResponse["workspace"]> = {},
+): ResolveWorkspaceResponse["workspace"] {
   return {
-    id: overrides.id ?? "repo-1",
-    kind: overrides.kind ?? "repo",
+    id: "repo-1",
+    kind: "local",
+    repoRootId: "repo-root-1",
+    path: "/tmp/proliferate",
+    surface: "standard",
+    originalBranch: "main",
+    currentBranch: "main",
+    executionSummary: null,
+    createdAt: "2026-04-06T10:00:00.000Z",
+    updatedAt: "2026-04-06T10:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function makeRepoRoot(overrides: Partial<RepoRoot> = {}): RepoRoot {
+  return {
+    id: overrides.id ?? "repo-root-1",
+    kind: overrides.kind ?? "external",
     path: overrides.path ?? "/tmp/proliferate",
-    sourceRepoRootPath: overrides.sourceRepoRootPath ?? "/tmp/proliferate",
-    sourceWorkspaceId: overrides.sourceWorkspaceId ?? null,
-    gitProvider: "gitProvider" in overrides ? overrides.gitProvider : "github",
-    gitOwner: "gitOwner" in overrides ? overrides.gitOwner : "proliferate-ai",
-    gitRepoName: "gitRepoName" in overrides ? overrides.gitRepoName : "proliferate",
-    originalBranch: "originalBranch" in overrides ? overrides.originalBranch : "main",
-    currentBranch: "currentBranch" in overrides ? overrides.currentBranch : "main",
-    executionSummary: overrides.executionSummary,
-    createdAt: overrides.createdAt ?? "2026-04-06T10:00:00.000Z",
-    updatedAt: overrides.updatedAt ?? "2026-04-06T10:00:00.000Z",
+    displayName: overrides.displayName ?? "proliferate",
+    defaultBranch: overrides.defaultBranch ?? "main",
+    remoteProvider: overrides.remoteProvider ?? "github",
+    remoteOwner: overrides.remoteOwner ?? "proliferate-ai",
+    remoteRepoName: overrides.remoteRepoName ?? "proliferate",
+    remoteUrl: overrides.remoteUrl ?? null,
+    createdAt: overrides.createdAt ?? "2026-04-06T09:00:00.000Z",
+    updatedAt: overrides.updatedAt ?? "2026-04-06T09:00:00.000Z",
+  };
+}
+
+function makeResolveWorkspaceResponse(
+  overrides: Partial<ResolveWorkspaceResponse> = {},
+): ResolveWorkspaceResponse {
+  return {
+    repoRoot: overrides.repoRoot ?? makeRepoRoot(),
+    workspace: overrides.workspace ?? makeResolvedWorkspace(),
   };
 }
 
@@ -27,7 +52,7 @@ describe("runAddRepoWorkflow", () => {
       invalidateQueries: vi.fn().mockResolvedValue(undefined),
     };
     const ensureRuntimeReady = vi.fn().mockResolvedValue("http://localhost:7007");
-    const registerRepoWorkspace = vi.fn().mockResolvedValue(makeWorkspace());
+    const resolveWorkspaceFromPath = vi.fn().mockResolvedValue(makeResolveWorkspaceResponse());
     const unarchiveWorkspace = vi.fn();
     const openRepoSetupModal = vi.fn();
 
@@ -35,16 +60,13 @@ describe("runAddRepoWorkflow", () => {
       path: "/tmp/proliferate",
       queryClient,
       ensureRuntimeReady,
-      registerRepoWorkspace,
+      resolveWorkspaceFromPath,
       unarchiveWorkspace,
       openRepoSetupModal,
       workspaceCollectionsScopeKey: (runtimeUrl) => ["workspaces", runtimeUrl],
     });
 
-    expect(registerRepoWorkspace).toHaveBeenCalledWith({
-      path: "/tmp/proliferate",
-      connection: { runtimeUrl: "http://localhost:7007" },
-    });
+    expect(resolveWorkspaceFromPath).toHaveBeenCalledWith("/tmp/proliferate");
     expect(unarchiveWorkspace).toHaveBeenCalledWith("repo-1");
     expect(openRepoSetupModal).toHaveBeenCalledWith({
       workspaceId: "repo-1",
@@ -59,11 +81,19 @@ describe("runAddRepoWorkflow", () => {
       invalidateQueries: vi.fn().mockResolvedValue(undefined),
     };
     const ensureRuntimeReady = vi.fn().mockResolvedValue("http://localhost:7007");
-    const registerRepoWorkspace = vi.fn().mockResolvedValue(
-      makeWorkspace({
-        id: "repo-existing",
-        sourceRepoRootPath: "/tmp/existing-repo",
-        gitRepoName: "existing-repo",
+    const resolveWorkspaceFromPath = vi.fn().mockResolvedValue(
+      makeResolveWorkspaceResponse({
+        repoRoot: makeRepoRoot({
+          id: "repo-root-existing",
+          path: "/tmp/existing-repo",
+          displayName: "existing-repo",
+          remoteRepoName: "existing-repo",
+        }),
+        workspace: makeResolvedWorkspace({
+          id: "repo-existing",
+          repoRootId: "repo-root-existing",
+          path: "/tmp/existing-repo",
+        }),
       }),
     );
     const unarchiveWorkspace = vi.fn();
@@ -73,7 +103,7 @@ describe("runAddRepoWorkflow", () => {
       path: "/tmp/existing-repo",
       queryClient,
       ensureRuntimeReady,
-      registerRepoWorkspace,
+      resolveWorkspaceFromPath,
       unarchiveWorkspace,
       openRepoSetupModal,
       workspaceCollectionsScopeKey: (runtimeUrl) => ["workspaces", runtimeUrl],

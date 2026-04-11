@@ -9,6 +9,7 @@ import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { ConfigurationPane } from "./panes/ConfigurationPane";
 import { ConnectorsPane } from "./panes/ConnectorsPane";
 import { AccountPane } from "./panes/AccountPane";
+import { CoworkPane } from "./panes/CoworkPane";
 import { CloudAuthUnavailablePane } from "./panes/CloudAuthUnavailablePane";
 import { CloudPane } from "./panes/CloudPane";
 import { CloudSignInRequiredPane } from "./panes/CloudSignInRequiredPane";
@@ -47,6 +48,9 @@ function renderSettingsSection(
 ): ReactNode {
   if (activeSection === "configuration") {
     return <ConfigurationPane />;
+  }
+  if (activeSection === "cowork") {
+    return <CoworkPane />;
   }
   if (activeSection === "account") {
     return <AccountPane />;

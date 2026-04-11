@@ -1,0 +1,183 @@
+import type { Workspace } from "@anyharness/sdk";
+import { useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
+import { ChatView } from "@/components/workspace/chat/ChatView";
+import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
+import { SidebarUpdatePill } from "@/components/workspace/shell/SidebarUpdatePill";
+import { IconButton } from "@/components/ui/IconButton";
+import { SplitPanel } from "@/components/ui/icons";
+import { CoworkArtifactsPanel } from "@/components/workspace/cowork/CoworkArtifactsPanel";
+import { CoworkWorkspaceHeader } from "@/components/workspace/cowork/CoworkWorkspaceHeader";
+import { useResize } from "@/hooks/layout/use-resize";
+import { useUpdater } from "@/hooks/updater/use-updater";
+import {
+  useWorkspaceUiStore,
+  WORKSPACE_SIDEBAR_MAX_WIDTH,
+  WORKSPACE_SIDEBAR_MIN_WIDTH,
+} from "@/stores/preferences/workspace-ui-store";
+import { useCoworkUiStore } from "@/stores/cowork/cowork-ui-store";
+import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
+
+interface CoworkWorkspaceShellProps {
+  workspace: Workspace;
+}
+
+export function CoworkWorkspaceShell({
+  workspace,
+}: CoworkWorkspaceShellProps) {
+  // Cowork keeps its artifact pane width session-local until the shell chrome
+  // is extracted and shares the standard workspace frame state.
+  const [rightPanelWidth, setRightPanelWidth] = useState(420);
+  const {
+    sidebarOpen,
+    setSidebarOpen,
+    sidebarWidth,
+    setSidebarWidth,
+  } = useWorkspaceUiStore(useShallow((state) => ({
+    sidebarOpen: state.sidebarOpen,
+    setSidebarOpen: state.setSidebarOpen,
+    sidebarWidth: state.sidebarWidth,
+    setSidebarWidth: state.setSidebarWidth,
+  })));
+  const rightPanelOpen = useCoworkUiStore(
+    (state) => state.artifactPanelOpenByWorkspaceId[workspace.id] === true,
+  );
+  const setArtifactPanelOpen = useCoworkUiStore((state) => state.setArtifactPanelOpen);
+  const {
+    activeSessionId,
+    activeSlot,
+  } = useHarnessStore(useShallow((state) => ({
+    activeSessionId: state.activeSessionId,
+    activeSlot: state.activeSessionId ? state.sessionSlots[state.activeSessionId] ?? null : null,
+  })));
+  const {
+    phase: updaterPhase,
+    downloadUpdate,
+    openRestartPrompt,
+  } = useUpdater();
+
+  const onLeftSeparatorDown = useResize({
+    direction: "horizontal",
+    size: sidebarWidth,
+    onResize: setSidebarWidth,
+    min: WORKSPACE_SIDEBAR_MIN_WIDTH,
+    max: WORKSPACE_SIDEBAR_MAX_WIDTH,
+  });
+  const onRightSeparatorDown = useResize({
+    direction: "horizontal",
+    size: rightPanelWidth,
+    onResize: setRightPanelWidth,
+    reverse: true,
+    min: 280,
+    max: 760,
+  });
+
+  const headerTitle = useMemo(() => {
+    if (activeSessionId && activeSlot?.workspaceId === workspace.id && activeSlot.title?.trim()) {
+      return activeSlot.title.trim();
+    }
+    return "Untitled chat";
+  }, [activeSessionId, activeSlot?.title, activeSlot?.workspaceId, workspace.id]);
+
+  return (
+    <WorkspacePathProvider workspacePath={workspace.path}>
+      <div className="h-screen flex overflow-hidden bg-sidebar" data-telemetry-block>
+        <div
+          id="cowork-sidebar"
+          className="flex shrink-0 flex-col overflow-hidden transition-[width] duration-150 ease-in-out"
+          style={{ width: sidebarOpen ? sidebarWidth : 0 }}
+        >
+          <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
+            <div className="flex h-full items-center gap-2 pl-[82px]">
+              <IconButton
+                tone="sidebar"
+                size="sm"
+                onClick={() => setSidebarOpen(false)}
+                title="Hide sidebar"
+                className="rounded-md"
+              >
+                <SplitPanel className="size-4" />
+              </IconButton>
+              <SidebarUpdatePill
+                phase={updaterPhase}
+                onDownloadUpdate={downloadUpdate}
+                onOpenRestartPrompt={openRestartPrompt}
+              />
+            </div>
+          </div>
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <MainSidebar />
+          </div>
+        </div>
+
+        {sidebarOpen && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-controls="cowork-sidebar"
+            onMouseDown={onLeftSeparatorDown}
+            className="relative z-10 flex w-1 shrink-0 cursor-col-resize items-center justify-center -ml-1 hover:bg-primary/30 active:bg-primary/50 transition-colors"
+          />
+        )}
+
+        <div className={`flex min-w-0 flex-1 flex-col overflow-hidden bg-background ${sidebarOpen ? "rounded-tl-lg" : ""}`}>
+          <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
+            {!sidebarOpen && (
+              <div className="flex items-center gap-2 pl-[82px] pr-2">
+                <IconButton
+                  size="sm"
+                  onClick={() => setSidebarOpen(true)}
+                  title="Show sidebar"
+                  className="rounded-md"
+                >
+                  <SplitPanel className="size-4" />
+                </IconButton>
+                <SidebarUpdatePill
+                  phase={updaterPhase}
+                  onDownloadUpdate={downloadUpdate}
+                  onOpenRestartPrompt={openRestartPrompt}
+                />
+              </div>
+            )}
+            <CoworkWorkspaceHeader
+              title={headerTitle}
+              sidebarOpen={sidebarOpen}
+              rightPanelOpen={rightPanelOpen}
+              onToggleSidebar={() => setSidebarOpen((value) => !value)}
+              onToggleRightPanel={() => setArtifactPanelOpen(workspace.id, !rightPanelOpen)}
+            />
+          </div>
+
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-background to-transparent"
+              />
+              <ChatView />
+            </div>
+
+            {rightPanelOpen && (
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                onMouseDown={onRightSeparatorDown}
+                className="relative z-10 flex w-1 shrink-0 cursor-col-resize items-center justify-center -mr-1 hover:bg-primary/30 active:bg-primary/50 transition-colors"
+              />
+            )}
+
+            <div
+              className="shrink-0 overflow-hidden transition-[width] duration-150 ease-in-out"
+              style={{ width: rightPanelOpen ? rightPanelWidth : 0 }}
+            >
+              <div className="h-full" style={{ minWidth: 320 }}>
+                <CoworkArtifactsPanel workspace={workspace} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </WorkspacePathProvider>
+  );
+}

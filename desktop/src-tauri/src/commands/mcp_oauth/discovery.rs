@@ -3,9 +3,7 @@ use std::collections::HashMap;
 use reqwest::header::WWW_AUTHENTICATE;
 use url::Url;
 
-use super::types::{
-    AuthorizationServerMetadata, DiscoveryOutcome, ProtectedResourceMetadata,
-};
+use super::types::{AuthorizationServerMetadata, DiscoveryOutcome, ProtectedResourceMetadata};
 
 pub fn normalize_resource_url(value: &str) -> Result<String, String> {
     let mut url = Url::parse(value).map_err(|error| format!("Invalid resource URL: {error}"))?;

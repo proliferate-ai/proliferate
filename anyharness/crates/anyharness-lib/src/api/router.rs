@@ -10,8 +10,8 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agents, files, git, health, hosting, model_registries, processes, provider_configs, sessions,
-    terminals, workspaces,
+    agents, cowork, files, git, health, hosting, model_registries, processes, provider_configs,
+    repo_roots, sessions, terminals, workspaces,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -50,13 +50,29 @@ pub fn build_router(state: AppState) -> Router {
             "/workspaces",
             get(workspaces::list_workspaces).post(workspaces::create_workspace),
         )
-        .route(
-            "/workspaces/repos",
-            post(workspaces::register_repo_workspace),
-        )
         .route("/workspaces/resolve", post(workspaces::resolve_workspace))
         .route("/workspaces/worktrees", post(workspaces::create_worktree))
         .route("/workspaces/{workspace_id}", get(workspaces::get_workspace))
+        .route("/repo-roots", get(repo_roots::list_repo_roots))
+        .route("/repo-roots/{repo_root_id}", get(repo_roots::get_repo_root))
+        .route("/cowork", get(cowork::get_cowork_status))
+        .route("/cowork/enable", post(cowork::enable_cowork))
+        .route(
+            "/cowork/threads",
+            get(cowork::list_cowork_threads).post(cowork::create_cowork_thread),
+        )
+        .route(
+            "/workspaces/{workspace_id}/cowork/manifest",
+            get(cowork::get_cowork_manifest),
+        )
+        .route(
+            "/workspaces/{workspace_id}/cowork/artifacts/{artifact_id}",
+            get(cowork::get_cowork_artifact),
+        )
+        .route(
+            "/workspaces/{workspace_id}/cowork/sessions/{session_id}/mcp",
+            get(cowork::get_cowork_mcp_endpoint).post(cowork::post_cowork_mcp_endpoint),
+        )
         .route(
             "/workspaces/{workspace_id}/display-name",
             patch(workspaces::update_workspace_display_name),
@@ -317,6 +333,7 @@ mod tests {
         let runtime_home = PathBuf::from(format!("/tmp/anyharness-router-test-{unique_suffix}"));
         AppState::new(
             runtime_home,
+            "http://127.0.0.1:8457".to_string(),
             Db::open_in_memory().expect("expected in-memory db"),
             require_bearer_auth,
         )
@@ -430,6 +447,7 @@ mod tests {
                 closed_at: None,
                 dismissed_at: None,
                 mcp_bindings_ciphertext: None,
+                system_prompt_append: None,
             })
             .expect("insert session");
         store
@@ -503,6 +521,7 @@ mod tests {
                 closed_at: None,
                 dismissed_at: Some("2026-03-25T01:00:00Z".to_string()),
                 mcp_bindings_ciphertext: None,
+                system_prompt_append: None,
             })
             .expect("insert dismissed session");
 

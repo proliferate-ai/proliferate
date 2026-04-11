@@ -1,11 +1,13 @@
 import type { ProblemDetails } from "../types/runtime.js";
 import { AgentsClient } from "./agents.js";
+import { CoworkClient } from "./cowork.js";
 import { FilesClient } from "./files.js";
 import { GitClient } from "./git.js";
 import { ModelRegistriesClient } from "./model-registries.js";
 import { ProcessesClient } from "./processes.js";
 import { ProvidersClient } from "./providers.js";
 import { PullRequestsClient } from "./pull-requests.js";
+import { RepoRootsClient } from "./repo-roots.js";
 import { RuntimeClient } from "./runtime.js";
 import { SessionsClient } from "./sessions.js";
 import { TerminalsClient } from "./terminals.js";
@@ -134,7 +136,9 @@ export class AnyHarnessClient {
   readonly agents: AgentsClient;
   readonly modelRegistries: ModelRegistriesClient;
   readonly providers: ProvidersClient;
+  readonly repoRoots: RepoRootsClient;
   readonly workspaces: WorkspacesClient;
+  readonly cowork: CoworkClient;
   readonly files: FilesClient;
   readonly sessions: SessionsClient;
   readonly git: GitClient;
@@ -148,7 +152,9 @@ export class AnyHarnessClient {
     this.agents = new AgentsClient(transport);
     this.modelRegistries = new ModelRegistriesClient(transport);
     this.providers = new ProvidersClient(transport);
+    this.repoRoots = new RepoRootsClient(transport);
     this.workspaces = new WorkspacesClient(transport);
+    this.cowork = new CoworkClient(transport);
     this.files = new FilesClient(transport);
     this.sessions = new SessionsClient(transport);
     this.git = new GitClient(transport);

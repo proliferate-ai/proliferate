@@ -21,6 +21,7 @@ from proliferate.integrations.sentry import flush_server_sentry, init_server_sen
 from proliferate.middleware.request_context import RequestContextMiddleware
 from proliferate.middleware.request_telemetry import RequestTelemetryMiddleware
 from proliferate.server.ai_magic.api import router as ai_magic_router
+from proliferate.server.artifact_runtime.api import router as artifact_runtime_router
 from proliferate.server.billing.api import router as billing_router
 from proliferate.server.billing.reconciler import (
     start_billing_reconciler,
@@ -137,6 +138,7 @@ def create_app() -> FastAPI:
 
     # ── Domain routes ──
     app.include_router(health_router, tags=["health"])
+    app.include_router(artifact_runtime_router, tags=["artifact_runtime"])
     app.include_router(cloud_router, prefix="/v1", tags=["cloud"])
     app.include_router(ai_magic_router, prefix="/v1", tags=["ai_magic"])
     app.include_router(support_router, prefix="/v1", tags=["support"])
