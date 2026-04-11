@@ -32,6 +32,7 @@ function ChatContent({
     // CloudRuntimeAttachedPanel) layer on top to carry the actionable
     // status detail.
     case "workspace-status":
+    case "pending-thread-creation":
     case "session-loading":
       return (
         <ChatPreMessageCanvas>
@@ -56,6 +57,7 @@ function shouldShowSessionInputChrome(mode: ChatSurfaceState): boolean {
     case "session-empty":
     case "session-transcript":
       return true;
+    case "pending-thread-creation":
     case "no-workspace":
       return false;
   }
@@ -76,14 +78,16 @@ export function ChatView() {
       <div className="flex flex-1 min-h-0 flex-col">
         <ChatContent mode={mode} />
       </div>
-      <ChatComposerDock
-        backdrop={isSessionMode}
-        topSlot={composerTopSlot}
-        data-telemetry-block
-        data-focus-zone="chat"
-      >
-        <ChatInput />
-      </ChatComposerDock>
+      {mode.kind !== "pending-thread-creation" && (
+        <ChatComposerDock
+          backdrop={isSessionMode}
+          topSlot={composerTopSlot}
+          data-telemetry-block
+          data-focus-zone="chat"
+        >
+          <ChatInput />
+        </ChatComposerDock>
+      )}
     </div>
   );
 }

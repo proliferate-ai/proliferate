@@ -71,6 +71,7 @@ pub struct Session {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_summary: Option<SessionExecutionSummary>,
     pub status: SessionStatus,
+    pub mode_locked: bool,
     pub created_at: String,
     pub updated_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -271,10 +272,7 @@ mod tests {
         let round_tripped: CreateSessionRequest =
             serde_json::from_value(json).expect("deserialize create request");
         assert_eq!(round_tripped.model_id.as_deref(), Some("default"));
-        assert_eq!(
-            round_tripped.mode_id.as_deref(),
-            Some("bypassPermissions")
-        );
+        assert_eq!(round_tripped.mode_id.as_deref(), Some("bypassPermissions"));
         assert_eq!(
             round_tripped.system_prompt_append,
             Some(vec!["Rename the branch".to_string()])

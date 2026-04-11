@@ -1355,6 +1355,213 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/artifacts": {
+      "get": {
+        "tags": [
+          "artifacts"
+        ],
+        "operationId": "list_artifacts",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List workspace artifacts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkspaceArtifactSummary"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/artifacts/{artifact_id}": {
+      "get": {
+        "tags": [
+          "artifacts"
+        ],
+        "operationId": "get_artifact",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "artifact_id",
+            "in": "path",
+            "description": "Artifact ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace artifact detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceArtifactDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Artifact not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/artifacts/{artifact_id}/content": {
+      "get": {
+        "tags": [
+          "artifacts"
+        ],
+        "operationId": "get_artifact_content",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "artifact_id",
+            "in": "path",
+            "description": "Artifact ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Artifact-relative file path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Artifact content"
+          },
+          "404": {
+            "description": "Artifact content not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/default-session:replace": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "replace_workspace_default_session",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceWorkspaceDefaultSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Replaced Cowork default session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplaceWorkspaceDefaultSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid replacement request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/detect-setup": {
       "get": {
         "tags": [
@@ -2236,6 +2443,46 @@
           }
         }
       }
+    },
+    "/v1/workspaces:cowork": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "create_cowork_workspace",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCoworkWorkspaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Created Cowork workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCoworkWorkspaceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid Cowork request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2336,6 +2583,18 @@
             "type": "boolean"
           }
         }
+      },
+      "ArtifactRenderer": {
+        "type": "string",
+        "enum": [
+          "text",
+          "markdown",
+          "code",
+          "html",
+          "svg",
+          "mermaid",
+          "react"
+        ]
       },
       "ArtifactStatus": {
         "type": "object",
@@ -2775,6 +3034,38 @@
             }
           }
         ]
+      },
+      "CreateCoworkWorkspaceRequest": {
+        "type": "object",
+        "required": [
+          "agentKind"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "CreateCoworkWorkspaceResponse": {
+        "type": "object",
+        "required": [
+          "workspace",
+          "session"
+        ],
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
+          }
+        }
       },
       "CreatePullRequestRequest": {
         "type": "object",
@@ -4348,6 +4639,38 @@
           }
         }
       },
+      "ReplaceWorkspaceDefaultSessionRequest": {
+        "type": "object",
+        "required": [
+          "agentKind"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReplaceWorkspaceDefaultSessionResponse": {
+        "type": "object",
+        "required": [
+          "workspace",
+          "session"
+        ],
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
+          }
+        }
+      },
       "ResolvePermissionRequest": {
         "type": "object",
         "properties": {
@@ -4442,6 +4765,7 @@
           "workspaceId",
           "agentKind",
           "status",
+          "modeLocked",
           "createdAt",
           "updatedAt"
         ],
@@ -4498,6 +4822,9 @@
               "string",
               "null"
             ]
+          },
+          "modeLocked": {
+            "type": "boolean"
           },
           "modelId": {
             "type": [
@@ -5750,6 +6077,7 @@
         "required": [
           "id",
           "kind",
+          "surfaceKind",
           "path",
           "sourceRepoRootPath",
           "createdAt",
@@ -5760,6 +6088,12 @@
             "type": "string"
           },
           "currentBranch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "defaultSessionId": {
             "type": [
               "string",
               "null"
@@ -5822,6 +6156,71 @@
               "string",
               "null"
             ]
+          },
+          "surfaceKind": {
+            "$ref": "#/components/schemas/WorkspaceSurfaceKind"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkspaceArtifactDetail": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "kind",
+          "renderer",
+          "entry",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "entry": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "renderer": {
+            "$ref": "#/components/schemas/ArtifactRenderer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkspaceArtifactSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "renderer",
+          "entry",
+          "updatedAt"
+        ],
+        "properties": {
+          "entry": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "renderer": {
+            "$ref": "#/components/schemas/ArtifactRenderer"
+          },
+          "title": {
+            "type": "string"
           },
           "updatedAt": {
             "type": "string"
@@ -5950,6 +6349,13 @@
             "type": "boolean"
           }
         }
+      },
+      "WorkspaceSurfaceKind": {
+        "type": "string",
+        "enum": [
+          "code",
+          "cowork"
+        ]
       }
     }
   }

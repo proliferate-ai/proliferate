@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 use acp::Agent as _;
 use agent_client_protocol as acp;
+use serde_json::{Map, Value};
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
@@ -265,6 +266,7 @@ pub struct SessionActorConfig {
     pub is_resume: bool,
     pub last_seq: i64,
     pub system_prompt_append: Option<String>,
+    pub startup_meta: Option<Map<String, Value>>,
     pub latency: Option<LatencyRequestContext>,
     /// Called after the actor loop exits (normal or error). The bool indicates
     /// whether the actor exited with an error (true = errored).
@@ -752,6 +754,7 @@ async fn run_actor(
         config.permission_broker.clone(),
         event_sink.clone(),
         handle.clone(),
+        config.session.permission_policy,
     );
 
     let (conn, io_task) =
@@ -879,13 +882,16 @@ async fn run_actor(
                 if !config.mcp_servers.is_empty() {
                     request = request.mcp_servers(to_acp_servers(&config.mcp_servers));
                 }
-                if let Some(meta) = build_system_prompt_meta(config.system_prompt_append.as_deref())
-                {
+                if let Some(meta) = build_startup_meta(
+                    config.system_prompt_append.as_deref(),
+                    config.startup_meta.as_ref(),
+                ) {
                     tracing::debug!(
                         session_id = %session_id,
                         system_prompt_append = config.system_prompt_append.as_deref().unwrap_or_default(),
                         system_prompt_append_len = config.system_prompt_append.as_ref().map(|value| value.len()).unwrap_or(0),
-                        "attaching ACP startup system prompt append to fallback new_session"
+                        has_startup_meta = config.startup_meta.is_some(),
+                        "attaching ACP startup meta to fallback new_session"
                     );
                     request = request.meta(meta);
                 }
@@ -942,12 +948,16 @@ async fn run_actor(
         if !config.mcp_servers.is_empty() {
             request = request.mcp_servers(to_acp_servers(&config.mcp_servers));
         }
-        if let Some(meta) = build_system_prompt_meta(config.system_prompt_append.as_deref()) {
+        if let Some(meta) = build_startup_meta(
+            config.system_prompt_append.as_deref(),
+            config.startup_meta.as_ref(),
+        ) {
             tracing::debug!(
                 session_id = %session_id,
                 system_prompt_append = config.system_prompt_append.as_deref().unwrap_or_default(),
                 system_prompt_append_len = config.system_prompt_append.as_ref().map(|value| value.len()).unwrap_or(0),
-                "attaching ACP startup system prompt append to new_session"
+                has_startup_meta = config.startup_meta.is_some(),
+                "attaching ACP startup meta to new_session"
             );
             request = request.meta(meta);
         }
@@ -2042,18 +2052,29 @@ fn serialize_meta(meta: Option<&acp::Meta>) -> Option<serde_json::Value> {
     meta.and_then(|value| serde_json::to_value(value).ok())
 }
 
-fn build_system_prompt_meta(system_prompt_append: Option<&str>) -> Option<acp::Meta> {
-    let append = system_prompt_append?.trim();
-    if append.is_empty() {
+fn build_startup_meta(
+    system_prompt_append: Option<&str>,
+    startup_meta: Option<&Map<String, Value>>,
+) -> Option<acp::Meta> {
+    let mut root = startup_meta.cloned().unwrap_or_default();
+
+    if let Some(append) = system_prompt_append
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        root.insert(
+            "systemPrompt".to_string(),
+            serde_json::json!({
+                "append": append,
+            }),
+        );
+    }
+
+    if root.is_empty() {
         return None;
     }
 
-    Some(acp::Meta::from_iter([(
-        "systemPrompt".to_string(),
-        serde_json::json!({
-            "append": append,
-        }),
-    )]))
+    Some(acp::Meta::from_iter(root))
 }
 
 fn is_missing_load_session_resource(error: &acp::Error, expected_uri: &str) -> bool {
@@ -3074,7 +3095,7 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use super::{
-        build_system_prompt_meta, classify_agent_stderr_line, finalize_established_actor_exit,
+        build_startup_meta, classify_agent_stderr_line, finalize_established_actor_exit,
         find_select_option_for_request, handle_notification,
         handle_notification_with_resume_replay_filter, is_missing_load_session_resource,
         is_mode_config_request, is_model_config_request, merge_spawn_env, normalized_key_rank,
@@ -3162,6 +3183,8 @@ mod tests {
                 thinking_level_id: None,
                 thinking_budget_tokens: None,
                 status: "idle".to_string(),
+                mode_locked: false,
+                permission_policy: crate::sessions::model::SessionPermissionPolicy::Interactive,
                 created_at: "2026-03-25T00:00:00Z".to_string(),
                 updated_at: "2026-03-25T00:00:00Z".to_string(),
                 last_prompt_at: None,
@@ -3295,6 +3318,8 @@ mod tests {
                 thinking_level_id: None,
                 thinking_budget_tokens: None,
                 status: "idle".to_string(),
+                mode_locked: false,
+                permission_policy: crate::sessions::model::SessionPermissionPolicy::Interactive,
                 created_at: "2026-03-25T00:00:00Z".to_string(),
                 updated_at: "2026-03-25T00:00:00Z".to_string(),
                 last_prompt_at: None,
@@ -3780,8 +3805,8 @@ mod tests {
     }
 
     #[test]
-    fn build_system_prompt_meta_uses_append_shape() {
-        let meta = build_system_prompt_meta(Some("Rename the branch")).expect("meta");
+    fn build_startup_meta_uses_append_shape() {
+        let meta = build_startup_meta(Some("Rename the branch"), None).expect("meta");
 
         assert_eq!(
             serialize_meta(Some(&meta)),
@@ -3794,9 +3819,39 @@ mod tests {
     }
 
     #[test]
-    fn build_system_prompt_meta_skips_blank_values() {
-        assert!(build_system_prompt_meta(None).is_none());
-        assert!(build_system_prompt_meta(Some("   ")).is_none());
+    fn build_startup_meta_merges_extra_entries() {
+        let meta = build_startup_meta(
+            Some("Rename the branch"),
+            Some(&serde_json::Map::from_iter([(
+                "claudeCode".to_string(),
+                serde_json::json!({
+                    "options": {
+                        "strictMcpConfig": true,
+                    },
+                }),
+            )])),
+        )
+        .expect("meta");
+
+        assert_eq!(
+            serialize_meta(Some(&meta)),
+            Some(serde_json::json!({
+                "systemPrompt": {
+                    "append": "Rename the branch",
+                },
+                "claudeCode": {
+                    "options": {
+                        "strictMcpConfig": true,
+                    },
+                },
+            }))
+        );
+    }
+
+    #[test]
+    fn build_startup_meta_skips_blank_values() {
+        assert!(build_startup_meta(None, None).is_none());
+        assert!(build_startup_meta(Some("   "), None).is_none());
     }
 
     #[test]
@@ -3853,6 +3908,8 @@ mod tests {
                 thinking_level_id: None,
                 thinking_budget_tokens: None,
                 status: "idle".to_string(),
+                mode_locked: false,
+                permission_policy: crate::sessions::model::SessionPermissionPolicy::Interactive,
                 created_at: "2026-03-25T00:00:00Z".to_string(),
                 updated_at: "2026-03-25T00:00:00Z".to_string(),
                 last_prompt_at: None,

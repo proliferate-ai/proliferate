@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { SidebarFooter } from "./SidebarFooter";
+import { SidebarThreadsSection } from "./SidebarThreadsSection";
 import { SidebarRowSurface } from "./SidebarRowSurface";
 import {
   DEFAULT_REPO_GROUP_ITEM_LIMIT,
@@ -21,6 +22,7 @@ import { CAPABILITY_COPY } from "@/config/capabilities";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/use-cloud-billing";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useAppSurfaceStore } from "@/stores/ui/app-surface-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/use-workspace-display-name-actions";
 import { useWorkspaceSidebarActions } from "@/hooks/workspaces/use-workspace-sidebar-actions";
@@ -41,6 +43,7 @@ export function MainSidebar() {
   const { data: billingPlan } = useCloudBilling();
   const [showArchived, setShowArchived] = useState(false);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
+  const pendingCoworkThread = useAppSurfaceStore((state) => state.pendingCoworkThread);
   const {
     groups,
     selectedWorkspaceId,
@@ -128,7 +131,7 @@ export function MainSidebar() {
         <div className="px-2">
           <div className="flex flex-col gap-px">
             <SidebarRowSurface
-              active={!selectedWorkspaceId && !pendingWorkspaceEntry}
+              active={!selectedWorkspaceId && !pendingWorkspaceEntry && !pendingCoworkThread}
               onPress={actions.handleGoHome}
               className="px-2 py-1"
             >
@@ -139,6 +142,8 @@ export function MainSidebar() {
             </SidebarRowSurface>
           </div>
         </div>
+
+        <SidebarThreadsSection />
 
         {/* Repositories heading */}
         <div className="text-foreground/50 text-base opacity-75 pl-4 pr-2 pt-3 pb-1">

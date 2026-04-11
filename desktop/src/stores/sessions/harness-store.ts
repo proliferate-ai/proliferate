@@ -53,6 +53,7 @@ interface HarnessState {
     opts?: { initialActiveSessionId?: string | null; clearPending?: boolean },
   ) => void;
   removeWorkspaceSlots: (workspaceId: string) => void;
+  clearWorkspaceSelection: () => void;
   clearSelection: () => void;
   putSessionSlot: (sessionId: string, slot: SessionSlot) => void;
   patchSessionSlot: (sessionId: string, patch: Partial<SessionSlot>) => void;
@@ -108,6 +109,13 @@ export const useHarnessStore = create<HarnessState>((set) => ({
       ? s.activeSessionId
       : null,
   })),
+
+  clearWorkspaceSelection: () => set({
+    pendingWorkspaceEntry: null,
+    selectedWorkspaceId: null,
+    workspaceArrivalEvent: null,
+    activeSessionId: null,
+  }),
 
   clearSelection: () => set(s => ({
     pendingWorkspaceEntry: null,

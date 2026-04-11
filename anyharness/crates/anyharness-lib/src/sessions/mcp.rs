@@ -8,6 +8,10 @@ use anyhow::Context;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+
+use super::model::SessionRecord;
+use crate::workspaces::model::WorkspaceRecord;
 
 pub const DATA_KEY_ENV_VAR: &str = "ANYHARNESS_DATA_KEY";
 const CIPHERTEXT_PREFIX: &str = "v1:";
@@ -176,6 +180,30 @@ impl fmt::Debug for SessionMcpBindingsError {
 impl SessionMcpBindingsError {
     pub fn missing_data_key_detail() -> &'static str {
         "ANYHARNESS_DATA_KEY is required when MCP bindings are present."
+    }
+}
+
+pub trait SessionMcpProviderSource: Send + Sync {
+    fn providers_for(
+        &self,
+        session: &SessionRecord,
+        workspace: &WorkspaceRecord,
+    ) -> anyhow::Result<Vec<SessionMcpServer>>;
+
+    fn system_prompt_append(
+        &self,
+        _session: &SessionRecord,
+        _workspace: &WorkspaceRecord,
+    ) -> anyhow::Result<Option<String>> {
+        Ok(None)
+    }
+
+    fn startup_meta(
+        &self,
+        _session: &SessionRecord,
+        _workspace: &WorkspaceRecord,
+    ) -> anyhow::Result<Option<Map<String, Value>>> {
+        Ok(None)
     }
 }
 

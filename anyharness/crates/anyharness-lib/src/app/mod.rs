@@ -3,6 +3,9 @@ use std::sync::Arc;
 
 use crate::acp::manager::AcpManager;
 use crate::agents::reconcile_execution::AgentReconcileService;
+use crate::artifacts::service::ArtifactService;
+use crate::cowork::orchestrator::CoworkOrchestrator;
+use crate::cowork::provider::CoworkMcpProviderSource;
 use crate::git::WorkspaceFileSearchCache;
 use crate::persistence::Db;
 use crate::processes::ProcessService;
@@ -33,6 +36,8 @@ pub struct AppState {
     pub bearer_token: Option<String>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub workspace_service: Arc<WorkspaceService>,
+    pub artifact_service: Arc<ArtifactService>,
+    pub cowork_orchestrator: Arc<CoworkOrchestrator>,
     pub process_service: Arc<ProcessService>,
     pub workspace_file_search_cache: Arc<WorkspaceFileSearchCache>,
     pub session_service: Arc<SessionService>,
@@ -58,27 +63,39 @@ impl AppState {
         let agent_reconcile_service = Arc::new(AgentReconcileService::new());
         let process_service = Arc::new(ProcessService::new());
         let workspace_file_search_cache = Arc::new(WorkspaceFileSearchCache::new());
+        let artifact_service = Arc::new(ArtifactService::new());
         let session_service = Arc::new(SessionService::new(
             SessionStore::new(db.clone()),
             WorkspaceStore::new(db.clone()),
             runtime_home.clone(),
         ));
         let acp_manager = AcpManager::new();
+        let current_executable =
+            std::env::current_exe().unwrap_or_else(|_| PathBuf::from("anyharness"));
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
             workspace_service.clone(),
             acp_manager.clone(),
             runtime_home.clone(),
             session_data_cipher,
+            vec![Arc::new(CoworkMcpProviderSource::new(current_executable))],
         ));
         let terminal_service = Arc::new(TerminalService::new());
         let setup_execution_service = Arc::new(SetupExecutionService::new());
+        let cowork_orchestrator = Arc::new(CoworkOrchestrator::new(
+            runtime_home.clone(),
+            workspace_service.clone(),
+            session_service.clone(),
+            session_runtime.clone(),
+        ));
         Ok(Self {
             runtime_home,
             db,
             bearer_token,
             agent_reconcile_service,
             workspace_service,
+            artifact_service,
+            cowork_orchestrator,
             process_service,
             workspace_file_search_cache,
             session_service,
@@ -275,7 +292,9 @@ environment variable is missing or empty. Refusing to start without authenticati
         .expect("expected invalid data key error");
 
         assert!(
-            error.to_string().starts_with("Invalid ANYHARNESS_DATA_KEY:"),
+            error
+                .to_string()
+                .starts_with("Invalid ANYHARNESS_DATA_KEY:"),
             "unexpected error: {error}"
         );
     }

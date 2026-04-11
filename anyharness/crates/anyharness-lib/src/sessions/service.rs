@@ -3,7 +3,9 @@ use std::time::Instant;
 use uuid::Uuid;
 
 use super::live_config::snapshot_from_record;
-use super::model::{SessionEventRecord, SessionRawNotificationRecord, SessionRecord};
+use super::model::{
+    SessionEventRecord, SessionPermissionPolicy, SessionRawNotificationRecord, SessionRecord,
+};
 use super::store::SessionStore;
 use crate::agents::catalog::model_registries;
 use crate::agents::model::{ModelRegistryMetadata, ResolvedAgentStatus};
@@ -71,6 +73,8 @@ impl SessionService {
         agent_kind: &str,
         model_id: Option<&str>,
         mode_id: Option<&str>,
+        mode_locked: bool,
+        permission_policy: SessionPermissionPolicy,
         mcp_bindings_ciphertext: Option<String>,
     ) -> anyhow::Result<SessionRecord> {
         let started = Instant::now();
@@ -164,6 +168,8 @@ impl SessionService {
             thinking_level_id: None,
             thinking_budget_tokens: None,
             status: "starting".into(),
+            mode_locked,
+            permission_policy,
             created_at: now.clone(),
             updated_at: now,
             last_prompt_at: None,
@@ -184,6 +190,10 @@ impl SessionService {
 
     pub fn get_session(&self, id: &str) -> anyhow::Result<Option<SessionRecord>> {
         self.session_store.find_by_id(id)
+    }
+
+    pub fn delete_sessions_by_workspace(&self, workspace_id: &str) -> anyhow::Result<()> {
+        self.session_store.delete_by_workspace(workspace_id)
     }
 
     pub fn list_sessions(

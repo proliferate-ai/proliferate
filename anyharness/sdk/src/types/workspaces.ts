@@ -1,6 +1,7 @@
 import type { components } from "../generated/openapi.js";
 
 export type WorkspaceKind = components["schemas"]["WorkspaceKind"];
+export type WorkspaceSurfaceKind = components["schemas"]["WorkspaceSurfaceKind"];
 export type WorkspaceExecutionPhase = components["schemas"]["WorkspaceExecutionPhase"];
 export type WorkspaceExecutionSummary = components["schemas"]["WorkspaceExecutionSummary"];
 export type Workspace = components["schemas"]["Workspace"];
@@ -15,8 +16,16 @@ export type WorkspaceSessionLaunchCatalog =
 export type ResolveWorkspaceFromPathRequest =
   components["schemas"]["ResolveWorkspaceFromPathRequest"];
 export type CreateWorkspaceRequest = components["schemas"]["CreateWorkspaceRequest"];
+export type CreateCoworkWorkspaceRequest =
+  components["schemas"]["CreateCoworkWorkspaceRequest"];
+export type CreateCoworkWorkspaceResponse =
+  components["schemas"]["CreateCoworkWorkspaceResponse"];
 export type RegisterRepoWorkspaceRequest =
   components["schemas"]["RegisterRepoWorkspaceRequest"];
+export type ReplaceWorkspaceDefaultSessionRequest =
+  components["schemas"]["ReplaceWorkspaceDefaultSessionRequest"];
+export type ReplaceWorkspaceDefaultSessionResponse =
+  components["schemas"]["ReplaceWorkspaceDefaultSessionResponse"];
 export type CreateWorktreeWorkspaceRequest =
   components["schemas"]["CreateWorktreeWorkspaceRequest"];
 export type SetupScriptStatus = components["schemas"]["SetupScriptStatus"];

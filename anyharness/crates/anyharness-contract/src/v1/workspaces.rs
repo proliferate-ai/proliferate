@@ -30,11 +30,19 @@ pub enum WorkspaceKind {
     Local,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceSurfaceKind {
+    Code,
+    Cowork,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
     pub id: String,
     pub kind: WorkspaceKind,
+    pub surface_kind: WorkspaceSurfaceKind,
     pub path: String,
     pub source_repo_root_path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -51,6 +59,8 @@ pub struct Workspace {
     pub current_branch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_summary: Option<WorkspaceExecutionSummary>,
     pub created_at: String,
@@ -101,6 +111,36 @@ pub struct ResolveWorkspaceFromPathRequest {
 #[serde(rename_all = "camelCase")]
 pub struct CreateWorkspaceRequest {
     pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCoworkWorkspaceRequest {
+    pub agent_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCoworkWorkspaceResponse {
+    pub workspace: Workspace,
+    pub session: super::Session,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceWorkspaceDefaultSessionRequest {
+    pub agent_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceWorkspaceDefaultSessionResponse {
+    pub workspace: Workspace,
+    pub session: super::Session,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

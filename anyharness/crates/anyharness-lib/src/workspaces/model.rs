@@ -2,6 +2,8 @@
 pub struct WorkspaceRecord {
     pub id: String,
     pub kind: String,
+    pub surface_kind: String,
+    pub is_internal: bool,
     pub path: String,
     pub source_repo_root_path: String,
     pub source_workspace_id: Option<String>,
@@ -11,6 +13,7 @@ pub struct WorkspaceRecord {
     pub original_branch: Option<String>,
     pub current_branch: Option<String>,
     pub display_name: Option<String>,
+    pub default_session_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

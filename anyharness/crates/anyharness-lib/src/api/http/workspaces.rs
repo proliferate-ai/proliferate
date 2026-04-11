@@ -1,28 +1,39 @@
 use std::time::Instant;
 
 use anyharness_contract::v1::{
-    CreateWorkspaceRequest, CreateWorktreeWorkspaceRequest, CreateWorktreeWorkspaceResponse,
-    DetectProjectSetupResponse, GetSetupStatusResponse, RegisterRepoWorkspaceRequest,
-    ResolveWorkspaceFromPathRequest, StartWorkspaceSetupRequest, UpdateWorkspaceDisplayNameRequest,
-    Workspace, WorkspaceSessionLaunchCatalog,
+    CreateCoworkWorkspaceRequest, CreateCoworkWorkspaceResponse, CreateWorkspaceRequest,
+    CreateWorktreeWorkspaceRequest, CreateWorktreeWorkspaceResponse, DetectProjectSetupResponse,
+    GetSetupStatusResponse, RegisterRepoWorkspaceRequest, ReplaceWorkspaceDefaultSessionRequest,
+    ReplaceWorkspaceDefaultSessionResponse, ResolveWorkspaceFromPathRequest,
+    StartWorkspaceSetupRequest, UpdateWorkspaceDisplayNameRequest, Workspace,
+    WorkspaceSessionLaunchCatalog,
 };
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::HeaderMap,
     Json,
 };
+use serde::Deserialize;
 
 use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
+use super::sessions::map_create_session_error;
 use super::workspaces_contract::{
     detection_result_to_contract, map_register_repo_workspace_error,
     map_set_workspace_display_name_error, setup_snapshot_to_contract,
     workspace_session_launch_catalog_to_contract, workspace_to_contract_with_summary,
 };
 use crate::app::AppState;
+use crate::cowork::orchestrator::{CoworkCreateWorkspaceError, CoworkReplaceDefaultSessionError};
 use crate::sessions::execution_summary::idle_workspace_execution_summary;
 use crate::workspaces::model::WorkspaceRecord;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListWorkspacesQuery {
+    pub surface_kind: Option<String>,
+}
 
 #[utoipa::path(
     post,
@@ -68,6 +79,78 @@ pub async fn create_workspace(
         .await?
         .map_err(|e| ApiError::bad_request(e.to_string(), "WORKSPACE_CREATE_FAILED"))?;
     Ok(Json(workspace_to_contract(&state, record).await?))
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/workspaces:cowork",
+    request_body = CreateCoworkWorkspaceRequest,
+    responses(
+        (status = 200, description = "Created Cowork workspace", body = CreateCoworkWorkspaceResponse),
+        (status = 400, description = "Invalid Cowork request", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "workspaces"
+)]
+pub async fn create_cowork_workspace(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<CreateCoworkWorkspaceRequest>,
+) -> Result<Json<CreateCoworkWorkspaceResponse>, ApiError> {
+    let latency = LatencyRequestContext::from_headers(&headers);
+    let result = state
+        .cowork_orchestrator
+        .create_workspace(&req.agent_kind, req.model_id.as_deref(), latency.as_ref())
+        .await
+        .map_err(map_create_cowork_workspace_error)?;
+
+    Ok(Json(CreateCoworkWorkspaceResponse {
+        workspace: workspace_to_contract(&state, result.workspace).await?,
+        session: state
+            .session_runtime
+            .session_to_contract(&result.session)
+            .await
+            .map_err(|error| ApiError::internal(error.to_string()))?,
+    }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/workspaces/{workspace_id}/default-session:replace",
+    params(("workspace_id" = String, Path, description = "Workspace ID")),
+    request_body = ReplaceWorkspaceDefaultSessionRequest,
+    responses(
+        (status = 200, description = "Replaced Cowork default session", body = ReplaceWorkspaceDefaultSessionResponse),
+        (status = 400, description = "Invalid replacement request", body = anyharness_contract::v1::ProblemDetails),
+        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "workspaces"
+)]
+pub async fn replace_workspace_default_session(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(workspace_id): Path<String>,
+    Json(req): Json<ReplaceWorkspaceDefaultSessionRequest>,
+) -> Result<Json<ReplaceWorkspaceDefaultSessionResponse>, ApiError> {
+    let latency = LatencyRequestContext::from_headers(&headers);
+    let result = state
+        .cowork_orchestrator
+        .replace_default_session(
+            &workspace_id,
+            &req.agent_kind,
+            req.model_id.as_deref(),
+            latency.as_ref(),
+        )
+        .await
+        .map_err(map_replace_default_session_error)?;
+
+    Ok(Json(ReplaceWorkspaceDefaultSessionResponse {
+        workspace: workspace_to_contract(&state, result.workspace).await?,
+        session: state
+            .session_runtime
+            .session_to_contract(&result.session)
+            .await
+            .map_err(|error| ApiError::internal(error.to_string()))?,
+    }))
 }
 
 #[utoipa::path(
@@ -209,11 +292,15 @@ pub async fn create_worktree(
 )]
 pub async fn list_workspaces(
     State(state): State<AppState>,
+    Query(query): Query<ListWorkspacesQuery>,
 ) -> Result<Json<Vec<Workspace>>, ApiError> {
     let workspace_service = state.workspace_service.clone();
-    let records = run_blocking("list", move || workspace_service.list_workspaces())
-        .await?
-        .map_err(|e| ApiError::internal(e.to_string()))?;
+    let surface_kind = query.surface_kind;
+    let records = run_blocking("list", move || {
+        workspace_service.list_workspaces(surface_kind.as_deref())
+    })
+    .await?
+    .map_err(|e| ApiError::internal(e.to_string()))?;
     let summaries = state
         .session_runtime
         .workspace_execution_summaries()
@@ -489,4 +576,36 @@ async fn workspace_to_contract(
         record,
         execution_summary,
     ))
+}
+
+fn map_create_cowork_workspace_error(error: CoworkCreateWorkspaceError) -> ApiError {
+    match error {
+        CoworkCreateWorkspaceError::UnsupportedAgent(agent_kind) => ApiError::bad_request(
+            format!("Cowork does not support agent '{agent_kind}'"),
+            "COWORK_UNSUPPORTED_AGENT",
+        ),
+        CoworkCreateWorkspaceError::Workspace(error) => ApiError::internal(error.to_string()),
+        CoworkCreateWorkspaceError::Session(error) => map_create_session_error(error),
+    }
+}
+
+fn map_replace_default_session_error(error: CoworkReplaceDefaultSessionError) -> ApiError {
+    match error {
+        CoworkReplaceDefaultSessionError::UnsupportedAgent(agent_kind) => ApiError::bad_request(
+            format!("unsupported Cowork agent kind: {agent_kind}"),
+            "COWORK_AGENT_UNSUPPORTED",
+        ),
+        CoworkReplaceDefaultSessionError::Workspace(error) => {
+            let message = error.to_string();
+            if message.contains("not found") {
+                ApiError::not_found(message, "WORKSPACE_NOT_FOUND")
+            } else {
+                ApiError::bad_request(message, "COWORK_WORKSPACE_REPLACE_FAILED")
+            }
+        }
+        CoworkReplaceDefaultSessionError::Session(error) => map_create_session_error(error),
+        CoworkReplaceDefaultSessionError::SessionLifecycle(error) => {
+            ApiError::internal(error.to_string())
+        }
+    }
 }

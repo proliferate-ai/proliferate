@@ -1,9 +1,11 @@
 import { useCallback, useMemo } from "react";
 import {
   buildLiveSessionControlDescriptors,
+  resolveVisibleLiveSessionControlDescriptors,
   type LiveSessionControlDescriptor,
 } from "@/lib/domain/chat/session-controls";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { useSelectedWorkspace } from "@/hooks/workspaces/use-selected-workspace";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -18,6 +20,7 @@ export function useChatSessionControls(): {
     state.activeSessionId ? state.sessionSlots[state.activeSessionId] ?? null : null,
   );
   const showToast = useToastStore((state) => state.show);
+  const { workspaceSurfaceKind } = useSelectedWorkspace();
   const { setActiveSessionConfigOption } = useSessionActions();
 
   const onSelect = useCallback((rawConfigId: string, value: string) => {
@@ -32,12 +35,22 @@ export function useChatSessionControls(): {
       return EMPTY_CONTROLS;
     }
 
-    return buildLiveSessionControlDescriptors(
+    const allControls = buildLiveSessionControlDescriptors(
       activeSlot.liveConfig.normalizedControls,
       activeSlot.pendingConfigChanges,
       onSelect,
     );
-  }, [activeSlot?.liveConfig?.normalizedControls, activeSlot?.pendingConfigChanges, onSelect]);
+
+    return resolveVisibleLiveSessionControlDescriptors(
+      workspaceSurfaceKind,
+      allControls,
+    );
+  }, [
+    activeSlot?.liveConfig?.normalizedControls,
+    activeSlot?.pendingConfigChanges,
+    onSelect,
+    workspaceSurfaceKind,
+  ]);
 
   const modeControl = useMemo(
     () =>

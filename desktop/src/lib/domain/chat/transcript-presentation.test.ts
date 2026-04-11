@@ -53,6 +53,43 @@ describe("buildTurnPresentation", () => {
       subagents: 0,
     });
   });
+
+  it("keeps artifact tool calls visible before the final assistant message", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      user: userItem("user", "turn-1", 1),
+      artifact: {
+        ...toolItem("artifact", "turn-1", 2),
+        nativeToolName: "proliferate.create_artifact",
+        title: "create_artifact",
+        rawOutput: {
+          structuredContent: {
+            action: "created",
+            artifact: {
+              id: "artifact-1",
+              title: "Artifact 1",
+              renderer: "markdown",
+              entry: "README.md",
+            },
+          },
+        },
+      },
+      final: assistantItem("final", "turn-1", 3),
+    };
+    const turn: TurnRecord = {
+      turnId: "turn-1",
+      itemOrder: ["user", "artifact", "final"],
+      startedAt: "2026-04-04T00:00:00Z",
+      completedAt: "2026-04-04T00:00:10Z",
+      stopReason: "end_turn",
+      fileBadges: [],
+    };
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect([...presentation.collapsedRootIds]).toEqual([]);
+    expect(presentation.rootIds).toEqual(["user", "artifact", "final"]);
+  });
 });
 
 function assistantItem(

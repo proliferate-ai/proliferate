@@ -17,6 +17,7 @@ use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::app::AppState;
 use crate::sessions::mcp::bindings_from_contract;
+use crate::sessions::model::SessionPermissionPolicy;
 use crate::sessions::runtime::{
     CreateAndStartSessionError, EnsureLiveSessionError, PendingPromptMutationError,
     PermissionResolution, ResolvePermissionError, SendPromptError, SendPromptOutcome,
@@ -88,6 +89,8 @@ pub async fn create_session(
             &agent_kind,
             model_id.as_deref(),
             mode_id.as_deref(),
+            false,
+            SessionPermissionPolicy::Interactive,
             req.system_prompt_append,
             mcp_servers,
             latency.as_ref(),
@@ -731,7 +734,7 @@ fn map_resolve_permission_error(error: ResolvePermissionError) -> ApiError {
     }
 }
 
-fn map_create_session_error(error: CreateAndStartSessionError) -> ApiError {
+pub(crate) fn map_create_session_error(error: CreateAndStartSessionError) -> ApiError {
     match error {
         CreateAndStartSessionError::Invalid(detail) => {
             ApiError::bad_request(detail, "SESSION_CREATE_FAILED")
@@ -794,10 +797,9 @@ fn map_pending_prompt_mutation_error(error: PendingPromptMutationError) -> ApiEr
             format!("Session not found: {session_id}"),
             "SESSION_NOT_FOUND",
         ),
-        PendingPromptMutationError::NotFound => ApiError::not_found(
-            "Pending prompt not found",
-            "PENDING_PROMPT_NOT_FOUND",
-        ),
+        PendingPromptMutationError::NotFound => {
+            ApiError::not_found("Pending prompt not found", "PENDING_PROMPT_NOT_FOUND")
+        }
         PendingPromptMutationError::Internal(error) => ApiError::internal(error.to_string()),
     }
 }

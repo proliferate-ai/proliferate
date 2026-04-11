@@ -6,8 +6,10 @@ function makeWorkspace(overrides: Partial<Workspace>): Workspace {
   return {
     id: "workspace-1",
     kind: "repo",
+    surfaceKind: "code",
     path: "/tmp/repo",
     sourceRepoRootPath: "/tmp/repo",
+    defaultSessionId: null,
     createdAt: "2025-01-01T00:00:00.000Z",
     updatedAt: "2025-01-01T00:00:00.000Z",
     ...overrides,

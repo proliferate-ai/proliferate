@@ -3,6 +3,7 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
+import { isArtifactToolCallItem } from "@/lib/domain/chat/artifact-tool-call";
 
 export interface ReadGroupSummary {
   reads: number;
@@ -82,7 +83,9 @@ export function buildTurnPresentation(
   const finalAssistantIndex = rootIds.indexOf(finalAssistantItemId);
   const collapsedRootIds = new Set(
     rootIds.filter((itemId, index) =>
-      index < finalAssistantIndex && transcript.itemsById[itemId]?.kind !== "user_message"
+      index < finalAssistantIndex
+      && transcript.itemsById[itemId]?.kind !== "user_message"
+      && !isArtifactToolCallItem(transcript.itemsById[itemId])
     ),
   );
 

@@ -6,10 +6,12 @@ import { useToastStore } from "@/stores/toast/toast-store";
 
 interface UseMainScreenShortcutsArgs {
   onOpenFilePalette: () => void;
+  allowFilePalette: boolean;
 }
 
 export function useMainScreenShortcuts({
   onOpenFilePalette,
+  allowFilePalette,
 }: UseMainScreenShortcutsArgs): void {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const { toggleFocus } = useFocusZone();
@@ -29,5 +31,5 @@ export function useMainScreenShortcuts({
     }
 
     onOpenFilePalette();
-  }, { enabled });
+  }, { enabled: enabled && allowFilePalette });
 }

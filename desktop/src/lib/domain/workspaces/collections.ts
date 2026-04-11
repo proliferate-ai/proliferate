@@ -20,6 +20,7 @@ function toSyntheticCloudWorkspace(workspace: CloudWorkspaceSummary): Workspace 
   return {
     id: cloudWorkspaceSyntheticId(workspace.id),
     kind: "repo",
+    surfaceKind: "code",
     path: `${workspace.repo.owner}/${workspace.repo.name}`,
     sourceRepoRootPath: cloudWorkspaceGroupKey(workspace),
     gitProvider: workspace.repo.provider,
@@ -27,6 +28,7 @@ function toSyntheticCloudWorkspace(workspace: CloudWorkspaceSummary): Workspace 
     gitRepoName: workspace.repo.name,
     originalBranch: workspace.repo.branch,
     currentBranch: workspace.repo.branch,
+    defaultSessionId: null,
     createdAt: workspace.createdAt ?? "",
     updatedAt: workspace.updatedAt ?? "",
   };

@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 
 use crate::commands::install_agents::InstallAgentsArgs;
+use crate::commands::mcp_proliferate::McpProliferateArgs;
 use crate::commands::serve::ServeArgs;
 
 #[derive(Parser)]
@@ -19,4 +20,6 @@ pub enum Commands {
     InstallAgents(InstallAgentsArgs),
     /// Print the OpenAPI JSON schema for the runtime API
     PrintOpenapi,
+    /// Run the built-in Cowork artifact MCP server over stdio
+    McpProliferate(McpProliferateArgs),
 }

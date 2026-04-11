@@ -1,5 +1,27 @@
 use anyharness_contract::v1;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionPermissionPolicy {
+    Interactive,
+    FailOnRequest,
+}
+
+impl SessionPermissionPolicy {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Interactive => "interactive",
+            Self::FailOnRequest => "fail_on_request",
+        }
+    }
+
+    pub fn parse(value: &str) -> Self {
+        match value {
+            "fail_on_request" => Self::FailOnRequest,
+            _ => Self::Interactive,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SessionRecord {
     pub id: String,
@@ -14,6 +36,8 @@ pub struct SessionRecord {
     pub thinking_level_id: Option<String>,
     pub thinking_budget_tokens: Option<u32>,
     pub status: String,
+    pub mode_locked: bool,
+    pub permission_policy: SessionPermissionPolicy,
     pub created_at: String,
     pub updated_at: String,
     pub last_prompt_at: Option<String>,
@@ -52,6 +76,7 @@ impl SessionRecord {
             live_config,
             execution_summary,
             status: parse_status(&self.status),
+            mode_locked: self.mode_locked,
             created_at: self.created_at.clone(),
             updated_at: self.updated_at.clone(),
             last_prompt_at: self.last_prompt_at.clone(),

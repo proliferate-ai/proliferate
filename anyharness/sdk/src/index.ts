@@ -35,6 +35,7 @@ export type {
 
 export type {
   WorkspaceKind,
+  WorkspaceSurfaceKind,
   WorkspaceExecutionPhase,
   WorkspaceExecutionSummary,
   Workspace,
@@ -43,7 +44,11 @@ export type {
   WorkspaceSessionLaunchCatalog,
   ResolveWorkspaceFromPathRequest,
   CreateWorkspaceRequest,
+  CreateCoworkWorkspaceRequest,
+  CreateCoworkWorkspaceResponse,
   RegisterRepoWorkspaceRequest,
+  ReplaceWorkspaceDefaultSessionRequest,
+  ReplaceWorkspaceDefaultSessionResponse,
   CreateWorktreeWorkspaceRequest,
   SetupScriptStatus,
   SetupScriptExecution,
@@ -55,6 +60,12 @@ export type {
   StartWorkspaceSetupRequest,
   UpdateWorkspaceDisplayNameRequest,
 } from "./types/workspaces.js";
+
+export type {
+  ArtifactRenderer,
+  WorkspaceArtifactSummary,
+  WorkspaceArtifactDetail,
+} from "./types/artifacts.js";
 
 export type {
   SessionStatus,

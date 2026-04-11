@@ -123,11 +123,7 @@ impl SetupExecutionService {
         command: String,
         env_vars: Vec<(String, String)>,
     ) -> String {
-        let job_id = format!(
-            "{}-{}",
-            workspace_id,
-            chrono::Utc::now().timestamp_millis()
-        );
+        let job_id = format!("{}-{}", workspace_id, chrono::Utc::now().timestamp_millis());
 
         // Cancel any existing job for this workspace
         self.cancel_for_workspace(&workspace_id).await;
@@ -178,7 +174,8 @@ impl SetupExecutionService {
     /// Get the execution result if the job is in a terminal state.
     pub async fn get_result(&self, workspace_id: &str) -> Option<SetupScriptExecutionResult> {
         let jobs = self.jobs.lock().await;
-        jobs.get(workspace_id).and_then(|job| job.to_execution_result())
+        jobs.get(workspace_id)
+            .and_then(|job| job.to_execution_result())
     }
 
     /// Cancel and remove any running job for a workspace.
@@ -307,13 +304,19 @@ async fn execute_script(
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
-    let child = cmd.spawn()
+    let child = cmd
+        .spawn()
         .map_err(|e| anyhow::anyhow!("failed to spawn setup script: {e}"))?;
 
     // Wait with timeout
     let output = tokio::time::timeout(DEFAULT_TIMEOUT, child.wait_with_output())
         .await
-        .map_err(|_| anyhow::anyhow!("setup script timed out after {}s", DEFAULT_TIMEOUT.as_secs()))?
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "setup script timed out after {}s",
+                DEFAULT_TIMEOUT.as_secs()
+            )
+        })?
         .map_err(|e| anyhow::anyhow!("setup script execution error: {e}"))?;
 
     let exit_code = output.status.code().unwrap_or(-1);
@@ -331,7 +334,10 @@ fn resolve_shell_command(script: &str) -> (String, Vec<String>) {
 
 #[cfg(windows)]
 fn resolve_shell_command(script: &str) -> (String, Vec<String>) {
-    ("cmd".to_string(), vec!["/C".to_string(), script.to_string()])
+    (
+        "cmd".to_string(),
+        vec!["/C".to_string(), script.to_string()],
+    )
 }
 
 fn truncate_output(output: &str, max_bytes: usize) -> String {
@@ -357,12 +363,7 @@ mod tests {
     async fn test_start_and_get_status() {
         let service = SetupExecutionService::new();
         let job_id = service
-            .start(
-                "ws-1".into(),
-                "/tmp".into(),
-                "echo hello".into(),
-                vec![],
-            )
+            .start("ws-1".into(), "/tmp".into(), "echo hello".into(), vec![])
             .await;
 
         assert!(!job_id.is_empty());
@@ -378,12 +379,7 @@ mod tests {
     async fn test_completion() {
         let service = SetupExecutionService::new();
         service
-            .start(
-                "ws-2".into(),
-                "/tmp".into(),
-                "echo done".into(),
-                vec![],
-            )
+            .start("ws-2".into(), "/tmp".into(), "echo done".into(), vec![])
             .await;
 
         // Wait for completion
@@ -399,12 +395,7 @@ mod tests {
     async fn test_failure() {
         let service = SetupExecutionService::new();
         service
-            .start(
-                "ws-3".into(),
-                "/tmp".into(),
-                "exit 1".into(),
-                vec![],
-            )
+            .start("ws-3".into(), "/tmp".into(), "exit 1".into(), vec![])
             .await;
 
         tokio::time::sleep(Duration::from_millis(500)).await;
@@ -418,12 +409,7 @@ mod tests {
     async fn test_cancel() {
         let service = SetupExecutionService::new();
         service
-            .start(
-                "ws-4".into(),
-                "/tmp".into(),
-                "sleep 60".into(),
-                vec![],
-            )
+            .start("ws-4".into(), "/tmp".into(), "sleep 60".into(), vec![])
             .await;
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -437,24 +423,14 @@ mod tests {
     async fn test_idempotent_restart() {
         let service = SetupExecutionService::new();
         let job1 = service
-            .start(
-                "ws-5".into(),
-                "/tmp".into(),
-                "sleep 60".into(),
-                vec![],
-            )
+            .start("ws-5".into(), "/tmp".into(), "sleep 60".into(), vec![])
             .await;
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Start a new job for the same workspace — should cancel the first
         let job2 = service
-            .start(
-                "ws-5".into(),
-                "/tmp".into(),
-                "echo replaced".into(),
-                vec![],
-            )
+            .start("ws-5".into(), "/tmp".into(), "echo replaced".into(), vec![])
             .await;
 
         assert_ne!(job1, job2);

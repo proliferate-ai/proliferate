@@ -1,3 +1,5 @@
+import { CoworkHeader } from "@/components/cowork/header/CoworkHeader";
+import { CoworkArtifactPanel } from "@/components/cowork/right-panel/CoworkArtifactPanel";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
 import { WorkspaceContentView } from "@/components/workspace/shell/WorkspaceContentView";
 import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel";
@@ -23,6 +25,7 @@ export function MainScreen() {
     existingPr: data.existingPr,
   });
   const {
+    shell,
     hasRuntimeReadyWorkspace,
     shouldKeepRuntimePanelsVisible,
     hasWorkspaceShell,
@@ -35,6 +38,7 @@ export function MainScreen() {
     sidebarOpen,
     sidebarWidth,
     rightPanelOpen,
+    setRightPanelOpen,
     rightPanelMode,
     rightPanelWidth,
     commitOpen,
@@ -51,61 +55,26 @@ export function MainScreen() {
   } = useUpdater();
   useMainScreenShortcuts({
     onOpenFilePalette: actions.handleFilePaletteOpen,
+    allowFilePalette: shell === "code",
   });
 
   return (
     <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? null}>
-    <div className="h-screen flex overflow-hidden bg-sidebar" data-telemetry-block>
-      {/* Sidebar column — full height, includes header area */}
-      <div
-        id="main-sidebar"
-        className="flex shrink-0 flex-col overflow-hidden transition-[width] duration-150 ease-in-out"
-        style={{ width: sidebarOpen ? sidebarWidth : 0 }}
-      >
-        {/* Sidebar header — toggle button + traffic light space */}
-        <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
-          <div className="flex h-full items-center gap-2 pl-[82px]">
-            <IconButton
-              tone="sidebar"
-              size="sm"
-              onClick={actions.onToggleSidebar}
-              title="Hide sidebar"
-              className="rounded-md"
-            >
-              <SplitPanel className="size-4" />
-            </IconButton>
-            <SidebarUpdatePill
-              phase={updaterPhase}
-              onDownloadUpdate={downloadUpdate}
-              onOpenRestartPrompt={openRestartPrompt}
-            />
-          </div>
-        </div>
-        {/* Sidebar content */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <MainSidebar />
-        </div>
-      </div>
-      {sidebarOpen && (
+      <div className="h-screen flex overflow-hidden bg-sidebar" data-telemetry-block>
+        {/* Sidebar column — full height, includes header area */}
         <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-controls="main-sidebar"
-          onMouseDown={onLeftSeparatorDown}
-          className="relative z-10 flex w-1 shrink-0 cursor-col-resize items-center justify-center -ml-1 hover:bg-primary/30 active:bg-primary/50 transition-colors"
-        />
-      )}
-
-      {/* Main surface — header + content as one rounded block */}
-      <div className={`flex min-w-0 flex-1 flex-col overflow-hidden bg-background ${sidebarOpen ? "rounded-tl-lg" : ""}`}>
-        {/* Header row */}
-        <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
-          {!sidebarOpen && (
-            <div className="flex items-center gap-2 pl-[82px] pr-2">
+          id="main-sidebar"
+          className="flex shrink-0 flex-col overflow-hidden transition-[width] duration-150 ease-in-out"
+          style={{ width: sidebarOpen ? sidebarWidth : 0 }}
+        >
+          {/* Sidebar header — toggle button + traffic light space */}
+          <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
+            <div className="flex h-full items-center gap-2 pl-[82px]">
               <IconButton
+                tone="sidebar"
                 size="sm"
                 onClick={actions.onToggleSidebar}
-                title="Show sidebar"
+                title="Hide sidebar"
                 className="rounded-md"
               >
                 <SplitPanel className="size-4" />
@@ -116,92 +85,137 @@ export function MainScreen() {
                 onOpenRestartPrompt={openRestartPrompt}
               />
             </div>
-          )}
-          {hasWorkspaceShell && (
-            <GlobalHeader
-              branchName={gitStatus?.currentBranch ?? undefined}
-              additions={gitStatus?.summary.additions}
-              deletions={gitStatus?.summary.deletions}
-              existingPr={existingPr}
-              selectedWorkspace={selectedWorkspace}
-              rightPanelOpen={rightPanelOpen}
-              disableGitActions={!hasRuntimeReadyWorkspace}
-              onTogglePanel={actions.toggleRightPanel}
-              onCommit={actions.handleCommitOpen}
-              onPush={actions.handlePushOpen}
-              onCreatePr={actions.handlePrOpen}
-              onViewPr={actions.handleViewPr}
-              onRenameBranch={hasRuntimeReadyWorkspace ? actions.renameBranch : undefined}
-              gitStatus={gitStatus ?? null}
-            />
-          )}
+          </div>
+          {/* Sidebar content */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <MainSidebar />
+          </div>
         </div>
+        {sidebarOpen && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-controls="main-sidebar"
+            onMouseDown={onLeftSeparatorDown}
+            className="relative z-10 flex w-1 shrink-0 cursor-col-resize items-center justify-center -ml-1 hover:bg-primary/30 active:bg-primary/50 transition-colors"
+          />
+        )}
 
-        {/* Content */}
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          {hasWorkspaceShell ? (
-            <>
-              <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-background to-transparent"
+        {/* Main surface — header + content as one rounded block */}
+        <div className={`flex min-w-0 flex-1 flex-col overflow-hidden bg-background ${sidebarOpen ? "rounded-tl-lg" : ""}`}>
+          {/* Header row */}
+          <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
+            {!sidebarOpen && (
+              <div className="flex items-center gap-2 pl-[82px] pr-2">
+                <IconButton
+                  size="sm"
+                  onClick={actions.onToggleSidebar}
+                  title="Show sidebar"
+                  className="rounded-md"
+                >
+                  <SplitPanel className="size-4" />
+                </IconButton>
+                <SidebarUpdatePill
+                  phase={updaterPhase}
+                  onDownloadUpdate={downloadUpdate}
+                  onOpenRestartPrompt={openRestartPrompt}
                 />
-                <WorkspaceContentView />
               </div>
+            )}
+            {(shell === "cowork" || shell === "cowork-pending") && selectedWorkspace && (
+              <CoworkHeader
+                selectedWorkspace={selectedWorkspace}
+                rightPanelOpen={rightPanelOpen}
+                onTogglePanel={() => setRightPanelOpen((value) => !value)}
+              />
+            )}
+            {shell === "code" && hasWorkspaceShell && (
+              <GlobalHeader
+                branchName={gitStatus?.currentBranch ?? undefined}
+                additions={gitStatus?.summary.additions}
+                deletions={gitStatus?.summary.deletions}
+                existingPr={existingPr}
+                selectedWorkspace={selectedWorkspace ?? undefined}
+                rightPanelOpen={rightPanelOpen}
+                disableGitActions={!hasRuntimeReadyWorkspace}
+                onTogglePanel={actions.toggleRightPanel}
+                onCommit={actions.handleCommitOpen}
+                onPush={actions.handlePushOpen}
+                onCreatePr={actions.handlePrOpen}
+                onViewPr={actions.handleViewPr}
+                onRenameBranch={hasRuntimeReadyWorkspace ? actions.renameBranch : undefined}
+                gitStatus={gitStatus ?? null}
+              />
+            )}
+          </div>
 
-              {hasWorkspaceShell && rightPanelOpen && (
-                <div
-                  role="separator"
-                  aria-orientation="vertical"
-                  onMouseDown={onRightSeparatorDown}
-                  className="relative z-10 flex w-1 shrink-0 cursor-col-resize items-center justify-center -mr-1 hover:bg-primary/30 active:bg-primary/50 transition-colors"
-                />
-              )}
-              {hasWorkspaceShell && (
+          {/* Content */}
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            {shell === "home" ? (
+              <HomeScreen />
+            ) : (
+              <>
+                <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-background to-transparent"
+                  />
+                  <WorkspaceContentView />
+                </div>
+
+                {rightPanelOpen && (
+                  <div
+                    role="separator"
+                    aria-orientation="vertical"
+                    onMouseDown={onRightSeparatorDown}
+                    className="relative z-10 flex w-1 shrink-0 cursor-col-resize items-center justify-center -mr-1 hover:bg-primary/30 active:bg-primary/50 transition-colors"
+                  />
+                )}
                 <div
                   className="shrink-0 overflow-hidden transition-[width] duration-150 ease-in-out"
                   style={{ width: rightPanelOpen ? rightPanelWidth : 0 }}
                 >
                   <div className="h-full" style={{ minWidth: 260 }}>
-                    <RightPanel
-                      isWorkspaceReady={hasRuntimeReadyWorkspace}
-                      shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}
-                      isCloudWorkspaceSelected={isCloudWorkspaceSelected}
-                      mode={rightPanelMode}
-                      onModeChange={actions.onSetRightPanelMode}
-                    />
+                    {shell === "code" ? (
+                      <RightPanel
+                        isWorkspaceReady={hasRuntimeReadyWorkspace}
+                        shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}
+                        isCloudWorkspaceSelected={isCloudWorkspaceSelected}
+                        mode={rightPanelMode}
+                        onModeChange={actions.onSetRightPanelMode}
+                      />
+                    ) : (
+                      <CoworkArtifactPanel />
+                    )}
                   </div>
                 </div>
-              )}
 
-              {hasRuntimeReadyWorkspace && (
-                <>
-                  <CommitDialog
-                    open={commitOpen}
-                    onClose={actions.onCommitClose}
-                    onOpenPrDialog={actions.openPrDialog}
-                  />
-                  <PushDialog
-                    open={pushOpen}
-                    onClose={actions.onPushClose}
-                  />
-                  <PullRequestDialog
-                    open={prOpen}
-                    onClose={actions.onPrClose}
-                  />
-                  <WorkspaceFilePalette
-                    open={filePaletteOpen}
-                    onClose={actions.onFilePaletteClose}
-                  />
-                </>
-              )}
-            </>
-          ) : (
-            <HomeScreen />
-          )}
+                {shell === "code" && hasRuntimeReadyWorkspace && (
+                  <>
+                    <CommitDialog
+                      open={commitOpen}
+                      onClose={actions.onCommitClose}
+                      onOpenPrDialog={actions.openPrDialog}
+                    />
+                    <PushDialog
+                      open={pushOpen}
+                      onClose={actions.onPushClose}
+                    />
+                    <PullRequestDialog
+                      open={prOpen}
+                      onClose={actions.onPrClose}
+                    />
+                    <WorkspaceFilePalette
+                      open={filePaletteOpen}
+                      onClose={actions.onFilePaletteClose}
+                    />
+                  </>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
-    </div>
     </WorkspacePathProvider>
   );
 }

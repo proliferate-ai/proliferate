@@ -7,6 +7,7 @@ import { ConnectedPendingPromptList } from "@/components/workspace/chat/input/Pe
 import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
 import { useActiveTodoTracker } from "@/hooks/chat/use-active-todo-tracker";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useSelectedWorkspace } from "@/hooks/workspaces/use-selected-workspace";
 import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/use-workspace-status-panel-state";
 
 /**
@@ -27,8 +28,13 @@ export function useComposerTopSlot(): ReactNode | null {
   const activeTodoTracker = useActiveTodoTracker();
   const workspaceStatusPanel = useWorkspaceStatusPanelState();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
+  const { isCoworkWorkspaceSelected } = useSelectedWorkspace();
 
-  const upperPanel: ReactNode | null = hasPendingApproval
+  const upperPanel: ReactNode | null = isCoworkWorkspaceSelected
+    ? activeTodoTracker
+      ? <TodoTrackerPanel entries={activeTodoTracker.entries} />
+      : null
+    : hasPendingApproval
     ? <ConnectedApprovalCard />
     : activeTodoTracker
       ? <TodoTrackerPanel entries={activeTodoTracker.entries} />

@@ -2,6 +2,7 @@ import type {
   NormalizedSessionControl,
   NormalizedSessionControls,
   NormalizedSessionControlValue,
+  WorkspaceSurfaceKind,
 } from "@anyharness/sdk";
 import {
   SESSION_CONTROL_ACCESSORS,
@@ -91,6 +92,17 @@ export function buildLiveSessionControlDescriptors(
       ...descriptorBase,
       kind: "select",
     });
+  }
+
+  return controls;
+}
+
+export function resolveVisibleLiveSessionControlDescriptors(
+  surfaceKind: WorkspaceSurfaceKind | null | undefined,
+  controls: LiveSessionControlDescriptor[],
+): LiveSessionControlDescriptor[] {
+  if (surfaceKind === "cowork") {
+    return [];
   }
 
   return controls;

@@ -277,6 +277,58 @@ impl GitService {
         Ok((oid, summary.to_string()))
     }
 
+    pub fn commit_paths(
+        workspace_path: &Path,
+        paths: &[String],
+        summary: &str,
+        body: Option<&str>,
+    ) -> Result<(String, String), CommitError> {
+        if paths.is_empty() {
+            return Err(CommitError::NothingStaged);
+        }
+
+        let repo_root = run_git_ok(workspace_path, &["rev-parse", "--show-toplevel"])?
+            .trim()
+            .to_string();
+        let repo_root_path = PathBuf::from(&repo_root);
+
+        let path_refs: Vec<&str> = paths.iter().map(|path| path.as_str()).collect();
+        let mut staged_check_args = vec!["diff", "--cached", "--stat", "--"];
+        staged_check_args.extend(path_refs.iter().copied());
+        let staged_check = run_git_ok(&repo_root_path, &staged_check_args)?;
+        if staged_check.trim().is_empty() {
+            return Err(CommitError::NothingStaged);
+        }
+
+        let mut msg = summary.to_string();
+        if let Some(b) = body {
+            if !b.is_empty() {
+                msg.push_str("\n\n");
+                msg.push_str(b);
+            }
+        }
+
+        let mut commit_args = vec!["commit", "-m", &msg, "--"];
+        commit_args.extend(path_refs.iter().copied());
+        let commit = run_git(&repo_root_path, &commit_args)?;
+        if !commit.success {
+            let stderr = commit.stderr.to_ascii_lowercase();
+            let stdout = commit.stdout.to_ascii_lowercase();
+            if stderr.contains("nothing to commit") || stdout.contains("nothing to commit") {
+                return Err(CommitError::NothingStaged);
+            }
+            return Err(CommitError::Failed {
+                message: git_command_message(&commit.stderr, "commit failed"),
+            });
+        }
+
+        let oid = run_git_ok(&repo_root_path, &["rev-parse", "HEAD"])?
+            .trim()
+            .to_string();
+
+        Ok((oid, summary.to_string()))
+    }
+
     pub fn push_current_branch(
         workspace_path: &Path,
         remote: Option<&str>,

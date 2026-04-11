@@ -143,6 +143,40 @@ pub fn create_git_worktree(
     Ok(())
 }
 
+pub fn remove_git_worktree(source_repo_root: &str, target_path: &str) -> anyhow::Result<()> {
+    let output = Command::new("git")
+        .args(["worktree", "remove", "--force", target_path])
+        .current_dir(source_repo_root)
+        .output()
+        .map_err(|e| anyhow::anyhow!("failed to run git worktree remove: {e}"))?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "git worktree remove failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+
+    Ok(())
+}
+
+pub fn delete_git_branch(source_repo_root: &str, branch_name: &str) -> anyhow::Result<()> {
+    let output = Command::new("git")
+        .args(["branch", "-D", branch_name])
+        .current_dir(source_repo_root)
+        .output()
+        .map_err(|e| anyhow::anyhow!("failed to run git branch -D: {e}"))?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "git branch -D failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+
+    Ok(())
+}
+
 fn git_rev_parse(cwd: &Path, args: &str) -> anyhow::Result<String> {
     let mut cmd = Command::new("git");
     cmd.arg("rev-parse");
