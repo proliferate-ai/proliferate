@@ -19,6 +19,7 @@ use crate::files::types::{
 };
 use crate::git::file_search::WorkspaceFileSearchMatch;
 
+use super::access::assert_workspace_mutable;
 use super::error::ApiError;
 
 #[derive(Deserialize)]
@@ -119,6 +120,7 @@ pub async fn write_file(
     Path(workspace_id): Path<String>,
     Json(body): Json<WriteWorkspaceFileRequest>,
 ) -> Result<Json<WriteWorkspaceFileResponse>, ApiError> {
+    assert_workspace_mutable(&state, &workspace_id)?;
     let path = body.path;
     let content = body.content;
     let expected_version_token = body.expected_version_token;

@@ -1,3 +1,4 @@
+pub mod access;
 pub mod agents;
 pub mod blocking;
 pub mod cowork;
@@ -8,6 +9,7 @@ pub mod health;
 pub mod hosting;
 pub mod latency;
 pub mod model_registries;
+pub mod mobility;
 pub mod processes;
 pub mod provider_configs;
 pub mod repo_roots;

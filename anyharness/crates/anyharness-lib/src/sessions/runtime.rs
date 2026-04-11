@@ -27,6 +27,7 @@ use crate::agents::registry::built_in_registry;
 use crate::agents::resolver::resolve_agent;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::cowork::runtime::CoworkSessionHooks;
+use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::runtime::WorkspaceRuntime;
 
 pub struct SessionRuntime {
@@ -36,6 +37,7 @@ pub struct SessionRuntime {
     runtime_home: PathBuf,
     session_data_cipher: Option<SessionDataCipher>,
     cowork_session_hooks: Arc<CoworkSessionHooks>,
+    access_gate: Arc<WorkspaceAccessGate>,
 }
 
 #[derive(Debug)]
@@ -119,6 +121,7 @@ impl SessionRuntime {
         runtime_home: PathBuf,
         session_data_cipher: Option<SessionDataCipher>,
         cowork_session_hooks: Arc<CoworkSessionHooks>,
+        access_gate: Arc<WorkspaceAccessGate>,
     ) -> Self {
         Self {
             session_service,
@@ -127,6 +130,7 @@ impl SessionRuntime {
             runtime_home,
             session_data_cipher,
             cowork_session_hooks,
+            access_gate,
         }
     }
 
@@ -213,6 +217,9 @@ impl SessionRuntime {
         mcp_servers: Vec<SessionMcpServer>,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
+        self.access_gate
+            .assert_can_mutate_for_workspace(workspace_id)
+            .map_err(|error| CreateAndStartSessionError::Invalid(error.to_string()))?;
         let started = Instant::now();
         let latency_fields = latency_trace_fields(latency);
         let system_prompt_append_count = system_prompt_append
@@ -364,6 +371,9 @@ impl SessionRuntime {
         session_id: &str,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<SessionRecord, EnsureLiveSessionError> {
+        self.access_gate
+            .assert_can_start_live_session(session_id)
+            .map_err(|error| EnsureLiveSessionError::Internal(anyhow::anyhow!(error.to_string())))?;
         let record = self
             .get_session_or_not_found(session_id)
             .map_err(|error| match error {
@@ -421,6 +431,9 @@ impl SessionRuntime {
         ),
         SetSessionConfigOptionError,
     > {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| SetSessionConfigOptionError::Internal(anyhow::anyhow!(error.to_string())))?;
         let record = self
             .get_session_or_not_found(session_id)
             .map_err(|error| match error {
@@ -508,6 +521,9 @@ impl SessionRuntime {
         text: String,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<SendPromptOutcome, SendPromptError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| SendPromptError::Internal(anyhow::anyhow!(error.to_string())))?;
         if text.is_empty() {
             return Err(SendPromptError::EmptyPrompt);
         }
@@ -614,6 +630,9 @@ impl SessionRuntime {
         seq: i64,
         text: String,
     ) -> Result<SessionRecord, PendingPromptMutationError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| PendingPromptMutationError::Internal(anyhow::anyhow!(error.to_string())))?;
         let record = self
             .get_session_or_not_found(session_id)
             .map_err(|error| match error {
@@ -672,6 +691,9 @@ impl SessionRuntime {
         session_id: &str,
         seq: i64,
     ) -> Result<SessionRecord, PendingPromptMutationError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| PendingPromptMutationError::Internal(anyhow::anyhow!(error.to_string())))?;
         let record = self
             .get_session_or_not_found(session_id)
             .map_err(|error| match error {
@@ -728,6 +750,9 @@ impl SessionRuntime {
         &self,
         session_id: &str,
     ) -> Result<SessionRecord, SessionLifecycleError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| SessionLifecycleError::Internal(anyhow::anyhow!(error.to_string())))?;
         let record = self.get_session_or_not_found(session_id)?;
 
         if let Some(handle) = self.acp_manager.get_handle(session_id).await {
@@ -745,6 +770,9 @@ impl SessionRuntime {
         &self,
         session_id: &str,
     ) -> Result<SessionRecord, SessionLifecycleError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| SessionLifecycleError::Internal(anyhow::anyhow!(error.to_string())))?;
         let _record = self.get_session_or_not_found(session_id)?;
 
         if let Some(handle) = self.acp_manager.get_handle(session_id).await {
@@ -773,6 +801,9 @@ impl SessionRuntime {
         &self,
         session_id: &str,
     ) -> Result<SessionRecord, SessionLifecycleError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| SessionLifecycleError::Internal(anyhow::anyhow!(error.to_string())))?;
         let record = self.get_session_or_not_found(session_id)?;
 
         if let Some(handle) = self.acp_manager.get_handle(session_id).await {
@@ -804,6 +835,9 @@ impl SessionRuntime {
         workspace_id: &str,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<Option<SessionRecord>, SessionLifecycleError> {
+        self.access_gate
+            .assert_can_mutate_for_workspace(workspace_id)
+            .map_err(|error| SessionLifecycleError::Internal(anyhow::anyhow!(error.to_string())))?;
         let started = Instant::now();
         let latency_fields = latency_trace_fields(latency);
         tracing::info!(
@@ -863,6 +897,9 @@ impl SessionRuntime {
         request_id: &str,
         resolution: PermissionResolution,
     ) -> Result<(), ResolvePermissionError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| ResolvePermissionError::SessionNotLive(error.to_string()))?;
         use crate::acp::permission_broker::PermissionDecision;
 
         let _handle = self
@@ -906,6 +943,9 @@ impl SessionRuntime {
         record: &SessionRecord,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<Arc<LiveSessionHandle>, StartSessionError> {
+        self.access_gate
+            .assert_can_start_live_session(&record.id)
+            .map_err(|error| StartSessionError::Internal(anyhow::anyhow!(error.to_string())))?;
         let started = Instant::now();
         let latency_fields = latency_trace_fields(latency);
         if let Some(handle) = self.acp_manager.get_handle(&record.id).await {

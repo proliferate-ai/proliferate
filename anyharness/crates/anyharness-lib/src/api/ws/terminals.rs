@@ -35,6 +35,14 @@ async fn handle_terminal_ws(socket: WebSocket, terminal_id: String, state: AppSt
         tokio::select! {
             maybe_msg = ws_stream.next() => match maybe_msg {
                 Some(Ok(Message::Binary(data))) => {
+                    if state
+                        .workspace_access_gate
+                        .assert_can_mutate_for_terminal(&terminal_id)
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
                     if state.terminal_service.write_input(&terminal_id, &data).await.is_err() {
                         break;
                     }
@@ -42,10 +50,26 @@ async fn handle_terminal_ws(socket: WebSocket, terminal_id: String, state: AppSt
                 Some(Ok(Message::Text(text))) => {
                     match serde_json::from_str::<TerminalControlMessage>(&text) {
                         Ok(TerminalControlMessage::Resize { cols, rows }) => {
+                            if state
+                                .workspace_access_gate
+                                .assert_can_mutate_for_terminal(&terminal_id)
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
                             let req = ResizeTerminalOptions { cols, rows };
                             let _ = state.terminal_service.resize_terminal(&terminal_id, req).await;
                         }
                         Err(_) => {
+                            if state
+                                .workspace_access_gate
+                                .assert_can_mutate_for_terminal(&terminal_id)
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
                             if state
                                 .terminal_service
                                 .write_input(&terminal_id, text.as_bytes())

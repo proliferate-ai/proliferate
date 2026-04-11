@@ -39,6 +39,29 @@ export type {
 } from "./types/repo-roots.js";
 
 export type {
+  WorkspaceMobilityRuntimeMode,
+  WorkspaceMobilityRuntimeState,
+  UpdateWorkspaceMobilityRuntimeStateRequest,
+  WorkspaceMobilityBlocker,
+  WorkspaceMobilitySessionCandidate,
+  WorkspaceMobilityPreflightResponse,
+  ExportWorkspaceMobilityArchiveRequest,
+  InstallWorkspaceMobilityArchiveRequest,
+  InstallWorkspaceMobilityArchiveResponse,
+  WorkspaceMobilityCleanupRequest,
+  WorkspaceMobilityCleanupResponse,
+  WorkspaceMobilityArchive,
+  WorkspaceMobilityFileEntry,
+  WorkspaceMobilitySessionBundle,
+  MobilitySessionRecord,
+  MobilitySessionLiveConfigSnapshotRecord,
+  MobilityPendingConfigChangeRecord,
+  MobilityPendingPromptRecord,
+  MobilitySessionEventRecord,
+  MobilitySessionRawNotificationRecord,
+} from "./types/mobility.js";
+
+export type {
   CoworkRoot,
   CoworkStatus,
   CoworkArtifactType,

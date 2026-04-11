@@ -4,6 +4,7 @@ import { CoworkClient } from "./cowork.js";
 import { FilesClient } from "./files.js";
 import { GitClient } from "./git.js";
 import { ModelRegistriesClient } from "./model-registries.js";
+import { MobilityClient } from "./mobility.js";
 import { ProcessesClient } from "./processes.js";
 import { ProvidersClient } from "./providers.js";
 import { PullRequestsClient } from "./pull-requests.js";
@@ -135,6 +136,7 @@ export class AnyHarnessClient {
   readonly runtime: RuntimeClient;
   readonly agents: AgentsClient;
   readonly modelRegistries: ModelRegistriesClient;
+  readonly mobility: MobilityClient;
   readonly providers: ProvidersClient;
   readonly repoRoots: RepoRootsClient;
   readonly workspaces: WorkspacesClient;
@@ -151,6 +153,7 @@ export class AnyHarnessClient {
     this.runtime = new RuntimeClient(transport);
     this.agents = new AgentsClient(transport);
     this.modelRegistries = new ModelRegistriesClient(transport);
+    this.mobility = new MobilityClient(transport);
     this.providers = new ProvidersClient(transport);
     this.repoRoots = new RepoRootsClient(transport);
     this.workspaces = new WorkspacesClient(transport);

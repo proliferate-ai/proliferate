@@ -334,6 +334,36 @@ impl SessionStore {
         })
     }
 
+    pub fn import_bundle(
+        &self,
+        session: &SessionRecord,
+        live_config_snapshot: Option<&SessionLiveConfigSnapshotRecord>,
+        pending_config_changes: &[PendingConfigChangeRecord],
+        pending_prompts: &[PendingPromptRecord],
+        events: &[SessionEventRecord],
+        raw_notifications: &[SessionRawNotificationRecord],
+    ) -> anyhow::Result<()> {
+        self.db.with_tx(|conn| {
+            insert_session_row(conn, session)?;
+            if let Some(snapshot) = live_config_snapshot {
+                upsert_live_config_snapshot_row(conn, snapshot)?;
+            }
+            for change in pending_config_changes {
+                upsert_pending_config_change_row(conn, change)?;
+            }
+            for prompt in pending_prompts {
+                insert_pending_prompt_row(conn, prompt)?;
+            }
+            for event in events {
+                insert_event_row(conn, event)?;
+            }
+            for notification in raw_notifications {
+                insert_raw_notification_row(conn, notification)?;
+            }
+            Ok(())
+        })
+    }
+
     pub fn find_live_config_snapshot(
         &self,
         session_id: &str,
@@ -826,7 +856,137 @@ fn map_pending_prompt(row: &rusqlite::Row) -> rusqlite::Result<PendingPromptReco
     })
 }
 
-fn map_background_work(row: &rusqlite::Row) -> rusqlite::Result<SessionBackgroundWorkRecord> {
+fn insert_session_row(conn: &rusqlite::Connection, record: &SessionRecord) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO sessions (id, workspace_id, agent_kind, native_session_id,
+         requested_model_id, current_model_id, requested_mode_id, current_mode_id,
+         title, thinking_level_id, thinking_budget_tokens, status, created_at,
+         updated_at, last_prompt_at, closed_at, dismissed_at, mcp_bindings_ciphertext,
+         system_prompt_append)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+        params![
+            record.id,
+            record.workspace_id,
+            record.agent_kind,
+            record.native_session_id,
+            record.requested_model_id,
+            record.current_model_id,
+            record.requested_mode_id,
+            record.current_mode_id,
+            record.title,
+            record.thinking_level_id,
+            record.thinking_budget_tokens,
+            record.status,
+            record.created_at,
+            record.updated_at,
+            record.last_prompt_at,
+            record.closed_at,
+            record.dismissed_at,
+            record.mcp_bindings_ciphertext,
+            record.system_prompt_append,
+        ],
+    )?;
+    Ok(())
+}
+
+fn upsert_live_config_snapshot_row(
+    conn: &rusqlite::Connection,
+    record: &SessionLiveConfigSnapshotRecord,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO session_live_config_snapshots (
+            session_id, source_seq, raw_config_options_json, normalized_controls_json, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(session_id) DO UPDATE SET
+            source_seq = excluded.source_seq,
+            raw_config_options_json = excluded.raw_config_options_json,
+            normalized_controls_json = excluded.normalized_controls_json,
+            updated_at = excluded.updated_at",
+        params![
+            record.session_id,
+            record.source_seq,
+            record.raw_config_options_json,
+            record.normalized_controls_json,
+            record.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+fn upsert_pending_config_change_row(
+    conn: &rusqlite::Connection,
+    record: &PendingConfigChangeRecord,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO session_pending_config_changes (session_id, config_id, value, queued_at)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(session_id, config_id) DO UPDATE SET
+            value = excluded.value,
+            queued_at = excluded.queued_at",
+        params![record.session_id, record.config_id, record.value, record.queued_at],
+    )?;
+    Ok(())
+}
+
+fn insert_pending_prompt_row(
+    conn: &rusqlite::Connection,
+    record: &PendingPromptRecord,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO session_pending_prompts (session_id, seq, prompt_id, text, queued_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![
+            record.session_id,
+            record.seq,
+            record.prompt_id,
+            record.text,
+            record.queued_at,
+        ],
+    )?;
+    Ok(())
+}
+
+fn insert_event_row(
+    conn: &rusqlite::Connection,
+    record: &SessionEventRecord,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO session_events (session_id, seq, timestamp, event_type, turn_id, item_id, payload_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            record.session_id,
+            record.seq,
+            record.timestamp,
+            record.event_type,
+            record.turn_id,
+            record.item_id,
+            record.payload_json,
+        ],
+    )?;
+    Ok(())
+}
+
+fn insert_raw_notification_row(
+    conn: &rusqlite::Connection,
+    record: &SessionRawNotificationRecord,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO session_raw_notifications (session_id, seq, timestamp, notification_kind, payload_json)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![
+            record.session_id,
+            record.seq,
+            record.timestamp,
+            record.notification_kind,
+            record.payload_json,
+        ],
+    )?;
+    Ok(())
+}
+
+fn map_background_work(
+    row: &rusqlite::Row,
+) -> rusqlite::Result<SessionBackgroundWorkRecord> {
     let tracker_kind: String = row.get("tracker_kind")?;
     let state: String = row.get("state")?;
 

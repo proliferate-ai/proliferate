@@ -6,6 +6,7 @@ pub mod cowork;
 pub mod files;
 pub mod git;
 pub mod hosting;
+pub mod mobility;
 pub mod persistence;
 pub mod processes;
 pub mod repo_roots;

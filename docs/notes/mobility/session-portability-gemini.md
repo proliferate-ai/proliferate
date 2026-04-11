@@ -15,7 +15,9 @@ Moving a session to another machine requires: (1) the session JSON file,
 project registry mapping so the new machine can find the session under the
 correct project slug. Absolute paths are embedded in tool call arguments/results
 and in masked tool output file references, making transcript content
-path-sensitive but not lookup-sensitive.
+path-sensitive but not lookup-sensitive. Collection should only happen for a
+quiescent session; exporting the JSON while Gemini CLI is rewriting it risks
+capturing an inconsistent document.
 
 ## Resume Path
 
@@ -204,8 +206,10 @@ by scanning `*.json` files in the chats directory and matching by UUID or
 index -- no path is encoded in the lookup key.
 
 **The `projectHash` field in `ConversationRecord` is a SHA-256 of the project
-root path.** It is stored in each session file but is **not** used for lookup
-or validation during resume. It appears to be a legacy/informational field.
+root path.** In the current inspected resume path, it does not appear to be
+used for lookup or validation during resume. Treat it as a legacy/informational
+field today, but also as a future-compatibility risk if Gemini CLI starts
+validating it later.
 
 ## Transcript / Tool History Path Sensitivity
 
@@ -239,6 +243,8 @@ in its context. A path-rewriting pass on the transcript would mitigate this.
 
 To make a Gemini CLI session portable, export:
 
+0. Ensure the session is quiescent. Do not export while Gemini CLI may still be
+   rewriting the session JSON file.
 1. **Session JSON file**:
    `~/.gemini/tmp/{project-slug}/chats/session-{timestamp}-{short-id}.json`
 
@@ -279,17 +285,18 @@ To install a session on a new machine:
 
 ## v1 Recommendation
 
-**Session portability for Gemini CLI is straightforward because the entire
-conversation state is in a single JSON file.** There is no server-side session
-state, no database, and no opaque binary format.
+**Gemini CLI is technically portable but intentionally deferred from workspace
+mobility v1.** The main reasons are the global project registry, the heavier
+install path, and unresolved path-sensitive behavior around `directories[]`
+and subagent/session sidecars.
 
-For a v1 mobility implementation:
+If Gemini portability is revisited in a later iteration:
 
 1. **Export**: Copy the session JSON file. This is the only required artifact.
    Tool output sidecars are nice-to-have but not required for resume.
 
-2. **Path rewriting**: Implement a simple find-and-replace on the JSON file,
-   rewriting the old project root to the new one. This covers:
+2. **Path rewriting**: If targeted structural rewriting is needed, use a
+   JSON-aware transform rather than raw byte replacement. Candidate fields are:
    - `directories[]` array
    - All `args` objects in `toolCalls[]` (file_path, command cwd, etc.)
    - Tool result strings that embed absolute paths
@@ -308,6 +315,15 @@ Key risk: The `convertSessionToClientHistory` function filters out slash
 commands (`/` prefix) and system messages (`info`/`error`/`warning` types)
 during reconstruction. This means the API history is a cleaned subset of the
 full transcript. This is handled automatically -- no special treatment needed.
+
+Additional open edges:
+
+- Parent/subagent continuity is not fully characterized. The code stores
+  subagent sessions under `chats/{parent-session-uuid}/`, but this
+  investigation did not prove whether resuming a parent requires additional
+  subagent installation semantics for full fidelity.
+- Version skew between Gemini CLI builds remains a compatibility risk because
+  the single JSON format and registry behavior may evolve over time.
 
 ## Code References
 

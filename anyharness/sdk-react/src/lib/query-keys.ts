@@ -45,6 +45,20 @@ export function anyHarnessRepoRootsKey(runtimeUrl: string | null | undefined) {
   return [...anyHarnessRuntimeKey(runtimeUrl), "repo-roots"] as const;
 }
 
+export function anyHarnessWorkspaceMobilityPreflightKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+) {
+  return [...anyHarnessRuntimeKey(runtimeUrl), "mobility", workspaceId ?? null, "preflight"] as const;
+}
+
+export function anyHarnessWorkspaceMobilityRuntimeStateKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+) {
+  return [...anyHarnessRuntimeKey(runtimeUrl), "mobility", workspaceId ?? null, "runtime-state"] as const;
+}
+
 export function anyHarnessCoworkStatusKey(runtimeUrl: string | null | undefined) {
   return [...anyHarnessRuntimeKey(runtimeUrl), "cowork", "status"] as const;
 }

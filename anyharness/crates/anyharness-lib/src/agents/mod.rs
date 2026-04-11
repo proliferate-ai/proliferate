@@ -3,6 +3,7 @@ pub mod catalog;
 pub mod credentials;
 pub mod installer;
 pub mod model;
+pub mod portability;
 pub mod reconcile;
 pub mod reconcile_execution;
 pub mod registry;

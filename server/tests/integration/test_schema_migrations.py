@@ -310,7 +310,8 @@ async def test_alembic_upgrade_from_removed_c9_revision() -> None:
                 tables = await conn.run_sync(
                     lambda sync_conn: set(inspect(sync_conn).get_table_names())
                 )
-                assert "cloud_workspace_mobility" not in tables
+                assert "cloud_workspace_mobility" in tables
+                assert "cloud_workspace_handoff_op" in tables
                 assert "cloud_mcp_connection" in tables
         finally:
             await inspection_engine.dispose()

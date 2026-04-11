@@ -724,6 +724,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/mobility/cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cleanup_workspace_mobility"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/mobility/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["export_workspace_mobility_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/mobility/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["install_workspace_mobility_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/mobility/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["preflight_workspace_mobility"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/mobility/runtime-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update_workspace_mobility_runtime_state"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/processes/run": {
         parameters: {
             query?: never;
@@ -1049,6 +1129,9 @@ export interface components {
             code?: string | null;
             message: string;
         };
+        ExportWorkspaceMobilityArchiveRequest: {
+            excludePaths?: string[];
+        };
         /** @enum {string} */
         FileChangeOperation: "create" | "edit" | "delete" | "move";
         /** @enum {string} */
@@ -1159,6 +1242,18 @@ export interface components {
             alreadyInstalled: boolean;
             installedArtifacts: components["schemas"]["ArtifactStatus"][];
         };
+        InstallWorkspaceMobilityArchiveRequest: {
+            archive: components["schemas"]["WorkspaceMobilityArchive"];
+        };
+        InstallWorkspaceMobilityArchiveResponse: {
+            appliedFileCount: number;
+            baseCommitSha: string;
+            deletedFileCount: number;
+            importedAgentArtifactCount: number;
+            importedSessionIds: string[];
+            sourceWorkspacePath: string;
+            workspaceId: string;
+        };
         ItemCompletedEvent: {
             item: components["schemas"]["TranscriptItemPayload"];
         };
@@ -1171,6 +1266,66 @@ export interface components {
         LoginCommand: {
             args: string[];
             program: string;
+        };
+        MobilityPendingConfigChangeRecord: {
+            configId: string;
+            queuedAt: string;
+            sessionId: string;
+            value: string;
+        };
+        MobilityPendingPromptRecord: {
+            promptId?: string | null;
+            queuedAt: string;
+            /** Format: int64 */
+            seq: number;
+            sessionId: string;
+            text: string;
+        };
+        MobilitySessionEventRecord: {
+            eventType: string;
+            itemId?: string | null;
+            payloadJson: string;
+            /** Format: int64 */
+            seq: number;
+            sessionId: string;
+            timestamp: string;
+            turnId?: string | null;
+        };
+        MobilitySessionLiveConfigSnapshotRecord: {
+            normalizedControlsJson: string;
+            rawConfigOptionsJson: string;
+            sessionId: string;
+            /** Format: int64 */
+            sourceSeq: number;
+            updatedAt: string;
+        };
+        MobilitySessionRawNotificationRecord: {
+            notificationKind: string;
+            payloadJson: string;
+            /** Format: int64 */
+            seq: number;
+            sessionId: string;
+            timestamp: string;
+        };
+        MobilitySessionRecord: {
+            agentKind: string;
+            closedAt?: string | null;
+            createdAt: string;
+            currentModeId?: string | null;
+            currentModelId?: string | null;
+            dismissedAt?: string | null;
+            id: string;
+            lastPromptAt?: string | null;
+            nativeSessionId?: string | null;
+            requestedModeId?: string | null;
+            requestedModelId?: string | null;
+            status: string;
+            systemPromptAppend?: string | null;
+            /** Format: int32 */
+            thinkingBudgetTokens?: number | null;
+            thinkingLevelId?: string | null;
+            title?: string | null;
+            updatedAt: string;
         };
         /** @description A known model in the AnyHarness catalog for a given provider. */
         ModelEntry: {
@@ -1748,6 +1903,10 @@ export interface components {
              */
             displayName?: string | null;
         };
+        UpdateWorkspaceMobilityRuntimeStateRequest: {
+            handoffOpId?: string | null;
+            mode: components["schemas"]["WorkspaceMobilityRuntimeMode"];
+        };
         UsageUpdatePayload: {
             cost?: unknown;
             /** Format: int64 */
@@ -1781,6 +1940,70 @@ export interface components {
         };
         /** @enum {string} */
         WorkspaceKind: "worktree" | "local";
+        WorkspaceMobilityArchive: {
+            baseCommitSha: string;
+            branchName?: string | null;
+            deletedPaths?: string[];
+            files: components["schemas"]["WorkspaceMobilityFileEntry"][];
+            repoRootPath: string;
+            sessions?: components["schemas"]["WorkspaceMobilitySessionBundle"][];
+            sourceWorkspacePath: string;
+        };
+        WorkspaceMobilityBlocker: {
+            code: string;
+            message: string;
+            sessionId?: string | null;
+        };
+        WorkspaceMobilityCleanupRequest: {
+            sessionIds?: string[];
+        };
+        WorkspaceMobilityCleanupResponse: {
+            deletedSessionIds: string[];
+            workspaceId: string;
+        };
+        WorkspaceMobilityFileEntry: {
+            /** Format: binary */
+            contentBase64: string;
+            /** Format: int32 */
+            mode: number;
+            relativePath: string;
+        };
+        WorkspaceMobilityPreflightResponse: {
+            /** Format: int64 */
+            archiveEstimatedBytes?: number | null;
+            baseCommitSha?: string | null;
+            blockers?: components["schemas"]["WorkspaceMobilityBlocker"][];
+            branchName?: string | null;
+            canMove: boolean;
+            runtimeState: components["schemas"]["WorkspaceMobilityRuntimeState"];
+            sessions?: components["schemas"]["WorkspaceMobilitySessionCandidate"][];
+            warnings?: string[];
+            workspaceId: string;
+        };
+        /** @enum {string} */
+        WorkspaceMobilityRuntimeMode: "normal" | "frozen_for_handoff" | "remote_owned";
+        WorkspaceMobilityRuntimeState: {
+            handoffOpId?: string | null;
+            mode: components["schemas"]["WorkspaceMobilityRuntimeMode"];
+            updatedAt: string;
+            workspaceId: string;
+        };
+        WorkspaceMobilitySessionBundle: {
+            agentArtifacts?: components["schemas"]["WorkspaceMobilityFileEntry"][];
+            events?: components["schemas"]["MobilitySessionEventRecord"][];
+            liveConfigSnapshot?: null | components["schemas"]["MobilitySessionLiveConfigSnapshotRecord"];
+            pendingConfigChanges?: components["schemas"]["MobilityPendingConfigChangeRecord"][];
+            pendingPrompts?: components["schemas"]["MobilityPendingPromptRecord"][];
+            rawNotifications?: components["schemas"]["MobilitySessionRawNotificationRecord"][];
+            session: components["schemas"]["MobilitySessionRecord"];
+        };
+        WorkspaceMobilitySessionCandidate: {
+            agentKind: string;
+            nativeSessionId?: string | null;
+            reason?: string | null;
+            sessionId: string;
+            supported: boolean;
+        };
         WorkspaceSessionLaunchAgent: {
             defaultModelId?: string | null;
             displayName: string;
@@ -3451,6 +3674,182 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cleanup_workspace_mobility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceMobilityCleanupRequest"];
+            };
+        };
+        responses: {
+            /** @description Cleaned up source workspace mobility state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMobilityCleanupResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    export_workspace_mobility_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportWorkspaceMobilityArchiveRequest"];
+            };
+        };
+        responses: {
+            /** @description Workspace mobility archive */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMobilityArchive"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    install_workspace_mobility_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallWorkspaceMobilityArchiveRequest"];
+            };
+        };
+        responses: {
+            /** @description Archive installed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstallWorkspaceMobilityArchiveResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    preflight_workspace_mobility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace mobility preflight */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMobilityPreflightResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_workspace_mobility_runtime_state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkspaceMobilityRuntimeStateRequest"];
+            };
+        };
+        responses: {
+            /** @description Workspace mobility runtime state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMobilityRuntimeState"];
                 };
             };
             /** @description Workspace not found */

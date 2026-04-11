@@ -12,6 +12,7 @@ use axum::{
 };
 use serde::Deserialize;
 
+use super::access::assert_workspace_mutable;
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::git::types::{
@@ -175,6 +176,7 @@ pub async fn rename_branch(
     Path(workspace_id): Path<String>,
     Json(req): Json<RenameBranchRequest>,
 ) -> Result<Json<RenameBranchResponse>, ApiError> {
+    assert_workspace_mutable(&state, &workspace_id)?;
     let new_name = req.new_name;
     let response = run_git_task(
         &state,
@@ -211,6 +213,7 @@ pub async fn stage_paths(
     Path(workspace_id): Path<String>,
     Json(req): Json<StagePathsRequest>,
 ) -> Result<Json<()>, ApiError> {
+    assert_workspace_mutable(&state, &workspace_id)?;
     let paths = req.paths;
     run_git_task(&state, workspace_id, "git stage", move |_, ws_path| {
         GitService::stage_paths(&ws_path, &paths)
@@ -242,6 +245,7 @@ pub async fn unstage_paths(
     Path(workspace_id): Path<String>,
     Json(req): Json<UnstagePathsRequest>,
 ) -> Result<Json<()>, ApiError> {
+    assert_workspace_mutable(&state, &workspace_id)?;
     let paths = req.paths;
     run_git_task(&state, workspace_id, "git unstage", move |_, ws_path| {
         GitService::unstage_paths(&ws_path, &paths)
@@ -275,6 +279,7 @@ pub async fn commit(
     Path(workspace_id): Path<String>,
     Json(req): Json<CommitRequest>,
 ) -> Result<Json<CommitResponse>, ApiError> {
+    assert_workspace_mutable(&state, &workspace_id)?;
     let summary = req.summary;
     let body = req.body;
     let response = run_git_task(&state, workspace_id, "git commit", move |_, ws_path| {
@@ -319,6 +324,7 @@ pub async fn push(
     Path(workspace_id): Path<String>,
     Json(req): Json<PushRequest>,
 ) -> Result<Json<PushResponse>, ApiError> {
+    assert_workspace_mutable(&state, &workspace_id)?;
     let remote = req.remote;
     let response = run_git_task(&state, workspace_id, "git push", move |_, ws_path| {
         GitService::push_current_branch(&ws_path, remote.as_deref())

@@ -23,26 +23,31 @@ Cross-agent comparison and adapter design for workspace mobility.
 
 ## v1 Mobility Recommendations
 
-### Safe for v1
+### Technical portability vs product support
 
-All three agents are safe for mobility v1. Each stores its entire session
-state in a single local file with no server-side dependencies. The primary
-risk across all three is absolute path mismatch, which is cosmetic (the model
-adapts to the new cwd on the next turn) and optionally fixable via path
-rewriting.
+All three agents are technically portable in the narrow sense that their
+session state is local-file-backed and can be reconstructed on another
+machine/runtime.
+
+That does **not** mean all three are in scope for workspace mobility v1.
+The accepted support matrix narrows v1 to Claude + Codex only. See
+[decision-v1-support-matrix.md](./decision-v1-support-matrix.md).
 
 | Agent | v1 Safe? | Confidence | Notes |
 |-------|----------|------------|-------|
 | Claude Code | Yes | High | Direct file path resume (`--resume /path`) makes install trivial |
 | Codex | Yes | High | Single rollout file; SQLite is derived and rebuilt automatically |
-| Gemini CLI | Yes | High | Single JSON file; no database; full replay on resume |
+| Gemini CLI | Deferred | High technical portability, lower v1 fit | Install path is materially messier and intentionally deferred from the product scope |
 
 ### Primary risks
 
 1. **Absolute path mismatch.** All three embed absolute paths in tool call
    arguments/results. If the project lives at a different path on the
-   destination, the model sees stale paths in history. Mitigation: optional
-   find-and-replace rewriting of the old project root to the new one.
+   destination, the model sees stale paths in history. In theory this can be
+   mitigated by path rewriting, but the accepted v1 decision is narrower: no
+   broad transcript-history rewriting, only targeted structural rewrite or
+   explicit cwd override where required for resume mechanics. See
+   [decision-agent-history-and-source-cleanup.md](./decision-agent-history-and-source-cleanup.md).
 
 2. **cwd-based lookup.** Claude Code and Gemini CLI use cwd-derived directory
    names for session storage. If the session file is placed under the wrong
@@ -56,47 +61,91 @@ rewriting.
    truncated placeholders for some historical outputs. Mitigation: include
    sidecar directories in the export bundle.
 
+4. **Live-session capture is unsafe.** All three formats are append-oriented.
+   Collecting artifacts during an active turn risks capturing a partial tool
+   exchange or half-written transcript state. Mobility collection should only
+   run after the AnyHarness workspace passes quiescence checks and the source
+   runtime has entered `frozen_for_handoff`.
+
+## Important boundary: agent-native portability is necessary, not sufficient
+
+The docs in this folder only answer the agent-native half of mobility:
+
+- where the agent stores its transcript/session artifacts
+- what extra sidecars matter for resume
+- what install shape native resume expects
+
+That is not enough to move a real workspace in Proliferate.
+
+The user-visible workspace/session state is primarily owned by AnyHarness:
+
+- `SessionRecord`
+- `session_events`
+- pending prompts / pending config changes
+- live config snapshots
+- raw notifications
+- workspace/session associations
+
+Agent-native portability must therefore be paired with AnyHarness durable
+session migration and re-association via `native_session_id`.
+
+Two concrete consequences:
+
+1. The portability adapter must return data that the AnyHarness runtime can
+   install and wire back to a destination `SessionRecord`, not a CLI command
+   string.
+2. Encrypted harness-owned fields such as `mcp_bindings_ciphertext` are an
+   AnyHarness-layer portability concern. They may require a stable
+   `ANYHARNESS_DATA_KEY` or an explicit re-encryption path; agent transcript
+   portability alone does not solve that.
+
 ## Normalized Adapter Interface
 
 ```
 trait SessionAdapter {
-    /// Collect all artifacts needed to reproduce this session on another machine.
-    fn collect(session_id: &str, cwd: &Path) -> ExportBundle;
+    /// Collect all agent-native artifacts needed to reproduce this session.
+    fn collect(session_id: &str, cwd: &Path) -> AgentSessionBundle;
 
     /// Install a previously collected bundle into the target runtime.
-    fn install(bundle: ExportBundle, target_cwd: &Path) -> InstalledSession;
+    fn install(bundle: AgentSessionBundle, target_cwd: &Path) -> InstalledAgentSession;
 }
 ```
 
-### ExportBundle
+### AgentSessionBundle
 
 ```
-struct ExportBundle {
+struct AgentSessionBundle {
     agent_kind: AgentKind,              // claude | codex | gemini
-    session_id: String,                 // original session UUID
-    source_cwd: PathBuf,               // absolute path on source machine
+    native_session_id: String,
+    source_cwd: PathBuf,
+    files: Vec<PortableFile>,           // primary artifact + sidecars
+    install_hints: AgentInstallHints,
+    warnings: Vec<String>,
+}
 
-    /// The primary transcript file (JSONL or JSON).
-    transcript: Vec<u8>,
-
-    /// Optional sidecar files, keyed by relative path from transcript root.
-    /// Examples:
-    ///   Claude: "<uuid>/subagents/agent-abc.jsonl"
-    ///   Claude: "<uuid>/tool-results/tool_use_xyz.json"
-    ///   Gemini: "tool-outputs/session-<uuid>/shell_call1.txt"
-    sidecars: HashMap<PathBuf, Vec<u8>>,
+struct PortableFile {
+    rel_path: PathBuf,
+    purpose: PortableFilePurpose,
+    // Logical file entry inside the workspace archive. The transport may inline
+    // or stream the content, but the interface should stay file-entry based
+    // rather than one giant transcript blob.
 }
 ```
 
-### InstalledSession
+### InstalledAgentSession
 
 ```
-struct InstalledSession {
-    session_id: String,
-    transcript_path: PathBuf,           // where the file was written
-    resume_command: String,             // CLI command to resume
+struct InstalledAgentSession {
+    native_session_id: String,
+    primary_artifact_path: PathBuf,
+    runtime_resume_hints: AgentResumeHints,
+    warnings: Vec<String>,
 }
 ```
+
+`runtime_resume_hints` is meant for the AnyHarness session runtime, not for
+shelling out to a CLI command string. Examples: transcript path, resolved
+storage slug, or explicit cwd-override requirements.
 
 ### Per-Agent Adapter Notes
 
@@ -108,6 +157,10 @@ struct InstalledSession {
 | Codex | 1. Locate rollout via SQLite `threads.rollout_path` or filesystem scan under `~/.codex/sessions/`. 2. Read the single `.jsonl` as transcript. 3. No sidecars needed (shell snapshots are regenerated). |
 | Gemini CLI | 1. Read `~/.gemini/projects.json` to resolve project slug. 2. Read `~/.gemini/tmp/<slug>/chats/session-*.json` matching the UUID. 3. Glob `~/.gemini/tmp/<slug>/tool-outputs/session-<uuid>/**` as sidecars. 4. Optionally glob `~/.gemini/tmp/<slug>/<uuid>/` (plans/tasks) as sidecars. |
 
+Collection should only run for quiescent sessions. None of these adapters
+should read artifacts from a session that is mid-turn or otherwise actively
+appending to disk.
+
 #### `install` implementation
 
 | Agent | Steps |
@@ -118,23 +171,34 @@ struct InstalledSession {
 
 ### Path Rewriting
 
-All three agents embed absolute paths, but none require them to be correct
-for session loading. The model sees them in history context. Rewriting is
-optional but improves model accuracy on the next turn.
+All three agents embed absolute paths, but none require them to be broadly
+rewritten for session loading.
 
-Recommended approach:
+This section is a portability observation, not the accepted v1 implementation
+policy.
+
+For v1:
+
+- do **not** do best-effort global transcript rewriting
+- only apply targeted rewrite or explicit cwd override where structurally
+  necessary for resume
+
+See
+[decision-agent-history-and-source-cleanup.md](./decision-agent-history-and-source-cleanup.md).
+
+If a future version ever adds targeted structural rewrites, use a
+JSON-value-aware transform:
+
 ```
-fn rewrite_paths(transcript: &[u8], old_root: &str, new_root: &str) -> Vec<u8> {
-    // Simple byte-level find-and-replace of old_root -> new_root.
-    // Works because paths appear as JSON string values.
-    // Edge case: paths in base64 content or thinking blocks are not
-    // structurally important and can tolerate stale values.
+fn rewrite_json_paths(value: JsonValue, old_root: &str, new_root: &str) -> JsonValue {
+    // Deserialize JSON/JSONL payloads, walk string values, replace only
+    // structurally recognized path-bearing fields, then re-serialize.
 }
 ```
 
-This is a best-effort transform. It handles the common case (tool args,
-cwd fields, file path references) without needing to parse the full
-transcript schema.
+Do not do raw byte-level global replacement. That is brittle across escaping,
+format variants, and future file-format changes. This remains out of scope for
+accepted v1 mobility.
 
 ## Artifact Classification
 
@@ -160,10 +224,13 @@ snapshots, pending prompts, background work tracking. The AnyHarness
 higher-level representation of what the agent is doing -- it is NOT a copy
 of the agent's native transcript.
 
-For mobility, AnyHarness session data must also be migrated, but that is
-a separate concern from agent transcript portability. The AnyHarness
-session record points to the agent session via `native_session_id` and can
-be recreated or re-associated on the destination.
+For mobility, AnyHarness session data must also be migrated. This is not an
+optional add-on. Agent transcripts alone are insufficient because the product
+UI and session actor behavior are driven from AnyHarness durable state, not
+from the raw agent transcript files.
+
+The AnyHarness session record points to the agent session via
+`native_session_id` and must be recreated or re-associated on the destination.
 
 ### 3. Agent-native sidecars (owned by the agent CLI, optional)
 
@@ -180,12 +247,13 @@ be recreated or re-associated on the destination.
 
 ## Implementation Priority
 
-1. **Claude Code adapter** -- highest value, most used agent. Direct file
-   path resume makes `install` trivial.
-2. **Codex adapter** -- straightforward single-file export. CWD rewriting
-   is the main install concern.
-3. **Gemini CLI adapter** -- requires project registry management on install.
-   Otherwise simple.
+1. **Claude Code adapter** -- simplest v1 install path because direct-file
+   resume avoids path-derived lookup constraints.
+2. **Codex adapter** -- straightforward single-file export with explicit
+   cwd handling and no required DB import.
+3. **Gemini CLI adapter** -- technically feasible but intentionally deferred
+   from the v1 product scope.
 
-All three can share the same `ExportBundle` / `InstalledSession` types and
-the same path rewriting utility.
+All three can share the same logical `AgentSessionBundle` /
+`InstalledAgentSession` model, but v1 should only implement Claude and Codex
+adapters.

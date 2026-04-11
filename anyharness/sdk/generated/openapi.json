@@ -2160,6 +2160,251 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/mobility/cleanup": {
+      "post": {
+        "tags": [
+          "mobility"
+        ],
+        "operationId": "cleanup_workspace_mobility",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceMobilityCleanupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Cleaned up source workspace mobility state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceMobilityCleanupResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/mobility/export": {
+      "post": {
+        "tags": [
+          "mobility"
+        ],
+        "operationId": "export_workspace_mobility_archive",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportWorkspaceMobilityArchiveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Workspace mobility archive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceMobilityArchive"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/mobility/install": {
+      "post": {
+        "tags": [
+          "mobility"
+        ],
+        "operationId": "install_workspace_mobility_archive",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallWorkspaceMobilityArchiveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Archive installed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallWorkspaceMobilityArchiveResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/mobility/preflight": {
+      "post": {
+        "tags": [
+          "mobility"
+        ],
+        "operationId": "preflight_workspace_mobility",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace mobility preflight",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceMobilityPreflightResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/mobility/runtime-state": {
+      "put": {
+        "tags": [
+          "mobility"
+        ],
+        "operationId": "update_workspace_mobility_runtime_state",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkspaceMobilityRuntimeStateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Workspace mobility runtime state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceMobilityRuntimeState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/processes/run": {
       "post": {
         "tags": [
@@ -3474,6 +3719,17 @@
           }
         }
       },
+      "ExportWorkspaceMobilityArchiveRequest": {
+        "type": "object",
+        "properties": {
+          "excludePaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "FileChangeOperation": {
         "type": "string",
         "enum": [
@@ -3914,6 +4170,58 @@
           }
         }
       },
+      "InstallWorkspaceMobilityArchiveRequest": {
+        "type": "object",
+        "required": [
+          "archive"
+        ],
+        "properties": {
+          "archive": {
+            "$ref": "#/components/schemas/WorkspaceMobilityArchive"
+          }
+        }
+      },
+      "InstallWorkspaceMobilityArchiveResponse": {
+        "type": "object",
+        "required": [
+          "workspaceId",
+          "sourceWorkspacePath",
+          "baseCommitSha",
+          "importedSessionIds",
+          "appliedFileCount",
+          "deletedFileCount",
+          "importedAgentArtifactCount"
+        ],
+        "properties": {
+          "appliedFileCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "baseCommitSha": {
+            "type": "string"
+          },
+          "deletedFileCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "importedAgentArtifactCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "importedSessionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sourceWorkspacePath": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
       "ItemCompletedEvent": {
         "type": "object",
         "required": [
@@ -3961,6 +4269,256 @@
             }
           },
           "program": {
+            "type": "string"
+          }
+        }
+      },
+      "MobilityPendingConfigChangeRecord": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "configId",
+          "value",
+          "queuedAt"
+        ],
+        "properties": {
+          "configId": {
+            "type": "string"
+          },
+          "queuedAt": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "MobilityPendingPromptRecord": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "seq",
+          "text",
+          "queuedAt"
+        ],
+        "properties": {
+          "promptId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queuedAt": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "MobilitySessionEventRecord": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "seq",
+          "timestamp",
+          "eventType",
+          "payloadJson"
+        ],
+        "properties": {
+          "eventType": {
+            "type": "string"
+          },
+          "itemId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "payloadJson": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "turnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "MobilitySessionLiveConfigSnapshotRecord": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "sourceSeq",
+          "rawConfigOptionsJson",
+          "normalizedControlsJson",
+          "updatedAt"
+        ],
+        "properties": {
+          "normalizedControlsJson": {
+            "type": "string"
+          },
+          "rawConfigOptionsJson": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "sourceSeq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "MobilitySessionRawNotificationRecord": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "seq",
+          "timestamp",
+          "notificationKind",
+          "payloadJson"
+        ],
+        "properties": {
+          "notificationKind": {
+            "type": "string"
+          },
+          "payloadJson": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        }
+      },
+      "MobilitySessionRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "agentKind",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "currentModeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "currentModelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dismissedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "lastPromptAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nativeSessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requestedModeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requestedModelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "systemPromptAppend": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thinkingBudgetTokens": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "thinkingLevelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
             "type": "string"
           }
         }
@@ -6280,6 +6838,23 @@
           }
         }
       },
+      "UpdateWorkspaceMobilityRuntimeStateRequest": {
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "properties": {
+          "handoffOpId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mode": {
+            "$ref": "#/components/schemas/WorkspaceMobilityRuntimeMode"
+          }
+        }
+      },
       "UsageUpdatePayload": {
         "type": "object",
         "required": [
@@ -6419,6 +6994,294 @@
           "worktree",
           "local"
         ]
+      },
+      "WorkspaceMobilityArchive": {
+        "type": "object",
+        "required": [
+          "sourceWorkspacePath",
+          "repoRootPath",
+          "baseCommitSha",
+          "files"
+        ],
+        "properties": {
+          "baseCommitSha": {
+            "type": "string"
+          },
+          "branchName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deletedPaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceMobilityFileEntry"
+            }
+          },
+          "repoRootPath": {
+            "type": "string"
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceMobilitySessionBundle"
+            }
+          },
+          "sourceWorkspacePath": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkspaceMobilityBlocker": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "WorkspaceMobilityCleanupRequest": {
+        "type": "object",
+        "properties": {
+          "sessionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "WorkspaceMobilityCleanupResponse": {
+        "type": "object",
+        "required": [
+          "workspaceId",
+          "deletedSessionIds"
+        ],
+        "properties": {
+          "deletedSessionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkspaceMobilityFileEntry": {
+        "type": "object",
+        "required": [
+          "relativePath",
+          "mode",
+          "contentBase64"
+        ],
+        "properties": {
+          "contentBase64": {
+            "type": "string",
+            "format": "binary"
+          },
+          "mode": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "relativePath": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkspaceMobilityPreflightResponse": {
+        "type": "object",
+        "required": [
+          "workspaceId",
+          "canMove",
+          "runtimeState"
+        ],
+        "properties": {
+          "archiveEstimatedBytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "baseCommitSha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceMobilityBlocker"
+            }
+          },
+          "branchName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "canMove": {
+            "type": "boolean"
+          },
+          "runtimeState": {
+            "$ref": "#/components/schemas/WorkspaceMobilityRuntimeState"
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceMobilitySessionCandidate"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkspaceMobilityRuntimeMode": {
+        "type": "string",
+        "enum": [
+          "normal",
+          "frozen_for_handoff",
+          "remote_owned"
+        ]
+      },
+      "WorkspaceMobilityRuntimeState": {
+        "type": "object",
+        "required": [
+          "workspaceId",
+          "mode",
+          "updatedAt"
+        ],
+        "properties": {
+          "handoffOpId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mode": {
+            "$ref": "#/components/schemas/WorkspaceMobilityRuntimeMode"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkspaceMobilitySessionBundle": {
+        "type": "object",
+        "required": [
+          "session"
+        ],
+        "properties": {
+          "agentArtifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceMobilityFileEntry"
+            }
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MobilitySessionEventRecord"
+            }
+          },
+          "liveConfigSnapshot": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MobilitySessionLiveConfigSnapshotRecord"
+              }
+            ]
+          },
+          "pendingConfigChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MobilityPendingConfigChangeRecord"
+            }
+          },
+          "pendingPrompts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MobilityPendingPromptRecord"
+            }
+          },
+          "rawNotifications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MobilitySessionRawNotificationRecord"
+            }
+          },
+          "session": {
+            "$ref": "#/components/schemas/MobilitySessionRecord"
+          }
+        }
+      },
+      "WorkspaceMobilitySessionCandidate": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "agentKind",
+          "supported"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "nativeSessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "supported": {
+            "type": "boolean"
+          }
+        }
       },
       "WorkspaceSessionLaunchAgent": {
         "type": "object",

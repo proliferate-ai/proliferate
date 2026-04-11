@@ -10,6 +10,7 @@ use crate::cowork::service::CoworkService;
 use crate::cowork::store::CoworkStore;
 use crate::files::runtime::WorkspaceFilesRuntime;
 use crate::git::WorkspaceFileSearchCache;
+use crate::mobility::service::MobilityService;
 use crate::persistence::Db;
 use crate::processes::ProcessService;
 use crate::repo_roots::service::RepoRootService;
@@ -19,6 +20,8 @@ use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
 use crate::sessions::store::SessionStore;
 use crate::terminals::TerminalService;
+use crate::workspaces::access_gate::WorkspaceAccessGate;
+use crate::workspaces::access_store::WorkspaceAccessStore;
 use crate::workspaces::runtime::WorkspaceRuntime;
 use crate::workspaces::service::WorkspaceService;
 use crate::workspaces::setup_execution::SetupExecutionService;
@@ -53,6 +56,8 @@ pub struct AppState {
     pub cowork_runtime: Arc<CoworkRuntime>,
     pub session_service: Arc<SessionService>,
     pub session_runtime: Arc<SessionRuntime>,
+    pub workspace_access_gate: Arc<WorkspaceAccessGate>,
+    pub mobility_service: Arc<MobilityService>,
     pub acp_manager: AcpManager,
     pub terminal_service: Arc<TerminalService>,
     pub setup_execution_service: Arc<SetupExecutionService>,
@@ -101,6 +106,13 @@ impl AppState {
             runtime_home.clone(),
         ));
         let acp_manager = AcpManager::new();
+        let terminal_service = Arc::new(TerminalService::new());
+        let workspace_access_gate = Arc::new(WorkspaceAccessGate::new(
+            WorkspaceStore::new(db.clone()),
+            SessionStore::new(db.clone()),
+            WorkspaceAccessStore::new(db.clone()),
+            terminal_service.clone(),
+        ));
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
             workspace_runtime.clone(),
@@ -108,6 +120,7 @@ impl AppState {
             runtime_home.clone(),
             session_data_cipher,
             cowork_session_hooks.clone(),
+            workspace_access_gate.clone(),
         ));
         let cowork_runtime = Arc::new(CoworkRuntime::new(
             (*cowork_service).clone(),
@@ -117,8 +130,15 @@ impl AppState {
             session_runtime.clone(),
             runtime_home.clone(),
         ));
-        let terminal_service = Arc::new(TerminalService::new());
         let setup_execution_service = Arc::new(SetupExecutionService::new());
+        let mobility_service = Arc::new(MobilityService::new(
+            workspace_service.clone(),
+            session_service.clone(),
+            session_runtime.clone(),
+            workspace_access_gate.clone(),
+            setup_execution_service.clone(),
+            terminal_service.clone(),
+        ));
         Ok(Self {
             runtime_home,
             runtime_base_url,
@@ -136,6 +156,8 @@ impl AppState {
             cowork_runtime,
             session_service,
             session_runtime,
+            workspace_access_gate,
+            mobility_service,
             acp_manager,
             terminal_service,
             setup_execution_service,

@@ -72,6 +72,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0020_cowork_tables",
         include_str!("sql/0020_cowork_tables.sql"),
     ),
+    (
+        "0021_workspace_access_modes",
+        include_str!("sql/0021_workspace_access_modes.sql"),
+    ),
 ];
 
 const CUSTOM_MIGRATIONS: &[(&str, fn(&Transaction<'_>) -> rusqlite::Result<()>)] = &[(

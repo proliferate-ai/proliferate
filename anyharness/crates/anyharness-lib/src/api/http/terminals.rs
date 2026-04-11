@@ -2,6 +2,7 @@ use axum::extract::{Path, State};
 use axum::response::IntoResponse;
 use axum::Json;
 
+use crate::api::http::access::{assert_terminal_mutable, assert_workspace_mutable};
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
 use crate::terminals::model::{
@@ -46,6 +47,7 @@ pub async fn create_terminal(
     Path(workspace_id): Path<String>,
     Json(request): Json<CreateTerminalRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    assert_workspace_mutable(&state, &workspace_id)?;
     let (ws_id, ws_path) = resolve_workspace(&state, &workspace_id)?;
     let record = state
         .terminal_service
@@ -81,6 +83,7 @@ pub async fn resize_terminal(
     Path(terminal_id): Path<String>,
     Json(request): Json<ResizeTerminalRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    assert_terminal_mutable(&state, &terminal_id).await?;
     let record = state
         .terminal_service
         .resize_terminal(
@@ -99,6 +102,7 @@ pub async fn delete_terminal(
     State(state): State<AppState>,
     Path(terminal_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
+    assert_terminal_mutable(&state, &terminal_id).await?;
     state
         .terminal_service
         .close_terminal(&terminal_id)

@@ -12,6 +12,7 @@ use axum::{
     Json,
 };
 
+use super::access::{assert_workspace_mutable, map_access_error};
 use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
@@ -116,6 +117,11 @@ pub async fn create_worktree(
         prompt_id = latency_fields.prompt_id,
         "[workspace-latency] workspace.http.worktree.request_received"
     );
+
+    state
+        .workspace_access_gate
+        .assert_can_mutate_for_repo_root(&repo_root_id)
+        .map_err(map_access_error)?;
 
     let result = run_blocking("worktree", {
         let base_branch = base_branch.clone();
@@ -253,6 +259,7 @@ pub async fn update_workspace_display_name(
     Path(workspace_id): Path<String>,
     Json(req): Json<UpdateWorkspaceDisplayNameRequest>,
 ) -> Result<Json<Workspace>, ApiError> {
+    assert_workspace_mutable(&state, &workspace_id)?;
     let workspace_runtime = state.workspace_runtime.clone();
     let workspace_id_for_task = workspace_id.clone();
     let display_name = req.display_name;
@@ -368,6 +375,7 @@ pub async fn rerun_setup(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<GetSetupStatusResponse>, ApiError> {
+    assert_workspace_mutable(&state, &workspace_id)?;
     let previous = state
         .setup_execution_service
         .get_status(&workspace_id)
@@ -400,6 +408,7 @@ pub async fn start_setup(
     Path(workspace_id): Path<String>,
     Json(req): Json<StartWorkspaceSetupRequest>,
 ) -> Result<Json<GetSetupStatusResponse>, ApiError> {
+    assert_workspace_mutable(&state, &workspace_id)?;
     let command = req.command.trim().to_string();
     if command.is_empty() {
         return Err(ApiError::bad_request(

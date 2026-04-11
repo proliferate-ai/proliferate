@@ -85,6 +85,18 @@ impl WorkspaceStore {
         })
     }
 
+    pub fn list_by_repo_root_id(&self, repo_root_id: &str) -> anyhow::Result<Vec<WorkspaceRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT * FROM workspaces
+                 WHERE repo_root_id = ?1
+                 ORDER BY updated_at DESC",
+            )?;
+            let rows = stmt.query_map([repo_root_id], map_row)?;
+            rows.collect()
+        })
+    }
+
     pub fn update_current_branch(
         &self,
         workspace_id: &str,

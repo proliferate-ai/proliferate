@@ -1,4 +1,5 @@
 use axum::{
+    extract::DefaultBodyLimit,
     extract::State,
     http::{header, HeaderMap, Request},
     middleware::{self, Next},
@@ -10,8 +11,8 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agents, cowork, files, git, health, hosting, model_registries, processes, provider_configs,
-    repo_roots, sessions, terminals, workspaces,
+    agents, cowork, files, git, health, hosting, mobility, model_registries, processes,
+    provider_configs, repo_roots, sessions, terminals, workspaces,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -100,6 +101,28 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}/sessions/restore",
             post(sessions::restore_dismissed_session),
+        )
+        .route(
+            "/workspaces/{workspace_id}/mobility/preflight",
+            post(mobility::preflight_workspace_mobility),
+        )
+        .route(
+            "/workspaces/{workspace_id}/mobility/runtime-state",
+            put(mobility::update_workspace_mobility_runtime_state),
+        )
+        .route(
+            "/workspaces/{workspace_id}/mobility/export",
+            post(mobility::export_workspace_mobility_archive),
+        )
+        .route(
+            "/workspaces/{workspace_id}/mobility/install",
+            post(mobility::install_workspace_mobility_archive).layer(DefaultBodyLimit::max(
+                mobility::MAX_MOBILITY_ARCHIVE_BODY_BYTES,
+            )),
+        )
+        .route(
+            "/workspaces/{workspace_id}/mobility/cleanup",
+            post(mobility::cleanup_workspace_mobility),
         )
         // Workspace files
         .route(

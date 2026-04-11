@@ -3,7 +3,10 @@ use std::time::Instant;
 use uuid::Uuid;
 
 use super::live_config::snapshot_from_record;
-use super::model::{SessionEventRecord, SessionRawNotificationRecord, SessionRecord};
+use super::model::{
+    PendingConfigChangeRecord, PendingPromptRecord, SessionEventRecord,
+    SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
+};
 use super::store::SessionStore;
 use crate::agents::catalog::model_registries;
 use crate::agents::model::{ModelRegistryMetadata, ResolvedAgentStatus};
@@ -275,6 +278,33 @@ impl SessionService {
 
     pub fn store(&self) -> &SessionStore {
         &self.session_store
+    }
+
+    pub fn import_session_bundle(
+        &self,
+        workspace_id: &str,
+        session: &SessionRecord,
+        live_config_snapshot: Option<&SessionLiveConfigSnapshotRecord>,
+        pending_config_changes: &[PendingConfigChangeRecord],
+        pending_prompts: &[PendingPromptRecord],
+        events: &[SessionEventRecord],
+        raw_notifications: &[SessionRawNotificationRecord],
+    ) -> anyhow::Result<()> {
+        self.workspace_store
+            .find_by_id(workspace_id)?
+            .ok_or_else(|| anyhow::anyhow!("workspace not found: {workspace_id}"))?;
+        self.session_store.import_bundle(
+            session,
+            live_config_snapshot,
+            pending_config_changes,
+            pending_prompts,
+            events,
+            raw_notifications,
+        )
+    }
+
+    pub fn delete_session(&self, session_id: &str) -> anyhow::Result<()> {
+        self.session_store.delete_session(session_id)
     }
 
     pub fn update_session_title(

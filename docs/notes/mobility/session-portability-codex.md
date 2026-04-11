@@ -9,7 +9,9 @@ rebuilt from the rollout files via backfill. Moving a session to another machine
 requires copying the rollout `.jsonl` file and rewriting the absolute `cwd`
 path embedded in the first line (SessionMeta) and in every `TurnContext` and
 `ExecCommandBegin/End` event. There is no server-side conversation state; the
-entire replay history is local to the machine.
+entire replay history is local to the machine. Collection should only happen
+for a quiescent session; exporting a rollout mid-turn risks capturing a partial
+append sequence.
 
 ## Resume Path
 
@@ -230,6 +232,8 @@ cwd going forward.
 
 To export a Codex session for mobility:
 
+0. Ensure the session is quiescent. Do not read the rollout while Codex is
+   actively appending to it.
 1. Copy the rollout `.jsonl` file.
 2. Record the original `cwd` (from `SessionMeta.cwd` on line 1).
 3. Optionally copy the thread name from `session_index.jsonl`.
@@ -241,7 +245,9 @@ That's it. The rollout file is self-contained.
 To install a session on a new machine/runtime:
 
 1. Place the rollout `.jsonl` under `~/.codex/sessions/YYYY/MM/DD/`
-   (the date directories must match the filename timestamp).
+   using the timestamp-derived directory convention from the filename. This is
+   the canonical placement even if UUID-based lookup may still find the file in
+   a different subdirectory.
 2. If the workspace cwd has changed, rewrite `SessionMeta.cwd` on line 1
    and all `TurnContext.cwd` entries. The model will see stale paths in
    older tool events but will operate in the new cwd.
@@ -277,6 +283,17 @@ user's shell environment on the target machine.
 **Thread naming is nice-to-have.** Append an entry to
 `session_index.jsonl` on the target so the session is discoverable by
 name.
+
+**Parent/child thread portability is still an open edge.** The state DB tracks
+`thread_spawn_edges`, but this investigation did not prove whether complete
+sub-agent continuity requires exporting additional child rollout files beyond
+the parent rollout. Treat parent-child portability as unverified and keep v1
+support scoped to the main resumed thread path.
+
+**Version skew remains a compatibility risk.** The rollout is plain JSONL, but
+source and destination Codex builds may evolve rollout item variants over time.
+Assume same-or-newer destination Codex until version-skew behavior is
+explicitly validated.
 
 **Concrete steps for v1:**
 

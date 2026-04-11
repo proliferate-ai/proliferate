@@ -200,6 +200,13 @@ impl SetupExecutionService {
             .map(|j| matches!(j.status, SetupJobStatus::Queued | SetupJobStatus::Running))
             .unwrap_or(false)
     }
+
+    pub fn is_running_blocking(&self, workspace_id: &str) -> bool {
+        let jobs = self.jobs.blocking_lock();
+        jobs.get(workspace_id)
+            .map(|j| matches!(j.status, SetupJobStatus::Queued | SetupJobStatus::Running))
+            .unwrap_or(false)
+    }
 }
 
 // ---------------------------------------------------------------------------

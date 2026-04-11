@@ -2,6 +2,7 @@ use anyharness_contract::v1::processes::{RunCommandRequest, RunCommandResponse};
 use axum::extract::{Path, State};
 use axum::Json;
 
+use crate::api::http::access::assert_workspace_mutable;
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
 use crate::processes::types::{ProcessServiceError, RunProcessRequest, RunProcessResult};
@@ -24,6 +25,7 @@ pub async fn run_command(
     Path(workspace_id): Path<String>,
     Json(request): Json<RunCommandRequest>,
 ) -> Result<Json<RunCommandResponse>, ApiError> {
+    assert_workspace_mutable(&state, &workspace_id)?;
     let ws = state
         .workspace_runtime
         .get_workspace(&workspace_id)

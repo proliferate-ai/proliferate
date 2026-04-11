@@ -16,6 +16,7 @@ export {
   anyHarnessProviderConfigsKey,
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessRepoRootsKey,
+  anyHarnessWorkspaceMobilityPreflightKey,
   anyHarnessCoworkStatusKey,
   anyHarnessCoworkThreadsKey,
   anyHarnessCoworkManifestKey,
@@ -53,6 +54,13 @@ export {
 } from "./hooks/model-registries.js";
 export { useProviderConfigsQuery } from "./hooks/providers.js";
 export { useRepoRootsQuery } from "./hooks/repo-roots.js";
+export {
+  useWorkspaceMobilityPreflightQuery,
+  useUpdateWorkspaceMobilityRuntimeStateMutation,
+  useExportWorkspaceMobilityArchiveMutation,
+  useInstallWorkspaceMobilityArchiveMutation,
+  useCleanupWorkspaceMobilityMutation,
+} from "./hooks/mobility.js";
 export {
   useCoworkStatusQuery,
   useCoworkThreadsQuery,

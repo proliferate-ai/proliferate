@@ -48,6 +48,19 @@ impl TerminalService {
         results
     }
 
+    pub fn list_terminals_blocking(&self, workspace_id: &str) -> Vec<TerminalRecord> {
+        let map = self.terminals.blocking_read();
+        let mut results = Vec::new();
+        for handle in map.values() {
+            let h = handle.blocking_lock();
+            if h.record.workspace_id == workspace_id {
+                results.push(h.record.clone());
+            }
+        }
+        results.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+        results
+    }
+
     pub async fn get_terminal(&self, terminal_id: &str) -> Option<TerminalRecord> {
         let map = self.terminals.read().await;
         if let Some(handle) = map.get(terminal_id) {

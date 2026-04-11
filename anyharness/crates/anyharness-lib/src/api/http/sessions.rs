@@ -13,6 +13,7 @@ use axum::{
 };
 use serde::Deserialize;
 
+use super::access::assert_session_mutable;
 use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::app::AppState;
@@ -126,6 +127,7 @@ pub async fn update_session_title(
     Path(session_id): Path<String>,
     Json(req): Json<UpdateSessionTitleRequest>,
 ) -> Result<Json<Session>, ApiError> {
+    assert_session_mutable(&state, &session_id)?;
     let record = state
         .session_service
         .update_session_title(&session_id, &req.title)

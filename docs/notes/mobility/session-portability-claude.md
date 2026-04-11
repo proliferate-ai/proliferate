@@ -23,6 +23,10 @@ Moving a session to another machine requires:
 3. Accepting that absolute paths inside tool events will reference the
    original machine's filesystem.
 
+Collection should only happen for a quiescent session. Exporting an actively
+appending JSONL risks capturing a partial turn or unresolved tool-use/tool-result
+pair.
+
 ## Resume Path
 
 Two CLI flags trigger resume:
@@ -203,7 +207,9 @@ For paths longer than 200 characters, a hash suffix is appended. The hash
 function differs between Bun (`Bun.hash`) and Node.js (`djb2Hash`), which
 means the same long path produces different directory names depending on
 the runtime. `findProjectDir()` handles this by falling back to
-prefix-based directory scanning.
+prefix-based directory scanning. In practice, direct-path resume
+(`claude --resume /path/to/file.jsonl`) largely sidesteps this portability
+trap because it bypasses project-directory lookup entirely.
 
 `canonicalizePath()` resolves symlinks via `realpath` and NFC-normalizes.
 
@@ -269,6 +275,8 @@ reason about it, but:
 
 To export a session for replay on another machine:
 
+0. Ensure the session is quiescent. Do not read the JSONL while Claude Code is
+   still appending to it.
 1. **Required**: `<session-uuid>.jsonl` -- the primary transcript.
 2. **If subagents were used**: `<session-uuid>/subagents/` directory tree
    (`.jsonl` and `.meta.json` files).
@@ -328,9 +336,8 @@ another), the pragmatic v1 approach:
 
 3. **Accept path mismatch**: the model will see old absolute paths in
    history. In practice this is mostly harmless -- the model adapts to the
-   current cwd for new tool calls. If precision matters, a post-export
-   sed pass on the JSONL could rewrite paths, but this is fragile (paths
-   appear in JSON string values, tool result text, thinking blocks, etc.).
+   current cwd for new tool calls. Broad transcript rewriting is intentionally
+   out of scope for v1.
 
 4. **Skip cost state**: cost counters are cosmetic. If needed, the global
    config's `projects[path].lastSessionId` / `lastCost` can be manually
@@ -352,6 +359,8 @@ What v1 does NOT solve:
 - Automatic path rewriting for cross-machine filesystem layout differences.
 - Restoration of ephemeral process state (MCP server connections, LSP
   state, terminal sessions).
+- Cross-version compatibility if source and destination Claude Code builds
+  diverge materially in transcript format or resume behavior.
 
 ## Code References
 
