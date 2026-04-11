@@ -13,9 +13,9 @@ use anyharness_contract::v1::{
     PendingPromptRemovedPayload, PendingPromptUpdatedPayload, PermissionOutcome,
     PermissionRequestedEvent, PermissionResolvedEvent, PlanEntry, SessionEndReason,
     SessionEndedEvent, SessionEvent, SessionEventEnvelope, SessionInfoUpdatePayload,
-    SessionStartedEvent, SessionStateUpdatePayload, StopReason, TranscriptItemDeltaPayload,
-    TranscriptItemKind, TranscriptItemPayload, TranscriptItemStatus, TurnEndedEvent,
-    TurnStartedEvent, UsageUpdatePayload,
+    SessionStartedEvent, SessionStateUpdatePayload, StopReason, TranscriptItemDeltaPayload, TranscriptItemKind,
+    TranscriptItemPayload, TranscriptItemStatus, TurnEndedEvent, TurnStartedEvent,
+    UsageUpdatePayload,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -733,8 +733,8 @@ impl SessionEventSink {
             .raw_output
             .clone()
             .or_else(|| previous.and_then(|prev| prev.item.raw_output.clone()));
-        let background_work =
-            extract_background_work_metadata(raw_input.as_ref(), &meta).or_else(|| {
+        let background_work = extract_background_work_metadata(raw_input.as_ref(), &meta)
+            .or_else(|| {
                 previous.and_then(|prev| {
                     extract_existing_background_work_metadata(prev.item.raw_output.as_ref())
                 })
@@ -964,10 +964,7 @@ fn parse_meta(meta: Option<&serde_json::Value>) -> ParsedMeta {
         .unwrap_or_default()
 }
 
-fn merge_snapshot_detail_parts(
-    previous: Vec<ContentPart>,
-    next: Vec<ContentPart>,
-) -> Vec<ContentPart> {
+fn merge_snapshot_detail_parts(previous: Vec<ContentPart>, next: Vec<ContentPart>) -> Vec<ContentPart> {
     if next.is_empty() {
         return previous;
     }
@@ -1091,7 +1088,10 @@ fn merge_file_change_part(previous: ContentPart, next: ContentPart) -> ContentPa
         workspace_path: choose_option_string(workspace_path, previous_workspace_path),
         basename: choose_option_string(basename, previous_basename),
         new_path: choose_option_string(new_path, previous_new_path),
-        new_workspace_path: choose_option_string(new_workspace_path, previous_new_workspace_path),
+        new_workspace_path: choose_option_string(
+            new_workspace_path,
+            previous_new_workspace_path,
+        ),
         new_basename: choose_option_string(new_basename, previous_new_basename),
         open_target: merged_open_target,
         additions: additions.or(previous_additions),
@@ -2356,11 +2356,7 @@ mod tests {
             .iter()
             .rev()
             .find_map(|event| match &event.event {
-                SessionEvent::ItemCompleted(completed)
-                    if event.item_id.as_deref() == Some("tool-1") =>
-                {
-                    Some(&completed.item)
-                }
+                SessionEvent::ItemCompleted(completed) if event.item_id.as_deref() == Some("tool-1") => Some(&completed.item),
                 _ => None,
             })
             .expect("completed tool item");
@@ -2381,9 +2377,7 @@ mod tests {
             Some("pending")
         );
         assert_eq!(
-            raw_output
-                .get("outputFile")
-                .and_then(serde_json::Value::as_str),
+            raw_output.get("outputFile").and_then(serde_json::Value::as_str),
             Some("/tmp/agent.output")
         );
     }
@@ -2415,8 +2409,6 @@ mod tests {
                 thinking_level_id: None,
                 thinking_budget_tokens: None,
                 status: "idle".to_string(),
-                mode_locked: false,
-                permission_policy: crate::sessions::model::SessionPermissionPolicy::Interactive,
                 created_at: "2026-04-04T00:00:00Z".to_string(),
                 updated_at: "2026-04-04T00:00:00Z".to_string(),
                 last_prompt_at: None,

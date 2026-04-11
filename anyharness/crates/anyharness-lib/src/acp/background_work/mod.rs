@@ -98,10 +98,7 @@ impl BackgroundWorkRegistry {
             return;
         };
 
-        match self
-            .store
-            .upsert_or_refresh_pending_background_work(&record)
-        {
+        match self.store.upsert_or_refresh_pending_background_work(&record) {
             Ok(true) => {
                 self.observed_tool_payloads.remove(&record.tool_call_id);
                 self.ensure_tracker(record);
@@ -147,14 +144,12 @@ impl BackgroundWorkRegistry {
 
         let tool_call_id = record.tool_call_id.clone();
         let handle = match record.tracker_kind {
-            SessionBackgroundWorkTrackerKind::ClaudeAsyncAgent => {
-                claude::spawn_async_agent_tracker(
-                    record,
-                    self.store.clone(),
-                    self.updates_tx.clone(),
-                    self.options,
-                )
-            }
+            SessionBackgroundWorkTrackerKind::ClaudeAsyncAgent => claude::spawn_async_agent_tracker(
+                record,
+                self.store.clone(),
+                self.updates_tx.clone(),
+                self.options,
+            ),
         };
         self.trackers.insert(tool_call_id, handle);
     }
@@ -312,8 +307,6 @@ mod tests {
                 thinking_level_id: None,
                 thinking_budget_tokens: None,
                 status: "idle".to_string(),
-                mode_locked: false,
-                permission_policy: crate::sessions::model::SessionPermissionPolicy::Interactive,
                 created_at: "2026-04-11T00:00:00Z".to_string(),
                 updated_at: "2026-04-11T00:00:00Z".to_string(),
                 last_prompt_at: None,

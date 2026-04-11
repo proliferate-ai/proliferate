@@ -1,5 +1,4 @@
 pub mod agents;
-pub mod artifacts;
 pub mod errors;
 pub mod events;
 pub mod files;
@@ -15,7 +14,6 @@ pub mod terminals;
 pub mod workspaces;
 
 pub use agents::*;
-pub use artifacts::*;
 pub use errors::*;
 pub use events::*;
 pub use files::*;

@@ -36,8 +36,7 @@ pub fn detect_async_agent_registration(
     turn_id: &str,
     payload: &AcpToolPayload,
 ) -> Option<SessionBackgroundWorkRecord> {
-    if !matches!(payload.raw_input.as_ref(), Some(value) if value.get("run_in_background").and_then(serde_json::Value::as_bool) == Some(true))
-    {
+    if !matches!(payload.raw_input.as_ref(), Some(value) if value.get("run_in_background").and_then(serde_json::Value::as_bool) == Some(true)) {
         return None;
     }
 
@@ -48,11 +47,7 @@ pub fn detect_async_agent_registration(
     }
 
     let tool_response = claude_meta.tool_response?;
-    if tool_response
-        .get("isAsync")
-        .and_then(serde_json::Value::as_bool)
-        != Some(true)
-    {
+    if tool_response.get("isAsync").and_then(serde_json::Value::as_bool) != Some(true) {
         return None;
     }
 
@@ -330,8 +325,13 @@ mod tests {
             ..Default::default()
         };
 
-        let record = detect_async_agent_registration("session-1", "claude", "turn-1", &payload)
-            .expect("registration");
+        let record = detect_async_agent_registration(
+            "session-1",
+            "claude",
+            "turn-1",
+            &payload,
+        )
+        .expect("registration");
 
         assert_eq!(record.tool_call_id, "tool-1");
         assert_eq!(record.turn_id, "turn-1");
@@ -608,8 +608,6 @@ mod tests {
                 thinking_level_id: None,
                 thinking_budget_tokens: None,
                 status: "idle".to_string(),
-                mode_locked: false,
-                permission_policy: crate::sessions::model::SessionPermissionPolicy::Interactive,
                 created_at: "2026-04-11T00:00:00Z".to_string(),
                 updated_at: "2026-04-11T00:00:00Z".to_string(),
                 last_prompt_at: None,

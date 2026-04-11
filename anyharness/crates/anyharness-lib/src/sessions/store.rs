@@ -3,8 +3,7 @@ use rusqlite::{params, OptionalExtension};
 use super::model::{
     PendingConfigChangeRecord, PendingPromptRecord, SessionBackgroundWorkRecord,
     SessionBackgroundWorkState, SessionBackgroundWorkTrackerKind, SessionEventRecord,
-    SessionLiveConfigSnapshotRecord, SessionPermissionPolicy, SessionRawNotificationRecord,
-    SessionRecord,
+    SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
 };
 use crate::persistence::Db;
 
@@ -23,10 +22,9 @@ impl SessionStore {
             conn.execute(
                 "INSERT INTO sessions (id, workspace_id, agent_kind, native_session_id,
                  requested_model_id, current_model_id, requested_mode_id, current_mode_id,
-                 title, thinking_level_id, thinking_budget_tokens, status, mode_locked, permission_policy,
-                 created_at, updated_at, last_prompt_at, closed_at, dismissed_at,
-                 mcp_bindings_ciphertext)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+                 title, thinking_level_id, thinking_budget_tokens, status, created_at,
+                 updated_at, last_prompt_at, closed_at, dismissed_at, mcp_bindings_ciphertext)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
                 params![
                     record.id,
                     record.workspace_id,
@@ -40,8 +38,6 @@ impl SessionStore {
                     record.thinking_level_id,
                     record.thinking_budget_tokens,
                     record.status,
-                    record.mode_locked,
-                    record.permission_policy.as_str(),
                     record.created_at,
                     record.updated_at,
                     record.last_prompt_at,
@@ -60,16 +56,6 @@ impl SessionStore {
                 map_session(row)
             })
             .optional()
-        })
-    }
-
-    pub fn delete_by_workspace(&self, workspace_id: &str) -> anyhow::Result<()> {
-        self.db.with_conn(|conn| {
-            conn.execute(
-                "DELETE FROM sessions WHERE workspace_id = ?1",
-                [workspace_id],
-            )?;
-            Ok(())
         })
     }
 
@@ -286,11 +272,7 @@ impl SessionStore {
             )?;
 
             let restored = conn
-                .query_row(
-                    "SELECT * FROM sessions WHERE id = ?1",
-                    [&record.id],
-                    map_session,
-                )
+                .query_row("SELECT * FROM sessions WHERE id = ?1", [&record.id], map_session)
                 .optional()?;
             Ok(restored)
         })
@@ -476,7 +458,11 @@ impl SessionStore {
         })
     }
 
-    pub fn delete_pending_prompt(&self, session_id: &str, seq: i64) -> anyhow::Result<bool> {
+    pub fn delete_pending_prompt(
+        &self,
+        session_id: &str,
+        seq: i64,
+    ) -> anyhow::Result<bool> {
         self.db.with_conn(|conn| {
             let rows = conn.execute(
                 "DELETE FROM session_pending_prompts WHERE session_id = ?1 AND seq = ?2",
@@ -766,10 +752,6 @@ fn map_session(row: &rusqlite::Row) -> rusqlite::Result<SessionRecord> {
         thinking_level_id: row.get("thinking_level_id")?,
         thinking_budget_tokens: row.get("thinking_budget_tokens")?,
         status: row.get("status")?,
-        mode_locked: row.get::<_, i64>("mode_locked")? != 0,
-        permission_policy: SessionPermissionPolicy::parse(
-            &row.get::<_, String>("permission_policy")?,
-        ),
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
         last_prompt_at: row.get("last_prompt_at")?,
@@ -834,7 +816,9 @@ fn map_pending_prompt(row: &rusqlite::Row) -> rusqlite::Result<PendingPromptReco
     })
 }
 
-fn map_background_work(row: &rusqlite::Row) -> rusqlite::Result<SessionBackgroundWorkRecord> {
+fn map_background_work(
+    row: &rusqlite::Row,
+) -> rusqlite::Result<SessionBackgroundWorkRecord> {
     let tracker_kind: String = row.get("tracker_kind")?;
     let state: String = row.get("state")?;
 
@@ -886,8 +870,6 @@ mod tests {
             thinking_level_id: None,
             thinking_budget_tokens: Some(16_000),
             status: "idle".to_string(),
-            mode_locked: false,
-            permission_policy: SessionPermissionPolicy::Interactive,
             created_at: "2026-03-25T00:00:00Z".to_string(),
             updated_at: "2026-03-25T00:00:00Z".to_string(),
             last_prompt_at: None,
@@ -1049,10 +1031,7 @@ mod tests {
             .find_by_id("session-1")
             .expect("find first session")
             .expect("first session exists");
-        assert_eq!(
-            first_stored.dismissed_at.as_deref(),
-            Some("2026-03-25T01:00:00Z")
-        );
+        assert_eq!(first_stored.dismissed_at.as_deref(), Some("2026-03-25T01:00:00Z"));
         assert_eq!(first_stored.updated_at, "2026-03-25T01:00:00Z");
 
         let last_dismissed = store
@@ -1146,9 +1125,11 @@ mod tests {
             completed_at: None,
         };
 
-        assert!(store
-            .upsert_or_refresh_pending_background_work(&pending)
-            .expect("upsert pending background work"));
+        assert!(
+            store
+                .upsert_or_refresh_pending_background_work(&pending)
+                .expect("upsert pending background work")
+        );
         store
             .touch_background_work_activity("session-1", "tool-1", "2026-03-25T01:05:00Z")
             .expect("touch background work activity");
@@ -1160,18 +1141,22 @@ mod tests {
         assert_eq!(pending_rows[0].last_activity_at, "2026-03-25T01:05:00Z");
         assert_eq!(pending_rows[0].updated_at, "2026-03-25T01:05:00Z");
 
-        assert!(store
+        assert!(
+            store
             .mark_background_work_terminal(
                 "session-1",
                 "tool-1",
                 SessionBackgroundWorkState::Completed,
                 "2026-03-25T01:06:00Z",
             )
-            .expect("mark background work terminal"));
+            .expect("mark background work terminal")
+        );
 
-        assert!(store
-            .list_pending_background_work("session-1")
-            .expect("list pending background work")
-            .is_empty());
+        assert!(
+            store
+                .list_pending_background_work("session-1")
+                .expect("list pending background work")
+                .is_empty()
+        );
     }
 }

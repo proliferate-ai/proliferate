@@ -1,6 +1,5 @@
 import type { ProblemDetails } from "../types/runtime.js";
 import { AgentsClient } from "./agents.js";
-import { ArtifactsClient } from "./artifacts.js";
 import { FilesClient } from "./files.js";
 import { GitClient } from "./git.js";
 import { ModelRegistriesClient } from "./model-registries.js";
@@ -52,17 +51,6 @@ export class AnyHarnessTransport {
       headers: this.buildHeaders({ accept: "application/json" }, options),
     });
     return this.handleResponse<T>(res);
-  }
-
-  async getRaw(path: string, options?: AnyHarnessRequestOptions): Promise<Response> {
-    const res = await this.fetch(`${this.baseUrl}${path}`, {
-      method: "GET",
-      headers: this.buildHeaders({ accept: "*/*" }, options),
-    });
-    if (!res.ok) {
-      throw new AnyHarnessError(await toProblemDetails(res));
-    }
-    return res;
   }
 
   async post<T>(path: string, body: unknown, options?: AnyHarnessRequestOptions): Promise<T> {
@@ -147,7 +135,6 @@ export class AnyHarnessClient {
   readonly modelRegistries: ModelRegistriesClient;
   readonly providers: ProvidersClient;
   readonly workspaces: WorkspacesClient;
-  readonly artifacts: ArtifactsClient;
   readonly files: FilesClient;
   readonly sessions: SessionsClient;
   readonly git: GitClient;
@@ -162,7 +149,6 @@ export class AnyHarnessClient {
     this.modelRegistries = new ModelRegistriesClient(transport);
     this.providers = new ProvidersClient(transport);
     this.workspaces = new WorkspacesClient(transport);
-    this.artifacts = new ArtifactsClient(transport);
     this.files = new FilesClient(transport);
     this.sessions = new SessionsClient(transport);
     this.git = new GitClient(transport);

@@ -452,70 +452,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_id}/artifacts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_artifacts"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/workspaces/{workspace_id}/artifacts/{artifact_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_artifact"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/workspaces/{workspace_id}/artifacts/{artifact_id}/content": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_artifact_content"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/workspaces/{workspace_id}/default-session:replace": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["replace_workspace_default_session"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/workspaces/{workspace_id}/detect-setup": {
         parameters: {
             query?: never;
@@ -788,22 +724,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces:cowork": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["create_cowork_workspace"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -828,8 +748,6 @@ export interface components {
             readiness: components["schemas"]["AgentReadinessState"];
             supportsLogin: boolean;
         };
-        /** @enum {string} */
-        ArtifactRenderer: "text" | "markdown" | "code" | "html" | "svg" | "mermaid" | "react";
         ArtifactStatus: {
             installed: boolean;
             message?: string | null;
@@ -926,14 +844,6 @@ export interface components {
             text: string;
             /** @enum {string} */
             type: "tool_result_text";
-        };
-        CreateCoworkWorkspaceRequest: {
-            agentKind: string;
-            modelId?: string | null;
-        };
-        CreateCoworkWorkspaceResponse: {
-            session: components["schemas"]["Session"];
-            workspace: components["schemas"]["Workspace"];
         };
         CreatePullRequestRequest: {
             baseBranch: string;
@@ -1366,14 +1276,6 @@ export interface components {
         RegisterRepoWorkspaceRequest: {
             path: string;
         };
-        ReplaceWorkspaceDefaultSessionRequest: {
-            agentKind: string;
-            modelId?: string | null;
-        };
-        ReplaceWorkspaceDefaultSessionResponse: {
-            session: components["schemas"]["Session"];
-            workspace: components["schemas"]["Workspace"];
-        };
         ResolvePermissionRequest: {
             decision?: null | components["schemas"]["PermissionDecision"];
             optionId?: string | null;
@@ -1404,7 +1306,6 @@ export interface components {
             lastPromptAt?: string | null;
             liveConfig?: null | components["schemas"]["SessionLiveConfigSnapshot"];
             modeId?: string | null;
-            modeLocked: boolean;
             modelId?: string | null;
             nativeSessionId?: string | null;
             pendingPrompts?: components["schemas"]["PendingPromptSummary"][];
@@ -1685,7 +1586,6 @@ export interface components {
         Workspace: {
             createdAt: string;
             currentBranch?: string | null;
-            defaultSessionId?: string | null;
             displayName?: string | null;
             executionSummary?: null | components["schemas"]["WorkspaceExecutionSummary"];
             gitOwner?: string | null;
@@ -1697,23 +1597,6 @@ export interface components {
             path: string;
             sourceRepoRootPath: string;
             sourceWorkspaceId?: string | null;
-            surfaceKind: components["schemas"]["WorkspaceSurfaceKind"];
-            updatedAt: string;
-        };
-        WorkspaceArtifactDetail: {
-            createdAt: string;
-            entry: string;
-            id: string;
-            kind: string;
-            renderer: components["schemas"]["ArtifactRenderer"];
-            title: string;
-            updatedAt: string;
-        };
-        WorkspaceArtifactSummary: {
-            entry: string;
-            id: string;
-            renderer: components["schemas"]["ArtifactRenderer"];
-            title: string;
             updatedAt: string;
         };
         /** @enum {string} */
@@ -1744,8 +1627,6 @@ export interface components {
             id: string;
             isDefault: boolean;
         };
-        /** @enum {string} */
-        WorkspaceSurfaceKind: "code" | "cowork";
     };
     responses: never;
     parameters: never;
@@ -2787,152 +2668,6 @@ export interface operations {
             };
         };
     };
-    list_artifacts: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace ID */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List workspace artifacts */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceArtifactSummary"][];
-                };
-            };
-            /** @description Workspace not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    get_artifact: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace ID */
-                workspace_id: string;
-                /** @description Artifact ID */
-                artifact_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Workspace artifact detail */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceArtifactDetail"];
-                };
-            };
-            /** @description Artifact not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    get_artifact_content: {
-        parameters: {
-            query: {
-                /** @description Artifact-relative file path */
-                path: string;
-            };
-            header?: never;
-            path: {
-                /** @description Workspace ID */
-                workspace_id: string;
-                /** @description Artifact ID */
-                artifact_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Artifact content */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Artifact content not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    replace_workspace_default_session: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace ID */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReplaceWorkspaceDefaultSessionRequest"];
-            };
-        };
-        responses: {
-            /** @description Replaced Cowork default session */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReplaceWorkspaceDefaultSessionResponse"];
-                };
-            };
-            /** @description Invalid replacement request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Workspace not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     detect_project_setup: {
         parameters: {
             query?: never;
@@ -3589,39 +3324,6 @@ export interface operations {
             };
             /** @description No setup execution found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    create_cowork_workspace: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateCoworkWorkspaceRequest"];
-            };
-        };
-        responses: {
-            /** @description Created Cowork workspace */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreateCoworkWorkspaceResponse"];
-                };
-            };
-            /** @description Invalid Cowork request */
-            400: {
                 headers: {
                     [name: string]: unknown;
                 };

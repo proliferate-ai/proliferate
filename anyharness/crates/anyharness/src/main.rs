@@ -16,7 +16,6 @@ async fn main() -> Result<()> {
         cli::Commands::Serve(serve_args) => commands::serve::run(serve_args).await,
         cli::Commands::InstallAgents(install_args) => commands::install_agents::run(install_args),
         cli::Commands::PrintOpenapi => commands::print_openapi::run(),
-        cli::Commands::McpProliferate(args) => commands::mcp_proliferate::run(args),
     };
 
     if let Err(error) = &result {

@@ -6,7 +6,6 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
     id: overrides.id ?? "repo-1",
     kind: overrides.kind ?? "repo",
-    surfaceKind: overrides.surfaceKind ?? "code",
     path: overrides.path ?? "/tmp/proliferate",
     sourceRepoRootPath: overrides.sourceRepoRootPath ?? "/tmp/proliferate",
     sourceWorkspaceId: overrides.sourceWorkspaceId ?? null,
@@ -15,7 +14,6 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
     gitRepoName: "gitRepoName" in overrides ? overrides.gitRepoName : "proliferate",
     originalBranch: "originalBranch" in overrides ? overrides.originalBranch : "main",
     currentBranch: "currentBranch" in overrides ? overrides.currentBranch : "main",
-    defaultSessionId: "defaultSessionId" in overrides ? overrides.defaultSessionId : null,
     executionSummary: overrides.executionSummary,
     createdAt: overrides.createdAt ?? "2026-04-06T10:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-04-06T10:00:00.000Z",

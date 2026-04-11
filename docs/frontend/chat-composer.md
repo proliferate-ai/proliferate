@@ -45,12 +45,6 @@ The slot holds **at most one** inhabitant at a time. The precedence order is com
 3. **`WorkspaceArrivalAttachedPanel`** — workspace arrival / setup / pending / cloud-status
 4. **`CloudRuntimeAttachedPanel`** — cloud runtime in any non-ready phase
 
-Cowork exception:
-
-- Cowork keeps this hook as the single arbiter, but deliberately suppresses
-  the approval/workspace-status/cloud-runtime branches. In Cowork, only the
-  todo tracker and pending prompt queue may render above the composer.
-
 If you need to introduce a fifth inhabitant, add it to the precedence chain in `use-composer-top-slot.tsx` — do not compute it inline in `ChatView` and do not introduce a parallel arbiter elsewhere.
 
 **Stacking is explicitly deferred.** When a genuine multi-inhabitant scenario arises (e.g. an `execute` approval while a Codex todo tracker is also active), upgrade `useComposerTopSlot` to return `ReactNode[]` and update `ChatComposerDock` to render them stacked. Until then, do not prep for stacking with `first:rounded-t-2xl` tricks or similar — see §6.

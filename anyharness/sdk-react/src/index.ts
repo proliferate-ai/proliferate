@@ -15,9 +15,6 @@ export {
   anyHarnessReconcileAgentsMutationKey,
   anyHarnessProviderConfigsKey,
   anyHarnessRuntimeWorkspacesKey,
-  anyHarnessWorkspaceArtifactsKey,
-  anyHarnessWorkspaceArtifactKey,
-  anyHarnessWorkspaceArtifactContentKey,
   anyHarnessWorkspaceSessionLaunchKey,
   anyHarnessSessionsKey,
   anyHarnessSessionKey,
@@ -59,13 +56,8 @@ export {
   useWorkspaceSessionLaunchQuery,
   useResolveWorkspaceFromPathMutation,
   useCreateWorkspaceMutation,
-  useCreateCoworkWorkspaceMutation,
-  useReplaceWorkspaceDefaultSessionMutation,
   useRegisterRepoWorkspaceMutation,
   useCreateWorktreeWorkspaceMutation,
-  useWorkspaceArtifactsQuery,
-  useWorkspaceArtifactQuery,
-  useWorkspaceArtifactContentQuery,
 } from "./hooks/workspaces.js";
 export {
   useWorkspaceSessionsQuery,

@@ -1,7 +1,7 @@
 use anyharness_contract::v1::{
     DetectProjectSetupResponse, GetSetupStatusResponse, SetupHint, SetupHintCategory,
     SetupScriptStatus, Workspace, WorkspaceKind, WorkspaceSessionLaunchAgent,
-    WorkspaceSessionLaunchCatalog, WorkspaceSessionLaunchModel, WorkspaceSurfaceKind,
+    WorkspaceSessionLaunchCatalog, WorkspaceSessionLaunchModel,
 };
 
 use super::error::ApiError;
@@ -85,10 +85,6 @@ pub(super) fn workspace_to_contract_with_summary(
             "local" => WorkspaceKind::Local,
             _ => WorkspaceKind::Repo,
         },
-        surface_kind: match record.surface_kind.as_str() {
-            "cowork" => WorkspaceSurfaceKind::Cowork,
-            _ => WorkspaceSurfaceKind::Code,
-        },
         path: record.path,
         source_repo_root_path: record.source_repo_root_path,
         source_workspace_id: record.source_workspace_id,
@@ -98,7 +94,6 @@ pub(super) fn workspace_to_contract_with_summary(
         original_branch: record.original_branch,
         current_branch: record.current_branch,
         display_name: record.display_name,
-        default_session_id: record.default_session_id,
         execution_summary: Some(execution_summary),
         created_at: record.created_at,
         updated_at: record.updated_at,

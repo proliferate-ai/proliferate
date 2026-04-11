@@ -2,8 +2,6 @@ pub mod acp;
 pub mod agents;
 pub mod api;
 pub mod app;
-pub mod artifacts;
-pub mod cowork;
 pub mod files;
 pub mod git;
 pub mod hosting;

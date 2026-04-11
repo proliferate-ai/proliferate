@@ -1,7 +1,5 @@
 export type ScenarioKey =
   | "clean"
-  | "cowork-clean"
-  | "cowork-pending"
   | "todos-short"
   | "todos-mid"
   | "todos-long"
@@ -20,8 +18,6 @@ interface Scenario {
 
 export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "clean": { label: "Clean" },
-  "cowork-clean": { label: "Cowork clean" },
-  "cowork-pending": { label: "Cowork pending" },
   "todos-short": { label: "Todos (3)" },
   "todos-mid": { label: "Todos (5)" },
   "todos-long": { label: "Todos (12)" },

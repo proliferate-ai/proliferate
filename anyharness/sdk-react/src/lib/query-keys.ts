@@ -37,14 +37,8 @@ export function anyHarnessModelRegistryKey(
   return [...anyHarnessModelRegistriesKey(runtimeUrl), kind ?? null] as const;
 }
 
-export function anyHarnessRuntimeWorkspacesKey(
-  runtimeUrl: string | null | undefined,
-  surfaceKind?: string | null,
-) {
-  if (surfaceKind == null) {
-    return [...anyHarnessRuntimeKey(runtimeUrl), "workspaces"] as const;
-  }
-  return [...anyHarnessRuntimeKey(runtimeUrl), "workspaces", surfaceKind] as const;
+export function anyHarnessRuntimeWorkspacesKey(runtimeUrl: string | null | undefined) {
+  return [...anyHarnessRuntimeKey(runtimeUrl), "workspaces"] as const;
 }
 
 export function anyHarnessWorkspaceSessionLaunchKey(
@@ -52,34 +46,6 @@ export function anyHarnessWorkspaceSessionLaunchKey(
   workspaceId: string | null | undefined,
 ) {
   return [...anyHarnessRuntimeKey(runtimeUrl), "workspace-session-launch", workspaceId ?? null] as const;
-}
-
-export function anyHarnessWorkspaceArtifactsKey(
-  runtimeUrl: string | null | undefined,
-  workspaceId: string | null | undefined,
-) {
-  return [...anyHarnessRuntimeKey(runtimeUrl), "workspace-artifacts", workspaceId ?? null] as const;
-}
-
-export function anyHarnessWorkspaceArtifactKey(
-  runtimeUrl: string | null | undefined,
-  workspaceId: string | null | undefined,
-  artifactId: string | null | undefined,
-) {
-  return [...anyHarnessWorkspaceArtifactsKey(runtimeUrl, workspaceId), artifactId ?? null] as const;
-}
-
-export function anyHarnessWorkspaceArtifactContentKey(
-  runtimeUrl: string | null | undefined,
-  workspaceId: string | null | undefined,
-  artifactId: string | null | undefined,
-  relativePath: string | null | undefined,
-) {
-  return [
-    ...anyHarnessWorkspaceArtifactKey(runtimeUrl, workspaceId, artifactId),
-    "content",
-    relativePath ?? null,
-  ] as const;
 }
 
 export function anyHarnessSessionsKey(

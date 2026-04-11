@@ -27,16 +27,6 @@ interface PlaygroundComposerProps {
 const noop = () => {};
 
 export function PlaygroundComposer({ scenario }: PlaygroundComposerProps) {
-  if (scenario === "cowork-pending") {
-    return (
-      <div className="px-4 pb-4">
-        <div className="mx-auto max-w-3xl rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-          Composer hidden while creating a Cowork thread.
-        </div>
-      </div>
-    );
-  }
-
   const topSlot = renderTopSlot(scenario);
   return (
     <ChatComposerDock topSlot={topSlot ?? undefined}>
@@ -48,8 +38,6 @@ export function PlaygroundComposer({ scenario }: PlaygroundComposerProps) {
 function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {
     case "clean":
-    case "cowork-clean":
-    case "cowork-pending":
       return null;
     case "todos-short":
       return <TodoTrackerPanel entries={TODOS_SHORT} />;

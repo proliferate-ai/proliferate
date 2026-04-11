@@ -118,8 +118,6 @@ mod tests {
             thinking_level_id: None,
             thinking_budget_tokens: None,
             status: status.to_string(),
-            mode_locked: false,
-            permission_policy: crate::sessions::model::SessionPermissionPolicy::Interactive,
             created_at: updated_at.to_string(),
             updated_at: updated_at.to_string(),
             last_prompt_at: None,

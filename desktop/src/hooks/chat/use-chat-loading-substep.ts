@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { CHAT_PRE_MESSAGE_LABELS } from "@/config/chat";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/workspace-bootstrap-memory";
 import { workspaceDisplayName } from "@/lib/domain/workspaces/workspace-display";
-import { useSelectedWorkspace } from "@/hooks/workspaces/use-selected-workspace";
 import { useActiveChatSessionState } from "./use-active-chat-session-state";
 
 /**
@@ -46,11 +46,17 @@ export function useChatLoadingSubstep(): ChatLoadingSubstepState {
       : null,
   );
   const { hasSlot, transcriptHydrated, isEmpty, isRunning } = useActiveChatSessionState();
-  const { selectedWorkspace } = useSelectedWorkspace();
+  const { data: workspaceCollections } = useWorkspaces();
 
   const workspaceName = useMemo(() => {
-    return selectedWorkspace ? workspaceDisplayName(selectedWorkspace) : null;
-  }, [selectedWorkspace]);
+    if (!selectedWorkspaceId) {
+      return null;
+    }
+    const workspace = workspaceCollections?.workspaces.find(
+      (candidate) => candidate.id === selectedWorkspaceId,
+    );
+    return workspace ? workspaceDisplayName(workspace) : null;
+  }, [selectedWorkspaceId, workspaceCollections]);
 
   const substep = resolveSubstep({
     activeSessionId,

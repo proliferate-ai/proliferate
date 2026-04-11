@@ -18,7 +18,6 @@ import { FileChangeCall } from "@/components/workspace/chat/tool-calls/FileChang
 import { FileReadCall } from "@/components/workspace/chat/tool-calls/FileReadCall";
 import { ReadGroupBlock } from "@/components/workspace/chat/tool-calls/ReadGroupBlock";
 import { ToolCallSummary } from "@/components/workspace/chat/tool-calls/ToolCallSummary";
-import { ArtifactToolCall } from "@/components/workspace/chat/tool-calls/ArtifactToolCall";
 import { TurnDiffPanel } from "./TurnDiffPanel";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import {
@@ -49,7 +48,6 @@ import {
   buildSubagentBrailleColorMap,
   resolveSubagentBrailleColor,
 } from "@/lib/domain/chat/subagent-braille-color";
-import { getArtifactToolCallData } from "@/lib/domain/chat/artifact-tool-call";
 import type {
   FileChangeContentPart,
   FileReadContentPart,
@@ -477,10 +475,6 @@ function ToolCallItemBlock({
   const fallbackDisplay = describeToolCall(item, toolName);
   const rows: React.ReactNode[] = [];
   const status = mapStatus(item.status);
-
-  if (getArtifactToolCallData(item)) {
-    return <ArtifactToolCall item={item} status={status} />;
-  }
 
   fileChanges.forEach((part, idx) => {
     rows.push(

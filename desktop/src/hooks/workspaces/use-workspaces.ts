@@ -26,7 +26,7 @@ export function useWorkspaces() {
         runtimeUrl,
         cloudActive,
       });
-      const localWorkspaces = await getAnyHarnessClient({ runtimeUrl }).workspaces.list("code").catch(() => []);
+      const localWorkspaces = await getAnyHarnessClient({ runtimeUrl }).workspaces.list().catch(() => []);
       const cloudWorkspaces = cloudActive
         ? await listCloudWorkspaces().catch(() => null)
         : [];

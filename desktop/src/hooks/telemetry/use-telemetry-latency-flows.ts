@@ -10,9 +10,7 @@ import {
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 
 function isSurfaceReady(modeKind: string): boolean {
-  return modeKind !== "no-workspace"
-    && modeKind !== "session-loading"
-    && modeKind !== "pending-thread-creation";
+  return modeKind !== "no-workspace" && modeKind !== "session-loading";
 }
 
 interface TelemetryLatencyFlowState {

@@ -34,12 +34,8 @@ pub fn resolve_agent(descriptor: &AgentDescriptor, runtime_home: &Path) -> Resol
             }
         }
     }
-    let compatibility_issue = detect_runtime_compatibility_issue(
-        descriptor,
-        &agent_process,
-        spawn.as_ref(),
-        runtime_home,
-    );
+    let compatibility_issue =
+        detect_runtime_compatibility_issue(descriptor, &agent_process, spawn.as_ref(), runtime_home);
     if let Some(message) = compatibility_issue.as_ref() {
         agent_process.message = Some(message.clone());
     }
@@ -149,9 +145,7 @@ fn resolve_agent_process_artifact(
                     return found_artifact(ArtifactRole::AgentProcess, path.clone(), "managed");
                 }
             }
-            if let Some(binary_name) = executable_relpath
-                .file_name()
-                .and_then(|name| name.to_str())
+            if let Some(binary_name) = executable_relpath.file_name().and_then(|name| name.to_str())
             {
                 if let Some(found) = find_in_path(binary_name) {
                     return found_artifact(ArtifactRole::AgentProcess, found, "path");
@@ -286,10 +280,10 @@ fn resolve_agent_process_override(kind: &AgentKind) -> Option<(SpawnSpec, Resolv
     }
 
     let requested_program = PathBuf::from(program);
-    let resolved_program =
-        resolve_override_program(&requested_program).unwrap_or_else(|| requested_program.clone());
-    let message = if resolved_program == requested_program
-        && !is_override_program_valid(&requested_program)
+    let resolved_program = resolve_override_program(&requested_program).unwrap_or_else(|| {
+        requested_program.clone()
+    });
+    let message = if resolved_program == requested_program && !is_override_program_valid(&requested_program)
     {
         Some(format!(
             "Override executable `{}` was not found or is not executable.",
@@ -339,7 +333,10 @@ fn is_override_program_valid(program: &Path) -> bool {
         return is_valid_executable(program);
     }
 
-    program.to_str().and_then(find_in_path).is_some()
+    program
+        .to_str()
+        .and_then(find_in_path)
+        .is_some()
 }
 
 fn agent_override_prefix(kind: &AgentKind) -> String {
@@ -643,9 +640,7 @@ mod tests {
 
     #[test]
     fn override_program_validation_requires_existing_executable() {
-        assert!(!is_override_program_valid(Path::new(
-            "/definitely/missing/agent-binary"
-        )));
+        assert!(!is_override_program_valid(Path::new("/definitely/missing/agent-binary")));
         assert!(is_override_program_valid(Path::new("sh")));
     }
 

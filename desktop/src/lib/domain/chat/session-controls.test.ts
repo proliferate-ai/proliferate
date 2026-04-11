@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { NormalizedSessionControls } from "@anyharness/sdk";
-import {
-  buildLiveSessionControlDescriptors,
-  resolveVisibleLiveSessionControlDescriptors,
-} from "./session-controls";
+import { buildLiveSessionControlDescriptors } from "./session-controls";
 
 const NORMALIZED_CONTROLS: NormalizedSessionControls = {
   model: null,
@@ -115,16 +112,5 @@ describe("buildLiveSessionControlDescriptors", () => {
         { value: "on", selected: true },
       ],
     });
-  });
-
-  it("hides live session controls for cowork", () => {
-    const controls = buildLiveSessionControlDescriptors(
-      NORMALIZED_CONTROLS,
-      null,
-      vi.fn(),
-    );
-
-    expect(resolveVisibleLiveSessionControlDescriptors("cowork", controls)).toEqual([]);
-    expect(resolveVisibleLiveSessionControlDescriptors("code", controls)).toEqual(controls);
   });
 });

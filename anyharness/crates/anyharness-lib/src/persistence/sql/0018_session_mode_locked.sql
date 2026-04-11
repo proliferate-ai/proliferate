@@ -1,2 +1,0 @@
-ALTER TABLE sessions
-ADD COLUMN mode_locked INTEGER NOT NULL DEFAULT 0;

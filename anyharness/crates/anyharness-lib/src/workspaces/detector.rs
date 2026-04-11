@@ -24,12 +24,7 @@ pub fn detect_project_setup(workspace_root: &Path) -> ProjectSetupDetectionResul
 fn detect_build_tools(root: &Path, hints: &mut Vec<DetectedSetupHint>) {
     // Rust
     if root.join("Cargo.toml").exists() {
-        hints.push(build_hint(
-            "rust",
-            "Rust project",
-            "cargo build",
-            "Cargo.toml",
-        ));
+        hints.push(build_hint("rust", "Rust project", "cargo build", "Cargo.toml"));
     }
 
     // Node — 3-tier disambiguation following Railpack patterns
@@ -49,12 +44,7 @@ fn detect_build_tools(root: &Path, hints: &mut Vec<DetectedSetupHint>) {
         } else {
             "uv sync"
         };
-        hints.push(build_hint(
-            "python",
-            "Python project",
-            cmd,
-            "pyproject.toml",
-        ));
+        hints.push(build_hint("python", "Python project", cmd, "pyproject.toml"));
     } else if root.join("requirements.txt").exists() {
         hints.push(build_hint(
             "python",
@@ -63,12 +53,7 @@ fn detect_build_tools(root: &Path, hints: &mut Vec<DetectedSetupHint>) {
             "requirements.txt",
         ));
     } else if root.join("Pipfile").exists() {
-        hints.push(build_hint(
-            "python",
-            "Python project",
-            "pipenv install",
-            "Pipfile",
-        ));
+        hints.push(build_hint("python", "Python project", "pipenv install", "Pipfile"));
     }
 
     // Go
@@ -78,22 +63,12 @@ fn detect_build_tools(root: &Path, hints: &mut Vec<DetectedSetupHint>) {
 
     // Ruby
     if root.join("Gemfile").exists() {
-        hints.push(build_hint(
-            "ruby",
-            "Ruby project",
-            "bundle install",
-            "Gemfile",
-        ));
+        hints.push(build_hint("ruby", "Ruby project", "bundle install", "Gemfile"));
     }
 
     // Elixir
     if root.join("mix.exs").exists() {
-        hints.push(build_hint(
-            "elixir",
-            "Elixir project",
-            "mix deps.get",
-            "mix.exs",
-        ));
+        hints.push(build_hint("elixir", "Elixir project", "mix deps.get", "mix.exs"));
     }
 }
 

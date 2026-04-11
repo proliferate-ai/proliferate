@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use serde_json::{Map, Value};
 use tokio::sync::{broadcast, RwLock};
 
 use super::permission_broker::PermissionBroker;
@@ -47,7 +46,6 @@ impl AcpManager {
         is_resume: bool,
         last_seq: i64,
         system_prompt_append: Option<String>,
-        startup_meta: Option<Map<String, Value>>,
         latency: Option<LatencyRequestContext>,
     ) -> anyhow::Result<(Arc<LiveSessionHandle>, ActorReadyResult)> {
         let session_id = session.id.clone();
@@ -120,7 +118,6 @@ impl AcpManager {
             is_resume,
             last_seq,
             system_prompt_append,
-            startup_meta,
             latency,
             on_exit: Some(on_exit),
         };

@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useAppSurfaceStore } from "@/stores/ui/app-surface-store";
 import { useWorkspaceEntryActions } from "./use-workspace-entry-actions";
 import { useWorkspaceSelection } from "./selection/use-workspace-selection";
 import { useAddRepo } from "./use-add-repo";
@@ -17,8 +16,6 @@ export function useWorkspaceSidebarActions() {
   const setPendingWorkspaceEntry = useHarnessStore((state) => state.setPendingWorkspaceEntry);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const pendingCoworkThread = useAppSurfaceStore((state) => state.pendingCoworkThread);
-  const setPendingCoworkThread = useAppSurfaceStore((state) => state.setPendingCoworkThread);
   const { selectWorkspace, clearWorkspaceRuntimeState } = useWorkspaceSelection();
   const {
     createLocalWorkspaceAndEnter,
@@ -38,16 +35,12 @@ export function useWorkspaceSidebarActions() {
     } else if (pendingWorkspaceEntry) {
       setPendingWorkspaceEntry(null);
       useWorkspaceFilesStore.getState().reset();
-    } else if (pendingCoworkThread) {
-      setPendingCoworkThread(null);
     }
     navigate("/");
   }, [
     clearWorkspaceRuntimeState,
     navigate,
-    pendingCoworkThread,
     pendingWorkspaceEntry,
-    setPendingCoworkThread,
     setPendingWorkspaceEntry,
     selectedWorkspaceId,
   ]);

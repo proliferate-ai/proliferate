@@ -6,10 +6,9 @@ use tokio::sync::{mpsc, Mutex};
 use super::event_sink::SessionEventSink;
 use super::permission_broker::{PermissionBroker, PermissionOutcome};
 use super::session_actor::LiveSessionHandle;
-use crate::sessions::model::SessionPermissionPolicy;
 use anyharness_contract::v1::{
     PendingApprovalSummary, PermissionOutcome as ContractPermissionOutcome,
-    PermissionRequestedEvent, SessionExecutionPhase,
+    PermissionRequestedEvent,
 };
 
 pub struct RuntimeClient {
@@ -18,7 +17,6 @@ pub struct RuntimeClient {
     pub permission_broker: Arc<PermissionBroker>,
     pub event_sink: Arc<Mutex<SessionEventSink>>,
     pub live_session_handle: Arc<LiveSessionHandle>,
-    pub permission_policy: SessionPermissionPolicy,
 }
 
 impl RuntimeClient {
@@ -28,7 +26,6 @@ impl RuntimeClient {
         permission_broker: Arc<PermissionBroker>,
         event_sink: Arc<Mutex<SessionEventSink>>,
         live_session_handle: Arc<LiveSessionHandle>,
-        permission_policy: SessionPermissionPolicy,
     ) -> Self {
         Self {
             session_id,
@@ -36,7 +33,6 @@ impl RuntimeClient {
             permission_broker,
             event_sink,
             live_session_handle,
-            permission_policy,
         }
     }
 }
@@ -47,31 +43,6 @@ impl acp::Client for RuntimeClient {
         &self,
         args: acp::RequestPermissionRequest,
     ) -> acp::Result<acp::RequestPermissionResponse> {
-        if self.permission_policy == SessionPermissionPolicy::FailOnRequest {
-            let title = args
-                .tool_call
-                .fields
-                .title
-                .clone()
-                .unwrap_or_else(|| "Permission requested".to_string());
-            {
-                let mut sink = self.event_sink.lock().await;
-                sink.error(
-                    format!(
-                        "Cowork session rejected a permission request for '{title}'. This session must run approval-free."
-                    ),
-                    Some("COWORK_PERMISSION_REQUESTED".to_string()),
-                );
-            }
-            self.live_session_handle
-                .set_execution_phase(SessionExecutionPhase::Errored)
-                .await;
-            return Err(acp::Error::internal_error().data(serde_json::json!({
-                "code": "cowork_permission_requested",
-                "detail": "Cowork sessions do not allow interactive permission requests.",
-            })));
-        }
-
         let request_id = uuid::Uuid::new_v4().to_string();
 
         let title = args

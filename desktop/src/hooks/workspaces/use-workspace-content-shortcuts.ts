@@ -16,12 +16,9 @@ interface WorkspaceContentShortcutActions extends Pick<
 
 export function useWorkspaceContentShortcuts(
   actions: WorkspaceContentShortcutActions,
-  options?: {
-    enabled?: boolean;
-  },
 ): void {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const enabled = (options?.enabled ?? true) && selectedWorkspaceId !== null;
+  const enabled = selectedWorkspaceId !== null;
   const {
     activateRelativeTab,
     activateTabByShortcutIndex,

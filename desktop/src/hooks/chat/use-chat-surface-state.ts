@@ -1,17 +1,18 @@
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
-import {
-  resolveChatSurfaceState,
-  type ChatSurfaceState,
-} from "@/lib/domain/chat/chat-surface";
+import { shouldShowStructuralRepoWorkspaceStatus } from "@/lib/domain/chat/chat-surface";
 import { shouldShowCloudWorkspaceStatusScreen } from "@/lib/domain/workspaces/cloud-workspace-status";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
-import { useSelectedWorkspace } from "@/hooks/workspaces/use-selected-workspace";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useAppSurfaceStore } from "@/stores/ui/app-surface-store";
 import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/workspace-bootstrap-memory";
 import { useActiveChatSessionState } from "./use-active-chat-session-state";
-export type { ChatSurfaceState } from "@/lib/domain/chat/chat-surface";
+
+export type ChatSurfaceState =
+  | { kind: "no-workspace" }
+  | { kind: "workspace-status" }
+  | { kind: "session-loading"; sessionId: string | null }
+  | { kind: "session-empty"; sessionId: string | null }
+  | { kind: "session-transcript"; sessionId: string };
 
 export function useChatSurfaceState(): {
   mode: ChatSurfaceState;
@@ -20,10 +21,8 @@ export function useChatSurfaceState(): {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const workspaceArrivalEvent = useHarnessStore((state) => state.workspaceArrivalEvent);
-  const pendingCoworkThread = useAppSurfaceStore((state) => state.pendingCoworkThread);
   const { data: workspaceCollections } = useWorkspaces();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
-  const { selectedWorkspace } = useSelectedWorkspace();
   const {
     activeSessionId,
     hasContent,
@@ -38,33 +37,64 @@ export function useChatSurfaceState(): {
       : null,
   );
 
+  if (!selectedWorkspaceId && !pendingWorkspaceEntry) {
+    return { mode: { kind: "no-workspace" }, selectedWorkspaceId };
+  }
+
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
   const selectedCloudWorkspace =
     workspaceCollections?.cloudWorkspaces.find((workspace) => workspace.id === selectedCloudWorkspaceId)
     ?? null;
 
+  if (pendingWorkspaceEntry) {
+    return { mode: { kind: "workspace-status" }, selectedWorkspaceId };
+  }
+
+  // Structural repo rows default to the status screen, but once a session is
+  // active we should let the normal transcript/loading states render.
+  const selectedLocalWorkspace = selectedWorkspaceId
+    ? workspaceCollections?.localWorkspaces?.find((w) => w.id === selectedWorkspaceId)
+    : null;
+  if (shouldShowStructuralRepoWorkspaceStatus(selectedLocalWorkspace ?? null, activeSessionId)) {
+    return { mode: { kind: "workspace-status" }, selectedWorkspaceId };
+  }
+
   const isArrivalWorkspace = workspaceArrivalEvent?.workspaceId === selectedWorkspaceId;
   const shouldShowCloudStatus = selectedCloudWorkspace
     && shouldShowCloudWorkspaceStatusScreen(selectedCloudWorkspace);
+  if (shouldShowCloudStatus || (isArrivalWorkspace && !hasContent)) {
+    return { mode: { kind: "workspace-status" }, selectedWorkspaceId };
+  }
 
   const shouldPreserveTranscript = selectedCloudRuntime.state?.preserveVisibleContent && hasContent;
-  const mode = resolveChatSurfaceState({
-    selectedWorkspaceId,
-    selectedWorkspace,
-    hasPendingWorkspaceEntry: pendingWorkspaceEntry !== null,
-    hasPendingCoworkThread: pendingCoworkThread !== null,
-    shouldShowCloudStatus: Boolean(shouldShowCloudStatus),
-    isArrivalWorkspaceWithoutContent: Boolean(isArrivalWorkspace && !hasContent),
-    activeSessionId,
-    hasWorkspaceBootstrappedInSession:
-      selectedWorkspaceId !== null && hasWorkspaceBootstrappedInSession(selectedWorkspaceId),
-    hasSlot,
-    transcriptHydrated,
-    isEmpty,
-    isRunning,
-    streamConnectionState,
-    shouldPreserveTranscript: Boolean(shouldPreserveTranscript),
-  });
 
-  return { mode, selectedWorkspaceId };
+  if (!activeSessionId) {
+    if (selectedWorkspaceId && hasWorkspaceBootstrappedInSession(selectedWorkspaceId)) {
+      return { mode: { kind: "session-empty", sessionId: null }, selectedWorkspaceId };
+    }
+    return { mode: { kind: "session-loading", sessionId: null }, selectedWorkspaceId };
+  }
+
+  // Gate the session-loading state on hasSlot, hydration, and the
+  // empty+running race window. The hydration check self-heals once the
+  // stream is open: if the producer-side auto-hydrate in
+  // ensureSessionStreamConnected ever misses flipping transcriptHydrated
+  // (leaky path or stale in-memory slot from before that fix landed), SSE
+  // replay on the live stream will populate the transcript anyway, so we
+  // should not stick on "Loading history" forever just because a flag
+  // didn't flip.
+  const awaitingHydration = !transcriptHydrated && streamConnectionState !== "open";
+  if (!hasSlot || awaitingHydration || (isEmpty && isRunning)) {
+    return { mode: { kind: "session-loading", sessionId: activeSessionId }, selectedWorkspaceId };
+  }
+
+  if (shouldPreserveTranscript) {
+    return { mode: { kind: "session-transcript", sessionId: activeSessionId }, selectedWorkspaceId };
+  }
+
+  if (isEmpty) {
+    return { mode: { kind: "session-empty", sessionId: activeSessionId }, selectedWorkspaceId };
+  }
+
+  return { mode: { kind: "session-transcript", sessionId: activeSessionId }, selectedWorkspaceId };
 }

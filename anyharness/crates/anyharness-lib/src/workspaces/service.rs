@@ -76,8 +76,6 @@ impl WorkspaceService {
             let record = WorkspaceRecord {
                 id: Uuid::new_v4().to_string(),
                 kind: "worktree".into(),
-                surface_kind: source_ws.surface_kind.clone(),
-                is_internal: false,
                 path: workspace_path.clone(),
                 source_repo_root_path: main_path.to_string(),
                 source_workspace_id: Some(source_ws.id.clone()),
@@ -87,7 +85,6 @@ impl WorkspaceService {
                 original_branch: ctx.current_branch.clone(),
                 current_branch: ctx.current_branch.clone(),
                 display_name: None,
-                default_session_id: None,
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -190,8 +187,6 @@ impl WorkspaceService {
             WorkspaceRecord {
                 id: Uuid::new_v4().to_string(),
                 kind: "worktree".into(),
-                surface_kind: source_ws.surface_kind.clone(),
-                is_internal: false,
                 path: workspace_path.clone(),
                 source_repo_root_path: main_path.to_string(),
                 source_workspace_id: Some(source_ws.id.clone()),
@@ -201,7 +196,6 @@ impl WorkspaceService {
                 original_branch: ctx.current_branch.clone(),
                 current_branch: ctx.current_branch.clone(),
                 display_name: None,
-                default_session_id: None,
                 created_at: now.clone(),
                 updated_at: now,
             }
@@ -233,25 +227,6 @@ impl WorkspaceService {
         new_branch_name: &str,
         base_branch: Option<&str>,
         setup_script: Option<&str>,
-    ) -> anyhow::Result<CreateWorktreeResult> {
-        self.create_worktree_with_id(
-            source_workspace_id,
-            target_path,
-            new_branch_name,
-            base_branch,
-            setup_script,
-            None,
-        )
-    }
-
-    pub fn create_worktree_with_id(
-        &self,
-        source_workspace_id: &str,
-        target_path: &str,
-        new_branch_name: &str,
-        base_branch: Option<&str>,
-        setup_script: Option<&str>,
-        workspace_id: Option<&str>,
     ) -> anyhow::Result<CreateWorktreeResult> {
         let started = Instant::now();
         let has_setup_script = setup_script
@@ -286,7 +261,9 @@ impl WorkspaceService {
                 .ok_or_else(|| anyhow::anyhow!("local workspace has no source_workspace_id"))?;
             self.store
                 .find_by_id(parent_id)?
-                .ok_or_else(|| anyhow::anyhow!("parent repo workspace not found: {parent_id}"))?
+                .ok_or_else(|| {
+                    anyhow::anyhow!("parent repo workspace not found: {parent_id}")
+                })?
         } else if source.kind == "repo" {
             source
         } else {
@@ -312,12 +289,7 @@ impl WorkspaceService {
             anyhow::bail!("a workspace record already exists for path: {canonical_str}");
         }
 
-        resolver::create_git_worktree(
-            &effective_source.path,
-            target_path,
-            new_branch_name,
-            base_branch,
-        )?;
+        resolver::create_git_worktree(&effective_source.path, target_path, new_branch_name, base_branch)?;
 
         let context_started = Instant::now();
         let ctx = resolver::resolve_git_context(target_path)?;
@@ -337,12 +309,8 @@ impl WorkspaceService {
 
         let now = chrono::Utc::now().to_rfc3339();
         let record = WorkspaceRecord {
-            id: workspace_id
-                .map(str::to_string)
-                .unwrap_or_else(|| Uuid::new_v4().to_string()),
+            id: Uuid::new_v4().to_string(),
             kind: "worktree".into(),
-            surface_kind: effective_source.surface_kind.clone(),
-            is_internal: false,
             path: ctx.repo_root,
             source_repo_root_path: effective_source.source_repo_root_path.clone(),
             source_workspace_id: Some(effective_source.id.clone()),
@@ -352,7 +320,6 @@ impl WorkspaceService {
             original_branch: current_branch.clone(),
             current_branch,
             display_name: None,
-            default_session_id: None,
             created_at: now.clone(),
             updated_at: now,
         };
@@ -398,55 +365,6 @@ impl WorkspaceService {
             .find_by_id(id)?
             .map(|record| self.reconcile_current_branch(record))
             .transpose()
-    }
-
-    pub fn get_internal_repo_workspace(
-        &self,
-        surface_kind: &str,
-    ) -> anyhow::Result<Option<WorkspaceRecord>> {
-        self.store.find_internal_repo_by_surface_kind(surface_kind)
-    }
-
-    pub fn update_default_session_id(
-        &self,
-        workspace_id: &str,
-        default_session_id: Option<&str>,
-    ) -> anyhow::Result<WorkspaceRecord> {
-        let mut existing = self
-            .store
-            .find_by_id(workspace_id)?
-            .ok_or_else(|| anyhow::anyhow!("workspace not found: {workspace_id}"))?;
-
-        let now = chrono::Utc::now().to_rfc3339();
-        self.store
-            .update_default_session_id(workspace_id, default_session_id, &now)?;
-        existing.default_session_id = default_session_id.map(str::to_string);
-        existing.updated_at = now;
-        Ok(existing)
-    }
-
-    pub fn delete_workspace(&self, workspace_id: &str) -> anyhow::Result<()> {
-        self.store.delete_by_id(workspace_id)
-    }
-
-    pub fn register_managed_repo(
-        &self,
-        path: &str,
-        surface_kind: &str,
-        is_internal: bool,
-    ) -> anyhow::Result<WorkspaceRecord> {
-        if let Some(existing) = self.store.find_by_path_and_kind(path, "repo")? {
-            return Ok(existing);
-        }
-
-        let ctx = resolver::resolve_git_context(path)?;
-        if ctx.is_worktree {
-            anyhow::bail!("managed repo path must be a repo root, not a worktree");
-        }
-
-        let record = build_repo_workspace_record_with_metadata(&ctx, surface_kind, is_internal);
-        self.store.insert(&record)?;
-        Ok(record)
     }
 
     /// Set or clear the user-provided workspace display name.
@@ -495,12 +413,9 @@ impl WorkspaceService {
         Ok(detector::detect_project_setup(Path::new(&record.path)))
     }
 
-    pub fn list_workspaces(
-        &self,
-        surface_kind: Option<&str>,
-    ) -> anyhow::Result<Vec<WorkspaceRecord>> {
+    pub fn list_workspaces(&self) -> anyhow::Result<Vec<WorkspaceRecord>> {
         self.store
-            .list_visible(surface_kind)?
+            .list_all()?
             .into_iter()
             .map(|record| self.reconcile_current_branch(record))
             .collect()
@@ -667,14 +582,6 @@ impl WorkspaceService {
 }
 
 fn build_repo_workspace_record(ctx: &ResolvedGitContext) -> WorkspaceRecord {
-    build_repo_workspace_record_with_metadata(ctx, "code", false)
-}
-
-fn build_repo_workspace_record_with_metadata(
-    ctx: &ResolvedGitContext,
-    surface_kind: &str,
-    is_internal: bool,
-) -> WorkspaceRecord {
     let remote = ctx
         .remote_url
         .as_deref()
@@ -685,8 +592,6 @@ fn build_repo_workspace_record_with_metadata(
     WorkspaceRecord {
         id: Uuid::new_v4().to_string(),
         kind: "repo".into(),
-        surface_kind: surface_kind.to_string(),
-        is_internal,
         path: ctx.repo_root.clone(),
         source_repo_root_path: ctx.repo_root.clone(),
         source_workspace_id: None,
@@ -696,7 +601,6 @@ fn build_repo_workspace_record_with_metadata(
         original_branch: current_branch.clone(),
         current_branch,
         display_name: None,
-        default_session_id: None,
         created_at: now.clone(),
         updated_at: now,
     }
@@ -716,8 +620,6 @@ fn build_local_workspace_record(
     WorkspaceRecord {
         id: Uuid::new_v4().to_string(),
         kind: "local".into(),
-        surface_kind: source_repo.surface_kind.clone(),
-        is_internal: false,
         path: ctx.repo_root.clone(),
         source_repo_root_path: source_repo.source_repo_root_path.clone(),
         source_workspace_id: Some(source_repo.id.clone()),
@@ -727,7 +629,6 @@ fn build_local_workspace_record(
         original_branch: current_branch.clone(),
         current_branch,
         display_name: None,
-        default_session_id: None,
         created_at: now.clone(),
         updated_at: now,
     }

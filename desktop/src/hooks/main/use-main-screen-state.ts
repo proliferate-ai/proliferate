@@ -7,10 +7,10 @@ import {
   useCurrentPullRequestQuery,
   useGitStatusQuery,
 } from "@anyharness/sdk-react";
-import { useState, type Dispatch, type MouseEvent, type SetStateAction } from "react";
+import { useMemo, useState, type Dispatch, type MouseEvent, type SetStateAction } from "react";
 import { useResize } from "@/hooks/layout/use-resize";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
-import { useSelectedWorkspace } from "@/hooks/workspaces/use-selected-workspace";
+import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import {
   useWorkspaceUiStore,
@@ -18,8 +18,9 @@ import {
   WORKSPACE_SIDEBAR_MIN_WIDTH,
 } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useAppSurfaceStore } from "@/stores/ui/app-surface-store";
 import type { RightPanelMode } from "@/components/workspace/shell/right-panel/RightPanel";
+
+const EMPTY_WORKSPACES: Workspace[] = [];
 
 export interface MainScreenLayoutState {
   rightPanelMode: RightPanelMode;
@@ -44,17 +45,13 @@ export interface MainScreenLayoutState {
   onRightSeparatorDown: (event: MouseEvent) => void;
 }
 
-export type MainShell = "home" | "code" | "cowork" | "cowork-pending";
-
 export interface MainScreenDataState {
-  shell: MainShell;
-  isCoworkWorkspaceSelected: boolean;
   hasRuntimeReadyWorkspace: boolean;
   shouldKeepRuntimePanelsVisible: boolean;
   hasWorkspaceShell: boolean;
   isCloudWorkspaceSelected: boolean;
   selectedWorkspaceId: string | null;
-  selectedWorkspace: Workspace | null;
+  selectedWorkspace: Workspace | undefined;
   gitStatus: GitStatusSnapshot | undefined;
   existingPr: NonNullable<CurrentPullRequestResponse["pullRequest"]> | null;
 }
@@ -96,30 +93,28 @@ export function useMainScreenState(): MainScreenState {
 
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const pendingCoworkThread = useAppSurfaceStore((state) => state.pendingCoworkThread);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
-  const { selectedWorkspace, isCoworkWorkspaceSelected } = useSelectedWorkspace();
+  const { data: workspaceCollections } = useWorkspaces();
+  const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
-  const shell: MainShell = pendingCoworkThread
-    ? "cowork-pending"
-    : isCoworkWorkspaceSelected
-      ? "cowork"
-      : (selectedWorkspaceId || pendingWorkspaceEntry)
-        ? "code"
-        : "home";
-  const hasWorkspaceShell = shell !== "home";
-  const hasRuntimeReadyWorkspace = shell === "code" && Boolean(selectedWorkspaceId) && (
+  const hasWorkspaceShell = Boolean(selectedWorkspaceId || pendingWorkspaceEntry);
+  const hasRuntimeReadyWorkspace = Boolean(selectedWorkspaceId) && (
     selectedCloudWorkspaceId !== null
       ? selectedCloudRuntime.state?.phase === "ready"
       : true
   );
-  const shouldKeepRuntimePanelsVisible = shell === "code" && Boolean(selectedWorkspaceId) && (
+  const shouldKeepRuntimePanelsVisible = Boolean(selectedWorkspaceId) && (
     selectedCloudWorkspaceId !== null
       ? selectedCloudRuntime.state?.preserveVisibleContent === true
       : false
   );
   const { data: gitStatus } = useGitStatusQuery({ enabled: hasRuntimeReadyWorkspace });
   const { data: currentPullRequest } = useCurrentPullRequestQuery({ enabled: hasRuntimeReadyWorkspace });
+
+  const selectedWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId),
+    [selectedWorkspaceId, workspaces],
+  );
 
   return {
     layout: {
@@ -145,8 +140,6 @@ export function useMainScreenState(): MainScreenState {
       onRightSeparatorDown,
     },
     data: {
-      shell,
-      isCoworkWorkspaceSelected,
       hasRuntimeReadyWorkspace,
       shouldKeepRuntimePanelsVisible,
       hasWorkspaceShell,

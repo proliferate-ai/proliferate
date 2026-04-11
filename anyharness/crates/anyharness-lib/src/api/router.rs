@@ -10,8 +10,8 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agents, artifacts, files, git, health, hosting, model_registries, processes, provider_configs,
-    sessions, terminals, workspaces,
+    agents, files, git, health, hosting, model_registries, processes, provider_configs, sessions,
+    terminals, workspaces,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -51,10 +51,6 @@ pub fn build_router(state: AppState) -> Router {
             get(workspaces::list_workspaces).post(workspaces::create_workspace),
         )
         .route(
-            "/workspaces:cowork",
-            post(workspaces::create_cowork_workspace),
-        )
-        .route(
             "/workspaces/repos",
             post(workspaces::register_repo_workspace),
         )
@@ -84,22 +80,6 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}/session-launch",
             get(workspaces::get_workspace_session_launch_catalog),
-        )
-        .route(
-            "/workspaces/{workspace_id}/default-session:replace",
-            post(workspaces::replace_workspace_default_session),
-        )
-        .route(
-            "/workspaces/{workspace_id}/artifacts",
-            get(artifacts::list_artifacts),
-        )
-        .route(
-            "/workspaces/{workspace_id}/artifacts/{artifact_id}",
-            get(artifacts::get_artifact),
-        )
-        .route(
-            "/workspaces/{workspace_id}/artifacts/{artifact_id}/content",
-            get(artifacts::get_artifact_content),
         )
         .route(
             "/workspaces/{workspace_id}/sessions/restore",
@@ -444,8 +424,6 @@ mod tests {
                 thinking_level_id: None,
                 thinking_budget_tokens: None,
                 status: "idle".to_string(),
-                mode_locked: false,
-                permission_policy: crate::sessions::model::SessionPermissionPolicy::Interactive,
                 created_at: "2026-03-25T00:00:00Z".to_string(),
                 updated_at: "2026-03-25T00:00:00Z".to_string(),
                 last_prompt_at: None,
@@ -519,8 +497,6 @@ mod tests {
                 thinking_level_id: None,
                 thinking_budget_tokens: None,
                 status: "idle".to_string(),
-                mode_locked: false,
-                permission_policy: crate::sessions::model::SessionPermissionPolicy::Interactive,
                 created_at: "2026-03-25T00:00:00Z".to_string(),
                 updated_at: "2026-03-25T01:00:00Z".to_string(),
                 last_prompt_at: None,
