@@ -18,10 +18,10 @@ export type InstallWorkspaceMobilityArchiveRequest =
   components["schemas"]["InstallWorkspaceMobilityArchiveRequest"];
 export type InstallWorkspaceMobilityArchiveResponse =
   components["schemas"]["InstallWorkspaceMobilityArchiveResponse"];
-export type WorkspaceMobilityCleanupRequest =
-  components["schemas"]["WorkspaceMobilityCleanupRequest"];
-export type WorkspaceMobilityCleanupResponse =
-  components["schemas"]["WorkspaceMobilityCleanupResponse"];
+export type DestroyWorkspaceMobilitySourceRequest =
+  components["schemas"]["DestroyWorkspaceMobilitySourceRequest"];
+export type DestroyWorkspaceMobilitySourceResponse =
+  components["schemas"]["DestroyWorkspaceMobilitySourceResponse"];
 export type WorkspaceMobilityArchive =
   components["schemas"]["WorkspaceMobilityArchive"];
 export type WorkspaceMobilityFileEntry =

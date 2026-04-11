@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { startLatencyTimer } from "@/lib/infra/debug-latency";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceBootstrapActions } from "./use-workspace-bootstrap-actions";
@@ -10,6 +11,7 @@ export function useSelectedCloudRuntimeRehydration(
   selectedCloudRuntime: SelectedCloudRuntimeState,
 ): void {
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
   const setPendingWorkspaceEntry = useHarnessStore((state) => state.setPendingWorkspaceEntry);
   const setWorkspaceArrivalEvent = useHarnessStore((state) => state.setWorkspaceArrivalEvent);
   const { bootstrapWorkspace } = useWorkspaceBootstrapActions();
@@ -66,6 +68,7 @@ export function useSelectedCloudRuntimeRehydration(
     shouldRehydrateOnReadyRef.current = false;
     void bootstrapWorkspace({
       workspaceId,
+      logicalWorkspaceId: selectedLogicalWorkspaceId ?? workspaceId,
       runtimeUrl,
       workspaceConnection: {
         runtimeUrl: connectionInfo.runtimeUrl,
@@ -78,6 +81,7 @@ export function useSelectedCloudRuntimeRehydration(
   }, [
     bootstrapWorkspace,
     runtimeUrl,
+    selectedLogicalWorkspaceId,
     setPendingWorkspaceEntry,
     setWorkspaceArrivalEvent,
     selectedCloudRuntime.connectionInfo?.accessToken,

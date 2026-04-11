@@ -1,15 +1,19 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
+import { ExternalLink } from "@/components/ui/icons";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
 import { AUTH_ACCOUNT_LABELS } from "@/config/auth";
 import { CAPABILITY_COPY } from "@/config/capabilities";
+import { useGitHubDesktopAuthAvailability } from "@/hooks/auth/use-github-auth-availability";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
 import { useAuthActions } from "@/hooks/auth/use-auth-actions";
 import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
+import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
+import { openExternal } from "@/platform/tauri/shell";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 export function AccountPane() {
@@ -23,11 +27,15 @@ export function AccountPane() {
     signInChecking,
     error: signInError,
   } = useGitHubSignIn();
+  const { data: githubDesktopAuthAvailability } = useGitHubDesktopAuthAvailability();
   const { cloudSignInAvailable, cloudSignInChecking, cloudUnavailable } = useCloudAvailabilityState();
   const [signingOut, setSigningOut] = useState(false);
   const devAuthBypassed = isDevAuthBypassed();
   const isAuthenticated = status === "authenticated";
   const localMode = cloudUnavailable && !devAuthBypassed && !isAuthenticated;
+  const canReconnectGitHub = isAuthenticated && cloudSignInAvailable && !cloudSignInChecking;
+  const canOpenGitHubSettings = isAuthenticated && !devAuthBypassed;
+  const githubSettingsUrl = buildGitHubOAuthAppSettingsUrl(githubDesktopAuthAvailability?.clientId);
   const signInUnavailable = !cloudUnavailable
     && !cloudSignInChecking
     && !cloudSignInAvailable
@@ -121,25 +129,61 @@ export function AccountPane() {
                 : signInUnavailable
                   ? CAPABILITY_COPY.githubAuthUnavailableDescription
               : isAuthenticated
-                ? "Connected through GitHub desktop sign-in."
+                ? user?.github_login
+                  ? `Connected through GitHub desktop sign-in as @${user.github_login}. Reconnect opens GitHub's account picker. Manage access opens this app's authorization page on GitHub.`
+                  : "Connected through GitHub desktop sign-in."
                 : "Sign in with GitHub to connect your Proliferate account."
           }
         >
-          <span className={`text-sm ${isAuthenticated ? "text-primary" : "text-muted-foreground"}`}>
-            {devAuthBypassed
-              ? "Bypassed"
-              : localMode || signInUnavailable
-                ? "Unavailable"
-                : cloudSignInChecking
-                  ? "Checking…"
-                : isAuthenticated
-                  ? "Connected"
-                  : "Not connected"}
-          </span>
+          {canReconnectGitHub ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-primary">Connected</span>
+              <Button
+                variant="secondary"
+                onClick={() => void signInWithGitHub({ prompt: "select_account" })}
+                disabled={signingIn || signInChecking}
+                loading={signingIn}
+              >
+                {signingIn
+                  ? AUTH_ACCOUNT_LABELS.reconnecting
+                  : AUTH_ACCOUNT_LABELS.reconnect}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => { void openExternal(githubSettingsUrl); }}
+              >
+                {AUTH_ACCOUNT_LABELS.manageAccess}
+                <ExternalLink className="size-3" />
+              </Button>
+            </div>
+          ) : canOpenGitHubSettings ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-primary">Connected</span>
+              <Button
+                variant="ghost"
+                onClick={() => { void openExternal(githubSettingsUrl); }}
+              >
+                {AUTH_ACCOUNT_LABELS.manageAccess}
+                <ExternalLink className="size-3" />
+              </Button>
+            </div>
+          ) : (
+            <span className={`text-sm ${isAuthenticated ? "text-primary" : "text-muted-foreground"}`}>
+              {devAuthBypassed
+                ? "Bypassed"
+                : localMode || signInUnavailable
+                  ? "Unavailable"
+                  : cloudSignInChecking
+                    ? "Checking…"
+                  : isAuthenticated
+                    ? "Connected"
+                    : "Not connected"}
+            </span>
+          )}
         </SettingsCardRow>
       </SettingsCard>
 
-      {signInError && !isAuthenticated && (
+      {signInError && (
         <p className="text-sm text-destructive">{signInError}</p>
       )}
     </section>

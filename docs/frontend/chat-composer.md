@@ -19,12 +19,14 @@ Three layers, top to bottom:
 
 ```text
 ChatView
-└── ChatComposerDock                        (backdrop + scrim + padded max-width column + inset top-slot region)
+└── ChatComposerDock                        (backdrop + scrim + padded max-width column + inset top-slot region + inset bottom-slot region)
     ├── topSlot: at most one of
     │     ├── ConnectedApprovalCard         (pending tool approval)
     │     ├── TodoTrackerPanel              (Codex/Gemini structured plan)
     │     ├── WorkspaceArrivalAttachedPanel (workspace arrival/setup/pending/cloud-status)
     │     └── CloudRuntimeAttachedPanel     (cloud runtime connecting/resuming/error)
+    ├── bottomSlot: at most one of
+    │     └── WorkspaceMobilityActionBar    (move to cloud / bring back local)
     └── ChatInput
         └── ChatComposerSurface
             └── form: Textarea + ModelSelector + SessionConfigControls + ChatComposerActions
@@ -34,6 +36,7 @@ Non-negotiable:
 
 - **`ChatComposerDock` owns the dock shell.** Background, scrim, padding, max-width column, and the inset `px-5` top-slot wrapper all live in `ChatComposerDock.tsx`. The production app (`ChatView`) and the dev playground (`ChatPlaygroundPage`) both render `ChatComposerDock` directly. Do not reconstruct this backdrop in a third place — if you need it somewhere new, reuse the dock.
 - **`ChatInput` is the composer surface only.** It does not own any of the outer wrapping. It takes no `topSlot` prop. Everything above the composer is the dock's responsibility.
+- **`bottomSlot` is a separate dock region.** It renders below the composer as its own inset card and is not part of `useComposerTopSlot`.
 - **The composer always keeps its full rounded shape.** There is no `flatTop` mode. Top-slot panels are a narrower, inset card above the composer — they are not fused to the composer surface.
 
 ## 2. Top-slot precedence
@@ -48,6 +51,15 @@ The slot holds **at most one** inhabitant at a time. The precedence order is com
 If you need to introduce a fifth inhabitant, add it to the precedence chain in `use-composer-top-slot.tsx` — do not compute it inline in `ChatView` and do not introduce a parallel arbiter elsewhere.
 
 **Stacking is explicitly deferred.** When a genuine multi-inhabitant scenario arises (e.g. an `execute` approval while a Codex todo tracker is also active), upgrade `useComposerTopSlot` to return `ReactNode[]` and update `ChatComposerDock` to render them stacked. Until then, do not prep for stacking with `first:rounded-t-2xl` tricks or similar — see §6.
+
+## 2.1 Bottom-slot semantics
+
+`ChatComposerDock.bottomSlot` is a separate, single-inhabitant region below the composer.
+
+- It is for persistent workspace-level actions that belong near the composer but are not part of the top-slot precedence chain.
+- It uses the same inset rhythm as the top slot (`px-5`) and remains visually separate from the rounded composer shell.
+- It is not computed by `useComposerTopSlot`.
+- If another feature needs this region later, extend this contract here instead of building a parallel dock wrapper.
 
 ## 3. The three composer-area components
 

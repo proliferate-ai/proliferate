@@ -1,4 +1,4 @@
-import type { GitStatusSnapshot, Workspace } from "@anyharness/sdk";
+import type { GitStatusSnapshot } from "@anyharness/sdk";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -7,19 +7,14 @@ import {
 } from "@/lib/domain/sessions/activity";
 import {
   buildSidebarGroupStates,
-  buildSidebarWorkspaceEntries,
   type SidebarGroupState,
 } from "@/lib/domain/workspaces/sidebar";
 import { getEffectiveSessionTitle } from "@/lib/domain/sessions/title";
-import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
-import { isStandardWorkspace } from "@/lib/domain/workspaces/usability";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
 import { useWorkspaceBranchRenameMonitor } from "@/hooks/workspaces/use-workspace-branch-rename-monitor";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
-
-const EMPTY_LOCAL_WORKSPACES: Workspace[] = [];
-const EMPTY_CLOUD_WORKSPACES: CloudWorkspaceSummary[] = [];
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 
 interface UseWorkspaceSidebarStateArgs {
   showArchived: boolean;
@@ -40,6 +35,7 @@ export function useWorkspaceSidebarState({
   showArchived,
 }: UseWorkspaceSidebarStateArgs): WorkspaceSidebarState {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
   const workspaceActivities = useHarnessStore(useShallow((state) =>
     collectWorkspaceSessionViewStates(state.sessionSlots)
   ));
@@ -55,35 +51,24 @@ export function useWorkspaceSidebarState({
     (state) => state.workspaceLastInteracted,
   );
 
-  const { data: workspaceCollections, isLoading: workspacesLoading } = useWorkspaces();
+  const { logicalWorkspaces, isLoading: workspacesLoading } = useLogicalWorkspaces();
   const { data: gitStatus } = useWorkspaceBranchRenameMonitor();
-
-  const localWorkspaces = useMemo(
-    () => (workspaceCollections?.localWorkspaces ?? EMPTY_LOCAL_WORKSPACES)
-      .filter(isStandardWorkspace),
-    [workspaceCollections?.localWorkspaces],
-  );
-  const cloudWorkspaces = workspaceCollections?.cloudWorkspaces ?? EMPTY_CLOUD_WORKSPACES;
 
   const archivedSet = useMemo(
     () => new Set(archivedWorkspaceIds),
     [archivedWorkspaceIds],
   );
 
-  const sidebarEntries = useMemo(
-    () => buildSidebarWorkspaceEntries(localWorkspaces, cloudWorkspaces),
-    [cloudWorkspaces, localWorkspaces],
-  );
-
   const archivedCount = useMemo(
-    () => sidebarEntries.filter((entry) => archivedSet.has(entry.id)).length,
-    [archivedSet, sidebarEntries],
+    () => logicalWorkspaces.filter((entry) => archivedSet.has(entry.id)).length,
+    [archivedSet, logicalWorkspaces],
   );
 
   const groups = useMemo(() => buildSidebarGroupStates({
-    sidebarEntries,
+    logicalWorkspaces,
     showArchived,
     archivedSet,
+    selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     workspaceActivities,
     gitStatus,
@@ -95,9 +80,10 @@ export function useWorkspaceSidebarState({
     archivedSet,
     gitStatus,
     lastViewedAt,
+    logicalWorkspaces,
+    selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     showArchived,
-    sidebarEntries,
     workspaceActivities,
     workspaceLastInteracted,
   ]);
@@ -110,6 +96,6 @@ export function useWorkspaceSidebarState({
     gitStatus,
     transcriptTitle: activeSessionTitle,
     isEmpty: groups.length === 0,
-    isLoading: workspacesLoading || !workspaceCollections,
+    isLoading: workspacesLoading,
   };
 }

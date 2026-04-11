@@ -53,6 +53,25 @@ impl RepoRootService {
             Err(error) => Err(error),
         }
     }
+
+    pub fn update_default_branch(
+        &self,
+        repo_root_id: &str,
+        default_branch: Option<&str>,
+    ) -> anyhow::Result<Option<RepoRootRecord>> {
+        let existing = self.store.find_by_id(repo_root_id)?;
+        let Some(existing) = existing else {
+            return Ok(None);
+        };
+        let updated_at = chrono::Utc::now().to_rfc3339();
+        self.store
+            .update_default_branch(repo_root_id, default_branch, &updated_at)?;
+        Ok(Some(RepoRootRecord {
+            default_branch: default_branch.map(str::to_string),
+            updated_at,
+            ..existing
+        }))
+    }
 }
 
 fn is_unique_violation(error: &anyhow::Error) -> bool {

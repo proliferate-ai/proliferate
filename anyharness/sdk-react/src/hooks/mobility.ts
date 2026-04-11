@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  DestroyWorkspaceMobilitySourceRequest,
   ExportWorkspaceMobilityArchiveRequest,
   UpdateWorkspaceMobilityRuntimeStateRequest,
   WorkspaceMobilityArchive,
-  WorkspaceMobilityCleanupRequest,
 } from "@anyharness/sdk";
 import {
   useAnyHarnessWorkspaceContext,
@@ -52,21 +52,31 @@ export function useUpdateWorkspaceMobilityRuntimeStateMutation(
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
-    mutationFn: async (input: UpdateWorkspaceMobilityRuntimeStateRequest) => {
-      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+    mutationFn: async ({
+      workspaceId: targetWorkspaceId,
+      input,
+    }: {
+      workspaceId?: string | null;
+      input: UpdateWorkspaceMobilityRuntimeStateRequest;
+    }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(
+        workspace,
+        targetWorkspaceId ?? workspaceId,
+      );
       const client = getAnyHarnessClient(resolved.connection);
       return client.mobility.updateRuntimeState(
         resolved.connection.anyharnessWorkspaceId,
         input,
       );
     },
-    onSuccess: async () => {
+    onSuccess: async (_, variables) => {
+      const targetWorkspaceId = variables.workspaceId ?? workspaceId;
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceMobilityPreflightKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessWorkspaceMobilityPreflightKey(runtimeUrl, targetWorkspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceMobilityRuntimeStateKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessWorkspaceMobilityRuntimeStateKey(runtimeUrl, targetWorkspaceId),
         }),
       ]);
     },
@@ -80,8 +90,17 @@ export function useExportWorkspaceMobilityArchiveMutation(
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
-    mutationFn: async (input?: ExportWorkspaceMobilityArchiveRequest) => {
-      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+    mutationFn: async ({
+      workspaceId: targetWorkspaceId,
+      input,
+    }: {
+      workspaceId?: string | null;
+      input?: ExportWorkspaceMobilityArchiveRequest;
+    } = {}) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(
+        workspace,
+        targetWorkspaceId ?? workspaceId,
+      );
       const client = getAnyHarnessClient(resolved.connection);
       return client.mobility.exportArchive(
         resolved.connection.anyharnessWorkspaceId,
@@ -100,31 +119,41 @@ export function useInstallWorkspaceMobilityArchiveMutation(
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
-    mutationFn: async (archive: WorkspaceMobilityArchive) => {
-      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+    mutationFn: async ({
+      workspaceId: targetWorkspaceId,
+      archive,
+    }: {
+      workspaceId?: string | null;
+      archive: WorkspaceMobilityArchive;
+    }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(
+        workspace,
+        targetWorkspaceId ?? workspaceId,
+      );
       const client = getAnyHarnessClient(resolved.connection);
       return client.mobility.installArchive(
         resolved.connection.anyharnessWorkspaceId,
         archive,
       );
     },
-    onSuccess: async () => {
+    onSuccess: async (_, variables) => {
+      const targetWorkspaceId = variables.workspaceId ?? workspaceId;
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessSessionsKey(runtimeUrl, targetWorkspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceMobilityPreflightKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessWorkspaceMobilityPreflightKey(runtimeUrl, targetWorkspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceMobilityRuntimeStateKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessWorkspaceMobilityRuntimeStateKey(runtimeUrl, targetWorkspaceId),
         }),
       ]);
     },
   });
 }
 
-export function useCleanupWorkspaceMobilityMutation(
+export function useDestroyWorkspaceMobilitySourceMutation(
   options?: { workspaceId?: string | null },
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
@@ -133,24 +162,34 @@ export function useCleanupWorkspaceMobilityMutation(
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
-    mutationFn: async (input: WorkspaceMobilityCleanupRequest) => {
-      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+    mutationFn: async ({
+      workspaceId: targetWorkspaceId,
+      input,
+    }: {
+      workspaceId?: string | null;
+      input?: DestroyWorkspaceMobilitySourceRequest;
+    }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(
+        workspace,
+        targetWorkspaceId ?? workspaceId,
+      );
       const client = getAnyHarnessClient(resolved.connection);
-      return client.mobility.cleanup(
+      return client.mobility.destroySource(
         resolved.connection.anyharnessWorkspaceId,
         input,
       );
     },
-    onSuccess: async () => {
+    onSuccess: async (_, variables) => {
+      const targetWorkspaceId = variables.workspaceId ?? workspaceId;
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessSessionsKey(runtimeUrl, targetWorkspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceMobilityPreflightKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessWorkspaceMobilityPreflightKey(runtimeUrl, targetWorkspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceMobilityRuntimeStateKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessWorkspaceMobilityRuntimeStateKey(runtimeUrl, targetWorkspaceId),
         }),
       ]);
     },

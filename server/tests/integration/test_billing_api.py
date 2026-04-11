@@ -354,7 +354,7 @@ class TestBillingApi:
         monkeypatch.setattr(
             cloud_service,
             "schedule_workspace_provision",
-            lambda _workspace_id: None,
+            lambda _workspace_id, **_kwargs: None,
         )
         monkeypatch.setattr(settings, "cloud_billing_mode", "enforce")
         monkeypatch.setattr(settings, "cloud_free_sandbox_hours", 1.0)

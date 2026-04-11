@@ -38,6 +38,16 @@ interface DesktopTokenResponse {
 
 interface OAuthAvailabilityResponse {
   enabled: boolean
+  client_id?: string | null
+}
+
+export interface GitHubDesktopAuthAvailability {
+  enabled: boolean
+  clientId: string | null
+}
+
+export interface GitHubDesktopSignInOptions {
+  prompt?: "select_account"
 }
 
 export interface DesktopAuthCallback {
@@ -54,6 +64,7 @@ export const DESKTOP_AUTH_REDIRECT_URI = `${DESKTOP_REDIRECT_SCHEME}://${DESKTOP
 export const PENDING_AUTH_MAX_AGE_MS = 10 * 60 * 1000
 const CLOUD_UNAVAILABLE_MESSAGE =
   "Could not reach the Proliferate cloud. Local workspaces still work; sign-in requires the control plane."
+const GITHUB_APP_SETTINGS_FALLBACK_URL = "https://github.com/settings/applications"
 
 class AuthRequestError extends Error {
   status: number
@@ -240,7 +251,14 @@ export function sessionUser(session: StoredAuthSession): AuthUser {
   }
 }
 
-export async function isGitHubDesktopAuthAvailable(): Promise<boolean> {
+export function buildGitHubOAuthAppSettingsUrl(clientId?: string | null): string {
+  if (!clientId) {
+    return GITHUB_APP_SETTINGS_FALLBACK_URL
+  }
+  return `https://github.com/settings/connections/applications/${encodeURIComponent(clientId)}`
+}
+
+export async function getGitHubDesktopAuthAvailability(): Promise<GitHubDesktopAuthAvailability> {
   const startedAt = startStartupTimer()
   logStartupDebug("auth.github_desktop_availability.start")
 
@@ -260,11 +278,16 @@ export async function isGitHubDesktopAuthAvailable(): Promise<boolean> {
     }
 
     const payload = (await response.json()) as OAuthAvailabilityResponse
+    const availability = {
+      enabled: payload.enabled,
+      clientId: payload.client_id ?? null,
+    } satisfies GitHubDesktopAuthAvailability
     logStartupDebug("auth.github_desktop_availability.completed", {
       elapsedMs: elapsedStartupMs(startedAt),
-      enabled: payload.enabled,
+      enabled: availability.enabled,
+      hasClientId: availability.clientId !== null,
     })
-    return payload.enabled
+    return availability
   } catch (error) {
     logStartupDebug("auth.github_desktop_availability.failed", {
       elapsedMs: elapsedStartupMs(startedAt),
@@ -274,10 +297,16 @@ export async function isGitHubDesktopAuthAvailable(): Promise<boolean> {
   }
 }
 
+export async function isGitHubDesktopAuthAvailable(): Promise<boolean> {
+  const availability = await getGitHubDesktopAuthAvailability()
+  return availability.enabled
+}
+
 export async function beginGitHubDesktopSignIn(
   state: string,
   codeVerifier: string,
   redirectUri = DESKTOP_AUTH_REDIRECT_URI,
+  options?: GitHubDesktopSignInOptions,
 ): Promise<void> {
   const codeChallenge = await sha256Base64Url(codeVerifier)
   const authorizeUrl = new URL(buildUrl("/auth/desktop/github/authorize"))
@@ -285,6 +314,9 @@ export async function beginGitHubDesktopSignIn(
   authorizeUrl.searchParams.set("code_challenge", codeChallenge)
   authorizeUrl.searchParams.set("code_challenge_method", "S256")
   authorizeUrl.searchParams.set("redirect_uri", redirectUri)
+  if (options?.prompt) {
+    authorizeUrl.searchParams.set("prompt", options.prompt)
+  }
 
   await openAuthSessionUrl(authorizeUrl.toString())
 }

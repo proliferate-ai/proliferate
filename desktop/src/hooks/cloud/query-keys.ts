@@ -22,6 +22,18 @@ export function cloudRepoConfigsKey() {
   return [...cloudRootKey(), "repo-configs"] as const;
 }
 
+export function cloudMobilityRootKey() {
+  return [...cloudRootKey(), "mobility"] as const;
+}
+
+export function cloudMobilityWorkspacesKey() {
+  return [...cloudMobilityRootKey(), "workspaces"] as const;
+}
+
+export function cloudMobilityWorkspaceKey(mobilityWorkspaceId: string) {
+  return [...cloudMobilityWorkspacesKey(), mobilityWorkspaceId] as const;
+}
+
 export function cloudRepoConfigKey(gitOwner: string, gitRepoName: string) {
   return [...cloudRepoConfigsKey(), gitOwner, gitRepoName] as const;
 }

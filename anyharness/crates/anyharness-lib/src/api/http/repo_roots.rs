@@ -1,11 +1,16 @@
-use anyharness_contract::v1::{RepoRoot, RepoRootKind};
+use anyharness_contract::v1::{
+    PrepareRepoRootMobilityDestinationRequest, PrepareRepoRootMobilityDestinationResponse,
+    RepoRoot, RepoRootKind,
+};
 use axum::{
     extract::{Path, State},
     Json,
 };
 
+use super::access::map_access_error;
 use super::blocking::run_blocking;
 use super::error::ApiError;
+use super::workspaces::workspace_to_contract;
 use crate::app::AppState;
 use crate::repo_roots::model::RepoRootRecord;
 
@@ -51,6 +56,68 @@ pub async fn get_repo_root(
     .map_err(|error| ApiError::internal(error.to_string()))?
     .ok_or_else(|| ApiError::not_found("Repo root not found", "REPO_ROOT_NOT_FOUND"))?;
     Ok(Json(repo_root_to_contract(repo_root)))
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/repo-roots/{repo_root_id}/mobility/prepare-destination",
+    params(("repo_root_id" = String, Path, description = "Repo root ID")),
+    request_body = PrepareRepoRootMobilityDestinationRequest,
+    responses(
+        (status = 200, description = "Prepared repo root mobility destination", body = PrepareRepoRootMobilityDestinationResponse),
+        (status = 400, description = "Invalid request", body = anyharness_contract::v1::ProblemDetails),
+        (status = 404, description = "Repo root not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "repo-roots"
+)]
+pub async fn prepare_repo_root_mobility_destination(
+    State(state): State<AppState>,
+    Path(repo_root_id): Path<String>,
+    Json(req): Json<PrepareRepoRootMobilityDestinationRequest>,
+) -> Result<Json<PrepareRepoRootMobilityDestinationResponse>, ApiError> {
+    state
+        .workspace_access_gate
+        .assert_can_prepare_mobility_destination_for_repo_root(&repo_root_id)
+        .map_err(map_access_error)?;
+
+    let mobility_service = state.mobility_service.clone();
+    let requested_branch = req.requested_branch;
+    let requested_base_sha = req.requested_base_sha;
+    let preferred_workspace_name = req.preferred_workspace_name;
+
+    let record = mobility_service
+        .prepare_repo_root_destination(
+            &repo_root_id,
+            &requested_branch,
+            &requested_base_sha,
+            preferred_workspace_name.as_deref(),
+        )
+        .await
+        .map_err(|error| match error {
+            crate::mobility::service::MobilityError::WorkspaceNotFound(_)
+            | crate::mobility::service::MobilityError::Invalid(_) => {
+                ApiError::bad_request(error.to_string(), "MOBILITY_DESTINATION_PREPARE_FAILED")
+            }
+            crate::mobility::service::MobilityError::NotGitWorkspace(_) => {
+                ApiError::bad_request(error.to_string(), "MOBILITY_DESTINATION_PREPARE_FAILED")
+            }
+            crate::mobility::service::MobilityError::BaseCommitMismatch { .. }
+            | crate::mobility::service::MobilityError::SessionAlreadyExists(_)
+            | crate::mobility::service::MobilityError::SizeLimitExceeded(_) => {
+                ApiError::bad_request(error.to_string(), "MOBILITY_DESTINATION_PREPARE_FAILED")
+            }
+            crate::mobility::service::MobilityError::Internal(inner) => {
+                if inner.to_string().contains("repo root not found") {
+                    ApiError::not_found("Repo root not found", "REPO_ROOT_NOT_FOUND")
+                } else {
+                    ApiError::bad_request(inner.to_string(), "MOBILITY_DESTINATION_PREPARE_FAILED")
+                }
+            }
+        })?;
+
+    Ok(Json(PrepareRepoRootMobilityDestinationResponse {
+        workspace: workspace_to_contract(&state, record).await?,
+    }))
 }
 
 fn repo_root_to_contract(record: RepoRootRecord) -> RepoRoot {

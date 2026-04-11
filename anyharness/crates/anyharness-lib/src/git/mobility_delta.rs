@@ -91,7 +91,10 @@ struct WorkspaceDeltaPaths {
     deleted_paths: BTreeSet<String>,
 }
 
-fn collect_delta_paths(repo_root: &Path, exclude_paths: &[String]) -> anyhow::Result<WorkspaceDeltaPaths> {
+fn collect_delta_paths(
+    repo_root: &Path,
+    exclude_paths: &[String],
+) -> anyhow::Result<WorkspaceDeltaPaths> {
     let excludes = normalize_excludes(exclude_paths);
     let diff_output = run_git_ok(
         repo_root,

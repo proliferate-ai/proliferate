@@ -32,6 +32,7 @@ SERVER_ENV_SOURCE = set -a; \
         stage-sidecar \
         prod-service prod-taskdef prod-tasks prod-task prod-logs prod-secret-keys \
         prod-db-url prod-sql prod-psql prod-rds \
+        db-migrate-up db-migrate-down \
         all clean
 
 # --- Dev (builds SDK, starts runtime + desktop together) ---
@@ -215,6 +216,14 @@ endif
 
 server-migrate: server-db-ready
 	cd server && .venv/bin/alembic upgrade head
+
+db-migrate-up: server-db-ready
+	@$(SERVER_ENV_SOURCE) \
+	cd server && .venv/bin/alembic upgrade head
+
+db-migrate-down: server-db-ready
+	@$(SERVER_ENV_SOURCE) \
+	cd server && .venv/bin/alembic downgrade base
 
 dev-server: server-migrate
 	cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port 8000

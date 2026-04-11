@@ -262,12 +262,14 @@ class TestDesktopGitHubBrowserFlow:
             assert scope == ["repo", "user", "user:email"]
             assert code_challenge is None
             assert code_challenge_method is None
-            assert extras_params is None
             assert state is not None
-            return (
+            url = (
                 "https://github.com/login/oauth/authorize"
                 f"?state={state}&redirect_uri={redirect_uri}"
             )
+            if extras_params:
+                url += "".join(f"&{key}={value}" for key, value in extras_params.items())
+            return url
 
         async def fake_get_access_token(code: str, redirect_uri: str) -> dict[str, object]:
             assert code == "github-code"
@@ -304,7 +306,19 @@ class TestDesktopGitHubBrowserFlow:
         monkeypatch.setattr(settings, "github_oauth_client_secret", "")
         resp = await client.get("/auth/desktop/github/availability")
         assert resp.status_code == 200
-        assert resp.json() == {"enabled": False}
+        assert resp.json() == {"enabled": False, "client_id": None}
+
+    @pytest.mark.asyncio
+    async def test_github_availability_includes_client_id_when_enabled(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "github_oauth_client_id", "github-client-id")
+        monkeypatch.setattr(settings, "github_oauth_client_secret", "github-client-secret")
+        resp = await client.get("/auth/desktop/github/availability")
+        assert resp.status_code == 200
+        assert resp.json() == {"enabled": True, "client_id": "github-client-id"}
 
     @pytest.mark.asyncio
     async def test_github_browser_flow_stages_and_exchanges_desktop_session(
@@ -364,6 +378,30 @@ class TestDesktopGitHubBrowserFlow:
             headers={"Authorization": f"Bearer {token_data['access_token']}"},
         )
         assert protected.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_github_browser_flow_supports_select_account_prompt(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        verifier, challenge = _make_pkce_pair()
+        self._enable_github(monkeypatch, "desktop-github@example.com")
+
+        authorize = await client.get(
+            "/auth/desktop/github/authorize",
+            params={
+                "state": "desktop-github-state",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+                "redirect_uri": "proliferate://auth/callback",
+                "prompt": "select_account",
+            },
+            follow_redirects=False,
+        )
+        assert authorize.status_code == 302
+        query = parse_qs(urlparse(authorize.headers["location"]).query)
+        assert query["prompt"] == ["select_account"]
 
     @pytest.mark.asyncio
     async def test_github_browser_flow_associates_existing_user(

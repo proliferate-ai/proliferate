@@ -1,11 +1,11 @@
 import type {
+  DestroyWorkspaceMobilitySourceRequest,
+  DestroyWorkspaceMobilitySourceResponse,
   ExportWorkspaceMobilityArchiveRequest,
   InstallWorkspaceMobilityArchiveRequest,
   InstallWorkspaceMobilityArchiveResponse,
   UpdateWorkspaceMobilityRuntimeStateRequest,
   WorkspaceMobilityArchive,
-  WorkspaceMobilityCleanupRequest,
-  WorkspaceMobilityCleanupResponse,
   WorkspaceMobilityPreflightResponse,
   WorkspaceMobilityRuntimeState,
 } from "../types/mobility.js";
@@ -62,13 +62,13 @@ export class MobilityClient {
     );
   }
 
-  async cleanup(
+  async destroySource(
     workspaceId: string,
-    input: WorkspaceMobilityCleanupRequest,
+    input: DestroyWorkspaceMobilitySourceRequest = {},
     options?: AnyHarnessRequestOptions,
-  ): Promise<WorkspaceMobilityCleanupResponse> {
-    return this.transport.post<WorkspaceMobilityCleanupResponse>(
-      `/v1/workspaces/${encodeURIComponent(workspaceId)}/mobility/cleanup`,
+  ): Promise<DestroyWorkspaceMobilitySourceResponse> {
+    return this.transport.post<DestroyWorkspaceMobilitySourceResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/mobility/destroy-source`,
       input,
       options,
     );

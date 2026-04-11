@@ -13,7 +13,7 @@ export function useCloudAvailabilityState() {
   } = useGitHubDesktopAuthAvailability();
   const cloudUnavailable = !cloudEnabled;
   const cloudSignInChecking = cloudEnabled && githubDesktopAuthAvailabilityPending;
-  const cloudSignInAvailable = cloudEnabled && githubDesktopAuthAvailable === true;
+  const cloudSignInAvailable = cloudEnabled && githubDesktopAuthAvailable?.enabled === true;
   const cloudAuthUnavailable = cloudEnabled && !cloudSignInChecking && !cloudSignInAvailable;
   const cloudActive = cloudEnabled && authStatus === "authenticated";
   const cloudRequiresSignIn = cloudSignInAvailable && authStatus === "anonymous";
@@ -22,7 +22,7 @@ export function useCloudAvailabilityState() {
     logStartupDebug("cloud.availability.derived_state", {
       authStatus,
       cloudEnabled,
-      githubDesktopAuthAvailable,
+      githubDesktopAuthAvailable: githubDesktopAuthAvailable?.enabled ?? null,
       githubDesktopAuthAvailabilityPending,
       cloudUnavailable,
       cloudSignInChecking,

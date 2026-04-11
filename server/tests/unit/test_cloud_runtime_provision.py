@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
@@ -297,6 +298,7 @@ def _make_provision_input(*, codex_enabled: bool) -> CloudProvisionInput:
             claude=ClaudeProvisionCredential(api_key="anthropic-key"),
             codex=CodexProvisionCredential(auth_json="{}") if codex_enabled else None,
         ),
+        repo_env_vars={},
     )
 
 
@@ -405,6 +407,125 @@ class TestPrepareRuntimeTemplate:
         await runtime_provision._prepare_runtime_template(tracker, ctx, provider, connected)
 
         assert calls == ["check_binary", "stage_binary", "check_node"]
+
+
+class TestCheckBinaryPreinstalled:
+    @pytest.mark.asyncio
+    async def test_returns_false_when_template_binary_missing(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        binary_path = tmp_path / "anyharness"
+        binary_path.write_bytes(b"current-runtime")
+
+        calls: list[str] = []
+
+        async def _run_sandbox_command_logged(*args, **kwargs):
+            calls.append(kwargs["label"])
+            return SimpleNamespace(exit_code=1, stdout="", stderr="")
+
+        monkeypatch.setattr(
+            runtime_bootstrap,
+            "resolve_local_runtime_binary_path",
+            lambda: binary_path,
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap,
+            "run_sandbox_command_logged",
+            _run_sandbox_command_logged,
+        )
+
+        result = await runtime_bootstrap.check_binary_preinstalled(
+            SimpleNamespace(),
+            object(),
+            workspace_id=uuid.uuid4(),
+            runtime_context=SimpleNamespace(runtime_binary_path="/home/user/anyharness"),
+        )
+
+        assert result is False
+        assert calls == ["check_runtime_binary"]
+
+    @pytest.mark.asyncio
+    async def test_returns_true_when_template_binary_hash_matches(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        binary_path = tmp_path / "anyharness"
+        binary_path.write_bytes(b"current-runtime")
+        binary_hash = hashlib.sha256(binary_path.read_bytes()).hexdigest()
+
+        calls: list[str] = []
+
+        async def _run_sandbox_command_logged(*args, **kwargs):
+            calls.append(kwargs["label"])
+            if kwargs["label"] == "check_runtime_binary":
+                return SimpleNamespace(exit_code=0, stdout="", stderr="")
+            if kwargs["label"] == "check_runtime_binary_sha256":
+                return SimpleNamespace(exit_code=0, stdout=f"{binary_hash}\n", stderr="")
+            raise AssertionError(f"unexpected label: {kwargs['label']}")
+
+        monkeypatch.setattr(
+            runtime_bootstrap,
+            "resolve_local_runtime_binary_path",
+            lambda: binary_path,
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap,
+            "run_sandbox_command_logged",
+            _run_sandbox_command_logged,
+        )
+
+        result = await runtime_bootstrap.check_binary_preinstalled(
+            SimpleNamespace(),
+            object(),
+            workspace_id=uuid.uuid4(),
+            runtime_context=SimpleNamespace(runtime_binary_path="/home/user/anyharness"),
+        )
+
+        assert result is True
+        assert calls == ["check_runtime_binary", "check_runtime_binary_sha256"]
+
+    @pytest.mark.asyncio
+    async def test_returns_false_when_template_binary_hash_differs(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        binary_path = tmp_path / "anyharness"
+        binary_path.write_bytes(b"current-runtime")
+
+        calls: list[str] = []
+
+        async def _run_sandbox_command_logged(*args, **kwargs):
+            calls.append(kwargs["label"])
+            if kwargs["label"] == "check_runtime_binary":
+                return SimpleNamespace(exit_code=0, stdout="", stderr="")
+            if kwargs["label"] == "check_runtime_binary_sha256":
+                return SimpleNamespace(exit_code=0, stdout="deadbeef\n", stderr="")
+            raise AssertionError(f"unexpected label: {kwargs['label']}")
+
+        monkeypatch.setattr(
+            runtime_bootstrap,
+            "resolve_local_runtime_binary_path",
+            lambda: binary_path,
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap,
+            "run_sandbox_command_logged",
+            _run_sandbox_command_logged,
+        )
+
+        result = await runtime_bootstrap.check_binary_preinstalled(
+            SimpleNamespace(),
+            object(),
+            workspace_id=uuid.uuid4(),
+            runtime_context=SimpleNamespace(runtime_binary_path="/home/user/anyharness"),
+        )
+
+        assert result is False
+        assert calls == ["check_runtime_binary", "check_runtime_binary_sha256"]
 
 
 class TestBuildRuntimeLaunchScript:
@@ -551,7 +672,7 @@ class TestProvisionWorkspaceGitSetup:
         workspace_id = uuid.uuid4()
         errors: list[str] = []
 
-        async def _load_provision_input(_workspace_id):
+        async def _load_provision_input(_workspace_id, *, requested_base_sha=None):
             raise CloudApiError(
                 "git_identity_required",
                 "A usable email address is required to configure cloud git commits.",
@@ -615,7 +736,7 @@ class TestProvisionWorkspaceGitSetup:
         async def _noop_status(*args, **kwargs) -> None:
             return None
 
-        async def _load_provision_input(_workspace_id):
+        async def _load_provision_input(_workspace_id, *, requested_base_sha=None):
             return ctx
 
         async def _create_and_connect_sandbox(*args, **kwargs):
@@ -645,6 +766,12 @@ class TestProvisionWorkspaceGitSetup:
 
         async def _finalize_workspace_provision_for_ids(*args, **kwargs) -> None:
             calls.append("finalize_workspace")
+
+        async def _load_cloud_workspace_by_id(*args, **kwargs):
+            return None
+
+        async def _apply_workspace_repo_config_after_provision(*args, **kwargs) -> None:
+            return None
 
         monkeypatch.setattr(runtime_provision, "_load_provision_input", _load_provision_input)
         monkeypatch.setattr(runtime_provision, "get_configured_sandbox_provider", lambda: provider)
@@ -677,6 +804,16 @@ class TestProvisionWorkspaceGitSetup:
             runtime_provision,
             "finalize_workspace_provision_for_ids",
             _finalize_workspace_provision_for_ids,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "load_cloud_workspace_by_id",
+            _load_cloud_workspace_by_id,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "apply_workspace_repo_config_after_provision",
+            _apply_workspace_repo_config_after_provision,
         )
         monkeypatch.setattr(runtime_provision, "log_cloud_event", lambda *args, **kwargs: None)
         monkeypatch.setattr(

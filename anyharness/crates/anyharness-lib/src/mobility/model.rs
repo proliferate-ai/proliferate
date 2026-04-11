@@ -48,6 +48,14 @@ pub struct ImportedWorkspaceArchiveSummary {
 }
 
 #[derive(Debug, Clone)]
+pub struct DestroyedWorkspaceSourceSummary {
+    pub workspace_id: String,
+    pub deleted_session_ids: Vec<String>,
+    pub closed_terminal_ids: Vec<String>,
+    pub source_destroyed: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct MobilityBlocker {
     pub code: String,
     pub message: String,

@@ -373,7 +373,9 @@ impl SessionRuntime {
     ) -> Result<SessionRecord, EnsureLiveSessionError> {
         self.access_gate
             .assert_can_start_live_session(session_id)
-            .map_err(|error| EnsureLiveSessionError::Internal(anyhow::anyhow!(error.to_string())))?;
+            .map_err(|error| {
+                EnsureLiveSessionError::Internal(anyhow::anyhow!(error.to_string()))
+            })?;
         let record = self
             .get_session_or_not_found(session_id)
             .map_err(|error| match error {
@@ -433,7 +435,9 @@ impl SessionRuntime {
     > {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
-            .map_err(|error| SetSessionConfigOptionError::Internal(anyhow::anyhow!(error.to_string())))?;
+            .map_err(|error| {
+                SetSessionConfigOptionError::Internal(anyhow::anyhow!(error.to_string()))
+            })?;
         let record = self
             .get_session_or_not_found(session_id)
             .map_err(|error| match error {
@@ -632,7 +636,9 @@ impl SessionRuntime {
     ) -> Result<SessionRecord, PendingPromptMutationError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
-            .map_err(|error| PendingPromptMutationError::Internal(anyhow::anyhow!(error.to_string())))?;
+            .map_err(|error| {
+                PendingPromptMutationError::Internal(anyhow::anyhow!(error.to_string()))
+            })?;
         let record = self
             .get_session_or_not_found(session_id)
             .map_err(|error| match error {
@@ -693,7 +699,9 @@ impl SessionRuntime {
     ) -> Result<SessionRecord, PendingPromptMutationError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
-            .map_err(|error| PendingPromptMutationError::Internal(anyhow::anyhow!(error.to_string())))?;
+            .map_err(|error| {
+                PendingPromptMutationError::Internal(anyhow::anyhow!(error.to_string()))
+            })?;
         let record = self
             .get_session_or_not_found(session_id)
             .map_err(|error| match error {

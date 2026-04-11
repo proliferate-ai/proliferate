@@ -16,28 +16,35 @@ export {
   anyHarnessProviderConfigsKey,
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessRepoRootsKey,
+  anyHarnessWorkspaceMobilityKey,
   anyHarnessWorkspaceMobilityPreflightKey,
   anyHarnessCoworkStatusKey,
   anyHarnessCoworkThreadsKey,
   anyHarnessCoworkManifestKey,
+  anyHarnessCoworkArtifactScopeKey,
   anyHarnessCoworkArtifactKey,
   anyHarnessWorkspaceSessionLaunchKey,
   anyHarnessSessionsKey,
+  anyHarnessSessionScopeKey,
   anyHarnessSessionKey,
   anyHarnessSessionLiveConfigKey,
   anyHarnessSessionEventsKey,
   anyHarnessGitStatusKey,
+  anyHarnessGitDiffScopeKey,
   anyHarnessGitDiffKey,
   anyHarnessGitBranchesKey,
   anyHarnessPullRequestKey,
+  anyHarnessWorkspaceFilesScopeKey,
   anyHarnessWorkspaceFileTreeKey,
   anyHarnessWorkspaceFileSearchScopeKey,
+  anyHarnessWorkspaceFileScopeKey,
   anyHarnessWorkspaceFileSearchKey,
   anyHarnessWorkspaceFileKey,
   anyHarnessWorkspaceFileStatKey,
   anyHarnessWorkspaceDetectSetupKey,
   anyHarnessWorkspaceSetupStatusKey,
   anyHarnessTerminalsKey,
+  anyHarnessWorkspaceQueryKeyRoots,
 } from "./lib/query-keys.js";
 
 export { useRuntimeHealthQuery } from "./hooks/runtime.js";
@@ -53,13 +60,16 @@ export {
   useModelRegistryQuery,
 } from "./hooks/model-registries.js";
 export { useProviderConfigsQuery } from "./hooks/providers.js";
-export { useRepoRootsQuery } from "./hooks/repo-roots.js";
+export {
+  useRepoRootsQuery,
+  usePrepareRepoRootMobilityDestinationMutation,
+} from "./hooks/repo-roots.js";
 export {
   useWorkspaceMobilityPreflightQuery,
   useUpdateWorkspaceMobilityRuntimeStateMutation,
   useExportWorkspaceMobilityArchiveMutation,
   useInstallWorkspaceMobilityArchiveMutation,
-  useCleanupWorkspaceMobilityMutation,
+  useDestroyWorkspaceMobilitySourceMutation,
 } from "./hooks/mobility.js";
 export {
   useCoworkStatusQuery,

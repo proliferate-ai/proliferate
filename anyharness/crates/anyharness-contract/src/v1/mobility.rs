@@ -7,6 +7,7 @@ pub enum WorkspaceMobilityRuntimeMode {
     Normal,
     FrozenForHandoff,
     RemoteOwned,
+    RepairBlocked,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -95,16 +96,17 @@ pub struct InstallWorkspaceMobilityArchiveResponse {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceMobilityCleanupRequest {
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub session_ids: Vec<String>,
-}
+pub struct DestroyWorkspaceMobilitySourceRequest {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct WorkspaceMobilityCleanupResponse {
+pub struct DestroyWorkspaceMobilitySourceResponse {
     pub workspace_id: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deleted_session_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub closed_terminal_ids: Vec<String>,
+    pub source_destroyed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

@@ -127,12 +127,123 @@ impl WorkspaceRuntime {
         })
     }
 
+    pub fn list_repo_root_workspaces(
+        &self,
+        repo_root_id: &str,
+    ) -> anyhow::Result<Vec<WorkspaceRecord>> {
+        Ok(self
+            .store
+            .list_by_repo_root_id(repo_root_id)?
+            .into_iter()
+            .filter(|record| matches!(record.kind.as_str(), "local" | "worktree"))
+            .collect())
+    }
+
+    pub fn create_mobility_destination(
+        &self,
+        repo_root_id: &str,
+        requested_branch: &str,
+        requested_base_sha: &str,
+        preferred_workspace_name: Option<&str>,
+    ) -> anyhow::Result<WorkspaceRecord> {
+        let requested_branch = requested_branch.trim();
+        let requested_base_sha = requested_base_sha.trim();
+        if requested_branch.is_empty() {
+            anyhow::bail!("requested branch is required");
+        }
+        if requested_base_sha.is_empty() {
+            anyhow::bail!("requested base sha is required");
+        }
+
+        let repo_root = self
+            .repo_root_service
+            .get_repo_root(repo_root_id)?
+            .ok_or_else(|| anyhow::anyhow!("repo root not found: {repo_root_id}"))?;
+
+        let base_dir = self
+            .runtime_home
+            .join("mobility")
+            .join("destinations")
+            .join(&repo_root.id);
+        fs::create_dir_all(&base_dir)?;
+
+        let mut slug = sanitize_mobility_destination_name(
+            preferred_workspace_name.unwrap_or(requested_branch),
+        );
+        if slug.is_empty() {
+            slug = "workspace".to_string();
+        }
+        let short_sha = requested_base_sha.chars().take(8).collect::<String>();
+
+        let target_path = (0..100)
+            .map(|attempt| {
+                let suffix = if attempt == 0 {
+                    String::new()
+                } else {
+                    format!("-{}", attempt + 1)
+                };
+                base_dir.join(format!("{slug}-{short_sha}{suffix}"))
+            })
+            .find(|candidate| {
+                let candidate_string = candidate.to_string_lossy();
+                !candidate.exists()
+                    && self
+                        .store
+                        .find_by_path(&candidate_string)
+                        .ok()
+                        .flatten()
+                        .is_none()
+            })
+            .ok_or_else(|| anyhow::anyhow!("unable to allocate a mobility destination path"))?;
+
+        let target_path_string = target_path.display().to_string();
+        resolver::create_mobility_git_worktree(
+            &repo_root.path,
+            &target_path_string,
+            requested_branch,
+            requested_base_sha,
+        )?;
+
+        let ctx = resolver::resolve_git_context(&target_path_string)?;
+        let record = build_workspace_record(
+            &repo_root,
+            &ctx.repo_root,
+            "worktree",
+            "standard",
+            ctx.current_branch.clone(),
+        );
+        self.store.insert(&record)?;
+
+        Ok(record)
+    }
+
+    pub fn resolve_repo_root_default_branch(&self, repo_root_id: &str) -> anyhow::Result<String> {
+        let repo_root = self
+            .repo_root_service
+            .get_repo_root(repo_root_id)?
+            .ok_or_else(|| anyhow::anyhow!("repo root not found: {repo_root_id}"))?;
+        let default_branch = detect_repo_default_branch(Path::new(&repo_root.path))
+            .ok_or_else(|| anyhow::anyhow!("canonical repo default branch could not be resolved"))?;
+
+        if repo_root.default_branch.as_deref() != Some(default_branch.as_str()) {
+            let _ = self
+                .repo_root_service
+                .update_default_branch(&repo_root.id, Some(&default_branch))?;
+        }
+
+        Ok(default_branch)
+    }
+
     pub fn get_workspace(&self, workspace_id: &str) -> anyhow::Result<Option<WorkspaceRecord>> {
         self.store
             .find_by_id(workspace_id)?
             .filter(|record| record.kind != "repo")
             .map(reconcile_current_branch)
             .transpose()
+    }
+
+    pub fn delete_workspace_record(&self, workspace_id: &str) -> anyhow::Result<()> {
+        self.store.delete_by_id(workspace_id)
     }
 
     pub fn set_display_name(
@@ -223,6 +334,37 @@ impl WorkspaceRuntime {
         workspace_id: &str,
         worktree_path: &str,
     ) -> anyhow::Result<()> {
+        self.remove_worktree_workspace(repo_root_path, workspace_id, worktree_path)
+    }
+
+    pub fn destroy_source_workspace_materialization(
+        &self,
+        workspace: &WorkspaceRecord,
+        default_branch: Option<&str>,
+    ) -> anyhow::Result<()> {
+        match workspace.kind.as_str() {
+            "worktree" => self.remove_worktree_workspace(
+                &workspace.source_repo_root_path,
+                &workspace.id,
+                &workspace.path,
+            ),
+            "local" => {
+                let branch = default_branch
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| anyhow::anyhow!("default branch is required to park a local workspace"))?;
+                self.park_local_workspace(workspace, branch)
+            }
+            kind => anyhow::bail!("unsupported workspace kind for mobility source destroy: {kind}"),
+        }
+    }
+
+    fn remove_worktree_workspace(
+        &self,
+        repo_root_path: &str,
+        workspace_id: &str,
+        worktree_path: &str,
+    ) -> anyhow::Result<()> {
         let worktree = Path::new(worktree_path);
         if worktree.exists() {
             let output = Command::new("git")
@@ -247,6 +389,47 @@ impl WorkspaceRuntime {
         Ok(())
     }
 
+    fn park_local_workspace(
+        &self,
+        workspace: &WorkspaceRecord,
+        default_branch: &str,
+    ) -> anyhow::Result<()> {
+        let workspace_path = Path::new(&workspace.path);
+        let local_branch_exists = git_ref_exists(workspace_path, &format!("refs/heads/{default_branch}"));
+        let remote_branch_exists = git_ref_exists(
+            workspace_path,
+            &format!("refs/remotes/origin/{default_branch}"),
+        );
+
+        let switch_args: Vec<String> = if local_branch_exists {
+            vec!["switch".into(), default_branch.to_string()]
+        } else if remote_branch_exists {
+            vec![
+                "switch".into(),
+                "--track".into(),
+                "-c".into(),
+                default_branch.to_string(),
+                format!("origin/{default_branch}"),
+            ]
+        } else {
+            anyhow::bail!("default branch '{default_branch}' is not available locally or on origin");
+        };
+
+        let output = Command::new("git")
+            .args(["-C", &workspace.path])
+            .args(&switch_args)
+            .output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            anyhow::bail!(
+                "failed to park local workspace on default branch '{default_branch}': {stderr}"
+            );
+        }
+
+        self.store.delete_by_id(&workspace.id)?;
+        Ok(())
+    }
+
     fn resolve_or_create_workspace(
         &self,
         path: &str,
@@ -263,18 +446,30 @@ impl WorkspaceRuntime {
             .remote_url
             .as_deref()
             .and_then(resolver::parse_remote_url);
+        let detected_default_branch = detect_repo_default_branch(Path::new(&repo_root_path));
         let repo_root = self
             .repo_root_service
             .ensure_repo_root(CreateRepoRootInput {
                 kind: "external".into(),
                 path: repo_root_path,
                 display_name: None,
-                default_branch: ctx.current_branch.clone(),
+                default_branch: detected_default_branch,
                 remote_provider: remote.as_ref().map(|value| value.provider.clone()),
                 remote_owner: remote.as_ref().map(|value| value.owner.clone()),
                 remote_repo_name: remote.as_ref().map(|value| value.repo.clone()),
                 remote_url: ctx.remote_url.clone(),
             })?;
+        let repo_root = if let Some(default_branch) = detect_repo_default_branch(Path::new(&repo_root.path)) {
+            if repo_root.default_branch.as_deref() != Some(default_branch.as_str()) {
+                self.repo_root_service
+                    .update_default_branch(&repo_root.id, Some(&default_branch))?
+                    .unwrap_or(repo_root)
+            } else {
+                repo_root
+            }
+        } else {
+            repo_root
+        };
 
         let workspace_kind = if ctx.is_worktree { "worktree" } else { "local" };
         let workspace_path = ctx.repo_root.clone();
@@ -395,6 +590,51 @@ fn path_basename(path: &str) -> String {
         .and_then(|name| name.to_str())
         .unwrap_or("repo")
         .to_string()
+}
+
+fn sanitize_mobility_destination_name(value: &str) -> String {
+    value
+        .trim()
+        .chars()
+        .map(|ch| match ch {
+            'a'..='z' | 'A'..='Z' | '0'..='9' => ch.to_ascii_lowercase(),
+            '-' | '_' => ch,
+            _ => '-',
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string()
+}
+
+fn detect_repo_default_branch(repo_root: &Path) -> Option<String> {
+    let output = Command::new("git")
+        .args(["-C", &repo_root.display().to_string(), "symbolic-ref", "refs/remotes/origin/HEAD"])
+        .output()
+        .ok()?;
+    if output.status.success() {
+        let refname = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if let Some(default_branch) = refname.strip_prefix("refs/remotes/origin/") {
+            return Some(default_branch.to_string());
+        }
+    }
+
+    for candidate in ["main", "master", "develop"] {
+        if git_ref_exists(repo_root, &format!("refs/remotes/origin/{candidate}"))
+            || git_ref_exists(repo_root, &format!("refs/heads/{candidate}"))
+        {
+            return Some(candidate.to_string());
+        }
+    }
+
+    None
+}
+
+fn git_ref_exists(repo_root: &Path, ref_name: &str) -> bool {
+    Command::new("git")
+        .args(["-C", &repo_root.display().to_string(), "rev-parse", "--verify", ref_name])
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
 }
 
 fn truncate_output(output: &str, max_bytes: usize) -> String {

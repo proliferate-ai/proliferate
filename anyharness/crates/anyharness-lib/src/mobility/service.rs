@@ -10,9 +10,10 @@ use crate::agents::portability::{
 use crate::git::executor::run_git_ok;
 use crate::git::mobility_delta::{collect_workspace_delta, current_branch_name};
 use crate::mobility::model::{
-    ImportedWorkspaceArchiveSummary, MobilityBlocker, MobilityFileData, MobilitySessionCandidate,
-    WorkspaceMobilityArchiveData, WorkspaceMobilityPreflightResult,
-    WorkspaceMobilitySessionBundleData, MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES,
+    DestroyedWorkspaceSourceSummary, ImportedWorkspaceArchiveSummary, MobilityBlocker,
+    MobilityFileData, MobilitySessionCandidate, WorkspaceMobilityArchiveData,
+    WorkspaceMobilityPreflightResult, WorkspaceMobilitySessionBundleData,
+    MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES,
 };
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
@@ -21,6 +22,7 @@ use crate::terminals::service::TerminalService;
 use crate::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::workspaces::access_model::WorkspaceAccessMode;
 use crate::workspaces::model::WorkspaceRecord;
+use crate::workspaces::runtime::WorkspaceRuntime;
 use crate::workspaces::service::WorkspaceService;
 use crate::workspaces::setup_execution::SetupExecutionService;
 use crate::{files::safety::resolve_safe_path, git::GitService};
@@ -49,6 +51,7 @@ pub enum MobilityError {
 #[derive(Clone)]
 pub struct MobilityService {
     workspace_service: Arc<WorkspaceService>,
+    workspace_runtime: Arc<WorkspaceRuntime>,
     session_service: Arc<SessionService>,
     session_runtime: Arc<SessionRuntime>,
     access_gate: Arc<WorkspaceAccessGate>,
@@ -59,6 +62,7 @@ pub struct MobilityService {
 impl MobilityService {
     pub fn new(
         workspace_service: Arc<WorkspaceService>,
+        workspace_runtime: Arc<WorkspaceRuntime>,
         session_service: Arc<SessionService>,
         session_runtime: Arc<SessionRuntime>,
         access_gate: Arc<WorkspaceAccessGate>,
@@ -67,12 +71,55 @@ impl MobilityService {
     ) -> Self {
         Self {
             workspace_service,
+            workspace_runtime,
             session_service,
             session_runtime,
             access_gate,
             setup_execution_service,
             terminal_service,
         }
+    }
+
+    pub async fn prepare_repo_root_destination(
+        &self,
+        repo_root_id: &str,
+        requested_branch: &str,
+        requested_base_sha: &str,
+        preferred_workspace_name: Option<&str>,
+    ) -> Result<WorkspaceRecord, MobilityError> {
+        let repo_root_id = repo_root_id.trim().to_string();
+        let requested_branch = requested_branch.trim().to_string();
+        let requested_base_sha = requested_base_sha.trim().to_string();
+        let preferred_workspace_name = preferred_workspace_name
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+
+        if requested_branch.is_empty() {
+            return Err(MobilityError::Invalid(
+                "requested branch is required".to_string(),
+            ));
+        }
+        if requested_base_sha.is_empty() {
+            return Err(MobilityError::Invalid(
+                "requested base sha is required".to_string(),
+            ));
+        }
+
+        let workspace_runtime = self.workspace_runtime.clone();
+        let created = tokio::task::spawn_blocking(move || {
+            workspace_runtime.create_mobility_destination(
+                &repo_root_id,
+                &requested_branch,
+                &requested_base_sha,
+                preferred_workspace_name.as_deref(),
+            )
+        })
+        .await
+        .map_err(|error| MobilityError::Internal(anyhow::anyhow!(error.to_string())))?
+        .map_err(MobilityError::Internal)?;
+
+        Ok(created)
     }
 
     pub async fn preflight_workspace(
@@ -123,6 +170,28 @@ impl MobilityService {
             });
         }
 
+        let default_branch = if workspace.kind == "local" {
+            match self
+                .workspace_runtime
+                .resolve_repo_root_default_branch(&workspace.effective_repo_root_id())
+            {
+                Ok(branch) => Some(branch),
+                Err(_) => {
+                    blockers.push(MobilityBlocker {
+                        code: "default_branch_unknown".to_string(),
+                        message: (
+                            "Main local workspaces require a resolved repo default branch "
+                                .to_string()
+                        ),
+                        session_id: None,
+                    });
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         if self.setup_execution_service.is_running(workspace_id).await {
             blockers.push(MobilityBlocker {
                 code: "setup_running".to_string(),
@@ -131,12 +200,44 @@ impl MobilityService {
             });
         }
 
+        if workspace.kind == "local" {
+            match workspace_is_clean(&repo_root) {
+                Ok(false) => blockers.push(MobilityBlocker {
+                    code: "workspace_dirty".to_string(),
+                    message: (
+                        "Main local workspaces must be committed and clean before moving"
+                            .to_string()
+                    ),
+                    session_id: None,
+                }),
+                Ok(true) => {}
+                Err(error) => blockers.push(MobilityBlocker {
+                    code: "workspace_status_unknown".to_string(),
+                    message: format!("Unable to inspect local workspace status: {error}"),
+                    session_id: None,
+                }),
+            }
+
+            if let (Some(current_branch), Some(default_branch)) =
+                (branch_name.as_deref(), default_branch.as_deref())
+            {
+                if current_branch == default_branch {
+                    blockers.push(MobilityBlocker {
+                        code: "local_default_branch_in_use".to_string(),
+                        message: format!(
+                            "Main local workspaces on '{default_branch}' must move from a worktree instead"
+                        ),
+                        session_id: None,
+                    });
+                }
+            }
+        }
+
         for terminal in self.active_terminals_async(workspace_id).await {
-            blockers.push(MobilityBlocker {
-                code: "terminal_running".to_string(),
-                message: format!("Terminal {} is still active", terminal.id),
-                session_id: None,
-            });
+            warnings.push(format!(
+                "Terminal {} will be force-closed after the move commits",
+                terminal.id
+            ));
         }
 
         for candidate in &sessions {
@@ -175,7 +276,7 @@ impl MobilityService {
 
             if !candidate.supported {
                 warnings.push(format!(
-                    "Session {} ({}) will be skipped because {}",
+                    "Session {} ({}) will be deleted after the move because {}",
                     candidate.session.id,
                     candidate.session.agent_kind,
                     candidate
@@ -319,31 +420,35 @@ impl MobilityService {
         })
     }
 
-    pub fn cleanup_workspace_sessions(
+    pub fn destroy_source_workspace(
         &self,
         workspace_id: &str,
-        session_ids: &[String],
-    ) -> Result<Vec<String>, MobilityError> {
+    ) -> Result<DestroyedWorkspaceSourceSummary, MobilityError> {
         let workspace = self.load_workspace(workspace_id)?;
         let workspace_path = PathBuf::from(&workspace.path);
-        let sessions = if session_ids.is_empty() {
-            self.session_service
-                .list_sessions(Some(workspace_id), true)?
-                .into_iter()
-                .filter(|session| is_supported_agent_kind(&session.agent_kind))
-                .collect::<Vec<_>>()
+        let default_branch = if workspace.kind == "local" {
+            Some(
+                self.workspace_runtime
+                    .resolve_repo_root_default_branch(&workspace.effective_repo_root_id())
+                    .map_err(MobilityError::Internal)?,
+            )
         } else {
-            session_ids
-                .iter()
-                .filter_map(|session_id| {
-                    self.session_service
-                        .get_session(session_id)
-                        .ok()
-                        .flatten()
-                        .filter(|session| session.workspace_id == workspace_id)
-                })
-                .collect::<Vec<_>>()
+            None
         };
+
+        let active_terminals = self.active_terminals_blocking(workspace_id);
+        let mut closed_terminal_ids = Vec::new();
+        for terminal in active_terminals {
+            self.terminal_service
+                .close_terminal_blocking(&terminal.id)
+                .map_err(MobilityError::Internal)?;
+            closed_terminal_ids.push(terminal.id);
+        }
+
+        let sessions = self
+            .session_service
+            .store()
+            .list_by_workspace(workspace_id)?;
 
         let mut deleted_session_ids = Vec::new();
         for session in sessions {
@@ -352,7 +457,16 @@ impl MobilityService {
             deleted_session_ids.push(session.id);
         }
 
-        Ok(deleted_session_ids)
+        self.workspace_runtime
+            .destroy_source_workspace_materialization(&workspace, default_branch.as_deref())
+            .map_err(MobilityError::Internal)?;
+
+        Ok(DestroyedWorkspaceSourceSummary {
+            workspace_id: workspace.id,
+            deleted_session_ids,
+            closed_terminal_ids,
+            source_destroyed: true,
+        })
     }
 
     fn collect_workspace_sessions(
@@ -520,6 +634,12 @@ fn is_active_terminal(terminal: &TerminalRecord) -> bool {
         terminal.status,
         TerminalStatus::Starting | TerminalStatus::Running
     )
+}
+
+fn workspace_is_clean(repo_root: &Path) -> anyhow::Result<bool> {
+    Ok(run_git_ok(repo_root, &["status", "--porcelain", "--untracked-files=all"])?
+        .trim()
+        .is_empty())
 }
 
 fn map_access_error(error: WorkspaceAccessError) -> MobilityError {
@@ -704,4 +824,77 @@ fn string_size(value: &String) -> u64 {
 
 fn option_string_size(value: &Option<String>) -> u64 {
     value.as_ref().map(|value| value.len() as u64).unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+    use std::fs;
+    use std::path::Path;
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    use super::workspace_is_clean;
+    use uuid::Uuid;
+
+    struct TempDirGuard {
+        path: PathBuf,
+    }
+
+    impl TempDirGuard {
+        fn new(prefix: &str) -> Self {
+            let path = env::temp_dir().join(format!("anyharness-{prefix}-{}", Uuid::new_v4()));
+            fs::create_dir_all(&path).expect("create temp dir");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDirGuard {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[test]
+    fn workspace_is_clean_detects_dirty_state() {
+        let tempdir = TempDirGuard::new("mobility-clean-check");
+        run_git(tempdir.path(), ["init"]);
+        fs::write(tempdir.path().join("tracked.txt"), "hello").expect("write");
+        run_git(tempdir.path(), ["add", "tracked.txt"]);
+        run_git(
+            tempdir.path(),
+            [
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "init",
+            ],
+        );
+
+        assert!(workspace_is_clean(Path::new(tempdir.path())).expect("clean"));
+
+        fs::write(tempdir.path().join("tracked.txt"), "changed").expect("rewrite");
+        assert!(!workspace_is_clean(Path::new(tempdir.path())).expect("dirty"));
+    }
+
+    fn run_git<const N: usize>(cwd: &Path, args: [&str; N]) {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("spawn git");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }

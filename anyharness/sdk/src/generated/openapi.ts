@@ -228,6 +228,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repo-roots/{repo_root_id}/mobility/prepare-destination": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["prepare_repo_root_mobility_destination"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions": {
         parameters: {
             query?: never;
@@ -724,7 +740,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspaces/{workspace_id}/mobility/cleanup": {
+    "/v1/workspaces/{workspace_id}/mobility/destroy-source": {
         parameters: {
             query?: never;
             header?: never;
@@ -733,7 +749,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["cleanup_workspace_mobility"];
+        post: operations["destroy_workspace_mobility_source"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1119,6 +1135,13 @@ export interface components {
         CurrentPullRequestResponse: {
             pullRequest?: null | components["schemas"]["PullRequestSummary"];
         };
+        DestroyWorkspaceMobilitySourceRequest: Record<string, never>;
+        DestroyWorkspaceMobilitySourceResponse: {
+            closedTerminalIds?: string[];
+            deletedSessionIds?: string[];
+            sourceDestroyed: boolean;
+            workspaceId: string;
+        };
         DetectProjectSetupResponse: {
             hints: components["schemas"]["SetupHint"][];
         };
@@ -1471,6 +1494,14 @@ export interface components {
         PlanEntry: {
             content: string;
             status: string;
+        };
+        PrepareRepoRootMobilityDestinationRequest: {
+            preferredWorkspaceName?: string | null;
+            requestedBaseSha: string;
+            requestedBranch: string;
+        };
+        PrepareRepoRootMobilityDestinationResponse: {
+            workspace: components["schemas"]["Workspace"];
         };
         ProblemDetails: {
             code?: string | null;
@@ -1954,13 +1985,6 @@ export interface components {
             message: string;
             sessionId?: string | null;
         };
-        WorkspaceMobilityCleanupRequest: {
-            sessionIds?: string[];
-        };
-        WorkspaceMobilityCleanupResponse: {
-            deletedSessionIds: string[];
-            workspaceId: string;
-        };
         WorkspaceMobilityFileEntry: {
             /** Format: binary */
             contentBase64: string;
@@ -1981,7 +2005,7 @@ export interface components {
             workspaceId: string;
         };
         /** @enum {string} */
-        WorkspaceMobilityRuntimeMode: "normal" | "frozen_for_handoff" | "remote_owned";
+        WorkspaceMobilityRuntimeMode: "normal" | "frozen_for_handoff" | "remote_owned" | "repair_blocked";
         WorkspaceMobilityRuntimeState: {
             handoffOpId?: string | null;
             mode: components["schemas"]["WorkspaceMobilityRuntimeMode"];
@@ -2449,6 +2473,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RepoRoot"];
+                };
+            };
+            /** @description Repo root not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    prepare_repo_root_mobility_destination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repo root ID */
+                repo_root_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrepareRepoRootMobilityDestinationRequest"];
+            };
+        };
+        responses: {
+            /** @description Prepared repo root mobility destination */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepareRepoRootMobilityDestinationResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Repo root not found */
@@ -3687,7 +3756,7 @@ export interface operations {
             };
         };
     };
-    cleanup_workspace_mobility: {
+    destroy_workspace_mobility_source: {
         parameters: {
             query?: never;
             header?: never;
@@ -3699,17 +3768,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["WorkspaceMobilityCleanupRequest"];
+                "application/json": components["schemas"]["DestroyWorkspaceMobilitySourceRequest"];
             };
         };
         responses: {
-            /** @description Cleaned up source workspace mobility state */
+            /** @description Destroyed the old workspace source materialization */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkspaceMobilityCleanupResponse"];
+                    "application/json": components["schemas"]["DestroyWorkspaceMobilitySourceResponse"];
                 };
             };
             /** @description Workspace not found */

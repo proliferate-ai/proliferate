@@ -53,6 +53,7 @@ class CloudProvisionInput:
     anyharness_data_key: str
     credentials: ProvisionCredentials
     repo_env_vars: dict[str, str]
+    requested_base_sha: str | None = None
 
     @property
     def repo_label(self) -> str:

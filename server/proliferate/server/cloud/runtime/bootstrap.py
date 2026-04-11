@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import shlex
 import sys
 from collections.abc import Mapping
@@ -24,6 +25,14 @@ _CLAUDE_MIN_NODE_MAJOR = 20
 _CLAUDE_MIN_NODE_MINOR = 10
 _RUST_INSTALL_TIMEOUT_SECONDS = 900
 _BUILD_DEPS_INSTALL_TIMEOUT_SECONDS = 300
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _runtime_sentry_dsn() -> str:
@@ -175,7 +184,30 @@ async def check_binary_preinstalled(
         runtime_context=runtime_context,
         timeout_seconds=30,
     )
-    return result_exit_code(check_result) == 0
+    if result_exit_code(check_result) != 0:
+        return False
+
+    local_binary_hash = _sha256_file(resolve_local_runtime_binary_path())
+    hash_result = await run_sandbox_command_logged(
+        provider,
+        sandbox,
+        workspace_id=workspace_id,
+        label="check_runtime_binary_sha256",
+        command=(
+            "bash -lc "
+            + shlex.quote(
+                f"sha256sum {shlex.quote(runtime_context.runtime_binary_path)} | cut -d' ' -f1"
+            )
+        ),
+        runtime_context=runtime_context,
+        timeout_seconds=30,
+        log_output_on_success=True,
+    )
+    if result_exit_code(hash_result) != 0:
+        return False
+
+    remote_binary_hash = result_stdout(hash_result).strip()
+    return remote_binary_hash == local_binary_hash
 
 
 async def install_node_runtime(

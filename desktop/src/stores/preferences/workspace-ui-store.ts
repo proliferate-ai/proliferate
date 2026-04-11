@@ -28,10 +28,12 @@ export interface WorkspaceUiState {
 }
 
 /**
- * Bump this version to trigger a one-time reset of workspaceLastInteracted.
+ * We have not launched yet, so persisted workspace UI state is allowed to
+ * reset across identity-model changes.
  * v1: reset false-unread state caused by wall-clock interaction timestamps.
+ * v2: reset user-facing workspace-keyed state for logical-workspace cutover.
  */
-const WORKSPACE_UI_MIGRATION_VERSION = 1;
+const WORKSPACE_UI_MIGRATION_VERSION = 2;
 export const WORKSPACE_SIDEBAR_DEFAULT_WIDTH = 280;
 export const WORKSPACE_SIDEBAR_MIN_WIDTH = 220;
 export const WORKSPACE_SIDEBAR_MAX_WIDTH = 420;
@@ -102,6 +104,9 @@ async function readAll(): Promise<{ state: PersistedWorkspaceUiState; didMigrate
 
   let didMigrate = false;
   if ((state.migrationVersion ?? 0) < WORKSPACE_UI_MIGRATION_VERSION) {
+    state.archivedWorkspaceIds = [];
+    state.lastViewedAt = {};
+    state.lastViewedSessionByWorkspace = {};
     state.workspaceLastInteracted = {};
     state.migrationVersion = WORKSPACE_UI_MIGRATION_VERSION;
     didMigrate = true;

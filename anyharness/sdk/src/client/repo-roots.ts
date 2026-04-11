@@ -1,4 +1,8 @@
-import type { RepoRoot } from "../types/repo-roots.js";
+import type {
+  PrepareRepoRootMobilityDestinationRequest,
+  PrepareRepoRootMobilityDestinationResponse,
+  RepoRoot,
+} from "../types/repo-roots.js";
 import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
 
 export class RepoRootsClient {
@@ -11,6 +15,18 @@ export class RepoRootsClient {
   async get(repoRootId: string, options?: AnyHarnessRequestOptions): Promise<RepoRoot> {
     return this.transport.get<RepoRoot>(
       `/v1/repo-roots/${encodeURIComponent(repoRootId)}`,
+      options,
+    );
+  }
+
+  async prepareDestination(
+    repoRootId: string,
+    input: PrepareRepoRootMobilityDestinationRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<PrepareRepoRootMobilityDestinationResponse> {
+    return this.transport.post<PrepareRepoRootMobilityDestinationResponse>(
+      `/v1/repo-roots/${encodeURIComponent(repoRootId)}/mobility/prepare-destination`,
+      input,
       options,
     );
   }

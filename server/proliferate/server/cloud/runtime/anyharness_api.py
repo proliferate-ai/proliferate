@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 import logging
 import time
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -428,8 +428,25 @@ async def resolve_remote_workspace(
             json={"path": runtime_workdir},
         )
         response.raise_for_status()
-        payload = response.json()
-    remote_workspace_id = payload.get("id")
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise CloudRuntimeReconnectError(
+                "Cloud runtime returned invalid JSON when resolving the AnyHarness workspace."
+            ) from exc
+
+    if not isinstance(payload, dict):
+        raise CloudRuntimeReconnectError(
+            "Cloud runtime did not return a valid AnyHarness workspace id."
+        )
+
+    workspace = payload.get("workspace")
+    if not isinstance(workspace, dict):
+        raise CloudRuntimeReconnectError(
+            "Cloud runtime did not return a valid AnyHarness workspace id."
+        )
+
+    remote_workspace_id = workspace.get("id")
     if not isinstance(remote_workspace_id, str) or not remote_workspace_id:
         raise CloudRuntimeReconnectError(
             "Cloud runtime did not return a valid AnyHarness workspace id."

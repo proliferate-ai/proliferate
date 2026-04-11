@@ -490,6 +490,176 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/mobility/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Mobility Workspaces Endpoint */
+        get: operations["list_mobility_workspaces_endpoint_v1_cloud_mobility_workspaces_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/mobility/workspaces/ensure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ensure Mobility Workspace Endpoint */
+        post: operations["ensure_mobility_workspace_endpoint_v1_cloud_mobility_workspaces_ensure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/mobility/workspaces/{mobility_workspace_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Mobility Workspace Endpoint */
+        get: operations["get_mobility_workspace_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preflight Mobility Handoff Endpoint */
+        post: operations["preflight_mobility_handoff_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__preflight_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Mobility Handoff Endpoint */
+        post: operations["start_mobility_handoff_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__handoffs_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Heartbeat Mobility Handoff Endpoint */
+        post: operations["heartbeat_mobility_handoff_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__handoffs__handoff_op_id__heartbeat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/phase": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update Mobility Handoff Phase Endpoint */
+        post: operations["update_mobility_handoff_phase_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__handoffs__handoff_op_id__phase_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/finalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finalize Mobility Handoff Endpoint */
+        post: operations["finalize_mobility_handoff_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__handoffs__handoff_op_id__finalize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/cleanup-complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cleanup Mobility Handoff Endpoint */
+        post: operations["cleanup_mobility_handoff_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__handoffs__handoff_op_id__cleanup_complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/mobility/workspaces/{mobility_workspace_id}/handoffs/{handoff_op_id}/fail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fail Mobility Handoff Endpoint */
+        post: operations["fail_mobility_handoff_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__handoffs__handoff_op_id__fail_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/credentials": {
         parameters: {
             query?: never;
@@ -694,6 +864,8 @@ export interface components {
             code_challenge_method: string;
             /** Redirect Uri */
             redirect_uri: string;
+            /** Prompt */
+            prompt?: "select_account" | null;
         };
         /** BillingOverview */
         BillingOverview: {
@@ -877,12 +1049,42 @@ export interface components {
              */
             received: boolean;
         };
+        /** EnsureMobilityWorkspaceRequest */
+        EnsureMobilityWorkspaceRequest: {
+            /** Gitprovider */
+            gitProvider: string;
+            /** Gitowner */
+            gitOwner: string;
+            /** Gitreponame */
+            gitRepoName: string;
+            /** Gitbranch */
+            gitBranch: string;
+            /** Displayname */
+            displayName?: string | null;
+            /**
+             * Ownerhint
+             * @default local
+             */
+            ownerHint: string;
+        };
         /** ErrorModel */
         ErrorModel: {
             /** Detail */
             detail: string | {
                 [key: string]: string;
             };
+        };
+        /** FailWorkspaceMobilityHandoffRequest */
+        FailWorkspaceMobilityHandoffRequest: {
+            /** Failurecode */
+            failureCode: string;
+            /** Failuredetail */
+            failureDetail: string;
+        };
+        /** FinalizeWorkspaceMobilityHandoffRequest */
+        FinalizeWorkspaceMobilityHandoffRequest: {
+            /** Cloudworkspaceid */
+            cloudWorkspaceId?: string | null;
         };
         /** GenerateSessionTitleRequest */
         GenerateSessionTitleRequest: {
@@ -912,6 +1114,104 @@ export interface components {
              */
             version: string;
         };
+        /** MobilityHandoffSummary */
+        MobilityHandoffSummary: {
+            /** Id */
+            id: string;
+            /** Direction */
+            direction: string;
+            /** Sourceowner */
+            sourceOwner: string;
+            /** Targetowner */
+            targetOwner: string;
+            /** Phase */
+            phase: string;
+            /** Requestedbranch */
+            requestedBranch: string;
+            /** Requestedbasesha */
+            requestedBaseSha?: string | null;
+            /** Excludepaths */
+            excludePaths: string[];
+            /** Failurecode */
+            failureCode?: string | null;
+            /** Failuredetail */
+            failureDetail?: string | null;
+            /** Startedat */
+            startedAt: string;
+            /** Heartbeatat */
+            heartbeatAt: string;
+            /** Finalizedat */
+            finalizedAt?: string | null;
+            /** Cleanupcompletedat */
+            cleanupCompletedAt?: string | null;
+        };
+        /** MobilityRepoRef */
+        MobilityRepoRef: {
+            /** Provider */
+            provider: string;
+            /** Owner */
+            owner: string;
+            /** Name */
+            name: string;
+            /** Branch */
+            branch: string;
+        };
+        /** MobilityWorkspaceDetail */
+        MobilityWorkspaceDetail: {
+            /** Id */
+            id: string;
+            /** Displayname */
+            displayName?: string | null;
+            repo: components["schemas"]["MobilityRepoRef"];
+            /** Owner */
+            owner: string;
+            /** Lifecyclestate */
+            lifecycleState: string;
+            /** Statusdetail */
+            statusDetail?: string | null;
+            /** Lasterror */
+            lastError?: string | null;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId?: string | null;
+            /** Cloudlostat */
+            cloudLostAt?: string | null;
+            /** Cloudlostreason */
+            cloudLostReason?: string | null;
+            activeHandoff?: components["schemas"]["MobilityHandoffSummary"] | null;
+            /** Updatedat */
+            updatedAt: string | null;
+            /** Createdat */
+            createdAt: string | null;
+            /** Lasthandoffopid */
+            lastHandoffOpId?: string | null;
+        };
+        /** MobilityWorkspaceSummary */
+        MobilityWorkspaceSummary: {
+            /** Id */
+            id: string;
+            /** Displayname */
+            displayName?: string | null;
+            repo: components["schemas"]["MobilityRepoRef"];
+            /** Owner */
+            owner: string;
+            /** Lifecyclestate */
+            lifecycleState: string;
+            /** Statusdetail */
+            statusDetail?: string | null;
+            /** Lasterror */
+            lastError?: string | null;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId?: string | null;
+            /** Cloudlostat */
+            cloudLostAt?: string | null;
+            /** Cloudlostreason */
+            cloudLostReason?: string | null;
+            activeHandoff?: components["schemas"]["MobilityHandoffSummary"] | null;
+            /** Updatedat */
+            updatedAt: string | null;
+            /** Createdat */
+            createdAt: string | null;
+        };
         /** OAuth2AuthorizeResponse */
         OAuth2AuthorizeResponse: {
             /** Authorization Url */
@@ -921,6 +1221,8 @@ export interface components {
         OAuthAvailabilityResponse: {
             /** Enabled */
             enabled: boolean;
+            /** Client Id */
+            client_id?: string | null;
         };
         /** OkResponse */
         OkResponse: {
@@ -1053,6 +1355,17 @@ export interface components {
             setupScript: string;
             /** Files */
             files?: components["schemas"]["SaveCloudRepoConfigFile"][];
+        };
+        /** StartWorkspaceMobilityHandoffRequest */
+        StartWorkspaceMobilityHandoffRequest: {
+            /** Direction */
+            direction: string;
+            /** Requestedbranch */
+            requestedBranch: string;
+            /** Requestedbasesha */
+            requestedBaseSha?: string | null;
+            /** Excludepaths */
+            excludePaths?: string[];
         };
         /** SupportMessageContext */
         SupportMessageContext: {
@@ -1230,6 +1543,15 @@ export interface components {
             /** Displayname */
             displayName?: string | null;
         };
+        /** UpdateWorkspaceMobilityHandoffPhaseRequest */
+        UpdateWorkspaceMobilityHandoffPhaseRequest: {
+            /** Phase */
+            phase: string;
+            /** Statusdetail */
+            statusDetail?: string | null;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId?: string | null;
+        };
         /** UserRead */
         UserRead: {
             /**
@@ -1353,6 +1675,25 @@ export interface components {
             readyAgentKinds: string[];
             /** Anyharnessworkspaceid */
             anyharnessWorkspaceId: string | null;
+        };
+        /** WorkspaceMobilityPreflightRequest */
+        WorkspaceMobilityPreflightRequest: {
+            /** Direction */
+            direction: string;
+            /** Requestedbranch */
+            requestedBranch: string;
+            /** Requestedbasesha */
+            requestedBaseSha?: string | null;
+        };
+        /** WorkspaceMobilityPreflightResponse */
+        WorkspaceMobilityPreflightResponse: {
+            /** Canstart */
+            canStart: boolean;
+            /** Blockers */
+            blockers: string[];
+            /** Excludedpaths */
+            excludedPaths: string[];
+            workspace: components["schemas"]["MobilityWorkspaceDetail"];
         };
         /** WorkspaceSummary */
         WorkspaceSummary: {
@@ -1780,6 +2121,7 @@ export interface operations {
                 code_challenge: string;
                 code_challenge_method?: string;
                 redirect_uri: string;
+                prompt?: "select_account" | null;
             };
             header?: never;
             path?: never;
@@ -2518,6 +2860,332 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_mobility_workspaces_endpoint_v1_cloud_mobility_workspaces_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobilityWorkspaceSummary"][];
+                };
+            };
+        };
+    };
+    ensure_mobility_workspace_endpoint_v1_cloud_mobility_workspaces_ensure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnsureMobilityWorkspaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobilityWorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_mobility_workspace_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mobility_workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobilityWorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preflight_mobility_handoff_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__preflight_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mobility_workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceMobilityPreflightRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMobilityPreflightResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_mobility_handoff_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__handoffs_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mobility_workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartWorkspaceMobilityHandoffRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobilityHandoffSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    heartbeat_mobility_handoff_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__handoffs__handoff_op_id__heartbeat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mobility_workspace_id: string;
+                handoff_op_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobilityHandoffSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_mobility_handoff_phase_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__handoffs__handoff_op_id__phase_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mobility_workspace_id: string;
+                handoff_op_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkspaceMobilityHandoffPhaseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobilityHandoffSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    finalize_mobility_handoff_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__handoffs__handoff_op_id__finalize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mobility_workspace_id: string;
+                handoff_op_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinalizeWorkspaceMobilityHandoffRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobilityHandoffSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cleanup_mobility_handoff_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__handoffs__handoff_op_id__cleanup_complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mobility_workspace_id: string;
+                handoff_op_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobilityHandoffSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fail_mobility_handoff_endpoint_v1_cloud_mobility_workspaces__mobility_workspace_id__handoffs__handoff_op_id__fail_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mobility_workspace_id: string;
+                handoff_op_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FailWorkspaceMobilityHandoffRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobilityHandoffSummary"];
                 };
             };
             /** @description Validation Error */

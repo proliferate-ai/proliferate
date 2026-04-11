@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 import { useWorkspaceEntryActions } from "./use-workspace-entry-actions";
 import { useWorkspaceSelection } from "./selection/use-workspace-selection";
 import { useAddRepo } from "./use-add-repo";
@@ -16,6 +17,7 @@ export function useWorkspaceSidebarActions() {
   const setPendingWorkspaceEntry = useHarnessStore((state) => state.setPendingWorkspaceEntry);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const mobility = useWorkspaceMobilityState();
   const { selectWorkspace, clearWorkspaceRuntimeState } = useWorkspaceSelection();
   const {
     createLocalWorkspaceAndEnter,
@@ -30,6 +32,11 @@ export function useWorkspaceSidebarActions() {
   }, [addRepoFromPicker]);
 
   const handleGoHome = useCallback(() => {
+    if (mobility.selectionLocked) {
+      showToast("Finish the current workspace move before leaving this workspace.");
+      return;
+    }
+
     if (selectedWorkspaceId) {
       clearWorkspaceRuntimeState(selectedWorkspaceId, { clearSelection: true });
     } else if (pendingWorkspaceEntry) {
@@ -39,13 +46,20 @@ export function useWorkspaceSidebarActions() {
     navigate("/");
   }, [
     clearWorkspaceRuntimeState,
+    mobility.selectionLocked,
     navigate,
     pendingWorkspaceEntry,
     setPendingWorkspaceEntry,
     selectedWorkspaceId,
+    showToast,
   ]);
 
   const handleSelectWorkspace = useCallback((workspaceId: string) => {
+    if (mobility.selectionLocked && workspaceId !== mobility.selectedLogicalWorkspaceId) {
+      showToast("Finish the current workspace move before switching workspaces.");
+      return;
+    }
+
     const latencyFlowId = startLatencyFlow({
       flowKind: "workspace_switch",
       source: "sidebar",
@@ -56,7 +70,12 @@ export function useWorkspaceSidebarActions() {
       const message = error instanceof Error ? error.message : String(error);
       showToast(`Failed to select workspace: ${message}`);
     });
-  }, [selectWorkspace, showToast]);
+  }, [
+    mobility.selectedLogicalWorkspaceId,
+    mobility.selectionLocked,
+    selectWorkspace,
+    showToast,
+  ]);
 
   const handleCreateLocalWorkspace = useCallback((sourceRoot: string | null) => {
     if (!sourceRoot) {

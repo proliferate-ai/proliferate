@@ -135,7 +135,11 @@ def _resolve_git_identity(user: object, github_account: object | None) -> tuple[
     return git_user_name, git_user_email
 
 
-async def _load_provision_input(workspace_id: UUID) -> CloudProvisionInput | None:
+async def _load_provision_input(
+    workspace_id: UUID,
+    *,
+    requested_base_sha: str | None = None,
+) -> CloudProvisionInput | None:
     workspace = await load_cloud_workspace_by_id(workspace_id)
     if workspace is None:
         return None
@@ -188,6 +192,7 @@ async def _load_provision_input(workspace_id: UUID) -> CloudProvisionInput | Non
             if workspace.repo_env_vars_ciphertext
             else {}
         ),
+        requested_base_sha=requested_base_sha,
     )
 
 
@@ -535,7 +540,11 @@ async def _launch_and_connect_runtime(
     )
 
 
-async def provision_workspace(workspace_id: UUID) -> None:
+async def provision_workspace(
+    workspace_id: UUID,
+    *,
+    requested_base_sha: str | None = None,
+) -> None:
     provision_started = time.perf_counter()
     tracker = _StepTracker(workspace_id=workspace_id)
     ctx: CloudProvisionInput | None = None
@@ -544,7 +553,10 @@ async def provision_workspace(workspace_id: UUID) -> None:
     sandbox_record_id: UUID | None = None
 
     try:
-        ctx = await _load_provision_input(workspace_id)
+        ctx = await _load_provision_input(
+            workspace_id,
+            requested_base_sha=requested_base_sha,
+        )
         if ctx is None:
             return
         provider = get_configured_sandbox_provider()
@@ -556,6 +568,7 @@ async def provision_workspace(workspace_id: UUID) -> None:
             repo=ctx.repo_label,
             base_branch=ctx.git_base_branch,
             branch_name=ctx.git_branch,
+            requested_base_sha=ctx.requested_base_sha,
         )
         await _set_workspace_status(
             workspace_id,

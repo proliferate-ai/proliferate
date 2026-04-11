@@ -29,3 +29,18 @@ pub struct RepoRoot {
     pub created_at: String,
     pub updated_at: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PrepareRepoRootMobilityDestinationRequest {
+    pub requested_branch: String,
+    pub requested_base_sha: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preferred_workspace_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PrepareRepoRootMobilityDestinationResponse {
+    pub workspace: crate::v1::Workspace,
+}

@@ -136,7 +136,17 @@ impl WorkspaceStore {
     }
 
     pub fn delete_by_id(&self, workspace_id: &str) -> anyhow::Result<()> {
-        self.db.with_conn(|conn| {
+        self.db.with_tx(|conn| {
+            // Workspace-scoped rows do not all cascade today, so clear them
+            // explicitly before removing the workspace record itself.
+            conn.execute(
+                "DELETE FROM workspace_access_modes WHERE workspace_id = ?1",
+                [workspace_id],
+            )?;
+            conn.execute(
+                "DELETE FROM cowork_threads WHERE workspace_id = ?1",
+                [workspace_id],
+            )?;
             conn.execute("DELETE FROM workspaces WHERE id = ?1", [workspace_id])?;
             Ok(())
         })
@@ -189,4 +199,125 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceRecord> {
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{WorkspaceRecord, WorkspaceStore};
+    use crate::persistence::Db;
+    use crate::sessions::model::SessionRecord;
+    use crate::sessions::store::SessionStore;
+
+    fn workspace_record(id: &str, kind: &str, path: &str) -> WorkspaceRecord {
+        WorkspaceRecord {
+            id: id.to_string(),
+            kind: kind.to_string(),
+            repo_root_id: None,
+            path: path.to_string(),
+            surface: "standard".to_string(),
+            source_repo_root_path: path.to_string(),
+            source_workspace_id: None,
+            git_provider: None,
+            git_owner: None,
+            git_repo_name: None,
+            original_branch: Some("main".to_string()),
+            current_branch: Some("main".to_string()),
+            display_name: None,
+            created_at: "2025-01-01T00:00:00Z".to_string(),
+            updated_at: "2025-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    fn session_record(id: &str, workspace_id: &str) -> SessionRecord {
+        SessionRecord {
+            id: id.to_string(),
+            workspace_id: workspace_id.to_string(),
+            agent_kind: "claude".to_string(),
+            native_session_id: None,
+            requested_model_id: None,
+            current_model_id: None,
+            requested_mode_id: None,
+            current_mode_id: None,
+            title: None,
+            thinking_level_id: None,
+            thinking_budget_tokens: None,
+            status: "idle".to_string(),
+            created_at: "2025-01-01T00:00:00Z".to_string(),
+            updated_at: "2025-01-01T00:00:00Z".to_string(),
+            last_prompt_at: None,
+            closed_at: None,
+            dismissed_at: None,
+            mcp_bindings_ciphertext: None,
+            system_prompt_append: None,
+        }
+    }
+
+    #[test]
+    fn delete_workspace_removes_workspace_scoped_rows() {
+        let db = Db::open_in_memory().expect("open db");
+        let store = WorkspaceStore::new(db.clone());
+        let session_store = SessionStore::new(db.clone());
+
+        let workspace = workspace_record("workspace-1", "worktree", "/tmp/workspace-1");
+        store.insert(&workspace).expect("insert workspace");
+        session_store
+            .insert(&session_record("session-1", &workspace.id))
+            .expect("insert session");
+
+        db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO repo_roots (
+                    id, kind, path, display_name, default_branch, remote_provider, remote_owner,
+                    remote_repo_name, remote_url, created_at, updated_at
+                 ) VALUES (
+                    'repo-root-1', 'external', '/tmp/repo-root-1', NULL, 'main', NULL, NULL,
+                    NULL, NULL, '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z'
+                 )",
+                [],
+            )?;
+            conn.execute(
+                "INSERT INTO workspace_access_modes (workspace_id, mode, handoff_op_id, updated_at)
+                 VALUES (?1, 'remote_owned', 'handoff-1', '2025-01-01T00:00:00Z')",
+                [&workspace.id],
+            )?;
+            conn.execute(
+                "INSERT INTO cowork_threads (
+                    id, repo_root_id, workspace_id, session_id, agent_kind, requested_model_id, branch_name, created_at
+                 ) VALUES (
+                    'thread-1', 'repo-root-1', ?1, 'session-1', 'claude', NULL, 'main', '2025-01-01T00:00:00Z'
+                 )",
+                [&workspace.id],
+            )?;
+            Ok(())
+        })
+        .expect("insert dependent rows");
+
+        session_store
+            .delete_session("session-1")
+            .expect("delete session first");
+        store.delete_by_id(&workspace.id).expect("delete workspace");
+
+        db.with_conn(|conn| {
+            let workspace_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM workspaces WHERE id = ?1",
+                [&workspace.id],
+                |row| row.get(0),
+            )?;
+            let access_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM workspace_access_modes WHERE workspace_id = ?1",
+                [&workspace.id],
+                |row| row.get(0),
+            )?;
+            let thread_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM cowork_threads WHERE workspace_id = ?1",
+                [&workspace.id],
+                |row| row.get(0),
+            )?;
+            assert_eq!(workspace_count, 0);
+            assert_eq!(access_count, 0);
+            assert_eq!(thread_count, 0);
+            Ok(())
+        })
+        .expect("verify cleanup");
+    }
 }

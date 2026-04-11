@@ -2,6 +2,7 @@ import type { GitStatusSnapshot, Workspace } from "@anyharness/sdk";
 import type { SessionViewState } from "@/lib/domain/sessions/activity";
 import { resolveWorkspaceExecutionViewState } from "@/lib/domain/sessions/activity";
 import type { NewCloudWorkspaceSeed } from "@/lib/domain/workspaces/cloud-workspace-creation";
+import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
 import { isCloudWorkspacePending } from "@/lib/domain/workspaces/cloud-workspace-status";
 import type {
   CloudWorkspaceStatus,
@@ -93,6 +94,12 @@ export interface SidebarGroupState {
   repoWorkspaceId: string | null;
   localSourceRoot: string | null;
   cloudDialogState: NewCloudWorkspaceSeed | null;
+}
+
+function logicalGroupName(workspace: LogicalWorkspace): string {
+  return workspace.repoName
+    ?? workspace.sourceRoot.split("/").filter(Boolean).pop()
+    ?? workspace.sourceRoot;
 }
 
 interface WorkspaceUnreadInput {
@@ -220,9 +227,10 @@ export function isWorkspaceUnread({
 }
 
 export function buildSidebarGroupStates(args: {
-  sidebarEntries: SidebarWorkspaceEntry[];
+  logicalWorkspaces: LogicalWorkspace[];
   showArchived: boolean;
   archivedSet: Set<string>;
+  selectedLogicalWorkspaceId: string | null;
   selectedWorkspaceId: string | null;
   workspaceActivities: Record<string, SessionViewState>;
   gitStatus: GitStatusSnapshot | undefined;
@@ -230,102 +238,113 @@ export function buildSidebarGroupStates(args: {
   lastViewedAt: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
 }): SidebarGroupState[] {
-  return groupSidebarEntries(args.sidebarEntries)
-    .map((group): SidebarGroupState | null => {
-      const visibleEntries = group.entries.filter(
+  const groups = new Map<string, LogicalWorkspace[]>();
+  for (const workspace of args.logicalWorkspaces) {
+    const entries = groups.get(workspace.repoKey);
+    if (entries) {
+      entries.push(workspace);
+    } else {
+      groups.set(workspace.repoKey, [workspace]);
+    }
+  }
+
+  return Array.from(groups.entries())
+    .map(([repoKey, groupWorkspaces]): SidebarGroupState | null => {
+      const visibleEntries = groupWorkspaces.filter(
         (entry) => args.showArchived || !args.archivedSet.has(entry.id),
       );
       if (
         visibleEntries.length === 0
-        && group.entries.every((entry) => args.archivedSet.has(entry.id))
+        && groupWorkspaces.every((entry) => args.archivedSet.has(entry.id))
       ) {
         return null;
       }
 
-      const cloudWorkspaceSource = group.entries.find((entry) => {
-        const gitMetadata = sidebarEntryGitMetadata(entry);
-        return gitMetadata.provider === "github"
-          && !!gitMetadata.owner
-          && !!gitMetadata.repoName;
-      });
-      const selectedGroupWorkspace = group.entries.find(
-        (entry): entry is LocalSidebarWorkspaceEntry =>
-          entry.source === "local" && entry.id === args.selectedWorkspaceId,
-      );
-      const cloudWorkspaceSourceGitMetadata = cloudWorkspaceSource
-        ? sidebarEntryGitMetadata(cloudWorkspaceSource)
-        : null;
+      const representative = groupWorkspaces[0];
+      const selectedGroupWorkspace = groupWorkspaces.find(
+        (entry) => entry.id === args.selectedLogicalWorkspaceId,
+      ) ?? null;
 
       return {
-        sourceRoot: group.repoKey,
-        name: group.name,
+        sourceRoot: repoKey,
+        name: logicalGroupName(representative),
         repoWorkspaceId:
-          group.entries.find(
-            (entry): entry is LocalSidebarWorkspaceEntry =>
-              entry.source === "local" && entry.workspace.kind === "local",
-          )?.id
-          ?? group.entries.find(
-            (entry): entry is LocalSidebarWorkspaceEntry => entry.source === "local",
-          )?.id
+          groupWorkspaces.find((entry) => entry.localWorkspace?.kind === "local")?.localWorkspace?.id
+          ?? groupWorkspaces.find((entry) => entry.localWorkspace)?.localWorkspace?.id
           ?? null,
         localSourceRoot:
-          group.entries.find((entry) => entry.source === "local")
-            ?.workspace.sourceRepoRootPath ?? null,
+          groupWorkspaces.find((entry) => entry.localWorkspace)?.localWorkspace?.sourceRepoRootPath
+          ?? null,
         cloudDialogState:
-          cloudWorkspaceSourceGitMetadata?.owner && cloudWorkspaceSourceGitMetadata.repoName
+          representative.provider === "github" && representative.owner && representative.repoName
             ? {
-              gitOwner: cloudWorkspaceSourceGitMetadata.owner,
-              gitRepoName: cloudWorkspaceSourceGitMetadata.repoName,
-              prefillBranchName:
-                selectedGroupWorkspace?.workspace.kind === "worktree"
-                  ? selectedGroupWorkspace.workspace.currentBranch
-                    ?? selectedGroupWorkspace.workspace.originalBranch
-                    ?? undefined
-                  : undefined,
+              gitOwner: representative.owner,
+              gitRepoName: representative.repoName,
+              prefillBranchName: selectedGroupWorkspace?.localWorkspace?.kind === "worktree"
+                ? selectedGroupWorkspace.localWorkspace.currentBranch
+                  ?? selectedGroupWorkspace.localWorkspace.originalBranch
+                  ?? undefined
+                : undefined,
             }
             : null,
         items: visibleEntries.map((entry) => {
+          const active = entry.id === args.selectedLogicalWorkspaceId;
           const archived = args.archivedSet.has(entry.id);
-          const active = entry.id === args.selectedWorkspaceId;
           const lastInteracted = args.workspaceLastInteracted[entry.id] ?? null;
-          const isCloudEntry = sidebarEntryIsCloud(entry);
-          const activity = isCloudEntry
-            ? (isCloudWorkspacePending(entry.workspace.status) ? "working" : "idle")
-            : args.workspaceActivities[entry.id]
-              ?? resolveWorkspaceExecutionViewState(entry.workspace.executionSummary ?? null);
-
-          const variant: SidebarWorkspaceVariant = isCloudEntry
+          const preferredLocalWorkspace = entry.localWorkspace;
+          const preferredCloudWorkspace = entry.cloudWorkspace;
+          const activity = preferredLocalWorkspace
+            ? args.workspaceActivities[preferredLocalWorkspace.id]
+              ?? resolveWorkspaceExecutionViewState(preferredLocalWorkspace.executionSummary ?? null)
+            : preferredCloudWorkspace && isCloudWorkspacePending(preferredCloudWorkspace.status)
+              ? "working"
+              : "idle";
+          const variant: SidebarWorkspaceVariant = entry.effectiveOwner === "cloud"
             ? "cloud"
-            : entry.workspace.kind === "worktree"
+            : preferredLocalWorkspace?.kind === "worktree"
               ? "worktree"
               : "local";
-          const displayNameOverride = entry.source === "local"
-            ? entry.workspace.displayName?.trim() || null
-            : entry.workspace.displayName?.trim() || null;
-          const defaultName = entry.source === "local"
+          const displayNameOverride = preferredLocalWorkspace?.displayName?.trim()
+            || preferredCloudWorkspace?.displayName?.trim()
+            || null;
+          const defaultName = preferredLocalWorkspace
             ? (
-              active && sidebarEntryIsBranchBacked(entry) && args.gitStatus?.currentBranch
+              active && args.selectedWorkspaceId === preferredLocalWorkspace.id && args.gitStatus?.currentBranch
                 ? humanizeBranchName(args.gitStatus.currentBranch)
-                : workspaceDefaultDisplayName(entry.workspace)
+                : workspaceDefaultDisplayName(preferredLocalWorkspace)
             )
-            : cloudEntryDefaultDisplayName(entry);
+            : preferredCloudWorkspace
+              ? cloudEntryDefaultDisplayName({
+                source: "cloud",
+                id: entry.id,
+                cloudWorkspaceId: preferredCloudWorkspace.id,
+                repoKey: entry.repoKey,
+                workspace: preferredCloudWorkspace,
+              })
+              : entry.displayName;
 
           return {
             id: entry.id,
             name: displayNameOverride ?? defaultName,
             defaultName,
             hasDisplayNameOverride: displayNameOverride !== null,
-            renameSupported: true,
+            renameSupported: !(entry.localWorkspace && entry.cloudWorkspace),
             subtitle: active ? args.activeSessionTitle : null,
             active,
             archived,
             activity,
             variant,
-            cloudStatus: isCloudEntry
-              ? entry.workspace.status as CloudWorkspaceStatus
+            cloudStatus: preferredCloudWorkspace
+              ? preferredCloudWorkspace.status as CloudWorkspaceStatus
               : null,
-            additions: active ? args.gitStatus?.summary.additions : undefined,
-            deletions: active ? args.gitStatus?.summary.deletions : undefined,
+            additions:
+              active && preferredLocalWorkspace && args.selectedWorkspaceId === preferredLocalWorkspace.id
+                ? args.gitStatus?.summary.additions
+                : undefined,
+            deletions:
+              active && preferredLocalWorkspace && args.selectedWorkspaceId === preferredLocalWorkspace.id
+                ? args.gitStatus?.summary.deletions
+                : undefined,
             lastInteracted,
             unread: isWorkspaceUnread({
               isActive: active,

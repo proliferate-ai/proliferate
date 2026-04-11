@@ -491,7 +491,7 @@ fn repo_root_to_contract(record: RepoRootRecord) -> RepoRoot {
     }
 }
 
-async fn workspace_to_contract(
+pub(crate) async fn workspace_to_contract(
     state: &AppState,
     record: WorkspaceRecord,
 ) -> Result<Workspace, ApiError> {

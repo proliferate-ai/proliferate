@@ -63,6 +63,23 @@ impl RepoRootStore {
             Ok(())
         })
     }
+
+    pub fn update_default_branch(
+        &self,
+        repo_root_id: &str,
+        default_branch: Option<&str>,
+        updated_at: &str,
+    ) -> anyhow::Result<()> {
+        self.db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE repo_roots
+                 SET default_branch = ?2, updated_at = ?3
+                 WHERE id = ?1",
+                params![repo_root_id, default_branch, updated_at],
+            )?;
+            Ok(())
+        })
+    }
 }
 
 fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RepoRootRecord> {

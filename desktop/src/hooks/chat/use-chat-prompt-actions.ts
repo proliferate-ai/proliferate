@@ -10,6 +10,7 @@ import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { useActiveChatSessionState } from "./use-active-chat-session-state";
 import { useChatAvailabilityState } from "./use-chat-availability-state";
 import { useConfiguredLaunchReadiness } from "./use-configured-launch-readiness";
@@ -50,6 +51,7 @@ export function useChatPromptActions() {
   const showToast = useToastStore((store) => store.show);
   const setWorkspaceArrivalEvent = useHarnessStore((state) => state.setWorkspaceArrivalEvent);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
   const { cancelActiveSession, findOrCreateSession, promptActiveSession } = useSessionActions();
   const clearDraft = useChatInputStore((state) => state.clearDraft);
@@ -66,7 +68,10 @@ export function useChatPromptActions() {
       return;
     }
 
-    const currentDraft = useChatInputStore.getState().draftByWorkspaceId[selectedWorkspaceId] ?? "";
+    const draftKey = selectedLogicalWorkspaceId ?? selectedWorkspaceId;
+    const currentDraft = draftKey
+      ? useChatInputStore.getState().draftByWorkspaceId[draftKey] ?? ""
+      : "";
     const text = currentDraft.trim();
     if (!text || isDisabled) {
       return;
@@ -88,7 +93,9 @@ export function useChatPromptActions() {
     // Optimistically clear the draft immediately so the input empties at the
     // same instant the pending user bubble appears in the transcript.
     // If the send fails, the error toast below covers the failure path.
-    clearDraft(selectedWorkspaceId);
+    if (draftKey) {
+      clearDraft(draftKey);
+    }
 
     try {
       if (targetSessionId) {
@@ -138,6 +145,7 @@ export function useChatPromptActions() {
     promptActiveSession,
     queryClient,
     runtimeUrl,
+    selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     setWorkspaceArrivalEvent,
     showToast,

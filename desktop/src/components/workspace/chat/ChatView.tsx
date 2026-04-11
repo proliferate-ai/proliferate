@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 import { ChatInput } from "@/components/workspace/chat/input/ChatInput";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
+import { WorkspaceMobilityActionBar } from "@/components/workspace/chat/input/WorkspaceMobilityActionBar";
 import { ChatLoadingHero } from "@/components/workspace/chat/surface/ChatLoadingHero";
 import { ChatPreMessageCanvas } from "@/components/workspace/chat/surface/ChatPreMessageCanvas";
 import { ChatReadyHero } from "@/components/workspace/chat/surface/ChatReadyHero";
@@ -79,6 +80,7 @@ export function ChatView() {
       <ChatComposerDock
         backdrop={isSessionMode}
         topSlot={composerTopSlot}
+        bottomSlot={isSessionMode ? <WorkspaceMobilityActionBar /> : null}
         data-telemetry-block
         data-focus-zone="chat"
       >

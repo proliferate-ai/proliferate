@@ -53,7 +53,32 @@ impl SessionStore {
     }
 
     pub fn delete_session(&self, id: &str) -> anyhow::Result<()> {
-        self.db.with_conn(|conn| {
+        self.db.with_tx(|conn| {
+            // Several durable tables still reference sessions without
+            // database-level cascade rules, so session deletion must clear
+            // dependent rows explicitly.
+            conn.execute("DELETE FROM cowork_threads WHERE session_id = ?1", [id])?;
+            conn.execute(
+                "DELETE FROM session_background_work WHERE session_id = ?1",
+                [id],
+            )?;
+            conn.execute(
+                "DELETE FROM session_pending_prompts WHERE session_id = ?1",
+                [id],
+            )?;
+            conn.execute(
+                "DELETE FROM session_pending_config_changes WHERE session_id = ?1",
+                [id],
+            )?;
+            conn.execute(
+                "DELETE FROM session_live_config_snapshots WHERE session_id = ?1",
+                [id],
+            )?;
+            conn.execute(
+                "DELETE FROM session_raw_notifications WHERE session_id = ?1",
+                [id],
+            )?;
+            conn.execute("DELETE FROM session_events WHERE session_id = ?1", [id])?;
             conn.execute("DELETE FROM sessions WHERE id = ?1", [id])?;
             Ok(())
         })
@@ -923,7 +948,12 @@ fn upsert_pending_config_change_row(
          ON CONFLICT(session_id, config_id) DO UPDATE SET
             value = excluded.value,
             queued_at = excluded.queued_at",
-        params![record.session_id, record.config_id, record.value, record.queued_at],
+        params![
+            record.session_id,
+            record.config_id,
+            record.value,
+            record.queued_at
+        ],
     )?;
     Ok(())
 }
@@ -984,9 +1014,7 @@ fn insert_raw_notification_row(
     Ok(())
 }
 
-fn map_background_work(
-    row: &rusqlite::Row,
-) -> rusqlite::Result<SessionBackgroundWorkRecord> {
+fn map_background_work(row: &rusqlite::Row) -> rusqlite::Result<SessionBackgroundWorkRecord> {
     let tracker_kind: String = row.get("tracker_kind")?;
     let state: String = row.get("state")?;
 
@@ -1011,6 +1039,12 @@ fn map_background_work(
 mod tests {
     use super::*;
     use crate::persistence::Db;
+
+    fn count_rows(db: &Db, table: &str, session_id: &str) -> i64 {
+        let sql = format!("SELECT COUNT(*) FROM {table} WHERE session_id = ?1");
+        db.with_conn(|conn| conn.query_row(&sql, [session_id], |row| row.get(0)))
+            .expect("count rows")
+    }
 
     fn seed_workspace(db: &Db) {
         db.with_conn(|conn| {
@@ -1064,6 +1098,108 @@ mod tests {
 
         assert_eq!(stored.thinking_budget_tokens, Some(16_000));
         assert_eq!(stored.title.as_deref(), Some("Fix auth refresh"));
+    }
+
+    #[test]
+    fn delete_session_removes_dependent_rows() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db.clone());
+        let record = session_record();
+        store.insert(&record).expect("insert session");
+
+        store
+            .append_event(&SessionEventRecord {
+                id: 0,
+                session_id: "session-1".to_string(),
+                seq: 1,
+                timestamp: "2026-03-25T00:01:00Z".to_string(),
+                event_type: "turn_started".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                item_id: None,
+                payload_json: r#"{"type":"turn_started"}"#.to_string(),
+            })
+            .expect("append event");
+        store
+            .append_raw_notification(
+                "session-1",
+                "agent_message_chunk",
+                "2026-03-25T00:01:01Z",
+                r#"{"kind":"agent_message_chunk"}"#,
+            )
+            .expect("append raw notification");
+        store
+            .upsert_live_config_snapshot(&SessionLiveConfigSnapshotRecord {
+                session_id: "session-1".to_string(),
+                source_seq: 1,
+                raw_config_options_json: "{}".to_string(),
+                normalized_controls_json: "{}".to_string(),
+                updated_at: "2026-03-25T00:01:02Z".to_string(),
+            })
+            .expect("upsert snapshot");
+        store
+            .upsert_pending_config_change(&PendingConfigChangeRecord {
+                session_id: "session-1".to_string(),
+                config_id: "model".to_string(),
+                value: "\"opus\"".to_string(),
+                queued_at: "2026-03-25T00:01:03Z".to_string(),
+            })
+            .expect("insert pending config change");
+        store
+            .insert_pending_prompt("session-1", "finish cleanup", Some("prompt-1"))
+            .expect("insert pending prompt");
+        store
+            .upsert_or_refresh_pending_background_work(&SessionBackgroundWorkRecord {
+                session_id: "session-1".to_string(),
+                tool_call_id: "tool-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                tracker_kind: SessionBackgroundWorkTrackerKind::ClaudeAsyncAgent,
+                source_agent_kind: "claude".to_string(),
+                agent_id: Some("agent-1".to_string()),
+                output_file: "/tmp/agent.output".to_string(),
+                state: SessionBackgroundWorkState::Pending,
+                created_at: "2026-03-25T00:01:04Z".to_string(),
+                updated_at: "2026-03-25T00:01:04Z".to_string(),
+                launched_at: "2026-03-25T00:01:04Z".to_string(),
+                last_activity_at: "2026-03-25T00:01:04Z".to_string(),
+                completed_at: None,
+            })
+            .expect("insert background work");
+
+        assert_eq!(count_rows(&db, "session_events", "session-1"), 1);
+        assert_eq!(count_rows(&db, "session_raw_notifications", "session-1"), 1);
+        assert_eq!(
+            count_rows(&db, "session_live_config_snapshots", "session-1"),
+            1
+        );
+        assert_eq!(
+            count_rows(&db, "session_pending_config_changes", "session-1"),
+            1
+        );
+        assert_eq!(count_rows(&db, "session_pending_prompts", "session-1"), 1);
+        assert_eq!(count_rows(&db, "session_background_work", "session-1"), 1);
+
+        store
+            .delete_session("session-1")
+            .expect("delete session with dependents");
+
+        assert!(store
+            .find_by_id("session-1")
+            .expect("load deleted session")
+            .is_none());
+        assert_eq!(count_rows(&db, "session_events", "session-1"), 0);
+        assert_eq!(count_rows(&db, "session_raw_notifications", "session-1"), 0);
+        assert_eq!(
+            count_rows(&db, "session_live_config_snapshots", "session-1"),
+            0
+        );
+        assert_eq!(
+            count_rows(&db, "session_pending_config_changes", "session-1"),
+            0
+        );
+        assert_eq!(count_rows(&db, "session_pending_prompts", "session-1"), 0);
+        assert_eq!(count_rows(&db, "session_background_work", "session-1"), 0);
     }
 
     #[test]

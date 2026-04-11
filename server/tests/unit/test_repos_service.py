@@ -110,6 +110,27 @@ class TestGetRepoBranchesForUser:
             assert exc_info.value.status_code == 400
 
     @pytest.mark.asyncio
+    async def test_wraps_repo_access_error_with_contextual_message(self) -> None:
+        user = _make_user(github_token="gh-token")
+
+        with patch(
+            "proliferate.server.cloud.repos.service.get_github_repo_branches",
+            new_callable=AsyncMock,
+            side_effect=GitHubRepoAccessRequired("no access"),
+        ):
+            with pytest.raises(CloudApiError) as exc_info:
+                await get_repo_branches_for_user(
+                    user,
+                    git_owner="acme",
+                    git_repo_name="rocket",
+                    missing_access_message="msg",
+                    repo_access_required_message="custom repo access message",
+                )
+            assert exc_info.value.code == "github_repo_access_required"
+            assert exc_info.value.status_code == 400
+            assert exc_info.value.message == "custom repo access message"
+
+    @pytest.mark.asyncio
     async def test_wraps_integration_error(self) -> None:
         user = _make_user(github_token="gh-token")
 

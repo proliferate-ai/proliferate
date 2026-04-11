@@ -25,8 +25,33 @@ def _has_table(table_name: str) -> bool:
     return table_name in set(inspector.get_table_names())
 
 
+def _has_index(table_name: str, index_name: str) -> bool:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return index_name in {index["name"] for index in inspector.get_indexes(table_name)}
+
+
 def upgrade() -> None:
     """Upgrade schema."""
+    if _has_table("cloud_workspace_handoff_op"):
+        if _has_index(
+            "cloud_workspace_handoff_op",
+            "ix_cloud_workspace_handoff_op_user_id",
+        ):
+            op.drop_index(
+                "ix_cloud_workspace_handoff_op_user_id",
+                table_name="cloud_workspace_handoff_op",
+            )
+        if _has_index(
+            "cloud_workspace_handoff_op",
+            "ix_cloud_workspace_handoff_op_mobility_workspace_id",
+        ):
+            op.drop_index(
+                "ix_cloud_workspace_handoff_op_mobility_workspace_id",
+                table_name="cloud_workspace_handoff_op",
+            )
+        op.drop_table("cloud_workspace_handoff_op")
+
     if not _has_table("cloud_workspace_mobility"):
         return
 

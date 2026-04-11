@@ -12,6 +12,7 @@ class AuthorizeParams(BaseModel):
     code_challenge: str
     code_challenge_method: str = "S256"
     redirect_uri: str
+    prompt: Literal["select_account"] | None = None
 
 
 class TokenRequest(BaseModel):
@@ -57,6 +58,7 @@ class PendingTokenResponse(BaseModel):
 
 class OAuthAvailabilityResponse(BaseModel):
     enabled: bool
+    client_id: str | None = None
 
 
 class RefreshRequest(BaseModel):

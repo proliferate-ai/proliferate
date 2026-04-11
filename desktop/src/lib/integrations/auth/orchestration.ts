@@ -24,6 +24,7 @@ import {
 } from "@/lib/domain/auth/github-signin-state";
 import { createDevBypassSession, isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
 import type { AuthUser } from "@/lib/integrations/auth/proliferate-auth";
+import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 import type { AuthSignInSource, AuthTelemetryProvider } from "@/lib/domain/telemetry/events";
 import {
   AuthRequestError,
@@ -31,7 +32,7 @@ import {
   createPendingGitHubDesktopAuth,
   exchangeDesktopAuthCode,
   fetchCurrentDesktopUser,
-  isGitHubDesktopAuthAvailable,
+  getGitHubDesktopAuthAvailability,
   isPendingDesktopAuthExpired,
   isSessionExpiring,
   parseDesktopAuthCallback,
@@ -334,7 +335,7 @@ export async function bootstrapAuth(): Promise<void> {
   }
 }
 
-export async function signInWithGitHub(): Promise<{
+export async function signInWithGitHub(options?: GitHubDesktopSignInOptions): Promise<{
   provider: AuthTelemetryProvider;
   source: AuthSignInSource;
 }> {
@@ -354,8 +355,8 @@ export async function signInWithGitHub(): Promise<{
     );
   }
 
-  const enabled = await isGitHubDesktopAuthAvailable();
-  if (!enabled) {
+  const availability = await getGitHubDesktopAuthAvailability();
+  if (!availability.enabled) {
     throw new AuthRequestError(
       "GitHub sign-in is not configured for this environment",
       503,
@@ -383,6 +384,7 @@ export async function signInWithGitHub(): Promise<{
       pending.state,
       pending.code_verifier,
       pending.redirect_uri,
+      options,
     );
 
     const recoverySession = pollGitHubDesktopSession(

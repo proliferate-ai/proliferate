@@ -53,6 +53,24 @@ export type GenerateSessionTitleRequest = components["schemas"]["GenerateSession
 export type GenerateSessionTitleResponse = components["schemas"]["GenerateSessionTitleResponse"];
 export type SupportMessageContext     = components["schemas"]["SupportMessageContext"];
 export type SendSupportMessageRequest = components["schemas"]["SupportMessageRequest"];
+export type CloudMobilityRepoRef = components["schemas"]["MobilityRepoRef"];
+export type CloudMobilityHandoffSummary = components["schemas"]["MobilityHandoffSummary"];
+export type CloudMobilityWorkspaceSummary = components["schemas"]["MobilityWorkspaceSummary"];
+export type CloudMobilityWorkspaceDetail = components["schemas"]["MobilityWorkspaceDetail"];
+export type EnsureCloudMobilityWorkspaceRequest =
+  components["schemas"]["EnsureMobilityWorkspaceRequest"];
+export type CloudWorkspaceMobilityPreflightRequest =
+  components["schemas"]["WorkspaceMobilityPreflightRequest"];
+export type CloudWorkspaceMobilityPreflightResponse =
+  components["schemas"]["WorkspaceMobilityPreflightResponse"];
+export type StartCloudWorkspaceMobilityHandoffRequest =
+  components["schemas"]["StartWorkspaceMobilityHandoffRequest"];
+export type UpdateCloudWorkspaceMobilityHandoffPhaseRequest =
+  components["schemas"]["UpdateWorkspaceMobilityHandoffPhaseRequest"];
+export type FinalizeCloudWorkspaceMobilityHandoffRequest =
+  components["schemas"]["FinalizeWorkspaceMobilityHandoffRequest"];
+export type FailCloudWorkspaceMobilityHandoffRequest =
+  components["schemas"]["FailWorkspaceMobilityHandoffRequest"];
 
 export class ProliferateClientError extends Error {
   status: number;

@@ -526,6 +526,67 @@
         }
       }
     },
+    "/v1/repo-roots/{repo_root_id}/mobility/prepare-destination": {
+      "post": {
+        "tags": [
+          "repo-roots"
+        ],
+        "operationId": "prepare_repo_root_mobility_destination",
+        "parameters": [
+          {
+            "name": "repo_root_id",
+            "in": "path",
+            "description": "Repo root ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareRepoRootMobilityDestinationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Prepared repo root mobility destination",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrepareRepoRootMobilityDestinationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Repo root not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions": {
       "get": {
         "tags": [
@@ -2160,12 +2221,12 @@
         }
       }
     },
-    "/v1/workspaces/{workspace_id}/mobility/cleanup": {
+    "/v1/workspaces/{workspace_id}/mobility/destroy-source": {
       "post": {
         "tags": [
           "mobility"
         ],
-        "operationId": "cleanup_workspace_mobility",
+        "operationId": "destroy_workspace_mobility_source",
         "parameters": [
           {
             "name": "workspace_id",
@@ -2181,7 +2242,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/WorkspaceMobilityCleanupRequest"
+                "$ref": "#/components/schemas/DestroyWorkspaceMobilitySourceRequest"
               }
             }
           },
@@ -2189,11 +2250,11 @@
         },
         "responses": {
           "200": {
-            "description": "Cleaned up source workspace mobility state",
+            "description": "Destroyed the old workspace source materialization",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkspaceMobilityCleanupResponse"
+                  "$ref": "#/components/schemas/DestroyWorkspaceMobilitySourceResponse"
                 }
               }
             }
@@ -3677,6 +3738,36 @@
           }
         }
       },
+      "DestroyWorkspaceMobilitySourceRequest": {
+        "type": "object"
+      },
+      "DestroyWorkspaceMobilitySourceResponse": {
+        "type": "object",
+        "required": [
+          "workspaceId",
+          "sourceDestroyed"
+        ],
+        "properties": {
+          "closedTerminalIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "deletedSessionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sourceDestroyed": {
+            "type": "boolean"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
       "DetectProjectSetupResponse": {
         "type": "object",
         "required": [
@@ -4986,6 +5077,38 @@
           },
           "status": {
             "type": "string"
+          }
+        }
+      },
+      "PrepareRepoRootMobilityDestinationRequest": {
+        "type": "object",
+        "required": [
+          "requestedBranch",
+          "requestedBaseSha"
+        ],
+        "properties": {
+          "preferredWorkspaceName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requestedBaseSha": {
+            "type": "string"
+          },
+          "requestedBranch": {
+            "type": "string"
+          }
+        }
+      },
+      "PrepareRepoRootMobilityDestinationResponse": {
+        "type": "object",
+        "required": [
+          "workspace"
+        ],
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
           }
         }
       },
@@ -7060,35 +7183,6 @@
           }
         }
       },
-      "WorkspaceMobilityCleanupRequest": {
-        "type": "object",
-        "properties": {
-          "sessionIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "WorkspaceMobilityCleanupResponse": {
-        "type": "object",
-        "required": [
-          "workspaceId",
-          "deletedSessionIds"
-        ],
-        "properties": {
-          "deletedSessionIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "workspaceId": {
-            "type": "string"
-          }
-        }
-      },
       "WorkspaceMobilityFileEntry": {
         "type": "object",
         "required": [
@@ -7173,7 +7267,8 @@
         "enum": [
           "normal",
           "frozen_for_handoff",
-          "remote_owned"
+          "remote_owned",
+          "repair_blocked"
         ]
       },
       "WorkspaceMobilityRuntimeState": {

@@ -195,6 +195,8 @@ async def test_alembic_upgrade_creates_current_schema() -> None:
                     "billing_grant",
                     "cloud_mcp_connection",
                     "cloud_credential",
+                    "cloud_workspace_handoff_op",
+                    "cloud_workspace_mobility",
                     "cloud_sandbox",
                     "cloud_workspace",
                     "desktop_auth_code",
@@ -352,8 +354,50 @@ async def test_alembic_upgrade_from_removed_f4_revision() -> None:
                 tables = await conn.run_sync(
                     lambda sync_conn: set(inspect(sync_conn).get_table_names())
                 )
-                assert "cloud_workspace_mobility" not in tables
-                assert "cloud_workspace_handoff_op" not in tables
+                assert "cloud_workspace_mobility" in tables
+                assert "cloud_workspace_handoff_op" in tables
+                assert "cloud_mcp_connection" in tables
+        finally:
+            await inspection_engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_alembic_upgrade_from_removed_a5_revision() -> None:
+    async with temporary_database("removed_a5_revision") as (_database_name, database_url):
+        bootstrap_engine = create_async_engine(database_url, echo=False)
+        try:
+            async with bootstrap_engine.begin() as conn:
+                await conn.run_sync(_bootstrap_legacy_initial_schema)
+                await conn.run_sync(
+                    lambda sync_conn: _set_alembic_revision(sync_conn, "0001_initial")
+                )
+        finally:
+            await bootstrap_engine.dispose()
+
+        await run_migrations_async(database_url)
+
+        stamped_engine = create_async_engine(database_url, echo=False)
+        try:
+            async with stamped_engine.begin() as conn:
+                await conn.run_sync(
+                    lambda sync_conn: _set_alembic_revision(sync_conn, "a5b6c7d8e9f0")
+                )
+        finally:
+            await stamped_engine.dispose()
+
+        await run_migrations_async(database_url)
+
+        inspection_engine = create_async_engine(database_url, echo=False)
+        try:
+            async with inspection_engine.begin() as conn:
+                version = await conn.scalar(text("SELECT version_num FROM alembic_version"))
+                assert version == HEAD_REVISION
+
+                tables = await conn.run_sync(
+                    lambda sync_conn: set(inspect(sync_conn).get_table_names())
+                )
+                assert "cloud_workspace_mobility" in tables
+                assert "cloud_workspace_handoff_op" in tables
                 assert "cloud_mcp_connection" in tables
         finally:
             await inspection_engine.dispose()

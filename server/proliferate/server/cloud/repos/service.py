@@ -44,6 +44,7 @@ async def get_repo_branches_for_user(
     git_owner: str,
     git_repo_name: str,
     missing_access_message: str,
+    repo_access_required_message: str | None = None,
 ) -> GitHubRepoBranches:
     access_token = _require_github_access_token(user, missing_access_message)
     lookup_started = time.perf_counter()
@@ -52,7 +53,7 @@ async def get_repo_branches_for_user(
     except GitHubRepoAccessRequired as exc:
         raise CloudApiError(
             "github_repo_access_required",
-            str(exc),
+            repo_access_required_message or str(exc),
             status_code=400,
         ) from exc
     except GitHubIntegrationError as exc:
@@ -82,6 +83,9 @@ async def get_cloud_repo_branches(
         git_owner=git_owner,
         git_repo_name=git_repo_name,
         missing_access_message="Connect a GitHub account before browsing cloud branches.",
+        repo_access_required_message=(
+            "Reconnect GitHub and grant repository access before browsing cloud branches."
+        ),
     )
     log_cloud_event(
         "cloud repo branch metadata loaded",

@@ -122,6 +122,29 @@ impl WorkspaceAccessGate {
         Ok(())
     }
 
+    pub fn assert_can_prepare_mobility_destination_for_repo_root(
+        &self,
+        repo_root_id: &str,
+    ) -> Result<(), WorkspaceAccessError> {
+        let workspaces = self
+            .workspace_store
+            .list_by_repo_root_id(repo_root_id)
+            .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))?;
+        for workspace in workspaces {
+            let state = self.runtime_state(&workspace.id)?;
+            if matches!(
+                state.mode,
+                WorkspaceAccessMode::FrozenForHandoff | WorkspaceAccessMode::RepairBlocked
+            ) {
+                return Err(WorkspaceAccessError::MutationBlocked {
+                    workspace_id: workspace.id,
+                    mode: state.mode,
+                });
+            }
+        }
+        Ok(())
+    }
+
     pub fn assert_can_mutate_for_session(
         &self,
         session_id: &str,
@@ -163,5 +186,133 @@ impl WorkspaceAccessGate {
                 mode,
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::WorkspaceAccessGate;
+    use crate::persistence::Db;
+    use crate::sessions::store::SessionStore;
+    use crate::terminals::service::TerminalService;
+    use crate::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
+    use crate::workspaces::access_store::WorkspaceAccessStore;
+    use crate::workspaces::model::WorkspaceRecord;
+    use crate::workspaces::store::WorkspaceStore;
+
+    fn workspace_record(id: &str, repo_root_id: &str, path: &str) -> WorkspaceRecord {
+        WorkspaceRecord {
+            id: id.to_string(),
+            kind: "worktree".to_string(),
+            repo_root_id: Some(repo_root_id.to_string()),
+            path: path.to_string(),
+            surface: "standard".to_string(),
+            source_repo_root_path: "/tmp/repo".to_string(),
+            source_workspace_id: Some(repo_root_id.to_string()),
+            git_provider: None,
+            git_owner: None,
+            git_repo_name: None,
+            original_branch: Some("main".to_string()),
+            current_branch: Some("main".to_string()),
+            display_name: None,
+            created_at: "2025-01-01T00:00:00Z".to_string(),
+            updated_at: "2025-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    fn access_record(workspace_id: &str, mode: WorkspaceAccessMode) -> WorkspaceAccessRecord {
+        WorkspaceAccessRecord {
+            workspace_id: workspace_id.to_string(),
+            mode,
+            handoff_op_id: Some("handoff-1".to_string()),
+            updated_at: "2025-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    fn build_gate() -> (WorkspaceAccessGate, WorkspaceStore, WorkspaceAccessStore) {
+        let db = Db::open_in_memory().expect("open db");
+        let workspace_store = WorkspaceStore::new(db.clone());
+        let session_store = SessionStore::new(db.clone());
+        let access_store = WorkspaceAccessStore::new(db);
+        let gate = WorkspaceAccessGate::new(
+            workspace_store.clone(),
+            session_store,
+            access_store.clone(),
+            Arc::new(TerminalService::new()),
+        );
+        (gate, workspace_store, access_store)
+    }
+
+    #[test]
+    fn mobility_destination_prepare_allows_remote_owned_repo_root_members() {
+        let (gate, workspace_store, access_store) = build_gate();
+        workspace_store
+            .insert(&workspace_record(
+                "workspace-1",
+                "repo-root-1",
+                "/tmp/repo/one",
+            ))
+            .expect("insert workspace");
+        access_store
+            .upsert(&access_record(
+                "workspace-1",
+                WorkspaceAccessMode::RemoteOwned,
+            ))
+            .expect("set state");
+
+        gate.assert_can_prepare_mobility_destination_for_repo_root("repo-root-1")
+            .expect("remote owned workspace should not block destination prep");
+    }
+
+    #[test]
+    fn mobility_destination_prepare_blocks_frozen_repo_root_members() {
+        let (gate, workspace_store, access_store) = build_gate();
+        workspace_store
+            .insert(&workspace_record(
+                "workspace-1",
+                "repo-root-1",
+                "/tmp/repo/one",
+            ))
+            .expect("insert workspace");
+        access_store
+            .upsert(&access_record(
+                "workspace-1",
+                WorkspaceAccessMode::FrozenForHandoff,
+            ))
+            .expect("set state");
+
+        let error = gate
+            .assert_can_prepare_mobility_destination_for_repo_root("repo-root-1")
+            .expect_err("frozen workspace should block destination prep");
+        let message = error.to_string();
+        assert!(message.contains("workspace workspace-1 is not writable"));
+        assert!(message.contains("frozen_for_handoff"));
+    }
+
+    #[test]
+    fn mobility_destination_prepare_blocks_repair_blocked_repo_root_members() {
+        let (gate, workspace_store, access_store) = build_gate();
+        workspace_store
+            .insert(&workspace_record(
+                "workspace-1",
+                "repo-root-1",
+                "/tmp/repo/one",
+            ))
+            .expect("insert workspace");
+        access_store
+            .upsert(&access_record(
+                "workspace-1",
+                WorkspaceAccessMode::RepairBlocked,
+            ))
+            .expect("set state");
+
+        let error = gate
+            .assert_can_prepare_mobility_destination_for_repo_root("repo-root-1")
+            .expect_err("repair-blocked workspace should block destination prep");
+        let message = error.to_string();
+        assert!(message.contains("workspace workspace-1 is not writable"));
+        assert!(message.contains("repair_blocked"));
     }
 }

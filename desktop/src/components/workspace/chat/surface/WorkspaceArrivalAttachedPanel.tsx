@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/Badge";
 import { IconButton } from "@/components/ui/IconButton";
 import { SupportDialog } from "@/components/support/SupportDialog";
 import { ComposerAttachedPanel } from "@/components/workspace/chat/input/ComposerAttachedPanel";
+import { WorkspaceMobilityAttachedPanel } from "@/components/workspace/chat/surface/WorkspaceMobilityAttachedPanel";
 import { useWorkspaceArrivalActions } from "@/hooks/workspaces/use-workspace-arrival-actions";
 import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/use-workspace-status-panel-state";
 import { usePendingWorkspaceEntryActions } from "@/hooks/workspaces/use-pending-workspace-entry-actions";
@@ -96,6 +97,10 @@ export function WorkspaceArrivalAttachedPanel() {
 
   if (!panelState) {
     return null;
+  }
+
+  if (panelState.kind === "mobility") {
+    return <WorkspaceMobilityAttachedPanel />;
   }
 
   const rerunSetup = useRerunSetupMutation();

@@ -36,6 +36,8 @@ export type {
 export type {
   RepoRootKind,
   RepoRoot,
+  PrepareRepoRootMobilityDestinationRequest,
+  PrepareRepoRootMobilityDestinationResponse,
 } from "./types/repo-roots.js";
 
 export type {
@@ -48,8 +50,8 @@ export type {
   ExportWorkspaceMobilityArchiveRequest,
   InstallWorkspaceMobilityArchiveRequest,
   InstallWorkspaceMobilityArchiveResponse,
-  WorkspaceMobilityCleanupRequest,
-  WorkspaceMobilityCleanupResponse,
+  DestroyWorkspaceMobilitySourceRequest,
+  DestroyWorkspaceMobilitySourceResponse,
   WorkspaceMobilityArchive,
   WorkspaceMobilityFileEntry,
   WorkspaceMobilitySessionBundle,

@@ -250,6 +250,10 @@ impl TerminalService {
         Ok(())
     }
 
+    pub fn close_terminal_blocking(&self, terminal_id: &str) -> anyhow::Result<()> {
+        tokio::runtime::Handle::current().block_on(self.close_terminal(terminal_id))
+    }
+
     pub async fn subscribe_output(
         &self,
         terminal_id: &str,

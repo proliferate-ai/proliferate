@@ -62,9 +62,13 @@ async def test_create_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     async def _unexpected(*_args, **_kwargs) -> None:
         raise AssertionError("downstream workspace creation should not run when billing blocks")
 
+    async def _repo_config_value(**_kwargs):
+        return SimpleNamespace(configured=True, env_vars={})
+
     monkeypatch.setattr(workspace_service, "get_linked_github_account", lambda _user: object())
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
     monkeypatch.setattr(workspace_service, "load_existing_cloud_workspace", _existing_workspace)
+    monkeypatch.setattr(workspace_service, "load_repo_config_value", _repo_config_value)
     monkeypatch.setattr(workspace_service, "get_billing_snapshot", _billing_snapshot)
     monkeypatch.setattr(workspace_service, "load_cloud_credential_statuses", _unexpected)
     monkeypatch.setattr(workspace_service, "create_cloud_workspace_for_user", _unexpected)
@@ -143,6 +147,7 @@ async def test_start_cloud_workspace_requeues_when_persisted_sandbox_lookup_fail
         runtime_token_ciphertext="ciphertext",
         anyharness_workspace_id="workspace-123",
         last_error="old error",
+        ready_at=datetime.now(UTC),
     )
     sandbox = SimpleNamespace(
         id=uuid4(),
@@ -213,7 +218,7 @@ async def test_start_cloud_workspace_requeues_when_persisted_sandbox_lookup_fail
     monkeypatch.setattr(
         workspace_service,
         "schedule_workspace_provision",
-        lambda workspace_id: scheduled.append(workspace_id),
+        lambda workspace_id, **_kwargs: scheduled.append(workspace_id),
     )
 
     payload = await workspace_service.start_cloud_workspace(user, workspace.id)
@@ -224,6 +229,88 @@ async def test_start_cloud_workspace_requeues_when_persisted_sandbox_lookup_fail
     assert marked_errors and "Sandbox missing from provider" in marked_errors[0]
     assert saved_statuses == [(workspace_service.WorkspaceStatus.queued, None)]
     assert scheduled == [workspace.id]
+
+
+@pytest.mark.asyncio
+async def test_start_cloud_workspace_requeues_queued_workspace_for_mobility(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    workspace = SimpleNamespace(
+        id=uuid4(),
+        user_id=user.id,
+        status=workspace_service.WorkspaceStatus.queued,
+        git_owner="acme",
+        git_repo_name="rocket",
+        git_branch="feature/cloud",
+        git_base_branch="main",
+        last_error="stale error",
+        ready_at=None,
+    )
+    scheduled: list[tuple[object, object]] = []
+    saved_statuses: list[tuple[object, object]] = []
+    refreshed_env_snapshots: list[object] = []
+
+    async def _require_workspace(_user_id, _workspace_id):
+        return workspace
+
+    async def _repo_branches(*_args, **_kwargs) -> SimpleNamespace:
+        return SimpleNamespace(branches=["main"])
+
+    async def _billing_snapshot(_user_id) -> BillingSnapshot:
+        return _unblocked_billing_snapshot()
+
+    async def _credential_statuses(_user_id):
+        return [SimpleNamespace(provider="claude", synced=True)]
+
+    async def _refresh_repo_env_snapshot_for_workspace(_workspace):
+        refreshed_env_snapshots.append(_workspace.id)
+        return _workspace
+
+    async def _save_workspace(_workspace):
+        saved_statuses.append((_workspace.status, _workspace.last_error))
+        return _workspace
+
+    async def _build_workspace_detail(_user_id, _workspace):
+        return SimpleNamespace(status=_workspace.status)
+
+    monkeypatch.setattr(
+        workspace_service,
+        "_require_cloud_workspace_for_user",
+        _require_workspace,
+    )
+    monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
+    monkeypatch.setattr(workspace_service, "get_billing_snapshot", _billing_snapshot)
+    monkeypatch.setattr(
+        workspace_service,
+        "load_cloud_credential_statuses",
+        _credential_statuses,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "_refresh_repo_env_snapshot_for_workspace",
+        _refresh_repo_env_snapshot_for_workspace,
+    )
+    monkeypatch.setattr(workspace_service, "save_workspace", _save_workspace)
+    monkeypatch.setattr(workspace_service, "_build_workspace_detail", _build_workspace_detail)
+    monkeypatch.setattr(
+        workspace_service,
+        "schedule_workspace_provision",
+        lambda workspace_id, **kwargs: scheduled.append(
+            (workspace_id, kwargs.get("requested_base_sha"))
+        ),
+    )
+
+    payload = await workspace_service.start_cloud_workspace(
+        user,
+        workspace.id,
+        requested_base_sha="abc123",
+    )
+
+    assert payload.status == workspace_service.WorkspaceStatus.queued
+    assert refreshed_env_snapshots == [workspace.id]
+    assert saved_statuses == [(workspace_service.WorkspaceStatus.queued, None)]
+    assert scheduled == [(workspace.id, "abc123")]
 
 
 @pytest.mark.asyncio
@@ -245,6 +332,7 @@ async def test_start_cloud_workspace_marks_ready_when_reconnect_succeeds(
         last_error=None,
         status_detail="Stopped",
         updated_at=datetime.now(UTC),
+        ready_at=datetime.now(UTC),
     )
     sandbox = SimpleNamespace(
         id=uuid4(),

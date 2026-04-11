@@ -1,12 +1,13 @@
 use anyharness_contract::v1::{
+    DestroyWorkspaceMobilitySourceRequest, DestroyWorkspaceMobilitySourceResponse,
     ExportWorkspaceMobilityArchiveRequest, InstallWorkspaceMobilityArchiveRequest,
     InstallWorkspaceMobilityArchiveResponse, MobilityPendingConfigChangeRecord,
     MobilityPendingPromptRecord, MobilitySessionEventRecord,
     MobilitySessionLiveConfigSnapshotRecord, MobilitySessionRawNotificationRecord,
     MobilitySessionRecord, UpdateWorkspaceMobilityRuntimeStateRequest, WorkspaceMobilityArchive,
-    WorkspaceMobilityBlocker, WorkspaceMobilityCleanupRequest, WorkspaceMobilityCleanupResponse,
-    WorkspaceMobilityFileEntry, WorkspaceMobilityPreflightResponse, WorkspaceMobilityRuntimeState,
-    WorkspaceMobilitySessionBundle, WorkspaceMobilitySessionCandidate,
+    WorkspaceMobilityBlocker, WorkspaceMobilityFileEntry, WorkspaceMobilityPreflightResponse,
+    WorkspaceMobilityRuntimeState, WorkspaceMobilitySessionBundle,
+    WorkspaceMobilitySessionCandidate,
 };
 use axum::{
     extract::{Path, State},
@@ -143,32 +144,34 @@ pub async fn install_workspace_mobility_archive(
 
 #[utoipa::path(
     post,
-    path = "/v1/workspaces/{workspace_id}/mobility/cleanup",
+    path = "/v1/workspaces/{workspace_id}/mobility/destroy-source",
     params(("workspace_id" = String, Path, description = "Workspace ID")),
-    request_body = WorkspaceMobilityCleanupRequest,
+    request_body = DestroyWorkspaceMobilitySourceRequest,
     responses(
-        (status = 200, description = "Cleaned up source workspace mobility state", body = WorkspaceMobilityCleanupResponse),
+        (status = 200, description = "Destroyed the old workspace source materialization", body = DestroyWorkspaceMobilitySourceResponse),
         (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
     ),
     tag = "mobility"
 )]
-pub async fn cleanup_workspace_mobility(
+pub async fn destroy_workspace_mobility_source(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
-    Json(req): Json<WorkspaceMobilityCleanupRequest>,
-) -> Result<Json<WorkspaceMobilityCleanupResponse>, ApiError> {
+    Json(_req): Json<DestroyWorkspaceMobilitySourceRequest>,
+) -> Result<Json<DestroyWorkspaceMobilitySourceResponse>, ApiError> {
     assert_workspace_mode(&state, &workspace_id, WorkspaceAccessMode::RemoteOwned)?;
     let mobility_service = state.mobility_service.clone();
-    let workspace_id_for_cleanup = workspace_id.clone();
-    let deleted_session_ids = run_blocking("mobility_cleanup", move || {
-        mobility_service.cleanup_workspace_sessions(&workspace_id_for_cleanup, &req.session_ids)
+    let workspace_id_for_destroy = workspace_id.clone();
+    let summary = run_blocking("mobility_destroy_source", move || {
+        mobility_service.destroy_source_workspace(&workspace_id_for_destroy)
     })
     .await?
     .map_err(map_mobility_error)?;
 
-    Ok(Json(WorkspaceMobilityCleanupResponse {
+    Ok(Json(DestroyWorkspaceMobilitySourceResponse {
         workspace_id,
-        deleted_session_ids,
+        deleted_session_ids: summary.deleted_session_ids,
+        closed_terminal_ids: summary.closed_terminal_ids,
+        source_destroyed: summary.source_destroyed,
     }))
 }
 

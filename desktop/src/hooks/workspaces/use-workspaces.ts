@@ -14,9 +14,8 @@ import {
 
 export function useWorkspaces() {
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
-  const connectionState = useHarnessStore((state) => state.connectionState);
   const { cloudActive } = useCloudAvailabilityState();
-  const isHealthy = connectionState === "healthy" && runtimeUrl.trim().length > 0;
+  const canQuery = runtimeUrl.trim().length > 0 || cloudActive;
 
   return useQuery<WorkspaceCollections>({
     queryKey: workspaceCollectionsKey(runtimeUrl, cloudActive),
@@ -49,6 +48,6 @@ export function useWorkspaces() {
       });
       return collections;
     },
-    enabled: isHealthy,
+    enabled: canQuery,
   });
 }

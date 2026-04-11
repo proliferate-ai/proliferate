@@ -3,9 +3,10 @@ import { CAPABILITY_COPY } from "@/config/capabilities";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/auth/use-github-auth-availability";
 import { useAppCapabilities } from "@/hooks/capabilities/use-app-capabilities";
 import { useAuthActions } from "@/hooks/auth/use-auth-actions";
+import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 
 export interface UseGitHubSignInResult {
-  signIn: () => Promise<void>;
+  signIn: (options?: GitHubDesktopSignInOptions) => Promise<void>;
   submitting: boolean;
   error: string | null;
   signInAvailable: boolean;
@@ -25,14 +26,14 @@ export function useGitHubSignIn(): UseGitHubSignInResult {
   const [error, setError] = useState<string | null>(null);
 
   const signInChecking = cloudEnabled && githubDesktopAuthAvailabilityPending;
-  const signInAvailable = cloudEnabled && githubDesktopAuthAvailable === true;
+  const signInAvailable = cloudEnabled && githubDesktopAuthAvailable?.enabled === true;
   const signInUnavailableDescription = signInChecking
     ? CAPABILITY_COPY.githubAuthCheckingDescription
     : cloudEnabled
       ? CAPABILITY_COPY.githubAuthUnavailableDescription
     : CAPABILITY_COPY.githubLocalDescription;
 
-  const signIn = useCallback(async () => {
+  const signIn = useCallback(async (options?: GitHubDesktopSignInOptions) => {
     if (!signInAvailable) {
       setError(signInUnavailableDescription);
       return;
@@ -41,7 +42,7 @@ export function useGitHubSignIn(): UseGitHubSignInResult {
     setSubmitting(true);
     setError(null);
     try {
-      await signInWithGitHub();
+      await signInWithGitHub(options);
     } catch (err) {
       setError(err instanceof Error ? err.message : "GitHub sign-in failed");
       throw err;

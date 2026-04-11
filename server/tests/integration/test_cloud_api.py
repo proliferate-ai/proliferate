@@ -121,7 +121,7 @@ def _disable_workspace_provision(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         cloud_service,
         "schedule_workspace_provision",
-        lambda _workspace_id: None,
+        lambda _workspace_id, **_kwargs: None,
     )
 
 
@@ -998,7 +998,7 @@ class TestCloudWorkspaces:
         monkeypatch.setattr(
             cloud_service,
             "schedule_workspace_provision",
-            lambda workspace_id: scheduled.append(workspace_id),
+            lambda workspace_id, **_kwargs: scheduled.append(workspace_id),
         )
         monkeypatch.setattr(cloud_service, "get_sandbox_provider", lambda _kind: _FakeProvider())
         monkeypatch.setattr(cloud_service, "ensure_workspace_runtime_ready", _ensure_runtime_ready)
@@ -1092,7 +1092,7 @@ class TestCloudWorkspaces:
         monkeypatch.setattr(
             cloud_service,
             "schedule_workspace_provision",
-            lambda workspace_id: scheduled.append(workspace_id),
+            lambda workspace_id, **_kwargs: scheduled.append(workspace_id),
         )
         monkeypatch.setattr(cloud_service, "get_sandbox_provider", lambda _kind: _FakeProvider())
         monkeypatch.setattr(cloud_service, "ensure_workspace_runtime_ready", _boom)

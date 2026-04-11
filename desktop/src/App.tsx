@@ -34,6 +34,7 @@ import {
 } from "@/stores/preferences/user-preferences-store"
 import { bootstrapRepoPreferences } from "@/stores/preferences/repo-preferences-store"
 import { bootstrapWorkspaceUi } from "@/stores/preferences/workspace-ui-store"
+import { bootstrapLogicalWorkspaceSelection } from "@/stores/workspaces/logical-workspace-store"
 
 // Dev-only playground. Lazy-loaded with a DEV guard so neither this file
 // nor any of its fixtures / transitive deps land in production bundles.
@@ -80,6 +81,7 @@ function App() {
     void bootstrapUserPreferences().then(applyStoredTheme)
     void bootstrapRepoPreferences()
     void bootstrapWorkspaceUi()
+    void bootstrapLogicalWorkspaceSelection()
 
     const authBootstrapStartedAt = startStartupTimer()
     logStartupDebug("app.auth_bootstrap.start")

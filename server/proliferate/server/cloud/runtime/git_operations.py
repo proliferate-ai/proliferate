@@ -57,17 +57,25 @@ async def clone_repository(
         stderr = result_stderr(install_git_result) or result_stdout(install_git_result)
         raise RuntimeError(f"Failed to install git in cloud sandbox: {str(stderr).strip()[:400]}")
 
+    clone_command = (
+        f"rm -rf {shlex.quote(runtime_context.runtime_workdir)} && "
+        + (
+            f"git clone {shlex.quote(_tokenized_repo_url(ctx))} "
+            f"{shlex.quote(runtime_context.runtime_workdir)}"
+            if ctx.requested_base_sha
+            else (
+                f"git clone --depth 1 --branch {shlex.quote(ctx.git_base_branch)} "
+                f"{shlex.quote(_tokenized_repo_url(ctx))} "
+                f"{shlex.quote(runtime_context.runtime_workdir)}"
+            )
+        )
+    )
     clone_result = await run_sandbox_command_logged(
         provider,
         sandbox,
         workspace_id=ctx.workspace_id,
         label="clone_repo",
-        command=(
-            f"rm -rf {shlex.quote(runtime_context.runtime_workdir)} && "
-            f"git clone --depth 1 --branch {shlex.quote(ctx.git_base_branch)} "
-            f"{shlex.quote(_tokenized_repo_url(ctx))} "
-            f"{shlex.quote(runtime_context.runtime_workdir)}"
-        ),
+        command=clone_command,
         cwd=clone_cwd,
         runtime_context=runtime_context,
         timeout_seconds=180,
@@ -84,15 +92,32 @@ async def checkout_cloud_branch(
     ctx: CloudProvisionInput,
     runtime_context: SandboxRuntimeContext,
 ) -> None:
+    if ctx.requested_base_sha:
+        checkout_command = "sh -lc " + shlex.quote(
+            " && ".join(
+                [
+                    (
+                        f"git -C {shlex.quote(runtime_context.runtime_workdir)} "
+                        f"checkout --force {shlex.quote(ctx.requested_base_sha)}"
+                    ),
+                    (
+                        f"git -C {shlex.quote(runtime_context.runtime_workdir)} "
+                        f"checkout -B {shlex.quote(ctx.git_branch)}"
+                    ),
+                ]
+            )
+        )
+    else:
+        checkout_command = (
+            f"git -C {shlex.quote(runtime_context.runtime_workdir)} checkout --no-track "
+            f"-b {shlex.quote(ctx.git_branch)} origin/{shlex.quote(ctx.git_base_branch)}"
+        )
     checkout_result = await run_sandbox_command_logged(
         provider,
         sandbox,
         workspace_id=ctx.workspace_id,
         label="checkout_cloud_branch",
-        command=(
-            f"git -C {shlex.quote(runtime_context.runtime_workdir)} checkout --no-track "
-            f"-b {shlex.quote(ctx.git_branch)} origin/{shlex.quote(ctx.git_base_branch)}"
-        ),
+        command=checkout_command,
         runtime_context=runtime_context,
         timeout_seconds=30,
     )

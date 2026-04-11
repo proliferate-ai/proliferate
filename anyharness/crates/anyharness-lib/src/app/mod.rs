@@ -133,6 +133,7 @@ impl AppState {
         let setup_execution_service = Arc::new(SetupExecutionService::new());
         let mobility_service = Arc::new(MobilityService::new(
             workspace_service.clone(),
+            workspace_runtime.clone(),
             session_service.clone(),
             session_runtime.clone(),
             workspace_access_gate.clone(),

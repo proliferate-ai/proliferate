@@ -35,6 +35,22 @@ class _FakeAsyncClient:
         return await self.get(_url, **_kwargs)
 
 
+def _response(
+    status_code: int,
+    *,
+    json: object | None = None,
+    text: str | None = None,
+    method: str = "POST",
+    url: str = "https://runtime.invalid/v1/workspaces/resolve",
+) -> httpx.Response:
+    kwargs: dict[str, object] = {"request": httpx.Request(method, url)}
+    if json is not None:
+        kwargs["json"] = json
+    if text is not None:
+        kwargs["text"] = text
+    return httpx.Response(status_code, **kwargs)
+
+
 @pytest.mark.asyncio
 async def test_verify_runtime_auth_enforced_accepts_authenticated_and_rejects_unauthenticated(
     monkeypatch: pytest.MonkeyPatch,
@@ -217,3 +233,59 @@ def test_synced_ready_providers_includes_gemini() -> None:
     )
 
     assert providers == ["claude", "gemini"]
+
+
+@pytest.mark.asyncio
+async def test_resolve_remote_workspace_accepts_current_contract_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeAsyncClient(
+        [
+            _response(
+                200,
+                json={
+                    "repoRoot": {"id": "repo-1"},
+                    "workspace": {"id": "workspace-123"},
+                },
+            )
+        ]
+    )
+    monkeypatch.setattr(anyharness_api.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    workspace_id = await anyharness_api.resolve_remote_workspace(
+        "https://runtime.invalid",
+        "runtime-token",
+        runtime_workdir="/workspace",
+    )
+
+    assert workspace_id == "workspace-123"
+
+
+@pytest.mark.asyncio
+async def test_resolve_remote_workspace_raises_when_response_json_is_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeAsyncClient([_response(200, text="{not-json}")])
+    monkeypatch.setattr(anyharness_api.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    with pytest.raises(CloudRuntimeReconnectError, match="returned invalid JSON"):
+        await anyharness_api.resolve_remote_workspace(
+            "https://runtime.invalid",
+            "runtime-token",
+            runtime_workdir="/workspace",
+        )
+
+
+@pytest.mark.asyncio
+async def test_resolve_remote_workspace_raises_when_workspace_id_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeAsyncClient([_response(200, json={"workspace": {}})])
+    monkeypatch.setattr(anyharness_api.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    with pytest.raises(CloudRuntimeReconnectError, match="valid AnyHarness workspace id"):
+        await anyharness_api.resolve_remote_workspace(
+            "https://runtime.invalid",
+            "runtime-token",
+            runtime_workdir="/workspace",
+        )

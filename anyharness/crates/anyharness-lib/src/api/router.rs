@@ -56,6 +56,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/workspaces/{workspace_id}", get(workspaces::get_workspace))
         .route("/repo-roots", get(repo_roots::list_repo_roots))
         .route("/repo-roots/{repo_root_id}", get(repo_roots::get_repo_root))
+        .route(
+            "/repo-roots/{repo_root_id}/mobility/prepare-destination",
+            post(repo_roots::prepare_repo_root_mobility_destination),
+        )
         .route("/cowork", get(cowork::get_cowork_status))
         .route("/cowork/enable", post(cowork::enable_cowork))
         .route(
@@ -121,8 +125,8 @@ pub fn build_router(state: AppState) -> Router {
             )),
         )
         .route(
-            "/workspaces/{workspace_id}/mobility/cleanup",
-            post(mobility::cleanup_workspace_mobility),
+            "/workspaces/{workspace_id}/mobility/destroy-source",
+            post(mobility::destroy_workspace_mobility_source),
         )
         // Workspace files
         .route(
@@ -330,9 +334,10 @@ fn extract_bearer_token(headers: &HeaderMap, query: Option<&str>) -> Option<Stri
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::sync::Mutex;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use std::{env, fs};
 
     use axum::{
         body::{to_bytes, Body},
@@ -340,13 +345,37 @@ mod tests {
     };
     use serde_json::Value;
     use tower::util::ServiceExt;
+    use uuid::Uuid;
 
     use super::build_router;
     use crate::{
         app::{test_support, AppState},
         persistence::Db,
         sessions::{model::SessionRecord, store::SessionStore},
+        terminals::model::CreateTerminalOptions,
     };
+
+    struct TempDirGuard {
+        path: PathBuf,
+    }
+
+    impl TempDirGuard {
+        fn new(prefix: &str) -> Self {
+            let path = env::temp_dir().join(format!("anyharness-{prefix}-{}", Uuid::new_v4()));
+            fs::create_dir_all(&path).expect("create temp dir");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDirGuard {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
 
     fn test_state(require_bearer_auth: bool) -> AppState {
         let unique_suffix = SystemTime::now()
@@ -361,6 +390,29 @@ mod tests {
             require_bearer_auth,
         )
         .expect("expected app state")
+    }
+
+    fn init_repo(path: &Path) {
+        run_git(path, ["init", "-b", "main"]);
+        run_git(path, ["config", "user.email", "codex@example.com"]);
+        run_git(path, ["config", "user.name", "Codex"]);
+        fs::write(path.join("README.md"), "seed\n").expect("write seed file");
+        run_git(path, ["add", "README.md"]);
+        run_git(path, ["commit", "-m", "Initial commit"]);
+    }
+
+    fn run_git<const N: usize>(cwd: &Path, args: [&str; N]) {
+        let output = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("spawn git");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     #[tokio::test]
@@ -428,6 +480,87 @@ mod tests {
             .expect("expected response");
 
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn workspace_mobility_preflight_warns_for_active_terminals_without_blocking() {
+        let _lock = test_support::ENV_MUTEX
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("expected env mutex");
+        let _guard = test_support::set_bearer_token_env(None);
+        let repo_root = TempDirGuard::new("mobility-terminal-warning");
+        init_repo(repo_root.path());
+        let state = test_state(false);
+        let workspace_path = repo_root.path().display().to_string();
+
+        state
+            .db
+            .with_conn(|conn| {
+                conn.execute(
+                    "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
+                     VALUES (?1, 'repo', ?2, ?2, ?3, ?3)",
+                    rusqlite::params!["workspace-1", workspace_path, "2026-03-25T00:00:00Z"],
+                )?;
+                Ok(())
+            })
+            .expect("seed workspace");
+
+        let terminal = state
+            .terminal_service
+            .create_terminal(
+                "workspace-1",
+                &workspace_path,
+                CreateTerminalOptions {
+                    cwd: None,
+                    shell: Some("/bin/sh".to_string()),
+                    cols: 80,
+                    rows: 24,
+                },
+            )
+            .await
+            .expect("create terminal");
+
+        let app = build_router(state.clone());
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/workspaces/workspace-1/mobility/preflight")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from("{}"))
+                    .expect("expected request"),
+            )
+            .await
+            .expect("expected response");
+        state
+            .terminal_service
+            .close_terminal(&terminal.id)
+            .await
+            .expect("close terminal");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read response body");
+        let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+        assert_eq!(payload["canMove"], true);
+        assert_eq!(
+            payload["blockers"]
+                .as_array()
+                .map(std::vec::Vec::len)
+                .unwrap_or(0),
+            0
+        );
+        let warnings = payload["warnings"].as_array().expect("warnings array");
+        assert!(
+            warnings.iter().any(|warning| {
+                warning
+                    .as_str()
+                    .is_some_and(|text| text.contains("will not migrate"))
+            }),
+            "expected terminal warning, got {warnings:?}"
+        );
     }
 
     #[tokio::test]

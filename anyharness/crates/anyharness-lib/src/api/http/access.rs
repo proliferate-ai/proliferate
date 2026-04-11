@@ -14,7 +14,10 @@ pub fn map_access_error(error: WorkspaceAccessError) -> ApiError {
             ApiError::not_found(format!("terminal not found: {id}"), "TERMINAL_NOT_FOUND")
         }
         WorkspaceAccessError::MutationBlocked { workspace_id, mode } => ApiError::conflict(
-            format!("workspace {workspace_id} is not writable while mode={}", mode.as_str()),
+            format!(
+                "workspace {workspace_id} is not writable while mode={}",
+                mode.as_str()
+            ),
             "WORKSPACE_MUTATION_BLOCKED",
         ),
         WorkspaceAccessError::LiveSessionStartBlocked { workspace_id, mode } => ApiError::conflict(

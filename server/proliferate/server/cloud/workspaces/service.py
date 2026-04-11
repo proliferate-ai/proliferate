@@ -34,8 +34,6 @@ from proliferate.db.store.cloud_workspaces import (
     save_workspace_display_name_for_user,
     update_sandbox_status,
 )
-
-MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 from proliferate.db.store.cloud_workspaces import (
     list_cloud_workspaces_for_user as list_cloud_workspaces_store,
 )
@@ -46,6 +44,10 @@ from proliferate.server.cloud._logging import format_exception_message, log_clou
 from proliferate.server.cloud.credentials.models import allowed_agent_kinds
 from proliferate.server.cloud.credentials.service import load_cloud_credential_statuses
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.repo_config.service import (
+    bootstrap_repo_config,
+    load_repo_config_value,
+)
 from proliferate.server.cloud.repos.service import (
     get_linked_github_account,
 )
@@ -59,10 +61,6 @@ from proliferate.server.cloud.runtime.service import (
     get_workspace_connection,
     sync_workspace_credentials,
 )
-from proliferate.server.cloud.repo_config.service import (
-    bootstrap_repo_config,
-    load_repo_config_value,
-)
 from proliferate.server.cloud.workspaces.models import (
     WorkspaceConnection,
     WorkspaceDetail,
@@ -72,6 +70,8 @@ from proliferate.server.cloud.workspaces.models import (
 )
 from proliferate.utils.crypto import decrypt_text, encrypt_json
 from proliferate.utils.time import duration_ms, utcnow
+
+MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 
 PROVISIONING_STATUSES: frozenset[WorkspaceStatus] = frozenset(
     {
@@ -276,6 +276,9 @@ async def create_cloud_workspace(
         git_owner=git_owner,
         git_repo_name=git_repo_name,
         missing_access_message="Connect a GitHub account before creating a cloud workspace.",
+        repo_access_required_message=(
+            "Reconnect GitHub and grant repository access before creating a cloud workspace."
+        ),
     )
     if cleaned_base_branch not in repo_branches.branches:
         raise CloudApiError(
@@ -380,6 +383,84 @@ async def create_cloud_workspace(
     return await _build_workspace_detail(user.id, workspace)
 
 
+async def ensure_cloud_workspace_for_existing_branch(
+    user: User,
+    *,
+    git_provider: str,
+    git_owner: str,
+    git_repo_name: str,
+    branch_name: str,
+    display_name: str | None,
+) -> CloudWorkspace:
+    if git_provider != SUPPORTED_GIT_PROVIDER:
+        raise CloudApiError(
+            "unsupported_repo_provider",
+            "Only GitHub repositories are supported for cloud workspaces.",
+            status_code=400,
+        )
+
+    if get_linked_github_account(user) is None:
+        raise CloudApiError(
+            "github_link_required",
+            "Connect a GitHub account before provisioning a cloud workspace.",
+            status_code=400,
+        )
+
+    cleaned_branch_name = branch_name.strip()
+    if not cleaned_branch_name:
+        raise CloudApiError(
+            "invalid_branch_request",
+            "Choose a branch before provisioning a cloud workspace.",
+            status_code=400,
+        )
+
+    existing_cloud_workspace = await load_existing_cloud_workspace(
+        user_id=user.id,
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        git_branch=cleaned_branch_name,
+    )
+    if existing_cloud_workspace is not None:
+        return existing_cloud_workspace
+
+    repo_config = await load_repo_config_value(
+        user_id=user.id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    )
+    if repo_config is None or not repo_config.configured:
+        repo_config = await bootstrap_repo_config(
+            user_id=user.id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+        )
+        log_cloud_event(
+            "cloud repo config auto-bootstrapped",
+            user_id=user.id,
+            repo=f"{git_owner}/{git_repo_name}",
+        )
+
+    workspace = await create_cloud_workspace_for_user(
+        user_id=user.id,
+        display_name=(display_name.strip() if display_name and display_name.strip() else None),
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        git_branch=cleaned_branch_name,
+        git_base_branch=cleaned_branch_name,
+        template_version=get_configured_sandbox_provider().template_version,
+        repo_env_vars_ciphertext=encrypt_json(repo_config.env_vars),
+    )
+    log_cloud_event(
+        "cloud workspace ensured for mobility",
+        workspace_id=workspace.id,
+        repo=f"{git_owner}/{git_repo_name}",
+        branch_name=cleaned_branch_name,
+    )
+    return workspace
+
+
 async def _refresh_repo_env_snapshot_for_workspace(
     workspace: CloudWorkspace,
 ) -> CloudWorkspace:
@@ -406,9 +487,11 @@ async def _refresh_repo_env_snapshot_for_workspace(
 async def start_cloud_workspace(
     user: User,
     workspace_id: UUID,
+    *,
+    requested_base_sha: str | None = None,
 ) -> WorkspaceDetail:
     workspace = await _require_cloud_workspace_for_user(user.id, workspace_id)
-    if workspace.status in PROVISIONING_STATUSES:
+    if workspace.status in PROVISIONING_STATUSES and workspace.status != WorkspaceStatus.queued:
         return await _build_workspace_detail(user.id, workspace)
 
     repo_branches = await get_github_repo_branches(
@@ -416,6 +499,9 @@ async def start_cloud_workspace(
         git_owner=workspace.git_owner,
         git_repo_name=workspace.git_repo_name,
         missing_access_message="Connect a GitHub account before starting a cloud workspace.",
+        repo_access_required_message=(
+            "Reconnect GitHub and grant repository access before starting a cloud workspace."
+        ),
     )
     base_branch = workspace.git_base_branch or workspace.git_branch
     if base_branch not in repo_branches.branches:
@@ -451,6 +537,23 @@ async def start_cloud_workspace(
 
     if workspace.ready_at is None:
         workspace = await _refresh_repo_env_snapshot_for_workspace(workspace)
+
+    if workspace.status == WorkspaceStatus.queued:
+        workspace.last_error = None
+        await save_workspace(workspace)
+        log_cloud_event(
+            "cloud workspace queued",
+            workspace_id=workspace.id,
+            repo=f"{workspace.git_owner}/{workspace.git_repo_name}",
+            base_branch=base_branch,
+            branch_name=workspace.git_branch,
+            requested_base_sha=requested_base_sha,
+        )
+        schedule_workspace_provision(
+            workspace.id,
+            requested_base_sha=requested_base_sha,
+        )
+        return await _build_workspace_detail(user.id, workspace)
 
     sandbox = await load_active_sandbox_for_workspace(workspace)
     if (
@@ -534,8 +637,12 @@ async def start_cloud_workspace(
         repo=f"{workspace.git_owner}/{workspace.git_repo_name}",
         base_branch=base_branch,
         branch_name=workspace.git_branch,
+        requested_base_sha=requested_base_sha,
     )
-    schedule_workspace_provision(workspace.id)
+    schedule_workspace_provision(
+        workspace.id,
+        requested_base_sha=requested_base_sha,
+    )
     return await _build_workspace_detail(user.id, workspace)
 
 
@@ -583,7 +690,10 @@ async def sync_cloud_workspace_display_name(
         if len(cleaned) > MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS:
             raise CloudApiError(
                 "invalid_display_name",
-                f"Workspace display name cannot exceed {MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS} characters.",
+                (
+                    "Workspace display name cannot exceed "
+                    f"{MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS} characters."
+                ),
                 status_code=400,
             )
 

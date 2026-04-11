@@ -34,6 +34,7 @@ import { markWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory
 
 interface BootstrapWorkspaceInput {
   workspaceId: string;
+  logicalWorkspaceId: string;
   runtimeUrl: string;
   workspaceConnection: AnyHarnessResolvedConnection;
   startedAt: number;
@@ -86,6 +87,7 @@ export function useWorkspaceBootstrapActions() {
 
   const bootstrapWorkspace = useCallback(async ({
     workspaceId,
+    logicalWorkspaceId,
     runtimeUrl,
     workspaceConnection,
     startedAt,
@@ -236,7 +238,7 @@ export function useWorkspaceBootstrapActions() {
     } else {
       const targetSession = choosePreferredWorkspaceSession(
         sessions,
-        lastViewedSessionByWorkspace[workspaceId] ?? null,
+        lastViewedSessionByWorkspace[logicalWorkspaceId] ?? null,
       );
 
       if (targetSession && isCurrent()) {

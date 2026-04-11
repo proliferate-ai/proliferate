@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useSetupStatusQuery } from "@anyharness/sdk-react";
+import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 import type { CloudWorkspaceStatusScreenModel } from "@/lib/domain/workspaces/cloud-workspace-status";
 import {
   buildCloudWorkspaceStatusScreenModel,
@@ -15,6 +16,9 @@ import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entr
 import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/arrival";
 
 export type WorkspaceStatusPanelState =
+  | {
+    kind: "mobility";
+  }
   | {
     kind: "pending";
     entry: PendingWorkspaceEntry;
@@ -88,6 +92,7 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const { data: workspaceCollections } = useWorkspaces();
   const arrival = useWorkspaceArrivalState();
+  const mobility = useWorkspaceMobilityState();
   const dismissedSetupFailures = useWorkspaceUiStore((s) => s.dismissedSetupFailures);
 
   // Query setup status for the selected workspace. Used to show persistent
@@ -104,6 +109,12 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
   ) ?? null;
 
   return useMemo(() => {
+    if (mobility.status.phase !== "idle") {
+      return {
+        kind: "mobility",
+      };
+    }
+
     if (pendingWorkspaceEntry) {
       const shouldUseCloudStatus = pendingWorkspaceEntry.stage === "awaiting-cloud-ready"
         && selectedCloudWorkspace
@@ -174,6 +185,7 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
     arrival.viewModel,
     arrival.workspacePath,
     dismissedSetupFailures,
+    mobility.status.phase,
     pendingWorkspaceEntry,
     selectedCloudWorkspace,
     selectedWorkspaceId,

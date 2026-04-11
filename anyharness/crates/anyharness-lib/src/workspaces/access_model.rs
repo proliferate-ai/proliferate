@@ -1,6 +1,4 @@
-use anyharness_contract::v1::{
-    WorkspaceMobilityRuntimeMode, WorkspaceMobilityRuntimeState,
-};
+use anyharness_contract::v1::{WorkspaceMobilityRuntimeMode, WorkspaceMobilityRuntimeState};
 
 use super::model::WorkspaceRecord;
 
@@ -9,6 +7,7 @@ pub enum WorkspaceAccessMode {
     Normal,
     FrozenForHandoff,
     RemoteOwned,
+    RepairBlocked,
 }
 
 impl WorkspaceAccessMode {
@@ -17,6 +16,7 @@ impl WorkspaceAccessMode {
             Self::Normal => "normal",
             Self::FrozenForHandoff => "frozen_for_handoff",
             Self::RemoteOwned => "remote_owned",
+            Self::RepairBlocked => "repair_blocked",
         }
     }
 
@@ -24,6 +24,7 @@ impl WorkspaceAccessMode {
         match value {
             "frozen_for_handoff" => Self::FrozenForHandoff,
             "remote_owned" => Self::RemoteOwned,
+            "repair_blocked" => Self::RepairBlocked,
             _ => Self::Normal,
         }
     }
@@ -33,6 +34,7 @@ impl WorkspaceAccessMode {
             Self::Normal => WorkspaceMobilityRuntimeMode::Normal,
             Self::FrozenForHandoff => WorkspaceMobilityRuntimeMode::FrozenForHandoff,
             Self::RemoteOwned => WorkspaceMobilityRuntimeMode::RemoteOwned,
+            Self::RepairBlocked => WorkspaceMobilityRuntimeMode::RepairBlocked,
         }
     }
 
@@ -41,6 +43,7 @@ impl WorkspaceAccessMode {
             WorkspaceMobilityRuntimeMode::Normal => Self::Normal,
             WorkspaceMobilityRuntimeMode::FrozenForHandoff => Self::FrozenForHandoff,
             WorkspaceMobilityRuntimeMode::RemoteOwned => Self::RemoteOwned,
+            WorkspaceMobilityRuntimeMode::RepairBlocked => Self::RepairBlocked,
         }
     }
 }

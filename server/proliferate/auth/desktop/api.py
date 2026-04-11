@@ -79,7 +79,11 @@ async def create_desktop_auth_code(
 
 @router.get("/github/availability", response_model=OAuthAvailabilityResponse)
 async def github_availability() -> OAuthAvailabilityResponse:
-    return OAuthAvailabilityResponse(enabled=github_oauth_enabled())
+    enabled = github_oauth_enabled()
+    return OAuthAvailabilityResponse(
+        enabled=enabled,
+        client_id=(settings.github_oauth_client_id or None) if enabled else None,
+    )
 
 
 @router.get("/github/authorize")
@@ -114,10 +118,12 @@ async def authorize_github_desktop(
         settings.jwt_secret,
     )
     callback_url = build_github_callback_url(request)
+    extra_params = {"prompt": params.prompt} if params.prompt else None
     authorization_url = await github_oauth_client.get_authorization_url(
         callback_url,
         oauth_state,
         GITHUB_OAUTH_SCOPES,
+        extras_params=extra_params,
     )
 
     response = RedirectResponse(authorization_url, status_code=status.HTTP_302_FOUND)

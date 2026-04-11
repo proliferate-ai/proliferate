@@ -1,9 +1,9 @@
 import { useCallback } from "react";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 
 export function useChatDraftState() {
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
   const draft = useChatInputStore((state) =>
     selectedWorkspaceId ? state.draftByWorkspaceId[selectedWorkspaceId] ?? "" : "",
   );

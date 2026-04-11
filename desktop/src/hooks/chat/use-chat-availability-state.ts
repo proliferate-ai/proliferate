@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import {
@@ -25,6 +26,7 @@ export function useChatAvailabilityState(): ChatAvailabilityState {
   );
   const { data: workspaceCollections } = useWorkspaces();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
+  const mobility = useWorkspaceMobilityState();
   const configuredLaunch = useConfiguredLaunchReadiness();
 
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
@@ -76,6 +78,17 @@ export function useChatAvailabilityState(): ChatAvailabilityState {
       disabledReason,
       areRuntimeControlsDisabled: true,
       selectedWorkspaceKind: pendingWorkspaceEntry.source === "cloud-created" ? "cloud" : "local",
+    };
+  }
+
+  if (mobility.handoffActive) {
+    return {
+      isDisabled: true,
+      disabledReason: mobility.status.description ?? "Workspace mobility is in progress.",
+      areRuntimeControlsDisabled: true,
+      selectedWorkspaceKind: mobility.selectedLogicalWorkspace?.effectiveOwner === "cloud"
+        ? "cloud"
+        : "local",
     };
   }
 

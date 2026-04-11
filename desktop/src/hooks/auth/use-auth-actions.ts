@@ -5,13 +5,17 @@ import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { signInWithGitHub, signOut } from "@/lib/integrations/auth/orchestration";
+import {
+  signInWithGitHub,
+  signOut,
+} from "@/lib/integrations/auth/orchestration";
+import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 
 export function useAuthActions() {
   return {
-    signInWithGitHub: useCallback(async () => {
+    signInWithGitHub: useCallback(async (options?: GitHubDesktopSignInOptions) => {
       try {
-        const result = await signInWithGitHub();
+        const result = await signInWithGitHub(options);
         trackProductEvent("auth_signed_in", {
           provider: result.provider,
           source: result.source,

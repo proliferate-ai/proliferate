@@ -3,6 +3,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
   backdrop?: boolean;
   topSlot?: ReactNode;
+  bottomSlot?: ReactNode;
   children: ReactNode;
 }
 
@@ -20,6 +21,7 @@ interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
 export function ChatComposerDock({
   backdrop = true,
   topSlot,
+  bottomSlot,
   children,
   className = "",
   ...rest
@@ -35,6 +37,9 @@ export function ChatComposerDock({
             <div className="relative z-10 flex flex-col px-5">{topSlot}</div>
           )}
           {children}
+          {bottomSlot && (
+            <div className="relative z-10 px-5">{bottomSlot}</div>
+          )}
         </div>
       </div>
     </div>
