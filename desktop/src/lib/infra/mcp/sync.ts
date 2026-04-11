@@ -6,9 +6,9 @@ import {
 import type { SavedConnectorMetadata } from "@/lib/domain/mcp/types";
 import {
   loadConnectorSecretValue,
+  mutateConnectorState,
   readConnectorState,
   updateConnectorSyncState,
-  writeConnectorState,
 } from "@/lib/infra/mcp/state";
 import {
   deleteCloudMcpConnection,
@@ -62,7 +62,8 @@ export async function retryConnectorSync(connectionId: string): Promise<boolean>
 export async function retryPendingConnectorSync(): Promise<boolean> {
   const state = await readConnectorState();
   let changed = false;
-  let pendingDeletesChanged = false;
+  const deletedConnectionIds = new Set<string>();
+  const failedDeleteIds = new Set<string>();
 
   for (const metadata of state.connections) {
     if (metadata.syncState !== "degraded") {
@@ -76,33 +77,31 @@ export async function retryPendingConnectorSync(): Promise<boolean> {
     }
   }
 
-  let nextState = await readConnectorState();
-  for (const tombstone of nextState.pendingDeletes) {
+  const latestState = await readConnectorState();
+  for (const tombstone of latestState.pendingDeletes) {
     try {
       await deleteCloudMcpConnection(tombstone.connectionId);
-      nextState = {
-        ...nextState,
-        pendingDeletes: nextState.pendingDeletes.filter(
-          (item) => item.connectionId !== tombstone.connectionId,
-        ),
-      };
       changed = true;
-      pendingDeletesChanged = true;
+      deletedConnectionIds.add(tombstone.connectionId);
     } catch {
-      nextState = {
-        ...nextState,
-        pendingDeletes: nextState.pendingDeletes.map((item) => (
-          item.connectionId === tombstone.connectionId
-            ? { ...item, lastAttemptAt: new Date().toISOString() }
-            : item
-        )),
-      };
-      pendingDeletesChanged = true;
+      failedDeleteIds.add(tombstone.connectionId);
     }
   }
 
-  if (changed || pendingDeletesChanged) {
-    await writeConnectorState(nextState);
+  if (deletedConnectionIds.size > 0 || failedDeleteIds.size > 0) {
+    await mutateConnectorState((latestState) => ({
+      state: {
+        ...latestState,
+        pendingDeletes: latestState.pendingDeletes
+          .filter((item) => !deletedConnectionIds.has(item.connectionId))
+          .map((item) => (
+            failedDeleteIds.has(item.connectionId)
+              ? { ...item, lastAttemptAt: new Date().toISOString() }
+              : item
+          )),
+      },
+      result: undefined,
+    }));
   }
   return changed;
 }

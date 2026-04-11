@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type {
+  ConnectOAuthConnectorResult,
+  GetValidOAuthAccessTokenResult,
+} from "@/platform/tauri/mcp-oauth";
 
 const mocks = vi.hoisted(() => {
   let persistedState: unknown;
   const connectorSecrets = new Map<string, string>();
+  const oauthBundles = new Set<string>();
 
   return {
     get persistedState() {
@@ -12,6 +17,7 @@ const mocks = vi.hoisted(() => {
       persistedState = value;
     },
     connectorSecrets,
+    oauthBundles,
     readPersistedValueMock: vi.fn(async () => persistedState),
     persistValueMock: vi.fn(async (_key: string, value: unknown) => {
       persistedState = structuredClone(value);
@@ -24,6 +30,20 @@ const mocks = vi.hoisted(() => {
     }),
     deleteConnectorSecretMock: vi.fn(async (connectionId: string, fieldId: string) => {
       connectorSecrets.delete(`${connectionId}:${fieldId}`);
+    }),
+    connectOAuthConnectorMock: vi.fn(async (input: { connectionId: string }): Promise<ConnectOAuthConnectorResult> => {
+      oauthBundles.add(input.connectionId);
+      return { kind: "completed" as const };
+    }),
+    getOAuthConnectorBundleStateMock: vi.fn(async (connectionId: string) => ({
+      hasBundle: oauthBundles.has(connectionId),
+      expiresAt: null,
+    })),
+    getValidOAuthAccessTokenMock: vi.fn(async (): Promise<GetValidOAuthAccessTokenResult> => ({
+      kind: "missing",
+    })),
+    deleteOAuthConnectorBundleMock: vi.fn(async (connectionId: string) => {
+      oauthBundles.delete(connectionId);
     }),
     syncCloudMcpConnectionMock: vi.fn(async () => undefined),
     deleteCloudMcpConnectionMock: vi.fn(async () => undefined),
@@ -46,27 +66,42 @@ vi.mock("@/platform/tauri/process", () => ({
   commandExists: mocks.commandExistsMock,
 }));
 
+vi.mock("@/platform/tauri/mcp-oauth", () => ({
+  connectOAuthConnector: mocks.connectOAuthConnectorMock,
+  getOAuthConnectorBundleState: mocks.getOAuthConnectorBundleStateMock,
+  getValidOAuthAccessToken: mocks.getValidOAuthAccessTokenMock,
+  deleteOAuthConnectorBundle: mocks.deleteOAuthConnectorBundleMock,
+}));
+
 vi.mock("@/lib/integrations/cloud/mcp_connections", () => ({
   syncCloudMcpConnection: mocks.syncCloudMcpConnectionMock,
   deleteCloudMcpConnection: mocks.deleteCloudMcpConnectionMock,
 }));
 
-import { installConnector } from "@/lib/infra/mcp/persistence";
+import { connectOAuthConnector, installConnector } from "@/lib/infra/mcp/persistence";
 import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
 
 describe("mcp launch resolution", () => {
   beforeEach(() => {
     mocks.persistedState = undefined;
     mocks.connectorSecrets.clear();
+    mocks.oauthBundles.clear();
     mocks.readPersistedValueMock.mockClear();
     mocks.persistValueMock.mockClear();
     mocks.getConnectorSecretMock.mockClear();
     mocks.setConnectorSecretMock.mockClear();
     mocks.deleteConnectorSecretMock.mockClear();
+    mocks.connectOAuthConnectorMock.mockClear();
+    mocks.getOAuthConnectorBundleStateMock.mockClear();
+    mocks.getValidOAuthAccessTokenMock.mockClear();
+    mocks.deleteOAuthConnectorBundleMock.mockClear();
     mocks.syncCloudMcpConnectionMock.mockClear();
     mocks.deleteCloudMcpConnectionMock.mockClear();
     mocks.commandExistsMock.mockReset();
     mocks.commandExistsMock.mockResolvedValue(true);
+    mocks.getValidOAuthAccessTokenMock.mockResolvedValue({
+      kind: "missing",
+    });
   });
 
   it("resolves installed http connectors into session MCP servers", async () => {
@@ -157,5 +192,70 @@ describe("mcp launch resolution", () => {
         catalogEntryId: "filesystem",
       }),
     ]);
+  });
+
+  it("downgrades OAuth token refresh failures into reconnect warnings", async () => {
+    await connectOAuthConnector("linear");
+    mocks.getValidOAuthAccessTokenMock.mockRejectedValueOnce(new Error("refresh failed"));
+
+    const resolution = await resolveSessionMcpServersForLaunch({
+      targetLocation: "cloud",
+      workspacePath: "/workspace",
+    });
+
+    expect(resolution.mcpServers).toEqual([]);
+    expect(resolution.warnings).toEqual([
+      expect.objectContaining({
+        kind: "needs_reconnect",
+        catalogEntryId: "linear",
+      }),
+    ]);
+  });
+
+  it("injects the same OAuth bearer header for local and cloud launches", async () => {
+    await connectOAuthConnector("linear");
+    mocks.getValidOAuthAccessTokenMock.mockResolvedValue({
+      kind: "ready",
+      accessToken: "linear-token",
+      expiresAt: null,
+    });
+
+    const [localResolution, cloudResolution] = await Promise.all([
+      resolveSessionMcpServersForLaunch({
+        targetLocation: "local",
+        workspacePath: "/workspace",
+      }),
+      resolveSessionMcpServersForLaunch({
+        targetLocation: "cloud",
+        workspacePath: "/workspace",
+      }),
+    ]);
+
+    expect(localResolution.warnings).toEqual([]);
+    expect(cloudResolution.warnings).toEqual([]);
+    expect(localResolution.mcpServers).toHaveLength(1);
+    expect(cloudResolution.mcpServers).toHaveLength(1);
+    expect(localResolution.mcpServers[0]).toMatchObject({
+      catalogEntryId: "linear",
+      transport: "http",
+      url: "https://mcp.linear.app/mcp",
+      headers: [
+        {
+          name: "Authorization",
+          value: "Bearer linear-token",
+        },
+      ],
+    });
+    expect(cloudResolution.mcpServers[0]).toMatchObject({
+      catalogEntryId: "linear",
+      transport: "http",
+      url: "https://mcp.linear.app/mcp",
+      headers: [
+        {
+          name: "Authorization",
+          value: "Bearer linear-token",
+        },
+      ],
+    });
   });
 });

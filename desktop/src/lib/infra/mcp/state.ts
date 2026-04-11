@@ -3,11 +3,14 @@ import {
   connectorHasMissingSecrets,
   getConnectorCatalogEntry,
   isConnectorCatalogEntryActive,
+  isOAuthConnectorCatalogEntry,
 } from "@/lib/domain/mcp/catalog";
+import { validateOAuthConnectorSettings } from "@/lib/domain/mcp/oauth";
 import { normalizeConnectorSecretValue } from "@/lib/domain/mcp/validation";
 import type {
   ConnectorCatalogEntry,
   ConnectorDeleteTombstone,
+  ConnectorSettings,
   ConnectorSyncState,
   InstalledConnectorRecord,
   PersistedConnectorState,
@@ -15,6 +18,7 @@ import type {
 } from "@/lib/domain/mcp/types";
 import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persistence";
 import { getConnectorSecret } from "@/platform/tauri/connectors";
+import { getOAuthConnectorBundleState } from "@/platform/tauri/mcp-oauth";
 
 const CONNECTORS_PERSISTENCE_KEY = "mcp_connections_v1";
 
@@ -22,6 +26,7 @@ const EMPTY_CONNECTOR_STATE: PersistedConnectorState = {
   connections: [],
   pendingDeletes: [],
 };
+let connectorStateMutationQueue: Promise<void> = Promise.resolve();
 
 function isConnectorSyncState(value: unknown): value is ConnectorSyncState {
   return value === "synced" || value === "degraded";
@@ -55,7 +60,27 @@ function sanitizeConnectorMetadata(value: unknown): SavedConnectorMetadata | nul
       typeof candidate.lastSyncedAt === "string" || candidate.lastSyncedAt === null
         ? candidate.lastSyncedAt
         : null,
+    settings: sanitizeConnectorSettings(candidate.settings),
   };
+}
+
+function sanitizeConnectorSettings(value: unknown): ConnectorSettings | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const candidate = value as Partial<ConnectorSettings>;
+  if (
+    candidate.kind === "supabase"
+    && typeof candidate.projectRef === "string"
+    && typeof candidate.readOnly === "boolean"
+  ) {
+    return {
+      kind: "supabase",
+      projectRef: candidate.projectRef,
+      readOnly: candidate.readOnly,
+    };
+  }
+  return undefined;
 }
 
 function sanitizeDeleteTombstone(value: unknown): ConnectorDeleteTombstone | null {
@@ -104,6 +129,31 @@ export async function writeConnectorState(state: PersistedConnectorState): Promi
   await persistValue(CONNECTORS_PERSISTENCE_KEY, state);
 }
 
+export async function mutateConnectorState<T>(
+  mutate: (
+    state: PersistedConnectorState,
+  ) => Promise<{ state: PersistedConnectorState; result: T }> | {
+    state: PersistedConnectorState;
+    result: T;
+  },
+): Promise<T> {
+  const operation = connectorStateMutationQueue
+    .catch(() => undefined)
+    .then(async () => {
+      const state = await readConnectorState();
+      const next = await mutate(state);
+      await writeConnectorState(next.state);
+      return next.result;
+    });
+
+  connectorStateMutationQueue = operation.then(
+    () => undefined,
+    () => undefined,
+  );
+
+  return operation;
+}
+
 export function sortInstalledConnectors(connections: SavedConnectorMetadata[]) {
   return [...connections].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
@@ -140,21 +190,22 @@ export async function updateConnectorSyncState(
   syncState: ConnectorSyncState,
   lastSyncedAt: string | null,
 ): Promise<void> {
-  const state = await readConnectorState();
-  const nextConnections = state.connections.map((metadata) => (
-    metadata.connectionId === connectionId
-      ? {
-          ...metadata,
-          syncState,
-          lastSyncedAt,
-          updatedAt: new Date().toISOString(),
-        }
-      : metadata
-  ));
-  await writeConnectorState({
-    ...state,
-    connections: nextConnections,
-  });
+  await mutateConnectorState((state) => ({
+    state: {
+      ...state,
+      connections: state.connections.map((metadata) => (
+        metadata.connectionId === connectionId
+          ? {
+              ...metadata,
+              syncState,
+              lastSyncedAt,
+              updatedAt: new Date().toISOString(),
+            }
+          : metadata
+      )),
+    },
+    result: undefined,
+  }));
 }
 
 export async function listInstalledConnectorRecords(): Promise<InstalledConnectorRecord[]> {
@@ -166,10 +217,16 @@ export async function listInstalledConnectorRecords(): Promise<InstalledConnecto
       continue;
     }
     const secretValues = await loadConnectorSecretValues(metadata.connectionId, catalogEntry);
+    const broken = isOAuthConnectorCatalogEntry(catalogEntry)
+      ? (
+          validateOAuthConnectorSettings(catalogEntry, metadata.settings) !== null
+          || !(await getOAuthConnectorBundleState(metadata.connectionId)).hasBundle
+        )
+      : connectorHasMissingSecrets(catalogEntry, secretValues);
     installed.push({
       metadata,
       catalogEntry,
-      broken: connectorHasMissingSecrets(catalogEntry, secretValues),
+      broken,
     });
   }
   return installed;
@@ -184,11 +241,17 @@ export async function listInstalledConnectorLaunchRecords(): Promise<InstalledCo
       continue;
     }
     const secretValues = await loadConnectorSecretValues(metadata.connectionId, catalogEntry);
+    const broken = isOAuthConnectorCatalogEntry(catalogEntry)
+      ? (
+          validateOAuthConnectorSettings(catalogEntry, metadata.settings) !== null
+          || !(await getOAuthConnectorBundleState(metadata.connectionId)).hasBundle
+        )
+      : connectorHasMissingSecrets(catalogEntry, secretValues);
     installed.push({
       record: {
         metadata,
         catalogEntry,
-        broken: connectorHasMissingSecrets(catalogEntry, secretValues),
+        broken,
       },
       secretValues,
     });

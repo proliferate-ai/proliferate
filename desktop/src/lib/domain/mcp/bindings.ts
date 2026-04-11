@@ -1,4 +1,5 @@
 import type { SessionMcpEnvVar, SessionMcpServer } from "@anyharness/sdk";
+import { buildOAuthConnectorServerUrl } from "@/lib/domain/mcp/oauth";
 import type {
   ConnectorCatalogEntry,
   ConnectorEnvTemplate,
@@ -13,14 +14,14 @@ export interface ConnectorLaunchContext {
 }
 
 export function getConnectorAuthSecretValue(
-  catalogEntry: Extract<ConnectorCatalogEntry, { transport: "http" }>,
+  catalogEntry: Extract<ConnectorCatalogEntry, { transport: "http"; authKind: "secret" }>,
   secretValues: Record<string, string>,
 ): string | null {
-  return secretValues[catalogEntry.authFieldId] ?? null;
+  return catalogEntry.authFieldId ? secretValues[catalogEntry.authFieldId] ?? null : null;
 }
 
 function buildConnectorUrl(
-  catalogEntry: Extract<ConnectorCatalogEntry, { transport: "http" }>,
+  catalogEntry: Extract<ConnectorCatalogEntry, { transport: "http"; authKind: "secret" }>,
   secretValue: string,
 ): string {
   if (catalogEntry.authStyle.kind !== "query") {
@@ -32,7 +33,7 @@ function buildConnectorUrl(
 }
 
 function buildConnectorHeaders(
-  catalogEntry: Extract<ConnectorCatalogEntry, { transport: "http" }>,
+  catalogEntry: Extract<ConnectorCatalogEntry, { transport: "http"; authKind: "secret" }>,
   secretValue: string,
 ) {
   if (catalogEntry.authStyle.kind === "bearer") {
@@ -79,14 +80,42 @@ function resolveStdioEnv(
   return catalogEntry.env.map((template) => resolveStdioEnvVar(template, secretValues));
 }
 
+function buildOAuthConnectorUrl(
+  connector: InstalledConnectorRecord & {
+    catalogEntry: Extract<ConnectorCatalogEntry, { transport: "http"; authKind: "oauth" }>;
+  },
+): string {
+  return buildOAuthConnectorServerUrl(
+    connector.catalogEntry,
+    connector.metadata.settings,
+  );
+}
+
 export function buildSessionMcpServer(
   connector: InstalledConnectorRecord,
   input: {
     launchContext: ConnectorLaunchContext;
     secretValues: Record<string, string>;
+    oauthAccessToken?: string | null;
   },
 ): SessionMcpServer {
   if (connector.catalogEntry.transport === "http") {
+    if (connector.catalogEntry.authKind === "oauth") {
+      const oauthConnector = connector as InstalledConnectorRecord & {
+        catalogEntry: Extract<ConnectorCatalogEntry, { transport: "http"; authKind: "oauth" }>;
+      };
+      return {
+        transport: "http",
+        connectionId: connector.metadata.connectionId,
+        catalogEntryId: connector.catalogEntry.id,
+        serverName: connector.metadata.serverName,
+        url: buildOAuthConnectorUrl(oauthConnector),
+        headers: input.oauthAccessToken
+          ? [{ name: "Authorization", value: `Bearer ${input.oauthAccessToken}` }]
+          : [],
+      };
+    }
+
     const secretValue = getConnectorAuthSecretValue(
       connector.catalogEntry,
       input.secretValues,
@@ -128,6 +157,12 @@ export function buildMissingSecretWarning(
   connector: InstalledConnectorRecord,
 ): ConnectorLaunchResolutionWarning {
   return buildLaunchWarning(connector, "missing_secret");
+}
+
+export function buildNeedsReconnectWarning(
+  connector: InstalledConnectorRecord,
+): ConnectorLaunchResolutionWarning {
+  return buildLaunchWarning(connector, "needs_reconnect");
 }
 
 export function buildMissingStdioCommandWarning(

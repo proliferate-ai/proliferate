@@ -25,6 +25,7 @@ describe("mcp bindings", () => {
         availability: "universal",
         cloudSecretSync: true,
         transport: "http",
+        authKind: "secret",
         authStyle: { kind: "query", parameterName: "appid" },
         authFieldId: "api_key",
         url: "https://example.com/mcp",
@@ -49,6 +50,54 @@ describe("mcp bindings", () => {
       transport: "http",
       url: "https://example.com/mcp?appid=weather-key",
       headers: [],
+    });
+  });
+
+  it("builds Supabase OAuth URLs from saved settings and bearer auth", () => {
+    const connector: InstalledConnectorRecord = {
+      metadata: {
+        connectionId: "conn-supabase",
+        catalogEntryId: "supabase",
+        enabled: true,
+        serverName: "supabase",
+        syncState: "synced",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        lastSyncedAt: "2026-01-01T00:00:00.000Z",
+        settings: {
+          kind: "supabase",
+          projectRef: "abc123",
+          readOnly: true,
+        },
+      },
+      broken: false,
+      catalogEntry: {
+        id: "supabase",
+        name: "Supabase",
+        oneLiner: "Database MCP",
+        description: "Supabase MCP",
+        docsUrl: "https://example.com",
+        availability: "universal",
+        cloudSecretSync: false,
+        transport: "http",
+        authKind: "oauth",
+        url: "https://mcp.supabase.com/mcp",
+        serverNameBase: "supabase",
+        iconId: "globe",
+        requiredFields: [],
+      },
+    };
+
+    const server = buildSessionMcpServer(connector, {
+      launchContext: { targetLocation: "cloud", workspacePath: null },
+      secretValues: {},
+      oauthAccessToken: "oauth-token",
+    });
+
+    expect(server).toMatchObject({
+      transport: "http",
+      url: "https://mcp.supabase.com/mcp?project_ref=abc123&read_only=true",
+      headers: [{ name: "Authorization", value: "Bearer oauth-token" }],
     });
   });
 

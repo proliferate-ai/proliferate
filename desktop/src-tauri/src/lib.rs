@@ -5,7 +5,7 @@ mod sidecar;
 mod state;
 mod telemetry;
 
-use commands::{config, keychain, process, runtime, shell};
+use commands::{config, keychain, mcp_oauth, process, runtime, shell};
 use quit_flow::QuitFlowState;
 use tauri::Manager;
 #[cfg(target_os = "macos")]
@@ -140,6 +140,11 @@ pub fn run() {
             keychain::get_pending_auth,
             keychain::set_pending_auth,
             keychain::clear_pending_auth,
+            mcp_oauth::connect_oauth_connector,
+            mcp_oauth::cancel_oauth_connector_connect,
+            mcp_oauth::get_oauth_connector_bundle_state,
+            mcp_oauth::get_valid_oauth_access_token,
+            mcp_oauth::delete_oauth_connector_bundle,
         ]);
 
     #[cfg(target_os = "macos")]

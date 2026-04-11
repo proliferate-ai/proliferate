@@ -153,6 +153,10 @@ function reportConnectorLaunchWarnings(
       showToast(`${warning.connectorName} wasn't available in this session because the workspace path couldn't be resolved.`, "info");
       return;
     }
+    if (warning.kind === "needs_reconnect") {
+      showToast(`${warning.connectorName} wasn't available in this session because it needs reconnecting.`, "info");
+      return;
+    }
     showToast(`${warning.connectorName} wasn't available in this session because it needs a token.`, "info");
     return;
   }

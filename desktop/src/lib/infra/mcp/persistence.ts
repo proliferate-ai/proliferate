@@ -1,13 +1,19 @@
 import {
+  isConnectorCatalogEntryAvailable,
   connectorSupportsCloudSecretSync,
   getConnectorCatalogEntry,
   getPrimarySecretField,
-  isConnectorCatalogEntryActive,
+  isOAuthConnectorCatalogEntry,
 } from "@/lib/domain/mcp/catalog";
+import {
+  buildOAuthConnectorServerUrl,
+  validateOAuthConnectorSettings,
+} from "@/lib/domain/mcp/oauth";
 import { generateConnectorServerName } from "@/lib/domain/mcp/server-name";
 import { normalizeConnectorSecretValue, validateConnectorSecretValue } from "@/lib/domain/mcp/validation";
 import type {
   ConnectorCatalogEntry,
+  ConnectorSettings,
   InstalledConnectorRecord,
   SavedConnectorMetadata,
 } from "@/lib/domain/mcp/types";
@@ -15,13 +21,19 @@ import {
   listAvailableConnectorEntries,
   listInstalledConnectorRecords,
   loadConnectorSecretValue,
+  mutateConnectorState,
   readConnectorState,
   updateConnectorSyncState,
-  writeConnectorState,
 } from "@/lib/infra/mcp/state";
 import { syncConnectorReplica } from "@/lib/infra/mcp/sync";
 import { deleteCloudMcpConnection } from "@/lib/integrations/cloud/mcp_connections";
 import { deleteConnectorSecret, setConnectorSecret } from "@/platform/tauri/connectors";
+import {
+  connectOAuthConnector as runOAuthConnectorFlow,
+  cancelOAuthConnectorConnect as cancelNativeOAuthConnectorConnect,
+  type ConnectOAuthConnectorResult,
+  deleteOAuthConnectorBundle,
+} from "@/platform/tauri/mcp-oauth";
 
 export interface ConnectorPaneData {
   installed: InstalledConnectorRecord[];
@@ -55,6 +67,30 @@ async function ensureConnectorSecretRoundTrip(
   }
 }
 
+function buildSavedConnectorMetadata(input: {
+  catalogEntry: ConnectorCatalogEntry;
+  connectionId: string;
+  existingConnections: SavedConnectorMetadata[];
+  settings?: ConnectorSettings;
+}): SavedConnectorMetadata {
+  const now = new Date().toISOString();
+  return {
+    connectionId: input.connectionId,
+    catalogEntryId: input.catalogEntry.id,
+    enabled: true,
+    serverName: generateConnectorServerName(
+      input.catalogEntry.serverNameBase,
+      input.connectionId,
+      input.existingConnections,
+    ),
+    syncState: connectorSupportsCloudSecretSync(input.catalogEntry) ? "degraded" : "synced",
+    createdAt: now,
+    updatedAt: now,
+    lastSyncedAt: connectorSupportsCloudSecretSync(input.catalogEntry) ? null : now,
+    settings: input.settings,
+  };
+}
+
 export async function installConnector(
   catalogEntryId: string,
   secretValue: string,
@@ -63,13 +99,11 @@ export async function installConnector(
   if (!catalogEntry) {
     throw new Error("Connector catalog entry was not found.");
   }
-  if (!isConnectorCatalogEntryActive(catalogEntry)) {
+  if (!isConnectorCatalogEntryAvailable(catalogEntry)) {
     throw new Error(`${catalogEntry.name} isn't available yet.`);
   }
-
-  const state = await readConnectorState();
-  if (state.connections.some((item) => item.catalogEntryId === catalogEntry.id)) {
-    throw new Error(`${catalogEntry.name} is already connected.`);
+  if (isOAuthConnectorCatalogEntry(catalogEntry)) {
+    throw new Error(`${catalogEntry.name} uses browser auth.`);
   }
 
   const field = getPrimarySecretField(catalogEntry);
@@ -82,17 +116,6 @@ export async function installConnector(
   }
 
   const connectionId = crypto.randomUUID();
-  const now = new Date().toISOString();
-  const metadata: SavedConnectorMetadata = {
-    connectionId,
-    catalogEntryId: catalogEntry.id,
-    enabled: true,
-    serverName: generateConnectorServerName(catalogEntry.serverNameBase, connectionId, state.connections),
-    syncState: connectorSupportsCloudSecretSync(catalogEntry) ? "degraded" : "synced",
-    createdAt: now,
-    updatedAt: now,
-    lastSyncedAt: connectorSupportsCloudSecretSync(catalogEntry) ? null : now,
-  };
 
   if (field) {
     await setConnectorSecret(connectionId, field.id, normalizedSecret);
@@ -109,10 +132,24 @@ export async function installConnector(
     }
   }
 
+  let metadata: SavedConnectorMetadata;
   try {
-    await writeConnectorState({
-      ...state,
-      connections: [...state.connections, metadata],
+    metadata = await mutateConnectorState((state) => {
+      if (state.connections.some((item) => item.catalogEntryId === catalogEntry.id)) {
+        throw new Error(`${catalogEntry.name} is already connected.`);
+      }
+      const nextMetadata = buildSavedConnectorMetadata({
+        catalogEntry,
+        connectionId,
+        existingConnections: state.connections,
+      });
+      return {
+        state: {
+          ...state,
+          connections: [...state.connections, nextMetadata],
+        },
+        result: nextMetadata,
+      };
     });
   } catch (error) {
     if (field) {
@@ -133,6 +170,129 @@ export async function installConnector(
   }
 }
 
+export async function connectOAuthConnector(
+  catalogEntryId: string,
+  settings?: ConnectorSettings,
+  connectionId = crypto.randomUUID(),
+): Promise<ConnectOAuthConnectorResult> {
+  const catalogEntry = getConnectorCatalogEntry(catalogEntryId);
+  if (!catalogEntry) {
+    throw new Error("Connector catalog entry was not found.");
+  }
+  if (!isConnectorCatalogEntryAvailable(catalogEntry)) {
+    throw new Error(`${catalogEntry.name} isn't available yet.`);
+  }
+  if (!isOAuthConnectorCatalogEntry(catalogEntry)) {
+    throw new Error(`${catalogEntry.name} doesn't use browser auth.`);
+  }
+
+  const settingsError = validateOAuthConnectorSettings(catalogEntry, settings);
+  if (settingsError) {
+    throw new Error(settingsError);
+  }
+
+  const connectResult = await runOAuthConnectorFlow({
+    connectionId,
+    serverUrl: buildOAuthConnectorServerUrl(catalogEntry, settings),
+  });
+  if (connectResult.kind === "canceled") {
+    return connectResult;
+  }
+
+  try {
+    await mutateConnectorState((latestState) => {
+      if (latestState.connections.some((item) => item.catalogEntryId === catalogEntry.id)) {
+        throw new Error(`${catalogEntry.name} is already connected.`);
+      }
+
+      const metadata = buildSavedConnectorMetadata({
+        catalogEntry,
+        connectionId,
+        existingConnections: latestState.connections,
+        settings,
+      });
+
+      return {
+        state: {
+          ...latestState,
+          connections: [...latestState.connections, metadata],
+        },
+        result: undefined,
+      };
+    });
+  } catch (error) {
+    await deleteOAuthConnectorBundle(connectionId).catch(() => undefined);
+    throw error;
+  }
+
+  return connectResult;
+}
+
+export async function cancelOAuthConnectorConnect(connectionId: string): Promise<void> {
+  await cancelNativeOAuthConnectorConnect(connectionId);
+}
+
+export async function reconnectOAuthConnector(
+  connectionId: string,
+  settings?: ConnectorSettings,
+): Promise<ConnectOAuthConnectorResult> {
+  const state = await readConnectorState();
+  const metadata = state.connections.find((item) => item.connectionId === connectionId) ?? null;
+  if (!metadata) {
+    throw new Error("Connector was not found.");
+  }
+  const catalogEntry = getConnectorCatalogEntry(metadata.catalogEntryId);
+  if (!catalogEntry || !isOAuthConnectorCatalogEntry(catalogEntry)) {
+    throw new Error("Connector doesn't use browser auth.");
+  }
+
+  const nextSettings = settings ?? metadata.settings;
+  const settingsError = validateOAuthConnectorSettings(catalogEntry, nextSettings);
+  if (settingsError) {
+    throw new Error(settingsError);
+  }
+
+  const reconnectResult = await runOAuthConnectorFlow({
+    connectionId: metadata.connectionId,
+    serverUrl: buildOAuthConnectorServerUrl(catalogEntry, nextSettings),
+  });
+  if (reconnectResult.kind === "canceled") {
+    return reconnectResult;
+  }
+
+  try {
+    await mutateConnectorState((latestState) => {
+      const latestMetadata = latestState.connections.find((item) => item.connectionId === connectionId) ?? null;
+      if (!latestMetadata) {
+        throw new Error("Connector was not found.");
+      }
+      if (latestMetadata.catalogEntryId !== catalogEntry.id) {
+        throw new Error("Connector changed while reconnecting.");
+      }
+      return {
+        state: {
+          ...latestState,
+          connections: latestState.connections.map((item) => (
+            item.connectionId === connectionId
+              ? {
+                  ...item,
+                  settings: nextSettings,
+                  updatedAt: new Date().toISOString(),
+                }
+              : item
+          )),
+        },
+        result: undefined,
+      };
+    });
+  } catch (error) {
+    await deleteOAuthConnectorBundle(connectionId).catch(() => undefined);
+    throw error;
+  }
+
+  return reconnectResult;
+}
+
 export async function updateConnectorSecret(
   connectionId: string,
   secretValue: string,
@@ -145,6 +305,9 @@ export async function updateConnectorSecret(
   const catalogEntry = getConnectorCatalogEntry(metadata.catalogEntryId);
   if (!catalogEntry) {
     throw new Error("Connector catalog entry was not found.");
+  }
+  if (isOAuthConnectorCatalogEntry(catalogEntry)) {
+    throw new Error(`${catalogEntry.name} uses browser auth.`);
   }
   const field = getPrimarySecretField(catalogEntry);
   if (!field) {
@@ -180,15 +343,17 @@ export async function setConnectorEnabled(
   connectionId: string,
   enabled: boolean,
 ): Promise<void> {
-  const state = await readConnectorState();
-  await writeConnectorState({
-    ...state,
-    connections: state.connections.map((metadata) => (
-      metadata.connectionId === connectionId
-        ? { ...metadata, enabled, updatedAt: new Date().toISOString() }
-        : metadata
-    )),
-  });
+  await mutateConnectorState((state) => ({
+    state: {
+      ...state,
+      connections: state.connections.map((metadata) => (
+        metadata.connectionId === connectionId
+          ? { ...metadata, enabled, updatedAt: new Date().toISOString() }
+          : metadata
+      )),
+    },
+    result: undefined,
+  }));
 }
 
 export async function deleteConnector(connectionId: string): Promise<void> {
@@ -201,13 +366,21 @@ export async function deleteConnector(connectionId: string): Promise<void> {
   const catalogEntry = getConnectorCatalogEntry(metadata.catalogEntryId);
   if (catalogEntry) {
     await Promise.all(
-      catalogEntry.requiredFields.map((field) => deleteConnectorSecret(connectionId, field.id)),
+      [
+        ...catalogEntry.requiredFields.map((field) => deleteConnectorSecret(connectionId, field.id)),
+        ...(isOAuthConnectorCatalogEntry(catalogEntry)
+          ? [deleteOAuthConnectorBundle(connectionId)]
+          : []),
+      ],
     );
   }
-  await writeConnectorState({
-    connections: state.connections.filter((item) => item.connectionId !== connectionId),
-    pendingDeletes: state.pendingDeletes,
-  });
+  await mutateConnectorState((latestState) => ({
+    state: {
+      connections: latestState.connections.filter((item) => item.connectionId !== connectionId),
+      pendingDeletes: latestState.pendingDeletes,
+    },
+    result: undefined,
+  }));
 
   if (!catalogEntry || !connectorSupportsCloudSecretSync(catalogEntry)) {
     return;
@@ -216,18 +389,20 @@ export async function deleteConnector(connectionId: string): Promise<void> {
   try {
     await deleteCloudMcpConnection(connectionId);
   } catch {
-    const nextState = await readConnectorState();
-    await writeConnectorState({
-      ...nextState,
-      pendingDeletes: [
-        ...nextState.pendingDeletes.filter((item) => item.connectionId !== connectionId),
-        {
-          connectionId,
-          catalogEntryId: metadata.catalogEntryId,
-          deletedAt: new Date().toISOString(),
-          lastAttemptAt: new Date().toISOString(),
-        },
-      ],
-    });
+    await mutateConnectorState((nextState) => ({
+      state: {
+        ...nextState,
+        pendingDeletes: [
+          ...nextState.pendingDeletes.filter((item) => item.connectionId !== connectionId),
+          {
+            connectionId,
+            catalogEntryId: metadata.catalogEntryId,
+            deletedAt: new Date().toISOString(),
+            lastAttemptAt: new Date().toISOString(),
+          },
+        ],
+      },
+      result: undefined,
+    }));
   }
 }

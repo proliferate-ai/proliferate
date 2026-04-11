@@ -11,6 +11,7 @@ export type WorkspaceOpenSource = "filesystem";
 export type SetupScriptTelemetryStatus = "failed" | "not_run" | "succeeded";
 export type ConnectorSkipReasonKind =
   | "missing_secret"
+  | "needs_reconnect"
   | "missing_stdio_command"
   | "workspace_path_unresolved"
   | "unsupported_target";

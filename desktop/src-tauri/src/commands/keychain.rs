@@ -133,6 +133,10 @@ fn connector_account(connection_id: &str, field_id: &str) -> String {
     format!("{connection_id}:{field_id}")
 }
 
+fn connector_oauth_account(connection_id: &str) -> String {
+    format!("oauth:{connection_id}")
+}
+
 enum KeychainRequest {
     Read {
         service: String,
@@ -264,6 +268,22 @@ fn delete_password(service: &str, account: &str) -> Result<(), String> {
     response_rx
         .recv()
         .map_err(|_| "Keychain worker did not return a result.".to_string())?
+}
+
+pub(crate) fn read_connector_oauth_bundle(connection_id: &str) -> Result<Option<String>, String> {
+    read_password(CONNECTOR_SERVICE, &connector_oauth_account(connection_id))
+}
+
+pub(crate) fn set_connector_oauth_bundle(connection_id: &str, value: &str) -> Result<(), String> {
+    set_password(
+        CONNECTOR_SERVICE,
+        &connector_oauth_account(connection_id),
+        value,
+    )
+}
+
+pub(crate) fn delete_connector_oauth_bundle(connection_id: &str) -> Result<(), String> {
+    delete_password(CONNECTOR_SERVICE, &connector_oauth_account(connection_id))
 }
 
 fn ensure_runtime_data_key() -> Result<String, String> {
@@ -487,17 +507,23 @@ fn export_env_credential(
         return Ok(None);
     };
 
-    tracing::info!(provider = spec.id, env_var = name, "Exporting cloud credential from desktop env secret");
+    tracing::info!(
+        provider = spec.id,
+        env_var = name,
+        "Exporting cloud credential from desktop env secret"
+    );
     let mut env_vars = HashMap::new();
     env_vars.insert(name.to_string(), value);
     if let Some(augment_env_vars) = spec.augment_env_vars {
         augment_env_vars(name, &mut env_vars);
     }
 
-    Ok(Some(ExportedCloudCredential::Env(ExportedEnvCloudCredential {
-        auth_mode: "env".to_string(),
-        env_vars,
-    })))
+    Ok(Some(ExportedCloudCredential::Env(
+        ExportedEnvCloudCredential {
+            auth_mode: "env".to_string(),
+            env_vars,
+        },
+    )))
 }
 
 fn portable_auth_detected(provider: ProviderId, home_dir: &std::path::Path) -> bool {

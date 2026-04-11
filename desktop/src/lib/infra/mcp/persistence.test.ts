@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type {
+  ConnectOAuthConnectorResult,
+  GetValidOAuthAccessTokenResult,
+} from "@/platform/tauri/mcp-oauth";
 
 const mocks = vi.hoisted(() => {
   let persistedState: unknown;
   const connectorSecrets = new Map<string, string>();
+  const oauthBundles = new Set<string>();
 
   return {
     get persistedState() {
@@ -12,6 +17,7 @@ const mocks = vi.hoisted(() => {
       persistedState = value;
     },
     connectorSecrets,
+    oauthBundles,
     readPersistedValueMock: vi.fn(async () => persistedState),
     persistValueMock: vi.fn(async (_key: string, value: unknown) => {
       persistedState = structuredClone(value);
@@ -24,6 +30,20 @@ const mocks = vi.hoisted(() => {
     }),
     deleteConnectorSecretMock: vi.fn(async (connectionId: string, fieldId: string) => {
       connectorSecrets.delete(`${connectionId}:${fieldId}`);
+    }),
+    connectOAuthConnectorMock: vi.fn(async (input: { connectionId: string }): Promise<ConnectOAuthConnectorResult> => {
+      oauthBundles.add(input.connectionId);
+      return { kind: "completed" as const };
+    }),
+    getOAuthConnectorBundleStateMock: vi.fn(async (connectionId: string) => ({
+      hasBundle: oauthBundles.has(connectionId),
+      expiresAt: null,
+    })),
+    getValidOAuthAccessTokenMock: vi.fn(async (): Promise<GetValidOAuthAccessTokenResult> => ({
+      kind: "missing",
+    })),
+    deleteOAuthConnectorBundleMock: vi.fn(async (connectionId: string) => {
+      oauthBundles.delete(connectionId);
     }),
     syncCloudMcpConnectionMock: vi.fn(async () => undefined),
     deleteCloudMcpConnectionMock: vi.fn(async () => undefined),
@@ -41,15 +61,24 @@ vi.mock("@/platform/tauri/connectors", () => ({
   deleteConnectorSecret: mocks.deleteConnectorSecretMock,
 }));
 
+vi.mock("@/platform/tauri/mcp-oauth", () => ({
+  connectOAuthConnector: mocks.connectOAuthConnectorMock,
+  getOAuthConnectorBundleState: mocks.getOAuthConnectorBundleStateMock,
+  getValidOAuthAccessToken: mocks.getValidOAuthAccessTokenMock,
+  deleteOAuthConnectorBundle: mocks.deleteOAuthConnectorBundleMock,
+}));
+
 vi.mock("@/lib/integrations/cloud/mcp_connections", () => ({
   syncCloudMcpConnection: mocks.syncCloudMcpConnectionMock,
   deleteCloudMcpConnection: mocks.deleteCloudMcpConnectionMock,
 }));
 
 import {
+  connectOAuthConnector,
   deleteConnector,
   installConnector,
   loadConnectorPaneData,
+  reconnectOAuthConnector,
 } from "@/lib/infra/mcp/persistence";
 import { retryConnectorSync, retryPendingConnectorSync } from "@/lib/infra/mcp/sync";
 
@@ -57,11 +86,16 @@ describe("mcp connector persistence", () => {
   beforeEach(() => {
     mocks.persistedState = undefined;
     mocks.connectorSecrets.clear();
+    mocks.oauthBundles.clear();
     mocks.readPersistedValueMock.mockClear();
     mocks.persistValueMock.mockClear();
     mocks.getConnectorSecretMock.mockClear();
     mocks.setConnectorSecretMock.mockClear();
     mocks.deleteConnectorSecretMock.mockClear();
+    mocks.connectOAuthConnectorMock.mockClear();
+    mocks.getOAuthConnectorBundleStateMock.mockClear();
+    mocks.getValidOAuthAccessTokenMock.mockClear();
+    mocks.deleteOAuthConnectorBundleMock.mockClear();
     mocks.syncCloudMcpConnectionMock.mockClear();
     mocks.deleteCloudMcpConnectionMock.mockClear();
     mocks.setConnectorSecretMock.mockImplementation(async (connectionId: string, fieldId: string, value: string) => {
@@ -102,6 +136,7 @@ describe("mcp connector persistence", () => {
 
     expect(availableIds).not.toContain("brave_search");
     expect(availableIds).not.toContain("openweather");
+    expect(availableIds).not.toContain("supabase");
   });
 
   it("marks cloud-sync connectors as degraded until retry succeeds", async () => {
@@ -148,5 +183,115 @@ describe("mcp connector persistence", () => {
     const paneData = await loadConnectorPaneData();
     expect(paneData.installed).toHaveLength(1);
     expect(paneData.installed[0]?.broken).toBe(false);
+  });
+
+  it("connects OAuth connectors through the native flow before persisting metadata", async () => {
+    const result = await connectOAuthConnector("linear");
+
+    expect(result).toEqual({ kind: "completed" });
+    const paneData = await loadConnectorPaneData();
+    expect(paneData.installed).toHaveLength(1);
+    expect(paneData.installed[0]?.catalogEntry.id).toBe("linear");
+    expect(paneData.installed[0]?.broken).toBe(false);
+    expect(mocks.connectOAuthConnectorMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-reads connector state after OAuth completes before saving metadata", async () => {
+    await installConnector("context7", "ctx7sk-example");
+    mocks.connectOAuthConnectorMock.mockImplementationOnce(async (input: { connectionId: string }) => {
+      mocks.oauthBundles.add(input.connectionId);
+      const state = mocks.persistedState as {
+        connections: Array<Record<string, unknown>>;
+        pendingDeletes: unknown[];
+      };
+      state.connections = [
+        ...state.connections,
+        {
+          connectionId: "filesystem-1",
+          catalogEntryId: "filesystem",
+          enabled: true,
+          serverName: "filesystem",
+          syncState: "synced",
+          createdAt: "2026-04-10T00:00:00.000Z",
+          updatedAt: "2026-04-10T00:00:00.000Z",
+          lastSyncedAt: "2026-04-10T00:00:00.000Z",
+        },
+      ];
+      return { kind: "completed" as const };
+    });
+
+    await connectOAuthConnector("linear");
+
+    const paneData = await loadConnectorPaneData();
+    expect(paneData.installed.map((record) => record.catalogEntry.id)).toEqual(
+      expect.arrayContaining(["linear", "context7", "filesystem"]),
+    );
+  });
+
+  it("does not persist connector metadata when the OAuth flow is canceled", async () => {
+    mocks.connectOAuthConnectorMock.mockResolvedValueOnce({ kind: "canceled" });
+
+    const result = await connectOAuthConnector("linear");
+
+    expect(result).toEqual({ kind: "canceled" });
+    expect((await loadConnectorPaneData()).installed).toEqual([]);
+    expect(mocks.deleteOAuthConnectorBundleMock).not.toHaveBeenCalled();
+  });
+
+  it("cleans up the OAuth bundle if reconnect metadata persistence fails", async () => {
+    await connectOAuthConnector("linear");
+    const connectionId = (mocks.persistedState as {
+      connections: Array<{ connectionId: string }>;
+    }).connections[0]!.connectionId;
+
+    mocks.persistValueMock.mockImplementationOnce(async () => {
+      throw new Error("disk full");
+    });
+
+    await expect(reconnectOAuthConnector(connectionId)).rejects.toThrow("disk full");
+    expect(mocks.deleteOAuthConnectorBundleMock).toHaveBeenCalledWith(connectionId);
+  });
+
+  it("reconnect writes against the latest connector state", async () => {
+    await connectOAuthConnector("linear");
+    const connectionId = (mocks.persistedState as {
+      connections: Array<{ connectionId: string }>;
+      pendingDeletes: unknown[];
+    }).connections[0]!.connectionId;
+
+    mocks.connectOAuthConnectorMock.mockImplementationOnce(async () => {
+      const state = mocks.persistedState as {
+        connections: Array<Record<string, unknown>>;
+        pendingDeletes: unknown[];
+      };
+      state.connections = [
+        ...state.connections,
+        {
+          connectionId: "filesystem-1",
+          catalogEntryId: "filesystem",
+          enabled: true,
+          serverName: "filesystem",
+          syncState: "synced",
+          createdAt: "2026-04-10T00:00:00.000Z",
+          updatedAt: "2026-04-10T00:00:00.000Z",
+          lastSyncedAt: "2026-04-10T00:00:00.000Z",
+        },
+      ];
+      return { kind: "completed" as const };
+    });
+
+    await reconnectOAuthConnector(connectionId);
+
+    const paneData = await loadConnectorPaneData();
+    expect(paneData.installed.map((record) => record.catalogEntry.id)).toEqual(
+      expect.arrayContaining(["linear", "filesystem"]),
+    );
+  });
+
+  it("keeps Supabase unavailable until confidential-client auth is implemented", async () => {
+    await expect(connectOAuthConnector("supabase")).rejects.toThrow(
+      "Supabase isn't available yet.",
+    );
+    expect(mocks.connectOAuthConnectorMock).not.toHaveBeenCalled();
   });
 });

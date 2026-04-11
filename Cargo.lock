@@ -4051,6 +4051,7 @@ version = "0.1.11"
 dependencies = [
  "anyharness-credential-discovery",
  "base64 0.22.1",
+ "chrono",
  "getrandom 0.2.17",
  "keyring",
  "reqwest 0.12.28",
@@ -4059,6 +4060,7 @@ dependencies = [
  "sentry-tracing",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-deep-link",
@@ -4073,6 +4075,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
  "which",
  "window-vibrancy",
 ]

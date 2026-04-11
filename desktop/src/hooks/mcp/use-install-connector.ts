@@ -6,7 +6,7 @@ import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { mcpConnectorsKey } from "./query-keys";
+import { refreshMcpConnectorsQuery } from "./use-connectors";
 
 export function useInstallConnector() {
   const queryClient = useQueryClient();
@@ -19,7 +19,7 @@ export function useInstallConnector() {
       return installConnector(input.catalogEntryId, input.secretValue);
     },
     onSuccess: async (result, variables) => {
-      await queryClient.invalidateQueries({ queryKey: mcpConnectorsKey() });
+      await refreshMcpConnectorsQuery(queryClient);
       trackProductEvent("connector_install_succeeded", {
         connector_id: variables.catalogEntryId,
         result: result.degraded ? "degraded" : "synced",

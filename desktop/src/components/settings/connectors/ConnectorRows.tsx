@@ -8,7 +8,10 @@ import { ConnectorIcon } from "./ConnectorShared";
 function getInstalledStatus(record: InstalledConnectorRecord) {
   if (record.broken) {
     return {
-      description: "Add a token to use this connector.",
+      description:
+        record.catalogEntry.transport === "http" && record.catalogEntry.authKind === "oauth"
+          ? "Reconnect in your browser to use this connector."
+          : "Add a token to use this connector.",
       tone: "text-destructive",
       retry: false,
     } as const;

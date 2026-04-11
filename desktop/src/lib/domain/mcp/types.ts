@@ -4,6 +4,9 @@ export type ConnectorCatalogId =
   | "brave_search"
   | "tavily"
   | "openweather"
+  | "linear"
+  | "supabase"
+  | "notion"
   | "filesystem"
   | "playwright";
 
@@ -33,12 +36,26 @@ export type ConnectorEnvTemplate =
   | { name: string; source: { kind: "field"; fieldId: string } };
 
 export type ConnectorIconId =
+  | "brave"
+  | "context7"
   | "github"
   | "globe"
+  | "notion"
+  | "openweather"
+  | "playwright"
   | "search"
+  | "supabase"
   | "sun"
   | "folder"
   | "terminal";
+
+export interface SupabaseConnectorSettings {
+  kind: "supabase";
+  projectRef: string;
+  readOnly: boolean;
+}
+
+export type ConnectorSettings = SupabaseConnectorSettings;
 
 interface ConnectorCatalogEntryBase {
   id: ConnectorCatalogId;
@@ -53,12 +70,23 @@ interface ConnectorCatalogEntryBase {
   requiredFields: readonly ConnectorCatalogField[];
 }
 
-export interface HttpConnectorCatalogEntry extends ConnectorCatalogEntryBase {
+export interface SecretHttpConnectorCatalogEntry extends ConnectorCatalogEntryBase {
   transport: "http";
+  authKind: "secret";
   authStyle: ConnectorHttpAuthStyle;
   authFieldId: string;
   url: string;
 }
+
+export interface OAuthHttpConnectorCatalogEntry extends ConnectorCatalogEntryBase {
+  transport: "http";
+  authKind: "oauth";
+  url: string;
+}
+
+export type HttpConnectorCatalogEntry =
+  | SecretHttpConnectorCatalogEntry
+  | OAuthHttpConnectorCatalogEntry;
 
 export interface StdioConnectorCatalogEntry extends ConnectorCatalogEntryBase {
   transport: "stdio";
@@ -80,6 +108,7 @@ export interface SavedConnectorMetadata {
   createdAt: string;
   updatedAt: string;
   lastSyncedAt: string | null;
+  settings?: ConnectorSettings;
 }
 
 export interface ConnectorDeleteTombstone {
@@ -108,6 +137,7 @@ interface ConnectorLaunchResolutionWarningBase {
 
 export type ConnectorLaunchResolutionWarning =
   | (ConnectorLaunchResolutionWarningBase & { kind: "missing_secret" })
+  | (ConnectorLaunchResolutionWarningBase & { kind: "needs_reconnect" })
   | (ConnectorLaunchResolutionWarningBase & { kind: "missing_stdio_command" })
   | (ConnectorLaunchResolutionWarningBase & { kind: "workspace_path_unresolved" })
   | (ConnectorLaunchResolutionWarningBase & { kind: "unsupported_target" });
