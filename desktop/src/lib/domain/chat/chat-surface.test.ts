@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Workspace } from "@anyharness/sdk";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
-import { shouldShowStructuralRepoWorkspaceStatus } from "@/lib/domain/chat/chat-surface";
+import {
+  shouldKeepBootstrappedWorkspaceLoading,
+  shouldShowStructuralRepoWorkspaceStatus,
+} from "@/lib/domain/chat/chat-surface";
 
 function makeWorkspace(overrides: Partial<Workspace>): Workspace {
   return {
@@ -52,5 +55,29 @@ describe("chat surface", () => {
       }),
       null,
     )).toBe(false);
+  });
+
+  it("keeps a bootstrapped workspace on loading when restoring a remembered session", () => {
+    expect(shouldKeepBootstrappedWorkspaceLoading({
+      activeSessionId: null,
+      hasBootstrappedWorkspace: true,
+      rememberedSessionId: "session-1",
+    })).toBe(true);
+  });
+
+  it("allows the empty state once there is no remembered session to restore", () => {
+    expect(shouldKeepBootstrappedWorkspaceLoading({
+      activeSessionId: null,
+      hasBootstrappedWorkspace: true,
+      rememberedSessionId: null,
+    })).toBe(false);
+  });
+
+  it("does not hold loading once a session is already active", () => {
+    expect(shouldKeepBootstrappedWorkspaceLoading({
+      activeSessionId: "session-1",
+      hasBootstrappedWorkspace: true,
+      rememberedSessionId: "session-1",
+    })).toBe(false);
   });
 });

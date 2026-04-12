@@ -2,7 +2,7 @@ use url::Url;
 
 use crate::app_config::load_app_config_record;
 
-const DEFAULT_HOSTED_API_BASE_URL: &str = "https://api.proliferate.com";
+const DEFAULT_HOSTED_API_BASE_URL: &str = "https://app.proliferate.com/api";
 const OFFICIAL_HOSTED_API_ORIGINS: &[&str] =
     &["https://api.proliferate.com", "https://app.proliferate.com"];
 
@@ -92,7 +92,7 @@ mod tests {
                 false,
                 true,
                 false,
-                Some("https://api.proliferate.com"),
+                Some("https://app.proliferate.com/api"),
             ),
             DesktopTelemetryMode::Disabled
         );
@@ -105,7 +105,7 @@ mod tests {
                 false,
                 false,
                 true,
-                Some("https://api.proliferate.com"),
+                Some("https://app.proliferate.com/api"),
             ),
             DesktopTelemetryMode::LocalDev
         );
@@ -118,7 +118,7 @@ mod tests {
                 false,
                 false,
                 false,
-                Some("https://api.proliferate.com"),
+                Some("https://app.proliferate.com/api"),
             ),
             DesktopTelemetryMode::HostedProduct
         );

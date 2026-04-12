@@ -129,7 +129,7 @@ function renderInlineHint(hint?: ReactNode) {
         {hint}
       </span>
     );
-  } 
+  }
 
   return <div className="min-w-0 shrink">{hint}</div>;
 }

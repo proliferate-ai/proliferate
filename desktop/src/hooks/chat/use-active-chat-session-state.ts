@@ -1,6 +1,7 @@
 import { createTranscriptState } from "@anyharness/sdk";
 import { useMemo } from "react";
 import { parsePermissionOptionActions, type PermissionOptionAction } from "@/lib/domain/chat/chat-input-helpers";
+import { hasVisibleTranscriptContent } from "@/lib/domain/chat/pending-prompts";
 import { resolveCurrentModeLabel } from "@/lib/domain/chat/chat-input";
 import { isSessionSlotBusy, resolveSessionViewState } from "@/lib/domain/sessions/activity";
 import { getPendingSessionConfigChange } from "@/lib/domain/sessions/pending-config";
@@ -49,11 +50,16 @@ export function useActiveChatSessionState() {
   );
   const transcript = activeSlot?.transcript ?? createTranscriptState(activeSessionId ?? "");
   const pendingPrompts = transcript.pendingPrompts;
+  const optimisticPrompt = activeSlot?.optimisticPrompt ?? null;
   const totalItems = useMemo(() => transcript.turnOrder.reduce(
     (sum, turnId) => sum + (transcript.turnsById[turnId]?.itemOrder.length ?? 0),
     0,
   ), [transcript]);
-  const hasContent = totalItems > 0 || pendingPrompts.length > 0;
+  const hasContent = hasVisibleTranscriptContent({
+    transcript,
+    pendingPrompts,
+    optimisticPrompt,
+  });
   const sessionViewState = resolveSessionViewState(activeSlot);
   const isRunning = isSessionSlotBusy(activeSlot);
 
@@ -63,6 +69,7 @@ export function useActiveChatSessionState() {
     liveConfig: activeSlot?.liveConfig ?? null,
     transcript,
     pendingPrompts,
+    optimisticPrompt,
     currentLaunchIdentity,
     currentModelConfigId,
     currentModeId,

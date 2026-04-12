@@ -4,6 +4,7 @@ interface ShortcutModifierMatch {
   meta: boolean;
   shift: boolean;
   alt: boolean;
+  ctrl?: boolean;
 }
 
 export type ShortcutMatch =
@@ -56,6 +57,14 @@ export const SHORTCUTS = {
     description: "New local workspace",
     owner: "js",
     match: { kind: "fixed", key: "n", meta: true, shift: true, alt: false },
+    allowInInputs: true,
+  },
+  newCloud: {
+    id: "workspace.new-cloud",
+    label: "⌘⌃N",
+    description: "New cloud workspace",
+    owner: "js",
+    match: { kind: "fixed", key: "n", meta: true, ctrl: true, shift: false, alt: false },
     allowInInputs: true,
   },
   addRepository: {

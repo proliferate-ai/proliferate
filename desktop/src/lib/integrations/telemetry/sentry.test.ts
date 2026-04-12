@@ -62,7 +62,7 @@ describe("desktop sentry transport", () => {
         tracesSampleRate: 1,
         enableLogs: true,
       },
-      apiBaseUrl: "https://api.proliferate.com",
+      apiBaseUrl: "https://app.proliferate.com/api",
       telemetryMode: "hosted_product",
     });
 

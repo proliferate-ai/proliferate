@@ -60,9 +60,15 @@ import {
   buildSubagentBrailleColorMap,
   resolveSubagentBrailleColor,
 } from "@/lib/domain/chat/subagent-braille-color";
+import {
+  turnHasAssistantRenderableTranscriptContent,
+  resolveVisibleTranscriptPendingPrompt,
+  shouldShowPendingPromptActivity,
+} from "@/lib/domain/chat/pending-prompts";
 import type {
   FileChangeContentPart,
   FileReadContentPart,
+  PendingPromptEntry,
   TranscriptState,
   ToolCallContentPart,
   ToolCallItem,
@@ -98,6 +104,7 @@ const TRAILING_STATUS_MIN_HEIGHT = "min-h-[2.625rem]";
 interface MessageListProps {
   activeSessionId: string;
   selectedWorkspaceId: string | null;
+  optimisticPrompt: PendingPromptEntry | null;
   transcript: TranscriptState;
   sessionViewState: SessionViewState;
 }
@@ -105,10 +112,12 @@ interface MessageListProps {
 export function MessageList({
   activeSessionId,
   selectedWorkspaceId,
+  optimisticPrompt,
   transcript,
   sessionViewState,
 }: MessageListProps) {
   const latestTurnId = transcript.turnOrder[transcript.turnOrder.length - 1] ?? null;
+  const latestTurn = latestTurnId ? transcript.turnsById[latestTurnId] ?? null : null;
   const { openFileDiff } = useWorkspaceFileActions();
   const { openArtifact } = useOpenCoworkArtifact();
   const subagentBrailleColors = useMemo(
@@ -120,9 +129,27 @@ export function MessageList({
     (sum, tid) => sum + (transcript.turnsById[tid]?.itemOrder.length ?? 0),
     0,
   );
+  const latestTurnHasAssistantRenderableContent = turnHasAssistantRenderableTranscriptContent(
+    latestTurn,
+    transcript,
+  );
+  const visiblePendingPrompt = resolveVisibleTranscriptPendingPrompt({
+    pendingPrompts: transcript.pendingPrompts,
+    optimisticPrompt,
+    latestTurnStartedAt: latestTurn?.startedAt ?? null,
+    latestTurnHasAssistantRenderableContent,
+  });
+  const pendingPromptTrailingStatus = visiblePendingPrompt
+    && shouldShowPendingPromptActivity({ optimisticPrompt, sessionViewState })
+    ? resolvePendingPromptTrailingStatus(
+      visiblePendingPrompt.queuedAt,
+      sessionViewState,
+      optimisticPrompt !== null,
+    )
+    : null;
   const { scrollRef, contentRef } = useMessageListScroll({
     totalItems,
-    pendingPromptText: null,
+    pendingPromptText: visiblePendingPrompt?.text ?? null,
     isSessionBusy: sessionViewState === "working" || sessionViewState === "needs_input",
     selectedWorkspaceId,
     activeSessionId,
@@ -138,6 +165,13 @@ export function MessageList({
             const isLatestTurn = turnId === latestTurnId;
             const isLatestTurnInProgress =
               isLatestTurn && !turn.completedAt;
+            const shouldHideEmptyLatestTurn =
+              visiblePendingPrompt !== null
+              && isLatestTurnInProgress
+              && !latestTurnHasAssistantRenderableContent;
+            if (shouldHideEmptyLatestTurn) {
+              return null;
+            }
             const hasFileBadges = turn.fileBadges.length > 0;
             const presentation = buildTurnPresentation(turn, transcript);
             const tailAssistantProseRootId = findTailAssistantProseRootId(
@@ -196,10 +230,41 @@ export function MessageList({
               </TurnShell>
             );
           })}
+          {visiblePendingPrompt && (
+            <TurnShell key="pending-prompt" isFirst={transcript.turnOrder.length === 0}>
+              <div className="flex flex-col gap-2">
+                <UserMessage content={visiblePendingPrompt.text} />
+                {pendingPromptTrailingStatus && (
+                  <div className={TRAILING_STATUS_MIN_HEIGHT}>{pendingPromptTrailingStatus}</div>
+                )}
+              </div>
+            </TurnShell>
+          )}
         </div>
       </AutoHideScrollArea>
     </div>
   );
+}
+
+function resolvePendingPromptTrailingStatus(
+  queuedAt: string,
+  sessionViewState: SessionViewState,
+  forceWorking: boolean,
+): ReactNode {
+  if (sessionViewState === "needs_input") {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <CircleQuestion className="size-3.5 shrink-0 text-warning-foreground" />
+        <span>Waiting for your input</span>
+      </div>
+    );
+  }
+
+  if (forceWorking || sessionViewState === "working") {
+    return <StreamingIndicator startedAt={queuedAt} />;
+  }
+
+  return null;
 }
 
 function resolveTurnTrailingStatus(
@@ -213,7 +278,7 @@ function resolveTurnTrailingStatus(
   if (sessionViewState === "needs_input") {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <CircleQuestion className="size-3.5 shrink-0 text-amber-500" />
+        <CircleQuestion className="size-3.5 shrink-0 text-warning-foreground" />
         <span>Waiting for your input</span>
       </div>
     );

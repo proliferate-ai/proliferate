@@ -10,16 +10,15 @@ import {
   SidebarWorkspaceContent,
 } from "./SidebarWorkspaceContent";
 import { CoworkThreadsSection } from "@/components/workspace/cowork/sidebar/CoworkThreadsSection";
-import { NewCloudWorkspaceModal } from "@/components/workspace/cloud/NewCloudWorkspaceModal";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import type { NewCloudWorkspaceSeed } from "@/lib/domain/workspaces/cloud-workspace-creation";
 import {
   getEffectiveExpandedSidebarGroupKeys,
   isDefaultSidebarWorkspaceTypes,
   type SidebarWorkspaceVariant,
 } from "@/lib/domain/workspaces/sidebar";
+import { buildConfiguredCloudRepoKeys } from "@/lib/domain/workspaces/cloud-workspace-creation";
 import {
   Archive,
   Check,
@@ -33,6 +32,7 @@ import {
 import { CAPABILITY_COPY } from "@/config/capabilities";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/use-cloud-billing";
+import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/use-workspace-display-name-actions";
@@ -40,7 +40,9 @@ import { useWorkspaceSidebarActions } from "@/hooks/workspaces/use-workspace-sid
 import { useWorkspaceSidebarState } from "@/hooks/workspaces/use-workspace-sidebar-state";
 import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";
 import { RepoSetupModal } from "@/components/workspace/repo-setup/RepoSetupModal";
-import { useStartCloudWorkspaceFlow } from "@/hooks/cloud/use-start-cloud-workspace-flow";
+import {
+  buildCloudRepoSettingsHref,
+} from "@/lib/domain/settings/navigation";
 
 const SIDEBAR_WORKSPACE_TYPE_OPTIONS: Array<{
   label: string;
@@ -58,6 +60,10 @@ export function MainSidebar() {
     cloudUnavailable,
   } = useCloudAvailabilityState();
   const { data: billingPlan } = useCloudBilling();
+  const {
+    data: cloudRepoConfigs,
+    isPending: isCloudRepoConfigsPending,
+  } = useCloudRepoConfigs(cloudActive);
   const [showArchived, setShowArchived] = useState(false);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const {
@@ -93,12 +99,15 @@ export function MainSidebar() {
       updateWorkspaceDisplayName({ workspaceId, displayName }),
     [updateWorkspaceDisplayName],
   );
-  const [cloudDialogState, setCloudDialogState] = useState<NewCloudWorkspaceSeed | null>(null);
   const repoSetupModal = useRepoSetupModalStore((s) => s.modal);
   const closeRepoSetupModal = useRepoSetupModalStore((s) => s.close);
-  const startCloudWorkspaceFlow = useStartCloudWorkspaceFlow({
-    onOpenCloudDialog: setCloudDialogState,
-  });
+  const configuredCloudRepoKeys = useMemo(
+    () => buildConfiguredCloudRepoKeys(cloudRepoConfigs?.configs),
+    [cloudRepoConfigs?.configs],
+  );
+  const cloudRepoConfigsInitialLoading = cloudActive
+    && isCloudRepoConfigsPending
+    && !cloudRepoConfigs;
 
   // Ephemeral, session-scoped set of repo keys the user has explicitly
   // expanded via "Show more". Toggles on/off. Resets on reload so the
@@ -140,6 +149,12 @@ export function MainSidebar() {
 
   const handleOpenRepoSettings = useCallback((sourceRoot: string) => {
     navigate(`/settings?section=repo&repo=${encodeURIComponent(sourceRoot)}`);
+  }, [navigate]);
+  const handleOpenCloudRepoSettings = useCallback((target: {
+    gitOwner: string;
+    gitRepoName: string;
+  }) => {
+    navigate(buildCloudRepoSettingsHref(target.gitOwner, target.gitRepoName));
   }, [navigate]);
 
   // Smart collapse toggle: if any repo group is currently expanded (i.e.
@@ -289,13 +304,14 @@ export function MainSidebar() {
               explicitlyExpandedRepoKeys={explicitlyExpandedRepoKeys}
               effectiveExpandedRepoKeys={effectiveExpandedRepoKeys}
               onToggleRepoExpansion={handleToggleRepoExpansion}
+              configuredCloudRepoKeys={configuredCloudRepoKeys}
+              cloudRepoConfigsInitialLoading={cloudRepoConfigsInitialLoading}
               cloudWorkspaceEnabled={cloudActive && !cloudWorkspaceBlocked}
               cloudWorkspaceTooltip={cloudWorkspaceTooltip}
               onCreateWorktreeWorkspace={actions.handleCreateWorktreeWorkspace}
               onCreateLocalWorkspace={actions.handleCreateLocalWorkspace}
-              onOpenCloudDialog={(seed) => {
-                void startCloudWorkspaceFlow(seed);
-              }}
+              onCreateCloudWorkspace={actions.handleCreateCloudWorkspace}
+              onOpenCloudRepoSettings={handleOpenCloudRepoSettings}
               onSelectWorkspace={actions.handleSelectWorkspace}
               onArchiveWorkspace={archiveWorkspace}
               onUnarchiveWorkspace={unarchiveWorkspace}
@@ -308,13 +324,6 @@ export function MainSidebar() {
       </div>
 
       <SidebarFooter />
-
-      {cloudActive && !cloudWorkspaceBlocked && cloudDialogState && (
-        <NewCloudWorkspaceModal
-          seed={cloudDialogState}
-          onClose={() => setCloudDialogState(null)}
-        />
-      )}
 
       {repoSetupModal && (
         <RepoSetupModal

@@ -226,6 +226,7 @@ class CloudRepoConfig(Base):
     git_repo_name: Mapped[str] = mapped_column(String(255))
     configured: Mapped[bool] = mapped_column(default=False)
     configured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    default_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
     env_vars_ciphertext: Mapped[str] = mapped_column(Text, default="")
     setup_script: Mapped[str] = mapped_column(Text, default="")
     files_version: Mapped[int] = mapped_column(Integer, default=0)

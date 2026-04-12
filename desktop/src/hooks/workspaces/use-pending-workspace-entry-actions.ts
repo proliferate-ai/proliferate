@@ -5,6 +5,7 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
+import { useCreateCloudWorkspace } from "@/hooks/cloud/use-create-cloud-workspace";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
@@ -27,8 +28,8 @@ export function usePendingWorkspaceEntryActions() {
   const {
     createLocalWorkspaceAndEnter,
     createWorktreeAndEnter,
-    createCloudWorkspaceAndEnter,
   } = useWorkspaceEntryActions();
+  const { retryCloudWorkspaceAndEnter } = useCreateCloudWorkspace();
   const { selectWorkspace, clearWorkspaceRuntimeState } = useWorkspaceSelection();
 
   const handleRetry = useCallback(async (entry: PendingWorkspaceEntry) => {
@@ -47,7 +48,7 @@ export function usePendingWorkspaceEntryActions() {
         });
         return;
       case "cloud":
-        await createCloudWorkspaceAndEnter(entry.request.input);
+        await retryCloudWorkspaceAndEnter(entry.request.input);
         return;
       case "select-existing":
         {
@@ -103,9 +104,9 @@ export function usePendingWorkspaceEntryActions() {
         }
     }
   }, [
-    createCloudWorkspaceAndEnter,
     createLocalWorkspaceAndEnter,
     createWorktreeAndEnter,
+    retryCloudWorkspaceAndEnter,
     selectWorkspace,
     setPendingWorkspaceEntry,
     setWorkspaceArrivalEvent,

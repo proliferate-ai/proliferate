@@ -232,6 +232,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/telemetry/anonymous": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Anonymous Telemetry Endpoint */
+        post: operations["record_anonymous_telemetry_endpoint_v1_telemetry_anonymous_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/repos/{git_owner}/{git_repo_name}/branches": {
         parameters: {
             query?: never;
@@ -836,6 +853,41 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnonymousTelemetryAcceptedResponse */
+        AnonymousTelemetryAcceptedResponse: {
+            /**
+             * Accepted
+             * @default true
+             */
+            accepted: boolean;
+        };
+        /** AnonymousTelemetryRequest */
+        AnonymousTelemetryRequest: {
+            /**
+             * Installuuid
+             * Format: uuid
+             */
+            installUuid: string;
+            /**
+             * Surface
+             * @enum {string}
+             */
+            surface: "desktop" | "server";
+            /**
+             * Telemetrymode
+             * @enum {string}
+             */
+            telemetryMode: "local_dev" | "self_managed" | "hosted_product";
+            /**
+             * Recordtype
+             * @enum {string}
+             */
+            recordType: "VERSION" | "ACTIVATION" | "USAGE";
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+        };
         /**
          * AuthCodeCreated
          * @description Returned when the server has created an auth code (internal use / testing).
@@ -934,6 +986,8 @@ export interface components {
             configured: boolean;
             /** Configuredat */
             configuredAt: string | null;
+            /** Defaultbranch */
+            defaultBranch: string | null;
             /** Envvars */
             envVars: {
                 [key: string]: string;
@@ -1017,7 +1071,7 @@ export interface components {
             /** Gitreponame */
             gitRepoName: string;
             /** Basebranch */
-            baseBranch: string;
+            baseBranch?: string | null;
             /** Branchname */
             branchName: string;
             /** Displayname */
@@ -1344,6 +1398,8 @@ export interface components {
         SaveCloudRepoConfigRequest: {
             /** Configured */
             configured: boolean;
+            /** Defaultbranch */
+            defaultBranch?: string | null;
             /** Envvars */
             envVars?: {
                 [key: string]: string;
@@ -2309,6 +2365,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    record_anonymous_telemetry_endpoint_v1_telemetry_anonymous_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnonymousTelemetryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnonymousTelemetryAcceptedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

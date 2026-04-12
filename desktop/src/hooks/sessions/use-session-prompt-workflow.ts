@@ -1,11 +1,15 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { useCallback } from "react";
+import { createOptimisticPendingPrompt } from "@/lib/domain/chat/pending-prompts";
 import { getSessionClientAndWorkspace, isPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
+import {
+  finishLatencyFlow,
+  getLatencyFlowRequestHeaders,
+} from "@/lib/infra/latency-flow";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useSessionTitleActions } from "@/hooks/sessions/use-session-title-actions";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
-import { getLatencyFlowRequestHeaders } from "@/lib/infra/latency-flow";
 
 interface PromptSessionInput {
   sessionId: string;
@@ -27,6 +31,7 @@ export function useSessionPromptWorkflow() {
     text,
     workspaceId,
     latencyFlowId,
+    promptId,
     onBeforePrompt,
   }: PromptSessionInput) => {
     const slot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
@@ -39,6 +44,12 @@ export function useSessionPromptWorkflow() {
     }
 
     try {
+      useHarnessStore.getState().patchSessionSlot(sessionId, {
+        optimisticPrompt:
+          slot?.optimisticPrompt ?? createOptimisticPendingPrompt(text, promptId ?? null),
+      });
+      finishLatencyFlow(latencyFlowId, "optimistic_visible");
+
       const shouldGenerateTitle = !slot?.lastPromptAt;
       if (resolvedWorkspaceId && onBeforePrompt) {
         await onBeforePrompt(resolvedWorkspaceId);
@@ -68,7 +79,10 @@ export function useSessionPromptWorkflow() {
         requestHeaders,
       });
     } catch (error) {
-      useHarnessStore.getState().patchSessionSlot(sessionId, { status: "idle" });
+      useHarnessStore.getState().patchSessionSlot(sessionId, {
+        optimisticPrompt: null,
+        status: "idle",
+      });
       throw error;
     }
   }, [

@@ -227,7 +227,7 @@
 
 - name: PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT
   secret: false
-  default: "https://api.proliferate.com/v1/telemetry/anonymous"
+  default: "https://app.proliferate.com/api/v1/telemetry/anonymous"
   description: Anonymous telemetry collector endpoint
   tags: [self-hosted, production]
 
@@ -307,7 +307,7 @@
 
 - name: VITE_PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT
   secret: false
-  default: "https://api.proliferate.com/v1/telemetry/anonymous"
+  default: "https://app.proliferate.com/api/v1/telemetry/anonymous"
   description: Renderer anonymous telemetry collector endpoint
   tags: [local-dev, ci]
 

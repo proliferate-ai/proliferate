@@ -8,22 +8,19 @@ import {
   generateWorkspaceSlug,
 } from "@/lib/domain/workspaces/arrival";
 import { useWorkspaces } from "./use-workspaces";
-import type {
-  PendingWorkspaceEntry,
-  PendingWorkspaceOriginTarget,
-  PendingWorkspaceRequest,
+import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
+import {
+  buildSubmittingPendingWorkspaceEntry as buildSubmittingPendingEntry,
+  createPendingWorkspaceAttemptId as createAttemptId,
 } from "@/lib/domain/workspaces/pending-entry";
 import {
   type CreateWorktreeWorkspaceInput,
   type WorktreeCreationParams,
 } from "@/lib/domain/workspaces/workspace-creation";
-import type { CreateCloudWorkspaceRequest } from "@/lib/integrations/cloud/client";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { localWorkspaceGroupKey } from "@/lib/domain/workspaces/collections";
 import { ensureRepoGroupExpanded } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceActions } from "./use-workspace-actions";
 import { useWorkspaceSelection } from "./selection/use-workspace-selection";
-import { useCloudWorkspaceActions } from "@/hooks/cloud/use-cloud-workspace-actions";
 import {
   elapsedMs,
   elapsedSince,
@@ -35,18 +32,8 @@ import {
   failLatencyFlow,
 } from "@/lib/infra/latency-flow";
 
-function createAttemptId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
 function resolveDisplayNameFromPath(path: string): string {
   return path.split("/").filter(Boolean).pop() ?? "workspace";
-}
-
-function buildOriginTarget(selectedWorkspaceId: string | null): PendingWorkspaceOriginTarget {
-  return selectedWorkspaceId
-    ? { kind: "workspace", workspaceId: selectedWorkspaceId }
-    : { kind: "home" };
 }
 
 function normalizeWorktreeInput(
@@ -79,30 +66,6 @@ function resolveErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-function buildSubmittingPendingEntry(input: {
-  attemptId: string;
-  source: PendingWorkspaceEntry["source"];
-  displayName: string;
-  repoLabel?: string | null;
-  baseBranchName?: string | null;
-  request: PendingWorkspaceRequest;
-}): PendingWorkspaceEntry {
-  return {
-    attemptId: input.attemptId,
-    source: input.source,
-    stage: "submitting",
-    displayName: input.displayName,
-    repoLabel: input.repoLabel ?? null,
-    baseBranchName: input.baseBranchName ?? null,
-    workspaceId: null,
-    request: input.request,
-    originTarget: buildOriginTarget(useHarnessStore.getState().selectedWorkspaceId),
-    errorMessage: null,
-    setupScript: null,
-    createdAt: Date.now(),
-  };
-}
-
 export function useWorkspaceEntryActions() {
   const { data: workspaceCollections } = useWorkspaces();
   const {
@@ -112,10 +75,6 @@ export function useWorkspaceEntryActions() {
     createWorktreeWorkspace,
     isCreatingWorktreeWorkspace,
   } = useWorkspaceActions();
-  const {
-    createCloudWorkspace,
-    isCreatingCloudWorkspace,
-  } = useCloudWorkspaceActions();
   const { selectWorkspace } = useWorkspaceSelection();
   const enterPendingWorkspaceShell = useHarnessStore(
     (state) => state.enterPendingWorkspaceShell,
@@ -251,6 +210,7 @@ export function useWorkspaceEntryActions() {
 
     const entry = buildSubmittingPendingEntry({
       attemptId: createAttemptId(),
+      selectedWorkspaceId: useHarnessStore.getState().selectedWorkspaceId,
       source: "local-created",
       displayName: resolveDisplayNameFromPath(sourceRoot),
       request: { kind: "local", sourceRoot },
@@ -341,6 +301,7 @@ export function useWorkspaceEntryActions() {
 
     const entry = buildSubmittingPendingEntry({
       attemptId: createAttemptId(),
+      selectedWorkspaceId: useHarnessStore.getState().selectedWorkspaceId,
       source: "worktree-created",
       displayName: normalizedInput.workspaceName?.trim() || "worktree",
       request: { kind: "worktree", input: normalizedInput },
@@ -444,91 +405,10 @@ export function useWorkspaceEntryActions() {
     workspaceCollections,
   ]);
 
-  const createCloudWorkspaceAndEnter = useCallback(async (
-    input: CreateCloudWorkspaceRequest,
-  ) => {
-    const startedAt = startLatencyTimer();
-    const branchName = input.branchName?.trim() || "cloud-workspace";
-    const repoLabel = input.gitOwner && input.gitRepoName
-      ? `${input.gitOwner}/${input.gitRepoName}`
-      : null;
-    const entry = buildSubmittingPendingEntry({
-      attemptId: createAttemptId(),
-      source: "cloud-created",
-      displayName: branchName,
-      repoLabel,
-      baseBranchName: input.baseBranch?.trim() || null,
-      request: { kind: "cloud", input },
-    });
-
-    beginPendingWorkspace(entry);
-
-    try {
-      logLatency("workspace.cloud_create.request.start", {
-        attemptId: entry.attemptId,
-        repoLabel,
-        branchName,
-        baseBranchName: entry.baseBranchName,
-      });
-      const workspace = await createCloudWorkspace(input);
-      logLatency("workspace.cloud_create.request.success", {
-        attemptId: entry.attemptId,
-        workspaceId: workspace.id,
-        status: workspace.status,
-        requestElapsedMs: elapsedMs(startedAt),
-      });
-      if (!isAttemptCurrent(entry.attemptId)) {
-        return;
-      }
-
-      const workspaceId = cloudWorkspaceSyntheticId(workspace.id);
-      const updatedEntry: PendingWorkspaceEntry = {
-        ...entry,
-        stage: workspace.status === "ready" ? "submitting" : "awaiting-cloud-ready",
-        workspaceId,
-        request: { kind: "select-existing", workspaceId },
-      };
-      setPendingWorkspaceEntry(updatedEntry);
-
-      if (workspace.status === "ready") {
-        await finalizeSelection(updatedEntry, workspaceId);
-        return;
-      }
-
-      await selectWorkspace(workspaceId, {
-        force: true,
-        preservePending: true,
-      });
-      logLatency("workspace.cloud_create.awaiting_ready", {
-        attemptId: entry.attemptId,
-        workspaceId,
-        status: workspace.status,
-        totalElapsedMs: elapsedSince(entry.createdAt),
-      });
-    } catch (error) {
-      const currentPending = useHarnessStore.getState().pendingWorkspaceEntry;
-      failPendingEntry(
-        currentPending?.attemptId === entry.attemptId
-          ? currentPending
-          : entry,
-        resolveErrorMessage(error, "Failed to create cloud workspace."),
-      );
-    }
-  }, [
-    beginPendingWorkspace,
-    createCloudWorkspace,
-    failPendingEntry,
-    finalizeSelection,
-    selectWorkspace,
-    setPendingWorkspaceEntry,
-  ]);
-
   return {
     createLocalWorkspaceAndEnter,
     isCreatingLocalWorkspace,
     createWorktreeAndEnter,
     isCreatingWorktreeWorkspace,
-    createCloudWorkspaceAndEnter,
-    isCreatingCloudWorkspace,
   };
 }

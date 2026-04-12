@@ -39,13 +39,17 @@ let persistedState = createDefaultAnonymousTelemetryPersistedState();
 let initialized = false;
 let initializing: Promise<void> | null = null;
 let saveQueue: Promise<void> = Promise.resolve();
-let versionTimerId: number | null = null;
-let housekeepingTimerId: number | null = null;
+let versionTimerId: ReturnType<typeof globalThis.setInterval> | null = null;
+let housekeepingTimerId: ReturnType<typeof globalThis.setInterval> | null = null;
 let usageFlushPromise: Promise<void> | null = null;
 let pendingDirectives: AnonymousTelemetryDirective[] = [];
 
+function isExpectedLocalDevNetworkFailure(error: unknown): boolean {
+  return runtime?.telemetryMode === "local_dev" && error instanceof TypeError;
+}
+
 function logAnonymousTelemetryWarning(message: string, error: unknown): void {
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && !isExpectedLocalDevNetworkFailure(error)) {
     console.warn(message, error);
   }
 }
@@ -218,13 +222,13 @@ function startTimers(): void {
     return;
   }
 
-  versionTimerId = window.setInterval(() => {
+  versionTimerId = globalThis.setInterval(() => {
     void sendVersionRecord().catch((error) => {
       logAnonymousTelemetryWarning("Failed to send anonymous telemetry version heartbeat", error);
     });
   }, VERSION_HEARTBEAT_INTERVAL_MS);
 
-  housekeepingTimerId = window.setInterval(() => {
+  housekeepingTimerId = globalThis.setInterval(() => {
     void retryPendingMilestones().catch((error) => {
       logAnonymousTelemetryWarning("Failed to retry pending anonymous milestones", error);
     });

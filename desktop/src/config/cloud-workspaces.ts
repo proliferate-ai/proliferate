@@ -6,23 +6,6 @@ export interface CloudWorkspaceStepDefinition {
   description: string;
 }
 
-export const NEW_CLOUD_WORKSPACE_LABELS = {
-  title: "New cloud workspace",
-  description: "Create a fresh cloud branch from a remote base branch.",
-  repositoryLabel: "Repository",
-  baseBranchLabel: "Base branch",
-  baseBranchLoadingPlaceholder: "Loading branches...",
-  baseBranchPlaceholder: "Select a remote base branch",
-  branchNameLabel: "New cloud branch",
-  branchNamePlaceholder: "feature/my-branch",
-  helperPrefix: "The cloud sandbox will clone ",
-  helperBaseBranchFallback: "the selected base branch",
-  helperMiddle: " and create a new local branch named ",
-  helperBranchFallback: "your cloud branch",
-  cancel: "Cancel",
-  submit: "Create cloud workspace",
-} as const;
-
 export const CLOUD_WORKSPACE_PROVISIONING_STEPS: CloudWorkspaceStepDefinition[] = [
   {
     status: "queued",

@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     customerio_from_email: str = "hello@proliferate.dev"
     frontend_base_url: str = ""
     anonymous_telemetry_endpoint: str = Field(
-        default="https://api.proliferate.com/v1/telemetry/anonymous",
+        default="https://app.proliferate.com/api/v1/telemetry/anonymous",
         validation_alias=AliasChoices(
             "PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT",
             "ANONYMOUS_TELEMETRY_ENDPOINT",

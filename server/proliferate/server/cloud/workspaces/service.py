@@ -244,7 +244,7 @@ async def create_cloud_workspace(
     git_provider: str,
     git_owner: str,
     git_repo_name: str,
-    base_branch: str,
+    base_branch: str | None,
     branch_name: str,
     display_name: str | None,
 ) -> WorkspaceDetail:
@@ -262,34 +262,12 @@ async def create_cloud_workspace(
             status_code=400,
         )
 
-    cleaned_base_branch = base_branch.strip()
+    cleaned_base_branch = base_branch.strip() if base_branch else ""
     cleaned_branch_name = branch_name.strip()
-    if not cleaned_base_branch or not cleaned_branch_name:
+    if not cleaned_branch_name:
         raise CloudApiError(
             "invalid_branch_request",
-            "Choose a base branch and a new cloud branch before creating a cloud workspace.",
-            status_code=400,
-        )
-
-    repo_branches = await get_github_repo_branches(
-        user,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-        missing_access_message="Connect a GitHub account before creating a cloud workspace.",
-        repo_access_required_message=(
-            "Reconnect GitHub and grant repository access before creating a cloud workspace."
-        ),
-    )
-    if cleaned_base_branch not in repo_branches.branches:
-        raise CloudApiError(
-            "github_branch_not_found",
-            f"The base branch '{cleaned_base_branch}' was not found on GitHub.",
-            status_code=400,
-        )
-    if cleaned_branch_name in repo_branches.branches:
-        raise CloudApiError(
-            "github_branch_already_exists",
-            f"The branch '{cleaned_branch_name}' already exists on GitHub.",
+            "Choose a new cloud branch before creating a cloud workspace.",
             status_code=400,
         )
 
@@ -319,6 +297,47 @@ async def create_cloud_workspace(
             "cloud repo config auto-bootstrapped",
             user_id=user.id,
             repo=f"{git_owner}/{git_repo_name}",
+        )
+
+    repo_branches = await get_github_repo_branches(
+        user,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        missing_access_message="Connect a GitHub account before creating a cloud workspace.",
+        repo_access_required_message=(
+            "Reconnect GitHub and grant repository access before creating a cloud workspace."
+        ),
+    )
+
+    resolved_base_branch = cleaned_base_branch or None
+    saved_default_branch = (
+        str(getattr(repo_config, "default_branch", "")).strip() or None
+    )
+    if resolved_base_branch is None and saved_default_branch:
+        if saved_default_branch in repo_branches.branches:
+            resolved_base_branch = saved_default_branch
+        else:
+            log_cloud_event(
+                "cloud repo default branch missing on github; falling back",
+                user_id=user.id,
+                repo=f"{git_owner}/{git_repo_name}",
+                saved_default_branch=saved_default_branch,
+                github_default_branch=repo_branches.default_branch,
+            )
+    if resolved_base_branch is None:
+        resolved_base_branch = repo_branches.default_branch.strip()
+
+    if resolved_base_branch not in repo_branches.branches:
+        raise CloudApiError(
+            "github_branch_not_found",
+            f"The base branch '{resolved_base_branch}' was not found on GitHub.",
+            status_code=400,
+        )
+    if cleaned_branch_name in repo_branches.branches:
+        raise CloudApiError(
+            "github_branch_already_exists",
+            f"The branch '{cleaned_branch_name}' already exists on GitHub.",
+            status_code=400,
         )
 
     existing_cloud_workspace = await load_existing_cloud_workspace(
@@ -354,7 +373,7 @@ async def create_cloud_workspace(
     log_cloud_event(
         "cloud workspace create validated",
         repo=f"{git_owner}/{git_repo_name}",
-        base_branch=cleaned_base_branch,
+        base_branch=resolved_base_branch,
         branch_name=cleaned_branch_name,
         synced_providers=",".join(status.provider for status in statuses if status.synced),
         used_sandbox_hours=round(billing.used_hours, 4),
@@ -368,7 +387,7 @@ async def create_cloud_workspace(
         git_owner=git_owner,
         git_repo_name=git_repo_name,
         git_branch=cleaned_branch_name,
-        git_base_branch=cleaned_base_branch,
+        git_base_branch=resolved_base_branch,
         template_version=get_configured_sandbox_provider().template_version,
         repo_env_vars_ciphertext=encrypt_json(repo_config.env_vars),
     )
@@ -376,7 +395,7 @@ async def create_cloud_workspace(
         "cloud workspace queued",
         workspace_id=workspace.id,
         repo=f"{git_owner}/{git_repo_name}",
-        base_branch=cleaned_base_branch,
+        base_branch=resolved_base_branch,
         branch_name=cleaned_branch_name,
     )
     schedule_workspace_provision(workspace.id)

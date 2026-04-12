@@ -1,33 +1,42 @@
 import { useCallback } from "react";
+import { resolveChatDraftWorkspaceId } from "@/lib/domain/chat/chat-input";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
+import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 
 export function useChatDraftState() {
-  const selectedWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
+  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+    (state) => state.selectedLogicalWorkspaceId,
+  );
+  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const draftWorkspaceId = resolveChatDraftWorkspaceId(
+    selectedLogicalWorkspaceId,
+    selectedWorkspaceId,
+  );
   const draft = useChatInputStore((state) =>
-    selectedWorkspaceId ? state.draftByWorkspaceId[selectedWorkspaceId] ?? "" : "",
+    draftWorkspaceId ? state.draftByWorkspaceId[draftWorkspaceId] ?? "" : "",
   );
   const setDraftForWorkspace = useChatInputStore((state) => state.setDraft);
   const clearDraftForWorkspace = useChatInputStore((state) => state.clearDraft);
 
   const setDraft = useCallback((value: string) => {
-    if (!selectedWorkspaceId) {
+    if (!draftWorkspaceId) {
       return;
     }
 
-    setDraftForWorkspace(selectedWorkspaceId, value);
-  }, [selectedWorkspaceId, setDraftForWorkspace]);
+    setDraftForWorkspace(draftWorkspaceId, value);
+  }, [draftWorkspaceId, setDraftForWorkspace]);
 
   const clearDraft = useCallback(() => {
-    if (!selectedWorkspaceId) {
+    if (!draftWorkspaceId) {
       return;
     }
 
-    clearDraftForWorkspace(selectedWorkspaceId);
-  }, [clearDraftForWorkspace, selectedWorkspaceId]);
+    clearDraftForWorkspace(draftWorkspaceId);
+  }, [clearDraftForWorkspace, draftWorkspaceId]);
 
   return {
-    selectedWorkspaceId,
+    selectedWorkspaceId: draftWorkspaceId,
     draft,
     setDraft,
     clearDraft,

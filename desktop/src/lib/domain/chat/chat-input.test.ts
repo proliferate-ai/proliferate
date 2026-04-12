@@ -1,5 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { resolveChatInputAvailability } from "./chat-input";
+import {
+  resolveChatDraftWorkspaceId,
+  resolveChatInputAvailability,
+} from "./chat-input";
+
+describe("resolveChatDraftWorkspaceId", () => {
+  it("prefers the logical workspace when one is selected", () => {
+    expect(resolveChatDraftWorkspaceId("logical-1", "workspace-1")).toBe("logical-1");
+  });
+
+  it("falls back to the raw workspace id for cowork workspaces", () => {
+    expect(resolveChatDraftWorkspaceId(null, "cowork-1")).toBe("cowork-1");
+  });
+
+  it("returns null when no workspace is selected", () => {
+    expect(resolveChatDraftWorkspaceId(null, null)).toBeNull();
+  });
+});
 
 describe("resolveChatInputAvailability", () => {
   it("disables the composer while the active session transcript is still loading", () => {

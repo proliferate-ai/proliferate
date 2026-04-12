@@ -180,7 +180,7 @@ RUNTIME_BINARY_SHA256_URL=https://github.com/proliferate-ai/proliferate/releases
 
 # ── Optional observability ────────────────────────────────
 # PROLIFERATE_TELEMETRY_MODE=self_managed
-# PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT=https://api.proliferate.com/v1/telemetry/anonymous
+# PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT=https://app.proliferate.com/api/v1/telemetry/anonymous
 # PROLIFERATE_ANONYMOUS_TELEMETRY_DISABLED=false
 # SENTRY_DSN=
 # SENTRY_ENVIRONMENT=self-hosted

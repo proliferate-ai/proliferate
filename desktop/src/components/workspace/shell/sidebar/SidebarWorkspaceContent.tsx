@@ -1,4 +1,7 @@
-import type { NewCloudWorkspaceSeed } from "@/lib/domain/workspaces/cloud-workspace-creation";
+import {
+  resolveCloudRepoActionState,
+  type CloudWorkspaceRepoTarget,
+} from "@/lib/domain/workspaces/cloud-workspace-creation";
 import type {
   SidebarEmptyState,
   SidebarGroupState,
@@ -26,11 +29,14 @@ interface SidebarWorkspaceContentProps {
    */
   effectiveExpandedRepoKeys: Set<string>;
   onToggleRepoExpansion: (sourceRoot: string) => void;
+  configuredCloudRepoKeys: ReadonlySet<string>;
+  cloudRepoConfigsInitialLoading: boolean;
   cloudWorkspaceEnabled: boolean;
   cloudWorkspaceTooltip: string;
   onCreateWorktreeWorkspace: (repoRootId: string | null) => void;
   onCreateLocalWorkspace: (sourceRoot: string | null) => void;
-  onOpenCloudDialog: (cloudDialogState: NewCloudWorkspaceSeed) => void;
+  onCreateCloudWorkspace: (target: CloudWorkspaceRepoTarget) => void;
+  onOpenCloudRepoSettings: (target: CloudWorkspaceRepoTarget) => void;
   onSelectWorkspace: (workspaceId: string) => void;
   onArchiveWorkspace: (workspaceId: string) => void;
   onUnarchiveWorkspace: (workspaceId: string) => void;
@@ -58,11 +64,14 @@ export function SidebarWorkspaceContent({
   explicitlyExpandedRepoKeys,
   effectiveExpandedRepoKeys,
   onToggleRepoExpansion,
+  configuredCloudRepoKeys,
+  cloudRepoConfigsInitialLoading,
   cloudWorkspaceEnabled,
   cloudWorkspaceTooltip,
   onCreateWorktreeWorkspace,
   onCreateLocalWorkspace,
-  onOpenCloudDialog,
+  onCreateCloudWorkspace,
+  onOpenCloudRepoSettings,
   onSelectWorkspace,
   onArchiveWorkspace,
   onUnarchiveWorkspace,
@@ -118,6 +127,12 @@ export function SidebarWorkspaceContent({
         : isExplicitlyExpanded
           ? "Show less"
           : "Show more";
+    const cloudRepoAction = resolveCloudRepoActionState({
+      repoTarget: group.cloudRepoTarget,
+      configuredRepoKeys: configuredCloudRepoKeys,
+      isInitialConfigLoad: cloudRepoConfigsInitialLoading,
+    });
+    const cloudRepoTarget = group.cloudRepoTarget;
 
     return (
       <RepoGroup
@@ -127,16 +142,24 @@ export function SidebarWorkspaceContent({
         count={group.items.length}
         onNewWorkspace={() => onCreateWorktreeWorkspace(group.repoRootId)}
         onNewLocalWorkspace={() => onCreateLocalWorkspace(group.localSourceRoot)}
-        cloudWorkspaceEnabled={cloudWorkspaceEnabled}
-        cloudWorkspaceTooltip={cloudWorkspaceTooltip}
-        onNewCloudWorkspace={
-          group.cloudDialogState
-            ? (() => {
-              const cloudDialogState = group.cloudDialogState;
-              return () => onOpenCloudDialog(cloudDialogState);
-            })()
-            : undefined
+        cloudWorkspaceEnabled={cloudWorkspaceEnabled && cloudRepoAction.kind !== "loading"}
+        cloudWorkspaceTooltip={
+          cloudRepoAction.kind === "loading"
+            ? "Loading cloud configuration..."
+            : cloudWorkspaceTooltip
         }
+        cloudWorkspaceLabel={cloudRepoAction.label ?? undefined}
+        onCloudWorkspaceAction={cloudRepoTarget
+          ? () => {
+            if (cloudRepoAction.kind === "create") {
+              onCreateCloudWorkspace(cloudRepoTarget);
+              return;
+            }
+            if (cloudRepoAction.kind === "configure") {
+              onOpenCloudRepoSettings(cloudRepoTarget);
+            }
+          }
+          : undefined}
         onRemoveRepo={() => onRemoveRepo(group.sourceRoot)}
         onOpenSettings={() => onOpenRepoSettings(group.sourceRoot)}
       >

@@ -1,7 +1,7 @@
 import type { GitStatusSnapshot, RepoRoot, Workspace } from "@anyharness/sdk";
 import type { SessionViewState } from "@/lib/domain/sessions/activity";
 import { resolveWorkspaceExecutionViewState } from "@/lib/domain/sessions/activity";
-import type { NewCloudWorkspaceSeed } from "@/lib/domain/workspaces/cloud-workspace-creation";
+import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud-workspace-creation";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
 import { isCloudWorkspacePending } from "@/lib/domain/workspaces/cloud-workspace-status";
 import type {
@@ -102,7 +102,7 @@ export interface SidebarGroupState {
   allLogicalWorkspaceIds: string[];
   repoRootId: string | null;
   localSourceRoot: string | null;
-  cloudDialogState: NewCloudWorkspaceSeed | null;
+  cloudRepoTarget: CloudWorkspaceRepoTarget | null;
 }
 
 function logicalGroupName(workspace: LogicalWorkspace): string {
@@ -369,9 +369,6 @@ export function buildSidebarGroupStates(args: {
       if (repoRoot && args.hiddenRepoRootIds.has(repoRoot.id)) {
         return null;
       }
-      const selectedGroupWorkspace = groupWorkspaces.find(
-        (entry) => entry.id === args.selectedLogicalWorkspaceId,
-      ) ?? null;
       const items = groupWorkspaces.map((entry) => {
         const active = entry.id === args.selectedLogicalWorkspaceId;
         const archived = args.archivedSet.has(entry.id);
@@ -468,16 +465,11 @@ export function buildSidebarGroupStates(args: {
             repoRoot?.path
             ?? groupWorkspaces.find((entry) => entry.localWorkspace)?.localWorkspace?.sourceRepoRootPath
             ?? null,
-          cloudDialogState:
+          cloudRepoTarget:
             provider === "github" && owner && repoName
               ? {
                 gitOwner: owner,
                 gitRepoName: repoName,
-                prefillBranchName: selectedGroupWorkspace?.localWorkspace?.kind === "worktree"
-                  ? selectedGroupWorkspace.localWorkspace.currentBranch
-                    ?? selectedGroupWorkspace.localWorkspace.originalBranch
-                    ?? undefined
-                  : undefined,
               }
               : null,
           items: visibleItems,

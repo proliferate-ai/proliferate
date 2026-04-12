@@ -20,7 +20,7 @@ class CreateCloudWorkspaceRequest(BaseModel):
     git_provider: Literal["github"] = Field(alias="gitProvider")
     git_owner: str = Field(alias="gitOwner")
     git_repo_name: str = Field(alias="gitRepoName")
-    base_branch: str = Field(alias="baseBranch")
+    base_branch: str | None = Field(default=None, alias="baseBranch")
     branch_name: str = Field(alias="branchName")
     display_name: str | None = Field(default=None, alias="displayName")
 

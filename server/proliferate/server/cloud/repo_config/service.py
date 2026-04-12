@@ -47,6 +47,7 @@ def _default_repo_config_response() -> CloudRepoConfigResponse:
     return CloudRepoConfigResponse(
         configured=False,
         configured_at=None,
+        default_branch=None,
         env_vars={},
         setup_script="",
         files_version=0,
@@ -111,6 +112,7 @@ async def save_repo_config(
         git_owner=git_owner,
         git_repo_name=git_repo_name,
         configured=body.configured,
+        default_branch=body.default_branch,
         env_vars=env_vars,
         setup_script=body.setup_script,
         files=files,

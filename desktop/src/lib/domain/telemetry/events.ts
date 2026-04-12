@@ -68,7 +68,9 @@ export interface DesktopProductEventMap {
     tracked_file_count: number;
   };
   cloud_workspace_created: {
+    attempt_count: number;
     git_provider: string;
+    retry_count: number;
     status: string;
     workspace_kind: "cloud";
   };

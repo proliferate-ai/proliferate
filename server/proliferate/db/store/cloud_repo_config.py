@@ -36,6 +36,7 @@ class CloudRepoConfigValue:
     git_repo_name: str
     configured: bool
     configured_at: datetime | None
+    default_branch: str | None
     env_vars: dict[str, str]
     setup_script: str
     files_version: int
@@ -86,6 +87,7 @@ def _repo_config_value(
         git_repo_name=record.git_repo_name,
         configured=record.configured,
         configured_at=record.configured_at,
+        default_branch=record.default_branch,
         env_vars=decrypt_json(record.env_vars_ciphertext) if record.env_vars_ciphertext else {},
         setup_script=record.setup_script,
         files_version=record.files_version,
@@ -175,6 +177,7 @@ async def _get_or_create_repo_config_record(
             git_repo_name=git_repo_name,
             configured=False,
             configured_at=None,
+            default_branch=None,
             env_vars_ciphertext=encrypt_json({}),
             setup_script="",
             files_version=0,
@@ -224,6 +227,7 @@ async def save_cloud_repo_config(
     git_owner: str,
     git_repo_name: str,
     configured: bool,
+    default_branch: str | None,
     env_vars: dict[str, str],
     setup_script: str,
     files: list[CloudRepoFileInput],
@@ -249,6 +253,7 @@ async def save_cloud_repo_config(
     record.setup_script = setup_script
     record.configured = configured
     record.configured_at = now if configured else None
+    record.default_branch = default_branch.strip() if default_branch and default_branch.strip() else None
     if files_changed:
         record.files_version += 1
     record.updated_at = now
@@ -397,6 +402,7 @@ async def persist_cloud_repo_config(
     git_owner: str,
     git_repo_name: str,
     configured: bool,
+    default_branch: str | None,
     env_vars: dict[str, str],
     setup_script: str,
     files: list[CloudRepoFileInput],
@@ -408,6 +414,7 @@ async def persist_cloud_repo_config(
             git_owner=git_owner,
             git_repo_name=git_repo_name,
             configured=configured,
+            default_branch=default_branch,
             env_vars=env_vars,
             setup_script=setup_script,
             files=files,

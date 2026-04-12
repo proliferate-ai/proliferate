@@ -1,4 +1,5 @@
 import type {
+  PendingPromptEntry,
   SessionEventEnvelope,
   SessionExecutionSummary,
   SessionLiveConfigSnapshot,
@@ -32,6 +33,7 @@ export interface SessionSlot {
   events: SessionEventEnvelope[];
   transcript: TranscriptState;
   pendingConfigChanges: PendingSessionConfigChanges;
+  optimisticPrompt: PendingPromptEntry | null;
   status: SessionStatus | null;
   lastPromptAt: string | null;
   sseHandle: SessionStreamHandle | null;

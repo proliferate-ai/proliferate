@@ -1,9 +1,14 @@
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
-import { shouldShowStructuralRepoWorkspaceStatus } from "@/lib/domain/chat/chat-surface";
+import {
+  shouldKeepBootstrappedWorkspaceLoading,
+  shouldShowStructuralRepoWorkspaceStatus,
+} from "@/lib/domain/chat/chat-surface";
 import { shouldShowCloudWorkspaceStatusScreen } from "@/lib/domain/workspaces/cloud-workspace-status";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/workspace-bootstrap-memory";
 import { useActiveChatSessionState } from "./use-active-chat-session-state";
 
@@ -21,6 +26,11 @@ export function useChatSurfaceState(): {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const workspaceArrivalEvent = useHarnessStore((state) => state.workspaceArrivalEvent);
+  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
+  const rememberedSessionId = useWorkspaceUiStore((state) => {
+    const workspaceKey = selectedLogicalWorkspaceId ?? selectedWorkspaceId;
+    return workspaceKey ? state.lastViewedSessionByWorkspace[workspaceKey] ?? null : null;
+  });
   const { data: workspaceCollections } = useWorkspaces();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const {
@@ -74,9 +84,18 @@ export function useChatSurfaceState(): {
   }
 
   const shouldPreserveTranscript = selectedCloudRuntime.state?.preserveVisibleContent && hasContent;
+  const hasBootstrappedWorkspace =
+    !!selectedWorkspaceId && hasWorkspaceBootstrappedInSession(selectedWorkspaceId);
 
   if (!activeSessionId) {
-    if (selectedWorkspaceId && hasWorkspaceBootstrappedInSession(selectedWorkspaceId)) {
+    if (shouldKeepBootstrappedWorkspaceLoading({
+      activeSessionId,
+      hasBootstrappedWorkspace,
+      rememberedSessionId,
+    })) {
+      return { mode: { kind: "session-loading", sessionId: null }, selectedWorkspaceId };
+    }
+    if (hasBootstrappedWorkspace) {
       return { mode: { kind: "session-empty", sessionId: null }, selectedWorkspaceId };
     }
     return { mode: { kind: "session-loading", sessionId: null }, selectedWorkspaceId };

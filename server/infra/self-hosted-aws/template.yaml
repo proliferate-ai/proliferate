@@ -932,7 +932,7 @@ Resources:
                 JWT_SECRET=
                 CLOUD_SECRET_KEY=
                 PROLIFERATE_TELEMETRY_MODE=self_managed
-                PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT=https://api.proliferate.com/v1/telemetry/anonymous
+                PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT=https://app.proliferate.com/api/v1/telemetry/anonymous
                 PROLIFERATE_ANONYMOUS_TELEMETRY_DISABLED=false
                 CORS_ALLOW_ORIGINS=http://localhost:1420,http://127.0.0.1:1420,http://localhost:3000,http://127.0.0.1:3000,http://tauri.localhost,tauri://localhost
                 # For advanced auth-flow overrides such as DESKTOP_GITHUB_AUTH_ENABLED,

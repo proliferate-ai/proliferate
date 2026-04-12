@@ -32,6 +32,7 @@ import {
   shouldAcceptAuthoritativeLiveConfig,
   type PendingSessionConfigChange,
 } from "@/lib/domain/sessions/pending-config";
+import { shouldClearOptimisticPendingPrompt } from "@/lib/domain/chat/pending-prompts";
 import { buildSessionSlotPatchFromSummary } from "@/lib/domain/sessions/summary";
 import { buildSessionStreamPatch } from "@/lib/domain/sessions/stream-patch";
 import {
@@ -135,6 +136,10 @@ export function useSessionRuntimeActions() {
       liveConfig: effectiveLiveConfig,
       modelId: shouldApplyConfigFields ? patch.modelId : existing.modelId,
       modeId: shouldApplyConfigFields ? patch.modeId : existing.modeId,
+      optimisticPrompt:
+        patch.status === "closed" || patch.status === "errored"
+          ? null
+          : existing.optimisticPrompt,
       transcript: nextTranscript,
       pendingConfigChanges: reconcileResult.pendingConfigChanges,
       status: resolveSessionStatus(patch.status, {
@@ -465,6 +470,9 @@ export function useSessionRuntimeActions() {
         useHarnessStore.getState().patchSessionSlot(sessionId, {
           events: result.state.events,
           ...patch,
+          optimisticPrompt: shouldClearOptimisticPendingPrompt(event.type)
+            ? null
+            : slotState.optimisticPrompt,
           pendingConfigChanges: reconcileResult.pendingConfigChanges,
         });
 

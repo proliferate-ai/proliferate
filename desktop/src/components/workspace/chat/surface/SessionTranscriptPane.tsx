@@ -6,6 +6,7 @@ export function SessionTranscriptPane() {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const {
     activeSessionId,
+    optimisticPrompt,
     transcript,
     sessionViewState,
   } = useActiveChatSessionState();
@@ -18,6 +19,7 @@ export function SessionTranscriptPane() {
     <MessageList
       activeSessionId={activeSessionId}
       selectedWorkspaceId={selectedWorkspaceId}
+      optimisticPrompt={optimisticPrompt}
       transcript={transcript}
       sessionViewState={sessionViewState}
     />

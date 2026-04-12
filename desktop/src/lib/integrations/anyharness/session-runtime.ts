@@ -4,6 +4,7 @@ import {
 } from "@anyharness/sdk-react";
 import {
   createTranscriptState,
+  type PendingPromptEntry,
   streamSession,
 } from "@anyharness/sdk";
 import type {
@@ -87,6 +88,7 @@ export function createEmptySessionSlot(
     liveConfig?: SessionLiveConfigSnapshot | null;
     executionSummary?: SessionExecutionSummary | null;
     lastPromptAt?: string | null;
+    optimisticPrompt?: PendingPromptEntry | null;
   },
 ): SessionSlot {
   const resolvedModeId =
@@ -113,6 +115,7 @@ export function createEmptySessionSlot(
       },
     },
     pendingConfigChanges: {},
+    optimisticPrompt: config?.optimisticPrompt ?? null,
     status: null,
     lastPromptAt: config?.lastPromptAt ?? null,
     sseHandle: null,

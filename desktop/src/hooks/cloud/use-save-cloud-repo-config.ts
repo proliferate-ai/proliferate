@@ -15,6 +15,7 @@ import {
 } from "./query-keys";
 
 interface SaveCloudRepoConfigInput {
+  defaultBranch: string | null;
   envVars: Record<string, string>;
   trackedFilePaths: string[];
   setupScript: string;
@@ -50,7 +51,7 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
     meta: {
       telemetryHandled: true,
     },
-    mutationFn: async ({ envVars, trackedFilePaths, setupScript }) => {
+    mutationFn: async ({ defaultBranch, envVars, trackedFilePaths, setupScript }) => {
       if (!repository?.gitOwner || !repository.gitRepoName) {
         throw new Error("A GitHub-backed repository is required.");
       }
@@ -61,6 +62,7 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
       const files = await buildTrackedFilesPayload(runtimeUrl, repository, trackedFilePaths);
       return await saveCloudRepoConfig(repository.gitOwner, repository.gitRepoName, {
         configured: true,
+        defaultBranch,
         envVars,
         setupScript,
         files,

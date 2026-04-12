@@ -30,6 +30,9 @@ export function useCloudRepoConfigDraft({
   savedConfig,
   localSetupScript,
 }: UseCloudRepoConfigDraftArgs) {
+  const [defaultBranch, setDefaultBranch] = useState<string | null>(
+    () => savedConfig?.defaultBranch ?? null,
+  );
   const [envVarRows, setEnvVarRows] = useState<CloudRepoEnvVarRow[]>(() =>
     buildEnvVarRows(savedConfig?.envVars ?? {}),
   );
@@ -93,6 +96,8 @@ export function useCloudRepoConfigDraft({
   }, []);
 
   return {
+    defaultBranch,
+    setDefaultBranch,
     envVarRows,
     envVars,
     trackedFilePaths,

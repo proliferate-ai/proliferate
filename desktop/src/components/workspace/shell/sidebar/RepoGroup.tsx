@@ -13,7 +13,8 @@ interface RepoGroupProps {
   children: ReactNode;
   onNewWorkspace?: () => void;
   onNewLocalWorkspace?: () => void;
-  onNewCloudWorkspace?: () => void;
+  onCloudWorkspaceAction?: () => void;
+  cloudWorkspaceLabel?: string;
   cloudWorkspaceEnabled?: boolean;
   cloudWorkspaceTooltip?: string;
   onRemoveRepo?: () => void;
@@ -30,7 +31,8 @@ export function RepoGroup({
   children,
   onNewWorkspace,
   onNewLocalWorkspace,
-  onNewCloudWorkspace,
+  onCloudWorkspaceAction,
+  cloudWorkspaceLabel = "New cloud workspace",
   cloudWorkspaceEnabled = true,
   cloudWorkspaceTooltip,
   onRemoveRepo,
@@ -103,15 +105,16 @@ export function RepoGroup({
                   <span className="flex-1 truncate text-left">New worktree</span>
                   <span className="shrink-0 text-xs text-muted-foreground/60">{SHORTCUTS.newWorktree.label}</span>
                 </button>
-                {onNewCloudWorkspace && (
+                {onCloudWorkspaceAction && cloudWorkspaceLabel && (
                   cloudWorkspaceEnabled ? (
                     <button
                       type="button"
-                      onClick={() => { close(); onNewCloudWorkspace(); }}
+                      onClick={() => { close(); onCloudWorkspaceAction(); }}
                       className={POPOVER_ROW}
                     >
                       <CloudIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                      <span className="flex-1 truncate text-left">New cloud workspace</span>
+                      <span className="flex-1 truncate text-left">{cloudWorkspaceLabel}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground/60">{SHORTCUTS.newCloud.label}</span>
                     </button>
                   ) : (
                     <Tooltip
@@ -125,7 +128,8 @@ export function RepoGroup({
                         className={`${POPOVER_ROW} cursor-not-allowed opacity-60`}
                       >
                         <CloudIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                        <span className="flex-1 truncate text-left">New cloud workspace</span>
+                        <span className="flex-1 truncate text-left">{cloudWorkspaceLabel}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground/60">{SHORTCUTS.newCloud.label}</span>
                       </button>
                     </Tooltip>
                   )

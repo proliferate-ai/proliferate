@@ -1,12 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
-  CloudAgentKind,
   CloudWorkspaceDetail,
-  CreateCloudWorkspaceRequest,
 } from "@/lib/integrations/cloud/client";
-import { isCloudAgentKind, ProliferateClientError } from "@/lib/integrations/cloud/client";
 import {
-  createCloudWorkspace,
   deleteCloudWorkspace,
   getCloudWorkspace,
   startCloudWorkspace,
@@ -15,50 +11,16 @@ import {
 } from "@/lib/integrations/cloud/workspaces";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { clearCachedCloudConnections } from "@/lib/integrations/anyharness/runtime-target";
-import { listSyncableCloudCredentials } from "@/platform/tauri/credentials";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import { cloudBillingKey, cloudCredentialsKey } from "./query-keys";
+import { cloudBillingKey } from "./query-keys";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useCloudCredentialActions } from "./use-cloud-credential-actions";
+import { autoSyncDetectedCloudCredentialsIfNeeded } from "./auto-sync-detected-cloud-credentials";
 import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-
-async function autoSyncDetectedCloudCredentialsIfNeeded(
-  error: unknown,
-  syncCredential: (provider: CloudAgentKind) => Promise<void>,
-): Promise<boolean> {
-  if (
-    !(error instanceof ProliferateClientError)
-    || error.code !== "missing_supported_credentials"
-  ) {
-    return false;
-  }
-
-  const localSources = await listSyncableCloudCredentials().catch(() => []);
-  const syncableProviders = Array.from(new Set(localSources
-    .filter((source): source is typeof source & { provider: CloudAgentKind } => (
-      source.detected && isCloudAgentKind(source.provider)
-    ))
-    .map((source) => source.provider)));
-
-  if (syncableProviders.length === 0) {
-    return false;
-  }
-
-  for (const provider of syncableProviders) {
-    try {
-      await syncCredential(provider);
-      return true;
-    } catch {
-      // Try the next detected provider before giving up on auto-sync.
-    }
-  }
-
-  return false;
-}
 
 export function useCloudWorkspaceActions() {
   const queryClient = useQueryClient();
@@ -77,47 +39,6 @@ export function useCloudWorkspaceActions() {
       }),
     ]);
   }
-
-  const createMutation = useMutation<CloudWorkspaceDetail, Error, CreateCloudWorkspaceRequest>({
-    meta: {
-      telemetryHandled: true,
-    },
-    mutationFn: async (input) => {
-      try {
-        return await createCloudWorkspace(input);
-      } catch (error) {
-        const didSync = await autoSyncDetectedCloudCredentialsIfNeeded(
-          error,
-          syncCloudCredential,
-        );
-        if (!didSync) {
-          throw error;
-        }
-        return await createCloudWorkspace(input);
-      }
-    },
-    onSuccess: async (workspace) => {
-      await clearCachedCloudConnections(workspace.id);
-      await Promise.all([
-        invalidateCloudResources(),
-        queryClient.invalidateQueries({ queryKey: cloudCredentialsKey() }),
-      ]);
-      trackProductEvent("cloud_workspace_created", {
-        workspace_kind: "cloud",
-        status: workspace.status,
-        git_provider: workspace.repo.provider,
-      });
-    },
-    onError: (error) => {
-      captureTelemetryException(error, {
-        tags: {
-          action: "create_cloud_workspace",
-          domain: "cloud_workspace",
-          workspace_kind: "cloud",
-        },
-      });
-    },
-  });
 
   const refreshMutation = useMutation<CloudWorkspaceDetail, Error, string>({
     mutationFn: async (workspaceId) => {
@@ -262,8 +183,6 @@ export function useCloudWorkspaceActions() {
   });
 
   return {
-    createCloudWorkspace: createMutation.mutateAsync,
-    isCreatingCloudWorkspace: createMutation.isPending,
     refreshCloudWorkspace: refreshMutation.mutateAsync,
     isRefreshingCloudWorkspace: refreshMutation.isPending,
     startCloudWorkspace: startMutation.mutateAsync,

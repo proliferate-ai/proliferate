@@ -24,7 +24,7 @@ export const CHAT_PRE_MESSAGE_LABELS = {
     "opening-session": "Opening session",
     "connecting-stream": "Connecting",
     "loading-history": "Loading history",
-    "awaiting-first-turn": "Waiting for first response",
+    "awaiting-first-turn": "Waiting for agent to wake up",
   },
 } as const;
 

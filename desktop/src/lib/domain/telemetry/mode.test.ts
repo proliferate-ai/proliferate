@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resolveDesktopTelemetryRoutingState } from "./mode";
 
-const HOSTED_ORIGINS = ["https://api.proliferate.com", "https://app.proliferate.com"];
+const HOSTED_ORIGINS = ["https://app.proliferate.com", "https://api.proliferate.com"];
 
 describe("resolveDesktopTelemetryRoutingState", () => {
   it("disables both telemetry backends when telemetry is disabled", () => {
@@ -11,7 +11,7 @@ describe("resolveDesktopTelemetryRoutingState", () => {
         runtimeTelemetryDisabled: true,
         viteDev: false,
         nativeDevProfile: false,
-        apiOrigin: "https://api.proliferate.com",
+        apiOrigin: "https://app.proliferate.com",
         officialHostedOrigins: HOSTED_ORIGINS,
       }),
     ).toEqual({
@@ -29,7 +29,7 @@ describe("resolveDesktopTelemetryRoutingState", () => {
         runtimeTelemetryDisabled: false,
         viteDev: true,
         nativeDevProfile: false,
-        apiOrigin: "https://api.proliferate.com",
+        apiOrigin: "https://app.proliferate.com",
         officialHostedOrigins: HOSTED_ORIGINS,
       }),
     ).toEqual({
@@ -47,7 +47,7 @@ describe("resolveDesktopTelemetryRoutingState", () => {
         runtimeTelemetryDisabled: false,
         viteDev: false,
         nativeDevProfile: true,
-        apiOrigin: "https://api.proliferate.com",
+        apiOrigin: "https://app.proliferate.com",
         officialHostedOrigins: HOSTED_ORIGINS,
       }).telemetryMode,
     ).toBe("local_dev");
@@ -60,7 +60,7 @@ describe("resolveDesktopTelemetryRoutingState", () => {
         runtimeTelemetryDisabled: false,
         viteDev: false,
         nativeDevProfile: false,
-        apiOrigin: "https://api.proliferate.com",
+        apiOrigin: "https://app.proliferate.com",
         officialHostedOrigins: HOSTED_ORIGINS,
       }),
     ).toEqual({

@@ -15,14 +15,33 @@ function normalizeKey(key: string): string {
   return key.length === 1 ? key.toLowerCase() : key;
 }
 
+function isApplePlatform(): boolean {
+  const platform = globalThis.navigator?.platform ?? "";
+  const userAgent = globalThis.navigator?.userAgent ?? "";
+  return /Mac|iPhone|iPad|iPod/.test(platform) || /Mac OS X/.test(userAgent);
+}
+
 function matchesModifiers(
   event: KeyboardShortcutEventLike,
   match: ShortcutMatch,
 ): boolean {
-  const hasMeta = event.metaKey || event.ctrlKey;
-  return hasMeta === match.meta
-    && event.shiftKey === match.shift
-    && event.altKey === match.alt;
+  const requiresCtrl = match.ctrl ?? false;
+  const isApple = isApplePlatform();
+  const hasPrimaryModifier = isApple ? event.metaKey : event.ctrlKey;
+
+  if (
+    hasPrimaryModifier !== match.meta
+    || event.shiftKey !== match.shift
+    || event.altKey !== match.alt
+  ) {
+    return false;
+  }
+
+  if (!isApple) {
+    return !requiresCtrl;
+  }
+
+  return event.ctrlKey === requiresCtrl;
 }
 
 function getShortcutDigitByKey(key: string): ShortcutDigit | null {

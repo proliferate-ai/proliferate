@@ -11,10 +11,12 @@ import { buildCloudSettingsHref } from "@/lib/domain/settings/navigation";
 import type { CloudRepoConfigResponse } from "@/lib/integrations/cloud/client";
 import { useCloudRepoConfig } from "@/hooks/cloud/use-cloud-repo-config";
 import { useCloudRepoConfigDraft } from "@/hooks/cloud/use-cloud-repo-config-draft";
+import { useCloudRepoBranches } from "@/hooks/cloud/use-cloud-repo-branches";
 import { useCloudRepoSetupSuggestions } from "@/hooks/cloud/use-cloud-repo-setup-suggestions";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useSaveCloudRepoConfig } from "@/hooks/cloud/use-save-cloud-repo-config";
 import { useResyncCloudRepoFile } from "@/hooks/cloud/use-resync-cloud-repo-file";
+import { CloudDefaultBranchCard } from "./CloudDefaultBranchCard";
 import { RepoEnvVarsCard } from "./RepoEnvVarsCard";
 import { RepoTrackedFilesCard } from "./RepoTrackedFilesCard";
 import { RepoSetupScriptCard } from "./RepoSetupScriptCard";
@@ -45,6 +47,11 @@ function CloudRepoSettingsEditor({
   });
   const saveMutation = useSaveCloudRepoConfig(repository);
   const resyncFileMutation = useResyncCloudRepoFile(repository);
+  const {
+    data: branchInfo,
+    isLoading: isLoadingBranches,
+    error: branchError,
+  } = useCloudRepoBranches(repository.gitOwner, repository.gitRepoName);
   const configured = savedConfig?.configured ?? false;
   const repoLabel = `${repository.gitOwner}/${repository.gitRepoName}`;
   const errorMessage = saveMutation.error?.message ?? resyncFileMutation.error?.message ?? null;
@@ -62,6 +69,7 @@ function CloudRepoSettingsEditor({
               loading={saveMutation.isPending}
               onClick={() => {
                 void saveMutation.mutateAsync({
+                  defaultBranch: draft.defaultBranch,
                   envVars: draft.envVars,
                   trackedFilePaths: draft.trackedFilePaths,
                   setupScript: draft.setupScript,
@@ -89,6 +97,15 @@ function CloudRepoSettingsEditor({
       {errorMessage && (
         <p className="text-sm text-destructive">{errorMessage}</p>
       )}
+
+      <CloudDefaultBranchCard
+        value={draft.defaultBranch}
+        githubDefaultBranch={branchInfo?.defaultBranch ?? null}
+        branches={branchInfo?.branches ?? []}
+        isLoading={isLoadingBranches}
+        errorMessage={branchError instanceof Error ? branchError.message : null}
+        onChange={draft.setDefaultBranch}
+      />
 
       <RepoTrackedFilesCard
         trackedFilePaths={draft.trackedFilePaths}

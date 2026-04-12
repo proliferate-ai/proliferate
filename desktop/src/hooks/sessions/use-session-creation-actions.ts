@@ -1,5 +1,6 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { useCallback } from "react";
+import { createOptimisticPendingPrompt } from "@/lib/domain/chat/pending-prompts";
 import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
 import { getCloudWorkspace } from "@/lib/integrations/cloud/workspaces";
 import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
@@ -306,6 +307,9 @@ export function useSessionCreationActions({
       ]
       : undefined;
     const pendingSessionId = createPendingSessionId(options.agentKind);
+    const optimisticPendingPrompt = hasPrompt
+      ? createOptimisticPendingPrompt(options.text)
+      : null;
     annotateLatencyFlow(options.latencyFlowId, {
       targetWorkspaceId: workspaceId,
       targetSessionId: pendingSessionId,
@@ -316,6 +320,7 @@ export function useSessionCreationActions({
         workspaceId,
         modelId: options.modelId,
         modeId: resolvedModeId ?? null,
+        optimisticPrompt: optimisticPendingPrompt,
       }),
       status: "starting",
       transcriptHydrated: true,
@@ -356,6 +361,7 @@ export function useSessionCreationActions({
             liveConfig: session.liveConfig ?? null,
             executionSummary: session.executionSummary ?? null,
             lastPromptAt: session.lastPromptAt ?? null,
+            optimisticPrompt: optimisticPendingPrompt,
           }),
           status: hasPrompt
             ? "running"

@@ -1,15 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { matchShortcut, isTextEntryTarget } from "@/lib/domain/shortcuts/matching";
 
 describe("shortcut matching", () => {
+  beforeEach(() => {
+    vi.stubGlobal("navigator", {
+      platform: "Linux x86_64",
+      userAgent: "Linux",
+    });
+  });
+
   it("matches fixed keys case-insensitively for character shortcuts", () => {
     expect(matchShortcut(
       { kind: "fixed", key: "n", meta: true, shift: false, alt: false },
       {
         key: "N",
         code: "KeyN",
-        metaKey: true,
-        ctrlKey: false,
+        metaKey: false,
+        ctrlKey: true,
         shiftKey: false,
         altKey: false,
       } as KeyboardEvent,
@@ -36,8 +43,8 @@ describe("shortcut matching", () => {
       {
         key: "&",
         code: "Digit7",
-        metaKey: true,
-        ctrlKey: false,
+        metaKey: false,
+        ctrlKey: true,
         shiftKey: false,
         altKey: true,
       } as KeyboardEvent,
@@ -57,6 +64,41 @@ describe("shortcut matching", () => {
       } as KeyboardEvent,
     )).toBeNull();
   });
+
+  it("requires control in addition to command for ctrl-qualified mac shortcuts", () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+
+    expect(matchShortcut(
+      { kind: "fixed", key: "n", meta: true, ctrl: true, shift: false, alt: false },
+      {
+        key: "n",
+        code: "KeyN",
+        metaKey: true,
+        ctrlKey: true,
+        shiftKey: false,
+        altKey: false,
+      } as KeyboardEvent,
+    )).toEqual({});
+
+    expect(matchShortcut(
+      { kind: "fixed", key: "n", meta: true, ctrl: true, shift: false, alt: false },
+      {
+        key: "n",
+        code: "KeyN",
+        metaKey: true,
+        ctrlKey: false,
+        shiftKey: false,
+        altKey: false,
+      } as KeyboardEvent,
+    )).toBeNull();
+  });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe("isTextEntryTarget", () => {

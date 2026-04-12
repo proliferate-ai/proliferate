@@ -131,12 +131,14 @@ async def _configure_repo(
     *,
     git_owner: str,
     git_repo_name: str,
+    default_branch: str | None = None,
 ) -> None:
     response = await client.put(
         f"/v1/cloud/repos/{git_owner}/{git_repo_name}/config",
         headers=headers,
         json={
             "configured": True,
+            "defaultBranch": default_branch,
             "envVars": {},
             "setupScript": "",
             "files": [],
@@ -281,6 +283,48 @@ class TestCloudCredentials:
 
 
 class TestCloudRepoConfig:
+    @pytest.mark.asyncio
+    async def test_save_and_get_repo_config_persists_default_branch(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        session = await _register_and_login(client, "cloud-repo-default-branch@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        save_response = await client.put(
+            "/v1/cloud/repos/proliferate-ai/proliferate/config",
+            headers=headers,
+            json={
+                "configured": True,
+                "defaultBranch": "release",
+                "envVars": {"API_BASE_URL": "https://example.internal"},
+                "setupScript": "pnpm install",
+                "files": [],
+            },
+        )
+
+        assert save_response.status_code == 200
+        assert save_response.json()["defaultBranch"] == "release"
+
+        get_response = await client.get(
+            "/v1/cloud/repos/proliferate-ai/proliferate/config",
+            headers=headers,
+        )
+        assert get_response.status_code == 200
+        assert get_response.json()["defaultBranch"] == "release"
+
+        record = (
+            await db_session.execute(
+                select(CloudRepoConfig).where(
+                    CloudRepoConfig.user_id == uuid.UUID(session["user_id"]),
+                    CloudRepoConfig.git_owner == "proliferate-ai",
+                    CloudRepoConfig.git_repo_name == "proliferate",
+                )
+            )
+        ).scalar_one()
+        assert record.default_branch == "release"
+
     @pytest.mark.asyncio
     async def test_concurrent_first_save_returns_success(
         self,
@@ -496,6 +540,178 @@ class TestCloudRepoBranches:
 
 
 class TestCloudWorkspaces:
+    @pytest.mark.asyncio
+    async def test_create_workspace_uses_saved_cloud_default_branch_when_base_missing(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _disable_workspace_provision(monkeypatch)
+
+        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main", "release"],
+            )
+
+        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+
+        session = await _register_and_login(client, "cloud-create-saved-default@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await _link_github_account(db_session, session["user_id"])
+        await _configure_repo(
+            client,
+            headers,
+            git_owner="acme",
+            git_repo_name="rocket",
+            default_branch="release",
+        )
+
+        sync_response = await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "env",
+                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
+            },
+        )
+        assert sync_response.status_code == 200
+
+        create_response = await client.post(
+            "/v1/cloud/workspaces",
+            headers=headers,
+            json={
+                "gitProvider": "github",
+                "gitOwner": "acme",
+                "gitRepoName": "rocket",
+                "branchName": "pure-drift",
+            },
+        )
+
+        assert create_response.status_code == 200
+        assert create_response.json()["repo"]["baseBranch"] == "release"
+
+    @pytest.mark.asyncio
+    async def test_create_workspace_falls_back_to_github_default_when_saved_default_is_stale(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _disable_workspace_provision(monkeypatch)
+        logged_events: list[tuple[str, dict[str, object]]] = []
+
+        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main", "release"],
+            )
+
+        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+        monkeypatch.setattr(
+            cloud_service,
+            "log_cloud_event",
+            lambda message, **kwargs: logged_events.append((message, kwargs)),
+        )
+
+        session = await _register_and_login(client, "cloud-create-stale-default@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await _link_github_account(db_session, session["user_id"])
+        await _configure_repo(
+            client,
+            headers,
+            git_owner="acme",
+            git_repo_name="rocket",
+            default_branch="legacy-release",
+        )
+
+        sync_response = await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "env",
+                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
+            },
+        )
+        assert sync_response.status_code == 200
+
+        create_response = await client.post(
+            "/v1/cloud/workspaces",
+            headers=headers,
+            json={
+                "gitProvider": "github",
+                "gitOwner": "acme",
+                "gitRepoName": "rocket",
+                "branchName": "pure-drift",
+            },
+        )
+
+        assert create_response.status_code == 200
+        assert create_response.json()["repo"]["baseBranch"] == "main"
+        assert (
+            "cloud repo default branch missing on github; falling back",
+            {
+                "user_id": uuid.UUID(session["user_id"]),
+                "repo": "acme/rocket",
+                "saved_default_branch": "legacy-release",
+                "github_default_branch": "main",
+            },
+        ) in logged_events
+
+    @pytest.mark.asyncio
+    async def test_create_workspace_explicit_base_branch_overrides_saved_cloud_default(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _disable_workspace_provision(monkeypatch)
+
+        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main", "release"],
+            )
+
+        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+
+        session = await _register_and_login(client, "cloud-create-explicit-base@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        await _link_github_account(db_session, session["user_id"])
+        await _configure_repo(
+            client,
+            headers,
+            git_owner="acme",
+            git_repo_name="rocket",
+            default_branch="release",
+        )
+
+        sync_response = await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "env",
+                "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
+            },
+        )
+        assert sync_response.status_code == 200
+
+        create_response = await client.post(
+            "/v1/cloud/workspaces",
+            headers=headers,
+            json={
+                "gitProvider": "github",
+                "gitOwner": "acme",
+                "gitRepoName": "rocket",
+                "baseBranch": "main",
+                "branchName": "pure-drift",
+            },
+        )
+
+        assert create_response.status_code == 200
+        assert create_response.json()["repo"]["baseBranch"] == "main"
+
     @pytest.mark.asyncio
     async def test_create_workspace_requires_linked_github_and_synced_credentials(
         self,

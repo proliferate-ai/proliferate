@@ -28,7 +28,10 @@ import {
 } from "@/lib/infra/debug-latency";
 import { getLatencyFlowRequestHeaders } from "@/lib/infra/latency-flow";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import {
+  clearLastViewedSession,
+  useWorkspaceUiStore,
+} from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { markWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
 
@@ -101,6 +104,7 @@ export function useWorkspaceBootstrapActions() {
       : workspaceId;
     const sessionsStartedAt = startLatencyTimer();
     const initWorkspaceStartedAt = startLatencyTimer();
+    let sessionsLoadFailed = false;
     const [sessions] = await Promise.all([
       queryClient.ensureQueryData({
         queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId),
@@ -113,6 +117,7 @@ export function useWorkspaceBootstrapActions() {
         });
         return result;
       }).catch(() => {
+        sessionsLoadFailed = true;
         logLatency("workspace.select.sessions_loaded", {
           workspaceId,
           sessionCount: 0,
@@ -142,6 +147,9 @@ export function useWorkspaceBootstrapActions() {
     }
 
     if (sessions.length === 0) {
+      if (!sessionsLoadFailed) {
+        clearLastViewedSession(logicalWorkspaceId);
+      }
       const dismissedCheckStartedAt = startLatencyTimer();
       const sessionsIncludingDismissed = await fetchWorkspaceSessionsWithConnection(
         workspaceConnection,
@@ -236,10 +244,14 @@ export function useWorkspaceBootstrapActions() {
         });
       }
     } else {
+      const rememberedSessionId = lastViewedSessionByWorkspace[logicalWorkspaceId] ?? null;
       const targetSession = choosePreferredWorkspaceSession(
         sessions,
-        lastViewedSessionByWorkspace[logicalWorkspaceId] ?? null,
+        rememberedSessionId,
       );
+      if (rememberedSessionId && targetSession?.id !== rememberedSessionId) {
+        clearLastViewedSession(logicalWorkspaceId, rememberedSessionId);
+      }
 
       if (targetSession && isCurrent()) {
         logLatency("workspace.select.session_select.start", {

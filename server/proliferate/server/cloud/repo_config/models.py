@@ -41,6 +41,7 @@ class CloudRepoFileMetadata(BaseModel):
 class CloudRepoConfigResponse(BaseModel):
     configured: bool
     configured_at: str | None = Field(serialization_alias="configuredAt")
+    default_branch: str | None = Field(serialization_alias="defaultBranch")
     env_vars: dict[str, str] = Field(serialization_alias="envVars")
     setup_script: str = Field(serialization_alias="setupScript")
     files_version: int = Field(serialization_alias="filesVersion")
@@ -54,6 +55,7 @@ class SaveCloudRepoConfigFile(BaseModel):
 
 class SaveCloudRepoConfigRequest(BaseModel):
     configured: bool
+    default_branch: str | None = Field(default=None, alias="defaultBranch")
     env_vars: dict[str, str] = Field(default_factory=dict, alias="envVars")
     setup_script: str = Field(default="", alias="setupScript")
     files: list[SaveCloudRepoConfigFile] = Field(default_factory=list)
@@ -113,6 +115,7 @@ def repo_config_payload(value: CloudRepoConfigValue) -> CloudRepoConfigResponse:
     return CloudRepoConfigResponse(
         configured=value.configured,
         configured_at=_to_iso(value.configured_at),
+        default_branch=value.default_branch,
         env_vars=value.env_vars,
         setup_script=value.setup_script,
         files_version=value.files_version,

@@ -4,6 +4,8 @@ import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
+import { useCreateCloudWorkspace } from "@/hooks/cloud/use-create-cloud-workspace";
+import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud-workspace-creation";
 import { useWorkspaceEntryActions } from "./use-workspace-entry-actions";
 import { useWorkspaceSelection } from "./selection/use-workspace-selection";
 import { useAddRepo } from "./use-add-repo";
@@ -25,6 +27,10 @@ export function useWorkspaceSidebarActions() {
     createWorktreeAndEnter,
     isCreatingWorktreeWorkspace,
   } = useWorkspaceEntryActions();
+  const {
+    createCloudWorkspaceAndEnter,
+    isCreatingCloudWorkspace,
+  } = useCreateCloudWorkspace();
   const { addRepoFromPicker } = useAddRepo();
   const showToast = useToastStore((state) => state.show);
 
@@ -143,6 +149,19 @@ export function useWorkspaceSidebarActions() {
     showToast,
   ]);
 
+  const handleCreateCloudWorkspace = useCallback((target: CloudWorkspaceRepoTarget | null) => {
+    if (!target || isCreatingCloudWorkspace) {
+      return;
+    }
+
+    navigateToWorkspaceShell();
+    void createCloudWorkspaceAndEnter(target);
+  }, [
+    createCloudWorkspaceAndEnter,
+    isCreatingCloudWorkspace,
+    navigateToWorkspaceShell,
+  ]);
+
   return {
     handleAddRepo,
     handleGoHome,
@@ -150,5 +169,6 @@ export function useWorkspaceSidebarActions() {
     handleSelectWorkspace,
     handleCreateLocalWorkspace,
     handleCreateWorktreeWorkspace,
+    handleCreateCloudWorkspace,
   };
 }

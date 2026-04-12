@@ -41,6 +41,13 @@ export interface ChatInputAvailability {
   areRuntimeControlsDisabled: boolean;
 }
 
+export function resolveChatDraftWorkspaceId(
+  selectedLogicalWorkspaceId: string | null,
+  selectedWorkspaceId: string | null,
+): string | null {
+  return selectedLogicalWorkspaceId ?? selectedWorkspaceId;
+}
+
 export function resolveChatInputAvailability({
   selectedWorkspaceId,
   isCloudWorkspaceSelected,
