@@ -91,7 +91,7 @@ export function ConnectorCatalogPage() {
   };
 
   return (
-    <div className="mx-auto min-h-full w-full max-w-4xl px-6 pb-16 pt-16">
+    <div className="mx-auto min-h-full w-full max-w-5xl px-6 pb-16 pt-16">
       <section className="space-y-6">
         <div>
           <h2 className="text-2xl font-medium text-foreground">Powers</h2>
@@ -129,7 +129,7 @@ export function ConnectorCatalogPage() {
             {state.connected.length > 0 && (
               <section className="space-y-3">
                 <h3 className="text-sm font-medium text-foreground">Connected</h3>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {state.connected.map((model) => (
                     <ConnectedConnectorCard
                       key={model.record.metadata.connectionId}
@@ -162,7 +162,7 @@ export function ConnectorCatalogPage() {
                 </div>
               )}
               {state.availableCards.length > 0 ? (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {state.availableCards.map((model) => (
                     <AvailableConnectorCard
                       key={model.entry.id}

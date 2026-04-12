@@ -1,81 +1,13 @@
-import type { ReactNode } from "react";
 import type {
   AvailableCardModel,
   ConnectedCardModel,
 } from "@/hooks/mcp/use-connectors-catalog-state";
-import {
-  getConnectorAuthLabel,
-  getConnectorAvailabilityLabel,
-} from "@/lib/domain/mcp/display";
-import type { ConnectorCatalogEntry } from "@/lib/domain/mcp/types";
 import { ConnectorIcon } from "./ConnectorIcon";
 import { ConnectorOverflowMenu } from "./ConnectorOverflowMenu";
 import { ConnectorStatusChip } from "./ConnectorStatusChip";
 
-function CardShell({
-  children,
-  interactive = false,
-  onClick,
-}: {
-  children: ReactNode;
-  interactive?: boolean;
-  onClick?: () => void;
-}) {
-  const base =
-    "group flex h-full flex-col rounded-xl border border-border bg-card p-4 text-left transition-colors";
-
-  if (interactive && onClick) {
-    return (
-      <button type="button" onClick={onClick} className={`${base} hover:bg-accent/40`}>
-        {children}
-      </button>
-    );
-  }
-
-  return <div className={base}>{children}</div>;
-}
-
-function ConnectorCardHeader({
-  entry,
-  trailing,
-}: {
-  entry: ConnectorCatalogEntry;
-  trailing?: ReactNode;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="flex min-w-0 items-center gap-3">
-        <ConnectorIcon entry={entry} size="md" />
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-foreground">
-            {entry.name}
-          </div>
-        </div>
-      </div>
-      {trailing && <div className="shrink-0">{trailing}</div>}
-    </div>
-  );
-}
-
-function ConnectorCardBody({ entry }: { entry: ConnectorCatalogEntry }) {
-  return (
-    <p className="mt-3 line-clamp-2 text-sm text-muted-foreground/90">
-      {entry.oneLiner}
-    </p>
-  );
-}
-
-function ConnectorCardFooter({ entry }: { entry: ConnectorCatalogEntry }) {
-  const auth = getConnectorAuthLabel(entry);
-  const availability = getConnectorAvailabilityLabel(entry);
-  return (
-    <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/80">
-      <span>{auth}</span>
-      <span aria-hidden="true">·</span>
-      <span>{availability}</span>
-    </div>
-  );
-}
+const CARD_BASE =
+  "group flex h-full min-h-[148px] flex-col items-start rounded-2xl border border-border bg-card p-4 text-left transition-colors";
 
 export function AvailableConnectorCard({
   model,
@@ -85,13 +17,21 @@ export function AvailableConnectorCard({
   onConnect: () => void;
 }) {
   return (
-    <CardShell interactive onClick={onConnect}>
-      <ConnectorCardHeader entry={model.entry} />
-      <ConnectorCardBody entry={model.entry} />
-      <div className="mt-auto">
-        <ConnectorCardFooter entry={model.entry} />
+    <button
+      type="button"
+      onClick={onConnect}
+      className={`${CARD_BASE} cursor-pointer hover:border-border hover:bg-accent/50 active:bg-accent/70`}
+    >
+      <ConnectorIcon entry={model.entry} size="lg" />
+      <div className="mt-3 w-full space-y-1">
+        <p className="truncate text-sm font-semibold text-foreground">
+          {model.entry.name}
+        </p>
+        <p className="line-clamp-2 text-sm text-muted-foreground/90">
+          {model.entry.oneLiner}
+        </p>
       </div>
-    </CardShell>
+    </button>
   );
 }
 
@@ -113,30 +53,32 @@ export function ConnectedConnectorCard({
   pending: boolean;
 }) {
   return (
-    <CardShell>
-      <ConnectorCardHeader
-        entry={model.record.catalogEntry}
-        trailing={(
-          <div className="flex items-center gap-1">
-            <ConnectorStatusChip
-              status={model.status}
-              onClick={model.status.actionable ? onStatusClick : undefined}
-            />
-            <ConnectorOverflowMenu
-              disabled={pending}
-              onDelete={onDelete}
-              onManage={onManage}
-              onReconnect={onReconnect}
-              onToggle={onToggle}
-              record={model.record}
-            />
-          </div>
-        )}
-      />
-      <ConnectorCardBody entry={model.record.catalogEntry} />
-      <div className="mt-auto">
-        <ConnectorCardFooter entry={model.record.catalogEntry} />
+    <div className={CARD_BASE}>
+      <div className="flex w-full items-start justify-between gap-2">
+        <ConnectorIcon entry={model.record.catalogEntry} size="lg" />
+        <ConnectorOverflowMenu
+          disabled={pending}
+          onDelete={onDelete}
+          onManage={onManage}
+          onReconnect={onReconnect}
+          onToggle={onToggle}
+          record={model.record}
+        />
       </div>
-    </CardShell>
+      <div className="mt-3 w-full space-y-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="truncate text-sm font-semibold text-foreground">
+            {model.record.catalogEntry.name}
+          </p>
+          <ConnectorStatusChip
+            status={model.status}
+            onClick={model.status.actionable ? onStatusClick : undefined}
+          />
+        </div>
+        <p className="line-clamp-2 text-sm text-muted-foreground/90">
+          {model.record.catalogEntry.oneLiner}
+        </p>
+      </div>
+    </div>
   );
 }

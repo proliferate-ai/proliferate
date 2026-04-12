@@ -28,9 +28,9 @@ const CONNECTOR_ICON_IMAGES = {
 type ConnectorIconSize = "sm" | "md" | "lg";
 
 const SIZE_CLASSES: Record<ConnectorIconSize, { tile: string; glyph: string }> = {
-  sm: { tile: "size-8 rounded-md p-1", glyph: "size-4" },
-  md: { tile: "size-10 rounded-lg p-1", glyph: "size-5" },
-  lg: { tile: "size-12 rounded-lg p-1.5", glyph: "size-6" },
+  sm: { tile: "size-8 rounded-lg p-1", glyph: "size-4" },
+  md: { tile: "size-11 rounded-xl p-1.5", glyph: "size-6" },
+  lg: { tile: "size-14 rounded-2xl p-2", glyph: "size-8" },
 };
 
 export function ConnectorIcon({
