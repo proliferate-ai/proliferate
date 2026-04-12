@@ -5,7 +5,7 @@ Status: authoritative for the hosted artifact viewer runtime.
 Scope:
 
 - `server/artifact-runtime/**`
-- desktop integration that loads `/artifact-runtime/`
+- desktop integration that loads `<api-base>/artifact-runtime/`
 - the desktop/runtime `postMessage` protocol
 - per-type renderers, especially raw JSX processing
 
@@ -27,10 +27,10 @@ server.
 - runtime owns rendering the artifact content
 - desktop and runtime communicate only through `postMessage`
 
-The runtime is hosted at:
+The runtime is hosted at the control-plane API base under:
 
 ```text
-/artifact-runtime/
+<api-base>/artifact-runtime/
 ```
 
 It is public and stateless. It does not require auth.
@@ -139,7 +139,7 @@ Desktop loads the runtime with:
 
 ```html
 <iframe
-  src="https://<server>/artifact-runtime/?parentOrigin=<desktop-origin>"
+  src="https://<server><api-base>/artifact-runtime/?parentOrigin=<desktop-origin>"
   sandbox="allow-scripts allow-same-origin"
   allow="clipboard-write"
 />
@@ -296,7 +296,7 @@ The runtime bundle owns the orchestration code.
 
 The JSX iframe envelope may rely on:
 
-- same-origin static assets served from `/artifact-runtime/`
+- same-origin static assets served from the same public mount as the runtime page
 - pinned CDN URLs explicitly declared in `library-registry.ts`
 
 The important invariant is that module resolution is fixed and code-owned.

@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  base: "/artifact-runtime/",
+  base: "./",
   clearScreen: false,
   build: {
     outDir: "../proliferate/server/artifact_runtime/static",

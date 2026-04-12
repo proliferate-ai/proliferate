@@ -9,12 +9,14 @@ interface BuildEnvelopeOptions {
   compiledSource: string;
   libraries: ArtifactLibraryDescriptor[];
   runtimeOrigin: string;
+  stylesheetHref: string;
 }
 
 export function buildJsxEnvelope({
   compiledSource,
   libraries,
   runtimeOrigin,
+  stylesheetHref,
 }: BuildEnvelopeOptions): string {
   const libraryUrls = libraries.map((library) => library.url);
   const libraryModules = libraries.map((library) => library.moduleName);
@@ -24,7 +26,7 @@ export function buildJsxEnvelope({
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="/artifact-runtime/tailwind-bundled.css" />
+    <link rel="stylesheet" href="${stylesheetHref}" />
     <script src="${TAILWIND_BROWSER_URL}"></script>
     <style>
       html, body, #artifact-root {

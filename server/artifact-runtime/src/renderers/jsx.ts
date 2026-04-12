@@ -47,6 +47,7 @@ export async function renderJsx({
     compiledSource,
     libraries,
     runtimeOrigin: window.location.origin,
+    stylesheetHref: new URL("./tailwind-bundled.css", window.location.href).toString(),
   });
   container.replaceChildren(iframe);
   registerChildFrame(iframe);
