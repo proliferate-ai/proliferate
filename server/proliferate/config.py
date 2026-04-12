@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     # App
     debug: bool = False
     api_base_url: str = ""
+    api_path_prefix: str = ""
     telemetry_mode: str = Field(
         default="local_dev",
         validation_alias=AliasChoices("PROLIFERATE_TELEMETRY_MODE", "TELEMETRY_MODE"),

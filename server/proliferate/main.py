@@ -38,6 +38,15 @@ from proliferate.server.support.api import router as support_router
 from proliferate.utils.logging import configure_server_logging
 
 
+def _normalize_api_prefix(raw_prefix: str) -> str:
+    if not raw_prefix or raw_prefix == "/":
+        return ""
+    normalized = raw_prefix.strip()
+    if not normalized.startswith("/"):
+        normalized = f"/{normalized}"
+    return normalized.rstrip("/")
+
+
 def _validate_cloud_billing_configuration() -> None:
     billing_mode = settings.cloud_billing_mode
     if billing_mode == "off":
@@ -103,6 +112,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     configure_server_logging()
     init_server_sentry()
+    api_prefix = _normalize_api_prefix(settings.api_path_prefix)
 
     app = FastAPI(
         title=APP_NAME,
@@ -123,7 +133,7 @@ def create_app() -> FastAPI:
     # ── Auth: users/me (read-only profile) ──
     app.include_router(
         fastapi_users.get_users_router(UserRead, UserUpdate),
-        prefix="/users",
+        prefix=f"{api_prefix}/users",
         tags=["users"],
     )
 
@@ -135,21 +145,25 @@ def create_app() -> FastAPI:
                 auth_backend,
                 state_secret=settings.jwt_secret,
             ),
-            prefix="/auth/github",
+            prefix=f"{api_prefix}/auth/github",
             tags=["auth"],
         )
 
     # ── Auth: Desktop PKCE flow ──
-    app.include_router(desktop_router, prefix="/auth", tags=["auth"])
+    app.include_router(desktop_router, prefix=f"{api_prefix}/auth", tags=["auth"])
 
     # ── Domain routes ──
-    app.include_router(health_router, tags=["health"])
-    app.include_router(artifact_runtime_router, tags=["artifact_runtime"])
-    app.include_router(anonymous_telemetry_router, prefix="/v1", tags=["anonymous_telemetry"])
-    app.include_router(cloud_router, prefix="/v1", tags=["cloud"])
-    app.include_router(ai_magic_router, prefix="/v1", tags=["ai_magic"])
-    app.include_router(support_router, prefix="/v1", tags=["support"])
-    app.include_router(billing_router, prefix="/v1", tags=["billing"])
+    app.include_router(health_router, prefix=api_prefix, tags=["health"])
+    app.include_router(artifact_runtime_router, prefix=api_prefix, tags=["artifact_runtime"])
+    app.include_router(
+        anonymous_telemetry_router,
+        prefix=f"{api_prefix}/v1",
+        tags=["anonymous_telemetry"],
+    )
+    app.include_router(cloud_router, prefix=f"{api_prefix}/v1", tags=["cloud"])
+    app.include_router(ai_magic_router, prefix=f"{api_prefix}/v1", tags=["ai_magic"])
+    app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])
+    app.include_router(billing_router, prefix=f"{api_prefix}/v1", tags=["billing"])
 
     return app
 
