@@ -11,6 +11,7 @@ export interface ModalShellProps {
   footer?: ReactNode;
   children: ReactNode;
   sizeClassName?: string;
+  bodyClassName?: string;
 }
 
 export function ModalShell({
@@ -22,6 +23,7 @@ export function ModalShell({
   footer,
   children,
   sizeClassName = "max-w-md",
+  bodyClassName = "px-5 pb-5 pt-4",
 }: ModalShellProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -54,31 +56,31 @@ export function ModalShell({
   }
 
   return createPortal(
-    <>
+    (
       <div
-        className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
         onClick={disableClose ? undefined : onClose}
-      />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      >
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
           aria-describedby={description ? descriptionId : undefined}
-          className={`relative w-full rounded-xl border border-border bg-background p-6 shadow-lg ${sizeClassName}`}
+          className={`relative flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-lg ${sizeClassName}`}
           onClick={(event) => event.stopPropagation()}
         >
           <button
             type="button"
             onClick={onClose}
             disabled={disableClose}
-            className="absolute top-4 right-4 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Close"
+            className="absolute right-4 top-4 z-10 rounded-md p-1 text-muted-foreground opacity-70 transition-opacity hover:opacity-100 disabled:opacity-30"
           >
             <X className="size-4" />
           </button>
 
-          <div className="mb-4 pr-8">
-            <h2 id={titleId} className="text-sm font-medium text-foreground">
+          <div className="shrink-0 px-5 pb-3 pr-10 pt-5">
+            <h2 id={titleId} className="text-base font-medium tracking-tight text-foreground">
               {title}
             </h2>
             {description && (
@@ -88,16 +90,18 @@ export function ModalShell({
             )}
           </div>
 
-          {children}
+          <div className={`min-h-0 flex-1 ${bodyClassName}`}>
+            {children}
+          </div>
 
           {footer && (
-            <div className="mt-4 flex items-center justify-end gap-2">
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3">
               {footer}
             </div>
           )}
         </div>
       </div>
-    </>,
+    ),
     document.body,
   );
 }

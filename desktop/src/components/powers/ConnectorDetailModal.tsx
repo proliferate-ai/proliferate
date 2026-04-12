@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   ConnectorModalTab,
   ResolvedConnectorModal,
@@ -13,7 +13,7 @@ import { validateConnectorSecretValue } from "@/lib/domain/mcp/validation";
 import type { ConnectOAuthConnectorResult } from "@/platform/tauri/mcp-oauth";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { Button } from "@/components/ui/Button";
-import { X } from "@/components/ui/icons";
+import { ModalShell } from "@/components/ui/ModalShell";
 import { ConnectorAboutTab } from "./ConnectorAboutTab";
 import { ConnectorConfigureTab } from "./ConnectorConfigureTab";
 import { ConnectorIcon } from "./ConnectorIcon";
@@ -72,7 +72,6 @@ export function ConnectorDetailModal({
   onSetTab: (tab: ConnectorModalTab) => void;
 }) {
   const showToast = useToastStore((state) => state.show);
-  const titleId = useId();
   const entry = modal.kind === "connect" ? modal.entry : modal.record.catalogEntry;
   const isConnected = modal.kind === "manage";
   const connectionId =
@@ -95,18 +94,6 @@ export function ConnectorDetailModal({
     setSupabaseSettings(existingSettings);
     setError(null);
   }, [entry.id, connectionId, existingSettings]);
-
-  useEffect(() => {
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !submitting && !reconnecting) {
-        event.preventDefault();
-        handleClose();
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [submitting, reconnecting]);
 
   const { variant } = modal;
   const busy = submitting || reconnecting;
@@ -213,7 +200,6 @@ export function ConnectorDetailModal({
       return;
     }
 
-    // manage
     if (!connectionId) return;
     if (variant === "api_key") {
       const validation = validateConnectorSecretValue(secretValue);
@@ -266,7 +252,6 @@ export function ConnectorDetailModal({
   const primary = resolvePrimaryButton({
     isConnected,
     variant,
-    secretValue,
     trimmedSecret,
     secretValidationError,
     oauthValidationError,
@@ -275,135 +260,94 @@ export function ConnectorDetailModal({
   const status = modal.kind === "manage" ? modal.status : null;
   const focus = modal.kind === "manage" ? modal.focus : null;
 
+  const primaryButton = modal.tab === "configure" && primary
+    ? (
+      <Button
+        type="button"
+        variant="primary"
+        size="md"
+        onClick={() => { void handlePrimaryAction(); }}
+        loading={submitting || reconnecting}
+        disabled={primary.disabled}
+        className="w-full rounded-[10px]"
+      >
+        {primary.label}
+      </Button>
+    )
+    : null;
+
   return (
-    <>
-      <div
-        className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm"
-        onClick={busy ? undefined : handleClose}
-      />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          className="relative flex w-full max-w-lg flex-col rounded-xl border border-border bg-background shadow-lg"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <header className="flex items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <ConnectorIcon entry={entry} size="md" />
-              <div className="min-w-0">
-                <h2 id={titleId} className="truncate text-sm font-medium text-foreground">
-                  {entry.name}
-                </h2>
-                <p className="truncate text-xs text-muted-foreground">{entry.oneLiner}</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleClose}
-              disabled={busy}
-              aria-label="Close"
-              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-            >
-              <X className="size-4" />
-            </button>
-          </header>
-
-          <div className="flex gap-1 border-b border-border/60 px-5">
-            {TABS.map((tab) => {
-              const isActive = modal.tab === tab;
-              return (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => onSetTab(tab)}
-                  className={`relative py-3 text-xs font-medium transition-colors ${
-                    isActive
-                      ? "text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  } px-3`}
-                >
-                  {TAB_LABELS[tab]}
-                  {isActive && (
-                    <span
-                      aria-hidden="true"
-                      className="absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-foreground"
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="max-h-[60vh] overflow-y-auto px-5 py-4">
-            {modal.tab === "configure" && (
-              <ConnectorConfigureTab
-                busy={busy}
-                disabled={submitting || reconnecting}
-                entry={entry}
-                error={error}
-                focus={focus}
-                isConnected={isConnected}
-                onRetrySync={connectionId ? handleRetrySync : undefined}
-                onSecretChange={(value) => {
-                  setSecretValue(value);
-                  if (error) setError(null);
-                }}
-                onSupabaseSettingsChange={(value) => {
-                  setSupabaseSettings(value);
-                  if (error) setError(null);
-                }}
-                retrying={retrying}
-                secretValue={secretValue}
-                status={status}
-                supabaseSettings={supabaseSettings}
-                variant={variant}
-              />
-            )}
-            {modal.tab === "tools" && <ConnectorToolsTab entry={entry} />}
-            {modal.tab === "about" && <ConnectorAboutTab entry={entry} />}
-          </div>
-
-          <footer className="flex items-center justify-end gap-2 border-t border-border/60 px-5 py-3">
-            {modal.tab === "configure" ? (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="md"
-                  onClick={handleClose}
-                  disabled={submitting}
-                >
-                  {isConnected ? "Close" : "Cancel"}
-                </Button>
-                {primary && (
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="md"
-                    onClick={() => { void handlePrimaryAction(); }}
-                    loading={submitting || reconnecting}
-                    disabled={primary.disabled}
-                  >
-                    {primary.label}
-                  </Button>
-                )}
-              </>
-            ) : (
-              <Button
-                type="button"
-                variant="ghost"
-                size="md"
-                onClick={handleClose}
-              >
-                Close
-              </Button>
-            )}
-          </footer>
+    <ModalShell
+      open
+      onClose={handleClose}
+      disableClose={busy}
+      sizeClassName="max-w-[480px] h-[520px] max-h-[85vh]"
+      bodyClassName="flex min-h-0 flex-1 flex-col overflow-hidden p-0"
+      title={(
+        <div className="flex items-center gap-3">
+          <ConnectorIcon entry={entry} size="sm" />
+          <span className="truncate text-base font-medium tracking-tight">
+            {entry.name}
+          </span>
         </div>
+      )}
+    >
+      <div
+        role="tablist"
+        aria-orientation="horizontal"
+        className="flex shrink-0 gap-4 border-b border-border/60 px-5"
+      >
+        {TABS.map((tab) => {
+          const isActive = modal.tab === tab;
+          return (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => onSetTab(tab)}
+              className={`-mb-px border-b-[1.5px] py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {TAB_LABELS[tab]}
+            </button>
+          );
+        })}
       </div>
-    </>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        {modal.tab === "configure" && (
+          <ConnectorConfigureTab
+            busy={busy}
+            disabled={submitting || reconnecting}
+            entry={entry}
+            error={error}
+            focus={focus}
+            isConnected={isConnected}
+            onRetrySync={connectionId ? handleRetrySync : undefined}
+            onSecretChange={(value) => {
+              setSecretValue(value);
+              if (error) setError(null);
+            }}
+            onSupabaseSettingsChange={(value) => {
+              setSupabaseSettings(value);
+              if (error) setError(null);
+            }}
+            primaryAction={primaryButton}
+            retrying={retrying}
+            secretValue={secretValue}
+            status={status}
+            supabaseSettings={supabaseSettings}
+            variant={variant}
+          />
+        )}
+        {modal.tab === "tools" && <ConnectorToolsTab entry={entry} />}
+        {modal.tab === "about" && <ConnectorAboutTab entry={entry} />}
+      </div>
+    </ModalShell>
   );
 }
 
@@ -415,14 +359,12 @@ interface PrimaryButtonSpec {
 function resolvePrimaryButton({
   isConnected,
   variant,
-  secretValue,
   trimmedSecret,
   secretValidationError,
   oauthValidationError,
 }: {
   isConnected: boolean;
   variant: "no_setup" | "api_key" | "oauth" | "oauth_structured";
-  secretValue: string;
   trimmedSecret: string;
   secretValidationError: string | null;
   oauthValidationError: string | null;
@@ -443,7 +385,6 @@ function resolvePrimaryButton({
     };
   }
 
-  // manage
   if (variant === "api_key") {
     return {
       label: "Save",
@@ -459,7 +400,5 @@ function resolvePrimaryButton({
   if (variant === "oauth") {
     return { label: "Reconnect", disabled: Boolean(oauthValidationError) };
   }
-  // no_setup manage — nothing to save
-  void secretValue;
   return null;
 }

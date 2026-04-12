@@ -27,10 +27,10 @@ const CONNECTOR_ICON_IMAGES = {
 
 type ConnectorIconSize = "sm" | "md" | "lg";
 
-const SIZE_CLASSES: Record<ConnectorIconSize, { tile: string; glyph: string }> = {
-  sm: { tile: "size-8 rounded-lg p-1", glyph: "size-4" },
-  md: { tile: "size-11 rounded-xl p-1.5", glyph: "size-6" },
-  lg: { tile: "size-14 rounded-2xl p-2", glyph: "size-8" },
+const TILE_SIZE: Record<ConnectorIconSize, string> = {
+  sm: "size-8 rounded-lg",
+  md: "size-10 rounded-xl",
+  lg: "size-12 rounded-xl",
 };
 
 export function ConnectorIcon({
@@ -40,21 +40,19 @@ export function ConnectorIcon({
   entry: ConnectorCatalogEntry;
   size?: ConnectorIconSize;
 }) {
-  const classes = SIZE_CLASSES[size];
+  const tileClass = TILE_SIZE[size];
   const iconImage = entry.iconId in CONNECTOR_ICON_IMAGES
     ? CONNECTOR_ICON_IMAGES[entry.iconId as keyof typeof CONNECTOR_ICON_IMAGES]
     : null;
 
   if (iconImage) {
     return (
-      <div
-        className={`flex shrink-0 items-center justify-center bg-muted/35 ${classes.tile}`}
-      >
+      <div className={`flex shrink-0 items-center justify-center overflow-hidden ${tileClass}`}>
         <img
           src={iconImage}
           alt=""
           aria-hidden="true"
-          className="size-full rounded-[5px] object-contain"
+          className="size-full object-contain"
         />
       </div>
     );
@@ -63,9 +61,9 @@ export function ConnectorIcon({
   const Icon = CONNECTOR_ICONS[entry.iconId as keyof typeof CONNECTOR_ICONS];
   return (
     <div
-      className={`flex shrink-0 items-center justify-center bg-muted/35 text-foreground ${classes.tile}`}
+      className={`flex shrink-0 items-center justify-center bg-muted/40 text-foreground ${tileClass}`}
     >
-      <Icon className={`${classes.glyph} shrink-0`} />
+      <Icon className="size-[72%] shrink-0" />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type {
   ConnectorCardStatus,
   ConnectorConfigureFocus,
@@ -23,6 +24,7 @@ export function ConnectorConfigureTab({
   onRetrySync,
   onSecretChange,
   onSupabaseSettingsChange,
+  primaryAction,
   retrying,
   secretValue,
   status,
@@ -38,6 +40,7 @@ export function ConnectorConfigureTab({
   onRetrySync?: () => void;
   onSecretChange: (value: string) => void;
   onSupabaseSettingsChange: (value: SupabaseConnectorSettings) => void;
+  primaryAction?: ReactNode;
   retrying: boolean;
   secretValue: string;
   status: ConnectorCardStatus | null;
@@ -141,6 +144,12 @@ export function ConnectorConfigureTab({
             </Button>
           </div>
           {error && <p className="text-xs text-destructive">{error}</p>}
+        </div>
+      )}
+
+      {primaryAction && (
+        <div className="pt-1">
+          {primaryAction}
         </div>
       )}
     </div>

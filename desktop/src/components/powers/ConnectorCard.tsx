@@ -7,7 +7,7 @@ import { ConnectorOverflowMenu } from "./ConnectorOverflowMenu";
 import { ConnectorStatusChip } from "./ConnectorStatusChip";
 
 const CARD_BASE =
-  "group flex h-full min-h-[148px] flex-col items-start rounded-2xl border border-border bg-card p-4 text-left transition-colors";
+  "group flex h-full min-h-[132px] flex-col items-start rounded-2xl border border-border bg-card p-4 text-left transition-colors";
 
 export function AvailableConnectorCard({
   model,
@@ -22,7 +22,7 @@ export function AvailableConnectorCard({
       onClick={onConnect}
       className={`${CARD_BASE} cursor-pointer hover:border-border hover:bg-accent/50 active:bg-accent/70`}
     >
-      <ConnectorIcon entry={model.entry} size="lg" />
+      <ConnectorIcon entry={model.entry} size="md" />
       <div className="mt-3 w-full space-y-1">
         <p className="truncate text-sm font-semibold text-foreground">
           {model.entry.name}
@@ -55,7 +55,7 @@ export function ConnectedConnectorCard({
   return (
     <div className={CARD_BASE}>
       <div className="flex w-full items-start justify-between gap-2">
-        <ConnectorIcon entry={model.record.catalogEntry} size="lg" />
+        <ConnectorIcon entry={model.record.catalogEntry} size="md" />
         <ConnectorOverflowMenu
           disabled={pending}
           onDelete={onDelete}
