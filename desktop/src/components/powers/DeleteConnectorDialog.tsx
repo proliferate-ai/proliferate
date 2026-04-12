@@ -4,7 +4,7 @@ import { useToastStore } from "@/stores/toast/toast-store";
 import { Button } from "@/components/ui/Button";
 import { ModalShell } from "@/components/ui/ModalShell";
 
-export function DeleteConnectorModal({
+export function DeleteConnectorDialog({
   onClose,
   onDelete,
   open,

@@ -29,6 +29,12 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
         prefixHint: "github_pat_",
       },
     ],
+    capabilities: [
+      "Search code across repositories you can access",
+      "Read pull requests, reviews, and discussions",
+      "Browse issues, labels, and milestones",
+      "Pull in README and doc content from repos",
+    ],
   },
   {
     id: "context7",
@@ -56,6 +62,11 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
           "Open the Context7 dashboard, click Create API Key, give it a name like “Proliferate”, copy the key immediately, and paste it here.",
         prefixHint: "ctx7sk-",
       },
+    ],
+    capabilities: [
+      "Look up current, version-specific library docs",
+      "Pull example snippets from official sources",
+      "Resolve ambiguous API usage with live references",
     ],
   },
   {
@@ -85,6 +96,11 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
           "Choose a Brave Search API plan, open the API Keys section in your dashboard, create a key, then paste it here.",
       },
     ],
+    capabilities: [
+      "Search the open web with Brave's independent index",
+      "Pull news and recent articles",
+      "Look up unfamiliar terms and references",
+    ],
   },
   {
     id: "tavily",
@@ -113,6 +129,11 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
         prefixHint: "tvly-",
       },
     ],
+    capabilities: [
+      "Run focused web searches",
+      "Extract clean text from pages",
+      "Crawl linked pages for deeper research",
+    ],
   },
   {
     id: "openweather",
@@ -140,6 +161,11 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
           "Sign up for OpenWeather, find your API key on the API key tab of your account page, then paste it here.",
       },
     ],
+    capabilities: [
+      "Look up current weather conditions anywhere",
+      "Pull short-term forecasts",
+      "Check wind, humidity, and pressure for a location",
+    ],
   },
   {
     id: "linear",
@@ -156,6 +182,11 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
     serverNameBase: "linear",
     iconId: "globe",
     requiredFields: [],
+    capabilities: [
+      "Search issues, projects, and cycles",
+      "Inspect team workloads and states",
+      "Follow up on ticket status and ownership",
+    ],
   },
   {
     id: "supabase",
@@ -172,6 +203,12 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
     serverNameBase: "supabase",
     iconId: "supabase",
     requiredFields: [],
+    capabilities: [
+      "Inspect schema, tables, and views",
+      "Run SQL against a selected project",
+      "Browse storage buckets and project config",
+      "Start read-only until you explicitly open write access",
+    ],
   },
   {
     id: "notion",
@@ -188,6 +225,11 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
     serverNameBase: "notion",
     iconId: "notion",
     requiredFields: [],
+    capabilities: [
+      "Search authorized pages and databases",
+      "Read and update selected records",
+      "Navigate the workspaces you grant access to",
+    ],
   },
   {
     id: "filesystem",
@@ -205,6 +247,11 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
     serverNameBase: "filesystem",
     iconId: "folder",
     requiredFields: [],
+    capabilities: [
+      "Read files inside the active workspace",
+      "Create new files in the workspace",
+      "Make targeted edits without leaving the session",
+    ],
   },
   {
     id: "playwright",
@@ -222,5 +269,10 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
     serverNameBase: "playwright",
     iconId: "playwright",
     requiredFields: [],
+    capabilities: [
+      "Launch a headless browser session",
+      "Click, type, and navigate pages",
+      "Capture DOM state and page snapshots",
+    ],
   },
 ] as const;

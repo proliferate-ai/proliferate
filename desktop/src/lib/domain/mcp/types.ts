@@ -68,6 +68,7 @@ interface ConnectorCatalogEntryBase {
   serverNameBase: string;
   iconId: ConnectorIconId;
   requiredFields: readonly ConnectorCatalogField[];
+  capabilities: readonly string[];
 }
 
 export interface SecretHttpConnectorCatalogEntry extends ConnectorCatalogEntryBase {

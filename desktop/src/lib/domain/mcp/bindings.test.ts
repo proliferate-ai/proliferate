@@ -38,6 +38,7 @@ describe("mcp bindings", () => {
           helperText: "",
           getTokenInstructions: "",
         }],
+        capabilities: [],
       },
     };
 
@@ -85,6 +86,7 @@ describe("mcp bindings", () => {
         serverNameBase: "supabase",
         iconId: "globe",
         requiredFields: [],
+        capabilities: [],
       },
     };
 
@@ -138,6 +140,7 @@ describe("mcp bindings", () => {
           helperText: "",
           getTokenInstructions: "",
         }],
+        capabilities: [],
       },
     };
 
