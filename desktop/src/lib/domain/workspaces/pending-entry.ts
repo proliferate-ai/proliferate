@@ -1,5 +1,4 @@
 import type { SetupScriptExecution } from "@anyharness/sdk";
-import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud-workspace-creation";
 import type { CreateCloudWorkspaceRequest } from "@/lib/integrations/cloud/client";
 import type { CreateWorktreeWorkspaceInput } from "@/lib/domain/workspaces/workspace-creation";
 
@@ -16,7 +15,7 @@ export type PendingWorkspaceStage =
 export type PendingWorkspaceRequest =
   | { kind: "local"; sourceRoot: string }
   | { kind: "worktree"; input: CreateWorktreeWorkspaceInput }
-  | { kind: "cloud"; input: CreateCloudWorkspaceRequest; target: CloudWorkspaceRepoTarget }
+  | { kind: "cloud"; input: CreateCloudWorkspaceRequest }
   | { kind: "select-existing"; workspaceId: string };
 
 export type PendingWorkspaceOriginTarget =

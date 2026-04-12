@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { matchShortcut, isTextEntryTarget } from "@/lib/domain/shortcuts/matching";
+import { SHORTCUTS } from "@/config/shortcuts";
+import {
+  getShortcutDisplayLabel,
+  isTextEntryTarget,
+  matchShortcut,
+  matchShortcutDef,
+} from "@/lib/domain/shortcuts/matching";
 
 describe("shortcut matching", () => {
   beforeEach(() => {
@@ -7,6 +13,10 @@ describe("shortcut matching", () => {
       platform: "Linux x86_64",
       userAgent: "Linux",
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("matches fixed keys case-insensitively for character shortcuts", () => {
@@ -95,10 +105,34 @@ describe("shortcut matching", () => {
       } as KeyboardEvent,
     )).toBeNull();
   });
-});
 
-afterEach(() => {
-  vi.unstubAllGlobals();
+  it("uses the non-mac cloud shortcut binding and label", () => {
+    expect(getShortcutDisplayLabel(SHORTCUTS.newCloud)).toBe("Ctrl+Alt+N");
+
+    expect(matchShortcutDef(
+      SHORTCUTS.newCloud,
+      {
+        key: "n",
+        code: "KeyN",
+        metaKey: false,
+        ctrlKey: true,
+        shiftKey: false,
+        altKey: true,
+      } as KeyboardEvent,
+    )).toEqual({});
+
+    expect(matchShortcut(
+      { kind: "fixed", key: "n", meta: true, ctrl: true, shift: false, alt: false },
+      {
+        key: "n",
+        code: "KeyN",
+        metaKey: false,
+        ctrlKey: true,
+        shiftKey: false,
+        altKey: false,
+      } as KeyboardEvent,
+    )).toBeNull();
+  });
 });
 
 describe("isTextEntryTarget", () => {

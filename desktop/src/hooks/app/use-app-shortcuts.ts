@@ -10,20 +10,17 @@ import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useAddRepo } from "@/hooks/workspaces/use-add-repo";
-import { isCloudWorkspaceId, parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
-import { localWorkspaceGroupKey } from "@/lib/domain/workspaces/collections";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import {
   buildConfiguredCloudRepoKeys,
   resolveCloudRepoActionState,
-  type CloudWorkspaceRepoTarget,
 } from "@/lib/domain/workspaces/cloud-workspace-creation";
+import { getCloudRepoTargetForSelectedWorkspace, getRepoForSelectedWorkspace } from "@/lib/domain/workspaces/selected-repo-target";
 import {
   buildSidebarWorkspaceEntries,
   groupSidebarEntries,
 } from "@/lib/domain/workspaces/sidebar";
 import {
-  isStandardWorkspace,
   isUsableWorkspace,
 } from "@/lib/domain/workspaces/usability";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -34,60 +31,6 @@ import {
 } from "@/lib/infra/latency-flow";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
-
-function getRepoForSelectedWorkspace(
-  selectedWorkspaceId: string | null,
-  workspaces: Workspace[],
-) {
-  if (!selectedWorkspaceId) return null;
-
-  const selectedWs = workspaces.find((workspace) => workspace.id === selectedWorkspaceId);
-  if (!selectedWs || !isStandardWorkspace(selectedWs)) return null;
-
-  const repoWs = workspaces
-    .filter(
-      (workspace) =>
-        !isCloudWorkspaceId(workspace.id)
-        && isStandardWorkspace(workspace)
-        && localWorkspaceGroupKey(workspace) === localWorkspaceGroupKey(selectedWs),
-    )
-    .sort((a, b) => {
-      if (a.kind === b.kind) {
-        return a.id.localeCompare(b.id);
-      }
-      return a.kind === "local" ? -1 : 1;
-    })[0] ?? null;
-
-  return { selectedWs, repoWs: repoWs ?? null };
-}
-
-function getCloudRepoTargetForSelectedWorkspace(
-  selectedWorkspaceId: string | null,
-  workspaces: Workspace[],
-  cloudWorkspaces: ReturnType<typeof useStandardRepoProjection>["cloudWorkspaces"],
-): CloudWorkspaceRepoTarget | null {
-  const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
-  if (cloudWorkspaceId) {
-    const cloudWorkspace = cloudWorkspaces.find((workspace) => workspace.id === cloudWorkspaceId);
-    if (cloudWorkspace?.repo.provider !== "github") {
-      return null;
-    }
-    return {
-      gitOwner: cloudWorkspace.repo.owner,
-      gitRepoName: cloudWorkspace.repo.name,
-    };
-  }
-
-  const ctx = getRepoForSelectedWorkspace(selectedWorkspaceId, workspaces);
-  if (!ctx?.repoWs || ctx.repoWs.gitProvider !== "github" || !ctx.repoWs.gitOwner || !ctx.repoWs.gitRepoName) {
-    return null;
-  }
-
-  return {
-    gitOwner: ctx.repoWs.gitOwner,
-    gitRepoName: ctx.repoWs.gitRepoName,
-  };
-}
 
 export function useAppShortcuts(): void {
   const navigate = useNavigate();

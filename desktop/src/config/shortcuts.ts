@@ -22,9 +22,11 @@ export type ShortcutMatch =
 export interface ShortcutDef<Id extends string = string> {
   id: Id;
   label: string;
+  nonMacLabel?: string;
   description: string;
   owner: ShortcutOwner;
   match: ShortcutMatch;
+  nonMacMatch?: ShortcutMatch;
   allowInInputs: boolean;
 }
 
@@ -62,9 +64,11 @@ export const SHORTCUTS = {
   newCloud: {
     id: "workspace.new-cloud",
     label: "⌘⌃N",
+    nonMacLabel: "Ctrl+Alt+N",
     description: "New cloud workspace",
     owner: "js",
     match: { kind: "fixed", key: "n", meta: true, ctrl: true, shift: false, alt: false },
+    nonMacMatch: { kind: "fixed", key: "n", meta: true, shift: false, alt: true },
     allowInInputs: true,
   },
   addRepository: {

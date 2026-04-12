@@ -5,7 +5,7 @@ import {
   type ShortcutTrigger,
 } from "@/lib/domain/shortcuts/registry";
 import {
-  matchShortcut,
+  matchShortcutDef,
 } from "@/lib/domain/shortcuts/matching";
 import { shouldDispatchKeyboardShortcut } from "@/lib/domain/shortcuts/dispatch-policy";
 import { listenForShortcutMenuEvents } from "@/platform/tauri/menu";
@@ -31,28 +31,48 @@ function dispatchShortcut(id: ShortcutId, trigger: ShortcutTrigger): boolean {
   }
 }
 
+export function resolveKeyboardShortcut(
+  event: KeyboardEvent,
+): {
+  id: ShortcutId;
+  shortcut: (typeof DISPATCH_SHORTCUTS)[number];
+  trigger: ShortcutTrigger;
+} | null {
+  // Declaration order in SHORTCUTS is authoritative here: the first match wins.
+  for (const shortcut of DISPATCH_SHORTCUTS) {
+    const match = matchShortcutDef(shortcut, event);
+    if (!match) {
+      continue;
+    }
+
+    return {
+      id: shortcut.id,
+      shortcut,
+      trigger: {
+        source: "keyboard",
+        digit: match.digit,
+      },
+    };
+  }
+
+  return null;
+}
+
 export function useShortcutDispatcher(): void {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Declaration order in SHORTCUTS is authoritative here: the first match wins.
-      for (const shortcut of DISPATCH_SHORTCUTS) {
-        const match = matchShortcut(shortcut.match, event);
-        if (!match) {
-          continue;
-        }
-
-        if (!shouldDispatchKeyboardShortcut(shortcut, event)) {
-          return;
-        }
-
-        const consumed = dispatchShortcut(shortcut.id, {
-          source: "keyboard",
-          digit: match.digit,
-        });
-        if (consumed) {
-          event.preventDefault();
-        }
+      const resolved = resolveKeyboardShortcut(event);
+      if (!resolved) {
         return;
+      }
+
+      if (!shouldDispatchKeyboardShortcut(resolved.shortcut, event)) {
+        return;
+      }
+
+      const consumed = dispatchShortcut(resolved.id, resolved.trigger);
+      if (consumed) {
+        event.preventDefault();
       }
     };
 

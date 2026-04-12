@@ -3,6 +3,7 @@ import { ChevronRight, CloudIcon, Folder, FolderFilled, GitBranchIcon, Plus, Set
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { SHORTCUTS } from "@/config/shortcuts";
+import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { SidebarActionButton } from "./SidebarActionButton";
 
@@ -114,7 +115,7 @@ export function RepoGroup({
                     >
                       <CloudIcon className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="flex-1 truncate text-left">{cloudWorkspaceLabel}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground/60">{SHORTCUTS.newCloud.label}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground/60">{getShortcutDisplayLabel(SHORTCUTS.newCloud)}</span>
                     </button>
                   ) : (
                     <Tooltip
@@ -129,7 +130,7 @@ export function RepoGroup({
                       >
                         <CloudIcon className="size-3.5 shrink-0 text-muted-foreground" />
                         <span className="flex-1 truncate text-left">{cloudWorkspaceLabel}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground/60">{SHORTCUTS.newCloud.label}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground/60">{getShortcutDisplayLabel(SHORTCUTS.newCloud)}</span>
                       </button>
                     </Tooltip>
                   )

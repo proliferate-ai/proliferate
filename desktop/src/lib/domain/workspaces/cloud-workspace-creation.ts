@@ -18,6 +18,10 @@ export interface CloudWorkspaceRepoTarget {
   gitRepoName: string;
 }
 
+export type CloudWorkspaceCreateInput =
+  | CloudWorkspaceRepoTarget
+  | CreateCloudWorkspaceRequest;
+
 export type CloudRepoActionState =
   | { kind: "hidden"; label: null }
   | { kind: "loading"; label: "Loading cloud..." }
@@ -67,6 +71,21 @@ export function collectKnownCloudBranchNames(args: {
       .map((workspace) => workspace.repo.branch.trim())
       .filter(Boolean),
   );
+}
+
+export function isCreateCloudWorkspaceRequest(
+  input: CloudWorkspaceCreateInput,
+): input is CreateCloudWorkspaceRequest {
+  return "gitProvider" in input;
+}
+
+export function getCloudWorkspaceRepoTarget(
+  input: CloudWorkspaceCreateInput,
+): CloudWorkspaceRepoTarget {
+  return {
+    gitOwner: input.gitOwner,
+    gitRepoName: input.gitRepoName,
+  };
 }
 
 export function collectTakenCloudWorkspaceSlugs(args: {
@@ -136,6 +155,25 @@ export function buildNextCloudWorkspaceAttempt(args: {
       displayName: null,
     },
     triedBranchNames: nextTriedBranchNames,
+  };
+}
+
+export function buildCloudWorkspaceAttemptFromRequest(
+  request: CreateCloudWorkspaceRequest,
+): {
+  branchName: string;
+  request: CreateCloudWorkspaceRequest;
+  triedBranchNames: Set<string>;
+} {
+  const branchName = request.branchName.trim();
+  return {
+    branchName,
+    request: {
+      ...request,
+      branchName,
+      displayName: request.displayName ?? null,
+    },
+    triedBranchNames: new Set([branchName]),
   };
 }
 

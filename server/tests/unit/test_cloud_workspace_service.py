@@ -63,7 +63,7 @@ async def test_create_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
         raise AssertionError("downstream workspace creation should not run when billing blocks")
 
     async def _repo_config_value(**_kwargs):
-        return SimpleNamespace(configured=True, env_vars={})
+        return SimpleNamespace(configured=True, env_vars={}, default_branch=None)
 
     monkeypatch.setattr(workspace_service, "get_linked_github_account", lambda _user: object())
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)

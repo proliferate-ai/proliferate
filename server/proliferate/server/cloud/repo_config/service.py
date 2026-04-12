@@ -12,7 +12,9 @@ from proliferate.db.store.cloud_repo_config import (
     persist_cloud_repo_file,
 )
 from proliferate.db.store.cloud_workspaces import load_cloud_workspace_for_user
+from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.repos.service import get_repo_branches_for_user
 from proliferate.server.cloud.repo_config.models import (
     CloudRepoConfigResponse,
     CloudRepoConfigsListResponse,
@@ -93,6 +95,40 @@ def _normalize_files(files: list[CloudRepoFileInput]) -> list[CloudRepoFileInput
     return normalized
 
 
+async def _validate_default_branch(
+    user_id: UUID,
+    *,
+    git_owner: str,
+    git_repo_name: str,
+    default_branch: str | None,
+) -> str | None:
+    normalized_default_branch = (default_branch or "").strip() or None
+    if normalized_default_branch is None:
+        return None
+
+    user = await load_user_with_oauth_accounts_by_id(user_id)
+    if user is None:
+        raise CloudApiError("user_not_found", "User not found.", status_code=404)
+
+    repo_branches = await get_repo_branches_for_user(
+        user,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        missing_access_message="Connect a GitHub account before setting a cloud default branch.",
+        repo_access_required_message=(
+            "Reconnect GitHub and grant repository access before setting a cloud default branch."
+        ),
+    )
+    if normalized_default_branch not in repo_branches.branches:
+        raise CloudApiError(
+            "github_branch_not_found",
+            f"The default branch '{normalized_default_branch}' was not found on GitHub.",
+            status_code=400,
+        )
+
+    return normalized_default_branch
+
+
 async def save_repo_config(
     user_id: UUID,
     *,
@@ -101,6 +137,12 @@ async def save_repo_config(
     body: SaveCloudRepoConfigRequest,
 ) -> CloudRepoConfigResponse:
     env_vars = normalize_env_vars(body.env_vars)
+    default_branch = await _validate_default_branch(
+        user_id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        default_branch=body.default_branch,
+    )
     files = _normalize_files(
         [
             CloudRepoFileInput(relative_path=item.relative_path, content=item.content)
@@ -112,7 +154,7 @@ async def save_repo_config(
         git_owner=git_owner,
         git_repo_name=git_repo_name,
         configured=body.configured,
-        default_branch=body.default_branch,
+        default_branch=default_branch,
         env_vars=env_vars,
         setup_script=body.setup_script,
         files=files,

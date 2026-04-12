@@ -9,6 +9,7 @@ import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import {
   buildNextCloudWorkspaceAttempt,
   collectKnownCloudBranchNames,
+  buildCloudWorkspaceAttemptFromRequest,
   type CloudWorkspaceRepoTarget,
   isCloudWorkspaceBranchConflictError,
 } from "@/lib/domain/workspaces/cloud-workspace-creation";
@@ -26,7 +27,7 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 import { workspaceCollectionsScopeKey, getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/query-keys";
 import { cloudBillingKey, cloudCredentialsKey } from "./query-keys";
 import { useCloudCredentialActions } from "./use-cloud-credential-actions";
-import { autoSyncDetectedCloudCredentialsIfNeeded } from "./auto-sync-detected-cloud-credentials";
+import { autoSyncDetectedCloudCredentialsIfNeeded } from "@/lib/integrations/cloud/credentials-auto-sync";
 import {
   captureTelemetryException,
   trackProductEvent,
@@ -99,6 +100,7 @@ export function useCreateCloudWorkspace() {
       ]);
     },
   });
+  const { mutateAsync: createCloudWorkspaceMutation } = createMutation;
 
   const runCloudWorkspaceCreateFlow = useCallback(async (args: {
     target: CloudWorkspaceRepoTarget;
@@ -126,11 +128,7 @@ export function useCreateCloudWorkspace() {
 
     for (let attemptCount = 1; attemptCount <= maxAttempts; attemptCount += 1) {
       const attempt = attemptCount === 1 && args.initialRequest
-        ? {
-          branchName: args.initialRequest.branchName,
-          request: args.initialRequest,
-          triedBranchNames,
-        }
+        ? buildCloudWorkspaceAttemptFromRequest(args.initialRequest)
         : buildNextCloudWorkspaceAttempt({
           target: args.target,
           branchPrefixType,
@@ -147,11 +145,7 @@ export function useCreateCloudWorkspace() {
         displayName: attempt.request.displayName ?? attempt.branchName,
         repoLabel,
         baseBranchName: attempt.request.baseBranch ?? null,
-        request: {
-          kind: "cloud",
-          input: attempt.request,
-          target: args.target,
-        },
+        request: { kind: "cloud", input: attempt.request },
       });
 
       if (currentEntry === null) {
@@ -171,7 +165,7 @@ export function useCreateCloudWorkspace() {
           branchName: attempt.branchName,
           attemptCount,
         });
-        const workspace = await createMutation.mutateAsync(attempt.request);
+        const workspace = await createCloudWorkspaceMutation(attempt.request);
         trackProductEvent("cloud_workspace_created", {
           workspace_kind: "cloud",
           status: workspace.status,
@@ -222,6 +216,7 @@ export function useCreateCloudWorkspace() {
       } catch (error) {
         if (
           isCloudWorkspaceBranchConflictError(error)
+          && !args.initialRequest
           && args.allowConflictRetry
           && attemptCount < maxAttempts
         ) {
@@ -252,7 +247,7 @@ export function useCreateCloudWorkspace() {
     authUser,
     beginPendingWorkspace,
     branchPrefixType,
-    createMutation,
+    createCloudWorkspaceMutation,
     failPendingEntry,
     finalizeSelection,
     queryClient,

@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProliferateClientError } from "@/lib/integrations/cloud/client";
 import {
+  buildCloudWorkspaceAttemptFromRequest,
   buildConfiguredCloudRepoKeys,
   buildNextCloudWorkspaceAttempt,
   collectTakenCloudWorkspaceSlugs,
+  getCloudWorkspaceRepoTarget,
   isCloudWorkspaceBranchConflictError,
+  isCreateCloudWorkspaceRequest,
   resolveCloudRepoActionState,
 } from "./cloud-workspace-creation";
 
@@ -96,6 +99,27 @@ describe("cloud workspace creation helpers", () => {
       displayName: null,
     });
     expect(attempt.triedBranchNames).toEqual(new Set([attempt.branchName]));
+  });
+
+  it("reuses an explicit cloud request without generating a new branch", () => {
+    const request = {
+      gitProvider: "github" as const,
+      gitOwner: "acme",
+      gitRepoName: "rocket",
+      branchName: "proliferate/acacia",
+      displayName: null,
+    };
+
+    expect(isCreateCloudWorkspaceRequest(request)).toBe(true);
+    expect(getCloudWorkspaceRepoTarget(request)).toEqual({
+      gitOwner: "acme",
+      gitRepoName: "rocket",
+    });
+    expect(buildCloudWorkspaceAttemptFromRequest(request)).toEqual({
+      branchName: "proliferate/acacia",
+      request,
+      triedBranchNames: new Set(["proliferate/acacia"]),
+    });
   });
 
   it("recognizes server-reported branch conflicts", () => {

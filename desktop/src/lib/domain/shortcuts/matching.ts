@@ -1,4 +1,4 @@
-import type { ShortcutMatch } from "@/config/shortcuts";
+import type { ShortcutDef, ShortcutMatch } from "@/config/shortcuts";
 
 export type ShortcutDigit = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -15,10 +15,24 @@ function normalizeKey(key: string): string {
   return key.length === 1 ? key.toLowerCase() : key;
 }
 
-function isApplePlatform(): boolean {
+export function isApplePlatform(): boolean {
   const platform = globalThis.navigator?.platform ?? "";
   const userAgent = globalThis.navigator?.userAgent ?? "";
   return /Mac|iPhone|iPad|iPod/.test(platform) || /Mac OS X/.test(userAgent);
+}
+
+export function getShortcutDisplayLabel(shortcut: Pick<ShortcutDef, "label" | "nonMacLabel">): string {
+  return isApplePlatform()
+    ? shortcut.label
+    : shortcut.nonMacLabel ?? shortcut.label;
+}
+
+export function getShortcutPlatformMatch(
+  shortcut: Pick<ShortcutDef, "match" | "nonMacMatch">,
+): ShortcutMatch {
+  return isApplePlatform()
+    ? shortcut.match
+    : shortcut.nonMacMatch ?? shortcut.match;
 }
 
 function matchesModifiers(
@@ -81,6 +95,13 @@ export function matchShortcut(
       return digit ? { digit } : null;
     }
   }
+}
+
+export function matchShortcutDef(
+  shortcut: Pick<ShortcutDef, "match" | "nonMacMatch">,
+  event: KeyboardShortcutEventLike,
+): ShortcutMatchResult | null {
+  return matchShortcut(getShortcutPlatformMatch(shortcut), event);
 }
 
 export function isTextEntryTarget(target: EventTarget | null): boolean {

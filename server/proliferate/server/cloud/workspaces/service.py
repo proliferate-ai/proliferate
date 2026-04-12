@@ -310,9 +310,7 @@ async def create_cloud_workspace(
     )
 
     resolved_base_branch = cleaned_base_branch or None
-    saved_default_branch = (
-        str(getattr(repo_config, "default_branch", "")).strip() or None
-    )
+    saved_default_branch = (repo_config.default_branch or "").strip() or None
     if resolved_base_branch is None and saved_default_branch:
         if saved_default_branch in repo_branches.branches:
             resolved_base_branch = saved_default_branch

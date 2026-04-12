@@ -9,6 +9,7 @@ import {
   stopCloudWorkspace,
   updateCloudWorkspaceBranch,
 } from "@/lib/integrations/cloud/workspaces";
+import { autoSyncDetectedCloudCredentialsIfNeeded } from "@/lib/integrations/cloud/credentials-auto-sync";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { clearCachedCloudConnections } from "@/lib/integrations/anyharness/runtime-target";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -16,7 +17,6 @@ import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspac
 import { cloudBillingKey } from "./query-keys";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useCloudCredentialActions } from "./use-cloud-credential-actions";
-import { autoSyncDetectedCloudCredentialsIfNeeded } from "./auto-sync-detected-cloud-credentials";
 import {
   captureTelemetryException,
   trackProductEvent,

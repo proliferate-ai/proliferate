@@ -3,8 +3,6 @@ import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
 import { Label } from "@/components/ui/Label";
 import { Select } from "@/components/ui/Select";
 
-const GITHUB_DEFAULT_OPTION = "__github_default__";
-
 interface CloudDefaultBranchCardProps {
   value: string | null;
   githubDefaultBranch: string | null;
@@ -25,7 +23,7 @@ export function CloudDefaultBranchCard({
   const hasStaleSavedBranch = Boolean(
     value && !branches.includes(value),
   );
-  const selectValue = value ?? GITHUB_DEFAULT_OPTION;
+  const selectValue = value ?? "";
 
   return (
     <SettingsCard>
@@ -40,11 +38,11 @@ export function CloudDefaultBranchCard({
               id="cloud-default-branch"
               value={selectValue}
               onChange={(event) => onChange(
-                event.target.value === GITHUB_DEFAULT_OPTION ? null : event.target.value,
+                event.target.value === "" ? null : event.target.value,
               )}
               disabled={isLoading}
             >
-              <option value={GITHUB_DEFAULT_OPTION}>
+              <option value="">
                 {githubDefaultBranch
                   ? `GitHub default (${githubDefaultBranch})`
                   : "GitHub default"}
