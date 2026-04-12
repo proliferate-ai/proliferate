@@ -52,6 +52,11 @@ def _make_user(email: str, *, display_name: str | None) -> User:
     )
 
 
+def _stub_decode_state(*args: object, **kwargs: object) -> dict[str, str]:
+    del args, kwargs
+    return _make_state_payload()
+
+
 @pytest.mark.asyncio
 async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
     monkeypatch: pytest.MonkeyPatch,
@@ -65,7 +70,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
     monkeypatch.setattr(settings, "github_oauth_client_id", "github-client-id")
     monkeypatch.setattr(settings, "github_oauth_client_secret", "github-client-secret")
     monkeypatch.setattr(settings, "api_base_url", "https://api.proliferate.com")
-    monkeypatch.setattr(desktop_service, "decode_jwt", lambda *args, **kwargs: _make_state_payload())
+    monkeypatch.setattr(desktop_service, "decode_jwt", _stub_decode_state)
     monkeypatch.setattr(
         desktop_service.github_oauth_client,
         "get_access_token",
@@ -112,7 +117,7 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_existing_user
     monkeypatch.setattr(settings, "github_oauth_client_id", "github-client-id")
     monkeypatch.setattr(settings, "github_oauth_client_secret", "github-client-secret")
     monkeypatch.setattr(settings, "api_base_url", "https://api.proliferate.com")
-    monkeypatch.setattr(desktop_service, "decode_jwt", lambda *args, **kwargs: _make_state_payload())
+    monkeypatch.setattr(desktop_service, "decode_jwt", _stub_decode_state)
     monkeypatch.setattr(
         desktop_service.github_oauth_client,
         "get_access_token",
@@ -155,7 +160,7 @@ async def test_finish_github_desktop_callback_skips_customerio_when_oauth_fails(
     monkeypatch.setattr(settings, "github_oauth_client_id", "github-client-id")
     monkeypatch.setattr(settings, "github_oauth_client_secret", "github-client-secret")
     monkeypatch.setattr(settings, "api_base_url", "https://api.proliferate.com")
-    monkeypatch.setattr(desktop_service, "decode_jwt", lambda *args, **kwargs: _make_state_payload())
+    monkeypatch.setattr(desktop_service, "decode_jwt", _stub_decode_state)
     monkeypatch.setattr(
         desktop_service.github_oauth_client,
         "get_access_token",
@@ -194,7 +199,7 @@ async def test_finish_github_desktop_callback_skips_customerio_when_auth_code_cr
     monkeypatch.setattr(settings, "github_oauth_client_id", "github-client-id")
     monkeypatch.setattr(settings, "github_oauth_client_secret", "github-client-secret")
     monkeypatch.setattr(settings, "api_base_url", "https://api.proliferate.com")
-    monkeypatch.setattr(desktop_service, "decode_jwt", lambda *args, **kwargs: _make_state_payload())
+    monkeypatch.setattr(desktop_service, "decode_jwt", _stub_decode_state)
     monkeypatch.setattr(
         desktop_service.github_oauth_client,
         "get_access_token",

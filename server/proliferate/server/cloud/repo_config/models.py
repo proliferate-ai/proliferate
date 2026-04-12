@@ -6,12 +6,12 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from proliferate.db.models.cloud import CloudWorkspace
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigSummaryValue,
     CloudRepoConfigValue,
     CloudRepoFileValue,
 )
-from proliferate.db.models.cloud import CloudWorkspace
 
 
 def _to_iso(value: datetime | None) -> str | None:
@@ -124,9 +124,11 @@ def workspace_repo_config_status_payload(
     workspace: CloudWorkspace,
     repo_config: CloudRepoConfigValue | None,
 ) -> CloudWorkspaceRepoConfigStatusResponse:
-    tracked_files = [] if repo_config is None else [
-        repo_file_metadata_payload(item) for item in repo_config.tracked_files
-    ]
+    tracked_files = (
+        []
+        if repo_config is None
+        else [repo_file_metadata_payload(item) for item in repo_config.tracked_files]
+    )
     env_var_keys = [] if repo_config is None else sorted(repo_config.env_vars)
     current_version = 0 if repo_config is None else repo_config.files_version
     return CloudWorkspaceRepoConfigStatusResponse(

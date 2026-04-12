@@ -33,8 +33,8 @@ def _to_iso(value: object) -> str | None:
 
 def cloud_mcp_connection_status_payload(record: object) -> CloudMcpConnectionSyncStatus:
     return CloudMcpConnectionSyncStatus(
-        connection_id=str(getattr(record, "connection_id")),
-        catalog_entry_id=str(getattr(record, "catalog_entry_id")),
+        connection_id=str(record.connection_id),
+        catalog_entry_id=str(record.catalog_entry_id),
         synced=True,
         last_synced_at=_to_iso(getattr(record, "last_synced_at", None)),
     )

@@ -145,9 +145,7 @@ def capture_server_sentry_exception(
         return
 
     normalized = (
-        error
-        if isinstance(error, Exception)
-        else Exception(str(error or "Unknown error"))
+        error if isinstance(error, Exception) else Exception(str(error or "Unknown error"))
     )
 
     with sentry_sdk.push_scope() as scope:

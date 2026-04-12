@@ -57,10 +57,7 @@ def _enable_github(monkeypatch: pytest.MonkeyPatch, email: str) -> None:
         assert code_challenge is None
         assert code_challenge_method is None
         assert state is not None
-        url = (
-            "https://github.com/login/oauth/authorize"
-            f"?state={state}&redirect_uri={redirect_uri}"
-        )
+        url = f"https://github.com/login/oauth/authorize?state={state}&redirect_uri={redirect_uri}"
         if extras_params:
             url += "".join(f"&{key}={value}" for key, value in extras_params.items())
         return url

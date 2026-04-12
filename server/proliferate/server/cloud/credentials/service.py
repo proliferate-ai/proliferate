@@ -108,9 +108,7 @@ def _normalize_gemini_env_payload(env_vars: Mapping[str, str]) -> dict[str, str]
             "Gemini cloud sync must use either GEMINI_API_KEY or GOOGLE_API_KEY, not both."
         )
     if has_google_api_key and not uses_vertex_ai:
-        _invalid_payload(
-            "Gemini GOOGLE_API_KEY sync requires GOOGLE_GENAI_USE_VERTEXAI=true."
-        )
+        _invalid_payload("Gemini GOOGLE_API_KEY sync requires GOOGLE_GENAI_USE_VERTEXAI=true.")
     if uses_vertex_ai and not has_google_api_key:
         _invalid_payload(
             "GOOGLE_GENAI_USE_VERTEXAI=true requires GOOGLE_API_KEY for Gemini cloud sync."
@@ -162,11 +160,14 @@ def _normalize_env_payload(
     env_var_names = set(env_vars.keys())
     unexpected = sorted(env_var_names - spec.allowed_env_vars)
     if unexpected:
+        unexpected_vars = ", ".join(unexpected)
         _invalid_payload(
-            f"{spec.provider.capitalize()} cloud sync does not allow env vars: {', '.join(unexpected)}."
+            f"{spec.provider.capitalize()} cloud sync does not allow env vars: {unexpected_vars}."
         )
 
-    normalized_input = {key: value for key, value in env_vars.items() if key in spec.allowed_env_vars}
+    normalized_input = {
+        key: value for key, value in env_vars.items() if key in spec.allowed_env_vars
+    }
     if not normalized_input:
         _invalid_payload(f"{spec.provider.capitalize()} cloud sync requires at least one env var.")
     return spec.env_normalizer(normalized_input)
@@ -178,14 +179,17 @@ def _normalize_file_payload(
 ) -> dict[str, str]:
     files = getattr(body, "files", None)
     if not isinstance(files, list) or not files:
-        _invalid_payload(f"{spec.provider.capitalize()} file sync requires at least one auth file.")
+        _invalid_payload(
+            f"{spec.provider.capitalize()} file sync requires at least one auth file."
+        )
 
     decoded_files: dict[str, str] = {}
     for entry in files:
         relative_path = getattr(entry, "relative_path", None)
         if relative_path not in spec.allowed_file_paths:
             _invalid_payload(
-                f"File path '{relative_path}' is not an approved {spec.provider.capitalize()} auth file."
+                f"File path '{relative_path}' is not an approved "
+                f"{spec.provider.capitalize()} auth file."
             )
         try:
             decoded = decode_base64_json(entry.content_base64)
@@ -200,7 +204,8 @@ def _normalize_file_payload(
             spec.file_validator is not None and not spec.file_validator(parsed, relative_path)
         ):
             _invalid_payload(
-                f"File '{relative_path}' does not contain portable {spec.provider.capitalize()} credentials for cloud use."
+                f"File '{relative_path}' does not contain portable "
+                f"{spec.provider.capitalize()} credentials for cloud use."
             )
         decoded_files[relative_path] = decoded
 

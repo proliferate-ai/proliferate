@@ -160,7 +160,9 @@ def mobility_workspace_summary_payload(
     )
 
 
-def mobility_workspace_detail_payload(value: CloudWorkspaceMobilityValue) -> MobilityWorkspaceDetail:
+def mobility_workspace_detail_payload(
+    value: CloudWorkspaceMobilityValue,
+) -> MobilityWorkspaceDetail:
     summary = mobility_workspace_summary_payload(value)
     return MobilityWorkspaceDetail(
         id=summary.id,

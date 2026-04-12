@@ -51,6 +51,7 @@ async def test_clone_repository_runs_from_parent_of_runtime_workdir(
         git_owner="proliferate-ai",
         git_repo_name="proliferate",
         git_base_branch="main",
+        requested_base_sha=None,
     )
 
     await clone_repository(provider, object(), ctx=ctx, runtime_context=runtime_context)

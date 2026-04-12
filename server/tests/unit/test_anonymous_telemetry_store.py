@@ -24,12 +24,16 @@ async def test_load_or_create_local_install_id_reuses_existing_surface_id(
 
         async with engine_module.async_session_factory() as session:
             records = (
-                await session.execute(
-                    select(AnonymousTelemetryLocalInstall).where(
-                        AnonymousTelemetryLocalInstall.surface == "server"
+                (
+                    await session.execute(
+                        select(AnonymousTelemetryLocalInstall).where(
+                            AnonymousTelemetryLocalInstall.surface == "server"
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
         assert len(records) == 1
         assert records[0].install_uuid == first
     finally:

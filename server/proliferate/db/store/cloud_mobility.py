@@ -121,9 +121,7 @@ def _mobility_value(
         cloud_lost_reason=record.cloud_lost_reason,
         created_at=record.created_at,
         updated_at=record.updated_at,
-        active_handoff=(
-            _handoff_value(active_handoff) if active_handoff is not None else None
-        ),
+        active_handoff=(_handoff_value(active_handoff) if active_handoff is not None else None),
     )
 
 
@@ -452,7 +450,9 @@ async def finalize_cloud_workspace_handoff_op(
     mobility_workspace.lifecycle_state = (
         "cloud_active" if handoff_op.target_owner == "cloud" else "local_active"
     )
-    mobility_workspace.cloud_workspace_id = cloud_workspace_id or mobility_workspace.cloud_workspace_id
+    mobility_workspace.cloud_workspace_id = (
+        cloud_workspace_id or mobility_workspace.cloud_workspace_id
+    )
     mobility_workspace.status_detail = "Awaiting source cleanup"
     mobility_workspace.last_error = None
     mobility_workspace.updated_at = now

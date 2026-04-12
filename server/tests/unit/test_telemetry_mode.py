@@ -29,8 +29,7 @@ def test_settings_accept_prefixed_telemetry_env_vars(
 
     assert resolved.telemetry_mode == "self_managed"
     assert (
-        resolved.anonymous_telemetry_endpoint
-        == "https://collector.example/v1/telemetry/anonymous"
+        resolved.anonymous_telemetry_endpoint == "https://collector.example/v1/telemetry/anonymous"
     )
     assert resolved.anonymous_telemetry_disabled is True
 

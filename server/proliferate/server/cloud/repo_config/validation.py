@@ -20,7 +20,11 @@ def normalize_repo_file_path(value: str) -> str:
     while normalized.startswith("./"):
         normalized = normalized[2:]
     if not normalized:
-        raise CloudApiError("invalid_repo_file_path", "File path cannot be empty.", status_code=400)
+        raise CloudApiError(
+            "invalid_repo_file_path",
+            "File path cannot be empty.",
+            status_code=400,
+        )
     if normalized.startswith("/"):
         raise CloudApiError(
             "invalid_repo_file_path",

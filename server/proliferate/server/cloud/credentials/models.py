@@ -22,6 +22,7 @@ _DEFAULT_AUTH_MODES: dict[str, CloudCredentialAuthMode] = {
     "gemini": "env",
 }
 
+
 class SyncClaudeEnvCredentialRequest(BaseModel):
     auth_mode: Literal["env"] = Field(alias="authMode")
     env_vars: dict[str, str] = Field(alias="envVars")

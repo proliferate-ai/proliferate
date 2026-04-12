@@ -10,7 +10,6 @@ from uuid import UUID
 
 from proliferate.constants.cloud import (
     CLAUDE_ALLOWED_AUTH_FILES,
-    CODEX_ALLOWED_AUTH_FILES,
     GEMINI_ALLOWED_AUTH_FILES,
 )
 from proliferate.integrations.sandbox import SandboxProvider, SandboxRuntimeContext
@@ -76,7 +75,12 @@ class ProvisionCredentials:
         if self.claude is not None:
             files.extend(self.claude.auth_files)
         if self.codex is not None and self.codex.auth_json:
-            files.append(ProvisionFile(relative_path=".codex/auth.json", content=self.codex.auth_json))
+            files.append(
+                ProvisionFile(
+                    relative_path=".codex/auth.json",
+                    content=self.codex.auth_json,
+                )
+            )
         if self.gemini is not None:
             files.extend(self.gemini.auth_files)
         return tuple(files)
@@ -160,7 +164,8 @@ def _normalize_gemini_credential(payload: object) -> GeminiProvisionCredential |
                     and relative_path in GEMINI_ALLOWED_AUTH_FILES
                 ):
                     # Gemini CLI reads security.auth.selectedType from ~/.gemini/settings.json;
-                    # "oauth-personal" is defined in google-gemini/gemini-cli packages/core/src/core/contentGenerator.ts.
+                    # "oauth-personal" is defined in google-gemini/gemini-cli
+                    # packages/core/src/core/contentGenerator.ts.
                     auth_files.append(ProvisionFile(relative_path=relative_path, content=content))
 
     return GeminiProvisionCredential(

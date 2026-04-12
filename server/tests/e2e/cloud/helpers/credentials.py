@@ -196,7 +196,8 @@ def build_claude_file_entry(path) -> dict[str, str]:
         }
 
     raise CloudE2ETestError(
-        "Claude main config did not contain a portable API key and no Claude keychain OAuth entry was found."
+        "Claude main config did not contain a portable API key and no Claude "
+        "keychain OAuth entry was found."
     )
 
 

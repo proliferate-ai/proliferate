@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, TypeAlias
+from typing import Literal
 from uuid import UUID
 
 from proliferate.db.store.anonymous_telemetry import (
     load_or_create_local_install_id as load_or_create_local_install_id_store,
+)
+from proliferate.db.store.anonymous_telemetry import (
     record_anonymous_telemetry_event,
 )
 
-TelemetrySurface: TypeAlias = Literal["desktop", "server"]
-TelemetryRecordType: TypeAlias = Literal["VERSION", "ACTIVATION", "USAGE"]
-TelemetryMode: TypeAlias = Literal["local_dev", "self_managed", "hosted_product"]
-ActivationMilestone: TypeAlias = Literal[
+type TelemetrySurface = Literal["desktop", "server"]
+type TelemetryRecordType = Literal["VERSION", "ACTIVATION", "USAGE"]
+type TelemetryMode = Literal["local_dev", "self_managed", "hosted_product"]
+type ActivationMilestone = Literal[
     "first_launch",
     "first_prompt_submitted",
     "first_local_workspace_created",

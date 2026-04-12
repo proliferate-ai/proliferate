@@ -13,7 +13,6 @@ from uuid import UUID
 from proliferate.config import settings
 from proliferate.integrations.sandbox import SandboxProvider, SandboxRuntimeContext
 from proliferate.server.cloud.runtime.credentials import ProvisionCredentials
-from proliferate.utils.telemetry_mode import is_vendor_telemetry_enabled
 from proliferate.server.cloud.runtime.sandbox_exec import (
     assert_command_succeeded,
     result_exit_code,
@@ -21,6 +20,7 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
     result_stdout,
     run_sandbox_command_logged,
 )
+from proliferate.utils.telemetry_mode import is_vendor_telemetry_enabled
 
 _CLAUDE_MIN_NODE_MAJOR = 20
 _CLAUDE_MIN_NODE_MINOR = 10

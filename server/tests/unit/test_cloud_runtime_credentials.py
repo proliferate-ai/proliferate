@@ -77,7 +77,9 @@ def test_normalize_provision_credentials_shapes_gemini_oauth_files() -> None:
                 "authMode": "file",
                 "files": {
                     ".gemini/oauth_creds.json": '{"refresh_token":"refresh-token"}',
-                    ".gemini/settings.json": '{"security":{"auth":{"selectedType":"oauth-personal"}}}',
+                    ".gemini/settings.json": (
+                        '{"security":{"auth":{"selectedType":"oauth-personal"}}}'
+                    ),
                     ".gemini/ignored.json": '{"nope":true}',
                 },
             }

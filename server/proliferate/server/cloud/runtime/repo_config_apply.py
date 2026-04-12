@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-import logging
 from uuid import UUID
 
 from proliferate.constants.cloud import WorkspacePostReadyPhase
@@ -43,7 +44,7 @@ class WorkspaceRuntimeAccess:
 
 
 @asynccontextmanager
-async def _workspace_apply_lock(workspace_id: UUID):
+async def _workspace_apply_lock(workspace_id: UUID) -> AsyncIterator[None]:
     async with workspace_repo_apply_lock(workspace_id) as acquired:
         if not acquired:
             raise WorkspaceRepoApplyBusyError(

@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db import engine as db_engine
@@ -241,9 +241,8 @@ async def save_cloud_repo_config(
     incoming_by_path = {item.relative_path: item for item in files}
     incoming_hashes = {path: _sha256_text(item.content) for path, item in incoming_by_path.items()}
     existing_hashes = {item.relative_path: item.content_sha256 for item in existing_files}
-    files_changed = (
-        set(existing_by_path) != set(incoming_by_path)
-        or any(existing_hashes.get(path) != incoming_hashes[path] for path in incoming_by_path)
+    files_changed = set(existing_by_path) != set(incoming_by_path) or any(
+        existing_hashes.get(path) != incoming_hashes[path] for path in incoming_by_path
     )
 
     record.env_vars_ciphertext = encrypt_json(env_vars)

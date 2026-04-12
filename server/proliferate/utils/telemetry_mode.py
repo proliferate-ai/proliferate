@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Literal, TypeAlias
+from typing import Literal
 
 from proliferate.config import settings
 
-TelemetryMode: TypeAlias = Literal["local_dev", "self_managed", "hosted_product"]
+type TelemetryMode = Literal["local_dev", "self_managed", "hosted_product"]
 
 
 def get_server_telemetry_mode() -> TelemetryMode:

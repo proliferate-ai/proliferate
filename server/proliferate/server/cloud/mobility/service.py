@@ -309,9 +309,7 @@ async def start_cloud_workspace_handoff(
             )
         except Exception as error:
             failure_code = (
-                error.code
-                if isinstance(error, CloudApiError)
-                else "handoff_start_failed"
+                error.code if isinstance(error, CloudApiError) else "handoff_start_failed"
             )
             failure_detail = (
                 error.message

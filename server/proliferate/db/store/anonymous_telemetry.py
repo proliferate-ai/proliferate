@@ -37,7 +37,7 @@ async def _load_install_row(
 
 async def _record_anonymous_telemetry_event(
     db: AsyncSession,
-    event: "AnonymousTelemetryEvent",
+    event: AnonymousTelemetryEvent,
 ) -> None:
     now = utcnow()
     install_row = await _load_install_row(
@@ -79,7 +79,7 @@ async def _record_anonymous_telemetry_event(
 
 
 async def record_anonymous_telemetry_event(
-    event: "AnonymousTelemetryEvent",
+    event: AnonymousTelemetryEvent,
 ) -> None:
     async with db_engine.async_session_factory() as db:
         await _record_anonymous_telemetry_event(db, event)

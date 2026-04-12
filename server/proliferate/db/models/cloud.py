@@ -199,9 +199,7 @@ class CloudCredential(Base):
 
 class CloudMcpConnection(Base):
     __tablename__ = "cloud_mcp_connection"
-    __table_args__ = (
-        UniqueConstraint("user_id", "connection_id"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "connection_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(index=True)
@@ -220,9 +218,7 @@ class CloudMcpConnection(Base):
 
 class CloudRepoConfig(Base):
     __tablename__ = "cloud_repo_config"
-    __table_args__ = (
-        UniqueConstraint("user_id", "git_owner", "git_repo_name"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "git_owner", "git_repo_name"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(index=True)
@@ -243,9 +239,7 @@ class CloudRepoConfig(Base):
 
 class CloudRepoFile(Base):
     __tablename__ = "cloud_repo_file"
-    __table_args__ = (
-        UniqueConstraint("cloud_repo_config_id", "relative_path"),
-    )
+    __table_args__ = (UniqueConstraint("cloud_repo_config_id", "relative_path"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     cloud_repo_config_id: Mapped[uuid.UUID] = mapped_column(

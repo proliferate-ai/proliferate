@@ -18,16 +18,22 @@ from proliferate.server.cloud.repo_config.models import (
     CloudRepoConfigsListResponse,
     CloudWorkspaceRepoConfigStatusResponse,
     PutCloudRepoFileRequest,
-    RunCloudWorkspaceSetupResponse,
     ResyncCloudWorkspaceFilesResponse,
+    RunCloudWorkspaceSetupResponse,
     SaveCloudRepoConfigRequest,
     repo_config_payload,
     repo_config_summary_payload,
-    run_cloud_workspace_setup_payload,
     resync_cloud_workspace_files_payload,
+    run_cloud_workspace_setup_payload,
     workspace_repo_config_status_payload,
 )
+from proliferate.server.cloud.repo_config.validation import (
+    normalize_env_vars,
+    normalize_repo_file_path,
+    validate_tracked_file_content,
+)
 from proliferate.server.cloud.runtime.anyharness_api import CloudRuntimeOperationError
+from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.runtime.repo_config_apply import (
     WorkspaceRepoApplyBusyError,
     WorkspaceRuntimeAccess,
@@ -35,11 +41,6 @@ from proliferate.server.cloud.runtime.repo_config_apply import (
     run_workspace_saved_setup,
 )
 from proliferate.server.cloud.runtime.service import get_workspace_connection
-from proliferate.server.cloud.repo_config.validation import (
-    normalize_env_vars,
-    normalize_repo_file_path,
-    validate_tracked_file_content,
-)
 
 
 def _default_repo_config_response() -> CloudRepoConfigResponse:
@@ -192,7 +193,9 @@ async def build_resync_workspace_repo_config_status(
     return resync_cloud_workspace_files_payload(workspace, repo_config)
 
 
-def _runtime_access_from_target(target) -> WorkspaceRuntimeAccess:
+def _runtime_access_from_target(
+    target: RuntimeConnectionTarget,
+) -> WorkspaceRuntimeAccess:
     if not target.anyharness_workspace_id:
         raise CloudApiError(
             "workspace_not_ready",

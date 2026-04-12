@@ -57,17 +57,14 @@ async def clone_repository(
         stderr = result_stderr(install_git_result) or result_stdout(install_git_result)
         raise RuntimeError(f"Failed to install git in cloud sandbox: {str(stderr).strip()[:400]}")
 
-    clone_command = (
-        f"rm -rf {shlex.quote(runtime_context.runtime_workdir)} && "
-        + (
-            f"git clone {shlex.quote(_tokenized_repo_url(ctx))} "
+    clone_command = f"rm -rf {shlex.quote(runtime_context.runtime_workdir)} && " + (
+        f"git clone {shlex.quote(_tokenized_repo_url(ctx))} "
+        f"{shlex.quote(runtime_context.runtime_workdir)}"
+        if ctx.requested_base_sha
+        else (
+            f"git clone --depth 1 --branch {shlex.quote(ctx.git_base_branch)} "
+            f"{shlex.quote(_tokenized_repo_url(ctx))} "
             f"{shlex.quote(runtime_context.runtime_workdir)}"
-            if ctx.requested_base_sha
-            else (
-                f"git clone --depth 1 --branch {shlex.quote(ctx.git_base_branch)} "
-                f"{shlex.quote(_tokenized_repo_url(ctx))} "
-                f"{shlex.quote(runtime_context.runtime_workdir)}"
-            )
         )
     )
     clone_result = await run_sandbox_command_logged(
