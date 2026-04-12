@@ -249,6 +249,14 @@ export function ConnectorDetailModal({
     }
   }
 
+  async function handleCancelOAuth() {
+    try {
+      await callbacks.onCancelOAuth();
+    } catch {
+      // ignore
+    }
+  }
+
   const primary = resolvePrimaryButton({
     isConnected,
     variant,
@@ -260,27 +268,46 @@ export function ConnectorDetailModal({
   const status = modal.kind === "manage" ? modal.status : null;
   const focus = modal.kind === "manage" ? modal.focus : null;
 
-  const primaryButton = modal.tab === "configure" && primary
-    ? (
-      <Button
-        type="button"
-        variant="primary"
-        size="md"
-        onClick={() => { void handlePrimaryAction(); }}
-        loading={submitting || reconnecting}
-        disabled={primary.disabled}
-        className="w-full rounded-[10px]"
-      >
-        {primary.label}
-      </Button>
-    )
-    : null;
+  const primaryButton = modal.tab !== "configure"
+    ? null
+    : reconnecting
+      ? (
+        <div className="space-y-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            onClick={() => { void handleCancelOAuth(); }}
+            className="w-full rounded-[10px]"
+          >
+            Cancel browser sign-in
+          </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            Finish authorizing in your browser, or cancel to stop waiting.
+          </p>
+        </div>
+      )
+      : primary
+        ? (
+          <Button
+            type="button"
+            variant="primary"
+            size="md"
+            onClick={() => { void handlePrimaryAction(); }}
+            loading={submitting}
+            disabled={primary.disabled}
+            className="w-full rounded-[10px]"
+          >
+            {primary.label}
+          </Button>
+        )
+        : null;
 
   return (
     <ModalShell
       open
       onClose={handleClose}
-      disableClose={busy}
+      disableClose={submitting}
       sizeClassName="max-w-[480px] h-[520px] max-h-[85vh]"
       bodyClassName="flex min-h-0 flex-1 flex-col overflow-hidden p-0"
       title={(
