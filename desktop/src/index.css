@@ -1157,6 +1157,15 @@ body {
 .animate-resolve-7 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.35s forwards; }
 .animate-resolve-8 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.4s  forwards; }
 
+@keyframes brand-mark-fade-out {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.animate-brand-mark-fade-out {
+  animation: brand-mark-fade-out 0.22s ease-out forwards;
+}
+
 /* ---- Toast slide-in ---- */
 @keyframes toast-in {
   from {

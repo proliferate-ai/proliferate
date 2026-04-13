@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect } from "react"
 import { Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { AuthRequiredGate } from "@/components/auth/AuthRequiredGate"
-import { SetupGate, SetupRoute } from "@/components/setup/SetupGate"
+import { OnboardingGate, OnboardingRoute } from "@/components/onboarding/OnboardingGate"
 import { ToastContainer } from "@/components/feedback/Toast"
 import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
@@ -12,6 +12,7 @@ import { useAppShortcuts } from "@/hooks/app/use-app-shortcuts"
 import { useAuthBootstrap } from "@/hooks/auth/use-auth-bootstrap"
 import { useAgentAutoReconcile } from "@/hooks/agents/use-agent-auto-reconcile"
 import { useConnectorSyncRetryDaemon } from "@/hooks/mcp/use-connector-sync-retry-daemon"
+import { useOnboardingFinalizer } from "@/hooks/onboarding/use-onboarding-finalizer"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/use-shortcut-dispatcher"
 import { useTurnEndSound } from "@/hooks/sessions/use-turn-end-sound"
 import {
@@ -25,9 +26,9 @@ import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupM
 import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
 import { LoginPage } from "@/pages/LoginPage"
 import { MainPage } from "@/pages/MainPage"
+import { OnboardingPage } from "@/pages/OnboardingPage"
 import { PowersPage } from "@/pages/PowersPage"
 import { SettingsPage } from "@/pages/SettingsPage"
-import { SetupPage } from "@/pages/SetupPage"
 import { useAuthStore } from "@/stores/auth/auth-store"
 import {
   bootstrapUserPreferences,
@@ -56,6 +57,7 @@ function App() {
   useTurnEndSound()
   useAgentAutoReconcile()
   useConnectorSyncRetryDaemon()
+  useOnboardingFinalizer()
 
   useEffect(() => {
     logStartupDebug("app.bootstrap.start")
@@ -121,10 +123,10 @@ function App() {
           </Route>
           <Route element={<BootstrappedRoute />}>
             <Route element={<AuthRequiredGate />}>
-              <Route element={<SetupRoute />}>
-                <Route path="/setup" element={<SetupPage />} />
+              <Route element={<OnboardingRoute />}>
+                <Route path="/setup" element={<OnboardingPage />} />
               </Route>
-              <Route element={<SetupGate />}>
+              <Route element={<OnboardingGate />}>
                 <Route path="/" element={<MainPage />} />
                 <Route path="/powers" element={<PowersPage />} />
                 <Route path="/settings" element={<SettingsPage />} />

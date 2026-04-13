@@ -3,7 +3,7 @@ import { useResolveRepoRootFromPathMutation } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { useSetupRequirements } from "@/hooks/setup/use-setup-requirements";
+import { useOnboardingRequirement } from "@/hooks/onboarding/use-onboarding-requirement";
 import { runAddRepoWorkflow } from "@/lib/domain/workspaces/add-repo-workflow";
 import { pickFolder } from "@/platform/tauri/shell";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -37,13 +37,13 @@ function isRepoEntryBlockedPath(pathname: string): boolean {
 export function useAddRepo() {
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { isHydrated, requiresSetup } = useSetupRequirements();
+  const { isHydrated, requiresOnboarding } = useOnboardingRequirement();
   const resolveRepoRootFromPath = useResolveRepoRootFromPathMutation().mutateAsync;
   const unhideRepoRoot = useWorkspaceUiStore((state) => state.unhideRepoRoot);
   const openRepoSetupModal = useRepoSetupModalStore((state) => state.open);
   const showToast = useToastStore((state) => state.show);
   const [isAddingRepo, setIsAddingRepo] = useState(false);
-  const canAddRepo = isHydrated && !requiresSetup && !isRepoEntryBlockedPath(location.pathname);
+  const canAddRepo = isHydrated && !requiresOnboarding && !isRepoEntryBlockedPath(location.pathname);
 
   const addRepoFromPath = useCallback(async (path: string) => {
     if (!canAddRepo) {

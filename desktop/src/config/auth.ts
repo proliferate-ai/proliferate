@@ -4,11 +4,14 @@ export const AUTH_GATE_LABELS = {
 } as const;
 
 export const AUTH_LOGIN_LABELS = {
-  intro: "Welcome! Sign in to get started.",
-  signIn: "Sign in with GitHub",
+  title: "Let's help you get your life's work done.",
+  detail: "Start by signing in with GitHub.",
+  detailWithLocalPrefix: "Continue with GitHub, or",
+  signIn: "Continue with GitHub",
   checking: "Checking GitHub sign-in...",
   waiting: "Waiting for GitHub...",
-  continueLocally: "Continue locally",
+  continueLocally: "Start locally",
+  continueLocallyInline: "start locally",
 } as const;
 
 export const AUTH_ACCOUNT_LABELS = {

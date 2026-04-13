@@ -152,4 +152,19 @@ export interface DesktopProductEventMap {
   workspace_selected: {
     workspace_kind: DesktopWorkspaceKind;
   };
+  onboarding_step_viewed: {
+    step: "intent" | "workflow" | "recommendations";
+  };
+  onboarding_completed: {
+    goal_id: string | null;
+    recommended_agent_kind: string | null;
+    deferred_defaults: boolean;
+  };
+  onboarding_defaults_finalized: {
+    goal_id: string | null;
+    recommended_agent_kind: string;
+  };
+  onboarding_home_landing_viewed: {
+    goal_id: string | null;
+  };
 }

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { ColorMode, ThemePreset } from "@/config/theme";
+import type { OnboardingGoalId } from "@/config/onboarding";
 import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persistence";
 
 export type BranchPrefixType = "none" | "proliferate" | "github_username";
@@ -15,6 +16,8 @@ export interface UserPreferences {
   branchPrefixType: BranchPrefixType;
   turnEndSoundEnabled: boolean;
   turnEndSoundId: TurnEndSoundId;
+  onboardingCompletedVersion: number;
+  onboardingPrimaryGoalId: OnboardingGoalId | "";
 }
 
 const USER_PREFERENCES_KEY = "user_preferences";
@@ -31,6 +34,8 @@ export const USER_PREFERENCE_DEFAULTS: UserPreferences = {
   branchPrefixType: "none",
   turnEndSoundEnabled: false,
   turnEndSoundId: "ding",
+  onboardingCompletedVersion: 0,
+  onboardingPrimaryGoalId: "",
 };
 
 const LEGACY_CLAUDE_MODEL_IDS: Record<string, string> = {
@@ -95,6 +100,8 @@ async function readLegacyUserPreferences(): Promise<UserPreferences> {
       ?? USER_PREFERENCE_DEFAULTS.branchPrefixType,
     turnEndSoundEnabled: USER_PREFERENCE_DEFAULTS.turnEndSoundEnabled,
     turnEndSoundId: USER_PREFERENCE_DEFAULTS.turnEndSoundId,
+    onboardingCompletedVersion: USER_PREFERENCE_DEFAULTS.onboardingCompletedVersion,
+    onboardingPrimaryGoalId: USER_PREFERENCE_DEFAULTS.onboardingPrimaryGoalId,
   };
 }
 
@@ -181,6 +188,8 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
     branchPrefixType: state.branchPrefixType,
     turnEndSoundEnabled: state.turnEndSoundEnabled,
     turnEndSoundId: state.turnEndSoundId,
+    onboardingCompletedVersion: state.onboardingCompletedVersion,
+    onboardingPrimaryGoalId: state.onboardingPrimaryGoalId,
   };
 }
 

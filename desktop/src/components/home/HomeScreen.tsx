@@ -7,6 +7,7 @@ import { SupportPopover } from "@/components/support/SupportPopover";
 import { Button } from "@/components/ui/Button";
 import { HOME_SCREEN_LABELS } from "@/config/home";
 import { useHomeScreen } from "@/hooks/home/use-home-screen";
+import { useHomeOnboardingLanding } from "@/hooks/home/use-home-onboarding-landing";
 import { HomeActionCard } from "./HomeActionCard";
 
 function resolveStatusIcon(icon: HomeStatusIcon) {
@@ -40,6 +41,7 @@ export function HomeScreen() {
     isAddingRepo,
     handleHomeAction,
   } = useHomeScreen();
+  const onboardingLanding = useHomeOnboardingLanding();
 
   const [supportOpen, setSupportOpen] = useState(false);
   const supportButtonRef = useRef<HTMLButtonElement>(null);
@@ -53,6 +55,18 @@ export function HomeScreen() {
           <div className="flex h-20 w-full items-center justify-between gap-6">
             <ProliferateLogo />
           </div>
+          {onboardingLanding.active && onboardingLanding.heroTitle && (
+            <div className="mt-6 space-y-2">
+              <p className="text-xl font-medium text-foreground">
+                {onboardingLanding.heroTitle}
+              </p>
+              {onboardingLanding.heroDetail && (
+                <p className="max-w-2xl text-sm text-muted-foreground">
+                  {onboardingLanding.heroDetail}
+                </p>
+              )}
+            </div>
+          )}
           <div className="mt-8 w-full max-w-[760px]">
             <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-3">
               {actionCards.map((action) => (

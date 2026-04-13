@@ -1,4 +1,4 @@
-import { ProliferateLogo } from "@/components/brand/ProliferateLogo";
+import { ProliferateLivingMark } from "@/components/brand/ProliferateLivingMark";
 import { ArrowRight, GitHub } from "@/components/ui/icons";
 import { Button } from "@/components/ui/Button";
 import { AUTH_LOGIN_LABELS } from "@/config/auth";
@@ -32,11 +32,34 @@ export function LoginScreen({
       data-tauri-drag-region="true"
     >
       <div className="w-full max-w-md space-y-8">
-        <div>
-          <ProliferateLogo />
-          <p className="mt-10 text-sm text-muted-foreground">
-            {AUTH_LOGIN_LABELS.intro}
-          </p>
+        <div className="space-y-5">
+          <ProliferateLivingMark />
+          <div className="space-y-2.5">
+            <h1 className="text-3xl font-semibold leading-tight text-foreground">
+              {AUTH_LOGIN_LABELS.title}
+            </h1>
+            {canContinueLocally
+              ? (
+                <p className="text-sm text-muted-foreground">
+                  {AUTH_LOGIN_LABELS.detailWithLocalPrefix}{" "}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={onContinueLocally}
+                    className="inline h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
+                  >
+                    {AUTH_LOGIN_LABELS.continueLocallyInline}
+                  </Button>
+                  .
+                </p>
+              )
+              : (
+                <p className="text-sm text-muted-foreground">
+                  {AUTH_LOGIN_LABELS.detail}
+                </p>
+              )}
+          </div>
         </div>
 
         <div className="space-y-4">
@@ -61,18 +84,6 @@ export function LoginScreen({
             <p className="text-sm text-muted-foreground">
               {githubSignInUnavailableDescription}
             </p>
-          )}
-
-          {canContinueLocally && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              onClick={onContinueLocally}
-              className="h-11 w-full"
-            >
-              {AUTH_LOGIN_LABELS.continueLocally}
-            </Button>
           )}
 
           {error && (
