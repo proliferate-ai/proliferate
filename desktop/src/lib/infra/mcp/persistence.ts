@@ -61,9 +61,13 @@ async function ensureConnectorSecretRoundTrip(
   // The native keychain can occasionally report a successful write while a
   // follow-up read still returns no value, so connector install/update only
   // succeeds after we verify the just-written secret is actually readable.
+  // On macOS this usually means the app signature cannot read items created
+  // by a previous build of the same binary — common for unsigned dev builds.
   const storedValue = await loadConnectorSecretValue(connectionId, fieldId);
   if (storedValue !== expectedValue) {
-    throw new Error(connectorWriteFailureMessage(connectorName));
+    throw new Error(
+      `${connectorWriteFailureMessage(connectorName)} The macOS keychain did not return the token after writing it. On unsigned dev builds this can happen after a rebuild — delete this connector and re-add it.`,
+    );
   }
 }
 
@@ -365,11 +369,16 @@ export async function deleteConnector(connectionId: string): Promise<void> {
 
   const catalogEntry = getConnectorCatalogEntry(metadata.catalogEntryId);
   if (catalogEntry) {
+    // Tolerate individual keychain failures so orphaned metadata can always be
+    // cleaned up even when the underlying secret/OAuth bundle is missing or
+    // ACL-denied (e.g. unsigned dev builds after a rebuild).
     await Promise.all(
       [
-        ...catalogEntry.requiredFields.map((field) => deleteConnectorSecret(connectionId, field.id)),
+        ...catalogEntry.requiredFields.map(
+          (field) => deleteConnectorSecret(connectionId, field.id).catch(() => undefined),
+        ),
         ...(isOAuthConnectorCatalogEntry(catalogEntry)
-          ? [deleteOAuthConnectorBundle(connectionId)]
+          ? [deleteOAuthConnectorBundle(connectionId).catch(() => undefined)]
           : []),
       ],
     );

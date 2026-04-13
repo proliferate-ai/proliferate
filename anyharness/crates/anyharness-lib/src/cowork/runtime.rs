@@ -3,6 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use uuid::Uuid;
 
@@ -242,6 +243,16 @@ impl CoworkRuntime {
         mode_id: Option<&str>,
         mcp_servers: Vec<SessionMcpServer>,
     ) -> Result<CreateCoworkThreadResult, CoworkCreateThreadError> {
+        let total_started = Instant::now();
+        let mcp_server_count = mcp_servers.len();
+        tracing::info!(
+            agent_kind = %agent_kind,
+            model_id = ?model_id,
+            mode_id = ?mode_id,
+            mcp_server_count,
+            "[workspace-latency] cowork.runtime.create_thread.start"
+        );
+
         let Some((root, repo_root)) = self.get_root()? else {
             return Err(CoworkCreateThreadError::NotEnabled);
         };
@@ -257,6 +268,7 @@ impl CoworkRuntime {
             fs::create_dir_all(parent).map_err(anyhow::Error::from)?;
         }
 
+        let worktree_started = Instant::now();
         let worktree = self.workspace_runtime.create_worktree_with_surface(
             &repo_root.id,
             &thread_path.display().to_string(),
@@ -265,6 +277,13 @@ impl CoworkRuntime {
             None,
             "cowork",
         )?;
+        tracing::info!(
+            thread_id = %thread_id,
+            workspace_id = %worktree.workspace.id,
+            elapsed_ms = worktree_started.elapsed().as_millis(),
+            "[workspace-latency] cowork.runtime.create_thread.worktree_created"
+        );
+        let durable_create_started = Instant::now();
         let durable_session = match self.session_runtime.create_durable_session(
             &worktree.workspace.id,
             agent_kind,
@@ -284,9 +303,16 @@ impl CoworkRuntime {
                 return Err(CoworkCreateThreadError::CreateSession(error));
             }
         };
+        tracing::info!(
+            thread_id = %thread_id,
+            workspace_id = %worktree.workspace.id,
+            session_id = %durable_session.id,
+            elapsed_ms = durable_create_started.elapsed().as_millis(),
+            "[workspace-latency] cowork.runtime.create_thread.durable_session_created"
+        );
 
         let thread_record = CoworkThreadRecord {
-            id: thread_id,
+            id: thread_id.clone(),
             repo_root_id: root.repo_root_id.clone(),
             workspace_id: worktree.workspace.id.clone(),
             session_id: durable_session.id.clone(),
@@ -307,6 +333,7 @@ impl CoworkRuntime {
                 return Err(CoworkCreateThreadError::Internal(error));
             }
         };
+        let start_started = Instant::now();
         let session = match self.session_runtime.start_persisted_session(&durable_session, None).await {
             Ok(session) => session,
             Err(error) => self
@@ -322,6 +349,15 @@ impl CoworkRuntime {
                     durable_session.clone()
                 }),
         };
+        tracing::info!(
+            thread_id = %thread_id,
+            workspace_id = %worktree.workspace.id,
+            session_id = %session.id,
+            native_session_id = %session.native_session_id.as_deref().unwrap_or_default(),
+            start_elapsed_ms = start_started.elapsed().as_millis(),
+            total_elapsed_ms = total_started.elapsed().as_millis(),
+            "[workspace-latency] cowork.runtime.create_thread.completed"
+        );
 
         Ok(CreateCoworkThreadResult {
             thread: CoworkThreadSummary {

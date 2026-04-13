@@ -10,6 +10,18 @@ import {
   type WorkspaceCollections,
   upsertLocalWorkspaceCollections,
 } from "@/lib/domain/workspaces/collections";
+import {
+  buildSubmittingPendingWorkspaceEntry,
+  createPendingWorkspaceAttemptId,
+  type PendingCoworkRequestInput,
+  type PendingWorkspaceEntry,
+} from "@/lib/domain/workspaces/pending-entry";
+import {
+  elapsedMs,
+  elapsedSince,
+  logLatency,
+  startLatencyTimer,
+} from "@/lib/infra/debug-latency";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
@@ -22,11 +34,25 @@ import { useToastStore } from "@/stores/toast/toast-store";
 
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 
+function isAttemptCurrent(attemptId: string): boolean {
+  return useHarnessStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
+}
+
+function resolveErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export function useCoworkThreadWorkflow() {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const enterPendingWorkspaceShell = useHarnessStore(
+    (state) => state.enterPendingWorkspaceShell,
+  );
+  const setPendingWorkspaceEntry = useHarnessStore(
+    (state) => state.setPendingWorkspaceEntry,
+  );
   const { agents } = useAgentCatalog();
   const { data: modelRegistries = EMPTY_MODEL_REGISTRIES } = useModelRegistriesQuery();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
@@ -52,40 +78,137 @@ export function useCoworkThreadWorkflow() {
     draftText?: string | null;
     sourceWorkspaceId?: string | null;
   }) => {
+    const totalStartedAt = startLatencyTimer();
     const modeId = resolveCoworkDefaultSessionModeId(input.agentKind);
-    const { mcpServers } = await resolveSessionMcpServersForLaunch({
-      targetLocation: "local",
-      workspacePath: null,
-    });
-    const result = await createCoworkThreadMutation.mutateAsync({
+    const pendingRequest: PendingCoworkRequestInput = {
       agentKind: input.agentKind,
       modelId: input.modelId,
       ...(modeId ? { modeId } : {}),
-      ...(mcpServers.length > 0 ? { mcpServers } : {}),
+      draftText: input.draftText ?? null,
+      sourceWorkspaceId: input.sourceWorkspaceId ?? null,
+    };
+
+    const entry: PendingWorkspaceEntry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: createPendingWorkspaceAttemptId(),
+      selectedWorkspaceId: useHarnessStore.getState().selectedWorkspaceId,
+      source: "cowork-created",
+      displayName: "Cowork thread",
+      request: { kind: "cowork", input: pendingRequest },
     });
 
-    queryClient.setQueriesData<WorkspaceCollections | undefined>(
-      { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
-      (collections) => upsertLocalWorkspaceCollections(collections, result.workspace),
-    );
-    upsertWorkspaceSessionRecord(result.workspace.id, result.session);
-    if (input.draftText?.length) {
-      setDraft(result.workspace.id, input.draftText);
-      if (input.sourceWorkspaceId && input.sourceWorkspaceId !== result.workspace.id) {
-        clearDraft(input.sourceWorkspaceId);
-      }
-    }
+    logLatency("workspace.cowork.create.pending_shell", {
+      attemptId: entry.attemptId,
+      agentKind: input.agentKind,
+      modelId: input.modelId,
+    });
+    enterPendingWorkspaceShell(entry);
     navigateToWorkspaceShell();
-    await selectWorkspace(result.workspace.id, { force: true });
-    return result;
+
+    try {
+      const resolveStartedAt = startLatencyTimer();
+      const { mcpServers } = await resolveSessionMcpServersForLaunch({
+        targetLocation: "local",
+        workspacePath: null,
+      });
+      logLatency("workspace.cowork.create.mcp_resolved", {
+        attemptId: entry.attemptId,
+        mcpServerCount: mcpServers.length,
+        elapsedMs: elapsedMs(resolveStartedAt),
+      });
+
+      if (!isAttemptCurrent(entry.attemptId)) {
+        return null;
+      }
+
+      const createStartedAt = startLatencyTimer();
+      logLatency("workspace.cowork.create.request.start", {
+        attemptId: entry.attemptId,
+        agentKind: input.agentKind,
+        modelId: input.modelId,
+        modeId: modeId ?? null,
+        mcpServerCount: mcpServers.length,
+        elapsedSincePendingMs: elapsedSince(entry.createdAt),
+      });
+
+      const result = await createCoworkThreadMutation.mutateAsync({
+        agentKind: input.agentKind,
+        modelId: input.modelId,
+        ...(modeId ? { modeId } : {}),
+        ...(mcpServers.length > 0 ? { mcpServers } : {}),
+      });
+
+      logLatency("workspace.cowork.create.request.success", {
+        attemptId: entry.attemptId,
+        workspaceId: result.workspace.id,
+        sessionId: result.session.id,
+        createElapsedMs: elapsedMs(createStartedAt),
+        totalElapsedMs: elapsedMs(totalStartedAt),
+      });
+
+      if (!isAttemptCurrent(entry.attemptId)) {
+        return null;
+      }
+
+      queryClient.setQueriesData<WorkspaceCollections | undefined>(
+        { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
+        (collections) => upsertLocalWorkspaceCollections(collections, result.workspace),
+      );
+      upsertWorkspaceSessionRecord(result.workspace.id, result.session);
+      if (input.draftText?.length) {
+        setDraft(result.workspace.id, input.draftText);
+        if (input.sourceWorkspaceId && input.sourceWorkspaceId !== result.workspace.id) {
+          clearDraft(input.sourceWorkspaceId);
+        }
+      }
+
+      const selectionStartedAt = startLatencyTimer();
+      setPendingWorkspaceEntry({
+        ...entry,
+        workspaceId: result.workspace.id,
+        request: { kind: "select-existing", workspaceId: result.workspace.id },
+      });
+      await selectWorkspace(result.workspace.id, {
+        force: true,
+        preservePending: true,
+      });
+      logLatency("workspace.cowork.create.selection.success", {
+        attemptId: entry.attemptId,
+        workspaceId: result.workspace.id,
+        selectionElapsedMs: elapsedMs(selectionStartedAt),
+        totalElapsedMs: elapsedMs(totalStartedAt),
+      });
+      if (isAttemptCurrent(entry.attemptId)) {
+        setPendingWorkspaceEntry(null);
+      }
+      return result;
+    } catch (error) {
+      const message = resolveErrorMessage(error, "Couldn't start cowork thread.");
+      logLatency("workspace.cowork.create.failed", {
+        attemptId: entry.attemptId,
+        errorMessage: message,
+        elapsedSincePendingMs: elapsedSince(entry.createdAt),
+      });
+      if (isAttemptCurrent(entry.attemptId)) {
+        setPendingWorkspaceEntry({
+          ...entry,
+          stage: "failed",
+          errorMessage: message,
+        });
+      }
+      showToast(message);
+      throw error;
+    }
   }, [
-    createCoworkThreadMutation,
     clearDraft,
+    createCoworkThreadMutation,
+    enterPendingWorkspaceShell,
     navigateToWorkspaceShell,
     queryClient,
     runtimeUrl,
     selectWorkspace,
     setDraft,
+    setPendingWorkspaceEntry,
+    showToast,
     upsertWorkspaceSessionRecord,
   ]);
 

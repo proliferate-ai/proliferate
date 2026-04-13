@@ -68,9 +68,11 @@ export function useChatAvailabilityState(): ChatAvailabilityState {
       : pendingWorkspaceEntry.stage === "awaiting-cloud-ready"
         ? "Cloud workspace is still preparing."
         : pendingWorkspaceEntry.source === "worktree-created"
-            ? "Creating worktree..."
-            : pendingWorkspaceEntry.source === "cloud-created"
-              ? "Creating cloud workspace..."
+          ? "Creating worktree..."
+          : pendingWorkspaceEntry.source === "cloud-created"
+            ? "Creating cloud workspace..."
+            : pendingWorkspaceEntry.source === "cowork-created"
+              ? "Starting cowork thread..."
               : "Creating workspace...";
 
     return {

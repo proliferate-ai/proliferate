@@ -5,7 +5,7 @@ import { workspaceBranchLabel, workspaceDisplayName } from "@/lib/domain/workspa
 
 export interface WorkspaceArrivalEvent {
   workspaceId: string;
-  source: "local-created" | "worktree-created" | "cloud-created";
+  source: "local-created" | "worktree-created" | "cloud-created" | "cowork-created";
   setupScript?: SetupScriptExecution | null;
   baseBranchName?: string | null;
   createdAt: number;

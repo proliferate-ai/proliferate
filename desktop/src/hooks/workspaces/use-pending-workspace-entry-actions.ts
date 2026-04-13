@@ -50,6 +50,12 @@ export function usePendingWorkspaceEntryActions() {
       case "cloud":
         await retryCloudWorkspaceAndEnter(entry.request.input);
         return;
+      case "cowork":
+        // Cowork retry isn't wired up yet — start a fresh thread from the
+        // cowork sidebar. Clearing the pending entry sends the user back.
+        showToast("Start a new cowork thread from the sidebar.", "info");
+        setPendingWorkspaceEntry(null);
+        return;
       case "select-existing":
         {
           const latencyFlowId = startLatencyFlow({
