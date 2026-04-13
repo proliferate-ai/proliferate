@@ -62,24 +62,55 @@ export async function openExternal(url: string): Promise<void> {
   return invoke("open_external", { url });
 }
 
-export async function openGmailCompose(input: {
+export interface EmailComposeInput {
   to: string;
   subject?: string;
   body?: string;
-}): Promise<void> {
-  const url = new URL("https://mail.google.com/mail/");
-  url.searchParams.set("view", "cm");
-  url.searchParams.set("fs", "1");
-  url.searchParams.set("to", input.to);
+}
 
+export async function openEmailCompose(input: EmailComposeInput): Promise<void> {
+  const to = input.to.trim();
+  const params = new URLSearchParams();
   if (input.subject?.trim()) {
-    url.searchParams.set("su", input.subject.trim());
+    params.set("subject", input.subject.trim());
   }
   if (input.body?.trim()) {
-    url.searchParams.set("body", input.body);
+    params.set("body", input.body);
   }
 
-  return openExternal(url.toString());
+  const query = params.toString();
+  const url = `mailto:${to}${query ? `?${query}` : ""}`;
+  return openExternal(url);
+}
+
+export async function openGmailCompose(input: EmailComposeInput): Promise<void> {
+  const params = new URLSearchParams({
+    view: "cm",
+    fs: "1",
+    to: input.to.trim(),
+  });
+  if (input.subject?.trim()) {
+    params.set("su", input.subject.trim());
+  }
+  if (input.body?.trim()) {
+    params.set("body", input.body);
+  }
+
+  return openExternal(`https://mail.google.com/mail/?${params.toString()}`);
+}
+
+export async function openOutlookCompose(input: EmailComposeInput): Promise<void> {
+  const params = new URLSearchParams({
+    to: input.to.trim(),
+  });
+  if (input.subject?.trim()) {
+    params.set("subject", input.subject.trim());
+  }
+  if (input.body?.trim()) {
+    params.set("body", input.body);
+  }
+
+  return openExternal(`https://outlook.office.com/mail/deeplink/compose?${params.toString()}`);
 }
 
 export async function pickFolder(): Promise<string | null> {

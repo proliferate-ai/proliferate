@@ -1,107 +1,49 @@
-import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { Copy, GmailBrandIcon, Mail, OutlookBrandIcon } from "@/components/ui/icons";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Textarea } from "@/components/ui/Textarea";
 import { CAPABILITY_COPY } from "@/config/capabilities";
-import { useAppCapabilities } from "@/hooks/capabilities/use-app-capabilities";
-import { sendSupportMessage, type SupportMessageContext } from "@/lib/integrations/cloud/support";
-import { copyText, openGmailCompose } from "@/platform/tauri/shell";
-import { useAuthStore } from "@/stores/auth/auth-store";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useSupportDialogState } from "@/hooks/support/use-support-dialog-state";
+import type { SupportMessageContext } from "@/lib/integrations/cloud/support";
 
 interface SupportDialogProps {
   open: boolean;
   onClose: () => void;
-  title: string;
-  description: string;
   context: SupportMessageContext;
-  defaultMessage?: string;
-}
-
-function contextLabel(context: SupportMessageContext): string {
-  if (context.workspaceName && context.workspaceLocation) {
-    return `${context.workspaceLocation} · ${context.workspaceName}`;
-  }
-  if (context.workspaceName) return context.workspaceName;
-  if (context.pathname) return context.pathname;
-  return "Current app context will be included.";
 }
 
 export function SupportDialog({
   open,
   onClose,
-  title,
-  description,
   context,
-  defaultMessage = "",
 }: SupportDialogProps) {
-  const { supportEnabled } = useAppCapabilities();
-  const authStatus = useAuthStore((s) => s.status);
-  const showToast = useToastStore((s) => s.show);
-  const [message, setMessage] = useState(defaultMessage);
-  const [sending, setSending] = useState(false);
-  const fallbackEmail = CAPABILITY_COPY.supportEmailAddress;
-  const inAppSupportEnabled = supportEnabled && authStatus === "authenticated";
-  const contextCopy = useMemo(() => contextLabel(context), [context]);
-  const fallbackBody = useMemo(
-    () => `Context: ${contextCopy}\nIntent: ${context.intent}\n\n${defaultMessage || "I’d like to talk about unlimited cloud / team features."}\n`,
-    [context.intent, contextCopy, defaultMessage],
-  );
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    setMessage(defaultMessage);
-  }, [defaultMessage, open]);
-
-  async function handleSend() {
-    const trimmed = message.trim();
-    if (!trimmed) return;
-
-    setSending(true);
-    try {
-      await sendSupportMessage({
-        message: trimmed,
-        context,
-      });
-      showToast("Support note sent.", "info");
-      onClose();
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Failed to send support note.");
-    } finally {
-      setSending(false);
-    }
-  }
-
-  async function handleCopyEmail() {
-    try {
-      await copyText(fallbackEmail);
-      showToast("Support email copied.", "info");
-    } catch {
-      showToast("Failed to copy support email.");
-    }
-  }
-
-  async function handleOpenGmail() {
-    try {
-      await openGmailCompose({
-        to: fallbackEmail,
-        subject: CAPABILITY_COPY.supportGmailSubject,
-        body: fallbackBody,
-      });
-      onClose();
-    } catch {
-      showToast("Failed to open Gmail.");
-    }
-  }
+  const {
+    contextLabel,
+    fallbackEmail,
+    handleCopyEmail,
+    handleEmail,
+    handleGmail,
+    handleOutlook,
+    handleSend,
+    inAppSupportEnabled,
+    isSendingSupportMessage,
+    message,
+    setMessage,
+    textareaRef,
+  } = useSupportDialogState({
+    open,
+    onClose,
+    context,
+  });
 
   return (
     <ModalShell
       open={open}
       onClose={onClose}
-      title={title}
-      description={description}
+      title="Support"
+      description={inAppSupportEnabled
+        ? "Questions, bugs, or setup issues. Send a note and we'll follow up directly."
+        : undefined}
       sizeClassName="max-w-lg"
       footer={inAppSupportEnabled ? (
         <>
@@ -111,39 +53,21 @@ export function SupportDialog({
           <Button
             size="sm"
             onClick={() => { void handleSend(); }}
-            loading={sending}
+            loading={isSendingSupportMessage}
             disabled={!message.trim()}
           >
             Send
           </Button>
         </>
-      ) : (
-        <>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Close
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => { void handleCopyEmail(); }}
-          >
-            {CAPABILITY_COPY.supportCopyLabel}
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => { void handleOpenGmail(); }}
-          >
-            {CAPABILITY_COPY.supportOpenLabel}
-          </Button>
-        </>
-      )}
+      ) : undefined}
     >
       {inAppSupportEnabled ? (
         <div className="space-y-3">
           <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            {contextCopy}
+            {contextLabel}
           </div>
           <Textarea
+            ref={textareaRef}
             rows={6}
             value={message}
             onChange={(event) => setMessage(event.target.value)}
@@ -152,16 +76,44 @@ export function SupportDialog({
           />
         </div>
       ) : (
-        <div className="space-y-3">
-          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-            <p className="text-xs font-medium text-foreground">{fallbackEmail}</p>
-            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-              {contextCopy}
-            </p>
-          </div>
-          <p className="text-xs leading-5 text-muted-foreground">
-            {CAPABILITY_COPY.supportFallbackDescription}
+        <div className="space-y-4">
+          <p className="max-w-md text-sm leading-6 text-foreground">
+            Help is a message away. Send us a note at {fallbackEmail}, and
+            we&apos;ll reply within a day.
           </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => { void handleGmail(); }}
+            >
+              <GmailBrandIcon className="size-3.5 shrink-0" />
+              {CAPABILITY_COPY.supportGmailLabel}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { void handleOutlook(); }}
+            >
+              <OutlookBrandIcon className="size-3.5 shrink-0" />
+              {CAPABILITY_COPY.supportOutlookLabel}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { void handleEmail(); }}
+            >
+              <Mail className="size-3.5 shrink-0" />
+              {CAPABILITY_COPY.supportMailAppLabel}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { void handleCopyEmail(); }}
+            >
+              <Copy className="size-3.5 shrink-0" />
+              {CAPABILITY_COPY.supportCopyLabel}
+            </Button>
+          </div>
         </div>
       )}
     </ModalShell>

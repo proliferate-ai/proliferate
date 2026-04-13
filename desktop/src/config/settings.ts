@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import {
   Settings,
   Blocks,
+  CircleQuestion,
   CircleUser,
   CloudIcon,
   RefreshCw,
@@ -26,7 +27,7 @@ export type SettingsStaticSection = Exclude<SettingsSection, "repo" | "cloudRepo
 
 export type SettingsNavItem =
   | { kind: "section"; id: SettingsStaticSection; label: string; icon: ComponentType<IconProps> }
-  | { kind: "action"; id: "checkForUpdates"; label: string; icon: ComponentType<IconProps> };
+  | { kind: "action"; id: "checkForUpdates" | "support"; label: string; icon: ComponentType<IconProps> };
 
 export interface SettingsNavGroup {
   id: "primary" | "cloud";
@@ -39,6 +40,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     id: "primary",
     items: [
       { kind: "section", id: "configuration", label: "Configuration", icon: Settings },
+      { kind: "action", id: "support", label: "Support", icon: CircleQuestion },
       { kind: "section", id: "cowork", label: "Cowork", icon: Tree },
       { kind: "section", id: "agents", label: "Agents", icon: Blocks },
       { kind: "section", id: "account", label: "Account", icon: CircleUser },
@@ -63,7 +65,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
 
 export type SettingsStaticNavItem =
   | { kind: "section"; id: SettingsStaticSection; label: string }
-  | { kind: "action"; id: "checkForUpdates"; label: string };
+  | { kind: "action"; id: "checkForUpdates" | "support"; label: string };
 
 export const SETTINGS_STATIC_NAV_ITEMS: SettingsStaticNavItem[] =
   SETTINGS_NAV_GROUPS.flatMap((g) =>

@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/Badge";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
-import { SupportDialog } from "@/components/support/SupportDialog";
 import { AUTH_ACCOUNT_LABELS } from "@/config/auth";
 import { CLOUD_CREDENTIAL_PROVIDER_ORDER } from "@/config/cloud-providers";
 import { getProviderDisplayName } from "@/config/providers";
@@ -52,18 +51,7 @@ export function CloudPane({ repositories }: CloudPaneProps) {
   const authStatus = useAuthStore((state) => state.status);
   const [syncingProvider, setSyncingProvider] = useState<CloudAgentKind | null>(null);
   const [clearingProvider, setClearingProvider] = useState<CloudAgentKind | null>(null);
-  const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false);
-  const [unlimitedDialogOpen, setUnlimitedDialogOpen] = useState(false);
   const canManageCloudCredentials = authStatus === "authenticated" && !isDevAuthBypassed();
-  const alreadyUnlimited = billingPlan?.isUnlimited ?? false;
-  const upgradeCardTitle = alreadyUnlimited ? "Need team features?" : "Upgrade to Pro";
-  const upgradeCardDescription = alreadyUnlimited
-    ? "You already have unlimited cloud. If you want team features or white-glove support, reach out to Pablo directly."
-    : "Team features, unlimited cloud, and white-glove support. Listed as $500/mo, but there is no self-serve billing flow right now because we’re trying to keep as much as possible free and open source.";
-  const upgradeButtonLabel = alreadyUnlimited ? "Ask about team features" : "Ask about Pro";
-  const upgradeDefaultMessage = alreadyUnlimited
-    ? "I already have unlimited cloud and want to talk about team features / white-glove support."
-    : "I want to talk about Pro / team features and unlimited cloud.";
   const cloudRepositories = repositories.filter(isCloudRepository);
   const repoConfigMap = useMemo(
     () => new Map<string, CloudRepoConfigSummary>(
@@ -127,40 +115,13 @@ export function CloudPane({ repositories }: CloudPaneProps) {
               <div className="rounded-lg border border-border bg-background px-3 py-2">
                 <p className="font-medium text-foreground">Cloud usage is paused</p>
                 <p className="mt-1 text-muted-foreground">
-                  Hosted cloud stays free by default. If you want unlimited cloud usage, reach out to Pablo and we can sort it out directly.
+                  Cloud usage is unavailable right now.
                 </p>
-                <div className="mt-3">
-                  <Button
-                    size="sm"
-                    onClick={() => setUnlimitedDialogOpen(true)}
-                  >
-                    Contact Pablo
-                  </Button>
-                </div>
               </div>
             )}
           </div>
         </SettingsCard>
       )}
-
-      <SettingsCard>
-        <div className="space-y-3 p-3">
-          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-            <p className="font-medium text-foreground">{upgradeCardTitle}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {upgradeCardDescription}
-            </p>
-            <div className="mt-3">
-              <Button
-                size="sm"
-                onClick={() => setUpgradeDialogOpen(true)}
-              >
-                {upgradeButtonLabel}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </SettingsCard>
 
       <SettingsCard>
         {rows.map((row) => {
@@ -271,32 +232,6 @@ export function CloudPane({ repositories }: CloudPaneProps) {
           })
         )}
       </SettingsCard>
-
-      <SupportDialog
-        open={upgradeDialogOpen}
-        onClose={() => setUpgradeDialogOpen(false)}
-        title={upgradeCardTitle}
-        description="There’s no billing page for this. Send a note and Pablo can follow up directly."
-        defaultMessage={upgradeDefaultMessage}
-        context={{
-          source: "settings",
-          intent: "team_features",
-          pathname: "/settings/cloud",
-        }}
-      />
-
-      <SupportDialog
-        open={unlimitedDialogOpen}
-        onClose={() => setUnlimitedDialogOpen(false)}
-        title="Unlimited Cloud"
-        description="Hosted cloud is free by default. If you want unlimited usage, reach out directly here."
-        defaultMessage="I want unlimited cloud usage."
-        context={{
-          source: "settings",
-          intent: "unlimited_cloud",
-          pathname: "/settings/cloud",
-        }}
-      />
     </section>
   );
 }

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { IconButton } from "@/components/ui/IconButton";
-import { SupportDialog } from "@/components/support/SupportDialog";
 import { ComposerAttachedPanel } from "@/components/workspace/chat/input/ComposerAttachedPanel";
 import { WorkspaceMobilityAttachedPanel } from "@/components/workspace/chat/surface/WorkspaceMobilityAttachedPanel";
 import { useWorkspaceArrivalActions } from "@/hooks/workspaces/use-workspace-arrival-actions";
@@ -83,7 +82,6 @@ function PendingCloudStatusHeader({
 export function WorkspaceArrivalAttachedPanel() {
   const panelState = useWorkspaceStatusPanelState();
   const [expanded, setExpanded] = useState(true);
-  const [supportDialogOpen, setSupportDialogOpen] = useState(false);
   const { handleRetry, handleBack } = usePendingWorkspaceEntryActions();
 
   const arrivalActions = useWorkspaceArrivalActions({
@@ -375,38 +373,10 @@ export function WorkspaceArrivalAttachedPanel() {
             <span className="text-sm text-muted-foreground">{model.footer.helperText}</span>
           </div>
         </SectionRow>
-      ) : model.footer.kind === "support" ? (
-        <SectionRow label="Actions">
-          <div className="flex items-center gap-3">
-            <Button
-              size="sm"
-              onClick={() => setSupportDialogOpen(true)}
-            >
-              {model.footer.label}
-            </Button>
-            <span className="text-sm text-muted-foreground">{model.footer.helperText}</span>
-          </div>
-        </SectionRow>
       ) : (
         <SectionRow label="Status">
           <span className="text-sm text-muted-foreground">{model.footer.message}</span>
         </SectionRow>
-      )}
-      {model.footer.kind === "support" && (
-        <SupportDialog
-          open={supportDialogOpen}
-          onClose={() => setSupportDialogOpen(false)}
-          title="Unlimited Cloud"
-          description="Hosted cloud is free by default. If you want unlimited usage, reach out directly here."
-          defaultMessage={`I want unlimited cloud usage for ${model.repoLabel} (${model.branchLabel}).`}
-          context={{
-            source: "cloud_gated",
-            intent: "unlimited_cloud",
-            workspaceId: panelState.workspaceId,
-            workspaceName: model.repoLabel,
-            workspaceLocation: "cloud",
-          }}
-        />
       )}
     </ComposerAttachedPanel>
   );

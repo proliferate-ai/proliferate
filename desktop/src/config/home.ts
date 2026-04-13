@@ -5,8 +5,6 @@ export const HOME_SCREEN_LABELS = {
     "Open a repository, resume recent work, or finish setup before starting a fresh session.",
   localLabel: "local",
   cloudLabel: "cloud",
-  supportPrefix: "Need help?",
-  supportAction: "Let us know",
   agentsConfiguredSuffix: "configured.",
   agentsSetupPrefix: "Finish",
   agentsSetupSuffix: "setup in",

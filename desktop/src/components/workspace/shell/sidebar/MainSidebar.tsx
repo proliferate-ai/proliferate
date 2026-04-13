@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
+import { SupportDialog } from "@/components/support/SupportDialog";
 import { SidebarFooter } from "./SidebarFooter";
 import { SidebarRowSurface } from "./SidebarRowSurface";
 import { SidebarActionButton } from "./SidebarActionButton";
@@ -28,11 +29,13 @@ import {
   FolderPlusFilled,
   Grid,
   Home,
+  CircleQuestion,
 } from "@/components/ui/icons";
 import { CAPABILITY_COPY } from "@/config/capabilities";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
+import { useSidebarSupportContext } from "@/hooks/support/use-sidebar-support-context";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/use-workspace-display-name-actions";
@@ -55,6 +58,7 @@ const SIDEBAR_WORKSPACE_TYPE_OPTIONS: Array<{
 
 export function MainSidebar() {
   const actions = useWorkspaceSidebarActions();
+  const supportContext = useSidebarSupportContext();
   const {
     cloudActive,
     cloudUnavailable,
@@ -64,6 +68,7 @@ export function MainSidebar() {
     data: cloudRepoConfigs,
     isPending: isCloudRepoConfigsPending,
   } = useCloudRepoConfigs(cloudActive);
+  const [supportOpen, setSupportOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const {
@@ -179,12 +184,17 @@ export function MainSidebar() {
   const cloudWorkspaceTooltip = cloudUnavailable
     ? CAPABILITY_COPY.cloudDisabledTooltip
     : cloudWorkspaceBlocked
-      ? billingPlan?.blockedReason ?? "Cloud usage is paused. Reach out to Pablo for unlimited cloud."
+      ? "Cloud usage is paused."
       : CAPABILITY_COPY.cloudSignInTooltip;
   const filtersActive = showArchived || !isDefaultSidebarWorkspaceTypes(workspaceTypes);
 
   return (
     <div className="h-full bg-sidebar select-none flex flex-col gap-2 pb-2 pt-2">
+      <SupportDialog
+        open={supportOpen}
+        onClose={() => setSupportOpen(false)}
+        context={supportContext}
+      />
       <div className="flex flex-col flex-1 min-h-0 w-full min-w-0">
         {/* Top actions */}
         <div className="px-2">
@@ -211,6 +221,18 @@ export function MainSidebar() {
               </div>
               <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-foreground">
                 <span className="truncate">Powers</span>
+              </div>
+            </SidebarRowSurface>
+            <SidebarRowSurface
+              active={supportOpen}
+              onPress={() => setSupportOpen(true)}
+              className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
+            >
+              <div className="flex w-4 shrink-0 items-center justify-center">
+                <CircleQuestion className="size-4" />
+              </div>
+              <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-foreground">
+                <span className="truncate">Support</span>
               </div>
             </SidebarRowSurface>
           </div>

@@ -1,5 +1,7 @@
+import { useLocation } from "react-router-dom";
 import type { UpdaterPhase } from "@/hooks/updater/use-updater";
 import { ArrowLeft } from "@/components/ui/icons";
+import { SupportDialog } from "@/components/support/SupportDialog";
 import {
   SETTINGS_NAV_GROUPS,
   SETTINGS_COPY,
@@ -7,6 +9,7 @@ import {
   type SettingsStaticSection,
 } from "@/config/settings";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import { useState } from "react";
 
 interface SettingsSidebarProps {
   repositories: SettingsRepositoryEntry[];
@@ -47,15 +50,26 @@ export function SettingsSidebar({
   onOpenRestartPrompt,
   updateActionState,
 }: SettingsSidebarProps) {
+  const location = useLocation();
+  const [supportOpen, setSupportOpen] = useState(false);
+
   function handleItemClick(item: SettingsNavItem) {
     if (item.kind === "action") {
-      if (!updateActionState.updatesSupported) {
+      if (item.id === "support") {
+        setSupportOpen(true);
         return;
       }
-      onCheckForUpdates();
-    } else {
-      onSelectSection(item.id);
+
+      if (item.id === "checkForUpdates") {
+        if (!updateActionState.updatesSupported) {
+          return;
+        }
+        onCheckForUpdates();
+      }
+      return;
     }
+
+    onSelectSection(item.id);
   }
 
   function isItemActive(item: SettingsNavItem) {
@@ -109,6 +123,15 @@ export function SettingsSidebar({
 
   return (
     <div className="flex w-64 flex-col border-r border-sidebar-border bg-sidebar">
+      <SupportDialog
+        open={supportOpen}
+        onClose={() => setSupportOpen(false)}
+        context={{
+          source: "settings",
+          intent: "general",
+          pathname: `${location.pathname}${location.search}`,
+        }}
+      />
       <div className="h-10 pl-[82px]" data-tauri-drag-region="true" />
 
       <button
@@ -135,7 +158,9 @@ export function SettingsSidebar({
                   item.kind === "section" && !!disabledSections?.[item.id];
                 const Icon = item.icon;
                 const actionDisabled =
-                  item.kind === "action" && !updateActionState.updatesSupported;
+                  item.kind === "action"
+                  && item.id === "checkForUpdates"
+                  && !updateActionState.updatesSupported;
                 const disabled = sectionDisabled || actionDisabled;
                 return (
                   <button
@@ -151,7 +176,7 @@ export function SettingsSidebar({
                   >
                     <Icon className="size-4 shrink-0" />
                     <span className="flex-1">{item.label}</span>
-                    {item.kind === "action" && (
+                    {item.kind === "action" && item.id === "checkForUpdates" && (
                       <span className="text-base text-muted-foreground">
                         {!updateActionState.updatesSupported
                           ? "Packaged only"

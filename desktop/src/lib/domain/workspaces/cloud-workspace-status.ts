@@ -17,13 +17,12 @@ const PENDING_STATUSES = new Set<CloudWorkspaceStatus>([
 const GENERIC_PREPARING_DESCRIPTION = "Preparing the cloud workspace.";
 const GENERIC_FAILURE_DESCRIPTION = "Provisioning hit an error before the workspace became ready.";
 const GENERIC_STOPPED_DESCRIPTION = "This cloud workspace is currently stopped. Start it to resume work.";
-const GENERIC_BLOCKED_DESCRIPTION = "Cloud usage is paused until unlimited access is enabled.";
+const GENERIC_BLOCKED_DESCRIPTION = "Cloud usage is unavailable for this workspace right now.";
 const AUTO_REFRESH_MESSAGE = "This view refreshes automatically and will switch into the workspace once the runtime is ready.";
 const READY_MESSAGE = "The workspace is ready.";
 const REPO_CONFIG_MESSAGE = "The runtime is ready. Applying repo files and cloud setup now.";
 const RETRY_HELPER_TEXT = "The workspace record is kept and we will retry setup from there.";
 const START_HELPER_TEXT = "The workspace record is kept and we will start the runtime again from there.";
-const BLOCKED_HELPER_TEXT = "Hosted cloud stays free by default. Reach out to Pablo if you want unlimited cloud usage.";
 
 export type CloudWorkspaceStatusScreenMode = "pending" | "error" | "stopped" | "blocked";
 
@@ -48,7 +47,7 @@ export interface CloudWorkspaceStatusScreenModel {
   footer:
     | { kind: "auto-refresh"; message: string }
     | { kind: "action"; action: "retry" | "start"; label: string; helperText: string }
-    | { kind: "support"; label: string; helperText: string };
+    | { kind: "status"; message: string };
 }
 
 export function isCloudWorkspacePending(status: string): boolean {
@@ -82,7 +81,7 @@ export function buildCloudWorkspaceStatusScreenModel(
       mode: "blocked",
       eyebrowTone: "pending",
       title: "Cloud usage is paused",
-      description: workspace.actionBlockReason || GENERIC_BLOCKED_DESCRIPTION,
+      description: GENERIC_BLOCKED_DESCRIPTION,
       repoLabel,
       branchLabel,
       stepCounter: null,
@@ -95,9 +94,8 @@ export function buildCloudWorkspaceStatusScreenModel(
         statusBadge: null,
       })),
       footer: {
-        kind: "support",
-        label: "Contact Pablo",
-        helperText: BLOCKED_HELPER_TEXT,
+        kind: "status",
+        message: GENERIC_BLOCKED_DESCRIPTION,
       },
     };
   }

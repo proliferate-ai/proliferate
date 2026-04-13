@@ -35,12 +35,10 @@ export const CAPABILITY_COPY = {
     "GitHub sign-in is not configured for this environment.",
   githubSignedInUnavailableDescription:
     "Connected through GitHub desktop sign-in, but cloud is currently unavailable.",
-  supportInAppDescription:
-    "This sends an in-app support notification to the Proliferate team.",
-  supportFallbackDescription:
-    "Support is available by email in this environment.",
   supportEmailAddress: "support@proliferate.com",
   supportCopyLabel: "Copy email",
-  supportOpenLabel: "Open Gmail",
-  supportGmailSubject: "Proliferate support",
+  supportGmailLabel: "Open Gmail",
+  supportOutlookLabel: "Open Outlook",
+  supportMailAppLabel: "Mail app",
+  supportEmailSubject: "Proliferate support",
 } as const;

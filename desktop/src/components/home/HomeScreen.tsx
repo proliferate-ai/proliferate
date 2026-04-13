@@ -1,11 +1,7 @@
-import { useState, useRef } from "react";
-import { useLocation } from "react-router-dom";
 import { ProliferateLogo } from "@/components/brand/ProliferateLogo";
 import { Check, CircleAlert, Clock, Folder, LoaderCircle, Settings } from "@/components/ui/icons";
 import type { HomeStatusIcon } from "@/lib/domain/home/home-screen";
-import { SupportPopover } from "@/components/support/SupportPopover";
 import { Button } from "@/components/ui/Button";
-import { HOME_SCREEN_LABELS } from "@/config/home";
 import { useHomeScreen } from "@/hooks/home/use-home-screen";
 import { useHomeOnboardingLanding } from "@/hooks/home/use-home-onboarding-landing";
 import { HomeActionCard } from "./HomeActionCard";
@@ -34,7 +30,6 @@ function resolveActionIcon(actionId: "resume-last-workspace" | "add-repository" 
 }
 
 export function HomeScreen() {
-  const location = useLocation();
   const {
     actionCards,
     statusMessage,
@@ -42,9 +37,6 @@ export function HomeScreen() {
     handleHomeAction,
   } = useHomeScreen();
   const onboardingLanding = useHomeOnboardingLanding();
-
-  const [supportOpen, setSupportOpen] = useState(false);
-  const supportButtonRef = useRef<HTMLButtonElement>(null);
 
   return (
     <div className="flex-1 bg-background h-full relative overflow-auto">
@@ -102,31 +94,6 @@ export function HomeScreen() {
                 </span>
               </p>
             ) : null}
-            <div className="relative">
-              {supportOpen && (
-                <SupportPopover
-                  context={{
-                    source: "home",
-                    intent: "general",
-                    pathname: `${location.pathname}${location.search}`,
-                  }}
-                  triggerRef={supportButtonRef}
-                  onClose={() => setSupportOpen(false)}
-                  className="absolute left-0 top-full mt-3 z-30 w-[28rem] max-w-[calc(100vw-3rem)]"
-                />
-              )}
-              <p>
-                {HOME_SCREEN_LABELS.supportPrefix}{" "}
-                <Button
-                  ref={supportButtonRef}
-                  variant="ghost"
-                  onClick={() => setSupportOpen((current) => !current)}
-                  className="text-foreground underline underline-offset-4 hover:text-muted-foreground h-auto px-0 py-0 inline"
-                >
-                  {HOME_SCREEN_LABELS.supportAction}
-                </Button>
-              </p>
-            </div>
           </div>
         </div>
       </div>
