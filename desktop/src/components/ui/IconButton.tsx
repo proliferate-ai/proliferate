@@ -38,7 +38,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
     ref,
   ) {
     const base =
-      "inline-flex px-2 items-center gap-2 whitespace-nowrap font-[450] text-xs justify-center rounded-md border border-transparent ring-offset-background focus-visible:outline-none focus-visible:ring-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 transition-colors";
+      "inline-flex cursor-pointer px-2 items-center gap-2 whitespace-nowrap font-[450] text-xs justify-center rounded-md border border-transparent ring-offset-background focus-visible:outline-none focus-visible:ring-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 transition-colors";
 
     return (
       <button
