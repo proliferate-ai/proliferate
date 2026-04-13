@@ -1,10 +1,13 @@
 import type { ConnectorCatalogEntry } from "@/lib/domain/mcp/types";
 import braveIcon from "@/assets/connector-icons/brave.svg";
 import context7Icon from "@/assets/connector-icons/context7.jpeg";
+import filesystemIcon from "@/assets/connector-icons/filesystem.svg";
+import linearIcon from "@/assets/connector-icons/linear.svg";
 import notionIcon from "@/assets/connector-icons/notion.png";
 import openweatherIcon from "@/assets/connector-icons/openweather.svg";
 import playwrightIcon from "@/assets/connector-icons/playwright.svg";
 import supabaseIcon from "@/assets/connector-icons/supabase.png";
+import tavilyIcon from "@/assets/connector-icons/tavily.svg";
 import { Folder, GitHub, Globe, Search, Sun, Terminal } from "@/components/ui/icons";
 
 const CONNECTOR_ICONS = {
@@ -19,10 +22,13 @@ const CONNECTOR_ICONS = {
 const CONNECTOR_ICON_IMAGES = {
   brave: braveIcon,
   context7: context7Icon,
+  filesystem: filesystemIcon,
+  linear: linearIcon,
   notion: notionIcon,
   openweather: openweatherIcon,
   playwright: playwrightIcon,
   supabase: supabaseIcon,
+  tavily: tavilyIcon,
 } as const;
 
 type ConnectorIconSize = "sm" | "md" | "lg";

@@ -19,6 +19,7 @@ use crate::cowork::mcp::handle_json_rpc;
 use crate::cowork::model::CoworkRootRecord;
 use crate::cowork::runtime::{CoworkCreateThreadError, CoworkThreadSummary};
 use crate::repo_roots::model::RepoRootRecord;
+use crate::sessions::mcp::bindings_from_contract;
 use crate::workspaces::model::WorkspaceRecord;
 
 #[utoipa::path(
@@ -97,12 +98,14 @@ pub async fn create_cowork_thread(
     State(state): State<AppState>,
     Json(req): Json<CreateCoworkThreadRequest>,
 ) -> Result<Json<CreateCoworkThreadResponse>, ApiError> {
+    let mcp_servers = bindings_from_contract(req.mcp_servers.unwrap_or_default());
     let result = state
         .cowork_runtime
         .create_thread(
             &req.agent_kind,
             req.model_id.as_deref(),
             req.mode_id.as_deref(),
+            mcp_servers,
         )
         .await
         .map_err(map_create_cowork_thread_error)?;

@@ -117,7 +117,7 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
     authFieldId: "api_key",
     url: "https://mcp.tavily.com/mcp",
     serverNameBase: "tavily",
-    iconId: "globe",
+    iconId: "tavily",
     requiredFields: [
       {
         id: "api_key",
@@ -180,7 +180,7 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
     authKind: "oauth",
     url: "https://mcp.linear.app/mcp",
     serverNameBase: "linear",
-    iconId: "globe",
+    iconId: "linear",
     requiredFields: [],
     capabilities: [
       "Search issues, projects, and cycles",
@@ -245,7 +245,7 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
     args: [{ source: { kind: "workspace_path" } }],
     env: [],
     serverNameBase: "filesystem",
-    iconId: "folder",
+    iconId: "filesystem",
     requiredFields: [],
     capabilities: [
       "Read files inside the active workspace",

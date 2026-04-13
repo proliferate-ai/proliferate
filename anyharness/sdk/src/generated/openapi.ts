@@ -1137,6 +1137,7 @@ export interface components {
         };
         CreateCoworkThreadRequest: {
             agentKind: string;
+            mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
             modeId?: string | null;
             modelId?: string | null;
         };

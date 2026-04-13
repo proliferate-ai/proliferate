@@ -38,14 +38,17 @@ export type ConnectorEnvTemplate =
 export type ConnectorIconId =
   | "brave"
   | "context7"
+  | "filesystem"
   | "github"
   | "globe"
+  | "linear"
   | "notion"
   | "openweather"
   | "playwright"
   | "search"
   | "supabase"
   | "sun"
+  | "tavily"
   | "folder"
   | "terminal";
 

@@ -240,6 +240,7 @@ impl CoworkRuntime {
         agent_kind: &str,
         model_id: Option<&str>,
         mode_id: Option<&str>,
+        mcp_servers: Vec<SessionMcpServer>,
     ) -> Result<CreateCoworkThreadResult, CoworkCreateThreadError> {
         let Some((root, repo_root)) = self.get_root()? else {
             return Err(CoworkCreateThreadError::NotEnabled);
@@ -270,7 +271,7 @@ impl CoworkRuntime {
             model_id,
             mode_id,
             None,
-            Vec::new(),
+            mcp_servers,
         ) {
             Ok(session) => session,
             Err(error) => {

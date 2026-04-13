@@ -3655,6 +3655,15 @@
           "agentKind": {
             "type": "string"
           },
+          "mcpServers": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SessionMcpServer"
+            }
+          },
           "modeId": {
             "type": [
               "string",

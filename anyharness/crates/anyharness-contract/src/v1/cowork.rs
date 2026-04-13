@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::v1::{Session, Workspace};
+use crate::v1::{Session, SessionMcpServer, Workspace};
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -95,6 +95,8 @@ pub struct CreateCoworkThreadRequest {
     pub model_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_servers: Option<Vec<SessionMcpServer>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

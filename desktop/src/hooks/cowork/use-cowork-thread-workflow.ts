@@ -14,6 +14,7 @@ import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
+import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -52,10 +53,15 @@ export function useCoworkThreadWorkflow() {
     sourceWorkspaceId?: string | null;
   }) => {
     const modeId = resolveCoworkDefaultSessionModeId(input.agentKind);
+    const { mcpServers } = await resolveSessionMcpServersForLaunch({
+      targetLocation: "local",
+      workspacePath: null,
+    });
     const result = await createCoworkThreadMutation.mutateAsync({
       agentKind: input.agentKind,
       modelId: input.modelId,
       ...(modeId ? { modeId } : {}),
+      ...(mcpServers.length > 0 ? { mcpServers } : {}),
     });
 
     queryClient.setQueriesData<WorkspaceCollections | undefined>(
