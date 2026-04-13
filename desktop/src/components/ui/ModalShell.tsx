@@ -80,7 +80,7 @@ export function ModalShell({
           </button>
 
           <div className="shrink-0 px-5 pb-3 pr-10 pt-5">
-            <h2 id={titleId} className="text-base font-medium tracking-tight text-foreground">
+            <h2 id={titleId} className="text-lg font-medium tracking-tight text-foreground">
               {title}
             </h2>
             {description && (
