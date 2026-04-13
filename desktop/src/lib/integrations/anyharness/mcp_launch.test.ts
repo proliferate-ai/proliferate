@@ -142,6 +142,24 @@ describe("mcp launch resolution", () => {
     ]);
   });
 
+  it("downgrades unreadable connector secrets into missing-secret warnings", async () => {
+    await installConnector("context7", "ctx7sk-example");
+    mocks.getConnectorSecretMock.mockRejectedValueOnce(new Error("keychain unavailable"));
+
+    const resolution = await resolveSessionMcpServersForLaunch({
+      targetLocation: "local",
+      workspacePath: "/workspace",
+    });
+
+    expect(resolution.mcpServers).toEqual([]);
+    expect(resolution.warnings).toEqual([
+      expect.objectContaining({
+        kind: "missing_secret",
+        catalogEntryId: "context7",
+      }),
+    ]);
+  });
+
   it("skips local-only connectors for cloud launches", async () => {
     await installConnector("filesystem", "");
 

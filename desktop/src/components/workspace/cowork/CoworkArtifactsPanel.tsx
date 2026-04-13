@@ -1,4 +1,3 @@
-import type { Workspace } from "@anyharness/sdk";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/Button";
 import { ArrowLeft } from "@/components/ui/icons";
@@ -11,23 +10,23 @@ import { CoworkArtifactRow } from "./CoworkArtifactRow";
 import { CoworkArtifactViewer } from "./CoworkArtifactViewer";
 
 interface CoworkArtifactsPanelProps {
-  workspace: Workspace;
+  workspaceId: string;
 }
 
 export function CoworkArtifactsPanel({
-  workspace,
+  workspaceId,
 }: CoworkArtifactsPanelProps) {
   const selectedArtifactId = useCoworkUiStore(
-    (state) => state.selectedArtifactIdByWorkspaceId[workspace.id] ?? null,
+    (state) => state.selectedArtifactIdByWorkspaceId[workspaceId] ?? null,
   );
   const setSelectedArtifactId = useCoworkUiStore((state) => state.setSelectedArtifactId);
-  const { artifacts, isLoading, isFetching } = useCoworkArtifactManifest(workspace.id);
+  const { artifacts, isLoading, isFetching } = useCoworkArtifactManifest(workspaceId);
   const selectedArtifact = useMemo(
     () => artifacts.find((artifact) => artifact.id === selectedArtifactId) ?? null,
     [artifacts, selectedArtifactId],
   );
-  const artifactDetailQuery = useCoworkArtifactDetail(workspace.id, selectedArtifact?.id ?? null);
-  const { refresh } = useCoworkArtifactRefresh(workspace.id, selectedArtifact?.id ?? null);
+  const artifactDetailQuery = useCoworkArtifactDetail(workspaceId, selectedArtifact?.id ?? null);
+  const { refresh } = useCoworkArtifactRefresh(workspaceId, selectedArtifact?.id ?? null);
   const isViewingArtifact = selectedArtifact !== null;
 
   return (
@@ -38,7 +37,7 @@ export function CoworkArtifactsPanel({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setSelectedArtifactId(workspace.id, null)}
+              onClick={() => setSelectedArtifactId(workspaceId, null)}
               className="-ml-2 shrink-0"
             >
               <ArrowLeft className="size-4" />
@@ -76,7 +75,7 @@ export function CoworkArtifactsPanel({
                   key={artifact.id}
                   artifact={artifact}
                   active={artifact.id === selectedArtifactId}
-                  onSelect={() => setSelectedArtifactId(workspace.id, artifact.id)}
+                  onSelect={() => setSelectedArtifactId(workspaceId, artifact.id)}
                 />
               ))
             )}

@@ -301,7 +301,7 @@ async fn workspace_mobility_preflight_warns_for_active_terminals_without_blockin
         warnings.iter().any(|warning| {
             warning
                 .as_str()
-                .is_some_and(|text| text.contains("will not migrate"))
+                .is_some_and(|text| text.contains("force-closed after the move commits"))
         }),
         "expected terminal warning, got {warnings:?}"
     );

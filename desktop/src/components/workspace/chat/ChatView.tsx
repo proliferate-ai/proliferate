@@ -1,12 +1,13 @@
 import type { JSX } from "react";
 import { ChatInput } from "@/components/workspace/chat/input/ChatInput";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
-import { WorkspaceMobilityActionBar } from "@/components/workspace/chat/input/WorkspaceMobilityActionBar";
+import { WorkspaceMobilityFooterRow } from "@/components/workspace/chat/input/WorkspaceMobilityFooterRow";
 import { ChatLoadingHero } from "@/components/workspace/chat/surface/ChatLoadingHero";
 import { ChatPreMessageCanvas } from "@/components/workspace/chat/surface/ChatPreMessageCanvas";
 import { ChatReadyHero } from "@/components/workspace/chat/surface/ChatReadyHero";
 import { NoWorkspaceState } from "@/components/workspace/chat/surface/NoWorkspaceState";
 import { SessionTranscriptPane } from "@/components/workspace/chat/surface/SessionTranscriptPane";
+import { WorkspaceMobilityOverlay } from "@/components/workspace/chat/surface/WorkspaceMobilityOverlay";
 import { type ChatSurfaceState, useChatSurfaceState } from "@/hooks/chat/use-chat-surface-state";
 import { useChatSelectionBoundary } from "@/hooks/chat/use-chat-selection-boundary";
 import { useCloudWorkspacePolling } from "@/hooks/chat/use-cloud-workspace-polling";
@@ -73,14 +74,15 @@ export function ChatView() {
   useChatSelectionBoundary();
 
   return (
-    <div className="chat-selection-root flex flex-col flex-1 min-h-0 h-full overflow-hidden select-none">
+    <div className="chat-selection-root relative flex h-full min-h-0 flex-1 flex-col select-none overflow-hidden">
       <div className="flex flex-1 min-h-0 flex-col">
         <ChatContent mode={mode} />
       </div>
+      <WorkspaceMobilityOverlay />
       <ChatComposerDock
         backdrop={isSessionMode}
         topSlot={composerTopSlot}
-        bottomSlot={isSessionMode ? <WorkspaceMobilityActionBar /> : null}
+        footerSlot={<WorkspaceMobilityFooterRow />}
         data-telemetry-block
         data-focus-zone="chat"
       >

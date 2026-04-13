@@ -116,6 +116,22 @@ describe("mcp connector persistence", () => {
     expect(paneData.available.map((entry) => entry.id)).not.toContain("context7");
   });
 
+  it("keeps installed connectors visible when a saved secret becomes unreadable", async () => {
+    await installConnector("context7", "ctx7sk-example");
+    mocks.getConnectorSecretMock.mockRejectedValueOnce(new Error("keychain unavailable"));
+
+    const paneData = await loadConnectorPaneData();
+
+    expect(paneData.installed).toHaveLength(1);
+    expect(paneData.installed[0]).toMatchObject({
+      broken: true,
+      catalogEntry: {
+        id: "context7",
+      },
+    });
+    expect(paneData.available.map((entry) => entry.id)).not.toContain("context7");
+  });
+
   it("does not persist connector metadata if the secret cannot be read back", async () => {
     mocks.setConnectorSecretMock.mockImplementation(async () => undefined);
 

@@ -23,6 +23,7 @@ import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobil
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
+import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/debug-latency";
 import { deriveHandoffFailureRecovery } from "./handoff-failure-recovery";
 
 function withRequiredSourceMetadata(
@@ -51,12 +52,6 @@ function withRequiredSourceMetadata(
     blockers,
     canMove: preflight.canMove && blockers.length === 0,
   };
-}
-
-function supportedSessionIds(preflight: WorkspaceMobilityPreflightResponse): string[] {
-  return (preflight.sessions ?? [])
-    .filter((session) => session.supported)
-    .map((session) => session.sessionId);
 }
 
 export function useCloudToLocalHandoff(args: {
@@ -114,47 +109,110 @@ export function useCloudToLocalHandoff(args: {
     && args.logicalWorkspace.repoName,
   ), [args.cloudMaterializationId, args.logicalWorkspace, args.logicalWorkspaceId]);
 
-  const prepare = useCallback(async () => {
+  const prepare = useCallback(async (requestId?: number) => {
     if (!canPrepare || !args.logicalWorkspace || !args.logicalWorkspaceId || !args.cloudMaterializationId) {
       showToast("This workspace cannot be brought back locally yet.");
       return;
     }
 
-    const ensured = await ensureMobilityWorkspace.mutateAsync({
-      gitProvider: args.logicalWorkspace.provider!,
-      gitOwner: args.logicalWorkspace.owner!,
-      gitRepoName: args.logicalWorkspace.repoName!,
-      gitBranch: args.logicalWorkspace.branchKey,
-      displayName: args.logicalWorkspace.displayName,
-      ownerHint: "cloud",
-    });
-
-    const sourcePreflightResult = await sourcePreflightQuery.refetch();
-    const sourcePreflightData = sourcePreflightResult.data;
-    if (!sourcePreflightData) {
-      throw new Error("Failed to load workspace mobility preflight.");
-    }
-    const sourcePreflight = withRequiredSourceMetadata(
-      sourcePreflightData,
-      args.logicalWorkspace.branchKey,
-    );
-    const cloudPreflightResult = await cloudPreflight.mutateAsync({
-      mobilityWorkspaceId: ensured.id,
-      input: {
-        direction: "cloud_to_local",
-        requestedBranch: sourcePreflight.branchName ?? args.logicalWorkspace.branchKey,
-        requestedBaseSha: sourcePreflight.baseCommitSha ?? null,
-      },
-    });
-
-    setConfirmSnapshot({
+    const prepareStartedAt = startLatencyTimer();
+    logLatency("mobility.prepare.cloud_to_local.start", {
+      requestId,
       logicalWorkspaceId: args.logicalWorkspaceId,
-      direction: "cloud_to_local",
-      sourceWorkspaceId: args.cloudMaterializationId,
-      mobilityWorkspaceId: ensured.id,
-      sourcePreflight,
-      cloudPreflight: cloudPreflightResult,
+      workspaceId: args.cloudMaterializationId,
     });
+
+    try {
+      const ensureStartedAt = startLatencyTimer();
+      const ensured = await ensureMobilityWorkspace.mutateAsync({
+        gitProvider: args.logicalWorkspace.provider!,
+        gitOwner: args.logicalWorkspace.owner!,
+        gitRepoName: args.logicalWorkspace.repoName!,
+        gitBranch: args.logicalWorkspace.branchKey,
+        displayName: args.logicalWorkspace.displayName,
+        ownerHint: "cloud",
+      });
+      logLatency("mobility.prepare.cloud_to_local.ensure.complete", {
+        requestId,
+        logicalWorkspaceId: args.logicalWorkspaceId,
+        mobilityWorkspaceId: ensured.id,
+        elapsedMs: elapsedMs(ensureStartedAt),
+      });
+
+      const sourcePreflightStartedAt = startLatencyTimer();
+      const sourcePreflightResult = await sourcePreflightQuery.refetch();
+      const sourcePreflightData = sourcePreflightResult.data;
+      if (!sourcePreflightData) {
+        throw new Error("Failed to load workspace mobility preflight.");
+      }
+      const sourcePreflight = withRequiredSourceMetadata(
+        sourcePreflightData,
+        args.logicalWorkspace.branchKey,
+      );
+      logLatency("mobility.prepare.cloud_to_local.source_preflight.complete", {
+        requestId,
+        logicalWorkspaceId: args.logicalWorkspaceId,
+        canMove: sourcePreflight.canMove,
+        blockerCount: sourcePreflight.blockers?.length ?? 0,
+        sessionCount: sourcePreflight.sessions?.length ?? 0,
+        elapsedMs: elapsedMs(sourcePreflightStartedAt),
+      });
+
+      const cloudPreflightStartedAt = startLatencyTimer();
+      const cloudPreflightResult = await cloudPreflight.mutateAsync({
+        mobilityWorkspaceId: ensured.id,
+        input: {
+          direction: "cloud_to_local",
+          requestedBranch: sourcePreflight.branchName ?? args.logicalWorkspace.branchKey,
+          requestedBaseSha: sourcePreflight.baseCommitSha ?? null,
+        },
+      });
+      logLatency("mobility.prepare.cloud_to_local.cloud_preflight.complete", {
+        requestId,
+        logicalWorkspaceId: args.logicalWorkspaceId,
+        mobilityWorkspaceId: ensured.id,
+        canStart: cloudPreflightResult.canStart,
+        blockerCount: cloudPreflightResult.blockers?.length ?? 0,
+        excludedPathCount: cloudPreflightResult.excludedPaths?.length ?? 0,
+        elapsedMs: elapsedMs(cloudPreflightStartedAt),
+      });
+
+      if (requestId !== undefined) {
+        const activeRequestId = useWorkspaceMobilityUiStore.getState()
+          .activePromptRequestIdByLogicalWorkspaceId[args.logicalWorkspaceId];
+        if (activeRequestId !== requestId) {
+          logLatency("mobility.prepare.cloud_to_local.aborted", {
+            requestId,
+            logicalWorkspaceId: args.logicalWorkspaceId,
+            elapsedMs: elapsedMs(prepareStartedAt),
+          });
+          return;
+        }
+      }
+
+      setConfirmSnapshot({
+        logicalWorkspaceId: args.logicalWorkspaceId,
+        direction: "cloud_to_local",
+        sourceWorkspaceId: args.cloudMaterializationId,
+        mobilityWorkspaceId: ensured.id,
+        sourcePreflight,
+        cloudPreflight: cloudPreflightResult,
+      });
+      logLatency("mobility.prepare.cloud_to_local.complete", {
+        requestId,
+        logicalWorkspaceId: args.logicalWorkspaceId,
+        mobilityWorkspaceId: ensured.id,
+        elapsedMs: elapsedMs(prepareStartedAt),
+      });
+    } catch (error) {
+      logLatency("mobility.prepare.cloud_to_local.failed", {
+        requestId,
+        logicalWorkspaceId: args.logicalWorkspaceId,
+        elapsedMs: elapsedMs(prepareStartedAt),
+        error: error instanceof Error ? error.message : "unknown_error",
+      });
+      throw error;
+    }
   }, [
     args.cloudMaterializationId,
     args.logicalWorkspace,
@@ -184,7 +242,6 @@ export function useCloudToLocalHandoff(args: {
     let handoffOpId: string | null = null;
     let finalized = false;
     let cleanupCompleted = false;
-    const movedSessionIds = supportedSessionIds(snapshot.sourcePreflight);
 
     clearMcpNotice(snapshot.logicalWorkspaceId);
     clearConfirmSnapshot(snapshot.logicalWorkspaceId);
@@ -309,15 +366,11 @@ export function useCloudToLocalHandoff(args: {
               : "Source cleanup failed after finalize.",
           },
         }).catch(() => undefined);
-        if (movedSessionIds.length > 0) {
-          showMcpNotice(snapshot.logicalWorkspaceId);
-        }
+        showMcpNotice(snapshot.logicalWorkspaceId);
         throw cleanupError;
       }
 
-      if (movedSessionIds.length > 0) {
-        showMcpNotice(snapshot.logicalWorkspaceId);
-      }
+      showMcpNotice(snapshot.logicalWorkspaceId);
     } catch (error) {
       const failureRecovery = deriveHandoffFailureRecovery({
         handoffStarted: handoffOpId !== null,

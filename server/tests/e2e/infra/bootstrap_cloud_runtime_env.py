@@ -37,6 +37,18 @@ async def _bootstrap_runtime_env(args: argparse.Namespace) -> dict[str, Any]:
             user_id=auth.user_id,
             access_token=config.github_token,
         )
+        repo_config_response = await client.put(
+            f"/v1/cloud/repos/{args.git_owner}/{args.git_repo}/config",
+            headers=auth.headers,
+            json={
+                "configured": True,
+                "defaultBranch": args.base_branch,
+                "envVars": {},
+                "setupScript": "",
+                "files": [],
+            },
+        )
+        repo_config_response.raise_for_status()
 
         selected_providers = args.sync_provider or ["claude"]
         synced_providers: list[str] = []

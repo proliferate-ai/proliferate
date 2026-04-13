@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from contextlib import suppress
 from datetime import timedelta
 from uuid import UUID
@@ -30,6 +31,7 @@ from proliferate.db.store.cloud_workspaces import (
     load_existing_cloud_workspace,
 )
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
+from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mobility.models import (
     WorkspaceMobilityPreflightResponse,
@@ -40,7 +42,7 @@ from proliferate.server.cloud.workspaces.service import (
     ensure_cloud_workspace_for_existing_branch,
     start_cloud_workspace,
 )
-from proliferate.utils.time import utcnow
+from proliferate.utils.time import duration_ms, utcnow
 
 _VALID_HANDOFF_PHASES: frozenset[str] = frozenset(
     {
@@ -55,6 +57,8 @@ _VALID_HANDOFF_PHASES: frozenset[str] = frozenset(
     }
 )
 _STALE_HANDOFF_AFTER = timedelta(seconds=120)
+_BRANCH_NOT_PUBLISHED_BLOCKER = "The branch '{branch}' was not found on GitHub."
+_BRANCH_HEAD_MISMATCH_BLOCKER = "The branch '{branch}' on GitHub is not at the requested commit."
 
 
 async def expire_stale_cloud_workspace_handoffs_for_user(*, user_id: UUID) -> None:
@@ -161,11 +165,21 @@ async def preflight_cloud_workspace_handoff(
     requested_branch: str,
     requested_base_sha: str | None,
 ) -> WorkspaceMobilityPreflightResponse:
+    preflight_started = time.perf_counter()
+    detail_elapsed_ms: int | None = None
+    branch_lookup_elapsed_ms: int | None = None
+    repo_config_elapsed_ms: int | None = None
+    normalized_requested_branch = requested_branch.strip()
+    normalized_requested_base_sha = (
+        requested_base_sha.strip() if requested_base_sha is not None else None
+    )
     await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
+    detail_started = time.perf_counter()
     workspace = await get_cloud_workspace_mobility_detail(
         user_id=user_id,
         mobility_workspace_id=mobility_workspace_id,
     )
+    detail_elapsed_ms = duration_ms(detail_started)
     blockers: list[str] = []
     if direction not in {"local_to_cloud", "cloud_to_local"}:
         raise CloudApiError(
@@ -188,6 +202,7 @@ async def preflight_cloud_workspace_handoff(
         user = await load_user_with_oauth_accounts_by_id(user_id)
         if user is None:
             raise CloudApiError("user_not_found", "User not found.", status_code=404)
+        branch_lookup_started = time.perf_counter()
         try:
             repo_branches = await get_repo_branches_for_user(
                 user,
@@ -202,37 +217,61 @@ async def preflight_cloud_workspace_handoff(
                 ),
             )
         except CloudApiError as error:
+            branch_lookup_elapsed_ms = duration_ms(branch_lookup_started)
             if error.code in {"github_link_required", "github_repo_access_required"}:
                 blockers.append(error.message)
             else:
                 raise
         else:
-            if requested_branch.strip() not in repo_branches.branches:
+            branch_lookup_elapsed_ms = duration_ms(branch_lookup_started)
+            if normalized_requested_branch not in repo_branches.branches:
                 blockers.append(
-                    f"The branch '{requested_branch.strip()}' was not found on GitHub."
+                    _BRANCH_NOT_PUBLISHED_BLOCKER.format(branch=normalized_requested_branch)
+                )
+            elif (
+                normalized_requested_base_sha
+                and repo_branches.branch_heads_by_name.get(normalized_requested_branch)
+                != normalized_requested_base_sha
+            ):
+                blockers.append(
+                    _BRANCH_HEAD_MISMATCH_BLOCKER.format(branch=normalized_requested_branch)
                 )
 
+    repo_config_started = time.perf_counter()
     repo_config = await load_cloud_repo_config_for_user(
         user_id=user_id,
         git_owner=workspace.git_owner,
         git_repo_name=workspace.git_repo_name,
     )
+    repo_config_elapsed_ms = duration_ms(repo_config_started)
     excluded_paths = (
         [item.relative_path for item in repo_config.tracked_files]
         if repo_config is not None
         else []
     )
-    if requested_branch.strip() != workspace.git_branch:
+    if normalized_requested_branch != workspace.git_branch:
         blockers.append("requested branch does not match logical workspace branch")
-    if requested_base_sha is not None and not requested_base_sha.strip():
+    if requested_base_sha is not None and not normalized_requested_base_sha:
         blockers.append("requested base sha must be non-empty when provided")
 
-    return WorkspaceMobilityPreflightResponse(
+    response = WorkspaceMobilityPreflightResponse(
         can_start=not blockers,
         blockers=blockers,
         excluded_paths=excluded_paths,
         workspace=mobility_workspace_detail_payload(workspace),
     )
+    log_cloud_event(
+        "mobility preflight completed",
+        mobility_workspace_id=mobility_workspace_id,
+        direction=direction,
+        blocker_count=len(blockers),
+        can_start=response.can_start,
+        workspace_detail_ms=detail_elapsed_ms,
+        branch_lookup_ms=branch_lookup_elapsed_ms,
+        repo_config_ms=repo_config_elapsed_ms,
+        elapsed_ms=duration_ms(preflight_started),
+    )
+    return response
 
 
 async def start_cloud_workspace_handoff(

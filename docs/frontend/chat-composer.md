@@ -19,24 +19,23 @@ Three layers, top to bottom:
 
 ```text
 ChatView
-└── ChatComposerDock                        (backdrop + scrim + padded max-width column + inset top-slot region + inset bottom-slot region)
+└── ChatComposerDock                        (backdrop + scrim + padded max-width column + inset top-slot region)
     ├── topSlot: at most one of
     │     ├── ConnectedApprovalCard         (pending tool approval)
     │     ├── TodoTrackerPanel              (Codex/Gemini structured plan)
     │     ├── WorkspaceArrivalAttachedPanel (workspace arrival/setup/pending/cloud-status)
     │     └── CloudRuntimeAttachedPanel     (cloud runtime connecting/resuming/error)
-    ├── bottomSlot: at most one of
-    │     └── WorkspaceMobilityActionBar    (move to cloud / bring back local)
-    └── ChatInput
-        └── ChatComposerSurface
-            └── form: Textarea + ModelSelector + SessionConfigControls + ChatComposerActions
+    ├── ChatInput
+    │   └── ChatComposerSurface
+    │       └── form: Textarea + ModelSelector + SessionConfigControls + ChatComposerActions
+    └── footerSlot
+        └── WorkspaceMobilityFooterRow
 ```
 
 Non-negotiable:
 
 - **`ChatComposerDock` owns the dock shell.** Background, scrim, padding, max-width column, and the inset `px-5` top-slot wrapper all live in `ChatComposerDock.tsx`. The production app (`ChatView`) and the dev playground (`ChatPlaygroundPage`) both render `ChatComposerDock` directly. Do not reconstruct this backdrop in a third place — if you need it somewhere new, reuse the dock.
-- **`ChatInput` is the composer surface only.** It does not own any of the outer wrapping. It takes no `topSlot` prop. Everything above the composer is the dock's responsibility.
-- **`bottomSlot` is a separate dock region.** It renders below the composer as its own inset card and is not part of `useComposerTopSlot`.
+- **`ChatInput` is the composer surface only.** It does not own any of the outer wrapping. It takes no `topSlot` prop. Everything above and below the composer surface is the dock's responsibility, and the workspace footer row is rendered via the dock's dedicated footer slot rather than ad hoc workspace logic in `ChatInput.tsx`.
 - **The composer always keeps its full rounded shape.** There is no `flatTop` mode. Top-slot panels are a narrower, inset card above the composer — they are not fused to the composer surface.
 
 ## 2. Top-slot precedence
@@ -52,14 +51,16 @@ If you need to introduce a fifth inhabitant, add it to the precedence chain in `
 
 **Stacking is explicitly deferred.** When a genuine multi-inhabitant scenario arises (e.g. an `execute` approval while a Codex todo tracker is also active), upgrade `useComposerTopSlot` to return `ReactNode[]` and update `ChatComposerDock` to render them stacked. Until then, do not prep for stacking with `first:rounded-t-2xl` tricks or similar — see §6.
 
-## 2.1 Bottom-slot semantics
+## 2.1 Composer footer semantics
 
-`ChatComposerDock.bottomSlot` is a separate, single-inhabitant region below the composer.
+`WorkspaceMobilityFooterRow` is the dedicated mobility row beneath the composer surface.
 
-- It is for persistent workspace-level actions that belong near the composer but are not part of the top-slot precedence chain.
-- It uses the same inset rhythm as the top slot (`px-5`) and remains visually separate from the rounded composer shell.
-- It is not computed by `useComposerTopSlot`.
-- If another feature needs this region later, extend this contract here instead of building a parallel dock wrapper.
+- It holds persistent workspace identity and mobility entry controls.
+- It is rendered beneath `ChatInput` via `ChatComposerDock.footerSlot`.
+- It uses `ComposerControlButton`, not ad hoc button treatments.
+- The location control is the only footer control that opens UI, via `PopoverButton` + `ComposerPopoverSurface`.
+- Path and branch controls are direct utility actions that copy their full values.
+- In-flight workspace mobility does **not** render in the top-slot path anymore. It uses the dedicated `ChatView` overlay instead.
 
 ## 3. The three composer-area components
 
@@ -166,10 +167,11 @@ Scenarios (selectable via `?s=<key>`):
 - `todos-short`, `todos-mid`, `todos-long` — TodoTrackerPanel at three sizes
 - `execute-approval`, `edit-approval` — ApprovalCard execute/edit variants
 - `claude-plan-short`, `claude-plan-long` — ApprovalCard switch_mode + ClaudePlanCard in transcript
+- `mobility-local-actionable`, `mobility-unpublished-branch`, `mobility-unpushed-commits`, `mobility-out-of-sync-branch`, `mobility-in-flight`, `mobility-failed` — composer footer row + mobility states
 
 The playground is **dev-only**. It is lazy-loaded via `React.lazy()` gated on `import.meta.env.DEV` in `App.tsx`, so neither the page nor its fixtures land in production bundles.
 
-When you change any composer-area component, **load the playground and verify all eight scenarios still look right** before opening a PR. The playground exists to catch drift — if it stops looking like the real app, either fix the real app or fix the playground (and add a regression scenario).
+When you change any composer-area component, **load the playground and verify every scenario still looks right** before opening a PR. The playground exists to catch drift — if it stops looking like the real app, either fix the real app or fix the playground (and add a regression scenario).
 
 ### Playground structure
 

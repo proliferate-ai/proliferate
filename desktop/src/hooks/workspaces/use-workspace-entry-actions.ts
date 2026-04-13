@@ -18,7 +18,9 @@ import {
   type WorktreeCreationParams,
 } from "@/lib/domain/workspaces/workspace-creation";
 import { localWorkspaceGroupKey } from "@/lib/domain/workspaces/collections";
-import { ensureRepoGroupExpanded } from "@/stores/preferences/workspace-ui-store";
+import {
+  ensureRepoGroupExpanded,
+} from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceActions } from "./use-workspace-actions";
 import { useWorkspaceSelection } from "./selection/use-workspace-selection";
 import {

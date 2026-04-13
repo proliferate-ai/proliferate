@@ -253,7 +253,9 @@ async def save_cloud_repo_config(
     record.setup_script = setup_script
     record.configured = configured
     record.configured_at = now if configured else None
-    record.default_branch = default_branch.strip() if default_branch and default_branch.strip() else None
+    record.default_branch = (
+        default_branch.strip() if default_branch and default_branch.strip() else None
+    )
     if files_changed:
         record.files_version += 1
     record.updated_at = now

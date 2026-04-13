@@ -20,6 +20,7 @@ from proliferate.db.models.cloud import (
 from proliferate.integrations.github import GitHubRepoBranches
 from proliferate.integrations.sandbox.base import ProviderSandboxState
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.repo_config import service as repo_config_service
 from proliferate.server.cloud.repos import service as repos_service
 from proliferate.server.cloud.runtime import service as runtime_service
 from proliferate.server.cloud.runtime.anyharness_api import CloudRuntimeReconnectError
@@ -145,6 +146,15 @@ async def _configure_repo(
         },
     )
     assert response.status_code == 200
+
+
+def _patch_repo_branches_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+    resolver,
+) -> None:
+    monkeypatch.setattr(repos_service, "get_github_repo_branches", resolver)
+    monkeypatch.setattr(cloud_service, "get_github_repo_branches", resolver)
+    monkeypatch.setattr(repo_config_service, "get_repo_branches_for_user", resolver)
 
 
 class TestCloudCredentials:
@@ -296,7 +306,7 @@ class TestCloudRepoConfig:
                 branches=["main", "release"],
             )
 
-        monkeypatch.setattr(repos_service, "get_github_repo_branches", _repo_branches)
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
 
         session = await _register_and_login(client, "cloud-repo-default-branch@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
@@ -348,9 +358,11 @@ class TestCloudRepoConfig:
                 branches=["main", "release"],
             )
 
-        monkeypatch.setattr(repos_service, "get_github_repo_branches", _repo_branches)
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
 
-        session = await _register_and_login(client, "cloud-repo-invalid-default-branch@example.com")
+        session = await _register_and_login(
+            client, "cloud-repo-invalid-default-branch@example.com"
+        )
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         await _link_github_account(db_session, session["user_id"])
 
@@ -565,7 +577,7 @@ class TestCloudRepoBranches:
                 branches=["main", "release", "stable"],
             )
 
-        monkeypatch.setattr(repos_service, "get_github_repo_branches", _repo_branches)
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
 
         session = await _register_and_login(client, "cloud-branches@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
@@ -599,7 +611,7 @@ class TestCloudWorkspaces:
                 branches=["main", "release"],
             )
 
-        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
 
         session = await _register_and_login(client, "cloud-create-saved-default@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
@@ -652,7 +664,7 @@ class TestCloudWorkspaces:
                 branches=["main", "release"],
             )
 
-        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
         monkeypatch.setattr(
             cloud_service,
             "log_cloud_event",
@@ -708,13 +720,13 @@ class TestCloudWorkspaces:
         _disable_workspace_provision(monkeypatch)
         logged_events: list[tuple[str, dict[str, object]]] = []
 
-        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+        async def _initial_repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
             return GitHubRepoBranches(
                 default_branch="main",
-                branches=["main", "release"],
+                branches=["main", "release", "legacy-release"],
             )
 
-        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+        _patch_repo_branches_lookup(monkeypatch, _initial_repo_branches)
         monkeypatch.setattr(
             cloud_service,
             "log_cloud_event",
@@ -731,6 +743,14 @@ class TestCloudWorkspaces:
             git_repo_name="rocket",
             default_branch="legacy-release",
         )
+
+        async def _stale_repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main", "release"],
+            )
+
+        _patch_repo_branches_lookup(monkeypatch, _stale_repo_branches)
 
         sync_response = await client.put(
             "/v1/cloud/credentials/claude",
@@ -780,7 +800,7 @@ class TestCloudWorkspaces:
                 branches=["main", "release"],
             )
 
-        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
 
         session = await _register_and_login(client, "cloud-create-explicit-base@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
@@ -833,7 +853,7 @@ class TestCloudWorkspaces:
                 branches=["main", "release"],
             )
 
-        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
 
         session = await _register_and_login(client, "cloud-create-gating@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
@@ -890,6 +910,12 @@ class TestCloudWorkspaces:
     ) -> None:
         _disable_workspace_provision(monkeypatch)
 
+        async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
+            return GitHubRepoBranches(
+                default_branch="main",
+                branches=["main", "release"],
+            )
+
         async def _deny_repo_access(*_args, **_kwargs) -> GitHubRepoBranches:
             raise CloudApiError(
                 "github_repo_access_required",
@@ -897,11 +923,12 @@ class TestCloudWorkspaces:
                 status_code=400,
             )
 
-        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _deny_repo_access)
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
 
         session = await _register_and_login(client, "cloud-create-repo-access@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         await _link_github_account(db_session, session["user_id"])
+        await _configure_repo(client, headers, git_owner="acme", git_repo_name="rocket")
 
         sync_response = await client.put(
             "/v1/cloud/credentials/claude",
@@ -912,6 +939,8 @@ class TestCloudWorkspaces:
             },
         )
         assert sync_response.status_code == 200
+
+        _patch_repo_branches_lookup(monkeypatch, _deny_repo_access)
 
         create_response = await client.post(
             "/v1/cloud/workspaces",
@@ -942,7 +971,7 @@ class TestCloudWorkspaces:
                 branches=["main", "release"],
             )
 
-        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
 
         session = await _register_and_login(client, "cloud-create-duplicate-branch@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
@@ -988,11 +1017,12 @@ class TestCloudWorkspaces:
                 branches=["main", "release"],
             )
 
-        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
 
         session = await _register_and_login(client, "cloud-create-missing-base@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         await _link_github_account(db_session, session["user_id"])
+        await _configure_repo(client, headers, git_owner="acme", git_repo_name="rocket")
 
         await client.put(
             "/v1/cloud/credentials/claude",
@@ -1033,11 +1063,12 @@ class TestCloudWorkspaces:
                 branches=["main", "pure-drift"],
             )
 
-        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
 
         session = await _register_and_login(client, "cloud-create-existing-branch@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         await _link_github_account(db_session, session["user_id"])
+        await _configure_repo(client, headers, git_owner="acme", git_repo_name="rocket")
 
         await client.put(
             "/v1/cloud/credentials/claude",
@@ -1316,7 +1347,7 @@ class TestCloudWorkspaces:
             workspace.last_error = None
             workspace.updated_at = utcnow()
 
-        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
         monkeypatch.setattr(
             cloud_service,
             "schedule_workspace_provision",
@@ -1410,7 +1441,7 @@ class TestCloudWorkspaces:
         async def _boom(*_args, **_kwargs) -> None:
             raise CloudRuntimeReconnectError("sandbox missing")
 
-        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+        _patch_repo_branches_lookup(monkeypatch, _repo_branches)
         monkeypatch.setattr(
             cloud_service,
             "schedule_workspace_provision",

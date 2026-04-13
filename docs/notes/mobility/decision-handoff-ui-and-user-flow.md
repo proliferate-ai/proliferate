@@ -1,6 +1,6 @@
 # Workspace Mobility Decision: UI Surface and User Flow
 
-Status: accepted
+Status: superseded by `decision-composer-footer-mobility-redesign.md`
 
 ## Decision
 

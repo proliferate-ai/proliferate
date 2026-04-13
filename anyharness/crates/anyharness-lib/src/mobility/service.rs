@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Instant;
 
 use anyhow::Context;
 
@@ -127,6 +128,7 @@ impl MobilityService {
         workspace_id: &str,
         exclude_paths: &[String],
     ) -> Result<WorkspaceMobilityPreflightResult, MobilityError> {
+        let started = Instant::now();
         let workspace = self.load_workspace(workspace_id)?;
         let runtime_state = self
             .access_gate
@@ -140,6 +142,14 @@ impl MobilityService {
             .trim()
             .to_string();
         let branch_name = current_branch_name(&repo_root)?;
+        tracing::info!(
+            workspace_id = %workspace_id,
+            workspace_kind = %workspace.kind,
+            runtime_mode = %runtime_state.mode.as_str(),
+            branch_name = branch_name.as_deref().unwrap_or(""),
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            "[workspace-latency] mobility.preflight.repo_ready"
+        );
 
         let sessions = self
             .session_service
@@ -288,8 +298,22 @@ impl MobilityService {
                 ));
             }
         }
+        tracing::info!(
+            workspace_id = %workspace_id,
+            session_count = sessions.len(),
+            blocker_count = blockers.len(),
+            warning_count = warnings.len(),
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            "[workspace-latency] mobility.preflight.validation_complete"
+        );
 
         let archive_estimated_bytes = if blockers.is_empty() {
+            let archive_started = Instant::now();
+            tracing::info!(
+                workspace_id = %workspace_id,
+                exclude_path_count = exclude_paths.len(),
+                "[workspace-latency] mobility.preflight.archive_estimate.start"
+            );
             let archive = self.export_workspace_archive(workspace_id, exclude_paths)?;
             let size = archive_estimated_size_bytes(&archive);
             if size > MAX_MOBILITY_ARCHIVE_BODY_BYTES as u64 {
@@ -302,12 +326,26 @@ impl MobilityService {
                     session_id: None,
                 });
             }
+            tracing::info!(
+                workspace_id = %workspace_id,
+                archive_estimated_bytes = size,
+                elapsed_ms = archive_started.elapsed().as_millis() as u64,
+                "[workspace-latency] mobility.preflight.archive_estimate.completed"
+            );
             Some(size)
         } else {
             None
         };
 
         let can_move = blockers.is_empty();
+        tracing::info!(
+            workspace_id = %workspace_id,
+            can_move = can_move,
+            blocker_count = blockers.len(),
+            warning_count = warnings.len(),
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            "[workspace-latency] mobility.preflight.completed"
+        );
 
         Ok(WorkspaceMobilityPreflightResult {
             workspace_id: workspace.id,

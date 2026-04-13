@@ -11,11 +11,14 @@ use anyharness_contract::v1::{
 };
 use axum::{
     extract::{Path, State},
+    http::HeaderMap,
     Json,
 };
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use std::time::Instant;
 
+use super::latency::{latency_trace_fields, LatencyRequestContext};
 use super::blocking::run_blocking;
 use super::error::ApiError;
 use crate::app::AppState;
@@ -48,12 +51,39 @@ pub const MAX_MOBILITY_ARCHIVE_BODY_BYTES: usize =
 pub async fn preflight_workspace_mobility(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
+    headers: HeaderMap,
 ) -> Result<Json<WorkspaceMobilityPreflightResponse>, ApiError> {
+    let latency = LatencyRequestContext::from_headers(&headers);
+    let latency_fields = latency_trace_fields(latency.as_ref());
+    let started = Instant::now();
+    tracing::info!(
+        session_id = tracing::field::Empty,
+        workspace_id = %workspace_id,
+        flow_id = ?latency_fields.flow_id,
+        flow_kind = ?latency_fields.flow_kind,
+        flow_source = ?latency_fields.flow_source,
+        prompt_id = ?latency_fields.prompt_id,
+        "[workspace-latency] mobility.http.preflight.request_received"
+    );
     let result = state
         .mobility_service
         .preflight_workspace(&workspace_id, &[])
         .await
         .map_err(map_mobility_error)?;
+    tracing::info!(
+        session_id = tracing::field::Empty,
+        workspace_id = %workspace_id,
+        can_move = result.can_move,
+        blocker_count = result.blockers.len(),
+        warning_count = result.warnings.len(),
+        archive_estimated_bytes = result.archive_estimated_bytes.unwrap_or_default(),
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        flow_id = ?latency_fields.flow_id,
+        flow_kind = ?latency_fields.flow_kind,
+        flow_source = ?latency_fields.flow_source,
+        prompt_id = ?latency_fields.prompt_id,
+        "[workspace-latency] mobility.http.preflight.completed"
+    );
     Ok(Json(to_contract_preflight(result)))
 }
 

@@ -4,7 +4,9 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import { ensureRepoGroupExpanded } from "@/stores/preferences/workspace-ui-store";
+import {
+  ensureRepoGroupExpanded,
+} from "@/stores/preferences/workspace-ui-store";
 import {
   elapsedSince,
   logLatency,

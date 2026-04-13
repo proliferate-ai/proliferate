@@ -1,0 +1,251 @@
+import { describe, expect, it } from "vitest";
+import { buildMobilityPromptState } from "@/lib/domain/workspaces/mobility-prompt";
+import type { WorkspaceMobilityStatusModel } from "@/lib/domain/workspaces/mobility-state-machine";
+import type { LocalGitSyncSnapshot } from "@/lib/domain/workspaces/mobility-sync-recovery";
+import type { WorkspaceMobilityConfirmSnapshot } from "@/stores/workspaces/workspace-mobility-ui-store";
+
+function makeStatus(overrides: Partial<WorkspaceMobilityStatusModel> = {}): WorkspaceMobilityStatusModel {
+  return {
+    direction: null,
+    phase: "idle",
+    activeHandoff: null,
+    title: null,
+    description: null,
+    isBlocking: false,
+    isFailure: false,
+    canRetryCleanup: false,
+    ...overrides,
+  };
+}
+
+function makeSnapshot(
+  overrides: Partial<WorkspaceMobilityConfirmSnapshot> = {},
+): WorkspaceMobilityConfirmSnapshot {
+  return {
+    logicalWorkspaceId: "logical-1",
+    direction: "local_to_cloud",
+    sourceWorkspaceId: "workspace-1",
+    mobilityWorkspaceId: "mobility-1",
+    sourcePreflight: {
+      canMove: true,
+      branchName: "feature/workspace-mobility",
+      baseCommitSha: "abc123456789",
+      blockers: [],
+      warnings: [],
+      sessions: [],
+    } as never,
+    cloudPreflight: {
+      canStart: true,
+      blockers: [],
+      excludedPaths: [],
+      workspace: {} as never,
+    },
+    ...overrides,
+  };
+}
+
+const CLEAN_GIT_SYNC: LocalGitSyncSnapshot = {
+  upstreamBranch: "origin/feature/workspace-mobility",
+  ahead: 0,
+  behind: 0,
+  clean: true,
+};
+
+describe("buildMobilityPromptState", () => {
+  it("blocks non repo-backed workspaces immediately", () => {
+    const prompt = buildMobilityPromptState({
+      isPreparing: false,
+      hasResolvedPrompt: false,
+      locationKind: "local_workspace",
+      repoBacked: false,
+      canMoveToCloud: false,
+      canBringBackLocal: false,
+      hasLocalRepoRoot: false,
+      selectionLocked: false,
+      status: makeStatus(),
+      confirmSnapshot: null,
+      gitSync: null,
+      isGitSyncResolved: true,
+    });
+
+    expect(prompt.variant).toBe("blocked");
+    expect(prompt.body).toBe("Workspace mobility is only available for repo-backed workspaces.");
+  });
+
+  it("surfaces a concise non-migrating warning for actionable prompts", () => {
+    const prompt = buildMobilityPromptState({
+      isPreparing: false,
+      hasResolvedPrompt: true,
+      locationKind: "local_worktree",
+      repoBacked: true,
+      canMoveToCloud: true,
+      canBringBackLocal: false,
+      hasLocalRepoRoot: true,
+      selectionLocked: false,
+      status: makeStatus(),
+      confirmSnapshot: makeSnapshot({
+        sourcePreflight: {
+          canMove: true,
+          branchName: "feature/workspace-mobility",
+          baseCommitSha: "abc123456789",
+          blockers: [],
+          warnings: ["Terminal abc will not migrate"],
+          sessions: [],
+        } as never,
+      }),
+      gitSync: CLEAN_GIT_SYNC,
+      isGitSyncResolved: true,
+    });
+
+    expect(prompt.variant).toBe("actionable");
+    expect(prompt.warning).toBe("Active terminals will stay here.");
+  });
+
+  it("maps cleanup failures into the terminal recovery state", () => {
+    const prompt = buildMobilityPromptState({
+      isPreparing: false,
+      hasResolvedPrompt: false,
+      locationKind: "cloud_workspace",
+      repoBacked: true,
+      canMoveToCloud: false,
+      canBringBackLocal: true,
+      hasLocalRepoRoot: true,
+      selectionLocked: false,
+      status: makeStatus({
+        direction: "local_to_cloud",
+        phase: "cleanup_failed",
+        description: "Source cleanup needs another pass.",
+        canRetryCleanup: true,
+      }),
+      confirmSnapshot: null,
+      gitSync: null,
+      isGitSyncResolved: true,
+    });
+
+    expect(prompt.variant).toBe("terminal_failure");
+    expect(prompt.actionLabel).toBe("Retry cleanup");
+    expect(prompt.body).toBe("Source cleanup needs another pass.");
+    expect(prompt.primaryActionKind).toBe("retry_cleanup");
+  });
+
+  it("preserves cloud-lost failure details and blocker code", () => {
+    const prompt = buildMobilityPromptState({
+      isPreparing: false,
+      hasResolvedPrompt: false,
+      locationKind: "cloud_workspace",
+      repoBacked: true,
+      canMoveToCloud: false,
+      canBringBackLocal: true,
+      hasLocalRepoRoot: true,
+      selectionLocked: false,
+      status: makeStatus({
+        direction: null,
+        phase: "failed",
+        description: "Cloud workspace heartbeat timed out.",
+      }),
+      confirmSnapshot: null,
+      gitSync: null,
+      isGitSyncResolved: true,
+    });
+
+    expect(prompt.variant).toBe("terminal_failure");
+    expect(prompt.blocker?.code).toBe("cloud_lost");
+    expect(prompt.body).toBe("Cloud workspace heartbeat timed out.");
+    expect(prompt.primaryActionKind).toBe("retry_prepare");
+  });
+
+  it("keeps the prompt loading while local git sync state is still resolving", () => {
+    const prompt = buildMobilityPromptState({
+      isPreparing: false,
+      hasResolvedPrompt: true,
+      locationKind: "local_worktree",
+      repoBacked: true,
+      canMoveToCloud: true,
+      canBringBackLocal: false,
+      hasLocalRepoRoot: true,
+      selectionLocked: false,
+      status: makeStatus(),
+      confirmSnapshot: makeSnapshot({
+        cloudPreflight: {
+          canStart: false,
+          blockers: ["The branch 'feature/workspace-mobility' on GitHub is not at the requested commit."],
+          excludedPaths: [],
+          workspace: {} as never,
+        },
+      }),
+      gitSync: null,
+      isGitSyncResolved: false,
+    });
+
+    expect(prompt.variant).toBe("loading");
+    expect(prompt.headline).toBe("Checking local branch sync");
+  });
+
+  it("shows a publish CTA when the branch is not on GitHub", () => {
+    const prompt = buildMobilityPromptState({
+      isPreparing: false,
+      hasResolvedPrompt: true,
+      locationKind: "local_worktree",
+      repoBacked: true,
+      canMoveToCloud: true,
+      canBringBackLocal: false,
+      hasLocalRepoRoot: true,
+      selectionLocked: false,
+      status: makeStatus(),
+      confirmSnapshot: makeSnapshot({
+        cloudPreflight: {
+          canStart: false,
+          blockers: ["The branch 'feature/workspace-mobility' was not found on GitHub."],
+          excludedPaths: [],
+          workspace: {} as never,
+        },
+      }),
+      gitSync: {
+        upstreamBranch: null,
+        ahead: 0,
+        behind: 0,
+        clean: false,
+      },
+      isGitSyncResolved: true,
+    });
+
+    expect(prompt.variant).toBe("blocked");
+    expect(prompt.primaryActionKind).toBe("publish_branch");
+    expect(prompt.actionLabel).toBe("Publish branch");
+    expect(prompt.warning).toBe("Uncommitted changes will move with the workspace after this branch is synced.");
+  });
+
+  it("shows a push CTA for ahead-only local commits", () => {
+    const prompt = buildMobilityPromptState({
+      isPreparing: false,
+      hasResolvedPrompt: true,
+      locationKind: "local_worktree",
+      repoBacked: true,
+      canMoveToCloud: true,
+      canBringBackLocal: false,
+      hasLocalRepoRoot: true,
+      selectionLocked: false,
+      status: makeStatus(),
+      confirmSnapshot: makeSnapshot({
+        cloudPreflight: {
+          canStart: false,
+          blockers: ["The branch 'feature/workspace-mobility' on GitHub is not at the requested commit."],
+          excludedPaths: [],
+          workspace: {} as never,
+        },
+      }),
+      gitSync: {
+        upstreamBranch: "origin/feature/workspace-mobility",
+        ahead: 2,
+        behind: 0,
+        clean: false,
+      },
+      isGitSyncResolved: true,
+    });
+
+    expect(prompt.variant).toBe("blocked");
+    expect(prompt.primaryActionKind).toBe("push_commits");
+    expect(prompt.actionLabel).toBe("Push commits");
+    expect(prompt.warning).toBe("Uncommitted changes will move with the workspace after this branch is synced.");
+  });
+});

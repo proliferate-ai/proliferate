@@ -1,5 +1,6 @@
 import type { CloudMobilityHandoffSummary } from "@/lib/integrations/cloud/client";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
+import { mobilityStatusCopy } from "@/config/mobility-copy";
 
 export type WorkspaceMobilityUiPhase =
   | "idle"
@@ -33,17 +34,14 @@ function normalizeDirection(
 function summarizeActivePhase(
   handoff: CloudMobilityHandoffSummary,
 ): Pick<WorkspaceMobilityStatusModel, "phase" | "title" | "description" | "isBlocking" | "isFailure" | "canRetryCleanup"> {
+  const direction = normalizeDirection(handoff.direction);
+
   switch (handoff.phase) {
     case "start_requested":
     case "source_frozen":
       return {
         phase: "provisioning",
-        title: handoff.direction === "local_to_cloud"
-          ? "Provisioning cloud workspace"
-          : "Preparing local destination",
-        description: handoff.direction === "local_to_cloud"
-          ? "Starting a cloud runtime on the current branch."
-          : "Preparing a local workspace at the requested base commit.",
+        ...mobilityStatusCopy("provisioning", direction),
         isBlocking: true,
         isFailure: false,
         canRetryCleanup: false,
@@ -51,8 +49,7 @@ function summarizeActivePhase(
     case "destination_ready":
       return {
         phase: "transferring",
-        title: "Transferring workspace",
-        description: "Syncing files and supported sessions.",
+        ...mobilityStatusCopy("transferring", direction),
         isBlocking: true,
         isFailure: false,
         canRetryCleanup: false,
@@ -60,8 +57,7 @@ function summarizeActivePhase(
     case "install_succeeded":
       return {
         phase: "finalizing",
-        title: "Finalizing move",
-        description: "Switching this workspace to the new owner.",
+        ...mobilityStatusCopy("finalizing", direction),
         isBlocking: true,
         isFailure: false,
         canRetryCleanup: false,
@@ -69,8 +65,7 @@ function summarizeActivePhase(
     case "cleanup_pending":
       return {
         phase: "cleanup_pending",
-        title: "Cleaning up source workspace",
-        description: "The workspace is ready on the destination. Finishing source cleanup.",
+        ...mobilityStatusCopy("cleanup_pending", direction),
         isBlocking: false,
         isFailure: false,
         canRetryCleanup: false,
@@ -78,8 +73,9 @@ function summarizeActivePhase(
     case "cleanup_failed":
       return {
         phase: "cleanup_failed",
-        title: "Source cleanup failed",
-        description: handoff.failureDetail ?? "The workspace moved successfully, but source cleanup needs another pass.",
+        title: mobilityStatusCopy("cleanup_failed", direction).title,
+        description: handoff.failureDetail
+          ?? mobilityStatusCopy("cleanup_failed", direction).description,
         isBlocking: false,
         isFailure: true,
         canRetryCleanup: true,
@@ -87,10 +83,7 @@ function summarizeActivePhase(
     case "completed":
       return {
         phase: "success",
-        title: "Workspace move complete",
-        description: handoff.direction === "local_to_cloud"
-          ? "This workspace is now running in cloud."
-          : "This workspace is now running locally.",
+        ...mobilityStatusCopy("success", direction),
         isBlocking: false,
         isFailure: false,
         canRetryCleanup: false,
@@ -98,8 +91,9 @@ function summarizeActivePhase(
     case "handoff_failed":
       return {
         phase: "failed",
-        title: "Workspace move failed",
-        description: handoff.failureDetail ?? "The move did not complete.",
+        title: mobilityStatusCopy("failed", direction).title,
+        description: handoff.failureDetail
+          ?? mobilityStatusCopy("failed", direction).description,
         isBlocking: false,
         isFailure: true,
         canRetryCleanup: false,
@@ -107,8 +101,7 @@ function summarizeActivePhase(
     default:
       return {
         phase: "provisioning",
-        title: "Preparing move",
-        description: "Starting the handoff workflow.",
+        ...mobilityStatusCopy("idle", direction),
         isBlocking: true,
         isFailure: false,
         canRetryCleanup: false,
@@ -133,8 +126,9 @@ export function resolveWorkspaceMobilityStatusModel(
       direction: "local_to_cloud",
       phase: "provisioning",
       activeHandoff: null,
-      title: "Provisioning cloud workspace",
-      description: logicalWorkspace.mobilityWorkspace?.statusDetail ?? "Starting a cloud runtime on the current branch.",
+      title: mobilityStatusCopy("provisioning", "local_to_cloud").title,
+      description: logicalWorkspace.mobilityWorkspace?.statusDetail
+        ?? mobilityStatusCopy("provisioning", "local_to_cloud").description,
       isBlocking: true,
       isFailure: false,
       canRetryCleanup: false,
@@ -146,8 +140,9 @@ export function resolveWorkspaceMobilityStatusModel(
       direction: "cloud_to_local",
       phase: "provisioning",
       activeHandoff: null,
-      title: "Preparing local destination",
-      description: logicalWorkspace.mobilityWorkspace?.statusDetail ?? "Preparing a local workspace at the requested base commit.",
+      title: mobilityStatusCopy("provisioning", "cloud_to_local").title,
+      description: logicalWorkspace.mobilityWorkspace?.statusDetail
+        ?? mobilityStatusCopy("provisioning", "cloud_to_local").description,
       isBlocking: true,
       isFailure: false,
       canRetryCleanup: false,
@@ -155,12 +150,16 @@ export function resolveWorkspaceMobilityStatusModel(
   }
 
   if (logicalWorkspace?.lifecycle === "cleanup_failed") {
+    const direction = logicalWorkspace.effectiveOwner === "cloud"
+      ? "local_to_cloud"
+      : "cloud_to_local";
     return {
-      direction: logicalWorkspace.effectiveOwner === "cloud" ? "local_to_cloud" : "cloud_to_local",
+      direction,
       phase: "cleanup_failed",
       activeHandoff: null,
-      title: "Source cleanup failed",
-      description: logicalWorkspace.mobilityWorkspace?.lastError ?? "Source cleanup needs another pass.",
+      title: mobilityStatusCopy("cleanup_failed", direction).title,
+      description: logicalWorkspace.mobilityWorkspace?.lastError
+        ?? mobilityStatusCopy("cleanup_failed", direction).description,
       isBlocking: false,
       isFailure: true,
       canRetryCleanup: true,
@@ -174,10 +173,10 @@ export function resolveWorkspaceMobilityStatusModel(
       activeHandoff: null,
       title: logicalWorkspace.lifecycle === "cloud_lost"
         ? "Cloud workspace unavailable"
-        : "Workspace move failed",
+        : mobilityStatusCopy("failed", null).title,
       description: logicalWorkspace.mobilityWorkspace?.lastError
         ?? logicalWorkspace.mobilityWorkspace?.statusDetail
-        ?? "This workspace needs attention before it can move again.",
+        ?? mobilityStatusCopy("failed", null).description,
       isBlocking: false,
       isFailure: true,
       canRetryCleanup: false,

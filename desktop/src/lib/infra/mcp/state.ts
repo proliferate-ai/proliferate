@@ -162,9 +162,15 @@ export async function loadConnectorSecretValue(
   connectionId: string,
   fieldId: string,
 ): Promise<string | null> {
-  const value = await getConnectorSecret(connectionId, fieldId);
-  const normalized = normalizeConnectorSecretValue(value ?? "");
-  return normalized || null;
+  try {
+    const value = await getConnectorSecret(connectionId, fieldId);
+    const normalized = normalizeConnectorSecretValue(value ?? "");
+    return normalized || null;
+  } catch {
+    // A keychain ACL/signature mismatch should degrade the connector to a
+    // missing-token state instead of breaking the entire connector query.
+    return null;
+  }
 }
 
 export async function loadConnectorSecretValues(

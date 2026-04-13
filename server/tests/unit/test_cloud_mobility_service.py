@@ -92,7 +92,10 @@ async def test_preflight_blocks_when_workspace_handoff_is_already_active(
         return SimpleNamespace(id=_user_id)
 
     async def _repo_branches(*_args, **_kwargs):
-        return SimpleNamespace(branches=["feature/cloud"])
+        return SimpleNamespace(
+            branches=["feature/cloud"],
+            branch_heads_by_name={"feature/cloud": "abc123"},
+        )
 
     async def _load_repo_config(**_kwargs):
         return None
@@ -183,6 +186,118 @@ async def test_preflight_blocks_when_github_repo_access_is_missing(
     assert response.can_start is False
     assert response.blockers == [
         "Reconnect GitHub and grant repository access before moving this workspace to cloud."
+    ]
+
+
+@pytest.mark.asyncio
+async def test_preflight_blocks_when_branch_is_not_published(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = _workspace()
+
+    async def _get_detail(**_kwargs):
+        return workspace
+
+    async def _load_active_user_handoff(*, user_id):
+        return None
+
+    async def _load_user(_user_id):
+        return SimpleNamespace(id=_user_id)
+
+    async def _repo_branches(*_args, **_kwargs):
+        return SimpleNamespace(
+            branches=["main"],
+            branch_heads_by_name={"main": "def456"},
+        )
+
+    async def _load_repo_config(**_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        mobility_service,
+        "expire_stale_cloud_workspace_handoffs_for_user",
+        _noop_expire,
+    )
+    monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
+    monkeypatch.setattr(
+        mobility_service,
+        "load_active_user_handoff_op_for_user",
+        _load_active_user_handoff,
+    )
+    monkeypatch.setattr(
+        mobility_service,
+        "load_user_with_oauth_accounts_by_id",
+        _load_user,
+    )
+    monkeypatch.setattr(mobility_service, "get_repo_branches_for_user", _repo_branches)
+    monkeypatch.setattr(mobility_service, "load_cloud_repo_config_for_user", _load_repo_config)
+
+    response = await mobility_service.preflight_cloud_workspace_handoff(
+        user_id=uuid4(),
+        mobility_workspace_id=workspace.id,
+        direction="local_to_cloud",
+        requested_branch="feature/cloud",
+        requested_base_sha="abc123",
+    )
+
+    assert response.can_start is False
+    assert response.blockers == ["The branch 'feature/cloud' was not found on GitHub."]
+
+
+@pytest.mark.asyncio
+async def test_preflight_blocks_when_github_branch_head_is_behind_requested_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = _workspace()
+
+    async def _get_detail(**_kwargs):
+        return workspace
+
+    async def _load_active_user_handoff(*, user_id):
+        return None
+
+    async def _load_user(_user_id):
+        return SimpleNamespace(id=_user_id)
+
+    async def _repo_branches(*_args, **_kwargs):
+        return SimpleNamespace(
+            branches=["feature/cloud"],
+            branch_heads_by_name={"feature/cloud": "def456"},
+        )
+
+    async def _load_repo_config(**_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        mobility_service,
+        "expire_stale_cloud_workspace_handoffs_for_user",
+        _noop_expire,
+    )
+    monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
+    monkeypatch.setattr(
+        mobility_service,
+        "load_active_user_handoff_op_for_user",
+        _load_active_user_handoff,
+    )
+    monkeypatch.setattr(
+        mobility_service,
+        "load_user_with_oauth_accounts_by_id",
+        _load_user,
+    )
+    monkeypatch.setattr(mobility_service, "get_repo_branches_for_user", _repo_branches)
+    monkeypatch.setattr(mobility_service, "load_cloud_repo_config_for_user", _load_repo_config)
+
+    response = await mobility_service.preflight_cloud_workspace_handoff(
+        user_id=uuid4(),
+        mobility_workspace_id=workspace.id,
+        direction="local_to_cloud",
+        requested_branch="feature/cloud",
+        requested_base_sha="abc123",
+    )
+
+    assert response.can_start is False
+    assert response.blockers == [
+        "The branch 'feature/cloud' on GitHub is not at the requested commit."
     ]
 
 

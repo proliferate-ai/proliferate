@@ -42,6 +42,23 @@ async def create_cloud_workspace(
     *,
     branch_name: str,
 ) -> dict[str, object]:
+    repo_config_response = await client.put(
+        f"/v1/cloud/repos/{config.github_owner}/{config.github_repo}/config",
+        headers=auth.headers,
+        json={
+            "configured": True,
+            "defaultBranch": config.github_base_branch,
+            "envVars": {},
+            "setupScript": "",
+            "files": [],
+        },
+    )
+    if repo_config_response.status_code >= 400:
+        detail = repo_config_response.text.strip() or "<empty response body>"
+        raise CloudE2ETestError(
+            f"Cloud repo config failed ({repo_config_response.status_code}): {detail}"
+        )
+
     response = await client.post(
         "/v1/cloud/workspaces",
         headers=auth.headers,

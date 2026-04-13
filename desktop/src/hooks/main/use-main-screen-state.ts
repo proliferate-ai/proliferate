@@ -7,7 +7,14 @@ import {
   useCurrentPullRequestQuery,
   useGitStatusQuery,
 } from "@anyharness/sdk-react";
-import { useMemo, useState, type Dispatch, type MouseEvent, type SetStateAction } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type MouseEvent,
+  type SetStateAction,
+} from "react";
 import { useResize } from "@/hooks/layout/use-resize";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
@@ -63,7 +70,7 @@ export interface MainScreenState {
 
 export function useMainScreenState(): MainScreenState {
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>("files");
-  const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [commitOpen, setCommitOpen] = useState(false);
   const [pushOpen, setPushOpen] = useState(false);
   const [prOpen, setPrOpen] = useState(false);
@@ -93,6 +100,7 @@ export function useMainScreenState(): MainScreenState {
 
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const workspaceArrivalEvent = useHarnessStore((state) => state.workspaceArrivalEvent);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
@@ -119,6 +127,24 @@ export function useMainScreenState(): MainScreenState {
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId),
     [selectedWorkspaceId, workspaces],
   );
+
+  useEffect(() => {
+    if (pendingWorkspaceEntry) {
+      setRightPanelOpen(false);
+      return;
+    }
+
+    if (
+      workspaceArrivalEvent?.workspaceId
+      && workspaceArrivalEvent.workspaceId === selectedWorkspaceId
+    ) {
+      setRightPanelOpen(false);
+    }
+  }, [
+    pendingWorkspaceEntry,
+    selectedWorkspaceId,
+    workspaceArrivalEvent?.workspaceId,
+  ]);
 
   return {
     layout: {

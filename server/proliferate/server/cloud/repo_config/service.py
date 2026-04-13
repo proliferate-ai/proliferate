@@ -14,7 +14,6 @@ from proliferate.db.store.cloud_repo_config import (
 from proliferate.db.store.cloud_workspaces import load_cloud_workspace_for_user
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.repos.service import get_repo_branches_for_user
 from proliferate.server.cloud.repo_config.models import (
     CloudRepoConfigResponse,
     CloudRepoConfigsListResponse,
@@ -34,6 +33,7 @@ from proliferate.server.cloud.repo_config.validation import (
     normalize_repo_file_path,
     validate_tracked_file_content,
 )
+from proliferate.server.cloud.repos.service import get_repo_branches_for_user
 from proliferate.server.cloud.runtime.anyharness_api import CloudRuntimeOperationError
 from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.runtime.repo_config_apply import (

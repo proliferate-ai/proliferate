@@ -15,10 +15,13 @@ export interface WorkspaceMobilityConfirmSnapshot {
 
 interface WorkspaceMobilityUiState {
   confirmSnapshotByLogicalWorkspaceId: Record<string, WorkspaceMobilityConfirmSnapshot>;
+  activePromptRequestIdByLogicalWorkspaceId: Record<string, number>;
   showMcpNoticeByLogicalWorkspaceId: Record<string, boolean>;
   dismissedMcpNoticeByLogicalWorkspaceId: Record<string, boolean>;
   setConfirmSnapshot: (snapshot: WorkspaceMobilityConfirmSnapshot) => void;
   clearConfirmSnapshot: (logicalWorkspaceId: string) => void;
+  setActivePromptRequestId: (logicalWorkspaceId: string, requestId: number) => void;
+  clearActivePromptRequestId: (logicalWorkspaceId: string) => void;
   showMcpNotice: (logicalWorkspaceId: string) => void;
   clearMcpNoticeVisibility: (logicalWorkspaceId: string) => void;
   dismissMcpNotice: (logicalWorkspaceId: string) => void;
@@ -27,6 +30,7 @@ interface WorkspaceMobilityUiState {
 
 export const useWorkspaceMobilityUiStore = create<WorkspaceMobilityUiState>((set) => ({
   confirmSnapshotByLogicalWorkspaceId: {},
+  activePromptRequestIdByLogicalWorkspaceId: {},
   showMcpNoticeByLogicalWorkspaceId: {},
   dismissedMcpNoticeByLogicalWorkspaceId: {},
 
@@ -45,6 +49,23 @@ export const useWorkspaceMobilityUiStore = create<WorkspaceMobilityUiState>((set
     const next = { ...state.confirmSnapshotByLogicalWorkspaceId };
     delete next[logicalWorkspaceId];
     return { confirmSnapshotByLogicalWorkspaceId: next };
+  }),
+
+  setActivePromptRequestId: (logicalWorkspaceId, requestId) => set((state) => ({
+    activePromptRequestIdByLogicalWorkspaceId: {
+      ...state.activePromptRequestIdByLogicalWorkspaceId,
+      [logicalWorkspaceId]: requestId,
+    },
+  })),
+
+  clearActivePromptRequestId: (logicalWorkspaceId) => set((state) => {
+    if (!(logicalWorkspaceId in state.activePromptRequestIdByLogicalWorkspaceId)) {
+      return state;
+    }
+
+    const next = { ...state.activePromptRequestIdByLogicalWorkspaceId };
+    delete next[logicalWorkspaceId];
+    return { activePromptRequestIdByLogicalWorkspaceId: next };
   }),
 
   showMcpNotice: (logicalWorkspaceId) => set((state) => ({

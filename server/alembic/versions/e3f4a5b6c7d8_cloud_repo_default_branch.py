@@ -19,14 +19,22 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _has_column(table_name: str, column_name: str) -> bool:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return column_name in {column["name"] for column in inspector.get_columns(table_name)}
+
+
 def upgrade() -> None:
     """Upgrade schema."""
-    op.add_column(
-        "cloud_repo_config",
-        sa.Column("default_branch", sa.String(length=255), nullable=True),
-    )
+    if not _has_column("cloud_repo_config", "default_branch"):
+        op.add_column(
+            "cloud_repo_config",
+            sa.Column("default_branch", sa.String(length=255), nullable=True),
+        )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_column("cloud_repo_config", "default_branch")
+    if _has_column("cloud_repo_config", "default_branch"):
+        op.drop_column("cloud_repo_config", "default_branch")

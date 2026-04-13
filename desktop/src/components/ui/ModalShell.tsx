@@ -12,6 +12,8 @@ export interface ModalShellProps {
   children: ReactNode;
   sizeClassName?: string;
   bodyClassName?: string;
+  overlayClassName?: string;
+  panelClassName?: string;
 }
 
 export function ModalShell({
@@ -24,6 +26,8 @@ export function ModalShell({
   children,
   sizeClassName = "max-w-md",
   bodyClassName = "px-5 pb-5 pt-4",
+  overlayClassName = "bg-black/70 backdrop-blur-sm",
+  panelClassName = "border-border bg-background shadow-lg",
 }: ModalShellProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -58,7 +62,7 @@ export function ModalShell({
   return createPortal(
     (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+        className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${overlayClassName}`}
         onClick={disableClose ? undefined : onClose}
       >
         <div
@@ -66,7 +70,7 @@ export function ModalShell({
           aria-modal="true"
           aria-labelledby={titleId}
           aria-describedby={description ? descriptionId : undefined}
-          className={`relative flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-lg ${sizeClassName}`}
+          className={`relative flex w-full flex-col overflow-hidden rounded-2xl border ${panelClassName} ${sizeClassName}`}
           onClick={(event) => event.stopPropagation()}
         >
           <button

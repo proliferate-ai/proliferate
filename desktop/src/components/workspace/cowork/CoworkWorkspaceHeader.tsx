@@ -6,6 +6,7 @@ interface CoworkWorkspaceHeaderProps {
   subtitle?: string | null;
   sidebarOpen: boolean;
   rightPanelOpen: boolean;
+  showArtifactsToggle?: boolean;
   onToggleSidebar: () => void;
   onToggleRightPanel: () => void;
 }
@@ -15,6 +16,7 @@ export function CoworkWorkspaceHeader({
   subtitle,
   sidebarOpen,
   rightPanelOpen,
+  showArtifactsToggle = true,
   onToggleSidebar,
   onToggleRightPanel,
 }: CoworkWorkspaceHeaderProps) {
@@ -39,16 +41,18 @@ export function CoworkWorkspaceHeader({
         </div>
       </div>
 
-      <div className="flex items-center gap-1">
-        <IconButton
-          size="sm"
-          onClick={onToggleRightPanel}
-          title={rightPanelOpen ? "Hide artifacts" : "Show artifacts"}
-          className={rightPanelOpen ? "bg-accent text-foreground" : "rounded-md"}
-        >
-          <FileText className="size-4" />
-        </IconButton>
-      </div>
+      {showArtifactsToggle ? (
+        <div className="flex items-center gap-1">
+          <IconButton
+            size="sm"
+            onClick={onToggleRightPanel}
+            title={rightPanelOpen ? "Hide artifacts" : "Show artifacts"}
+            className={rightPanelOpen ? "bg-accent text-foreground" : "rounded-md"}
+          >
+            <FileText className="size-4" />
+          </IconButton>
+        </div>
+      ) : null}
     </div>
   );
 }

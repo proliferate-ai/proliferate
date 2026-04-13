@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -12,6 +12,7 @@ import httpx
 class GitHubRepoBranches:
     default_branch: str
     branches: list[str]
+    branch_heads_by_name: dict[str, str] = field(default_factory=dict)
 
 
 class GitHubIntegrationError(RuntimeError):
@@ -71,6 +72,7 @@ async def get_github_repo_branches(
     default_branch = str(repo_payload.get("default_branch") or "main")
     repo_url = f"https://api.github.com/repos/{git_owner}/{git_repo_name}/branches"
     branches: list[str] = []
+    branch_heads_by_name: dict[str, str] = {}
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -97,12 +99,18 @@ async def get_github_repo_branches(
                         "Could not load GitHub branches for this repository."
                     )
 
-                page_branches = [
-                    item["name"]
-                    for item in payload
-                    if isinstance(item, dict) and isinstance(item.get("name"), str)
-                ]
-                branches.extend(page_branches)
+                for item in payload:
+                    if not isinstance(item, dict):
+                        continue
+                    branch_name = item.get("name")
+                    if not isinstance(branch_name, str):
+                        continue
+                    branches.append(branch_name)
+                    commit = item.get("commit")
+                    if isinstance(commit, dict):
+                        commit_sha = commit.get("sha")
+                        if isinstance(commit_sha, str) and commit_sha.strip():
+                            branch_heads_by_name[branch_name] = commit_sha.strip()
                 if len(payload) < 100:
                     break
                 page += 1
@@ -115,7 +123,11 @@ async def get_github_repo_branches(
     if default_branch in ordered:
         ordered.remove(default_branch)
     ordered.insert(0, default_branch)
-    return GitHubRepoBranches(default_branch=default_branch, branches=ordered)
+    return GitHubRepoBranches(
+        default_branch=default_branch,
+        branches=ordered,
+        branch_heads_by_name=branch_heads_by_name,
+    )
 
 
 # Public alias used by cloud repos service.

@@ -1,4 +1,3 @@
-import type { Workspace } from "@anyharness/sdk";
 import { useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ChatView } from "@/components/workspace/chat/ChatView";
@@ -20,11 +19,15 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
 
 interface CoworkWorkspaceShellProps {
-  workspace: Workspace;
+  workspaceId: string | null;
+  workspacePath: string | null;
+  fallbackTitle?: string | null;
 }
 
 export function CoworkWorkspaceShell({
-  workspace,
+  workspaceId,
+  workspacePath,
+  fallbackTitle,
 }: CoworkWorkspaceShellProps) {
   // Cowork keeps its artifact pane width session-local until the shell chrome
   // is extracted and shares the standard workspace frame state.
@@ -40,8 +43,9 @@ export function CoworkWorkspaceShell({
     sidebarWidth: state.sidebarWidth,
     setSidebarWidth: state.setSidebarWidth,
   })));
+  const canShowArtifactPanel = workspaceId !== null;
   const rightPanelOpen = useCoworkUiStore(
-    (state) => state.artifactPanelOpenByWorkspaceId[workspace.id] === true,
+    (state) => (workspaceId ? state.artifactPanelOpenByWorkspaceId[workspaceId] === true : false),
   );
   const setArtifactPanelOpen = useCoworkUiStore((state) => state.setArtifactPanelOpen);
   const {
@@ -74,14 +78,14 @@ export function CoworkWorkspaceShell({
   });
 
   const headerTitle = useMemo(() => {
-    if (activeSessionId && activeSlot?.workspaceId === workspace.id && activeSlot.title?.trim()) {
+    if (workspaceId && activeSessionId && activeSlot?.workspaceId === workspaceId && activeSlot.title?.trim()) {
       return activeSlot.title.trim();
     }
-    return "Untitled chat";
-  }, [activeSessionId, activeSlot?.title, activeSlot?.workspaceId, workspace.id]);
+    return fallbackTitle?.trim() || "Untitled chat";
+  }, [activeSessionId, activeSlot?.title, activeSlot?.workspaceId, fallbackTitle, workspaceId]);
 
   return (
-    <WorkspacePathProvider workspacePath={workspace.path}>
+    <WorkspacePathProvider workspacePath={workspacePath}>
       <div className="h-screen flex overflow-hidden bg-sidebar" data-telemetry-block>
         <div
           id="cowork-sidebar"
@@ -144,8 +148,14 @@ export function CoworkWorkspaceShell({
               title={headerTitle}
               sidebarOpen={sidebarOpen}
               rightPanelOpen={rightPanelOpen}
+              showArtifactsToggle={canShowArtifactPanel}
               onToggleSidebar={() => setSidebarOpen((value) => !value)}
-              onToggleRightPanel={() => setArtifactPanelOpen(workspace.id, !rightPanelOpen)}
+              onToggleRightPanel={() => {
+                if (!workspaceId) {
+                  return;
+                }
+                setArtifactPanelOpen(workspaceId, !rightPanelOpen);
+              }}
             />
           </div>
 
@@ -158,7 +168,7 @@ export function CoworkWorkspaceShell({
               <ChatView />
             </div>
 
-            {rightPanelOpen && (
+            {canShowArtifactPanel && rightPanelOpen && (
               <div
                 role="separator"
                 aria-orientation="vertical"
@@ -169,10 +179,10 @@ export function CoworkWorkspaceShell({
 
             <div
               className="shrink-0 overflow-hidden transition-[width] duration-150 ease-in-out"
-              style={{ width: rightPanelOpen ? rightPanelWidth : 0 }}
+              style={{ width: canShowArtifactPanel && rightPanelOpen ? rightPanelWidth : 0 }}
             >
               <div className="h-full" style={{ minWidth: 320 }}>
-                <CoworkArtifactsPanel workspace={workspace} />
+                {workspaceId ? <CoworkArtifactsPanel workspaceId={workspaceId} /> : null}
               </div>
             </div>
           </div>

@@ -10,7 +10,14 @@ export type ScenarioKey =
   | "pending-prompts-single"
   | "pending-prompts-multi"
   | "pending-prompts-editing"
-  | "pending-prompts-with-approval";
+  | "pending-prompts-with-approval"
+  | "mobility-local-actionable"
+  | "mobility-local-blocked"
+  | "mobility-unpublished-branch"
+  | "mobility-unpushed-commits"
+  | "mobility-out-of-sync-branch"
+  | "mobility-in-flight"
+  | "mobility-failed";
 
 interface Scenario {
   label: string;
@@ -29,6 +36,13 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "pending-prompts-multi": { label: "Queue (3 rows)" },
   "pending-prompts-editing": { label: "Queue (editing row)" },
   "pending-prompts-with-approval": { label: "Queue + approval" },
+  "mobility-local-actionable": { label: "Mobility (actionable)" },
+  "mobility-local-blocked": { label: "Mobility (blocked)" },
+  "mobility-unpublished-branch": { label: "Mobility (publish branch)" },
+  "mobility-unpushed-commits": { label: "Mobility (push commits)" },
+  "mobility-out-of-sync-branch": { label: "Mobility (out of sync)" },
+  "mobility-in-flight": { label: "Mobility (in flight)" },
+  "mobility-failed": { label: "Mobility (failed)" },
 };
 
 export const DEFAULT_SCENARIO: ScenarioKey = "clean";

@@ -13,12 +13,14 @@ export type ComposerControlTone =
 
 interface ComposerControlButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   icon?: ReactNode;
-  label: string;
-  detail?: string | null;
+  label: ReactNode;
+  detail?: ReactNode | null;
   trailing?: ReactNode;
   tone?: ComposerControlTone;
   active?: boolean;
   iconOnly?: boolean;
+  labelClassName?: string;
+  detailClassName?: string;
 }
 
 const toneClassNames: Record<ComposerControlTone, { idle: string; active: string }> = {
@@ -41,6 +43,8 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
     tone = "neutral",
     active = false,
     iconOnly = false,
+    labelClassName = "",
+    detailClassName = "",
     className = "",
     type = "button",
     ...props
@@ -50,6 +54,11 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
     const buttonClassName = iconOnly
       ? `h-7 w-7 shrink-0 !justify-center px-0 ${baseClassName} ${className}`
       : `h-7 min-w-0 max-w-full !justify-start px-2 py-0 text-left text-sm leading-[18px] ${baseClassName} ${className}`;
+    const iconOnlyLabel = typeof label === "string"
+      ? label
+      : typeof props["aria-label"] === "string"
+        ? props["aria-label"]
+        : "Composer control";
 
     return (
       <Button
@@ -62,12 +71,12 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
       >
         {icon && <span className="shrink-0">{icon}</span>}
         {iconOnly ? (
-          <span className="sr-only">{detail ? `${label}: ${detail}` : label}</span>
+          <span className="sr-only">{iconOnlyLabel}</span>
         ) : (
           <span className="flex min-w-0 items-center gap-1">
-            <span className="truncate text-left">{label}</span>
+            <span className={`min-w-0 truncate text-left ${labelClassName}`}>{label}</span>
             {detail && (
-              <span className="truncate text-left opacity-72">
+              <span className={`truncate text-left opacity-72 ${detailClassName}`}>
                 {detail}
               </span>
             )}
