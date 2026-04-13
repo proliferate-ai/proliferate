@@ -5,7 +5,7 @@ import {
 } from "@/lib/domain/support/formatting";
 
 describe("formatSupportContextLabel", () => {
-  it("prefers workspace location and name when available", () => {
+  it("combines workspace location and name when available", () => {
     expect(formatSupportContextLabel({
       source: "sidebar",
       intent: "general",
@@ -14,22 +14,22 @@ describe("formatSupportContextLabel", () => {
     })).toBe("cloud · repo-a");
   });
 
-  it("falls back to pathname when no workspace is selected", () => {
+  it("returns null when there is no workspace context", () => {
     expect(formatSupportContextLabel({
       source: "settings",
       intent: "general",
       pathname: "/settings",
-    })).toBe("/settings");
+    })).toBeNull();
   });
 });
 
 describe("buildSupportEmailBody", () => {
-  it("includes the normalized context label and intent", () => {
+  it("returns an empty body so email compose starts clean", () => {
     expect(buildSupportEmailBody({
       source: "sidebar",
       intent: "general",
       workspaceName: "repo-a",
       workspaceLocation: "local",
-    })).toContain("Context: local · repo-a");
+    })).toBe("");
   });
 });

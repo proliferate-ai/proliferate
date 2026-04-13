@@ -63,9 +63,11 @@ export function SupportDialog({
     >
       {inAppSupportEnabled ? (
         <div className="space-y-3">
-          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            {contextLabel}
-          </div>
+          {contextLabel && (
+            <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              {contextLabel}
+            </div>
+          )}
           <Textarea
             ref={textareaRef}
             rows={6}

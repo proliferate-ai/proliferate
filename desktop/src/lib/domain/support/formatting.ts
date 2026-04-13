@@ -1,20 +1,20 @@
 import type { SupportMessageContext } from "@/lib/integrations/cloud/client";
 
-export function formatSupportContextLabel(context: SupportMessageContext): string {
+export function formatSupportContextLabel(
+  context: SupportMessageContext,
+): string | null {
   if (context.workspaceName && context.workspaceLocation) {
     return `${context.workspaceLocation} · ${context.workspaceName}`;
   }
   if (context.workspaceName) {
     return context.workspaceName;
   }
-  if (context.pathname) {
-    return context.pathname;
-  }
-  return "Current app context will be included.";
+  return null;
 }
 
-export function buildSupportEmailBody(context: SupportMessageContext): string {
-  const contextLabel = formatSupportContextLabel(context);
-
-  return `Context: ${contextLabel}\nIntent: ${context.intent}\n\nHow can you help?\n`;
+export function buildSupportEmailBody(_context: SupportMessageContext): string {
+  // Leave the email body empty on purpose — the subject already identifies
+  // the product, and the user should start with a clean textarea rather
+  // than the default robotic "Context: / Intent: general" template.
+  return "";
 }
