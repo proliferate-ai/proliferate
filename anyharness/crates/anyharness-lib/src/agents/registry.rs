@@ -4,8 +4,7 @@ use std::path::PathBuf;
 const CLAUDE_AGENT_ACP_PACKAGE: &str =
     "git+https://github.com/proliferate-ai/claude-agent-acp.git#9ca5f44d730d48611800fb1ff7aca895c2fd5e79";
 const CLAUDE_AGENT_ACP_DOCS_URL: &str = "https://github.com/proliferate-ai/claude-agent-acp";
-// The Proliferate-scoped npm package is missing several platform artifacts in npm.
-const CODEX_AGENT_ACP_PACKAGE: &str = "@zed-industries/codex-acp@0.11.1";
+const CODEX_AGENT_ACP_PACKAGE: &str = "@proliferateai/codex-acp@0.11.5";
 const CODEX_AGENT_ACP_DOCS_URL: &str = "https://github.com/proliferate-ai/codex-acp";
 
 /// Returns the built-in registry of supported agent descriptors for v1.
