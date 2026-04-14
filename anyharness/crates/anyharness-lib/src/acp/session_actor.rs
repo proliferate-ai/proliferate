@@ -11,7 +11,7 @@ use super::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry, Back
 use super::event_sink::{AcpChunkPayload, AcpToolPayload, SessionEventSink};
 use super::permission_broker::PermissionBroker;
 use super::runtime_client::RuntimeClient;
-use crate::agents::model::ResolvedAgent;
+use crate::agents::model::{AgentKind, ResolvedAgent};
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::sessions::live_config::{
     build_live_config_snapshot, normalized_key_rank, option_matches_key, snapshot_from_record,
@@ -28,7 +28,7 @@ use anyharness_contract::v1::{
     PendingPromptAddedPayload, PendingPromptRemovalReason, PendingPromptRemovedPayload,
     PendingPromptUpdatedPayload, PermissionOutcome, SessionEndReason, SessionEventEnvelope,
     SessionExecutionPhase, SessionExecutionSummary, SessionInfoUpdatePayload,
-    SessionStateUpdatePayload, StopReason, UsageUpdatePayload,
+    SessionLiveConfigSnapshot, SessionStateUpdatePayload, StopReason, UsageUpdatePayload,
 };
 
 #[derive(Debug)]
@@ -122,8 +122,15 @@ struct ResumeReplayFilter {
 }
 
 impl ResumeReplayFilter {
-    fn new(source_agent_kind: &str, is_resume: bool, session_status: &str) -> Self {
-        let state = if is_resume && source_agent_kind == "claude" && session_status == "idle" {
+    fn new(
+        source_agent_kind: &str,
+        startup_disposition: NativeSessionStartupDisposition,
+        session_status: &str,
+    ) -> Self {
+        let state = if startup_disposition == NativeSessionStartupDisposition::LoadedExisting
+            && source_agent_kind == "claude"
+            && session_status == "idle"
+        {
             ResumeReplayFilterState::Monitoring
         } else {
             ResumeReplayFilterState::Disabled
@@ -172,6 +179,42 @@ impl ResumeReplayFilter {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionStartupStrategy {
+    Fresh,
+    ResumeSeqFreshNative,
+    LoadNative(String),
+}
+
+impl SessionStartupStrategy {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Fresh => "fresh",
+            Self::ResumeSeqFreshNative => "resume_seq_fresh_native",
+            Self::LoadNative(_) => "load_native",
+        }
+    }
+
+    pub fn resumes_durable_history(&self) -> bool {
+        !matches!(self, Self::Fresh)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NativeSessionStartupDisposition {
+    CreatedFresh,
+    LoadedExisting,
+}
+
+impl NativeSessionStartupDisposition {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::CreatedFresh => "created_fresh_native",
+            Self::LoadedExisting => "loaded_existing_native",
+        }
+    }
+}
+
 fn classify_resume_replay_notification(
     update: &acp::SessionUpdate,
 ) -> ResumeReplayNotificationClass {
@@ -191,6 +234,7 @@ pub struct LiveSessionHandle {
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,
     pub busy: Arc<AtomicBool>,
     execution: Arc<RwLock<LiveSessionExecutionSnapshot>>,
+    native_session_id: Arc<std::sync::RwLock<Option<String>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -251,6 +295,31 @@ impl LiveSessionHandle {
     pub async fn execution_snapshot(&self) -> LiveSessionExecutionSnapshot {
         self.execution.read().await.clone()
     }
+
+    pub fn native_session_id(&self) -> Option<String> {
+        self.native_session_id
+            .read()
+            .expect("native session id lock poisoned")
+            .clone()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test(
+        session_id: impl Into<String>,
+        command_tx: mpsc::Sender<SessionCommand>,
+        event_tx: broadcast::Sender<SessionEventEnvelope>,
+        native_session_id: Option<String>,
+        phase: SessionExecutionPhase,
+    ) -> Self {
+        Self {
+            session_id: session_id.into(),
+            command_tx,
+            event_tx,
+            busy: Arc::new(AtomicBool::new(false)),
+            execution: Arc::new(RwLock::new(LiveSessionExecutionSnapshot::new(phase))),
+            native_session_id: Arc::new(std::sync::RwLock::new(native_session_id)),
+        }
+    }
 }
 
 pub struct SessionActorConfig {
@@ -263,7 +332,7 @@ pub struct SessionActorConfig {
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,
     pub session_store: SessionStore,
     pub mcp_servers: Vec<SessionMcpServer>,
-    pub is_resume: bool,
+    pub startup_strategy: SessionStartupStrategy,
     pub last_seq: i64,
     pub system_prompt_append: Option<String>,
     pub on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync + 'static>>,
@@ -509,7 +578,7 @@ pub fn spawn_session_actor(
     let session_id = config.session.id.clone();
     let workspace_id = config.session.workspace_id.clone();
     let agent_kind = config.session.agent_kind.clone();
-    let is_resume = config.is_resume;
+    let startup_strategy = config.startup_strategy.as_str();
     let actor_latency = config.latency.clone();
     let actor_latency_fields = latency_trace_fields(actor_latency.as_ref());
     let started = Instant::now();
@@ -517,7 +586,7 @@ pub fn spawn_session_actor(
         session_id = %session_id,
         workspace_id = %workspace_id,
         agent_kind = %agent_kind,
-        is_resume,
+        startup_strategy,
         flow_id = actor_latency_fields.flow_id,
             flow_kind = actor_latency_fields.flow_kind,
             flow_source = actor_latency_fields.flow_source,
@@ -537,6 +606,7 @@ pub fn spawn_session_actor(
         event_tx: event_tx.clone(),
         busy: busy.clone(),
         execution,
+        native_session_id: Arc::new(std::sync::RwLock::new(None)),
     });
     let actor_handle = handle.clone();
 
@@ -582,11 +652,17 @@ pub fn spawn_session_actor(
                 anyhow::anyhow!("actor thread died before ACP init completed")
             }
         })??;
+    handle
+        .native_session_id
+        .write()
+        .expect("native session id lock poisoned")
+        .replace(native_session_id.clone());
 
     tracing::info!(
         session_id = %session_id,
         workspace_id = %workspace_id,
         native_session_id = %native_session_id,
+        startup_strategy,
         elapsed_ms = started.elapsed().as_millis(),
         flow_id = actor_latency_fields.flow_id,
             flow_kind = actor_latency_fields.flow_kind,
@@ -607,6 +683,8 @@ async fn run_actor(
     let session_id = config.session.id.clone();
     let source_agent_kind = config.session.agent_kind.clone();
     let workspace_id = config.session.workspace_id.clone();
+    let startup_strategy = config.startup_strategy.clone();
+    let startup_strategy_label = startup_strategy.as_str();
     let actor_latency = config.latency.clone();
     let actor_latency_fields = latency_trace_fields(actor_latency.as_ref());
     let startup_started = Instant::now();
@@ -728,7 +806,7 @@ async fn run_actor(
         mpsc::unbounded_channel::<acp::SessionNotification>();
     let store = config.session_store.clone();
 
-    let event_sink = Arc::new(Mutex::new(if config.is_resume {
+    let event_sink = Arc::new(Mutex::new(if startup_strategy.resumes_durable_history() {
         SessionEventSink::resume_from_seq(
             session_id.clone(),
             source_agent_kind.clone(),
@@ -850,162 +928,139 @@ async fn run_actor(
         }
     }
 
-    let mut recovered_from_missing_load_session = false;
-    let (native_session_id, mut startup_state) = if config.is_resume {
-        let existing =
-            config.session.native_session_id.clone().ok_or_else(|| {
-                anyhow::anyhow!("cannot resume session without native_session_id")
-            })?;
-        let load_started = Instant::now();
-        match conn
-            .load_session(
-                acp::LoadSessionRequest::new(existing.clone(), config.workspace_path.clone())
-                    .mcp_servers(to_acp_servers(&config.mcp_servers))
-                    .meta(build_system_prompt_meta(
-                        config.system_prompt_append.as_deref(),
-                    )),
+    let (native_session_id, mut startup_state, startup_disposition) = match &startup_strategy {
+        SessionStartupStrategy::Fresh | SessionStartupStrategy::ResumeSeqFreshNative => {
+            let new_session_resp = match start_new_session(
+                &conn,
+                &config.workspace_path,
+                &config.mcp_servers,
+                config.system_prompt_append.as_deref(),
+                &session_id,
+                &workspace_id,
+                startup_strategy_label,
+                "[workspace-latency] session.actor.new_session.completed",
+                "[workspace-latency] session.actor.new_session.failed",
             )
             .await
-        {
-            Ok(resp) => {
-                tracing::info!(
-                    session_id = %session_id,
-                    workspace_id = %workspace_id,
-                    native_session_id = %existing,
-                    elapsed_ms = load_started.elapsed().as_millis(),
-                    "[workspace-latency] session.actor.load_session.completed"
-                );
-                (existing, SessionStartupState::from_load_session(&resp))
-            }
-            Err(e) if is_missing_load_session_resource(&e, &existing) => {
-                tracing::warn!(
-                    session_id = %session_id,
-                    workspace_id = %workspace_id,
-                    native_session_id = %existing,
-                    elapsed_ms = load_started.elapsed().as_millis(),
-                    error = %e,
-                    "ACP load_session resource missing; falling back to new_session"
-                );
-                recovered_from_missing_load_session = true;
-
-                let mut request = acp::NewSessionRequest::new(config.workspace_path.clone());
-                if !config.mcp_servers.is_empty() {
-                    request = request.mcp_servers(to_acp_servers(&config.mcp_servers));
+            {
+                Ok(resp) => resp,
+                Err(error) => {
+                    let _ = ready_tx.send(Err(anyhow::anyhow!("ACP new_session: {error}")));
+                    return Err(anyhow::anyhow!("ACP new_session: {error}"));
                 }
-                if let Some(meta) = build_system_prompt_meta(config.system_prompt_append.as_deref())
-                {
-                    tracing::debug!(
-                        session_id = %session_id,
-                        system_prompt_append = config.system_prompt_append.as_deref().unwrap_or_default(),
-                        system_prompt_append_len = config.system_prompt_append.as_ref().map(|value| value.len()).unwrap_or(0),
-                        "attaching ACP startup system prompt append to fallback new_session"
-                    );
-                    request = request.meta(meta);
-                }
+            };
 
-                let new_session_started = Instant::now();
-                let new_session_resp = match conn.new_session(request).await {
-                    Ok(resp) => {
-                        tracing::info!(
-                            session_id = %session_id,
-                            workspace_id = %workspace_id,
-                            native_session_id = %resp.session_id,
-                            elapsed_ms = new_session_started.elapsed().as_millis(),
-                            "[workspace-latency] session.actor.new_session_after_missing_load.completed"
-                        );
-                        resp
-                    }
-                    Err(new_session_error) => {
-                        tracing::warn!(
-                            session_id = %session_id,
-                            workspace_id = %workspace_id,
-                            elapsed_ms = new_session_started.elapsed().as_millis(),
-                            error = %new_session_error,
-                            "[workspace-latency] session.actor.new_session_after_missing_load.failed"
-                        );
-                        let _ = ready_tx.send(Err(anyhow::anyhow!(
-                                "ACP new_session after missing load_session resource: {new_session_error}"
-                            )));
-                        return Err(anyhow::anyhow!(
-                                "ACP new_session after missing load_session resource: {new_session_error}"
-                            ));
-                    }
-                };
-
-                (
-                    new_session_resp.session_id.to_string(),
-                    SessionStartupState::from_new_session(&new_session_resp),
+            (
+                new_session_resp.session_id.to_string(),
+                SessionStartupState::from_new_session(&new_session_resp),
+                NativeSessionStartupDisposition::CreatedFresh,
+            )
+        }
+        SessionStartupStrategy::LoadNative(existing) => {
+            let load_started = Instant::now();
+            match conn
+                .load_session(
+                    acp::LoadSessionRequest::new(existing.clone(), config.workspace_path.clone())
+                        .mcp_servers(to_acp_servers(&config.mcp_servers))
+                        .meta(build_system_prompt_meta(
+                            config.system_prompt_append.as_deref(),
+                        )),
                 )
-            }
-            Err(e) => {
-                tracing::warn!(
-                    session_id = %session_id,
-                    workspace_id = %workspace_id,
-                    native_session_id = %existing,
-                    elapsed_ms = load_started.elapsed().as_millis(),
-                    error = %e,
-                    "[workspace-latency] session.actor.load_session.failed"
-                );
-                let _ = ready_tx.send(Err(anyhow::anyhow!("ACP load_session: {e}")));
-                return Err(anyhow::anyhow!("ACP load_session: {e}"));
-            }
-        }
-    } else {
-        let mut request = acp::NewSessionRequest::new(config.workspace_path.clone());
-        if !config.mcp_servers.is_empty() {
-            request = request.mcp_servers(to_acp_servers(&config.mcp_servers));
-        }
-        if let Some(meta) = build_system_prompt_meta(config.system_prompt_append.as_deref()) {
-            tracing::debug!(
-                session_id = %session_id,
-                system_prompt_append = config.system_prompt_append.as_deref().unwrap_or_default(),
-                system_prompt_append_len = config.system_prompt_append.as_ref().map(|value| value.len()).unwrap_or(0),
-                "attaching ACP startup system prompt append to new_session"
-            );
-            request = request.meta(meta);
-        }
+                .await
+            {
+                Ok(resp) => {
+                    tracing::info!(
+                        session_id = %session_id,
+                        workspace_id = %workspace_id,
+                        native_session_id = %existing,
+                        startup_strategy = startup_strategy_label,
+                        native_startup_disposition = NativeSessionStartupDisposition::LoadedExisting.as_str(),
+                        elapsed_ms = load_started.elapsed().as_millis(),
+                        "[workspace-latency] session.actor.load_session.completed"
+                    );
+                    (
+                        existing.clone(),
+                        SessionStartupState::from_load_session(&resp),
+                        NativeSessionStartupDisposition::LoadedExisting,
+                    )
+                }
+                Err(e) if is_missing_load_session_resource(&e, existing) => {
+                    tracing::warn!(
+                        session_id = %session_id,
+                        workspace_id = %workspace_id,
+                        native_session_id = %existing,
+                        startup_strategy = startup_strategy_label,
+                        elapsed_ms = load_started.elapsed().as_millis(),
+                        error = %e,
+                        "ACP load_session resource missing; falling back to new_session"
+                    );
 
-        let new_session_started = Instant::now();
-        let new_session_resp = match conn.new_session(request).await {
-            Ok(resp) => {
-                tracing::info!(
-                    session_id = %session_id,
-                    workspace_id = %workspace_id,
-                    native_session_id = %resp.session_id,
-                    elapsed_ms = new_session_started.elapsed().as_millis(),
-                    "[workspace-latency] session.actor.new_session.completed"
-                );
-                resp
+                    let new_session_resp = match start_new_session(
+                        &conn,
+                        &config.workspace_path,
+                        &config.mcp_servers,
+                        config.system_prompt_append.as_deref(),
+                        &session_id,
+                        &workspace_id,
+                        startup_strategy_label,
+                        "[workspace-latency] session.actor.new_session_after_missing_load.completed",
+                        "[workspace-latency] session.actor.new_session_after_missing_load.failed",
+                    )
+                    .await
+                    {
+                        Ok(resp) => resp,
+                        Err(error) => {
+                            let _ = ready_tx.send(Err(anyhow::anyhow!(
+                                "ACP new_session after missing load_session resource: {error}"
+                            )));
+                            return Err(anyhow::anyhow!(
+                                "ACP new_session after missing load_session resource: {error}"
+                            ));
+                        }
+                    };
+
+                    (
+                        new_session_resp.session_id.to_string(),
+                        SessionStartupState::from_new_session(&new_session_resp),
+                        NativeSessionStartupDisposition::CreatedFresh,
+                    )
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        session_id = %session_id,
+                        workspace_id = %workspace_id,
+                        native_session_id = %existing,
+                        startup_strategy = startup_strategy_label,
+                        elapsed_ms = load_started.elapsed().as_millis(),
+                        error = %e,
+                        "[workspace-latency] session.actor.load_session.failed"
+                    );
+                    let _ = ready_tx.send(Err(anyhow::anyhow!("ACP load_session: {e}")));
+                    return Err(anyhow::anyhow!("ACP load_session: {e}"));
+                }
             }
-            Err(e) => {
-                tracing::warn!(
-                    session_id = %session_id,
-                    workspace_id = %workspace_id,
-                    elapsed_ms = new_session_started.elapsed().as_millis(),
-                    error = %e,
-                    "[workspace-latency] session.actor.new_session.failed"
-                );
-                let _ = ready_tx.send(Err(anyhow::anyhow!("ACP new_session: {e}")));
-                return Err(anyhow::anyhow!("ACP new_session: {e}"));
-            }
-        };
-        (
-            new_session_resp.session_id.to_string(),
-            SessionStartupState::from_new_session(&new_session_resp),
-        )
+        }
     };
 
     tracing::info!(
         session_id = %session_id,
         native_session_id = %native_session_id,
+        startup_strategy = startup_strategy_label,
+        native_startup_disposition = startup_disposition.as_str(),
         "ACP session established"
     );
 
     let mut persisted_config_state = PersistedSessionConfigState::from_session(&config.session);
+    let startup_restore_snapshot = load_startup_restore_snapshot(
+        &store,
+        &session_id,
+        &source_agent_kind,
+        startup_strategy.resumes_durable_history(),
+    )?;
 
     {
         let mut sink = event_sink.lock().await;
-        if !config.is_resume || recovered_from_missing_load_session {
+        if startup_disposition == NativeSessionStartupDisposition::CreatedFresh {
             sink.session_started(native_session_id.to_string());
         }
         emit_startup_state(&mut sink, &startup_state);
@@ -1077,7 +1132,7 @@ async fn run_actor(
         &event_sink,
         &mut persisted_config_state,
         &mut startup_state,
-        config.is_resume,
+        startup_restore_snapshot.as_ref(),
     )
     .await
     {
@@ -1135,6 +1190,8 @@ async fn run_actor(
         session_id = %session_id,
         workspace_id = %workspace_id,
         native_session_id = %native_session_id,
+        startup_strategy = startup_strategy_label,
+        native_startup_disposition = startup_disposition.as_str(),
         total_elapsed_ms = startup_started.elapsed().as_millis(),
         flow_id = actor_latency_fields.flow_id,
             flow_kind = actor_latency_fields.flow_kind,
@@ -1142,8 +1199,11 @@ async fn run_actor(
             prompt_id = actor_latency_fields.prompt_id,
         "[workspace-latency] session.actor.startup_ready"
     );
-    let mut resume_replay_filter =
-        ResumeReplayFilter::new(&source_agent_kind, config.is_resume, &config.session.status);
+    let mut resume_replay_filter = ResumeReplayFilter::new(
+        &source_agent_kind,
+        startup_disposition,
+        &config.session.status,
+    );
 
     // Invariant 5: startup drain. If the durable queue is non-empty, self-dispatch
     // a Prompt command for the head row carrying `from_queue_seq`. The first
@@ -2083,6 +2143,62 @@ fn build_system_prompt_meta(system_prompt_append: Option<&str>) -> Option<acp::M
     )]))
 }
 
+async fn start_new_session(
+    conn: &acp::ClientSideConnection,
+    workspace_path: &std::path::PathBuf,
+    mcp_servers: &[SessionMcpServer],
+    system_prompt_append: Option<&str>,
+    session_id: &str,
+    workspace_id: &str,
+    startup_strategy: &str,
+    completed_event: &str,
+    failed_event: &str,
+) -> anyhow::Result<acp::NewSessionResponse> {
+    let mut request = acp::NewSessionRequest::new(workspace_path.clone());
+    if !mcp_servers.is_empty() {
+        request = request.mcp_servers(to_acp_servers(mcp_servers));
+    }
+    if let Some(meta) = build_system_prompt_meta(system_prompt_append) {
+        tracing::debug!(
+            session_id = %session_id,
+            startup_strategy,
+            system_prompt_append = system_prompt_append.unwrap_or_default(),
+            system_prompt_append_len = system_prompt_append.map(|value| value.len()).unwrap_or(0),
+            "attaching ACP startup system prompt append to new_session"
+        );
+        request = request.meta(meta);
+    }
+
+    let new_session_started = Instant::now();
+    match conn.new_session(request).await {
+        Ok(resp) => {
+            tracing::info!(
+                session_id = %session_id,
+                workspace_id = %workspace_id,
+                native_session_id = %resp.session_id,
+                startup_strategy,
+                startup_event = completed_event,
+                native_startup_disposition = NativeSessionStartupDisposition::CreatedFresh.as_str(),
+                elapsed_ms = new_session_started.elapsed().as_millis(),
+                "ACP new_session completed"
+            );
+            Ok(resp)
+        }
+        Err(error) => {
+            tracing::warn!(
+                session_id = %session_id,
+                workspace_id = %workspace_id,
+                startup_strategy,
+                startup_event = failed_event,
+                elapsed_ms = new_session_started.elapsed().as_millis(),
+                error = %error,
+                "ACP new_session failed"
+            );
+            Err(anyhow::anyhow!("{error}"))
+        }
+    }
+}
+
 fn is_missing_load_session_resource(error: &acp::Error, expected_uri: &str) -> bool {
     if !matches!(error.code, acp::ErrorCode::ResourceNotFound) {
         return false;
@@ -2423,16 +2539,11 @@ async fn restore_persisted_live_config_if_needed(
     event_sink: &Arc<Mutex<SessionEventSink>>,
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,
-    is_resume: bool,
+    persisted_snapshot: Option<&SessionLiveConfigSnapshot>,
 ) -> anyhow::Result<()> {
-    if !is_resume || source_agent_kind != "claude" {
-        return Ok(());
-    }
-
-    let Some(record) = store.find_live_config_snapshot(session_id)? else {
+    let Some(snapshot) = persisted_snapshot else {
         return Ok(());
     };
-    let snapshot = snapshot_from_record(&record)?;
     let desired = persisted_control_values(&snapshot.normalized_controls);
     if desired.is_empty() {
         return Ok(());
@@ -2468,6 +2579,25 @@ async fn restore_persisted_live_config_if_needed(
     }
 
     Ok(())
+}
+
+fn load_startup_restore_snapshot(
+    store: &SessionStore,
+    session_id: &str,
+    source_agent_kind: &str,
+    resumes_durable_history: bool,
+) -> anyhow::Result<Option<SessionLiveConfigSnapshot>> {
+    if !resumes_durable_history || source_agent_kind != AgentKind::Claude.as_str() {
+        return Ok(None);
+    }
+
+    // Capture the persisted snapshot before startup emits a fresh live-config
+    // update. Fresh-native resumes need the pre-restart controls, not the
+    // defaults reported by the replacement ACP session.
+    store
+        .find_live_config_snapshot(session_id)?
+        .map(|record| snapshot_from_record(&record))
+        .transpose()
 }
 
 async fn apply_config_option_if_possible(
@@ -3104,22 +3234,25 @@ mod tests {
         build_system_prompt_meta, classify_agent_stderr_line, finalize_established_actor_exit,
         find_select_option_for_request, handle_notification,
         handle_notification_with_resume_replay_filter, is_missing_load_session_resource,
-        is_mode_config_request, is_model_config_request, merge_spawn_env, normalized_key_rank,
-        pending_config_rank, persisted_control_values, sanitize_agent_stderr_line, serialize_meta,
-        should_try_direct_claude_model_setter, tracked_config_purpose, ActorExitDisposition,
-        AgentStderrSeverity, LiveSessionExecutionSnapshot, LiveSessionHandle,
+        is_mode_config_request, is_model_config_request, load_startup_restore_snapshot,
+        merge_spawn_env, normalized_key_rank, pending_config_rank, persisted_control_values,
+        sanitize_agent_stderr_line, serialize_meta, should_try_direct_claude_model_setter,
+        tracked_config_purpose, ActorExitDisposition, AgentStderrSeverity,
+        LiveSessionExecutionSnapshot, LiveSessionHandle, NativeSessionStartupDisposition,
         PersistedSessionConfigState, ResumeReplayFilter, SessionCommand, SessionStartupState,
         IDLE_RESUME_REPLAY_QUIET_WINDOW,
     };
     use crate::acp::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
     use crate::acp::event_sink::SessionEventSink;
+    use crate::agents::model::AgentKind;
     use crate::persistence::Db;
-    use crate::sessions::live_config::NormalizedControlKind;
+    use crate::sessions::live_config::{snapshot_to_record, NormalizedControlKind};
     use crate::sessions::{model::SessionRecord, store::SessionStore};
     use agent_client_protocol as acp;
     use anyharness_contract::v1::{
         NormalizedSessionControl, NormalizedSessionControlValue, NormalizedSessionControls,
         PendingApprovalSummary, SessionEventEnvelope, SessionExecutionPhase,
+        SessionLiveConfigSnapshot,
     };
     use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 
@@ -3254,7 +3387,11 @@ mod tests {
 
     #[test]
     fn resume_replay_filter_suppresses_after_user_echo_until_quiet_gap() {
-        let mut filter = ResumeReplayFilter::new("claude", true, "idle");
+        let mut filter = ResumeReplayFilter::new(
+            "claude",
+            NativeSessionStartupDisposition::LoadedExisting,
+            "idle",
+        );
         let base = Instant::now();
 
         let user_echo = acp::SessionNotification::new(
@@ -3285,7 +3422,11 @@ mod tests {
 
     #[test]
     fn resume_replay_filter_ignores_non_resume_agent_chunks() {
-        let mut filter = ResumeReplayFilter::new("claude", false, "idle");
+        let mut filter = ResumeReplayFilter::new(
+            "claude",
+            NativeSessionStartupDisposition::CreatedFresh,
+            "idle",
+        );
         let base = Instant::now();
         let assistant = acp::SessionNotification::new(
             "native-1",
@@ -3293,6 +3434,22 @@ mod tests {
         );
 
         assert!(!filter.should_suppress(&assistant, base));
+    }
+
+    #[test]
+    fn resume_replay_filter_stays_disabled_for_zero_turn_fresh_native_resumes() {
+        let mut filter = ResumeReplayFilter::new(
+            "claude",
+            NativeSessionStartupDisposition::CreatedFresh,
+            "idle",
+        );
+        let base = Instant::now();
+        let user_echo = acp::SessionNotification::new(
+            "native-1",
+            acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new("current prompt".into())),
+        );
+
+        assert!(!filter.should_suppress(&user_echo, base));
     }
 
     #[tokio::test]
@@ -3354,7 +3511,11 @@ mod tests {
             requested_mode_id: None,
             current_mode_id: None,
         };
-        let mut replay_filter = ResumeReplayFilter::new("claude", true, "idle");
+        let mut replay_filter = ResumeReplayFilter::new(
+            "claude",
+            NativeSessionStartupDisposition::LoadedExisting,
+            "idle",
+        );
         let mut background_work_registry = test_background_work_registry(&store);
 
         let replay_user = acp::SessionNotification::new(
@@ -3409,6 +3570,136 @@ mod tests {
         assert_eq!(raw.len(), 2);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event_type, "available_commands_update");
+    }
+
+    #[test]
+    fn load_startup_restore_snapshot_captures_pre_restart_controls_before_overwrite() {
+        let db = Db::open_in_memory().expect("open db");
+        db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
+                 VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
+                rusqlite::params!["workspace-1", "2026-03-25T00:00:00Z"],
+            )?;
+            Ok(())
+        })
+        .expect("seed workspace");
+
+        let store = SessionStore::new(db.clone());
+        store
+            .insert(&SessionRecord {
+                id: "session-1".to_string(),
+                workspace_id: "workspace-1".to_string(),
+                agent_kind: AgentKind::Claude.as_str().to_string(),
+                native_session_id: Some("native-1".to_string()),
+                requested_model_id: None,
+                current_model_id: None,
+                requested_mode_id: None,
+                current_mode_id: None,
+                title: None,
+                thinking_level_id: None,
+                thinking_budget_tokens: None,
+                status: "idle".to_string(),
+                created_at: "2026-03-25T00:00:00Z".to_string(),
+                updated_at: "2026-03-25T00:00:00Z".to_string(),
+                last_prompt_at: None,
+                closed_at: None,
+                dismissed_at: None,
+                mcp_bindings_ciphertext: None,
+                system_prompt_append: None,
+            })
+            .expect("insert session");
+
+        let persisted_snapshot = SessionLiveConfigSnapshot {
+            raw_config_options: vec![],
+            normalized_controls: NormalizedSessionControls {
+                model: None,
+                collaboration_mode: Some(NormalizedSessionControl {
+                    key: "collaboration_mode".into(),
+                    raw_config_id: "collaboration_mode".into(),
+                    label: "Collaboration Mode".into(),
+                    current_value: Some("plan".into()),
+                    settable: true,
+                    values: vec![
+                        NormalizedSessionControlValue {
+                            value: "chat".into(),
+                            label: "Chat".into(),
+                            description: None,
+                        },
+                        NormalizedSessionControlValue {
+                            value: "plan".into(),
+                            label: "Plan".into(),
+                            description: None,
+                        },
+                    ],
+                }),
+                mode: None,
+                reasoning: None,
+                effort: None,
+                fast_mode: None,
+                extras: vec![],
+            },
+            source_seq: 1,
+            updated_at: "2026-03-25T00:00:00Z".into(),
+        };
+        store
+            .upsert_live_config_snapshot(
+                &snapshot_to_record("session-1", &persisted_snapshot).expect("snapshot record"),
+            )
+            .expect("persist old snapshot");
+
+        let captured =
+            load_startup_restore_snapshot(&store, "session-1", AgentKind::Claude.as_str(), true)
+                .expect("load startup snapshot")
+                .expect("snapshot exists");
+
+        let replacement_snapshot = SessionLiveConfigSnapshot {
+            raw_config_options: vec![],
+            normalized_controls: NormalizedSessionControls {
+                model: None,
+                collaboration_mode: Some(NormalizedSessionControl {
+                    key: "collaboration_mode".into(),
+                    raw_config_id: "collaboration_mode".into(),
+                    label: "Collaboration Mode".into(),
+                    current_value: Some("chat".into()),
+                    settable: true,
+                    values: vec![
+                        NormalizedSessionControlValue {
+                            value: "chat".into(),
+                            label: "Chat".into(),
+                            description: None,
+                        },
+                        NormalizedSessionControlValue {
+                            value: "plan".into(),
+                            label: "Plan".into(),
+                            description: None,
+                        },
+                    ],
+                }),
+                mode: None,
+                reasoning: None,
+                effort: None,
+                fast_mode: None,
+                extras: vec![],
+            },
+            source_seq: 2,
+            updated_at: "2026-03-25T00:01:00Z".into(),
+        };
+        store
+            .upsert_live_config_snapshot(
+                &snapshot_to_record("session-1", &replacement_snapshot)
+                    .expect("replacement snapshot record"),
+            )
+            .expect("persist replacement snapshot");
+
+        assert_eq!(
+            captured
+                .normalized_controls
+                .collaboration_mode
+                .as_ref()
+                .and_then(|control| control.current_value.as_deref()),
+            Some("plan")
+        );
     }
 
     #[tokio::test]
@@ -3904,6 +4195,7 @@ mod tests {
             event_tx: event_tx.clone(),
             busy: Arc::new(AtomicBool::new(false)),
             execution: Arc::new(RwLock::new(execution)),
+            native_session_id: Arc::new(std::sync::RwLock::new(Some("native-1".to_string()))),
         });
 
         let event_sink = Arc::new(Mutex::new(SessionEventSink::new(

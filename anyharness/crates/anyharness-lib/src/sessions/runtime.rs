@@ -20,7 +20,7 @@ use super::service::SessionService;
 use crate::acp::manager::AcpManager;
 use crate::acp::session_actor::{
     LiveSessionHandle, PromptAcceptError, PromptAcceptance, QueueMutationError, SessionCommand,
-    SetConfigOptionCommandError,
+    SessionStartupStrategy, SetConfigOptionCommandError,
 };
 use crate::agents::model::{AgentKind, ResolvedAgent};
 use crate::agents::registry::built_in_registry;
@@ -111,6 +111,28 @@ enum StartSessionError {
     RestartRequired(String),
     Internal(anyhow::Error),
     AcpStart(anyhow::Error),
+}
+
+fn choose_session_startup_strategy(
+    record: &SessionRecord,
+    session_store: &crate::sessions::store::SessionStore,
+) -> anyhow::Result<SessionStartupStrategy> {
+    let Some(native_session_id) = record.native_session_id.clone() else {
+        return Ok(SessionStartupStrategy::Fresh);
+    };
+
+    if record.agent_kind != AgentKind::Claude.as_str() {
+        return Ok(SessionStartupStrategy::LoadNative(native_session_id));
+    }
+
+    // A durable `turn_started` protects the narrow crash window where the sink
+    // has already persisted a real turn but `last_prompt_at` has not been
+    // updated yet. Outside that window, `last_prompt_at` is the fast path.
+    if record.last_prompt_at.is_some() || session_store.has_turn_started_event(&record.id)? {
+        return Ok(SessionStartupStrategy::LoadNative(native_session_id));
+    }
+
+    Ok(SessionStartupStrategy::ResumeSeqFreshNative)
 }
 
 impl SessionRuntime {
@@ -309,7 +331,7 @@ impl SessionRuntime {
         let (_handle, native_session_id) = match self
             .start_live_session(
                 record,
-                false,
+                SessionStartupStrategy::Fresh,
                 0,
                 record.system_prompt_append.clone(),
                 latency,
@@ -996,11 +1018,13 @@ impl SessionRuntime {
         let last_seq = session_store
             .last_event_seq(&record.id)
             .map_err(StartSessionError::Internal)?;
+        let startup_strategy = choose_session_startup_strategy(record, &session_store)
+            .map_err(StartSessionError::Internal)?;
 
         let (handle, native_session_id) = self
             .start_live_session(
                 record,
-                record.native_session_id.is_some(),
+                startup_strategy,
                 last_seq,
                 record.system_prompt_append.clone(),
                 latency,
@@ -1025,18 +1049,19 @@ impl SessionRuntime {
     async fn start_live_session(
         &self,
         record: &SessionRecord,
-        is_resume: bool,
+        startup_strategy: SessionStartupStrategy,
         last_seq: i64,
         system_prompt_append: Option<String>,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<(Arc<LiveSessionHandle>, String), StartSessionError> {
         let started = Instant::now();
         let latency_fields = latency_trace_fields(latency);
+        let startup_strategy_label = startup_strategy.as_str();
         tracing::info!(
             session_id = %record.id,
             workspace_id = %record.workspace_id,
             agent_kind = %record.agent_kind,
-            is_resume,
+            startup_strategy = startup_strategy_label,
             last_seq,
             has_system_prompt_append = system_prompt_append.is_some(),
             flow_id = latency_fields.flow_id,
@@ -1122,7 +1147,7 @@ impl SessionRuntime {
                 session_launch_env,
                 session_store,
                 mcp_servers,
-                is_resume,
+                startup_strategy,
                 last_seq,
                 system_prompt_append,
                 Some(Arc::new({
@@ -1143,6 +1168,7 @@ impl SessionRuntime {
             session_id = %record.id,
             workspace_id = %record.workspace_id,
             native_session_id = %ready.native_session_id,
+            startup_strategy = startup_strategy_label,
             elapsed_ms = acp_start_started.elapsed().as_millis(),
             total_elapsed_ms = started.elapsed().as_millis(),
             flow_id = latency_fields.flow_id,
@@ -1338,12 +1364,17 @@ fn map_create_session_service_error(
 mod tests {
     use std::path::PathBuf;
 
-    use super::{build_session_launch_env, join_system_prompt_append};
+    use super::{
+        build_session_launch_env, choose_session_startup_strategy, join_system_prompt_append,
+    };
+    use crate::acp::session_actor::SessionStartupStrategy;
     use crate::agents::model::{
         AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus,
         ResolvedArtifact,
     };
     use crate::agents::registry::built_in_registry;
+    use crate::persistence::Db;
+    use crate::sessions::{model::SessionEventRecord, model::SessionRecord, store::SessionStore};
 
     fn resolved_agent(kind: AgentKind, native_path: Option<&str>) -> ResolvedAgent {
         let descriptor = built_in_registry()
@@ -1372,6 +1403,42 @@ mod tests {
                 message: None,
             },
             spawn: None,
+        }
+    }
+
+    fn seed_workspace(db: &Db) {
+        db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
+                 VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
+                rusqlite::params!["workspace-1", "2026-03-25T00:00:00Z"],
+            )?;
+            Ok(())
+        })
+        .expect("seed workspace");
+    }
+
+    fn session_record(agent_kind: &str) -> SessionRecord {
+        SessionRecord {
+            id: "session-1".to_string(),
+            workspace_id: "workspace-1".to_string(),
+            agent_kind: agent_kind.to_string(),
+            native_session_id: Some("native-1".to_string()),
+            requested_model_id: None,
+            current_model_id: None,
+            requested_mode_id: None,
+            current_mode_id: None,
+            title: None,
+            thinking_level_id: None,
+            thinking_budget_tokens: None,
+            status: "idle".to_string(),
+            created_at: "2026-03-25T00:00:00Z".to_string(),
+            updated_at: "2026-03-25T00:00:00Z".to_string(),
+            last_prompt_at: None,
+            closed_at: None,
+            dismissed_at: None,
+            mcp_bindings_ciphertext: None,
+            system_prompt_append: None,
         }
     }
 
@@ -1423,5 +1490,99 @@ mod tests {
         ));
 
         assert!(env.is_empty());
+    }
+
+    #[test]
+    fn choose_startup_strategy_prefers_fresh_when_no_native_session_exists() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        let mut record = session_record("claude");
+        record.native_session_id = None;
+
+        let strategy =
+            choose_session_startup_strategy(&record, &store).expect("select startup strategy");
+
+        assert_eq!(strategy, SessionStartupStrategy::Fresh);
+    }
+
+    #[test]
+    fn choose_startup_strategy_uses_fresh_native_for_zero_turn_claude_sessions() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        let record = session_record("claude");
+
+        let strategy =
+            choose_session_startup_strategy(&record, &store).expect("select startup strategy");
+
+        assert_eq!(strategy, SessionStartupStrategy::ResumeSeqFreshNative);
+    }
+
+    #[test]
+    fn choose_startup_strategy_loads_claude_when_last_prompt_was_recorded() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        let mut record = session_record("claude");
+        record.last_prompt_at = Some("2026-03-25T00:05:00Z".to_string());
+
+        let strategy =
+            choose_session_startup_strategy(&record, &store).expect("select startup strategy");
+
+        assert_eq!(
+            strategy,
+            SessionStartupStrategy::LoadNative("native-1".to_string())
+        );
+    }
+
+    #[test]
+    fn choose_startup_strategy_loads_claude_when_turn_history_exists_without_last_prompt_at() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        let record = session_record("claude");
+        store.insert(&record).expect("insert session");
+        store
+            .append_event(&SessionEventRecord {
+                id: 0,
+                session_id: "session-1".to_string(),
+                seq: 1,
+                timestamp: "2026-03-25T00:01:00Z".to_string(),
+                event_type: "turn_started".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                item_id: None,
+                payload_json: r#"{"type":"turn_started"}"#.to_string(),
+            })
+            .expect("append turn_started");
+
+        let strategy =
+            choose_session_startup_strategy(&record, &store).expect("select startup strategy");
+
+        assert_eq!(
+            strategy,
+            SessionStartupStrategy::LoadNative("native-1".to_string())
+        );
+    }
+
+    #[test]
+    fn choose_startup_strategy_keeps_non_claude_agents_on_native_load_path() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        let record = session_record("codex");
+
+        let strategy =
+            choose_session_startup_strategy(&record, &store).expect("select startup strategy");
+
+        assert_eq!(
+            strategy,
+            SessionStartupStrategy::LoadNative("native-1".to_string())
+        );
     }
 }

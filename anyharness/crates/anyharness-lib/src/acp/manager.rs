@@ -8,7 +8,7 @@ use tokio::sync::{broadcast, RwLock};
 use super::permission_broker::PermissionBroker;
 use super::session_actor::{
     spawn_session_actor, ActorReadyResult, LiveSessionHandle, SessionActorConfig,
-    SessionTurnFinishResult,
+    SessionStartupStrategy, SessionTurnFinishResult,
 };
 use crate::agents::model::ResolvedAgent;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
@@ -44,7 +44,7 @@ impl AcpManager {
         session_launch_env: std::collections::BTreeMap<String, String>,
         session_store: SessionStore,
         mcp_servers: Vec<SessionMcpServer>,
-        is_resume: bool,
+        startup_strategy: SessionStartupStrategy,
         last_seq: i64,
         system_prompt_append: Option<String>,
         on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync + 'static>>,
@@ -53,11 +53,12 @@ impl AcpManager {
         let session_id = session.id.clone();
         let started = Instant::now();
         let latency_fields = latency_trace_fields(latency.as_ref());
+        let startup_strategy_label = startup_strategy.as_str();
         tracing::info!(
             session_id = %session_id,
             workspace_id = %session.workspace_id,
             agent_kind = %session.agent_kind,
-            is_resume,
+            startup_strategy = startup_strategy_label,
             last_seq,
             flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
@@ -80,7 +81,10 @@ impl AcpManager {
             return Ok((
                 existing.clone(),
                 ActorReadyResult {
-                    native_session_id: session.native_session_id.unwrap_or_default(),
+                    native_session_id: existing
+                        .native_session_id()
+                        .or(session.native_session_id)
+                        .unwrap_or_default(),
                 },
             ));
         }
@@ -117,7 +121,7 @@ impl AcpManager {
             event_tx,
             session_store,
             mcp_servers,
-            is_resume,
+            startup_strategy,
             last_seq,
             system_prompt_append,
             on_turn_finish,
@@ -132,6 +136,7 @@ impl AcpManager {
         tracing::info!(
             session_id = %handle.session_id,
             native_session_id = %ready.native_session_id,
+            startup_strategy = startup_strategy_label,
             elapsed_ms = actor_start_started.elapsed().as_millis(),
             total_elapsed_ms = started.elapsed().as_millis(),
             flow_id = actor_latency_fields.flow_id,
@@ -161,5 +166,119 @@ impl Clone for AcpManager {
             live_sessions: self.live_sessions.clone(),
             permission_broker: self.permission_broker.clone(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use tokio::sync::{broadcast, mpsc};
+
+    use super::AcpManager;
+    use crate::acp::session_actor::{LiveSessionHandle, SessionStartupStrategy};
+    use crate::agents::model::{
+        AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus,
+        ResolvedArtifact,
+    };
+    use crate::agents::registry::built_in_registry;
+    use crate::persistence::Db;
+    use crate::sessions::model::SessionRecord;
+    use crate::sessions::store::SessionStore;
+    use anyharness_contract::v1::{SessionEventEnvelope, SessionExecutionPhase};
+
+    fn resolved_agent(kind: AgentKind) -> ResolvedAgent {
+        let descriptor = built_in_registry()
+            .into_iter()
+            .find(|descriptor| descriptor.kind == kind)
+            .expect("missing descriptor");
+
+        ResolvedAgent {
+            descriptor,
+            status: ResolvedAgentStatus::Ready,
+            credential_state: CredentialState::Ready,
+            native: Some(ResolvedArtifact {
+                role: ArtifactRole::NativeCli,
+                installed: true,
+                source: Some("managed".into()),
+                version: None,
+                path: Some(PathBuf::from("/tmp/managed/claude")),
+                message: None,
+            }),
+            agent_process: ResolvedArtifact {
+                role: ArtifactRole::AgentProcess,
+                installed: true,
+                source: Some("managed".into()),
+                version: None,
+                path: Some(PathBuf::from("/tmp/claude-agent-acp")),
+                message: None,
+            },
+            spawn: None,
+        }
+    }
+
+    fn session_record() -> SessionRecord {
+        SessionRecord {
+            id: "session-1".to_string(),
+            workspace_id: "workspace-1".to_string(),
+            agent_kind: AgentKind::Claude.as_str().to_string(),
+            native_session_id: Some("stale-native".to_string()),
+            requested_model_id: None,
+            current_model_id: None,
+            requested_mode_id: None,
+            current_mode_id: None,
+            title: None,
+            thinking_level_id: None,
+            thinking_budget_tokens: None,
+            status: "idle".to_string(),
+            created_at: "2026-03-25T00:00:00Z".to_string(),
+            updated_at: "2026-03-25T00:00:00Z".to_string(),
+            last_prompt_at: None,
+            closed_at: None,
+            dismissed_at: None,
+            mcp_bindings_ciphertext: None,
+            system_prompt_append: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn reused_live_handle_reports_the_live_native_session_id() {
+        let manager = AcpManager::new();
+        let (command_tx, _command_rx) = mpsc::channel(4);
+        let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            "session-1",
+            command_tx,
+            event_tx,
+            Some("fresh-native".to_string()),
+            SessionExecutionPhase::Idle,
+        ));
+        manager
+            .live_sessions
+            .write()
+            .await
+            .insert("session-1".to_string(), handle.clone());
+
+        let (returned_handle, ready) = manager
+            .start_session(
+                session_record(),
+                resolved_agent(AgentKind::Claude),
+                PathBuf::from("/tmp/workspace"),
+                Default::default(),
+                Default::default(),
+                SessionStore::new(Db::open_in_memory().expect("open db")),
+                vec![],
+                SessionStartupStrategy::ResumeSeqFreshNative,
+                0,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("reuse existing handle");
+
+        assert!(Arc::ptr_eq(&returned_handle, &handle));
+        assert_eq!(ready.native_session_id, "fresh-native");
     }
 }

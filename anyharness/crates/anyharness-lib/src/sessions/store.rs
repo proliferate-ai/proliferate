@@ -743,6 +743,21 @@ impl SessionStore {
         })
     }
 
+    pub fn has_turn_started_event(&self, session_id: &str) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT EXISTS(
+                     SELECT 1
+                     FROM session_events
+                     WHERE session_id = ?1 AND event_type = 'turn_started'
+                     LIMIT 1
+                 )",
+                [session_id],
+                |row| row.get(0),
+            )
+        })
+    }
+
     /// Find turns that have a `turn_started` but no corresponding `turn_ended`
     /// (or `error` / `session_ended`) and close them with a synthetic
     /// `turn_ended` event carrying `stop_reason: cancelled`. Returns the number
@@ -1098,6 +1113,37 @@ mod tests {
 
         assert_eq!(stored.thinking_budget_tokens, Some(16_000));
         assert_eq!(stored.title.as_deref(), Some("Fix auth refresh"));
+    }
+
+    #[test]
+    fn detects_when_a_session_has_started_a_turn() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        let record = session_record();
+        store.insert(&record).expect("insert session");
+
+        assert!(!store
+            .has_turn_started_event("session-1")
+            .expect("check empty turn history"));
+
+        store
+            .append_event(&SessionEventRecord {
+                id: 0,
+                session_id: "session-1".to_string(),
+                seq: 1,
+                timestamp: "2026-03-25T00:01:00Z".to_string(),
+                event_type: "turn_started".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                item_id: None,
+                payload_json: r#"{"type":"turn_started"}"#.to_string(),
+            })
+            .expect("append turn_started");
+
+        assert!(store
+            .has_turn_started_event("session-1")
+            .expect("check populated turn history"));
     }
 
     #[test]
