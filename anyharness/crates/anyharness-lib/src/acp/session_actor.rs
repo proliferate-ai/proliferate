@@ -121,6 +121,84 @@ struct ResumeReplayFilter {
     state: ResumeReplayFilterState,
 }
 
+#[derive(Debug, Clone)]
+struct PromptDiagnostics {
+    prompt_started_at: Instant,
+    prompt_id: Option<String>,
+    last_raw_kind: Option<&'static str>,
+    last_raw_at: Option<Instant>,
+    last_agent_chunk_at: Option<Instant>,
+    last_agent_preview: Option<String>,
+    last_tool_event_at: Option<Instant>,
+    last_plan_at: Option<Instant>,
+    last_usage_at: Option<Instant>,
+}
+
+impl PromptDiagnostics {
+    fn new(prompt_id: Option<String>) -> Self {
+        Self {
+            prompt_started_at: Instant::now(),
+            prompt_id,
+            last_raw_kind: None,
+            last_raw_at: None,
+            last_agent_chunk_at: None,
+            last_agent_preview: None,
+            last_tool_event_at: None,
+            last_plan_at: None,
+            last_usage_at: None,
+        }
+    }
+
+    fn observe_notification(&mut self, notif: &acp::SessionNotification) {
+        let kind = super::runtime_client::session_update_kind(&notif.update);
+        let now = Instant::now();
+        self.last_raw_kind = Some(kind);
+        self.last_raw_at = Some(now);
+
+        match &notif.update {
+            acp::SessionUpdate::AgentMessageChunk(chunk) => {
+                self.last_agent_chunk_at = Some(now);
+                self.last_agent_preview = Some(content_block_preview(&chunk.content));
+            }
+            acp::SessionUpdate::ToolCall(_) | acp::SessionUpdate::ToolCallUpdate(_) => {
+                self.last_tool_event_at = Some(now);
+            }
+            acp::SessionUpdate::Plan(_) => {
+                self.last_plan_at = Some(now);
+            }
+            acp::SessionUpdate::UsageUpdate(_) => {
+                self.last_usage_at = Some(now);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn content_block_preview(content: &acp::ContentBlock) -> String {
+    let value = serde_json::to_value(content).unwrap_or_else(|_| serde_json::json!({}));
+    if let Some(text) = value.get("text").and_then(|text| text.as_str()) {
+        return truncate_preview(text, 120);
+    }
+    truncate_preview(&value.to_string(), 120)
+}
+
+fn truncate_preview(text: &str, max_chars: usize) -> String {
+    let mut preview = String::new();
+    for ch in text.chars().take(max_chars) {
+        preview.push(ch);
+    }
+    if text.chars().count() > max_chars {
+        preview.push_str("...");
+    }
+    preview
+}
+
+fn age_ms(since: Option<Instant>) -> u64 {
+    since
+        .map(|instant| instant.elapsed().as_millis() as u64)
+        .unwrap_or(0)
+}
+
 impl ResumeReplayFilter {
     fn new(
         source_agent_kind: &str,
@@ -1318,6 +1396,8 @@ async fn run_actor(
                             );
 
                             let mut prompt_result = None;
+                            let mut prompt_diagnostics =
+                                PromptDiagnostics::new(current_prompt_id.clone());
                             tracing::info!(
                                 session_id = %session_id,
                                 flow_id = latency_fields.flow_id,
@@ -1328,14 +1408,53 @@ async fn run_actor(
                             );
                             let prompt_fut = conn.prompt(req);
                             tokio::pin!(prompt_fut);
+                            let mut prompt_pending_interval =
+                                tokio::time::interval(Duration::from_secs(15));
+                            prompt_pending_interval
+                                .set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                            prompt_pending_interval.tick().await;
 
                             while prompt_result.is_none() {
                                 tokio::select! {
+                                    _ = prompt_pending_interval.tick() => {
+                                        let sink_snapshot = {
+                                            let sink = event_sink.lock().await;
+                                            sink.debug_snapshot()
+                                        };
+                                        let execution_snapshot = handle.execution_snapshot().await;
+                                        tracing::info!(
+                                            session_id = %session_id,
+                                            flow_id = latency_fields.flow_id,
+                                            flow_kind = latency_fields.flow_kind,
+                                            flow_source = latency_fields.flow_source,
+                                            prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
+                                            turn_id = ?sink_snapshot.current_turn_id,
+                                            pending_for_ms = prompt_diagnostics.prompt_started_at.elapsed().as_millis() as u64,
+                                            execution_phase = ?execution_snapshot.phase,
+                                            last_raw_kind = ?prompt_diagnostics.last_raw_kind,
+                                            last_raw_age_ms = age_ms(prompt_diagnostics.last_raw_at),
+                                            last_agent_chunk_age_ms = age_ms(prompt_diagnostics.last_agent_chunk_at),
+                                            last_agent_preview = prompt_diagnostics.last_agent_preview.as_deref().unwrap_or(""),
+                                            last_tool_event_age_ms = age_ms(prompt_diagnostics.last_tool_event_at),
+                                            last_plan_age_ms = age_ms(prompt_diagnostics.last_plan_at),
+                                            last_usage_age_ms = age_ms(prompt_diagnostics.last_usage_at),
+                                            open_assistant_item_id = ?sink_snapshot.open_assistant_item_id,
+                                            open_assistant_chars = sink_snapshot.open_assistant_chars,
+                                            open_reasoning_item_id = ?sink_snapshot.open_reasoning_item_id,
+                                            open_reasoning_chars = sink_snapshot.open_reasoning_chars,
+                                            open_plan_item_id = ?sink_snapshot.open_plan_item_id,
+                                            open_tool_call_ids = ?sink_snapshot.open_tool_call_ids,
+                                            background_work_count = background_work_registry.tracker_count(),
+                                            next_event_seq = sink_snapshot.next_seq,
+                                            "session.actor.prompt.pending"
+                                        );
+                                    }
                                     result = &mut prompt_fut => {
                                         prompt_result = Some(result);
                                     }
                                     notification = notification_rx.recv() => {
                                         if let Some(notif) = notification {
+                                            prompt_diagnostics.observe_notification(&notif);
                                             handle_notification_with_resume_replay_filter(
                                                 &notif,
                                                 &mut resume_replay_filter,
@@ -1445,6 +1564,7 @@ async fn run_actor(
                             match &result {
                                 Ok(resp) => {
                                     while let Ok(notif) = notification_rx.try_recv() {
+                                        prompt_diagnostics.observe_notification(&notif);
                                         handle_notification_with_resume_replay_filter(
                                             &notif,
                                             &mut resume_replay_filter,
@@ -1460,13 +1580,55 @@ async fn run_actor(
                                     while let Ok(update) = background_work_rx.try_recv() {
                                         handle_background_work_update(&event_sink, &store, &session_id, update).await;
                                     }
+                                    let sink_snapshot_before_turn_end = {
+                                        let sink = event_sink.lock().await;
+                                        sink.debug_snapshot()
+                                    };
+                                    tracing::info!(
+                                        session_id = %session_id,
+                                        flow_id = latency_fields.flow_id,
+                                        flow_kind = latency_fields.flow_kind,
+                                        flow_source = latency_fields.flow_source,
+                                        prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
+                                        turn_id = ?sink_snapshot_before_turn_end.current_turn_id,
+                                        stop_reason = ?resp.stop_reason,
+                                        prompt_elapsed_ms = prompt_diagnostics.prompt_started_at.elapsed().as_millis() as u64,
+                                        last_raw_kind = ?prompt_diagnostics.last_raw_kind,
+                                        last_raw_age_ms = age_ms(prompt_diagnostics.last_raw_at),
+                                        last_agent_chunk_age_ms = age_ms(prompt_diagnostics.last_agent_chunk_at),
+                                        last_agent_preview = prompt_diagnostics.last_agent_preview.as_deref().unwrap_or(""),
+                                        open_assistant_item_id = ?sink_snapshot_before_turn_end.open_assistant_item_id,
+                                        open_tool_call_ids = ?sink_snapshot_before_turn_end.open_tool_call_ids,
+                                        open_plan_item_id = ?sink_snapshot_before_turn_end.open_plan_item_id,
+                                        background_work_count = background_work_registry.tracker_count(),
+                                        "session.actor.prompt.conn_resolved"
+                                    );
                                     let stop = map_stop_reason(&resp.stop_reason);
                                     let mut sink = event_sink.lock().await;
                                     sink.turn_ended(stop);
                                     drop(sink);
+                                    tracing::info!(
+                                        session_id = %session_id,
+                                        flow_id = latency_fields.flow_id,
+                                        flow_kind = latency_fields.flow_kind,
+                                        flow_source = latency_fields.flow_source,
+                                        prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
+                                        turn_id = ?sink_snapshot_before_turn_end.current_turn_id,
+                                        "session.actor.prompt.turn_ended_emitted"
+                                    );
                                     let now = chrono::Utc::now().to_rfc3339();
                                     handle.set_execution_phase(SessionExecutionPhase::Idle).await;
                                     let _ = store.update_status(&session_id, "idle", &now);
+                                    tracing::info!(
+                                        session_id = %session_id,
+                                        flow_id = latency_fields.flow_id,
+                                        flow_kind = latency_fields.flow_kind,
+                                        flow_source = latency_fields.flow_source,
+                                        prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
+                                        turn_id = ?sink_snapshot_before_turn_end.current_turn_id,
+                                        updated_at = %now,
+                                        "session.actor.prompt.status_idle_written"
+                                    );
                                     if let Some(callback) = on_turn_finish.as_ref() {
                                         callback(SessionTurnFinishResult {
                                             session_id: session_id.clone(),
@@ -1490,6 +1652,29 @@ async fn run_actor(
                                     }
                                 }
                                 Err(e) => {
+                                    let sink_snapshot_on_error = {
+                                        let sink = event_sink.lock().await;
+                                        sink.debug_snapshot()
+                                    };
+                                    tracing::warn!(
+                                        session_id = %session_id,
+                                        flow_id = latency_fields.flow_id,
+                                        flow_kind = latency_fields.flow_kind,
+                                        flow_source = latency_fields.flow_source,
+                                        prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
+                                        turn_id = ?sink_snapshot_on_error.current_turn_id,
+                                        error = %e,
+                                        prompt_elapsed_ms = prompt_diagnostics.prompt_started_at.elapsed().as_millis() as u64,
+                                        last_raw_kind = ?prompt_diagnostics.last_raw_kind,
+                                        last_raw_age_ms = age_ms(prompt_diagnostics.last_raw_at),
+                                        last_agent_chunk_age_ms = age_ms(prompt_diagnostics.last_agent_chunk_at),
+                                        last_agent_preview = prompt_diagnostics.last_agent_preview.as_deref().unwrap_or(""),
+                                        open_assistant_item_id = ?sink_snapshot_on_error.open_assistant_item_id,
+                                        open_tool_call_ids = ?sink_snapshot_on_error.open_tool_call_ids,
+                                        open_plan_item_id = ?sink_snapshot_on_error.open_plan_item_id,
+                                        background_work_count = background_work_registry.tracker_count(),
+                                        "session.actor.prompt.conn_failed"
+                                    );
                                     let mut sink = event_sink.lock().await;
                                     sink.error(e.to_string(), None);
                                     drop(sink);
@@ -1636,7 +1821,28 @@ async fn finalize_established_actor_exit(
     disposition: ActorExitDisposition,
 ) {
     let pending_approval = handle.execution_snapshot().await.pending_approval;
+    let execution_snapshot = handle.execution_snapshot().await;
+    let busy = handle.busy.load(Ordering::Acquire);
+    let sink_snapshot = {
+        let sink = event_sink.lock().await;
+        sink.debug_snapshot()
+    };
     let now = chrono::Utc::now().to_rfc3339();
+
+    tracing::info!(
+        session_id = %session_id,
+        disposition = ?disposition,
+        busy = busy,
+        execution_phase = ?execution_snapshot.phase,
+        pending_approval = pending_approval.is_some(),
+        turn_id = ?sink_snapshot.current_turn_id,
+        open_assistant_item_id = ?sink_snapshot.open_assistant_item_id,
+        open_reasoning_item_id = ?sink_snapshot.open_reasoning_item_id,
+        open_plan_item_id = ?sink_snapshot.open_plan_item_id,
+        open_tool_call_ids = ?sink_snapshot.open_tool_call_ids,
+        next_event_seq = sink_snapshot.next_seq,
+        "session.actor.exit.finalized"
+    );
 
     {
         let mut sink = event_sink.lock().await;

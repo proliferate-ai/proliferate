@@ -8,6 +8,7 @@ export interface ModalShellProps {
   disableClose?: boolean;
   title: ReactNode;
   description?: ReactNode;
+  headerContent?: ReactNode;
   footer?: ReactNode;
   children: ReactNode;
   sizeClassName?: string;
@@ -22,6 +23,7 @@ export function ModalShell({
   disableClose = false,
   title,
   description,
+  headerContent,
   footer,
   children,
   sizeClassName = "max-w-md",
@@ -83,16 +85,32 @@ export function ModalShell({
             <X className="size-4" />
           </button>
 
-          <div className="shrink-0 px-5 pb-3 pr-10 pt-5">
-            <h2 id={titleId} className="text-lg font-medium tracking-tight text-foreground">
-              {title}
-            </h2>
-            {description && (
-              <p id={descriptionId} className="mt-1 text-xs text-muted-foreground">
-                {description}
-              </p>
-            )}
-          </div>
+          {headerContent ? (
+            <>
+              <h2 id={titleId} className="sr-only">
+                {title}
+              </h2>
+              {description && (
+                <p id={descriptionId} className="sr-only">
+                  {description}
+                </p>
+              )}
+              <div className="shrink-0 px-5 py-3 pr-12">
+                {headerContent}
+              </div>
+            </>
+          ) : (
+            <div className="shrink-0 px-5 pb-3 pr-10 pt-5">
+              <h2 id={titleId} className="text-lg font-medium tracking-tight text-foreground">
+                {title}
+              </h2>
+              {description && (
+                <p id={descriptionId} className="mt-1 text-xs text-muted-foreground">
+                  {description}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className={`min-h-0 flex-1 ${bodyClassName}`}>
             {children}

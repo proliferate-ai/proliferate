@@ -9,6 +9,7 @@ import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { ConfigurationPane } from "./panes/ConfigurationPane";
 import { AccountPane } from "./panes/AccountPane";
 import { CoworkPane } from "./panes/CoworkPane";
+import { KeyboardShortcutsPane } from "./panes/KeyboardShortcutsPane";
 import { CloudAuthUnavailablePane } from "./panes/CloudAuthUnavailablePane";
 import { CloudPane } from "./panes/CloudPane";
 import { CloudSignInRequiredPane } from "./panes/CloudSignInRequiredPane";
@@ -47,6 +48,9 @@ function renderSettingsSection(
 ): ReactNode {
   if (activeSection === "configuration") {
     return <ConfigurationPane />;
+  }
+  if (activeSection === "keyboard") {
+    return <KeyboardShortcutsPane />;
   }
   if (activeSection === "cowork") {
     return <CoworkPane />;

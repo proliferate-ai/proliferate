@@ -16,6 +16,7 @@ export interface UserPreferences {
   branchPrefixType: BranchPrefixType;
   turnEndSoundEnabled: boolean;
   turnEndSoundId: TurnEndSoundId;
+  transparentChromeEnabled: boolean;
   onboardingCompletedVersion: number;
   onboardingPrimaryGoalId: OnboardingGoalId | "";
 }
@@ -34,6 +35,7 @@ export const USER_PREFERENCE_DEFAULTS: UserPreferences = {
   branchPrefixType: "none",
   turnEndSoundEnabled: false,
   turnEndSoundId: "ding",
+  transparentChromeEnabled: true,
   onboardingCompletedVersion: 0,
   onboardingPrimaryGoalId: "",
 };
@@ -100,6 +102,7 @@ async function readLegacyUserPreferences(): Promise<UserPreferences> {
       ?? USER_PREFERENCE_DEFAULTS.branchPrefixType,
     turnEndSoundEnabled: USER_PREFERENCE_DEFAULTS.turnEndSoundEnabled,
     turnEndSoundId: USER_PREFERENCE_DEFAULTS.turnEndSoundId,
+    transparentChromeEnabled: USER_PREFERENCE_DEFAULTS.transparentChromeEnabled,
     onboardingCompletedVersion: USER_PREFERENCE_DEFAULTS.onboardingCompletedVersion,
     onboardingPrimaryGoalId: USER_PREFERENCE_DEFAULTS.onboardingPrimaryGoalId,
   };
@@ -157,6 +160,11 @@ function migrateUserPreferences(preferences: UserPreferences): {
     changed = true;
   }
 
+  if (typeof next.transparentChromeEnabled !== "boolean") {
+    next.transparentChromeEnabled = USER_PREFERENCE_DEFAULTS.transparentChromeEnabled;
+    changed = true;
+  }
+
   const sanitizedDefaultSessionModeByAgentKind = sanitizeDefaultSessionModeByAgentKind(
     next.defaultSessionModeByAgentKind,
   );
@@ -188,6 +196,7 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
     branchPrefixType: state.branchPrefixType,
     turnEndSoundEnabled: state.turnEndSoundEnabled,
     turnEndSoundId: state.turnEndSoundId,
+    transparentChromeEnabled: state.transparentChromeEnabled,
     onboardingCompletedVersion: state.onboardingCompletedVersion,
     onboardingPrimaryGoalId: state.onboardingPrimaryGoalId,
   };

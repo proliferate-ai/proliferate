@@ -5,6 +5,7 @@ import {
   CircleQuestion,
   CircleUser,
   CloudIcon,
+  Keyboard,
   RefreshCw,
   Tree,
 } from "@/components/ui/icons";
@@ -12,6 +13,7 @@ import type { IconProps } from "@/components/ui/icons";
 
 export const SETTINGS_CONTENT_SECTIONS = [
   "configuration",
+  "keyboard",
   "cowork",
   "account",
   "cloud",
@@ -44,6 +46,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       { kind: "section", id: "cowork", label: "Cowork", icon: Tree },
       { kind: "section", id: "agents", label: "Agents", icon: Blocks },
       { kind: "section", id: "account", label: "Account", icon: CircleUser },
+      { kind: "section", id: "keyboard", label: "Keyboard", icon: Keyboard },
     ],
   },
   {

@@ -122,6 +122,9 @@ struct BackgroundWorkMetadata {
 }
 
 const ANYHARNESS_META_KEY: &str = "_anyharness";
+const ANYHARNESS_TRANSCRIPT_META_KEY: &str = "anyharness";
+const ANYHARNESS_TRANSCRIPT_EVENT_KEY: &str = "transcriptEvent";
+const ASSISTANT_MESSAGE_COMPLETED_EVENT: &str = "assistant_message_completed";
 const BACKGROUND_WORK_TRACKER_KIND: &str = "claude_async_agent";
 
 pub struct SessionEventSink {
@@ -137,6 +140,18 @@ pub struct SessionEventSink {
     open_reasoning_item: Option<StreamingItemState>,
     open_plan_item: Option<PlanItemState>,
     tool_items: HashMap<String, ToolItemState>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SessionEventSinkDebugSnapshot {
+    pub current_turn_id: Option<String>,
+    pub open_assistant_item_id: Option<String>,
+    pub open_assistant_chars: usize,
+    pub open_reasoning_item_id: Option<String>,
+    pub open_reasoning_chars: usize,
+    pub open_plan_item_id: Option<String>,
+    pub open_tool_call_ids: Vec<String>,
+    pub next_seq: i64,
 }
 
 impl SessionEventSink {
@@ -204,6 +219,36 @@ impl SessionEventSink {
         self.current_turn_id.clone()
     }
 
+    pub fn debug_snapshot(&self) -> SessionEventSinkDebugSnapshot {
+        SessionEventSinkDebugSnapshot {
+            current_turn_id: self.current_turn_id.clone(),
+            open_assistant_item_id: self
+                .open_assistant_item
+                .as_ref()
+                .map(|item| item.item_id.clone()),
+            open_assistant_chars: self
+                .open_assistant_item
+                .as_ref()
+                .map(|item| item.text.chars().count())
+                .unwrap_or(0),
+            open_reasoning_item_id: self
+                .open_reasoning_item
+                .as_ref()
+                .map(|item| item.item_id.clone()),
+            open_reasoning_chars: self
+                .open_reasoning_item
+                .as_ref()
+                .map(|item| item.text.chars().count())
+                .unwrap_or(0),
+            open_plan_item_id: self
+                .open_plan_item
+                .as_ref()
+                .map(|item| item.item_id.clone()),
+            open_tool_call_ids: self.tool_items.keys().cloned().collect(),
+            next_seq: self.next_seq,
+        }
+    }
+
     pub fn session_ended(&mut self, reason: SessionEndReason) {
         self.close_open_items();
         self.close_plan_item();
@@ -255,6 +300,11 @@ impl SessionEventSink {
     }
 
     pub fn agent_message_chunk(&mut self, payload: AcpChunkPayload) {
+        if is_assistant_message_completed_marker(payload.meta.as_ref()) {
+            self.close_assistant_item_by_message_id(payload.message_id.as_deref());
+            return;
+        }
+
         let text = extract_text(&payload.content);
         if text.is_empty() {
             return;
@@ -840,6 +890,21 @@ impl SessionEventSink {
         }
     }
 
+    fn close_assistant_item_by_message_id(&mut self, message_id: Option<&str>) {
+        let Some(message_id) = message_id else {
+            return;
+        };
+        let is_current_message = self
+            .open_assistant_item
+            .as_ref()
+            .and_then(|item| item.message_id.as_deref())
+            .is_some_and(|open_message_id| open_message_id == message_id);
+
+        if is_current_message {
+            self.close_assistant_item();
+        }
+    }
+
     fn close_reasoning_item(&mut self) {
         if let Some(item) = self.open_reasoning_item.take() {
             let StreamingItemState {
@@ -962,6 +1027,13 @@ impl SessionEventSink {
 fn parse_meta(meta: Option<&serde_json::Value>) -> ParsedMeta {
     meta.and_then(|value| serde_json::from_value(value.clone()).ok())
         .unwrap_or_default()
+}
+
+fn is_assistant_message_completed_marker(meta: Option<&serde_json::Value>) -> bool {
+    meta.and_then(|value| value.get(ANYHARNESS_TRANSCRIPT_META_KEY))
+        .and_then(|value| value.get(ANYHARNESS_TRANSCRIPT_EVENT_KEY))
+        .and_then(serde_json::Value::as_str)
+        == Some(ASSISTANT_MESSAGE_COMPLETED_EVENT)
 }
 
 fn merge_snapshot_detail_parts(
@@ -2075,7 +2147,10 @@ mod tests {
     use crate::persistence::Db;
     use crate::sessions::model::{SessionBackgroundWorkState, SessionRecord};
     use crate::sessions::store::SessionStore;
-    use anyharness_contract::v1::{SessionEvent, SessionEventEnvelope, StopReason};
+    use anyharness_contract::v1::{
+        ContentPart, SessionEvent, SessionEventEnvelope, StopReason, TranscriptItemKind,
+        TranscriptItemStatus,
+    };
 
     #[test]
     fn assistant_chunking_emits_one_item_lifecycle_with_monotonic_seq() {
@@ -2118,9 +2193,11 @@ mod tests {
                 "turn_ended",
             ]
         );
-        assert!(events
-            .windows(2)
-            .all(|window| window[0].seq < window[1].seq));
+        assert!(
+            events
+                .windows(2)
+                .all(|window| window[0].seq < window[1].seq)
+        );
         assert_eq!(events[3].item_id, events[4].item_id);
         assert_eq!(events[4].item_id, events[5].item_id);
         assert_eq!(
@@ -2129,6 +2206,115 @@ mod tests {
                 .expect("persisted events")
                 .len(),
             events.len()
+        );
+    }
+
+    #[test]
+    fn assistant_completion_marker_closes_matching_open_message() {
+        let store = seeded_store();
+        let (tx, mut rx) = broadcast::channel(32);
+        let mut sink = SessionEventSink::new(
+            "session-1".to_string(),
+            "codex".to_string(),
+            PathBuf::from("/tmp/workspace"),
+            tx,
+            store.clone(),
+        );
+
+        sink.begin_turn("hello".to_string());
+        sink.agent_message_chunk(AcpChunkPayload {
+            content: json!("Hel"),
+            message_id: Some("2d313586-97aa-436b-932c-7e0c0b286f87".to_string()),
+            ..Default::default()
+        });
+        sink.agent_message_chunk(AcpChunkPayload {
+            content: json!("lo"),
+            message_id: Some("2d313586-97aa-436b-932c-7e0c0b286f87".to_string()),
+            ..Default::default()
+        });
+        sink.agent_message_chunk(assistant_completion_marker(
+            "2d313586-97aa-436b-932c-7e0c0b286f87",
+        ));
+
+        let events = drain_events(&mut rx);
+        let event_types = events
+            .iter()
+            .map(|event| event.event.event_type())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            event_types,
+            vec![
+                "turn_started",
+                "item_started",
+                "item_completed",
+                "item_started",
+                "item_delta",
+                "item_completed",
+            ]
+        );
+        assert_eq!(events[3].item_id, events[4].item_id);
+        assert_eq!(events[4].item_id, events[5].item_id);
+
+        let SessionEvent::ItemCompleted(completed) = &events[5].event else {
+            panic!("expected item_completed");
+        };
+        assert!(matches!(
+            &completed.item.kind,
+            TranscriptItemKind::AssistantMessage
+        ));
+        assert!(matches!(
+            &completed.item.status,
+            TranscriptItemStatus::Completed
+        ));
+        assert_eq!(
+            completed.item.message_id.as_deref(),
+            Some("2d313586-97aa-436b-932c-7e0c0b286f87")
+        );
+        assert_eq!(
+            completed.item.content_parts,
+            vec![ContentPart::Text {
+                text: "Hello".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn assistant_completion_marker_ignores_mismatched_message_id() {
+        let store = seeded_store();
+        let (tx, mut rx) = broadcast::channel(32);
+        let mut sink = SessionEventSink::new(
+            "session-1".to_string(),
+            "codex".to_string(),
+            PathBuf::from("/tmp/workspace"),
+            tx,
+            store,
+        );
+
+        sink.begin_turn("hello".to_string());
+        sink.agent_message_chunk(AcpChunkPayload {
+            content: json!("Hello"),
+            message_id: Some("2d313586-97aa-436b-932c-7e0c0b286f87".to_string()),
+            ..Default::default()
+        });
+        sink.agent_message_chunk(assistant_completion_marker(
+            "f760973a-2eb1-4258-9de1-f643dce51c70",
+        ));
+
+        let events = drain_events(&mut rx);
+        let event_types = events
+            .iter()
+            .map(|event| event.event.event_type())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            event_types,
+            vec![
+                "turn_started",
+                "item_started",
+                "item_completed",
+                "item_started",
+            ]
         );
     }
 
@@ -2435,5 +2621,18 @@ mod tests {
             events.push(event);
         }
         events
+    }
+
+    fn assistant_completion_marker(message_id: &str) -> AcpChunkPayload {
+        AcpChunkPayload {
+            content: json!(""),
+            meta: Some(json!({
+                "anyharness": {
+                    "transcriptEvent": "assistant_message_completed",
+                    "codexItemId": "item-1",
+                },
+            })),
+            message_id: Some(message_id.to_string()),
+        }
     }
 }

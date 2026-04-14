@@ -1,9 +1,7 @@
 import {
-  forwardRef,
   useState,
   useCallback,
   useEffect,
-  type MouseEventHandler,
   type ReactNode,
 } from "react";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
@@ -43,6 +41,7 @@ import {
 } from "@/lib/infra/latency-flow";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
+import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
 
 interface GlobalHeaderProps {
   branchName?: string;
@@ -106,14 +105,14 @@ export function GlobalHeader({
   );
 
   return (
-    <div className="flex h-full min-w-0 flex-1 items-center gap-2 px-2">
+    <div className="flex h-full min-w-0 flex-1 items-stretch gap-2 px-2">
       {/* Tabs */}
-      <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+      <div className="flex min-w-0 flex-1 items-end overflow-hidden">
         <HeaderTabs />
       </div>
 
       {/* Right side — branch + open-in + git + panel toggle */}
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2 pb-px">
         {branchName && (
           <BranchBadge branchName={branchName} />
         )}
@@ -166,10 +165,12 @@ function BranchBadge({ branchName }: { branchName: string }) {
   }, [branchName]);
 
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="sm"
       onClick={handleCopy}
-      className="group flex min-w-0 max-w-[200px] items-center gap-1 rounded-md px-1.5 py-0.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      className="group h-7 min-w-0 max-w-[200px] justify-start gap-1 px-1.5 py-0 text-sm font-normal text-muted-foreground hover:bg-transparent hover:text-foreground"
       title="Click to copy branch"
     >
       <span className="truncate">{branchName}</span>
@@ -180,7 +181,7 @@ function BranchBadge({ branchName }: { branchName: string }) {
           <Copy className="size-2.5" />
         )}
       </span>
-    </button>
+    </Button>
   );
 }
 
@@ -199,6 +200,7 @@ function HeaderTabs() {
   const { dismissSession, selectSession } = useSessionActions();
   const { updateSessionTitle } = useSessionTitleActions();
   const tabActions = useWorkspaceTabActions();
+  const transparentChromeEnabled = useTransparentChromeEnabled();
 
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
 
@@ -212,7 +214,11 @@ function HeaderTabs() {
   const chatTabs = useWorkspaceChatTabs(selectedWorkspaceId, activeSessionId, isChatActive);
 
   return (
-    <div className="flex h-full items-center gap-px overflow-x-auto">
+    <div
+      role="tablist"
+      aria-label="Workspace tabs"
+      className="flex h-full min-w-0 items-end gap-1 overflow-x-auto px-1 pt-1"
+    >
       {chatTabs.map((tab) => (
         <SessionTitleRenamePopover
           key={tab.id}
@@ -221,9 +227,10 @@ function HeaderTabs() {
           externalOpen={renamingSessionId === tab.id}
           onOpenChange={(isOpen) => { if (!isOpen) setRenamingSessionId(null); }}
           trigger={(
-            <span className="inline-flex app-region-no-drag">
+            <span role="presentation" className="inline-flex app-region-no-drag">
               <HeaderTab
                 isActive={tab.isActive}
+                transparentChromeEnabled={transparentChromeEnabled}
                 icon={
                   tab.agentKind ? (
                     <ProviderIcon kind={tab.agentKind} className="size-3.5 shrink-0" />
@@ -273,6 +280,7 @@ function HeaderTabs() {
           <HeaderTab
             key={path}
             isActive={isActive}
+            transparentChromeEnabled={transparentChromeEnabled}
             icon={
               <FileTreeEntryIcon
                 name={basename}
@@ -301,73 +309,85 @@ function HeaderTabs() {
         );
       })}
 
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-sm"
         disabled={!tabActions.canOpenNewSessionTab}
         onClick={() => tabActions.openNewSessionTab()}
         title={tabActions.newSessionDisabledReason ?? "New chat"}
-        className="ml-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+        className="mb-0.5 ml-0.5 size-6 shrink-0 rounded-md text-muted-foreground hover:bg-accent/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
       >
         <Plus className="size-3" />
-      </button>
+      </Button>
     </div>
   );
 }
 
-const HeaderTab = forwardRef<HTMLButtonElement, {
+interface HeaderTabProps {
   isActive: boolean;
+  transparentChromeEnabled: boolean;
   icon: ReactNode;
   label: string;
   onClick: () => void;
   onClose: () => void;
   badge?: ReactNode;
-  onDoubleClick?: MouseEventHandler<HTMLButtonElement>;
-}>(
+}
+
 function HeaderTab({
   isActive,
+  transparentChromeEnabled,
   icon,
   label,
   onClick,
   onClose,
   badge,
-  onDoubleClick,
-}, ref) {
+}: HeaderTabProps) {
+  const shapeClassName = transparentChromeEnabled ? "-mb-px rounded-t-md" : "rounded-md";
+  const activeClassName = transparentChromeEnabled
+    ? "border-foreground/10 border-b-background bg-background/85 text-foreground shadow-subtle backdrop-blur-xl"
+    : "border-border bg-background text-foreground shadow-subtle";
+
   return (
-    <button
-      ref={ref}
-      type="button"
-      onClick={onClick}
-      onDoubleClick={onDoubleClick}
-      className={`group relative flex h-7 min-w-0 max-w-40 items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors ${
+    <div
+      role="presentation"
+      className={`group/tab flex h-8 min-w-0 max-w-44 shrink-0 items-center border px-0.5 transition-colors ${shapeClassName} ${
         isActive
-          ? "bg-accent text-foreground font-medium shadow-subtle"
-          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+          ? activeClassName
+          : "border-transparent text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
       }`}
     >
-      {icon}
-      <span className="truncate min-w-0 flex-1">{label}</span>
-      {badge}
-      <span
-        role="button"
-        tabIndex={0}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.stopPropagation();
-            onClose();
-          }
-        }}
-        className={`ml-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded transition-opacity ${
+      <Button
+        type="button"
+        role="tab"
+        aria-selected={isActive}
+        variant="ghost"
+        size="sm"
+        onClick={onClick}
+        title={label}
+        className={`h-full min-w-0 flex-1 justify-start gap-1.5 bg-transparent px-2 py-0 text-xs font-normal hover:bg-transparent ${shapeClassName} ${
+          isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        {icon}
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        {badge}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={onClose}
+        title={`Close ${label}`}
+        aria-label={`Close ${label}`}
+        className={`mr-1 size-5 shrink-0 rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground ${
           isActive
-            ? "opacity-60 hover:opacity-100"
-            : "opacity-0 group-hover:opacity-60 hover:!opacity-100"
+            ? "opacity-70 hover:opacity-100"
+            : "opacity-0 transition-opacity group-hover/tab:opacity-70 hover:!opacity-100 focus-visible:opacity-100"
         }`}
       >
         <X className="size-2.5" />
-      </span>
-    </button>
+      </Button>
+    </div>
   );
-});
+}

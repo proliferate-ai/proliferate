@@ -145,10 +145,10 @@ export const SHORTCUTS = {
   },
   openFilePalette: {
     id: "workspace.open-file-palette",
-    label: "⌘P",
+    label: "⌘K",
     description: "Open file palette",
     owner: "js",
-    match: { kind: "fixed", key: "p", meta: true, shift: false, alt: false },
+    match: { kind: "fixed", key: "k", meta: true, shift: false, alt: false },
     allowInInputs: true,
   },
   renameSession: {
@@ -180,3 +180,65 @@ export const COMPOSER_SHORTCUTS = {
     description: "Stop running session",
   },
 } as const satisfies Record<string, ComposerShortcutDef>;
+
+export type ShortcutKey = keyof typeof SHORTCUTS;
+export type ComposerShortcutKey = keyof typeof COMPOSER_SHORTCUTS;
+
+export interface ShortcutGroup {
+  title: string;
+  shortcutKeys: readonly ShortcutKey[];
+}
+
+export interface ComposerShortcutGroup {
+  title: string;
+  shortcutKeys: readonly ComposerShortcutKey[];
+}
+
+export const SHORTCUT_GROUPS = [
+  {
+    title: "App",
+    shortcutKeys: [
+      "openSettings",
+    ],
+  },
+  {
+    title: "Workspaces",
+    shortcutKeys: [
+      "newWorktree",
+      "newLocal",
+      "newCloud",
+      "addRepository",
+      "workspaceByIndex",
+    ],
+  },
+  {
+    title: "Tabs",
+    shortcutKeys: [
+      "previousTab",
+      "nextTab",
+      "tabByIndex",
+      "newSessionTab",
+      "restoreTab",
+      "closeActiveTab",
+    ],
+  },
+  {
+    title: "Current Workspace",
+    shortcutKeys: [
+      "focusToggle",
+      "openFilePalette",
+      "renameSession",
+    ],
+  },
+] as const satisfies readonly ShortcutGroup[];
+
+export const COMPOSER_SHORTCUT_GROUPS = [
+  {
+    title: "Composer",
+    shortcutKeys: [
+      "submitMessage",
+      "previousMode",
+      "stopSession",
+    ],
+  },
+] as const satisfies readonly ComposerShortcutGroup[];

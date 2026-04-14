@@ -65,6 +65,10 @@ import {
   resolveVisibleTranscriptPendingPrompt,
   shouldShowPendingPromptActivity,
 } from "@/lib/domain/chat/pending-prompts";
+import {
+  lastTopLevelItemIsAssistantProseWithText,
+  shouldAllowTurnTrailingStatus,
+} from "@/lib/domain/chat/transcript-trailing-status";
 import type {
   FileChangeContentPart,
   FileReadContentPart,
@@ -95,7 +99,7 @@ const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
  *     (currently `1.125rem` / 18px)
  *   • trailing assistant action slot — `h-6` in this file
  *     (24px, reserved only once the latest in-progress turn has tail
- *     assistant prose and `lastTopLevelItemIsProse(...)` is true)
+ *     assistant prose)
  *   ----
  *   = 18px + 24px = 42px = 2.625rem
  */
@@ -185,15 +189,17 @@ export function MessageList({
             const shouldReserveTurnAssistantActionSlot =
               isLatestTurnInProgress
               && !!tailAssistantCopyContent
-              && lastTopLevelItemIsProse(turn, transcript);
+              && lastTopLevelItemIsAssistantProseWithText(turn, transcript);
 
-            // The trailing status indicator is only meaningful when the turn is
-            // in progress and the final prose answer hasn't started landing yet.
-            // Once the last top-level item is an assistant_prose with text, that
-            // prose IS the placeholder for "the final answer lands here" — no
-            // separate spinner needed.
+            // Hide the trailing indicator only while the assistant prose item
+            // itself is actively streaming. If Codex closes the prose item but
+            // keeps working internally, the trailing indicator should return.
             const trailingStatus =
-              isLatestTurnInProgress && !lastTopLevelItemIsProse(turn, transcript)
+              shouldAllowTurnTrailingStatus({
+                turn,
+                transcript,
+                isLatestTurnInProgress,
+              })
                 ? resolveTurnTrailingStatus(turn.startedAt, sessionViewState)
                 : null;
 
@@ -285,30 +291,6 @@ function resolveTurnTrailingStatus(
   }
 
   return null;
-}
-
-/**
- * True if the last top-level item in the turn is an assistant_prose with text.
- * "Top level" here means: we skip items that are nested children of an
- * ongoing tool_call (they render inside their parent's block, not as the
- * turn's trailing content). The final message is always prose, so if the
- * latest top-level item is already prose, the prose itself is the placeholder
- * for "the final answer lands here" and we don't need a separate spinner.
- */
-function lastTopLevelItemIsProse(
-  turn: { itemOrder: readonly string[] },
-  transcript: TranscriptState,
-): boolean {
-  for (let i = turn.itemOrder.length - 1; i >= 0; i--) {
-    const item = transcript.itemsById[turn.itemOrder[i]];
-    if (!item) continue;
-    if ("parentToolCallId" in item && item.parentToolCallId) {
-      const parent = transcript.itemsById[item.parentToolCallId];
-      if (parent?.kind === "tool_call") continue;
-    }
-    return item.kind === "assistant_prose" && !!item.text;
-  }
-  return false;
 }
 
 function findTailAssistantProseRootId(

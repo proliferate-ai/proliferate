@@ -6,6 +6,7 @@ import { useTerminalStore } from "@/stores/terminal/terminal-store";
 import { getTerminalWsHandle, onTerminalData } from "@/lib/integrations/anyharness/terminal-handles";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useTerminalActions } from "@/hooks/terminals/use-terminal-actions";
+import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
 import { getTerminalTheme, onThemeChange } from "@/config/theme";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -21,6 +22,10 @@ const STATUS_DOT: Record<string, string> = {
   exited: "bg-muted-foreground",
   failed: "bg-git-red",
 };
+const GLASS_TABLIST_RAIL_CLASS =
+  "relative flex shrink-0 items-center gap-1 overflow-hidden border-b border-foreground/10 bg-card/25 pr-1 backdrop-blur-md supports-[backdrop-filter]:bg-card/20";
+const SOLID_TABLIST_RAIL_CLASS =
+  "relative flex shrink-0 items-center gap-1 overflow-hidden pr-1";
 
 export function TerminalPanel({
   collapsed,
@@ -35,6 +40,7 @@ export function TerminalPanel({
   const loadedWorkspaceTabs = useTerminalStore((s) => s.loadedWorkspaceTabs);
   const selectTab = useTerminalStore((s) => s.selectTab);
   const { createTab, closeTab, loadWorkspaceTabs } = useTerminalActions();
+  const transparentChromeEnabled = useTransparentChromeEnabled();
   const creatingInitialTabRef = useRef(false);
   const [canConnectTabs, setCanConnectTabs] = useState(false);
 
@@ -124,59 +130,87 @@ export function TerminalPanel({
 
   return (
     <div className="flex flex-col h-full" data-telemetry-block data-focus-zone="terminal">
-      <div className="flex items-center gap-1 pr-1 relative overflow-hidden border-b border-border shrink-0">
+      <div className={transparentChromeEnabled ? GLASS_TABLIST_RAIL_CLASS : SOLID_TABLIST_RAIL_CLASS}>
         <IconButton className="ml-1" onClick={onToggleCollapse} title="Collapse terminal">
           <ChevronDown className="size-4 text-muted-foreground" />
         </IconButton>
 
-        <div role="tablist" className="bg-transparent p-0 gap-0.5 flex h-8 flex-1 items-center overflow-x-auto">
+        <div
+          role="tablist"
+          aria-label="Terminal tabs"
+          className="flex h-9 flex-1 items-end gap-1 overflow-x-auto bg-transparent px-1 pt-1"
+        >
           {tabIds.map((tabId, idx) => {
             const tab = tabsById[tabId];
             if (!tab) return null;
             const isActive = tabId === activeTabId;
             const fallbackTitle = `Terminal ${idx + 1}`;
             const displayTitle = tab.title === "Terminal" ? fallbackTitle : tab.title;
+            const shapeClassName = transparentChromeEnabled ? "-mb-px rounded-t-md" : "rounded-md";
+            const activeClassName = transparentChromeEnabled
+              ? "border-border border-b-background bg-background/85 text-foreground shadow-subtle backdrop-blur-xl"
+              : "border-border bg-background text-foreground shadow-subtle";
 
             return (
-              <button
+              <div
                 key={tabId}
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => selectTab(tabId)}
-                className={`inline-flex items-center h-8 px-2 text-xs font-medium group/tab transition-colors gap-1.5 shrink-0 ${
+                role="presentation"
+                className={`group/tab flex h-8 min-w-0 max-w-44 shrink-0 items-center border px-0.5 transition-colors ${shapeClassName} ${
                   isActive
-                    ? "text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? activeClassName
+                    : "border-transparent bg-foreground/5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
                 }`}
               >
-                <span
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    STATUS_DOT[tab.status] ?? "bg-muted-foreground"
+                <Button
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => selectTab(tabId)}
+                  title={displayTitle}
+                  className={`h-full min-w-0 flex-1 justify-start gap-1.5 bg-transparent px-2 py-0 text-xs font-normal hover:bg-transparent ${shapeClassName} ${
+                    isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                   }`}
-                />
-                {displayTitle}
-                {tab.unread && !isActive && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-info shrink-0" />
-                )}
-                <span
-                  className="opacity-0 group-hover/tab:opacity-100 rounded-sm p-0.5 hover:bg-accent transition-opacity inline-flex items-center"
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!isRuntimeReady) {
-                      return;
-                    }
+                >
+                  <span
+                    className={`size-1.5 shrink-0 rounded-full ${
+                      STATUS_DOT[tab.status] ?? "bg-muted-foreground"
+                    }`}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{displayTitle}</span>
+                  {tab.unread && !isActive && (
+                    <span className="size-1.5 shrink-0 rounded-full bg-info" />
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={!isRuntimeReady}
+                  onClick={() => {
                     void closeTab(tabId);
                   }}
+                  title={`Close ${displayTitle}`}
+                  aria-label={`Close ${displayTitle}`}
+                  className={`mr-1 size-5 shrink-0 rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground ${
+                    isActive
+                      ? "opacity-70 hover:opacity-100"
+                      : "opacity-0 transition-opacity group-hover/tab:opacity-70 hover:!opacity-100 focus-visible:opacity-100"
+                  }`}
                 >
-                  <X className="size-3 text-muted-foreground" />
-                </span>
-              </button>
+                  <X className="size-3" />
+                </Button>
+              </div>
             );
           })}
 
-          <IconButton title="New terminal" onClick={handleNewTab} disabled={!isRuntimeReady}>
+          <IconButton
+            title="New terminal"
+            onClick={handleNewTab}
+            disabled={!isRuntimeReady}
+            className="mb-0.5"
+          >
             <Plus className="size-3 text-muted-foreground" />
           </IconButton>
         </div>

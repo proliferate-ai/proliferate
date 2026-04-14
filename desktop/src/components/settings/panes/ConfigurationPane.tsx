@@ -85,6 +85,7 @@ export function ConfigurationPane() {
     branchPrefixType: state.branchPrefixType,
     turnEndSoundEnabled: state.turnEndSoundEnabled,
     turnEndSoundId: state.turnEndSoundId,
+    transparentChromeEnabled: state.transparentChromeEnabled,
     set: state.set,
     setMultiple: state.setMultiple,
   })));
@@ -240,6 +241,16 @@ export function ConfigurationPane() {
             );
           })}
         </div>
+        </SettingsCardRow>
+
+        <SettingsCardRow
+          label="Transparent chrome"
+          description="Use glass treatment for workspace headers and tab bars"
+        >
+          <Switch
+            checked={preferences.transparentChromeEnabled}
+            onChange={(v) => preferences.set("transparentChromeEnabled", v)}
+          />
         </SettingsCardRow>
       </SettingsCard>
 

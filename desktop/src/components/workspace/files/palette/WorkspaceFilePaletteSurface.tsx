@@ -1,57 +1,31 @@
-import { useEffect, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import type { ReactNode } from "react";
+import { ModalShell } from "@/components/ui/ModalShell";
 
 interface WorkspaceFilePaletteSurfaceProps {
   open: boolean;
   onClose: () => void;
+  headerContent: ReactNode;
   children: ReactNode;
 }
 
 export function WorkspaceFilePaletteSurface({
   open,
   onClose,
+  headerContent,
   children,
 }: WorkspaceFilePaletteSurfaceProps) {
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") {
-        return;
-      }
-
-      event.preventDefault();
-      onClose();
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, open]);
-
-  if (!open) {
-    return null;
-  }
-
-  return createPortal(
-    <>
-      <div
-        aria-hidden="true"
-        className="fixed inset-0 z-50"
-        onClick={onClose}
-      />
-      <div className="pointer-events-none fixed inset-x-0 top-16 z-50 flex justify-center px-4">
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Open file"
-          className="pointer-events-auto w-full max-w-2xl overflow-hidden rounded-xl border border-border bg-composer-background text-foreground shadow-sm"
-        >
-          {children}
-        </div>
-      </div>
-    </>,
-    document.body,
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      title="Open file"
+      headerContent={headerContent}
+      sizeClassName="max-w-2xl"
+      bodyClassName="p-0"
+      overlayClassName="bg-overlay/50"
+      panelClassName="border-border/70 bg-background shadow-floating-dark"
+    >
+      {children}
+    </ModalShell>
   );
 }

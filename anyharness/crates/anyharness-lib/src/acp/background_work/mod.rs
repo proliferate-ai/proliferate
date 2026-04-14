@@ -124,6 +124,10 @@ impl BackgroundWorkRegistry {
         }
     }
 
+    pub fn tracker_count(&self) -> usize {
+        self.trackers.len()
+    }
+
     fn detect_registration(
         &self,
         turn_id: &str,
