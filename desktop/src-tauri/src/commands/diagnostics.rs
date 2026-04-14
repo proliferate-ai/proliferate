@@ -5,10 +5,13 @@ use tauri::State;
 use crate::{
     diagnostics::{
         export_debug_bundle_to_path,
+        save_diagnostic_json_to_path,
         scrub_diagnostic_text,
         suggested_bundle_file_name,
         ExportDebugBundleOptions,
         ExportDebugBundleResult,
+        SaveDiagnosticJsonOptions,
+        SaveDiagnosticJsonResult,
     },
     sidecar::{RuntimeStatus, SharedSidecar},
 };
@@ -71,5 +74,25 @@ pub async fn export_debug_bundle(
         runtime_status_override,
     })
     .await
+    .map(Some)
+}
+
+#[tauri::command]
+pub async fn save_diagnostic_json(
+    suggested_file_name: String,
+    contents: String,
+) -> Result<Option<SaveDiagnosticJsonResult>, String> {
+    let Some(output_path) = FileDialog::new()
+        .add_filter("JSON", &["json"])
+        .set_file_name(&suggested_file_name)
+        .save_file()
+    else {
+        return Ok(None);
+    };
+
+    save_diagnostic_json_to_path(SaveDiagnosticJsonOptions {
+        output_path,
+        contents,
+    })
     .map(Some)
 }

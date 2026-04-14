@@ -189,7 +189,12 @@ async def check_binary_preinstalled(
     if result_exit_code(check_result) != 0:
         return False
 
-    local_binary_hash = _sha256_file(resolve_local_runtime_binary_path())
+    try:
+        local_binary_path = resolve_local_runtime_binary_path()
+    except RuntimeError:
+        return True
+
+    local_binary_hash = _sha256_file(local_binary_path)
     hash_result = await run_sandbox_command_logged(
         provider,
         sandbox,

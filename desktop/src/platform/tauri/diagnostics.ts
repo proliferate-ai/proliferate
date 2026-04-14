@@ -31,3 +31,18 @@ export async function exportDebugBundle(): Promise<string | null> {
   const result = await invoke<{ outputPath: string } | null>("export_debug_bundle");
   return result?.outputPath ?? null;
 }
+
+export async function saveDiagnosticJson(
+  suggestedFileName: string,
+  contents: string,
+): Promise<string | null> {
+  if (!isTauriDesktop()) {
+    return null;
+  }
+
+  const result = await invoke<{ outputPath: string } | null>(
+    "save_diagnostic_json",
+    { suggestedFileName, contents },
+  );
+  return result?.outputPath ?? null;
+}

@@ -305,6 +305,8 @@ export function handleAnonymousProductEvent<
   }
 
   for (const directive of directives) {
-    void applyDirective(directive);
+    void applyDirective(directive).catch((error) => {
+      logAnonymousTelemetryWarning("Failed to process anonymous telemetry directive", error);
+    });
   }
 }

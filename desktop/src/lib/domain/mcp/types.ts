@@ -1,6 +1,9 @@
 export type ConnectorCatalogId =
   | "github"
+  | "gmail"
+  | "google_calendar"
   | "context7"
+  | "exa"
   | "brave_search"
   | "tavily"
   | "openweather"
@@ -37,8 +40,10 @@ export type ConnectorEnvTemplate =
 
 export type ConnectorIconId =
   | "brave"
+  | "calendar"
   | "context7"
   | "filesystem"
+  | "gmail"
   | "github"
   | "globe"
   | "linear"

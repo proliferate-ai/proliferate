@@ -121,6 +121,24 @@ describe("mcp launch resolution", () => {
     });
   });
 
+  it("resolves Exa API keys into MCP query auth", async () => {
+    await installConnector("exa", "exa-example");
+
+    const resolution = await resolveSessionMcpServersForLaunch({
+      targetLocation: "local",
+      workspacePath: "/workspace",
+    });
+
+    expect(resolution.warnings).toEqual([]);
+    expect(resolution.mcpServers).toHaveLength(1);
+    expect(resolution.mcpServers[0]).toMatchObject({
+      catalogEntryId: "exa",
+      transport: "http",
+      url: "https://mcp.exa.ai/mcp?exaApiKey=exa-example",
+      headers: [],
+    });
+  });
+
   it("warns when an enabled connector is missing its saved secret", async () => {
     await installConnector("context7", "ctx7sk-example");
     const connectionId = (mocks.persistedState as {
@@ -228,6 +246,34 @@ describe("mcp launch resolution", () => {
         catalogEntryId: "linear",
       }),
     ]);
+  });
+
+  it("injects Gmail OAuth bearer auth into session MCP servers", async () => {
+    await connectOAuthConnector("gmail");
+    mocks.getValidOAuthAccessTokenMock.mockResolvedValue({
+      kind: "ready",
+      accessToken: "gmail-token",
+      expiresAt: null,
+    });
+
+    const resolution = await resolveSessionMcpServersForLaunch({
+      targetLocation: "cloud",
+      workspacePath: "/workspace",
+    });
+
+    expect(resolution.warnings).toEqual([]);
+    expect(resolution.mcpServers).toHaveLength(1);
+    expect(resolution.mcpServers[0]).toMatchObject({
+      catalogEntryId: "gmail",
+      transport: "http",
+      url: "https://gmail.mcp.claude.com/mcp",
+      headers: [
+        {
+          name: "Authorization",
+          value: "Bearer gmail-token",
+        },
+      ],
+    });
   });
 
   it("injects the same OAuth bearer header for local and cloud launches", async () => {

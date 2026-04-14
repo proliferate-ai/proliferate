@@ -320,8 +320,8 @@
 - name: VITE_REQUIRE_AUTH
   secret: false
   default: ""
-  description: Force auth requirement in dev
-  tags: [local-dev]
+  description: Force or disable desktop auth requirement; production desktop releases default to requiring auth
+  tags: [local-dev, production, desktop]
 
 - name: VITE_PROLIFERATE_DEBUG_LATENCY
   secret: false

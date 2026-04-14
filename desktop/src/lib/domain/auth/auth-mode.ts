@@ -15,12 +15,29 @@ function envFlagEnabled(value: string | undefined, defaultValue: boolean): boole
   return !["0", "false", "off", "no"].includes(normalized);
 }
 
+export interface ProductAuthRequirementInput {
+  viteDev: boolean;
+  viteRequireAuth?: string;
+  proliferateEnvironment?: string;
+}
+
+export function resolveProductAuthRequired(input: ProductAuthRequirementInput): boolean {
+  const environment = input.proliferateEnvironment?.trim().toLowerCase();
+  const defaultValue = !input.viteDev && environment === "production";
+
+  return envFlagEnabled(input.viteRequireAuth, defaultValue);
+}
+
 export function isDevAuthBypassed(): boolean {
   return import.meta.env.DEV && envFlagEnabled(import.meta.env.VITE_DEV_DISABLE_AUTH, false);
 }
 
 export function isProductAuthRequired(): boolean {
-  return envFlagEnabled(import.meta.env.VITE_REQUIRE_AUTH, false);
+  return resolveProductAuthRequired({
+    viteDev: import.meta.env.DEV,
+    viteRequireAuth: import.meta.env.VITE_REQUIRE_AUTH,
+    proliferateEnvironment: import.meta.env.VITE_PROLIFERATE_ENVIRONMENT,
+  });
 }
 
 export function createDevBypassSession(): StoredAuthSession {

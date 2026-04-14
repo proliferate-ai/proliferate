@@ -1,5 +1,13 @@
 import { Button } from "@/components/ui/Button";
-import { Copy, GmailBrandIcon, Mail, OutlookBrandIcon } from "@/components/ui/icons";
+import {
+  Archive,
+  Copy,
+  FileText,
+  FolderList,
+  GmailBrandIcon,
+  Mail,
+  OutlookBrandIcon,
+} from "@/components/ui/icons";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Textarea } from "@/components/ui/Textarea";
 import { CAPABILITY_COPY } from "@/config/capabilities";
@@ -19,16 +27,25 @@ export function SupportDialog({
 }: SupportDialogProps) {
   const {
     canExportDebugBundle,
+    canCopyInvestigationJson,
+    canExportActiveSessionJson,
+    canExportWorkspaceJson,
     contextLabel,
     fallbackEmail,
+    handleCopyInvestigationJson,
+    handleExportActiveSessionJson,
     handleExportDebugBundle,
+    handleExportWorkspaceJson,
     handleCopyEmail,
     handleEmail,
     handleGmail,
     handleOutlook,
     handleSend,
     inAppSupportEnabled,
+    isCopyingInvestigationJson,
     isExportingDebugBundle,
+    isExportingSessionDebugJson,
+    isExportingWorkspaceDebugJson,
     isSendingSupportMessage,
     message,
     setMessage,
@@ -80,24 +97,19 @@ export function SupportDialog({
             className="min-h-[132px] border-border bg-background text-[13px]"
           />
           {canExportDebugBundle && (
-            <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Export a local debug bundle if you want us to inspect logs and runtime state.
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  loading={isExportingDebugBundle}
-                  onClick={() => { void handleExportDebugBundle(); }}
-                >
-                  Export debug bundle
-                </Button>
-              </div>
-              <p className="mt-2 text-[11px] leading-5 text-muted-foreground/80">
-                Includes local paths and error text. It never sends automatically.
-              </p>
-            </div>
+            <SupportDebugSection
+              canCopyInvestigationJson={canCopyInvestigationJson}
+              canExportActiveSessionJson={canExportActiveSessionJson}
+              canExportWorkspaceJson={canExportWorkspaceJson}
+              handleCopyInvestigationJson={handleCopyInvestigationJson}
+              handleExportActiveSessionJson={handleExportActiveSessionJson}
+              handleExportDebugBundle={handleExportDebugBundle}
+              handleExportWorkspaceJson={handleExportWorkspaceJson}
+              isCopyingInvestigationJson={isCopyingInvestigationJson}
+              isExportingDebugBundle={isExportingDebugBundle}
+              isExportingSessionDebugJson={isExportingSessionDebugJson}
+              isExportingWorkspaceDebugJson={isExportingWorkspaceDebugJson}
+            />
           )}
         </div>
       ) : (
@@ -139,24 +151,110 @@ export function SupportDialog({
               <Copy className="size-3.5 shrink-0" />
               {CAPABILITY_COPY.supportCopyLabel}
             </Button>
-            {canExportDebugBundle && (
-              <Button
-                variant="outline"
-                size="sm"
-                loading={isExportingDebugBundle}
-                onClick={() => { void handleExportDebugBundle(); }}
-              >
-                Export debug bundle
-              </Button>
-            )}
           </div>
           {canExportDebugBundle && (
-            <p className="text-[11px] leading-5 text-muted-foreground/80">
-              Includes local paths and error text. It never sends automatically.
-            </p>
+            <SupportDebugSection
+              canCopyInvestigationJson={canCopyInvestigationJson}
+              canExportActiveSessionJson={canExportActiveSessionJson}
+              canExportWorkspaceJson={canExportWorkspaceJson}
+              handleCopyInvestigationJson={handleCopyInvestigationJson}
+              handleExportActiveSessionJson={handleExportActiveSessionJson}
+              handleExportDebugBundle={handleExportDebugBundle}
+              handleExportWorkspaceJson={handleExportWorkspaceJson}
+              isCopyingInvestigationJson={isCopyingInvestigationJson}
+              isExportingDebugBundle={isExportingDebugBundle}
+              isExportingSessionDebugJson={isExportingSessionDebugJson}
+              isExportingWorkspaceDebugJson={isExportingWorkspaceDebugJson}
+            />
           )}
         </div>
       )}
     </ModalShell>
+  );
+}
+
+interface SupportDebugSectionProps {
+  canCopyInvestigationJson: boolean;
+  canExportActiveSessionJson: boolean;
+  canExportWorkspaceJson: boolean;
+  handleCopyInvestigationJson: () => Promise<void>;
+  handleExportActiveSessionJson: () => Promise<void>;
+  handleExportDebugBundle: () => Promise<void>;
+  handleExportWorkspaceJson: () => Promise<void>;
+  isCopyingInvestigationJson: boolean;
+  isExportingDebugBundle: boolean;
+  isExportingSessionDebugJson: boolean;
+  isExportingWorkspaceDebugJson: boolean;
+}
+
+function SupportDebugSection({
+  canCopyInvestigationJson,
+  canExportActiveSessionJson,
+  canExportWorkspaceJson,
+  handleCopyInvestigationJson,
+  handleExportActiveSessionJson,
+  handleExportDebugBundle,
+  handleExportWorkspaceJson,
+  isCopyingInvestigationJson,
+  isExportingDebugBundle,
+  isExportingSessionDebugJson,
+  isExportingWorkspaceDebugJson,
+}: SupportDebugSectionProps) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+      <div className="space-y-2">
+        <div>
+          <p className="text-xs font-medium text-foreground">Session debugging</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Copy a compact investigation locator or export full raw and normalized event JSON.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            loading={isCopyingInvestigationJson}
+            disabled={!canCopyInvestigationJson}
+            onClick={() => { void handleCopyInvestigationJson(); }}
+          >
+            <Copy className="size-3.5 shrink-0" />
+            Copy investigation JSON
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            loading={isExportingSessionDebugJson}
+            disabled={!canExportActiveSessionJson}
+            onClick={() => { void handleExportActiveSessionJson(); }}
+          >
+            <FileText className="size-3.5 shrink-0" />
+            Export active session JSON
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            loading={isExportingWorkspaceDebugJson}
+            disabled={!canExportWorkspaceJson}
+            onClick={() => { void handleExportWorkspaceJson(); }}
+          >
+            <FolderList className="size-3.5 shrink-0" />
+            Export workspace JSON
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            loading={isExportingDebugBundle}
+            onClick={() => { void handleExportDebugBundle(); }}
+          >
+            <Archive className="size-3.5 shrink-0" />
+            Export debug bundle
+          </Button>
+        </div>
+      </div>
+      <p className="mt-2 text-[11px] leading-5 text-muted-foreground/80">
+        Event exports include prompts, raw notifications, tool output, file paths, and
+        runtime metadata. Nothing is sent automatically.
+      </p>
+    </div>
   );
 }

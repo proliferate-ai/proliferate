@@ -37,6 +37,50 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
     ],
   },
   {
+    id: "gmail",
+    name: "Gmail",
+    oneLiner: "Search and read authorized Gmail messages.",
+    description:
+      "Use Gmail to find relevant email threads and bring message context into a session after you authorize the connected Google account.",
+    docsUrl:
+      "https://support.anthropic.com/en/articles/11088742-using-the-gmail-and-google-calendar-integrations",
+    availability: "universal",
+    cloudSecretSync: false,
+    transport: "http",
+    authKind: "oauth",
+    url: "https://gmail.mcp.claude.com/mcp",
+    serverNameBase: "gmail",
+    iconId: "gmail",
+    requiredFields: [],
+    capabilities: [
+      "Search authorized Gmail messages",
+      "Read matching email threads",
+      "Use email context when answering session questions",
+    ],
+  },
+  {
+    id: "google_calendar",
+    name: "Google Calendar",
+    oneLiner: "Search events and schedule context from Google Calendar.",
+    description:
+      "Use Google Calendar to inspect authorized events, meeting details, and schedule context after you authorize the connected Google account.",
+    docsUrl:
+      "https://support.anthropic.com/en/articles/11088742-using-the-gmail-and-google-calendar-integrations",
+    availability: "universal",
+    cloudSecretSync: false,
+    transport: "http",
+    authKind: "oauth",
+    url: "https://gcal.mcp.claude.com/mcp",
+    serverNameBase: "google_calendar",
+    iconId: "calendar",
+    requiredFields: [],
+    capabilities: [
+      "Search authorized calendar events",
+      "Read meeting details and attendees",
+      "Use schedule context when planning work",
+    ],
+  },
+  {
     id: "context7",
     name: "Context7",
     oneLiner: "Pull current library docs into every session.",
@@ -67,6 +111,38 @@ export const CONNECTOR_CATALOG: readonly ConnectorCatalogEntry[] = [
       "Look up current, version-specific library docs",
       "Pull example snippets from official sources",
       "Resolve ambiguous API usage with live references",
+    ],
+  },
+  {
+    id: "exa",
+    name: "Exa",
+    oneLiner: "Search the web and code context with Exa.",
+    description:
+      "Use Exa when Proliferate needs fast web, docs, and code context from Exa's search infrastructure.",
+    docsUrl: "https://docs.exa.ai/reference/exa-mcp",
+    availability: "universal",
+    cloudSecretSync: true,
+    transport: "http",
+    authKind: "secret",
+    authStyle: { kind: "query", parameterName: "exaApiKey" },
+    authFieldId: "api_key",
+    url: "https://mcp.exa.ai/mcp",
+    serverNameBase: "exa",
+    iconId: "search",
+    requiredFields: [
+      {
+        id: "api_key",
+        label: "API key",
+        placeholder: "Paste your Exa API key",
+        helperText: "Create or copy an API key from your Exa dashboard.",
+        getTokenInstructions:
+          "Open your Exa dashboard, create or copy an API key, and paste it here.",
+      },
+    ],
+    capabilities: [
+      "Search the web for current information",
+      "Pull concise context from docs and code examples",
+      "Research unfamiliar APIs and implementation patterns",
     ],
   },
   {

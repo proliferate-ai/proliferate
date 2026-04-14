@@ -121,7 +121,17 @@ export async function pickFolder(): Promise<string | null> {
   }
 }
 
+function isTauriDesktop(): boolean {
+  return typeof window !== "undefined"
+    && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>);
+}
+
 export async function copyText(value: string): Promise<void> {
+  if (isTauriDesktop()) {
+    await invoke("copy_text", { value });
+    return;
+  }
+
   await navigator.clipboard.writeText(value);
 }
 

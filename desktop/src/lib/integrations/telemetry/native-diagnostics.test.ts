@@ -25,6 +25,7 @@ describe("native diagnostics", () => {
 
   beforeEach(() => {
     listeners = new Map();
+    vi.stubEnv("DEV", true);
     mocks.logRendererDiagnosticMock.mockReset();
     mocks.logRendererDiagnosticMock.mockResolvedValue(undefined);
     vi.stubGlobal("window", {
@@ -36,6 +37,7 @@ describe("native diagnostics", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -61,6 +63,19 @@ describe("native diagnostics", () => {
         route: "/settings/agents",
       }),
     );
+  });
+
+  it("suppresses stackless local dev network load rejections", async () => {
+    const diagnostics = await loadNativeDiagnostics();
+
+    diagnostics.initializeDesktopNativeDiagnostics();
+
+    const error = new TypeError("Load failed");
+    Object.defineProperty(error, "stack", { value: undefined });
+    listeners.get("unhandledrejection")?.({ reason: error });
+    await flushMicrotasks();
+
+    expect(mocks.logRendererDiagnosticMock).not.toHaveBeenCalled();
   });
 
   it("dedupes repeated React render errors within the debounce window", async () => {

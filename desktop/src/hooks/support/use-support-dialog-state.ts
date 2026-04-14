@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CAPABILITY_COPY } from "@/config/capabilities";
 import { useAppCapabilities } from "@/hooks/capabilities/use-app-capabilities";
 import { useSendSupportMessage } from "@/hooks/cloud/use-send-support-message";
+import { useSessionDebugActions } from "@/hooks/support/use-session-debug-actions";
 import {
   buildSupportEmailBody,
   formatSupportContextLabel,
@@ -32,6 +33,7 @@ export function useSupportDialogState({
   const authStatus = useAuthStore((state) => state.status);
   const showToast = useToastStore((state) => state.show);
   const { sendSupportMessage, isSendingSupportMessage } = useSendSupportMessage();
+  const sessionDebugActions = useSessionDebugActions();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [message, setMessage] = useState("");
   const [isExportingDebugBundle, setIsExportingDebugBundle] = useState(false);
@@ -146,11 +148,20 @@ export function useSupportDialogState({
 
   return {
     canExportDebugBundle,
+    canCopyInvestigationJson: sessionDebugActions.canCopyInvestigationJson,
+    canExportActiveSessionJson: sessionDebugActions.canExportActiveSessionJson,
+    canExportWorkspaceJson: sessionDebugActions.canExportWorkspaceJson,
     contextLabel,
     fallbackEmail: CAPABILITY_COPY.supportEmailAddress,
+    handleCopyInvestigationJson: sessionDebugActions.handleCopyInvestigationJson,
+    handleExportActiveSessionJson: sessionDebugActions.handleExportActiveSessionJson,
     handleExportDebugBundle,
+    handleExportWorkspaceJson: sessionDebugActions.handleExportWorkspaceJson,
     inAppSupportEnabled,
+    isCopyingInvestigationJson: sessionDebugActions.isCopyingInvestigationJson,
     isExportingDebugBundle,
+    isExportingSessionDebugJson: sessionDebugActions.isExportingSessionDebugJson,
+    isExportingWorkspaceDebugJson: sessionDebugActions.isExportingWorkspaceDebugJson,
     isSendingSupportMessage,
     message,
     setMessage,

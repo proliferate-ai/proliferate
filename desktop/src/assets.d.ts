@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_PROLIFERATE_RELEASE?: string;
   readonly VITE_PROLIFERATE_TELEMETRY_DISABLED?: string;
   readonly VITE_PROLIFERATE_DEBUG_LATENCY?: string;
+  readonly VITE_DEV_DISABLE_AUTH?: string;
+  readonly VITE_REQUIRE_AUTH?: string;
   readonly VITE_PROLIFERATE_SENTRY_DSN?: string;
   readonly VITE_PROLIFERATE_SENTRY_TRACES_SAMPLE_RATE?: string;
   readonly VITE_PROLIFERATE_SENTRY_ENABLE_LOGS?: string;

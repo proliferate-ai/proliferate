@@ -6,7 +6,7 @@ export interface AnyHarnessResolvedConnection {
   anyharnessWorkspaceId: string;
 }
 
-interface AnyHarnessWorkspaceContextValue {
+export interface AnyHarnessWorkspaceContextValue {
   workspaceId: string | null;
   resolveConnection: (workspaceId: string) => Promise<AnyHarnessResolvedConnection>;
 }

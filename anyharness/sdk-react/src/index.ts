@@ -1,6 +1,13 @@
 export { AnyHarnessRuntime } from "./context/AnyHarnessRuntime.js";
-export { AnyHarnessWorkspace } from "./context/AnyHarnessWorkspace.js";
-export type { AnyHarnessResolvedConnection } from "./context/AnyHarnessWorkspace.js";
+export {
+  AnyHarnessWorkspace,
+  resolveWorkspaceConnectionFromContext,
+  useAnyHarnessWorkspaceContext,
+} from "./context/AnyHarnessWorkspace.js";
+export type {
+  AnyHarnessResolvedConnection,
+  AnyHarnessWorkspaceContextValue,
+} from "./context/AnyHarnessWorkspace.js";
 
 export { getAnyHarnessClient } from "./lib/client-cache.js";
 export type { AnyHarnessClientConnection } from "./lib/client-cache.js";

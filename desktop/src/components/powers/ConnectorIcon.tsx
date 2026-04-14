@@ -7,7 +7,16 @@ import notionIcon from "@/assets/connector-icons/notion.png";
 import openweatherIcon from "@/assets/connector-icons/openweather.svg";
 import playwrightIcon from "@/assets/connector-icons/playwright.svg";
 import supabaseIcon from "@/assets/connector-icons/supabase.png";
-import { Folder, GitHub, Globe, Search, Sun, Terminal } from "@/components/ui/icons";
+import {
+  Calendar,
+  Folder,
+  GitHub,
+  GmailBrandIcon,
+  Globe,
+  Search,
+  Sun,
+  Terminal,
+} from "@/components/ui/icons";
 
 function LinearGlyph({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
@@ -42,6 +51,8 @@ function TavilyGlyph({ className, ...props }: SVGProps<SVGSVGElement>) {
 }
 
 const CONNECTOR_ICONS = {
+  calendar: Calendar,
+  gmail: GmailBrandIcon,
   github: GitHub,
   globe: Globe,
   linear: LinearGlyph,

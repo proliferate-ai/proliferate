@@ -1,10 +1,17 @@
 import { logRendererDiagnostic } from "@/platform/tauri/diagnostics";
+import { getRuntimeDesktopAppConfig } from "@/lib/infra/proliferate-api";
 
 const DEDUPE_WINDOW_MS = 3_000;
 
 const seenObjects = new WeakSet<object>();
 const seenFingerprints = new Map<string, number>();
 let listenersInstalled = false;
+
+const STACKLESS_NETWORK_REJECTION_MESSAGES = new Set([
+  "Failed to fetch",
+  "Load failed",
+  "NetworkError when attempting to fetch resource.",
+]);
 
 function currentRoute(): string | null {
   if (typeof window === "undefined") {
@@ -72,6 +79,21 @@ function shouldLogDiagnostic(
   return true;
 }
 
+function shouldSuppressDiagnostic(
+  source: string,
+  error: unknown,
+  message: string,
+  stack: string | null,
+  componentStack: string | null,
+): boolean {
+  return (import.meta.env.DEV || getRuntimeDesktopAppConfig().nativeDevProfile)
+    && source === "unhandledrejection"
+    && error instanceof TypeError
+    && stack === null
+    && componentStack === null
+    && STACKLESS_NETWORK_REJECTION_MESSAGES.has(message);
+}
+
 async function sendDiagnostic(
   source: string,
   error: unknown,
@@ -80,6 +102,10 @@ async function sendDiagnostic(
 ) {
   const message = messageFromUnknown(error);
   const stack = stackFromUnknown(error);
+  if (shouldSuppressDiagnostic(source, error, message, stack, componentStack ?? null)) {
+    return;
+  }
+
   const fingerprint = buildFingerprint(source, message, stack, componentStack ?? null);
   if (!shouldLogDiagnostic(dedupeKey, fingerprint)) {
     return;

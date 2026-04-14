@@ -488,6 +488,43 @@ class TestCheckBinaryPreinstalled:
         assert calls == ["check_runtime_binary", "check_runtime_binary_sha256"]
 
     @pytest.mark.asyncio
+    async def test_returns_true_when_template_binary_exists_without_local_binary(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        calls: list[str] = []
+
+        async def _run_sandbox_command_logged(*args, **kwargs):
+            calls.append(kwargs["label"])
+            if kwargs["label"] == "check_runtime_binary":
+                return SimpleNamespace(exit_code=0, stdout="", stderr="")
+            raise AssertionError(f"unexpected label: {kwargs['label']}")
+
+        def _resolve_local_runtime_binary_path() -> Path:
+            raise RuntimeError("missing local binary")
+
+        monkeypatch.setattr(
+            runtime_bootstrap,
+            "resolve_local_runtime_binary_path",
+            _resolve_local_runtime_binary_path,
+        )
+        monkeypatch.setattr(
+            runtime_bootstrap,
+            "run_sandbox_command_logged",
+            _run_sandbox_command_logged,
+        )
+
+        result = await runtime_bootstrap.check_binary_preinstalled(
+            SimpleNamespace(),
+            object(),
+            workspace_id=uuid.uuid4(),
+            runtime_context=SimpleNamespace(runtime_binary_path="/home/user/anyharness"),
+        )
+
+        assert result is True
+        assert calls == ["check_runtime_binary"]
+
+    @pytest.mark.asyncio
     async def test_returns_false_when_template_binary_hash_differs(
         self,
         monkeypatch: pytest.MonkeyPatch,
