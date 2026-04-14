@@ -51,7 +51,17 @@ fn stage_proliferate_debug_binary() -> Result<(), String> {
     };
     let dest = binaries_dir.join(dest_name);
 
-    let source = resolve_proliferate_debug_binary(&manifest_dir, &target, &profile)?;
+    let source = match resolve_proliferate_debug_binary(&manifest_dir, &target, &profile) {
+        Ok(source) => source,
+        Err(error) if profile != "release" => {
+            write_placeholder_sidecar(&dest, &target)?;
+            println!(
+                "cargo:warning=staged placeholder Proliferate debug helper for {target}: {error}"
+            );
+            return Ok(());
+        }
+        Err(error) => return Err(error),
+    };
     copy_executable(&source, &dest)?;
 
     println!(
@@ -301,13 +311,8 @@ fn resolve_proliferate_debug_binary(
         return Ok(path);
     }
 
-    build_proliferate_debug(&helper_dir, target, profile)?;
-    if let Some(path) = find_proliferate_debug_binary(manifest_dir, &helper_dir, target, profile) {
-        return Ok(path);
-    }
-
     Err(format!(
-        "could not find or build proliferate-debug for target {target}"
+        "could not find prebuilt proliferate-debug for target {target}; build it first or set PROLIFERATE_DEBUG_BIN"
     ))
 }
 
@@ -332,31 +337,6 @@ fn find_named_binary(repo_root: &Path, target: &str, profile: &str, bin_name: &s
     ]
     .into_iter()
     .find(|p| p.is_file())
-}
-
-fn build_proliferate_debug(repo_root: &Path, target: &str, profile: &str) -> Result<(), String> {
-    let mut cmd = Command::new("cargo");
-    cmd.current_dir(repo_root)
-        .env("CARGO_TARGET_DIR", repo_root.join("../../target"))
-        .arg("build")
-        .arg("--bin")
-        .arg("proliferate-debug")
-        .arg("--target")
-        .arg(target);
-
-    if profile == "release" {
-        cmd.arg("--release");
-    }
-
-    let status = cmd.status().map_err(|e| e.to_string())?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "cargo build --bin proliferate-debug failed in {}",
-            repo_root.display()
-        ))
-    }
 }
 
 fn find_proliferate_debug_binary(

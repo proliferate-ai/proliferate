@@ -1,6 +1,6 @@
 [package]
 name = "proliferate"
-version = "0.1.15"
+version = "0.1.16"
 edition.workspace = true
 
 [build-dependencies]

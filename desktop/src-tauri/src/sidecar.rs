@@ -6,7 +6,6 @@ use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 
 use crate::app_config::{
-    load_runtime_info_record,
     write_runtime_info_record,
     RuntimeInfoRecord,
 };
@@ -546,17 +545,12 @@ fn runtime_status_label(status: &RuntimeStatus) -> &'static str {
 }
 
 fn persist_runtime_info(info: &RuntimeInfo, health: Option<&RuntimeHealthRecord>) {
-    let previous = load_runtime_info_record().ok().flatten();
     let record = RuntimeInfoRecord {
         url: info.url.clone(),
         port: info.port,
         status: runtime_status_label(&info.status).to_string(),
-        runtime_home: health
-            .map(|value| value.runtime_home.clone())
-            .or_else(|| previous.as_ref().and_then(|value| value.runtime_home.clone())),
-        version: health
-            .map(|value| value.version.clone())
-            .or_else(|| previous.as_ref().and_then(|value| value.version.clone())),
+        runtime_home: health.map(|value| value.runtime_home.clone()),
+        version: health.map(|value| value.version.clone()),
     };
 
     if let Err(error) = write_runtime_info_record(&record) {

@@ -90,15 +90,25 @@ pub async fn export_debug_bundle_to_path(
                 .as_ref()
                 .and_then(|value| value.runtime_home.clone().map(PathBuf::from))
         })
-        .unwrap_or_else(|| default_runtime_home.clone());
-    let anyharness_base_log = anyharness_runtime_home.join("logs/anyharness.log");
-    let anyharness_logs_exist = anyharness_base_log.is_file();
+        .or_else(|| {
+            (runtime_status.as_deref() != Some("healthy")).then_some(default_runtime_home.clone())
+        });
+    let anyharness_base_log = anyharness_runtime_home
+        .as_ref()
+        .map(|runtime_home| runtime_home.join("logs/anyharness.log"));
+    let anyharness_logs_exist = anyharness_base_log.as_ref().is_some_and(|path| path.is_file());
     let runtime_home_for_manifest = health
         .as_ref()
         .map(|value| value.runtime_home.clone())
         .or_else(|| runtime_info.as_ref().and_then(|value| value.runtime_home.clone()))
         .or_else(|| {
-            anyharness_logs_exist.then(|| anyharness_runtime_home.to_string_lossy().into_owned())
+            anyharness_logs_exist.then(|| {
+                anyharness_runtime_home
+                    .as_ref()
+                    .expect("runtime home should exist when logs are present")
+                    .to_string_lossy()
+                    .into_owned()
+            })
         });
 
     let output_file = fs::File::create(&options.output_path)
@@ -121,17 +131,19 @@ pub async fn export_debug_bundle_to_path(
         )?;
     }
 
-    for path in collect_log_files(&anyharness_base_log) {
-        let file_name = path
-            .file_name()
-            .expect("runtime log file should have a name")
-            .to_string_lossy();
-        add_scrubbed_text_file(
-            &mut zip,
-            &format!("logs/anyharness/{file_name}"),
-            &path,
-            file_options,
-        )?;
+    if let Some(anyharness_base_log) = anyharness_base_log.as_ref() {
+        for path in collect_log_files(anyharness_base_log) {
+            let file_name = path
+                .file_name()
+                .expect("runtime log file should have a name")
+                .to_string_lossy();
+            add_scrubbed_text_file(
+                &mut zip,
+                &format!("logs/anyharness/{file_name}"),
+                &path,
+                file_options,
+            )?;
+        }
     }
 
     if let Some(health) = health.as_ref() {

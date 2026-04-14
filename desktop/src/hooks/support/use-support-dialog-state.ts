@@ -13,7 +13,7 @@ import {
   openGmailCompose,
   openOutlookCompose,
 } from "@/platform/tauri/shell";
-import { exportDebugBundle } from "@/platform/tauri/diagnostics";
+import { exportDebugBundle, isTauriDesktop } from "@/platform/tauri/diagnostics";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -36,6 +36,7 @@ export function useSupportDialogState({
   const [message, setMessage] = useState("");
   const [isExportingDebugBundle, setIsExportingDebugBundle] = useState(false);
   const inAppSupportEnabled = supportEnabled && authStatus === "authenticated";
+  const canExportDebugBundle = isTauriDesktop();
   const contextLabel = useMemo(() => formatSupportContextLabel(context), [context]);
   const fallbackBody = useMemo(() => buildSupportEmailBody(context), [context]);
 
@@ -122,6 +123,11 @@ export function useSupportDialogState({
   }
 
   async function handleExportDebugBundle() {
+    if (!canExportDebugBundle) {
+      showToast("Debug bundle export is only available in the desktop app.");
+      return;
+    }
+
     setIsExportingDebugBundle(true);
 
     try {
@@ -139,6 +145,7 @@ export function useSupportDialogState({
   }
 
   return {
+    canExportDebugBundle,
     contextLabel,
     fallbackEmail: CAPABILITY_COPY.supportEmailAddress,
     handleExportDebugBundle,

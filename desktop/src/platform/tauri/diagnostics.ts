@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-function isTauriDesktop(): boolean {
+export function isTauriDesktop(): boolean {
   return typeof window !== "undefined"
     && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>);
 }
