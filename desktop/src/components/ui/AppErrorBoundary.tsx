@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { reportReactRenderError } from "@/lib/integrations/telemetry/native-diagnostics";
 
 interface Props {
   children: ReactNode;
@@ -16,6 +17,7 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    reportReactRenderError(error, info.componentStack);
     console.error("[AppErrorBoundary] Uncaught render error:", error);
     console.error("[AppErrorBoundary] Component stack:", info.componentStack);
   }

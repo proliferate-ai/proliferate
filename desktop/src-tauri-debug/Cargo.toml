@@ -1,0 +1,14 @@
+[package]
+name = "proliferate-debug"
+version = "0.1.15"
+edition.workspace = true
+
+[[bin]]
+name = "proliferate-debug"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+tokio.workspace = true
+proliferate = { path = "../src-tauri" }

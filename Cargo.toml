@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["anyharness/crates/*", "desktop/src-tauri"]
+members = ["anyharness/crates/*", "desktop/src-tauri", "desktop/src-tauri-debug"]
 
 [workspace.package]
 edition = "2021"
@@ -28,6 +28,8 @@ clap = { version = "4", features = ["derive"] }
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2.4"
+file-rotate = "0.8.0"
 sentry = { version = "0.47.0", default-features = false, features = ["backtrace", "contexts", "debug-images", "panic", "release-health", "reqwest", "rustls"] }
 sentry-anyhow = "0.47.0"
 sentry-tracing = { version = "0.47.0", features = ["logs"] }
@@ -49,6 +51,8 @@ nucleo-matcher = "0.3.1"
 aes-gcm-siv = "0.11"
 base64 = "0.22"
 sha2 = "0.10"
+regex = "1"
+zip = { version = "4.6.1", default-features = false, features = ["deflate"] }
 
 # ACP SDK
 agent-client-protocol = { version = "0.10.2", features = ["unstable"] }

@@ -17,6 +17,16 @@ pub struct AppConfigRecord {
     pub native_dev_profile: bool,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeInfoRecord {
+    pub url: String,
+    pub port: u16,
+    pub status: String,
+    pub runtime_home: Option<String>,
+    pub version: Option<String>,
+}
+
 pub fn app_dir_name_for_native_dev_profile(native_dev_profile: bool) -> &'static str {
     if native_dev_profile {
         ".proliferate-local"
@@ -48,12 +58,32 @@ pub fn config_path() -> Result<PathBuf, String> {
     Ok(app_dir_path()?.join("config.json"))
 }
 
+pub fn logs_dir_path() -> Result<PathBuf, String> {
+    Ok(app_dir_path()?.join("logs"))
+}
+
+pub fn runtime_info_path() -> Result<PathBuf, String> {
+    Ok(app_dir_path()?.join("runtime-info.json"))
+}
+
+pub fn default_anyharness_runtime_home_path() -> Result<PathBuf, String> {
+    Ok(app_dir_path()?.join("anyharness"))
+}
+
 pub fn anonymous_telemetry_install_id_path() -> Result<PathBuf, String> {
     Ok(app_dir_path()?.join("install_id"))
 }
 
 pub fn anonymous_telemetry_state_path() -> Result<PathBuf, String> {
     Ok(app_dir_path()?.join("anonymous-telemetry-desktop.json"))
+}
+
+pub fn load_runtime_info_record() -> Result<Option<RuntimeInfoRecord>, String> {
+    read_json_file(&runtime_info_path()?)
+}
+
+pub fn write_runtime_info_record(value: &RuntimeInfoRecord) -> Result<(), String> {
+    write_json_file_atomic(&runtime_info_path()?, value)
 }
 
 fn normalize_optional_string(value: Option<String>) -> Option<String> {
@@ -161,6 +191,27 @@ mod tests {
             app_dir_name_for_native_dev_profile(true),
             ".proliferate-local"
         );
+    }
+
+    #[test]
+    fn runtime_info_record_round_trips() {
+        let path = temp_path("runtime-info.json");
+        let record = RuntimeInfoRecord {
+            url: "http://127.0.0.1:8457".to_string(),
+            port: 8457,
+            status: "healthy".to_string(),
+            runtime_home: Some("/tmp/runtime-home".to_string()),
+            version: Some("0.1.0".to_string()),
+        };
+
+        write_json_file_atomic(&path, &record).expect("write should succeed");
+        let parsed: RuntimeInfoRecord = read_json_file(&path)
+            .expect("read should succeed")
+            .expect("file should exist");
+        assert_eq!(parsed, record);
+
+        std::fs::remove_dir_all(path.parent().expect("temp dir should exist"))
+            .expect("temp dir cleanup should succeed");
     }
 
     #[test]

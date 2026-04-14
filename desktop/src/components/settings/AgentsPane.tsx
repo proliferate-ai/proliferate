@@ -115,6 +115,8 @@ export function AgentsPane() {
           agent={state.selectedAgent}
           onClose={state.closeAgent}
           reconcileState={state.reconcileState}
+          runtimeHome={state.runtimeHome}
+          anyHarnessLogPath={state.anyHarnessLogPath}
           reconcileResult={
             state.rows.find((row) => row.agent.kind === state.selectedAgent?.kind)
               ?.reconcileResult
@@ -133,6 +135,7 @@ function AgentRow({
   row: {
     agent: AgentSummary;
     status: AgentStatusDisplay;
+    detailText: string;
     actionLabel: string;
     actionVariant: "outline" | "primary";
     actionDisabled: boolean;
@@ -140,8 +143,6 @@ function AgentRow({
   isFirst: boolean;
   onOpen: () => void;
 }) {
-  const showMessage = Boolean(row.agent.message && row.agent.readiness !== "ready");
-
   return (
     <div
       className={`flex items-center justify-between gap-4 px-4 py-3 ${
@@ -161,17 +162,9 @@ function AgentRow({
               {row.status.label}
             </Badge>
           </div>
-          {showMessage ? (
-            <p className="text-sm text-muted-foreground/80">
-              {row.agent.message}
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground/80">
-              {row.agent.supportsLogin || row.agent.expectedEnvVars.length > 0
-                ? "Credentials can be managed from the setup dialog."
-                : "No additional credentials are required."}
-            </p>
-          )}
+          <p className="text-sm text-muted-foreground/80">
+            {row.detailText}
+          </p>
         </div>
       </div>
 

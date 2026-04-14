@@ -12,6 +12,8 @@ import { ModalShell } from "@/components/ui/ModalShell";
 interface AgentSetupModalProps {
   agent: AgentSummary;
   onClose: () => void;
+  runtimeHome?: string | null;
+  anyHarnessLogPath?: string | null;
   reconcileState?: AgentReconcileState;
   reconcileResult?: ReconcileAgentResult;
 }
@@ -19,6 +21,8 @@ interface AgentSetupModalProps {
 export function AgentSetupModal({
   agent,
   onClose,
+  runtimeHome = null,
+  anyHarnessLogPath = null,
   reconcileState = "idle",
   reconcileResult,
 }: AgentSetupModalProps) {
@@ -111,6 +115,17 @@ export function AgentSetupModal({
             {(state.installError || (state.isRetry && reconcileResult?.message)) && (
               <div className="space-y-1 text-xs text-destructive">
                 <p>{state.installError ?? reconcileResult?.message}</p>
+                {(runtimeHome || anyHarnessLogPath) && (
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    {runtimeHome && (
+                      <span>Runtime home: {runtimeHome}</span>
+                    )}
+                    {runtimeHome && anyHarnessLogPath && " · "}
+                    {anyHarnessLogPath && (
+                      <span>AnyHarness log: {anyHarnessLogPath}</span>
+                    )}
+                  </p>
+                )}
                 {agent.docsUrl && (
                   <a
                     href={agent.docsUrl}

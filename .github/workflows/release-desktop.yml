@@ -113,6 +113,19 @@ jobs:
             chmod +x "desktop/src-tauri/binaries/anyharness-${{ matrix.target }}"
           fi
 
+      - name: Build Proliferate debug helper for target
+        if: steps.filter.outputs.skip != 'true'
+        shell: bash
+        run: |
+          cargo build --release -p proliferate-debug --target "${{ matrix.target }}"
+          mkdir -p desktop/src-tauri/binaries
+          if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
+            cp "target/${{ matrix.target }}/release/proliferate-debug.exe" "desktop/src-tauri/binaries/proliferate-debug-${{ matrix.target }}.exe"
+          else
+            cp "target/${{ matrix.target }}/release/proliferate-debug" "desktop/src-tauri/binaries/proliferate-debug-${{ matrix.target }}"
+            chmod +x "desktop/src-tauri/binaries/proliferate-debug-${{ matrix.target }}"
+          fi
+
       - name: Generate and build SDK
         if: steps.filter.outputs.skip != 'true'
         shell: bash

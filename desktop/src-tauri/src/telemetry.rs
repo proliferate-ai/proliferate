@@ -1,6 +1,17 @@
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use std::path::PathBuf;
 
-use crate::desktop_telemetry_mode::{resolve_desktop_telemetry_mode, DesktopTelemetryMode};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
+
+use crate::{
+    app_config::logs_dir_path,
+    desktop_telemetry_mode::{resolve_desktop_telemetry_mode, DesktopTelemetryMode},
+    telemetry_file_logging::create_file_log_sink,
+};
+
+pub struct TelemetryGuards {
+    _sentry: Option<sentry::ClientInitGuard>,
+    _file_log: Option<tracing_appender::non_blocking::WorkerGuard>,
+}
 
 fn baked_env(key: &str) -> Option<&'static str> {
     match key {
@@ -38,6 +49,10 @@ fn sample_rate(key: &str, default: f32) -> f32 {
         .unwrap_or(default)
 }
 
+fn env_filter_from_env() -> tracing_subscriber::EnvFilter {
+    tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into())
+}
+
 fn vendor_sentry_enabled(mode: DesktopTelemetryMode) -> bool {
     mode == DesktopTelemetryMode::HostedProduct
 }
@@ -51,10 +66,11 @@ fn telemetry_mode_tag(mode: DesktopTelemetryMode) -> Option<&'static str> {
     }
 }
 
-pub fn init() -> Option<sentry::ClientInitGuard> {
-    let env_filter =
-        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+fn desktop_native_log_path() -> Result<PathBuf, String> {
+    Ok(logs_dir_path()?.join("desktop-native.log"))
+}
 
+pub fn init() -> TelemetryGuards {
     let telemetry_mode = resolve_desktop_telemetry_mode();
     let dsn = if vendor_sentry_enabled(telemetry_mode) {
         env_value("PROLIFERATE_DESKTOP_SENTRY_DSN")
@@ -85,10 +101,30 @@ pub fn init() -> Option<sentry::ClientInitGuard> {
         ))
     });
 
+    let file_sink = desktop_native_log_path().ok().and_then(|path| {
+        match create_file_log_sink(&path) {
+            Ok(sink) => Some(sink),
+            Err(error) => {
+                eprintln!(
+                    "[desktop-native] file logging disabled for {}: {error}",
+                    path.display()
+                );
+                None
+            }
+        }
+    });
+
+    let console_layer = tracing_subscriber::fmt::layer().with_filter(env_filter_from_env());
+
     tracing_subscriber::registry()
-        .with(env_filter)
-        .with(tracing_subscriber::fmt::layer())
+        .with(console_layer)
         .with(sentry_tracing::layer())
+        .with(file_sink.as_ref().map(|sink| {
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(sink.writer.clone())
+                .with_filter(env_filter_from_env())
+        }))
         .init();
 
     if telemetry.is_some() {
@@ -100,7 +136,14 @@ pub fn init() -> Option<sentry::ClientInitGuard> {
         });
     }
 
-    telemetry
+    if let Some(sink) = file_sink.as_ref() {
+        tracing::info!(log_path = %sink.path.display(), "Desktop native file logging enabled");
+    }
+
+    TelemetryGuards {
+        _sentry: telemetry,
+        _file_log: file_sink.map(|sink| sink.guard),
+    }
 }
 
 #[cfg(test)]

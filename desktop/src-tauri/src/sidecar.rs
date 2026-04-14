@@ -5,6 +5,11 @@ use std::time::Duration;
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 
+use crate::app_config::{
+    load_runtime_info_record,
+    write_runtime_info_record,
+    RuntimeInfoRecord,
+};
 use crate::desktop_telemetry_mode::{resolve_desktop_telemetry_mode, DesktopTelemetryMode};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
@@ -26,6 +31,13 @@ pub enum RuntimeStatus {
     Healthy,
     Failed,
     Stopped,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeHealthRecord {
+    runtime_home: String,
+    version: String,
 }
 
 pub struct SidecarProcess {
@@ -376,6 +388,7 @@ pub async fn boot(sidecar: &SharedSidecar) {
         let mut guard = sidecar.lock().await;
         guard.info.url = dev_url;
         guard.info.status = RuntimeStatus::Healthy;
+        persist_runtime_info(&guard.info, None);
         return;
     }
 
@@ -390,6 +403,7 @@ pub async fn boot(sidecar: &SharedSidecar) {
             tracing::error!("No AnyHarness binary found and no dev URL set");
             let mut guard = sidecar.lock().await;
             guard.info.status = RuntimeStatus::Failed;
+            persist_runtime_info(&guard.info, None);
             return;
         }
     };
@@ -397,6 +411,7 @@ pub async fn boot(sidecar: &SharedSidecar) {
     {
         let mut guard = sidecar.lock().await;
         guard.info.status = RuntimeStatus::Starting;
+        persist_runtime_info(&guard.info, None);
     }
 
     tracing::info!(
@@ -414,6 +429,7 @@ pub async fn boot(sidecar: &SharedSidecar) {
                 let mut guard = sidecar.lock().await;
                 guard.child = Some(child);
                 guard.info.status = RuntimeStatus::Starting;
+                persist_runtime_info(&guard.info, None);
             }
             wait_healthy(sidecar).await;
         }
@@ -425,6 +441,7 @@ pub async fn boot(sidecar: &SharedSidecar) {
             );
             let mut guard = sidecar.lock().await;
             guard.info.status = RuntimeStatus::Failed;
+            persist_runtime_info(&guard.info, None);
         }
     }
 }
@@ -439,6 +456,7 @@ pub async fn restart(sidecar: &SharedSidecar, launch_env: HashMap<String, String
         guard.child = None;
         guard.info.status = RuntimeStatus::Stopped;
         guard.launch_env = launch_env;
+        persist_runtime_info(&guard.info, None);
     }
 
     boot(sidecar).await;
@@ -458,6 +476,7 @@ async fn wait_healthy(sidecar: &SharedSidecar) {
                 match child.try_wait() {
                     Ok(Some(status)) => {
                         guard.info.status = RuntimeStatus::Failed;
+                        persist_runtime_info(&guard.info, None);
                         tracing::error!(
                             exit_status = %status,
                             "AnyHarness sidecar exited before becoming healthy"
@@ -467,6 +486,7 @@ async fn wait_healthy(sidecar: &SharedSidecar) {
                     Ok(None) => {}
                     Err(error) => {
                         guard.info.status = RuntimeStatus::Failed;
+                        persist_runtime_info(&guard.info, None);
                         tracing::error!(
                             error = %error,
                             "Failed to inspect AnyHarness sidecar process state"
@@ -476,6 +496,7 @@ async fn wait_healthy(sidecar: &SharedSidecar) {
                 }
             } else {
                 guard.info.status = RuntimeStatus::Stopped;
+                persist_runtime_info(&guard.info, None);
                 tracing::error!("AnyHarness sidecar handle missing during startup");
                 return;
             }
@@ -486,6 +507,7 @@ async fn wait_healthy(sidecar: &SharedSidecar) {
         if start.elapsed() > HEALTH_POLL_TIMEOUT {
             let mut guard = sidecar.lock().await;
             guard.info.status = RuntimeStatus::Failed;
+            persist_runtime_info(&guard.info, None);
             tracing::error!(
                 timeout_ms = HEALTH_POLL_TIMEOUT.as_millis(),
                 "AnyHarness sidecar failed to become healthy in time"
@@ -495,9 +517,11 @@ async fn wait_healthy(sidecar: &SharedSidecar) {
 
         match client.get(&url).send().await {
             Ok(resp) if resp.status().is_success() => {
+                let health = resp.json::<RuntimeHealthRecord>().await.ok();
                 tracing::info!(health_url = %url, "AnyHarness sidecar is healthy");
                 let mut guard = sidecar.lock().await;
                 guard.info.status = RuntimeStatus::Healthy;
+                persist_runtime_info(&guard.info, health.as_ref());
                 return;
             }
             _ => {}
@@ -510,4 +534,32 @@ async fn wait_healthy(sidecar: &SharedSidecar) {
 pub fn create_sidecar_with_auto_port() -> SharedSidecar {
     let port = pick_port();
     create_sidecar(port)
+}
+
+fn runtime_status_label(status: &RuntimeStatus) -> &'static str {
+    match status {
+        RuntimeStatus::Starting => "starting",
+        RuntimeStatus::Healthy => "healthy",
+        RuntimeStatus::Failed => "failed",
+        RuntimeStatus::Stopped => "stopped",
+    }
+}
+
+fn persist_runtime_info(info: &RuntimeInfo, health: Option<&RuntimeHealthRecord>) {
+    let previous = load_runtime_info_record().ok().flatten();
+    let record = RuntimeInfoRecord {
+        url: info.url.clone(),
+        port: info.port,
+        status: runtime_status_label(&info.status).to_string(),
+        runtime_home: health
+            .map(|value| value.runtime_home.clone())
+            .or_else(|| previous.as_ref().and_then(|value| value.runtime_home.clone())),
+        version: health
+            .map(|value| value.version.clone())
+            .or_else(|| previous.as_ref().and_then(|value| value.version.clone())),
+    };
+
+    if let Err(error) = write_runtime_info_record(&record) {
+        tracing::warn!(error = %error, "Failed to persist runtime info");
+    }
 }

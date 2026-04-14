@@ -1,5 +1,6 @@
 mod cli;
 mod commands;
+mod file_logging;
 mod telemetry;
 
 use anyhow::Result;
@@ -8,9 +9,8 @@ use sentry_anyhow::capture_anyhow;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let _telemetry = telemetry::init();
-
     let args = cli::Cli::parse();
+    let _telemetry = telemetry::init(&args.command);
 
     let result = match args.command {
         cli::Commands::Serve(serve_args) => commands::serve::run(serve_args).await,

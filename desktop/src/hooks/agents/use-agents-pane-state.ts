@@ -9,6 +9,7 @@ import type {
 import { useShallow } from "zustand/react/shallow";
 import { AGENTS_PAGE_COPY } from "@/config/agents";
 import {
+  getAgentDetailText,
   getAgentStatusDisplay,
   isReadyAgent,
   type AgentReconcileState,
@@ -21,6 +22,7 @@ import { useAgentInstallationActions } from "./use-agent-installation-actions";
 export interface AgentsPaneRowState {
   agent: AgentSummary;
   status: AgentStatusDisplay;
+  detailText: string;
   actionLabel: string;
   actionVariant: "outline" | "primary";
   actionDisabled: boolean;
@@ -30,6 +32,8 @@ export interface AgentsPaneRowState {
 interface AgentsPaneState {
   connectionState: "connecting" | "healthy" | "failed";
   runtimeError: string | null;
+  runtimeHome: string | null;
+  anyHarnessLogPath: string | null;
   runtimeVersion: string | null;
   agentsLoading: boolean;
   agentError: string | null;
@@ -93,6 +97,7 @@ export function useAgentsPaneState(): AgentsPaneState {
           reconcileResult,
           isReconciling: isReconcilingInstall,
         }),
+        detailText: getAgentDetailText(agent, reconcileResult),
         actionLabel: isReconcilingInstall
           ? AGENTS_PAGE_COPY.reconcileLoadingAction
           : isReadyAgent(agent)
@@ -127,6 +132,10 @@ export function useAgentsPaneState(): AgentsPaneState {
   return {
     connectionState,
     runtimeError,
+    runtimeHome: health?.runtimeHome ?? null,
+    anyHarnessLogPath: health?.runtimeHome
+      ? `${health.runtimeHome}/logs/anyharness.log`
+      : null,
     runtimeVersion: health?.version ?? null,
     agentsLoading,
     agentError,

@@ -1,13 +1,15 @@
 mod app_config;
 mod commands;
+pub mod diagnostics;
 mod desktop_telemetry_mode;
 mod editors;
 mod quit_flow;
 mod sidecar;
 mod state;
 mod telemetry;
+mod telemetry_file_logging;
 
-use commands::{anonymous_telemetry, config, keychain, mcp_oauth, process, runtime, shell};
+use commands::{anonymous_telemetry, config, diagnostics as diagnostics_commands, keychain, mcp_oauth, process, runtime, shell};
 use quit_flow::QuitFlowState;
 use tauri::Manager;
 #[cfg(target_os = "macos")]
@@ -120,6 +122,8 @@ pub fn run() {
             anonymous_telemetry::load_anonymous_telemetry_bootstrap,
             anonymous_telemetry::save_anonymous_telemetry_state,
             config::get_app_config,
+            diagnostics_commands::export_debug_bundle,
+            diagnostics_commands::log_renderer_diagnostic,
             runtime::get_runtime_info,
             runtime::restart_runtime,
             quit_flow::set_running_agent_count,

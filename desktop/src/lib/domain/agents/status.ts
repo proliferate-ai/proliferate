@@ -159,3 +159,24 @@ export function getAgentSetupSubtitle(
 
   return AGENT_SETUP_COPY.subtitles.credentials;
 }
+
+export function getAgentDetailText(
+  agent: AgentSummary,
+  reconcileResult?: ReconcileAgentResult,
+): string {
+  if (
+    reconcileResult?.outcome === "failed"
+    && reconcileResult.message
+    && reconcileResult.message.trim().length > 0
+  ) {
+    return reconcileResult.message;
+  }
+
+  if (agent.message && agent.readiness !== "ready") {
+    return agent.message;
+  }
+
+  return agent.supportsLogin || agent.expectedEnvVars.length > 0
+    ? "Credentials can be managed from the setup dialog."
+    : "No additional credentials are required.";
+}

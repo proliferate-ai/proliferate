@@ -6,17 +6,89 @@ use std::process::Command;
 fn main() {
     println!("cargo:rerun-if-changed=tauri.conf.json");
     println!("cargo:rerun-if-env-changed=ANYHARNESS_BIN");
+    println!("cargo:rerun-if-env-changed=PROLIFERATE_DEBUG_BIN");
+    println!("cargo:rerun-if-env-changed=CARGO_PRIMARY_PACKAGE");
     println!("cargo:rerun-if-env-changed=TAURI_ENV_TARGET_TRIPLE");
     println!("cargo:rerun-if-env-changed=TARGET");
     println!("cargo:rerun-if-env-changed=PROFILE");
     propagate_native_telemetry_env();
     register_anyharness_rerun_inputs();
+    register_proliferate_debug_rerun_inputs();
 
-    if let Err(err) = stage_anyharness_binary() {
-        panic!("failed to stage AnyHarness sidecar binary: {err}");
+    if let Err(err) = stage_dependency_placeholders() {
+        panic!("failed to stage dependency placeholders: {err}");
+    }
+
+    if building_primary_package() {
+        if let Err(err) = stage_anyharness_binary() {
+            panic!("failed to stage AnyHarness sidecar binary: {err}");
+        }
+        if let Err(err) = stage_proliferate_debug_binary() {
+            panic!("failed to stage Proliferate debug helper binary: {err}");
+        }
     }
 
     tauri_build::build()
+}
+
+fn building_primary_package() -> bool {
+    env::var_os("CARGO_PRIMARY_PACKAGE").is_some()
+}
+
+fn stage_proliferate_debug_binary() -> Result<(), String> {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").map_err(|e| e.to_string())?);
+    let target = env::var("TAURI_ENV_TARGET_TRIPLE")
+        .or_else(|_| env::var("TARGET"))
+        .map_err(|e| e.to_string())?;
+    let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
+
+    let binaries_dir = manifest_dir.join("binaries");
+    fs::create_dir_all(&binaries_dir).map_err(|e| e.to_string())?;
+    let dest_name = if target.contains("windows") {
+        format!("proliferate-debug-{target}.exe")
+    } else {
+        format!("proliferate-debug-{target}")
+    };
+    let dest = binaries_dir.join(dest_name);
+
+    let source = resolve_proliferate_debug_binary(&manifest_dir, &target, &profile)?;
+    copy_executable(&source, &dest)?;
+
+    println!(
+        "cargo:warning=staged Proliferate debug helper from {}",
+        source.display()
+    );
+    println!("cargo:warning=helper resource path {}", dest.display());
+    Ok(())
+}
+
+fn stage_dependency_placeholders() -> Result<(), String> {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").map_err(|e| e.to_string())?);
+    let target = env::var("TAURI_ENV_TARGET_TRIPLE")
+        .or_else(|_| env::var("TARGET"))
+        .map_err(|e| e.to_string())?;
+    let binaries_dir = manifest_dir.join("binaries");
+    fs::create_dir_all(&binaries_dir).map_err(|e| e.to_string())?;
+
+    let helper_dest = if target.contains("windows") {
+        binaries_dir.join(format!("proliferate-debug-{target}.exe"))
+    } else {
+        binaries_dir.join(format!("proliferate-debug-{target}"))
+    };
+    let anyharness_dest = if target.contains("windows") {
+        binaries_dir.join(format!("anyharness-{target}.exe"))
+    } else {
+        binaries_dir.join(format!("anyharness-{target}"))
+    };
+
+    if !helper_dest.exists() {
+        write_placeholder_sidecar(&helper_dest, &target)?;
+    }
+    if !anyharness_dest.exists() {
+        write_placeholder_sidecar(&anyharness_dest, &target)?;
+    }
+
+    Ok(())
 }
 
 fn propagate_native_telemetry_env() {
@@ -151,6 +223,17 @@ fn register_anyharness_rerun_inputs() {
     }
 }
 
+fn register_proliferate_debug_rerun_inputs() {
+    let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") else {
+        return;
+    };
+    let manifest_dir = PathBuf::from(manifest_dir);
+    let helper_dir = proliferate_debug_repo_candidate(&manifest_dir);
+    if helper_dir.is_dir() {
+        println!("cargo:rerun-if-changed={}", helper_dir.display());
+    }
+}
+
 fn anyharness_repo_candidates(manifest_dir: &Path) -> Vec<PathBuf> {
     let candidates = vec![
         manifest_dir.join("../../anyharness"),
@@ -170,6 +253,10 @@ fn anyharness_repo_candidates(manifest_dir: &Path) -> Vec<PathBuf> {
         }
     }
     unique
+}
+
+fn proliferate_debug_repo_candidate(manifest_dir: &Path) -> PathBuf {
+    manifest_dir.join("../src-tauri-debug")
 }
 
 fn build_anyharness(repo_root: &Path, target: &str, profile: &str) -> Result<(), String> {
@@ -197,23 +284,90 @@ fn build_anyharness(repo_root: &Path, target: &str, profile: &str) -> Result<(),
     }
 }
 
+fn resolve_proliferate_debug_binary(
+    manifest_dir: &Path,
+    target: &str,
+    profile: &str,
+) -> Result<PathBuf, String> {
+    if let Ok(explicit) = env::var("PROLIFERATE_DEBUG_BIN") {
+        let path = PathBuf::from(explicit);
+        if path.is_file() {
+            return Ok(path);
+        }
+    }
+
+    let helper_dir = proliferate_debug_repo_candidate(manifest_dir);
+    if let Some(path) = find_proliferate_debug_binary(manifest_dir, &helper_dir, target, profile) {
+        return Ok(path);
+    }
+
+    build_proliferate_debug(&helper_dir, target, profile)?;
+    if let Some(path) = find_proliferate_debug_binary(manifest_dir, &helper_dir, target, profile) {
+        return Ok(path);
+    }
+
+    Err(format!(
+        "could not find or build proliferate-debug for target {target}"
+    ))
+}
+
 fn find_existing_binary(repo_root: &Path, target: &str, profile: &str) -> Option<PathBuf> {
+    find_named_binary(repo_root, target, profile, "anyharness")
+}
+
+fn find_named_binary(repo_root: &Path, target: &str, profile: &str, bin_name: &str) -> Option<PathBuf> {
     let bin_name = if target.contains("windows") {
-        "anyharness.exe"
+        format!("{bin_name}.exe")
     } else {
-        "anyharness"
+        bin_name.to_string()
     };
 
-    let candidates = [
+    [
         repo_root
             .join("target")
             .join(target)
             .join(profile)
-            .join(bin_name),
-        repo_root.join("target").join(profile).join(bin_name),
-    ];
+            .join(&bin_name),
+        repo_root.join("target").join(profile).join(&bin_name),
+    ]
+    .into_iter()
+    .find(|p| p.is_file())
+}
 
-    candidates.into_iter().find(|p| p.is_file())
+fn build_proliferate_debug(repo_root: &Path, target: &str, profile: &str) -> Result<(), String> {
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(repo_root)
+        .env("CARGO_TARGET_DIR", repo_root.join("../../target"))
+        .arg("build")
+        .arg("--bin")
+        .arg("proliferate-debug")
+        .arg("--target")
+        .arg(target);
+
+    if profile == "release" {
+        cmd.arg("--release");
+    }
+
+    let status = cmd.status().map_err(|e| e.to_string())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "cargo build --bin proliferate-debug failed in {}",
+            repo_root.display()
+        ))
+    }
+}
+
+fn find_proliferate_debug_binary(
+    manifest_dir: &Path,
+    repo_root: &Path,
+    target: &str,
+    profile: &str,
+) -> Option<PathBuf> {
+    find_named_binary(repo_root, target, profile, "proliferate-debug").or_else(|| {
+        find_named_binary(&manifest_dir.join("../../"), target, profile, "proliferate-debug")
+    })
 }
 
 fn copy_executable(source: &Path, dest: &Path) -> Result<(), String> {

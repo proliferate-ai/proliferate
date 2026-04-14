@@ -335,6 +335,7 @@ dependencies = [
  "anyhow",
  "axum",
  "clap",
+ "file-rotate",
  "sentry",
  "sentry-anyhow",
  "sentry-tracing",
@@ -342,6 +343,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
+ "tracing-appender",
  "tracing-subscriber",
 ]
 
@@ -1670,6 +1672,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "file-rotate"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e8e2fa049328a1f3295991407a88585805d126dfaadf74b9fe8c194c730aafc"
+dependencies = [
+ "chrono",
+ "flate2",
+]
+
+[[package]]
 name = "filedescriptor"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1717,6 +1729,7 @@ checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
+ "zlib-rs",
 ]
 
 [[package]]
@@ -4048,13 +4061,15 @@ dependencies = [
 
 [[package]]
 name = "proliferate"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
  "anyharness-credential-discovery",
  "base64 0.22.1",
  "chrono",
+ "file-rotate",
  "getrandom 0.2.17",
  "keyring",
+ "regex",
  "reqwest 0.12.28",
  "rfd 0.15.4",
  "sentry",
@@ -4075,11 +4090,23 @@ dependencies = [
  "tauri-plugin-updater",
  "tokio",
  "tracing",
+ "tracing-appender",
  "tracing-subscriber",
  "url",
  "uuid",
  "which",
  "window-vibrancy",
+ "zip",
+]
+
+[[package]]
+name = "proliferate-debug"
+version = "0.1.15"
+dependencies = [
+ "anyhow",
+ "clap",
+ "proliferate",
+ "tokio",
 ]
 
 [[package]]
@@ -6446,6 +6473,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-appender"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "786d480bce6247ab75f005b14ae1624ad978d3029d9113f0a22fa1ac773faeaf"
+dependencies = [
+ "crossbeam-channel",
+ "thiserror 2.0.18",
+ "time",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tracing-attributes"
 version = "0.1.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8018,15 +8057,35 @@ checksum = "caa8cd6af31c3b31c6631b8f483848b91589021b28fffe50adada48d4f4d2ed1"
 dependencies = [
  "arbitrary",
  "crc32fast",
+ "flate2",
  "indexmap 2.13.0",
  "memchr",
+ "zopfli",
 ]
+
+[[package]]
+name = "zlib-rs"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3be3d40e40a133f9c916ee3f9f4fa2d9d63435b5fbe1bfc6d9dae0aa0ada1513"
 
 [[package]]
 name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
+
+[[package]]
+name = "zopfli"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f05cd8797d63865425ff89b5c4a48804f35ba0ce8d125800027ad6017d2b5249"
+dependencies = [
+ "bumpalo",
+ "crc32fast",
+ "log",
+ "simd-adler32",
+]
 
 [[package]]
 name = "zvariant"

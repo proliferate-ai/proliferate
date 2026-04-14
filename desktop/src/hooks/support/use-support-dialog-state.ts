@@ -13,6 +13,7 @@ import {
   openGmailCompose,
   openOutlookCompose,
 } from "@/platform/tauri/shell";
+import { exportDebugBundle } from "@/platform/tauri/diagnostics";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -33,6 +34,7 @@ export function useSupportDialogState({
   const { sendSupportMessage, isSendingSupportMessage } = useSendSupportMessage();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [message, setMessage] = useState("");
+  const [isExportingDebugBundle, setIsExportingDebugBundle] = useState(false);
   const inAppSupportEnabled = supportEnabled && authStatus === "authenticated";
   const contextLabel = useMemo(() => formatSupportContextLabel(context), [context]);
   const fallbackBody = useMemo(() => buildSupportEmailBody(context), [context]);
@@ -119,10 +121,29 @@ export function useSupportDialogState({
     }
   }
 
+  async function handleExportDebugBundle() {
+    setIsExportingDebugBundle(true);
+
+    try {
+      const outputPath = await exportDebugBundle();
+      if (!outputPath) {
+        return;
+      }
+
+      showToast("Debug bundle exported.", "info");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Failed to export debug bundle.");
+    } finally {
+      setIsExportingDebugBundle(false);
+    }
+  }
+
   return {
     contextLabel,
     fallbackEmail: CAPABILITY_COPY.supportEmailAddress,
+    handleExportDebugBundle,
     inAppSupportEnabled,
+    isExportingDebugBundle,
     isSendingSupportMessage,
     message,
     setMessage,

@@ -20,12 +20,14 @@ export function SupportDialog({
   const {
     contextLabel,
     fallbackEmail,
+    handleExportDebugBundle,
     handleCopyEmail,
     handleEmail,
     handleGmail,
     handleOutlook,
     handleSend,
     inAppSupportEnabled,
+    isExportingDebugBundle,
     isSendingSupportMessage,
     message,
     setMessage,
@@ -76,6 +78,24 @@ export function SupportDialog({
             placeholder="What do you need help with?"
             className="min-h-[132px] border-border bg-background text-[13px]"
           />
+          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs leading-5 text-muted-foreground">
+                Export a local debug bundle if you want us to inspect logs and runtime state.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                loading={isExportingDebugBundle}
+                onClick={() => { void handleExportDebugBundle(); }}
+              >
+                Export debug bundle
+              </Button>
+            </div>
+            <p className="mt-2 text-[11px] leading-5 text-muted-foreground/80">
+              Includes local paths and error text. It never sends automatically.
+            </p>
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
@@ -116,7 +136,18 @@ export function SupportDialog({
               <Copy className="size-3.5 shrink-0" />
               {CAPABILITY_COPY.supportCopyLabel}
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              loading={isExportingDebugBundle}
+              onClick={() => { void handleExportDebugBundle(); }}
+            >
+              Export debug bundle
+            </Button>
           </div>
+          <p className="text-[11px] leading-5 text-muted-foreground/80">
+            Includes local paths and error text. It never sends automatically.
+          </p>
         </div>
       )}
     </ModalShell>
