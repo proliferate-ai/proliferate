@@ -1,9 +1,13 @@
 import type {
   ContentPart,
+  McpElicitationInteractionPayload,
+  PermissionInteractionContext,
   PlanEntry,
+  PermissionInteractionOption,
   SessionEventEnvelope,
   StopReason,
   TranscriptItemStatus,
+  UserInputQuestion,
 } from "./events.js";
 import type { SessionLiveConfigSnapshot } from "./sessions.js";
 
@@ -20,7 +24,7 @@ export interface TranscriptState {
   itemsById: Record<string, TranscriptItem>;
   openAssistantItemId: string | null;
   openThoughtItemId: string | null;
-  pendingApproval: PendingApproval | null;
+  pendingInteractions: PendingInteraction[];
   availableCommands: unknown[];
   liveConfig: SessionLiveConfigSnapshot | null;
   currentModeId: string | null;
@@ -67,6 +71,7 @@ export interface TranscriptBaseItem {
   turnId: string;
   status: TranscriptItemStatus;
   sourceAgentKind: string;
+  isTransient?: boolean;
   messageId: string | null;
   title: string | null;
   nativeToolName: string | null;
@@ -140,13 +145,37 @@ export interface UnknownItem {
   startedSeq: number;
 }
 
-export interface PendingApproval {
+interface PendingInteractionBase {
   requestId: string;
   toolCallId: string | null;
   toolKind: string | null;
+  toolStatus: string | null;
   title: string;
-  options: unknown;
+  description: string | null;
 }
+
+export interface PendingPermissionInteraction extends PendingInteractionBase {
+  kind: "permission";
+  options: PermissionInteractionOption[];
+  context?: PermissionInteractionContext | null;
+}
+
+export interface PendingUserInputInteraction extends PendingInteractionBase {
+  kind: "user_input";
+  questions: UserInputQuestion[];
+}
+
+export interface PendingMcpElicitationInteraction extends PendingInteractionBase {
+  kind: "mcp_elicitation";
+  mcpElicitation: McpElicitationInteractionPayload;
+}
+
+export type PendingInteraction =
+  | PendingPermissionInteraction
+  | PendingUserInputInteraction
+  | PendingMcpElicitationInteraction;
+
+export type PendingApproval = Extract<PendingInteraction, { kind: "permission" }>;
 
 export interface UsageState {
   used: number;
@@ -161,6 +190,7 @@ export type ToolCallSemanticKind =
   | "terminal"
   | "search"
   | "fetch"
+  | "hook"
   | "mode_switch"
   | "cowork_artifact_create"
   | "cowork_artifact_update"

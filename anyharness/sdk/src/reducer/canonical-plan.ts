@@ -1,6 +1,8 @@
 import type { CanonicalPlan, PlanItem, ToolCallItem, TranscriptState } from "../types/reducer.js";
+import { selectPendingApprovalInteraction } from "./transcript.js";
 
 export function deriveCanonicalPlan(transcript: TranscriptState): CanonicalPlan | null {
+  const pendingApproval = selectPendingApprovalInteraction(transcript);
   const items = Object.values(transcript.itemsById)
     .filter((item): item is PlanItem | ToolCallItem => item.kind === "plan" || item.kind === "tool_call")
     .sort((left, right) => {
@@ -21,7 +23,7 @@ export function deriveCanonicalPlan(transcript: TranscriptState): CanonicalPlan 
     }
 
     if (item.kind === "tool_call") {
-      const modeSwitchPlan = deriveModeSwitchCanonicalPlan(item, transcript.pendingApproval);
+      const modeSwitchPlan = deriveModeSwitchCanonicalPlan(item, pendingApproval);
       if (modeSwitchPlan) {
         return modeSwitchPlan;
       }
@@ -57,7 +59,7 @@ function deriveStructuredCanonicalPlan(item: PlanItem): CanonicalPlan | null {
 
 function deriveModeSwitchCanonicalPlan(
   item: ToolCallItem,
-  pendingApproval: TranscriptState["pendingApproval"],
+  pendingApproval: ReturnType<typeof selectPendingApprovalInteraction>,
 ): CanonicalPlan | null {
   if (!isClaudeExitPlanModeCall(item)) {
     return null;

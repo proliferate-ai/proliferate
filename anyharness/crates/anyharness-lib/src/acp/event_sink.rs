@@ -9,9 +9,9 @@ use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::{
     AvailableCommandsUpdatePayload, ConfigOptionUpdatePayload, ContentPart,
     CurrentModeUpdatePayload, ErrorEvent, FileChangeOperation, FileOpenTarget, FileReadScope,
+    InteractionKind, InteractionOutcome, InteractionRequestedEvent, InteractionResolvedEvent,
     ItemCompletedEvent, ItemDeltaEvent, ItemStartedEvent, PendingPromptAddedPayload,
-    PendingPromptRemovedPayload, PendingPromptUpdatedPayload, PermissionOutcome,
-    PermissionRequestedEvent, PermissionResolvedEvent, PlanEntry, SessionEndReason,
+    PendingPromptRemovedPayload, PendingPromptUpdatedPayload, PlanEntry, SessionEndReason,
     SessionEndedEvent, SessionEvent, SessionEventEnvelope, SessionInfoUpdatePayload,
     SessionStartedEvent, SessionStateUpdatePayload, StopReason, TranscriptItemDeltaPayload,
     TranscriptItemKind, TranscriptItemPayload, TranscriptItemStatus, TurnEndedEvent,
@@ -44,6 +44,7 @@ struct StreamingItemState {
     parent_tool_call_id: Option<String>,
     message_id: Option<String>,
     text: String,
+    is_transient: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -77,6 +78,8 @@ struct FileReadLineScope {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 struct ParsedMeta {
+    #[serde(default)]
+    anyharness: Option<AnyHarnessMeta>,
     #[serde(rename = "claudeCode")]
     claude_code: Option<ClaudeCodeMeta>,
     #[serde(default)]
@@ -85,6 +88,14 @@ struct ParsedMeta {
     terminal_output: Option<TerminalOutputMeta>,
     #[serde(default)]
     terminal_exit: Option<TerminalExitMeta>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AnyHarnessMeta {
+    transcript_event: Option<String>,
+    native_tool_name: Option<String>,
+    tool_kind: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -125,6 +136,7 @@ const ANYHARNESS_META_KEY: &str = "_anyharness";
 const ANYHARNESS_TRANSCRIPT_META_KEY: &str = "anyharness";
 const ANYHARNESS_TRANSCRIPT_EVENT_KEY: &str = "transcriptEvent";
 const ASSISTANT_MESSAGE_COMPLETED_EVENT: &str = "assistant_message_completed";
+const TRANSIENT_STATUS_EVENT: &str = "transient_status";
 const BACKGROUND_WORK_TRACKER_KIND: &str = "claude_async_agent";
 
 pub struct SessionEventSink {
@@ -278,6 +290,7 @@ impl SessionEventSink {
             kind: TranscriptItemKind::UserMessage,
             status: TranscriptItemStatus::Completed,
             source_agent_kind: self.source_agent_kind.clone(),
+            is_transient: false,
             message_id: None,
             title: None,
             tool_call_id: None,
@@ -330,6 +343,7 @@ impl SessionEventSink {
                 kind: TranscriptItemKind::AssistantMessage,
                 status: TranscriptItemStatus::InProgress,
                 source_agent_kind: self.source_agent_kind.clone(),
+                is_transient: false,
                 message_id: message_id.clone(),
                 title: None,
                 tool_call_id: None,
@@ -349,6 +363,7 @@ impl SessionEventSink {
                 parent_tool_call_id,
                 message_id,
                 text,
+                is_transient: false,
             });
             return;
         }
@@ -362,6 +377,7 @@ impl SessionEventSink {
             self.emit_with_ids(
                 SessionEvent::ItemDelta(ItemDeltaEvent {
                     delta: TranscriptItemDeltaPayload {
+                        is_transient: None,
                         status: None,
                         title: None,
                         native_tool_name: None,
@@ -385,6 +401,7 @@ impl SessionEventSink {
         if text.is_empty() {
             return;
         }
+        let is_transient = is_transient_status_marker(payload.meta.as_ref());
         let parent_tool_call_id = self.meta_parent_tool_call_id(payload.meta.as_ref());
         let message_id = payload.message_id.clone();
 
@@ -394,6 +411,7 @@ impl SessionEventSink {
             .map(|item| {
                 item.parent_tool_call_id != parent_tool_call_id
                     || (message_id.is_some() && item.message_id != message_id)
+                    || item.is_transient != is_transient
             })
             .unwrap_or(true);
 
@@ -404,6 +422,7 @@ impl SessionEventSink {
                 kind: TranscriptItemKind::Reasoning,
                 status: TranscriptItemStatus::InProgress,
                 source_agent_kind: self.source_agent_kind.clone(),
+                is_transient,
                 message_id: message_id.clone(),
                 title: None,
                 tool_call_id: None,
@@ -426,6 +445,7 @@ impl SessionEventSink {
                 parent_tool_call_id,
                 message_id,
                 text,
+                is_transient,
             });
             return;
         }
@@ -433,12 +453,17 @@ impl SessionEventSink {
         if self.open_reasoning_item.is_some() {
             let item_id = {
                 let item = self.open_reasoning_item.as_mut().expect("reasoning item");
-                item.text.push_str(&text);
+                if item.is_transient {
+                    item.text = text.clone();
+                } else {
+                    item.text.push_str(&text);
+                }
                 item.item_id.clone()
             };
             self.emit_with_ids(
                 SessionEvent::ItemDelta(ItemDeltaEvent {
                     delta: TranscriptItemDeltaPayload {
+                        is_transient: Some(is_transient),
                         status: None,
                         title: None,
                         native_tool_name: None,
@@ -446,8 +471,19 @@ impl SessionEventSink {
                         raw_input: None,
                         raw_output: None,
                         append_text: None,
-                        append_reasoning: Some(text),
-                        replace_content_parts: None,
+                        append_reasoning: if is_transient {
+                            None
+                        } else {
+                            Some(text.clone())
+                        },
+                        replace_content_parts: if is_transient {
+                            Some(vec![ContentPart::Reasoning {
+                                text,
+                                visibility: anyharness_contract::v1::ReasoningVisibility::Private,
+                            }])
+                        } else {
+                            None
+                        },
                         append_content_parts: None,
                     },
                 }),
@@ -500,6 +536,7 @@ impl SessionEventSink {
         self.emit_with_ids(
             SessionEvent::ItemDelta(ItemDeltaEvent {
                 delta: TranscriptItemDeltaPayload {
+                    is_transient: None,
                     status: Some(item.item.status.clone()),
                     title: item.item.title.clone(),
                     native_tool_name: item.item.native_tool_name.clone(),
@@ -542,6 +579,7 @@ impl SessionEventSink {
             self.emit_with_ids(
                 SessionEvent::ItemDelta(ItemDeltaEvent {
                     delta: TranscriptItemDeltaPayload {
+                        is_transient: None,
                         status: None,
                         title: None,
                         native_tool_name: None,
@@ -570,6 +608,7 @@ impl SessionEventSink {
             kind: TranscriptItemKind::Plan,
             status: TranscriptItemStatus::InProgress,
             source_agent_kind: self.source_agent_kind.clone(),
+            is_transient: false,
             message_id: None,
             title: Some("Plan".to_string()),
             tool_call_id: None,
@@ -648,19 +687,26 @@ impl SessionEventSink {
         );
     }
 
-    pub fn permission_requested(&mut self, event: PermissionRequestedEvent) {
+    pub fn interaction_requested(&mut self, event: InteractionRequestedEvent) {
         self.close_open_items();
+        let tool_call_id = event.source.tool_call_id.clone();
         self.emit_with_ids(
-            SessionEvent::PermissionRequested(event.clone()),
+            SessionEvent::InteractionRequested(event),
             self.current_turn_id.clone(),
-            event.tool_call_id,
+            tool_call_id,
         );
     }
 
-    pub fn permission_resolved(&mut self, request_id: String, outcome: PermissionOutcome) {
+    pub fn interaction_resolved(
+        &mut self,
+        request_id: String,
+        kind: InteractionKind,
+        outcome: InteractionOutcome,
+    ) {
         self.emit_with_ids(
-            SessionEvent::PermissionResolved(PermissionResolvedEvent {
+            SessionEvent::InteractionResolved(InteractionResolvedEvent {
                 request_id,
+                kind,
                 outcome,
             }),
             self.current_turn_id.clone(),
@@ -691,6 +737,7 @@ impl SessionEventSink {
         self.emit_with_ids(
             SessionEvent::ItemDelta(ItemDeltaEvent {
                 delta: TranscriptItemDeltaPayload {
+                    is_transient: None,
                     status: Some(TranscriptItemStatus::Completed),
                     title: None,
                     native_tool_name: None,
@@ -713,6 +760,7 @@ impl SessionEventSink {
                     kind: TranscriptItemKind::ToolInvocation,
                     status: TranscriptItemStatus::Completed,
                     source_agent_kind: self.source_agent_kind.clone(),
+                    is_transient: false,
                     message_id: None,
                     title: None,
                     tool_call_id: Some(tool_call_id.clone()),
@@ -743,14 +791,20 @@ impl SessionEventSink {
         previous: Option<&ToolItemState>,
     ) -> ToolItemState {
         let meta = parse_meta(payload.meta.as_ref());
-        let native_tool_name = if self.source_agent_kind == "claude" {
-            meta.claude_code
-                .as_ref()
-                .and_then(|meta| meta.tool_name.clone())
-                .or_else(|| previous.and_then(|prev| prev.item.native_tool_name.clone()))
-        } else {
-            previous.and_then(|prev| prev.item.native_tool_name.clone())
-        };
+        let native_tool_name = meta
+            .anyharness
+            .as_ref()
+            .and_then(|meta| meta.native_tool_name.clone())
+            .or_else(|| {
+                if self.source_agent_kind == "claude" {
+                    meta.claude_code
+                        .as_ref()
+                        .and_then(|meta| meta.tool_name.clone())
+                } else {
+                    None
+                }
+            })
+            .or_else(|| previous.and_then(|prev| prev.item.native_tool_name.clone()));
         let parent_tool_call_id = if self.source_agent_kind == "claude" {
             meta.claude_code
                 .as_ref()
@@ -765,9 +819,11 @@ impl SessionEventSink {
             .clone()
             .or_else(|| previous.and_then(|prev| prev.item.title.clone()))
             .unwrap_or_else(|| "Tool call".to_string());
-        let tool_kind = payload
-            .kind
-            .clone()
+        let tool_kind = meta
+            .anyharness
+            .as_ref()
+            .and_then(|meta| meta.tool_kind.clone())
+            .or_else(|| payload.kind.clone())
             .or_else(|| previous.and_then(extract_tool_kind_from_item));
         let status = payload
             .status
@@ -839,6 +895,7 @@ impl SessionEventSink {
             kind: TranscriptItemKind::ToolInvocation,
             status,
             source_agent_kind: self.source_agent_kind.clone(),
+            is_transient: false,
             message_id: None,
             title: Some(title),
             tool_call_id: Some(payload.tool_call_id.clone()),
@@ -868,11 +925,13 @@ impl SessionEventSink {
                 parent_tool_call_id,
                 message_id,
                 text,
+                is_transient: _,
             } = item;
             let payload = TranscriptItemPayload {
                 kind: TranscriptItemKind::AssistantMessage,
                 status: TranscriptItemStatus::Completed,
                 source_agent_kind: self.source_agent_kind.clone(),
+                is_transient: false,
                 message_id,
                 title: None,
                 tool_call_id: None,
@@ -912,11 +971,13 @@ impl SessionEventSink {
                 parent_tool_call_id,
                 message_id,
                 text,
+                is_transient,
             } = item;
             let payload = TranscriptItemPayload {
                 kind: TranscriptItemKind::Reasoning,
                 status: TranscriptItemStatus::Completed,
                 source_agent_kind: self.source_agent_kind.clone(),
+                is_transient,
                 message_id,
                 title: None,
                 tool_call_id: None,
@@ -943,6 +1004,7 @@ impl SessionEventSink {
                 kind: TranscriptItemKind::Plan,
                 status: TranscriptItemStatus::Completed,
                 source_agent_kind: self.source_agent_kind.clone(),
+                is_transient: false,
                 message_id: None,
                 title: Some("Plan".to_string()),
                 tool_call_id: None,
@@ -1034,6 +1096,14 @@ fn is_assistant_message_completed_marker(meta: Option<&serde_json::Value>) -> bo
         .and_then(|value| value.get(ANYHARNESS_TRANSCRIPT_EVENT_KEY))
         .and_then(serde_json::Value::as_str)
         == Some(ASSISTANT_MESSAGE_COMPLETED_EVENT)
+}
+
+fn is_transient_status_marker(meta: Option<&serde_json::Value>) -> bool {
+    parse_meta(meta)
+        .anyharness
+        .and_then(|meta| meta.transcript_event)
+        .as_deref()
+        == Some(TRANSIENT_STATUS_EVENT)
 }
 
 fn merge_snapshot_detail_parts(
@@ -2193,11 +2263,9 @@ mod tests {
                 "turn_ended",
             ]
         );
-        assert!(
-            events
-                .windows(2)
-                .all(|window| window[0].seq < window[1].seq)
-        );
+        assert!(events
+            .windows(2)
+            .all(|window| window[0].seq < window[1].seq));
         assert_eq!(events[3].item_id, events[4].item_id);
         assert_eq!(events[4].item_id, events[5].item_id);
         assert_eq!(
@@ -2316,6 +2384,100 @@ mod tests {
                 "item_started",
             ]
         );
+    }
+
+    #[test]
+    fn transient_status_marker_sets_transient_reasoning_and_replaces_text() {
+        let store = seeded_store();
+        let (tx, mut rx) = broadcast::channel(32);
+        let mut sink = SessionEventSink::new(
+            "session-1".to_string(),
+            "codex".to_string(),
+            PathBuf::from("/tmp/workspace"),
+            tx,
+            store,
+        );
+
+        sink.begin_turn("hello".to_string());
+        sink.agent_thought_chunk(transient_status_chunk("Authenticating MCP server"));
+        sink.agent_thought_chunk(transient_status_chunk("Waiting for browser auth"));
+        sink.turn_ended(StopReason::EndTurn);
+
+        let events = drain_events(&mut rx);
+        let SessionEvent::ItemStarted(started) = &events[3].event else {
+            panic!("expected transient item_started");
+        };
+        assert!(started.item.is_transient);
+        assert_eq!(
+            started.item.content_parts,
+            vec![ContentPart::Reasoning {
+                text: "Authenticating MCP server".to_string(),
+                visibility: anyharness_contract::v1::ReasoningVisibility::Private,
+            }]
+        );
+
+        let SessionEvent::ItemDelta(delta) = &events[4].event else {
+            panic!("expected transient item_delta");
+        };
+        assert_eq!(delta.delta.is_transient, Some(true));
+        assert_eq!(delta.delta.append_reasoning, None);
+        assert_eq!(
+            delta.delta.replace_content_parts,
+            Some(vec![ContentPart::Reasoning {
+                text: "Waiting for browser auth".to_string(),
+                visibility: anyharness_contract::v1::ReasoningVisibility::Private,
+            }])
+        );
+
+        let SessionEvent::ItemCompleted(completed) = &events[5].event else {
+            panic!("expected transient item_completed");
+        };
+        assert!(completed.item.is_transient);
+        assert_eq!(
+            completed.item.content_parts,
+            vec![ContentPart::Reasoning {
+                text: "Waiting for browser auth".to_string(),
+                visibility: anyharness_contract::v1::ReasoningVisibility::Private,
+            }]
+        );
+    }
+
+    #[test]
+    fn regular_thought_chunks_remain_non_transient_and_append() {
+        let store = seeded_store();
+        let (tx, mut rx) = broadcast::channel(32);
+        let mut sink = SessionEventSink::new(
+            "session-1".to_string(),
+            "codex".to_string(),
+            PathBuf::from("/tmp/workspace"),
+            tx,
+            store,
+        );
+
+        sink.begin_turn("hello".to_string());
+        sink.agent_thought_chunk(AcpChunkPayload {
+            content: json!("Thinking"),
+            message_id: Some("reasoning-1".to_string()),
+            ..Default::default()
+        });
+        sink.agent_thought_chunk(AcpChunkPayload {
+            content: json!(" harder"),
+            message_id: Some("reasoning-1".to_string()),
+            ..Default::default()
+        });
+
+        let events = drain_events(&mut rx);
+        let SessionEvent::ItemStarted(started) = &events[3].event else {
+            panic!("expected reasoning item_started");
+        };
+        assert!(!started.item.is_transient);
+
+        let SessionEvent::ItemDelta(delta) = &events[4].event else {
+            panic!("expected reasoning item_delta");
+        };
+        assert_eq!(delta.delta.is_transient, Some(false));
+        assert_eq!(delta.delta.append_reasoning.as_deref(), Some(" harder"));
+        assert_eq!(delta.delta.replace_content_parts, None);
     }
 
     #[test]
@@ -2633,6 +2795,18 @@ mod tests {
                 },
             })),
             message_id: Some(message_id.to_string()),
+        }
+    }
+
+    fn transient_status_chunk(text: &str) -> AcpChunkPayload {
+        AcpChunkPayload {
+            content: json!(text),
+            meta: Some(json!({
+                "anyharness": {
+                    "transcriptEvent": "transient_status",
+                },
+            })),
+            message_id: Some("status-stream".to_string()),
         }
     }
 }

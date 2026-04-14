@@ -3,6 +3,10 @@ import {
   createTranscriptState,
   reduceEvent,
   reduceEvents,
+  selectPendingApprovalInteraction,
+  selectPendingMcpElicitationInteraction,
+  selectPendingUserInputInteraction,
+  selectPrimaryPendingInteraction,
 } from "../../index.js";
 import type { SessionEventEnvelope, ThoughtItem, ToolCallItem } from "../../index.js";
 
@@ -51,6 +55,52 @@ describe("transcript reducer", () => {
     const thoughtItem = state.itemsById["reasoning-1"] as ThoughtItem;
     expect(thoughtItem.kind).toBe("thought");
     expect(thoughtItem.isStreaming).toBe(false);
+  });
+
+  it("preserves transient status thoughts and updates them in place", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        reasoningStarted(2, "status-1", "Authenticating MCP", true),
+        {
+          sessionId: "session-1",
+          seq: 3,
+          timestamp: "2026-04-04T00:00:03Z",
+          turnId: "turn-1",
+          itemId: "status-1",
+          event: {
+            type: "item_delta",
+            delta: {
+              isTransient: true,
+              replaceContentParts: [
+                { type: "reasoning", text: "Waiting for browser auth", visibility: "private" },
+              ],
+            },
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["status-1"] as ThoughtItem;
+    expect(item.kind).toBe("thought");
+    expect(item.isTransient).toBe(true);
+    expect(item.text).toBe("Waiting for browser auth");
+    expect(state.turnsById["turn-1"].itemOrder).toEqual(["status-1"]);
+  });
+
+  it("keeps ordinary reasoning non-transient", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        reasoningStarted(2, "reasoning-1", "Thinking"),
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["reasoning-1"] as ThoughtItem;
+    expect(item.kind).toBe("thought");
+    expect(item.isTransient).toBe(false);
   });
 
   it("merges tool deltas and re-derives semantic kind from file changes", () => {
@@ -133,8 +183,9 @@ describe("transcript reducer", () => {
           timestamp: "2026-04-04T00:00:04Z",
           turnId: "turn-1",
           event: {
-            type: "permission_resolved",
+            type: "interaction_resolved",
             requestId: "perm-1",
+            kind: "permission",
             outcome: {
               outcome: "selected",
               optionId: "allow",
@@ -145,7 +196,7 @@ describe("transcript reducer", () => {
       "session-1",
     );
 
-    expect(state.pendingApproval).toBeNull();
+    expect(selectPendingApprovalInteraction(state)).toBeNull();
     expect((state.itemsById["tool-1"] as ToolCallItem).approvalState).toBe("approved");
   });
 
@@ -161,8 +212,9 @@ describe("transcript reducer", () => {
           timestamp: "2026-04-04T00:00:04Z",
           turnId: "turn-1",
           event: {
-            type: "permission_resolved",
+            type: "interaction_resolved",
             requestId: "perm-1",
+            kind: "permission",
             outcome: {
               outcome: "cancelled",
             },
@@ -172,11 +224,11 @@ describe("transcript reducer", () => {
       "session-1",
     );
 
-    expect(state.pendingApproval).toBeNull();
+    expect(selectPendingApprovalInteraction(state)).toBeNull();
     expect((state.itemsById["tool-1"] as ToolCallItem).approvalState).toBe("none");
   });
 
-  it("preserves toolKind on pendingApproval", () => {
+  it("preserves toolKind on pending approval interaction", () => {
     const state = reduceEvents(
       [
         turnStarted(1),
@@ -188,27 +240,47 @@ describe("transcript reducer", () => {
           turnId: "turn-1",
           itemId: "tool-1",
           event: {
-            type: "permission_requested",
+            type: "interaction_requested",
             requestId: "perm-1",
+            kind: "permission",
             title: "Run command",
-            toolCallId: "tool-1",
-            toolKind: "switch_mode",
-            options: [{ id: "allow", label: "Allow" }],
+            description: null,
+            source: {
+              toolCallId: "tool-1",
+              toolKind: "switch_mode",
+              toolStatus: null,
+            },
+            payload: {
+              type: "permission",
+              context: {
+                displayName: "Write access",
+                blockedPath: "/tmp/output.txt",
+                decisionReason: "Needs write permission",
+                agentId: "agent-1",
+              },
+              options: [{ optionId: "allow", label: "Allow", kind: "allow_once" }],
+            },
           },
         },
       ],
       "session-1",
     );
 
-    expect(state.pendingApproval).toMatchObject({
+    expect(selectPendingApprovalInteraction(state)).toMatchObject({
       requestId: "perm-1",
       toolCallId: "tool-1",
       toolKind: "switch_mode",
       title: "Run command",
+      context: {
+        displayName: "Write access",
+        blockedPath: "/tmp/output.txt",
+        decisionReason: "Needs write permission",
+        agentId: "agent-1",
+      },
     });
   });
 
-  it("defaults pendingApproval toolKind to null when absent on the event", () => {
+  it("defaults pending approval toolKind to null when absent on the event", () => {
     const state = reduceEvents(
       [
         turnStarted(1),
@@ -220,18 +292,245 @@ describe("transcript reducer", () => {
           turnId: "turn-1",
           itemId: "tool-1",
           event: {
-            type: "permission_requested",
+            type: "interaction_requested",
             requestId: "perm-1",
+            kind: "permission",
             title: "Run command",
-            toolCallId: "tool-1",
-            options: [{ id: "allow", label: "Allow" }],
+            description: null,
+            source: {
+              toolCallId: "tool-1",
+              toolKind: null,
+              toolStatus: null,
+            },
+            payload: {
+              type: "permission",
+              options: [{ optionId: "allow", label: "Allow", kind: "allow_once" }],
+            },
           },
         },
       ],
       "session-1",
     );
 
-    expect(state.pendingApproval?.toolKind).toBeNull();
+    expect(selectPendingApprovalInteraction(state)?.toolKind).toBeNull();
+  });
+
+  it("tracks user input interactions without storing answers", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        {
+          sessionId: "session-1",
+          seq: 2,
+          timestamp: "2026-04-04T00:00:02Z",
+          turnId: "turn-1",
+          event: {
+            type: "interaction_requested",
+            requestId: "input-1",
+            kind: "user_input",
+            title: "Provider",
+            description: "Which provider should be used?",
+            source: {
+              toolCallId: null,
+              toolKind: null,
+              toolStatus: null,
+            },
+            payload: {
+              type: "user_input",
+              questions: [{
+                questionId: "provider",
+                header: "Provider",
+                question: "Which provider should be used?",
+                isOther: true,
+                isSecret: false,
+                options: [{ label: "Recommended", description: "Use the default" }],
+              }],
+            },
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    expect(selectPendingApprovalInteraction(state)).toBeNull();
+    expect(selectPrimaryPendingInteraction(state)).toMatchObject({
+      requestId: "input-1",
+      kind: "user_input",
+    });
+    expect(selectPendingUserInputInteraction(state)).toMatchObject({
+      requestId: "input-1",
+      questions: [{
+        questionId: "provider",
+        isOther: true,
+      }],
+    });
+    expect(JSON.stringify(state)).not.toContain("submitted answer");
+  });
+
+  it("clears user input interactions on submitted resolution", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        {
+          sessionId: "session-1",
+          seq: 2,
+          timestamp: "2026-04-04T00:00:02Z",
+          turnId: "turn-1",
+          event: {
+            type: "interaction_requested",
+            requestId: "input-1",
+            kind: "user_input",
+            title: "Provider",
+            description: null,
+            source: {
+              toolCallId: null,
+              toolKind: null,
+              toolStatus: null,
+            },
+            payload: {
+              type: "user_input",
+              questions: [{
+                questionId: "provider",
+                header: "Provider",
+                question: "Which provider should be used?",
+                isOther: false,
+                isSecret: false,
+                options: [],
+              }],
+            },
+          },
+        },
+        {
+          sessionId: "session-1",
+          seq: 3,
+          timestamp: "2026-04-04T00:00:03Z",
+          turnId: "turn-1",
+          event: {
+            type: "interaction_resolved",
+            requestId: "input-1",
+            kind: "user_input",
+            outcome: {
+              outcome: "submitted",
+              answeredQuestionIds: ["provider"],
+            },
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    expect(selectPendingUserInputInteraction(state)).toBeNull();
+    expect(JSON.stringify(state)).not.toContain("secret answer");
+  });
+
+  it("tracks MCP elicitations without storing raw values", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        {
+          sessionId: "session-1",
+          seq: 2,
+          timestamp: "2026-04-04T00:00:02Z",
+          turnId: "turn-1",
+          event: {
+            type: "interaction_requested",
+            requestId: "mcp-1",
+            kind: "mcp_elicitation",
+            title: "MCP input needed",
+            description: null,
+            source: {
+              toolCallId: null,
+              toolKind: null,
+              toolStatus: null,
+            },
+            payload: {
+              type: "mcp_elicitation",
+              serverName: "Google",
+              mode: {
+                mode: "form",
+                message: "Pick account",
+                fields: [{
+                  fieldType: "single_select",
+                  fieldId: "field_1",
+                  label: "Account",
+                  required: true,
+                  options: [{ optionId: "field_1_option_1", label: "Work" }],
+                }],
+              },
+            },
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    expect(selectPendingMcpElicitationInteraction(state)).toMatchObject({
+      requestId: "mcp-1",
+      kind: "mcp_elicitation",
+      mcpElicitation: {
+        serverName: "Google",
+        mode: {
+          mode: "form",
+        },
+      },
+    });
+    expect(selectPrimaryPendingInteraction(state)?.kind).toBe("mcp_elicitation");
+    expect(JSON.stringify(state)).not.toContain("acct_");
+    expect(JSON.stringify(state)).not.toContain("original-request-id");
+  });
+
+  it("clears MCP elicitations on accepted resolution without values", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        {
+          sessionId: "session-1",
+          seq: 2,
+          timestamp: "2026-04-04T00:00:02Z",
+          turnId: "turn-1",
+          event: {
+            type: "interaction_requested",
+            requestId: "mcp-1",
+            kind: "mcp_elicitation",
+            title: "MCP input needed",
+            description: null,
+            source: {
+              toolCallId: null,
+              toolKind: null,
+              toolStatus: null,
+            },
+            payload: {
+              type: "mcp_elicitation",
+              serverName: "Google",
+              mode: {
+                mode: "form",
+                message: "Pick account",
+                fields: [],
+              },
+            },
+          },
+        },
+        {
+          sessionId: "session-1",
+          seq: 3,
+          timestamp: "2026-04-04T00:00:03Z",
+          turnId: "turn-1",
+          event: {
+            type: "interaction_resolved",
+            requestId: "mcp-1",
+            kind: "mcp_elicitation",
+            outcome: {
+              outcome: "accepted",
+              acceptedFieldIds: ["field_1"],
+            },
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    expect(selectPendingMcpElicitationInteraction(state)).toBeNull();
+    expect(JSON.stringify(state)).not.toContain("submitted-secret");
   });
 
   it("aggregates file badges when the turn ends", () => {
@@ -290,7 +589,7 @@ describe("transcript reducer", () => {
       "session-1",
     );
 
-    expect(state.pendingApproval).toBeNull();
+    expect(selectPendingApprovalInteraction(state)).toBeNull();
     expect((state.itemsById["tool-1"] as ToolCallItem).approvalState).toBe("none");
   });
 
@@ -313,7 +612,7 @@ describe("transcript reducer", () => {
       "session-1",
     );
 
-    expect(state.pendingApproval).toBeNull();
+    expect(selectPendingApprovalInteraction(state)).toBeNull();
     expect((state.itemsById["tool-1"] as ToolCallItem).approvalState).toBe("none");
     expect(state.isStreaming).toBe(false);
   });
@@ -545,6 +844,7 @@ function reasoningStarted(
   seq: number,
   itemId: string,
   text: string,
+  isTransient = false,
 ): SessionEventEnvelope {
   return {
     sessionId: "session-1",
@@ -558,6 +858,7 @@ function reasoningStarted(
         kind: "reasoning",
         status: "in_progress",
         sourceAgentKind: "claude",
+        isTransient,
         contentParts: [{ type: "reasoning", text, visibility: "private" }],
       },
     },
@@ -669,12 +970,20 @@ function permissionRequested(
     turnId: "turn-1",
     itemId: toolCallId,
     event: {
-      type: "permission_requested",
+      type: "interaction_requested",
       requestId: "perm-1",
+      kind: "permission",
       title: "Run command",
-      toolCallId,
-      toolKind: "execute",
-      options: [{ id: "allow", label: "Allow" }],
+      description: null,
+      source: {
+        toolCallId,
+        toolKind: "execute",
+        toolStatus: null,
+      },
+      payload: {
+        type: "permission",
+        options: [{ optionId: "allow", label: "Allow", kind: "allow_once" }],
+      },
     },
   };
 }

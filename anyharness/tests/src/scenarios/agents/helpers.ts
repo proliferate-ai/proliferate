@@ -1,5 +1,6 @@
 import {
   deriveCanonicalPlan,
+  selectPendingApprovalInteraction,
   type CanonicalPlan,
   AssistantProseItem,
   PlanItem,
@@ -156,8 +157,9 @@ export function describeTranscript(transcript: TranscriptState): string {
     }
     return item.kind;
   });
-  if (transcript.pendingApproval) {
-    summary.push(`pendingApproval:${transcript.pendingApproval.title}`);
+  const pendingApproval = selectPendingApprovalInteraction(transcript);
+  if (pendingApproval) {
+    summary.push(`pendingApproval:${pendingApproval.title}`);
   }
   if (canonicalPlan) {
     summary.push(`canonicalPlan:${describeCanonicalPlan(canonicalPlan)}`);

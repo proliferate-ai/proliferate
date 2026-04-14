@@ -62,13 +62,16 @@ describe("canonical plan derivation", () => {
         ],
       },
     });
-    transcript.pendingApproval = {
+    transcript.pendingInteractions = [{
       requestId: "perm-1",
+      kind: "permission",
       toolCallId: "toolu_plan_1",
       toolKind: "switch_mode",
+      toolStatus: null,
       title: "Ready to code?",
-      options: {},
-    };
+      description: null,
+      options: [],
+    }];
 
     expect(deriveCanonicalPlan(transcript)).toEqual({
       title: "Plan",

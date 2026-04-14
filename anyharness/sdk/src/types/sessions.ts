@@ -14,7 +14,12 @@ type GeneratedPromptSessionResponse =
 
 export type SessionStatus = components["schemas"]["SessionStatus"];
 export type SessionExecutionPhase = components["schemas"]["SessionExecutionPhase"];
-export type PendingApprovalSummary = components["schemas"]["PendingApprovalSummary"];
+export type PendingInteractionSummary =
+  components["schemas"]["PendingInteractionSummary"];
+export type PendingInteractionSource =
+  components["schemas"]["PendingInteractionSource"];
+export type PendingInteractionPayloadSummary =
+  components["schemas"]["PendingInteractionPayloadSummary"];
 export type SessionExecutionSummary = components["schemas"]["SessionExecutionSummary"];
 export type Session = Omit<GeneratedSession, "liveConfig"> & {
   liveConfig?: SessionLiveConfigSnapshot | null;
@@ -75,9 +80,11 @@ export type PromptSessionResponse = Omit<
 export type PendingPromptSummary = components["schemas"]["PendingPromptSummary"];
 export type EditPendingPromptRequest =
   components["schemas"]["EditPendingPromptRequest"];
-export type PermissionDecision = components["schemas"]["PermissionDecision"];
-export type ResolvePermissionRequest =
-  components["schemas"]["ResolvePermissionRequest"];
+export type InteractionDecision = components["schemas"]["InteractionDecision"];
+export type ResolveInteractionRequest =
+  components["schemas"]["ResolveInteractionRequest"];
+export type McpElicitationUrlRevealResponse =
+  components["schemas"]["McpElicitationUrlRevealResponse"];
 
 export interface ListSessionEventsOptions {
   afterSeq?: number;

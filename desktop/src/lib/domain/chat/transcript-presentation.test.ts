@@ -53,6 +53,26 @@ describe("buildTurnPresentation", () => {
       subagents: 0,
     });
   });
+
+  it("excludes transient thoughts from transcript presentation", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      status: thoughtItem("status", "turn-1", 1, true),
+      assistant: assistantItem("assistant", "turn-1", 2),
+    };
+    const turn: TurnRecord = {
+      turnId: "turn-1",
+      itemOrder: ["status", "assistant"],
+      startedAt: "2026-04-04T00:00:00Z",
+      completedAt: null,
+      stopReason: null,
+      fileBadges: [],
+    };
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect(presentation.rootIds).toEqual(["assistant"]);
+  });
 });
 
 function assistantItem(
@@ -125,5 +145,33 @@ function toolItem(itemId: string, turnId: string, startedSeq: number) {
     toolKind: "other",
     semanticKind: "other" as const,
     approvalState: "none" as const,
+  };
+}
+
+function thoughtItem(
+  itemId: string,
+  turnId: string,
+  startedSeq: number,
+  isTransient: boolean,
+) {
+  return {
+    kind: "thought" as const,
+    itemId,
+    turnId,
+    status: "in_progress" as const,
+    sourceAgentKind: "codex",
+    isTransient,
+    messageId: null,
+    title: null,
+    nativeToolName: null,
+    parentToolCallId: null,
+    contentParts: [{ type: "reasoning" as const, text: itemId, visibility: "private" as const }],
+    timestamp: "2026-04-04T00:00:00Z",
+    startedSeq,
+    lastUpdatedSeq: startedSeq,
+    completedSeq: null,
+    completedAt: null,
+    text: itemId,
+    isStreaming: true,
   };
 }

@@ -12,7 +12,7 @@ It owns:
 - the in-memory registry of live sessions
 - one actor per live session
 - the ACP stdio connection to the agent process
-- permission mediation
+- interaction mediation for ACP permission requests
 - normalization of ACP-native notifications into AnyHarness session events
 
 It does not own session creation validation, workspace registration, or agent
@@ -27,7 +27,7 @@ installation.
 It owns:
 
 - the in-memory `session_id -> LiveSessionHandle` map
-- the shared `PermissionBroker`
+- the shared `InteractionBroker`
 
 Its main jobs are:
 
@@ -64,7 +64,7 @@ It includes:
 - workspace env
 - session launch env
 - session store
-- shared permission broker
+- shared interaction broker
 - resume metadata such as `is_resume` and `last_seq`
 
 This is the handoff from durable orchestration into live execution.
@@ -75,12 +75,17 @@ This is the handoff from durable orchestration into live execution.
 
 It handles:
 
-- ACP permission requests
+- ACP permission requests normalized as interactions
+- Codex user-input extension requests normalized as interactions
+- Codex and Claude MCP elicitation extension requests normalized as
+  interactions
+- Claude user-input extension requests when an adapter version exposes a
+  compatible AskUserQuestion bridge
 - ACP session notifications
 
 It does not own the actor loop. It translates ACP protocol callbacks into:
 
-- permission broker requests
+- interaction broker requests
 - internal notification messages
 - normalized runtime events through the event sink
 
@@ -95,22 +100,26 @@ It owns:
 - durable event persistence
 - live event broadcast
 - transcript item coalescing
-- plan, tool, usage, config, permission, and session event emission
+- plan, tool, usage, config, interaction, and session event emission
 
-### `PermissionBroker` (`anyharness/crates/anyharness-lib/src/acp/permission_broker.rs`)
+### `InteractionBroker` (`anyharness/crates/anyharness-lib/src/acp/permission_broker.rs`)
 
-`PermissionBroker` owns pending ACP permission-request state.
+`InteractionBroker` owns live pending interaction waits behind the normalized
+interaction contract.
 
 It stores:
 
-- unresolved requests keyed by request id
-- ACP option ids and option kinds
+- unresolved requests keyed by session id and request id
+- per-kind validation state, such as ACP permission option ids and user-input
+  question metadata
 
 It resolves requests by:
 
 - allow
 - deny
 - explicit option id
+- submitted user input
+- cancellation or dismissal of every live wait for a session
 
 ## Main Flow
 
@@ -180,24 +189,34 @@ Important normalization behaviors:
 - tool calls are tracked as transcript items keyed by tool-call id
 - plan updates replace the active plan item payload
 - config-option updates rebuild the normalized live-config snapshot
-- session info, usage, and permission events are emitted as distinct typed
+- session info, usage, and interaction events are emitted as distinct typed
   events
 - raw ACP notifications are persisted alongside normalized events so rendering
   or normalization bugs can be debugged from both views
 
-### Permission Flow
+### Interaction Flow
 
-The permission flow is:
+The interaction flow is:
 
-1. ACP calls `request_permission(...)` on `RuntimeClient`
-2. `RuntimeClient` emits `permission_requested` through the sink
-3. `PermissionBroker` stores the pending request and waits
-4. higher-level runtime resolves the request by:
+1. ACP calls `request_permission(...)` or a supported extension method on
+   `RuntimeClient`
+   - Codex extension methods use `experimental/codex/*`
+   - Claude extension methods use `experimental/claude/*`
+2. `RuntimeClient` registers the broker wait before making the request visible
+3. `RuntimeClient` emits `interaction_requested` through the sink while
+   publishing is locked against cleanup
+4. `InteractionBroker` stores the pending request and waits
+5. higher-level runtime resolves the request through the session actor by:
    - allow
    - deny
    - explicit option id
-5. `RuntimeClient` converts that back into ACP’s permission outcome
-6. `RuntimeClient` emits `permission_resolved` through the sink
+   - submitted input
+   - cancellation
+   - dismissal
+6. the actor emits `interaction_resolved` exactly once and resumes the brokered
+   wait
+7. `RuntimeClient` converts that back into the ACP or extension-specific
+   response
 
 ### Config Flow
 
@@ -235,7 +254,7 @@ Most of that logic lives in
 - live config application and queued config changes
 - notification handling
 - event normalization
-- permission brokering
+- interaction brokering
 
 ### ACP Does Not Own
 

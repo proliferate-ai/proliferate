@@ -18,7 +18,7 @@ export type WorkspaceMobilityBlockerCode =
   | "workspace_status_unknown"
   | "local_default_branch_in_use"
   | "session_running"
-  | "session_awaiting_permission"
+  | "session_awaiting_interaction"
   | "pending_prompt"
   | "archive_too_large"
   | "missing_branch_name"
@@ -284,11 +284,11 @@ export function mobilityBlockerCopy(args: {
         helper: "Finish or stop that session, then try again.",
         actionLabel: "Got it",
       };
-    case "session_awaiting_permission":
+    case "session_awaiting_interaction":
       return {
         headline: moveLabel,
-        body: "A session is waiting on approval.",
-        helper: "Resolve that approval, then try again.",
+        body: "A session is waiting on an interaction.",
+        helper: "Resolve that request, then try again.",
         actionLabel: "Got it",
       };
     case "pending_prompt":

@@ -7,9 +7,10 @@ import type {
   EditPendingPromptRequest,
   GetSessionLiveConfigResponse,
   ListSessionEventsOptions,
+  McpElicitationUrlRevealResponse,
   PromptSessionRequest,
   PromptSessionResponse,
-  ResolvePermissionRequest,
+  ResolveInteractionRequest,
   SetSessionConfigOptionRequest,
   SetSessionConfigOptionResponse,
   Session,
@@ -223,14 +224,24 @@ export class SessionsClient {
     );
   }
 
-  async resolvePermission(
+  async resolveInteraction(
     sessionId: string,
     requestId: string,
-    input: ResolvePermissionRequest,
+    input: ResolveInteractionRequest,
   ): Promise<void> {
     await this.transport.post<void>(
-      `/v1/sessions/${encodeURIComponent(sessionId)}/permissions/${encodeURIComponent(requestId)}/resolve`,
+      `/v1/sessions/${encodeURIComponent(sessionId)}/interactions/${encodeURIComponent(requestId)}/resolve`,
       input,
+    );
+  }
+
+  async revealMcpElicitationUrl(
+    sessionId: string,
+    requestId: string,
+  ): Promise<McpElicitationUrlRevealResponse> {
+    return this.transport.post<McpElicitationUrlRevealResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/interactions/${encodeURIComponent(requestId)}/mcp-url/reveal`,
+      {},
     );
   }
 }

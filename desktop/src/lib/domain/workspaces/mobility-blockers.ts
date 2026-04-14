@@ -23,7 +23,7 @@ const SOURCE_BLOCKER_PRIORITY: WorkspaceMobilityBlockerCode[] = [
   "workspace_not_mutable",
   "setup_running",
   "session_running",
-  "session_awaiting_permission",
+  "session_awaiting_interaction",
   "pending_prompt",
   "workspace_dirty",
   "local_default_branch_in_use",

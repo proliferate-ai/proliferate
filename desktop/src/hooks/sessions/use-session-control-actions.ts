@@ -1,3 +1,12 @@
+import {
+  selectPendingApprovalInteraction,
+  selectPendingMcpElicitationInteraction,
+  selectPendingUserInputInteraction,
+  type McpElicitationSubmittedField,
+  type McpElicitationUrlRevealResponse,
+  type ResolveInteractionRequest,
+  type UserInputSubmittedAnswer,
+} from "@anyharness/sdk";
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { useCallback } from "react";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
@@ -295,7 +304,9 @@ export function useSessionControlActions({
     const state = useHarnessStore.getState();
     const sessionId = state.activeSessionId;
     const slot = sessionId ? state.sessionSlots[sessionId] : null;
-    const permission = slot?.transcript.pendingApproval;
+    const permission = slot?.transcript
+      ? selectPendingApprovalInteraction(slot.transcript)
+      : null;
     if (!sessionId || !permission) {
       return;
     }
@@ -306,10 +317,99 @@ export function useSessionControlActions({
     }
 
     const { connection } = await getSessionClientAndWorkspace(sessionId);
-    await getAnyHarnessClient(connection).sessions.resolvePermission(
+    const request: ResolveInteractionRequest = input.optionId
+      ? { outcome: "selected", optionId: input.optionId }
+      : { outcome: "decision", decision: input.decision ?? "deny" };
+    await getAnyHarnessClient(connection).sessions.resolveInteraction(
       sessionId,
       permission.requestId,
-      input,
+      request,
+    );
+  }, [getWorkspaceRuntimeBlockReason]);
+
+  const resolveUserInput = useCallback(async (
+    input:
+      | { outcome: "submitted"; answers: UserInputSubmittedAnswer[] }
+      | { outcome: "cancelled" },
+  ) => {
+    const state = useHarnessStore.getState();
+    const sessionId = state.activeSessionId;
+    const slot = sessionId ? state.sessionSlots[sessionId] : null;
+    const userInput = slot?.transcript
+      ? selectPendingUserInputInteraction(slot.transcript)
+      : null;
+    if (!sessionId || !userInput) {
+      return;
+    }
+
+    const blockedReason = getWorkspaceRuntimeBlockReason(slot?.workspaceId ?? state.selectedWorkspaceId);
+    if (blockedReason) {
+      throw new Error(blockedReason);
+    }
+
+    const { connection } = await getSessionClientAndWorkspace(sessionId);
+    const request: ResolveInteractionRequest = input.outcome === "submitted"
+      ? { outcome: "submitted", answers: input.answers }
+      : { outcome: "cancelled" };
+    await getAnyHarnessClient(connection).sessions.resolveInteraction(
+      sessionId,
+      userInput.requestId,
+      request,
+    );
+  }, [getWorkspaceRuntimeBlockReason]);
+
+  const resolveMcpElicitation = useCallback(async (
+    input:
+      | { outcome: "accepted"; fields: McpElicitationSubmittedField[] }
+      | { outcome: "declined" }
+      | { outcome: "cancelled" },
+  ) => {
+    const state = useHarnessStore.getState();
+    const sessionId = state.activeSessionId;
+    const slot = sessionId ? state.sessionSlots[sessionId] : null;
+    const mcpElicitation = slot?.transcript
+      ? selectPendingMcpElicitationInteraction(slot.transcript)
+      : null;
+    if (!sessionId || !mcpElicitation) {
+      return;
+    }
+
+    const blockedReason = getWorkspaceRuntimeBlockReason(slot?.workspaceId ?? state.selectedWorkspaceId);
+    if (blockedReason) {
+      throw new Error(blockedReason);
+    }
+
+    const { connection } = await getSessionClientAndWorkspace(sessionId);
+    const request: ResolveInteractionRequest = input.outcome === "accepted"
+      ? { outcome: "accepted", fields: input.fields }
+      : { outcome: input.outcome };
+    await getAnyHarnessClient(connection).sessions.resolveInteraction(
+      sessionId,
+      mcpElicitation.requestId,
+      request,
+    );
+  }, [getWorkspaceRuntimeBlockReason]);
+
+  const revealMcpElicitationUrl = useCallback(async (): Promise<McpElicitationUrlRevealResponse | null> => {
+    const state = useHarnessStore.getState();
+    const sessionId = state.activeSessionId;
+    const slot = sessionId ? state.sessionSlots[sessionId] : null;
+    const mcpElicitation = slot?.transcript
+      ? selectPendingMcpElicitationInteraction(slot.transcript)
+      : null;
+    if (!sessionId || !mcpElicitation) {
+      return null;
+    }
+
+    const blockedReason = getWorkspaceRuntimeBlockReason(slot?.workspaceId ?? state.selectedWorkspaceId);
+    if (blockedReason) {
+      throw new Error(blockedReason);
+    }
+
+    const { connection } = await getSessionClientAndWorkspace(sessionId);
+    return getAnyHarnessClient(connection).sessions.revealMcpElicitationUrl(
+      sessionId,
+      mcpElicitation.requestId,
     );
   }, [getWorkspaceRuntimeBlockReason]);
 
@@ -379,6 +479,9 @@ export function useSessionControlActions({
     findOrCreateSession,
     promptActiveSession,
     resolvePermission,
+    resolveMcpElicitation,
+    resolveUserInput,
+    revealMcpElicitationUrl,
     setActiveSessionConfigOption,
   };
 }

@@ -2,13 +2,13 @@ use std::time::Instant;
 
 use anyharness_contract::v1::{
     CreateSessionRequest, EditPendingPromptRequest, GetSessionLiveConfigResponse,
-    PermissionDecision, PromptInputBlock, PromptSessionRequest, PromptSessionResponse,
-    ResolvePermissionRequest, Session, SessionEventEnvelope, SessionRawNotificationEnvelope,
+    InteractionDecision, PromptInputBlock, PromptSessionRequest, PromptSessionResponse,
+    ResolveInteractionRequest, Session, SessionEventEnvelope, SessionRawNotificationEnvelope,
     SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, UpdateSessionTitleRequest,
 };
 use axum::{
     extract::{Path, Query, State},
-    http::HeaderMap,
+    http::{HeaderMap, HeaderValue},
     Json,
 };
 use serde::Deserialize;
@@ -16,11 +16,12 @@ use serde::Deserialize;
 use super::access::assert_session_mutable;
 use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::acp::permission_broker::PermissionDecision;
 use crate::app::AppState;
 use crate::sessions::mcp::bindings_from_contract;
 use crate::sessions::runtime::{
-    CreateAndStartSessionError, EnsureLiveSessionError, PendingPromptMutationError,
-    PermissionResolution, ResolvePermissionError, SendPromptError, SendPromptOutcome,
+    CreateAndStartSessionError, EnsureLiveSessionError, InteractionResolutionRequest,
+    PendingPromptMutationError, ResolveInteractionError, SendPromptError, SendPromptOutcome,
     SessionLifecycleError, SetSessionConfigOptionError,
 };
 use crate::sessions::service::{GetLiveConfigSnapshotError, UpdateSessionTitleError};
@@ -656,32 +657,68 @@ pub async fn list_session_raw_notifications(
 
 #[utoipa::path(
     post,
-    path = "/v1/sessions/{session_id}/permissions/{request_id}/resolve",
+    path = "/v1/sessions/{session_id}/interactions/{request_id}/resolve",
     params(
         ("session_id" = String, Path, description = "Session ID"),
-        ("request_id" = String, Path, description = "Permission request ID"),
+        ("request_id" = String, Path, description = "Interaction request ID"),
     ),
-    request_body = anyharness_contract::v1::ResolvePermissionRequest,
+    request_body = anyharness_contract::v1::ResolveInteractionRequest,
     responses(
-        (status = 200, description = "Permission resolved"),
+        (status = 200, description = "Interaction resolved"),
+        (status = 400, description = "Invalid interaction resolution", body = anyharness_contract::v1::ProblemDetails),
         (status = 404, description = "Not found", body = anyharness_contract::v1::ProblemDetails),
     ),
     tag = "sessions"
 )]
-pub async fn resolve_permission(
+pub async fn resolve_interaction(
     State(state): State<AppState>,
     Path((session_id, request_id)): Path<(String, String)>,
-    Json(req): Json<ResolvePermissionRequest>,
+    Json(req): Json<ResolveInteractionRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let resolution = resolve_permission_input(req)?;
+    let resolution = resolve_interaction_input(req);
 
     state
         .session_runtime
-        .resolve_permission_request(&session_id, &request_id, resolution)
+        .resolve_interaction_request(&session_id, &request_id, resolution)
         .await
-        .map_err(map_resolve_permission_error)?;
+        .map_err(map_resolve_interaction_error)?;
 
     Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/sessions/{session_id}/interactions/{request_id}/mcp-url/reveal",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("request_id" = String, Path, description = "Interaction request ID"),
+    ),
+    responses(
+        (status = 200, description = "MCP elicitation URL revealed", body = anyharness_contract::v1::McpElicitationUrlRevealResponse),
+        (status = 400, description = "Invalid interaction kind", body = anyharness_contract::v1::ProblemDetails),
+        (status = 404, description = "Not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "sessions"
+)]
+pub async fn reveal_mcp_elicitation_url(
+    State(state): State<AppState>,
+    Path((session_id, request_id)): Path<(String, String)>,
+) -> Result<
+    (
+        HeaderMap,
+        Json<anyharness_contract::v1::McpElicitationUrlRevealResponse>,
+    ),
+    ApiError,
+> {
+    let response = state
+        .session_runtime
+        .reveal_mcp_elicitation_url(&session_id, &request_id)
+        .await
+        .map_err(map_resolve_interaction_error)?;
+
+    let mut headers = HeaderMap::new();
+    headers.insert("cache-control", HeaderValue::from_static("no-store"));
+    Ok((headers, Json(response)))
 }
 
 fn extract_prompt_text(blocks: &[PromptInputBlock]) -> String {
@@ -707,28 +744,81 @@ fn raw_notification_record_to_envelope(
     })
 }
 
-fn resolve_permission_input(
-    request: ResolvePermissionRequest,
-) -> Result<PermissionResolution, ApiError> {
-    match (request.decision, request.option_id) {
-        (None, None) => Err(ApiError::bad_request(
-            "permission resolution requires either decision or optionId",
-            "INVALID_PERMISSION_RESOLUTION",
-        )),
-        (Some(PermissionDecision::Allow), None) => Ok(PermissionResolution::Allow),
-        (Some(PermissionDecision::Deny), None) => Ok(PermissionResolution::Deny),
-        (_, Some(option_id)) => Ok(PermissionResolution::OptionId(option_id)),
+fn resolve_interaction_input(request: ResolveInteractionRequest) -> InteractionResolutionRequest {
+    match request {
+        ResolveInteractionRequest::Selected { option_id } => {
+            InteractionResolutionRequest::OptionId(option_id)
+        }
+        ResolveInteractionRequest::Decision {
+            decision: InteractionDecision::Allow,
+        } => InteractionResolutionRequest::Decision(PermissionDecision::Allow),
+        ResolveInteractionRequest::Decision {
+            decision: InteractionDecision::Deny,
+        } => InteractionResolutionRequest::Decision(PermissionDecision::Deny),
+        ResolveInteractionRequest::Submitted { answers } => {
+            InteractionResolutionRequest::Submitted { answers }
+        }
+        ResolveInteractionRequest::Accepted { fields } => {
+            InteractionResolutionRequest::Accepted { fields }
+        }
+        ResolveInteractionRequest::Declined => InteractionResolutionRequest::Declined,
+        ResolveInteractionRequest::Cancelled => InteractionResolutionRequest::Cancelled,
+        ResolveInteractionRequest::Dismissed => InteractionResolutionRequest::Dismissed,
     }
 }
 
-fn map_resolve_permission_error(error: ResolvePermissionError) -> ApiError {
+fn map_resolve_interaction_error(error: ResolveInteractionError) -> ApiError {
     match error {
-        ResolvePermissionError::SessionNotLive(session_id) => {
+        ResolveInteractionError::SessionNotLive(session_id) => {
             ApiError::not_found(format!("No live session: {session_id}"), "SESSION_NOT_LIVE")
         }
-        ResolvePermissionError::PermissionNotFound(request_id) => ApiError::not_found(
-            format!("No pending permission request: {request_id}"),
-            "PERMISSION_NOT_FOUND",
+        ResolveInteractionError::InteractionNotFound(request_id) => ApiError::not_found(
+            format!("No pending interaction request: {request_id}"),
+            "INTERACTION_NOT_FOUND",
+        ),
+        ResolveInteractionError::InteractionKindMismatch(request_id) => ApiError::bad_request(
+            format!("Resolution outcome does not match interaction kind: {request_id}"),
+            "INTERACTION_KIND_MISMATCH",
+        ),
+        ResolveInteractionError::InvalidOptionId(request_id) => ApiError::bad_request(
+            format!("Invalid option for interaction request: {request_id}"),
+            "INTERACTION_OPTION_NOT_FOUND",
+        ),
+        ResolveInteractionError::InvalidQuestionId(request_id) => ApiError::bad_request(
+            format!("Invalid question for interaction request: {request_id}"),
+            "INTERACTION_QUESTION_NOT_FOUND",
+        ),
+        ResolveInteractionError::DuplicateQuestionAnswer(request_id) => ApiError::bad_request(
+            format!("Duplicate question answer for interaction request: {request_id}"),
+            "INTERACTION_DUPLICATE_QUESTION_ANSWER",
+        ),
+        ResolveInteractionError::MissingQuestionAnswer(request_id) => ApiError::bad_request(
+            format!("Missing question answer for interaction request: {request_id}"),
+            "INTERACTION_MISSING_QUESTION_ANSWER",
+        ),
+        ResolveInteractionError::InvalidSelectedOptionLabel(request_id) => ApiError::bad_request(
+            format!("Invalid selected option label for interaction request: {request_id}"),
+            "INTERACTION_OPTION_LABEL_NOT_FOUND",
+        ),
+        ResolveInteractionError::InvalidMcpFieldId(request_id) => ApiError::bad_request(
+            format!("Invalid MCP field for interaction request: {request_id}"),
+            "INTERACTION_MCP_FIELD_NOT_FOUND",
+        ),
+        ResolveInteractionError::DuplicateMcpField(request_id) => ApiError::bad_request(
+            format!("Duplicate MCP field for interaction request: {request_id}"),
+            "INTERACTION_DUPLICATE_MCP_FIELD",
+        ),
+        ResolveInteractionError::MissingMcpField(request_id) => ApiError::bad_request(
+            format!("Missing MCP field for interaction request: {request_id}"),
+            "INTERACTION_MISSING_MCP_FIELD",
+        ),
+        ResolveInteractionError::InvalidMcpFieldValue(request_id) => ApiError::bad_request(
+            format!("Invalid MCP field value for interaction request: {request_id}"),
+            "INTERACTION_INVALID_MCP_FIELD_VALUE",
+        ),
+        ResolveInteractionError::NotMcpUrlElicitation(request_id) => ApiError::bad_request(
+            format!("Interaction request is not an MCP URL elicitation: {request_id}"),
+            "INTERACTION_NOT_MCP_URL_ELICITATION",
         ),
     }
 }

@@ -20,7 +20,7 @@ interface SessionActivitySnapshot {
   streamConnectionState?: StreamConnectionState;
   transcript: {
     isStreaming: boolean;
-    pendingApproval: unknown | null;
+    pendingInteractions: unknown[];
   };
 }
 
@@ -32,7 +32,7 @@ export function resolveStatusFromExecutionSummary(
     case "starting":
       return "starting";
     case "running":
-    case "awaiting_permission":
+    case "awaiting_interaction":
       return "running";
     case "idle":
       return "idle";
@@ -70,7 +70,7 @@ export function resolveSessionStatus(
       streamConnectionState: input.streamConnectionState,
       transcript: input.transcript,
     })
-    || input.transcript.pendingApproval !== null
+    || input.transcript.pendingInteractions.length > 0
   ) {
     return reconciledStatus === "starting" ? "starting" : "running";
   }
@@ -115,8 +115,8 @@ export function resolveSessionExecutionPhase(
   if (slot.status === "errored") {
     return "errored";
   }
-  if (slot.transcript.pendingApproval !== null) {
-    return "awaiting_permission";
+  if (slot.transcript.pendingInteractions.length > 0) {
+    return "awaiting_interaction";
   }
   if (slot.status === "starting") {
     return "starting";
@@ -138,7 +138,7 @@ export function resolveSessionViewState(
     case "starting":
     case "running":
       return "working";
-    case "awaiting_permission":
+    case "awaiting_interaction":
       return "needs_input";
     case "errored":
       return "errored";
@@ -166,7 +166,7 @@ export function resolveWorkspaceExecutionViewState(
   summary: WorkspaceExecutionSummary | null | undefined,
 ): SessionViewState {
   switch (summary?.phase) {
-    case "awaiting_permission":
+    case "awaiting_interaction":
       return "needs_input";
     case "running":
       return "working";

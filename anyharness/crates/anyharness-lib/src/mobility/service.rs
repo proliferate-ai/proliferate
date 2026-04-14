@@ -265,10 +265,10 @@ impl MobilityService {
                 .session_runtime
                 .session_execution_summary(&candidate.session)
                 .await;
-            if execution_summary.pending_approval.is_some() {
+            if !execution_summary.pending_interactions.is_empty() {
                 blockers.push(MobilityBlocker {
-                    code: "session_awaiting_permission".to_string(),
-                    message: format!("Session {} is awaiting approval", candidate.session.id),
+                    code: "session_awaiting_interaction".to_string(),
+                    message: format!("Session {} is awaiting interaction", candidate.session.id),
                     session_id: Some(candidate.session.id.clone()),
                 });
             }

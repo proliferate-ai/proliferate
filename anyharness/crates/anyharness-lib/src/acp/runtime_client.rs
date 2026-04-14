@@ -1,20 +1,36 @@
 use std::sync::Arc;
 
 use agent_client_protocol as acp;
+use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use tokio::sync::{mpsc, Mutex};
 
 use super::event_sink::SessionEventSink;
-use super::permission_broker::{PermissionBroker, PermissionOutcome};
+use super::mcp_elicitation::{
+    claude_ext_response_from_outcome, codex_ext_response_from_outcome,
+    normalize_claude_mcp_elicitation, normalize_codex_mcp_elicitation,
+    ClaudeMcpElicitationExtParams, CodexMcpElicitationExtParams,
+};
+use super::permission_broker::{InteractionBroker, PermissionOutcome, UserInputOutcome};
+use super::permission_context::permission_context_from_meta;
 use super::session_actor::LiveSessionHandle;
 use anyharness_contract::v1::{
-    PendingApprovalSummary, PermissionOutcome as ContractPermissionOutcome,
-    PermissionRequestedEvent,
+    InteractionKind, InteractionPayload, InteractionRequestedEvent, InteractionSource,
+    PendingInteractionPayloadSummary, PendingInteractionSource, PendingInteractionSummary,
+    PermissionInteractionOption, PermissionInteractionOptionKind, PermissionInteractionPayload,
+    UserInputInteractionPayload, UserInputQuestion, UserInputSubmittedAnswer,
 };
+
+const MAX_PERMISSION_RAW_JSON_BYTES: usize = 32 * 1024;
+const CODEX_REQUEST_USER_INPUT_METHOD: &str = "experimental/codex/requestUserInput";
+const CODEX_MCP_ELICITATION_METHOD: &str = "experimental/codex/mcpElicitation";
+const CLAUDE_REQUEST_USER_INPUT_METHOD: &str = "experimental/claude/requestUserInput";
+const CLAUDE_MCP_ELICITATION_METHOD: &str = "experimental/claude/mcpElicitation";
 
 pub struct RuntimeClient {
     pub session_id: String,
     pub notification_tx: mpsc::UnboundedSender<acp::SessionNotification>,
-    pub permission_broker: Arc<PermissionBroker>,
+    pub interaction_broker: Arc<InteractionBroker>,
     pub event_sink: Arc<Mutex<SessionEventSink>>,
     pub live_session_handle: Arc<LiveSessionHandle>,
 }
@@ -23,14 +39,14 @@ impl RuntimeClient {
     pub fn new(
         session_id: String,
         notification_tx: mpsc::UnboundedSender<acp::SessionNotification>,
-        permission_broker: Arc<PermissionBroker>,
+        interaction_broker: Arc<InteractionBroker>,
         event_sink: Arc<Mutex<SessionEventSink>>,
         live_session_handle: Arc<LiveSessionHandle>,
     ) -> Self {
         Self {
             session_id,
             notification_tx,
-            permission_broker,
+            interaction_broker,
             event_sink,
             live_session_handle,
         }
@@ -75,76 +91,76 @@ impl acp::Client for RuntimeClient {
             .fields
             .raw_input
             .as_ref()
-            .and_then(|v| serde_json::to_value(v).ok());
+            .and_then(|v| serde_json::to_value(v).ok())
+            .map(bound_raw_json);
 
         let raw_output = args
             .tool_call
             .fields
             .raw_output
             .as_ref()
-            .and_then(|v| serde_json::to_value(v).ok());
+            .and_then(|v| serde_json::to_value(v).ok())
+            .map(bound_raw_json);
 
-        let options = serde_json::to_value(&args.options).ok();
+        let options = permission_options(&args.options);
+        let context = permission_context_from_meta(args.meta.as_ref());
+        let source = InteractionSource {
+            tool_call_id: tool_call_id.clone(),
+            tool_kind: tool_kind.clone(),
+            tool_status: tool_status.clone(),
+            source_metadata: None,
+        };
+        let payload = InteractionPayload::Permission(PermissionInteractionPayload {
+            options: options.clone(),
+            context: context.clone(),
+            raw_input,
+            raw_output,
+        });
 
-        {
+        let pending_wait = {
             let mut sink = self.event_sink.lock().await;
-            sink.permission_requested(PermissionRequestedEvent {
+            let pending_wait = self
+                .interaction_broker
+                .register_permission(&self.session_id, &request_id, &args.options)
+                .await;
+
+            self.live_session_handle
+                .add_pending_interaction(PendingInteractionSummary {
+                    request_id: request_id.clone(),
+                    kind: InteractionKind::Permission,
+                    title: title.clone(),
+                    description: None,
+                    source: PendingInteractionSource {
+                        tool_call_id,
+                        tool_kind,
+                        tool_status,
+                    },
+                    payload: PendingInteractionPayloadSummary::Permission { options, context },
+                })
+                .await;
+
+            sink.interaction_requested(InteractionRequestedEvent {
                 request_id: request_id.clone(),
-                title,
+                kind: InteractionKind::Permission,
+                title: title.clone(),
                 description: None,
-                tool_call_id,
-                tool_kind,
-                tool_status,
-                raw_input,
-                raw_output,
-                options,
+                source: source.clone(),
+                payload,
             });
-        }
-        self.live_session_handle
-            .set_pending_approval(PendingApprovalSummary {
-                request_id: request_id.clone(),
-                title: args
-                    .tool_call
-                    .fields
-                    .title
-                    .clone()
-                    .unwrap_or_else(|| "Permission requested".to_string()),
-                tool_call_id: Some(args.tool_call.tool_call_id.to_string()),
-                tool_kind: args
-                    .tool_call
-                    .fields
-                    .kind
-                    .as_ref()
-                    .and_then(|k| serde_json::to_value(k).ok())
-                    .and_then(|v| v.as_str().map(String::from)),
-            })
-            .await;
 
-        let outcome = self
-            .permission_broker
-            .request_permission(&request_id, &args.options)
-            .await;
-
-        let (acp_outcome, contract_outcome) = match outcome {
-            PermissionOutcome::Selected { option_id } => (
-                acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome::new(
-                    option_id.clone(),
-                )),
-                ContractPermissionOutcome::Selected { option_id },
-            ),
-            PermissionOutcome::Cancelled => (
-                acp::RequestPermissionOutcome::Cancelled,
-                ContractPermissionOutcome::Cancelled,
-            ),
+            pending_wait
         };
 
-        {
-            let mut sink = self.event_sink.lock().await;
-            sink.permission_resolved(request_id, contract_outcome);
-        }
-        self.live_session_handle
-            .set_execution_phase(anyharness_contract::v1::SessionExecutionPhase::Running)
-            .await;
+        let outcome = pending_wait.wait().await;
+
+        let acp_outcome = match outcome {
+            PermissionOutcome::Selected { option_id } => acp::RequestPermissionOutcome::Selected(
+                acp::SelectedPermissionOutcome::new(option_id),
+            ),
+            PermissionOutcome::Cancelled | PermissionOutcome::Dismissed => {
+                acp::RequestPermissionOutcome::Cancelled
+            }
+        };
 
         Ok(acp::RequestPermissionResponse::new(acp_outcome))
     }
@@ -161,6 +177,391 @@ impl acp::Client for RuntimeClient {
         let _ = self.notification_tx.send(notification);
         Ok(())
     }
+
+    async fn ext_method(&self, args: acp::ExtRequest) -> acp::Result<acp::ExtResponse> {
+        match args.method.as_ref() {
+            CODEX_REQUEST_USER_INPUT_METHOD => self.codex_request_user_input(args).await,
+            CODEX_MCP_ELICITATION_METHOD => self.codex_mcp_elicitation(args).await,
+            CLAUDE_REQUEST_USER_INPUT_METHOD => self.claude_request_user_input(args).await,
+            CLAUDE_MCP_ELICITATION_METHOD => self.claude_mcp_elicitation(args).await,
+            _ => Err(acp::Error::method_not_found()),
+        }
+    }
+}
+
+impl RuntimeClient {
+    async fn codex_request_user_input(
+        &self,
+        args: acp::ExtRequest,
+    ) -> acp::Result<acp::ExtResponse> {
+        let request = serde_json::from_str::<CodexRequestUserInputParams>(args.params.get())
+            .map_err(|error| acp::Error::invalid_params().data(error.to_string()))?;
+
+        let request_id = uuid::Uuid::new_v4().to_string();
+        let questions = request.questions;
+        let title = questions
+            .first()
+            .map(|question| question.header.trim())
+            .filter(|header| !header.is_empty())
+            .unwrap_or("Input requested")
+            .to_string();
+        let description = (questions.len() == 1)
+            .then(|| questions.first().map(|question| question.question.clone()))
+            .flatten()
+            .filter(|question| !question.trim().is_empty());
+
+        let source = InteractionSource {
+            tool_call_id: None,
+            tool_kind: None,
+            tool_status: None,
+            source_metadata: None,
+        };
+        let payload = InteractionPayload::UserInput(UserInputInteractionPayload {
+            questions: questions.clone(),
+        });
+
+        let pending_wait = {
+            let mut sink = self.event_sink.lock().await;
+            let pending_wait = self
+                .interaction_broker
+                .register_user_input(&self.session_id, &request_id, &questions)
+                .await;
+
+            self.live_session_handle
+                .add_pending_interaction(PendingInteractionSummary {
+                    request_id: request_id.clone(),
+                    kind: InteractionKind::UserInput,
+                    title: title.clone(),
+                    description: description.clone(),
+                    source: PendingInteractionSource {
+                        tool_call_id: None,
+                        tool_kind: None,
+                        tool_status: None,
+                    },
+                    payload: PendingInteractionPayloadSummary::UserInput { questions },
+                })
+                .await;
+
+            sink.interaction_requested(InteractionRequestedEvent {
+                request_id: request_id.clone(),
+                kind: InteractionKind::UserInput,
+                title,
+                description,
+                source,
+                payload,
+            });
+
+            pending_wait
+        };
+
+        let response = match pending_wait.wait().await {
+            UserInputOutcome::Submitted { answers, .. } => CodexRequestUserInputExtResponse {
+                outcome: CodexRequestUserInputExtOutcome::Submitted,
+                answers,
+            },
+            UserInputOutcome::Cancelled | UserInputOutcome::Dismissed => {
+                CodexRequestUserInputExtResponse {
+                    outcome: CodexRequestUserInputExtOutcome::Cancelled,
+                    answers: Vec::new(),
+                }
+            }
+        };
+
+        raw_ext_response(response)
+    }
+
+    async fn claude_request_user_input(
+        &self,
+        args: acp::ExtRequest,
+    ) -> acp::Result<acp::ExtResponse> {
+        let request = serde_json::from_str::<ClaudeRequestUserInputParams>(args.params.get())
+            .map_err(|error| acp::Error::invalid_params().data(error.to_string()))?;
+
+        let response = self
+            .request_user_input(request.questions, "Input requested")
+            .await?;
+
+        raw_ext_response(response)
+    }
+
+    async fn codex_mcp_elicitation(&self, args: acp::ExtRequest) -> acp::Result<acp::ExtResponse> {
+        let request = serde_json::from_str::<CodexMcpElicitationExtParams>(args.params.get())
+            .map_err(|error| acp::Error::invalid_params().data(error.to_string()))?;
+        let normalized = normalize_codex_mcp_elicitation(request)
+            .map_err(|error| acp::Error::invalid_params().data(format!("{error:?}")))?;
+
+        let request_id = uuid::Uuid::new_v4().to_string();
+        let title = normalized.title;
+        let description = normalized.description;
+        let payload = normalized.payload;
+        let pending_payload = PendingInteractionPayloadSummary::McpElicitation {
+            payload: payload.clone(),
+        };
+        let source = InteractionSource {
+            tool_call_id: None,
+            tool_kind: None,
+            tool_status: None,
+            source_metadata: None,
+        };
+
+        let pending_wait = {
+            let mut sink = self.event_sink.lock().await;
+            let pending_wait = self
+                .interaction_broker
+                .register_mcp_elicitation(&self.session_id, &request_id, normalized.pending)
+                .await;
+
+            self.live_session_handle
+                .add_pending_interaction(PendingInteractionSummary {
+                    request_id: request_id.clone(),
+                    kind: InteractionKind::McpElicitation,
+                    title: title.clone(),
+                    description: description.clone(),
+                    source: PendingInteractionSource {
+                        tool_call_id: None,
+                        tool_kind: None,
+                        tool_status: None,
+                    },
+                    payload: pending_payload,
+                })
+                .await;
+
+            sink.interaction_requested(InteractionRequestedEvent {
+                request_id: request_id.clone(),
+                kind: InteractionKind::McpElicitation,
+                title,
+                description,
+                source,
+                payload: InteractionPayload::McpElicitation(payload),
+            });
+
+            pending_wait
+        };
+
+        raw_ext_response(codex_ext_response_from_outcome(pending_wait.wait().await))
+    }
+
+    async fn claude_mcp_elicitation(&self, args: acp::ExtRequest) -> acp::Result<acp::ExtResponse> {
+        let request = serde_json::from_str::<ClaudeMcpElicitationExtParams>(args.params.get())
+            .map_err(|error| acp::Error::invalid_params().data(error.to_string()))?;
+        let normalized = normalize_claude_mcp_elicitation(request)
+            .map_err(|error| acp::Error::invalid_params().data(format!("{error:?}")))?;
+
+        let request_id = uuid::Uuid::new_v4().to_string();
+        let title = normalized.title;
+        let description = normalized.description;
+        let payload = normalized.payload;
+        let pending_payload = PendingInteractionPayloadSummary::McpElicitation {
+            payload: payload.clone(),
+        };
+        let source = InteractionSource {
+            tool_call_id: None,
+            tool_kind: None,
+            tool_status: None,
+            source_metadata: None,
+        };
+
+        let pending_wait = {
+            let mut sink = self.event_sink.lock().await;
+            let pending_wait = self
+                .interaction_broker
+                .register_mcp_elicitation(&self.session_id, &request_id, normalized.pending)
+                .await;
+
+            self.live_session_handle
+                .add_pending_interaction(PendingInteractionSummary {
+                    request_id: request_id.clone(),
+                    kind: InteractionKind::McpElicitation,
+                    title: title.clone(),
+                    description: description.clone(),
+                    source: PendingInteractionSource {
+                        tool_call_id: None,
+                        tool_kind: None,
+                        tool_status: None,
+                    },
+                    payload: pending_payload,
+                })
+                .await;
+
+            sink.interaction_requested(InteractionRequestedEvent {
+                request_id: request_id.clone(),
+                kind: InteractionKind::McpElicitation,
+                title,
+                description,
+                source,
+                payload: InteractionPayload::McpElicitation(payload),
+            });
+
+            pending_wait
+        };
+
+        raw_ext_response(claude_ext_response_from_outcome(pending_wait.wait().await))
+    }
+
+    async fn request_user_input(
+        &self,
+        questions: Vec<UserInputQuestion>,
+        fallback_title: &str,
+    ) -> acp::Result<ClaudeRequestUserInputExtResponse> {
+        let request_id = uuid::Uuid::new_v4().to_string();
+        let title = questions
+            .first()
+            .map(|question| question.header.trim())
+            .filter(|header| !header.is_empty())
+            .unwrap_or(fallback_title)
+            .to_string();
+        let description = (questions.len() == 1)
+            .then(|| questions.first().map(|question| question.question.clone()))
+            .flatten()
+            .filter(|question| !question.trim().is_empty());
+
+        let source = InteractionSource {
+            tool_call_id: None,
+            tool_kind: None,
+            tool_status: None,
+            source_metadata: None,
+        };
+        let payload = InteractionPayload::UserInput(UserInputInteractionPayload {
+            questions: questions.clone(),
+        });
+
+        let pending_wait = {
+            let mut sink = self.event_sink.lock().await;
+            let pending_wait = self
+                .interaction_broker
+                .register_user_input(&self.session_id, &request_id, &questions)
+                .await;
+
+            self.live_session_handle
+                .add_pending_interaction(PendingInteractionSummary {
+                    request_id: request_id.clone(),
+                    kind: InteractionKind::UserInput,
+                    title: title.clone(),
+                    description: description.clone(),
+                    source: PendingInteractionSource {
+                        tool_call_id: None,
+                        tool_kind: None,
+                        tool_status: None,
+                    },
+                    payload: PendingInteractionPayloadSummary::UserInput { questions },
+                })
+                .await;
+
+            sink.interaction_requested(InteractionRequestedEvent {
+                request_id: request_id.clone(),
+                kind: InteractionKind::UserInput,
+                title,
+                description,
+                source,
+                payload,
+            });
+
+            pending_wait
+        };
+
+        let response = match pending_wait.wait().await {
+            UserInputOutcome::Submitted { answers, .. } => ClaudeRequestUserInputExtResponse {
+                outcome: ClaudeRequestUserInputExtOutcome::Submitted,
+                answers,
+            },
+            UserInputOutcome::Cancelled | UserInputOutcome::Dismissed => {
+                ClaudeRequestUserInputExtResponse {
+                    outcome: ClaudeRequestUserInputExtOutcome::Cancelled,
+                    answers: Vec::new(),
+                }
+            }
+        };
+
+        Ok(response)
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CodexRequestUserInputParams {
+    #[allow(dead_code)]
+    call_id: String,
+    #[allow(dead_code)]
+    turn_id: String,
+    questions: Vec<UserInputQuestion>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClaudeRequestUserInputParams {
+    questions: Vec<UserInputQuestion>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CodexRequestUserInputExtResponse {
+    outcome: CodexRequestUserInputExtOutcome,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    answers: Vec<UserInputSubmittedAnswer>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+enum CodexRequestUserInputExtOutcome {
+    Submitted,
+    Cancelled,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClaudeRequestUserInputExtResponse {
+    outcome: ClaudeRequestUserInputExtOutcome,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    answers: Vec<UserInputSubmittedAnswer>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+enum ClaudeRequestUserInputExtOutcome {
+    Submitted,
+    Cancelled,
+}
+
+fn raw_ext_response<T: Serialize>(value: T) -> acp::Result<acp::ExtResponse> {
+    let serialized = serde_json::to_string(&value)
+        .map_err(|error| acp::Error::internal_error().data(error.to_string()))?;
+    let raw = RawValue::from_string(serialized)
+        .map_err(|error| acp::Error::internal_error().data(error.to_string()))?;
+    Ok(acp::ExtResponse::new(raw.into()))
+}
+
+fn permission_options(options: &[acp::PermissionOption]) -> Vec<PermissionInteractionOption> {
+    options
+        .iter()
+        .map(|option| PermissionInteractionOption {
+            option_id: option.option_id.to_string(),
+            label: option.name.clone(),
+            kind: permission_option_kind(option.kind),
+        })
+        .collect()
+}
+
+fn permission_option_kind(kind: acp::PermissionOptionKind) -> PermissionInteractionOptionKind {
+    match kind {
+        acp::PermissionOptionKind::AllowOnce => PermissionInteractionOptionKind::AllowOnce,
+        acp::PermissionOptionKind::AllowAlways => PermissionInteractionOptionKind::AllowAlways,
+        acp::PermissionOptionKind::RejectOnce => PermissionInteractionOptionKind::RejectOnce,
+        acp::PermissionOptionKind::RejectAlways => PermissionInteractionOptionKind::RejectAlways,
+        _ => PermissionInteractionOptionKind::Unknown,
+    }
+}
+
+fn bound_raw_json(value: serde_json::Value) -> serde_json::Value {
+    let Ok(bytes) = serde_json::to_vec(&value) else {
+        return value;
+    };
+    if bytes.len() <= MAX_PERMISSION_RAW_JSON_BYTES {
+        return value;
+    }
+    serde_json::json!({
+        "truncated": true,
+        "originalSizeBytes": bytes.len(),
+    })
 }
 
 pub(crate) fn session_update_kind(update: &acp::SessionUpdate) -> &'static str {

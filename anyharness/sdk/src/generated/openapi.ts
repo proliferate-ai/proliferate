@@ -404,6 +404,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/interactions/{request_id}/mcp-url/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reveal_mcp_elicitation_url"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/interactions/{request_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolve_interaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{session_id}/live-config": {
         parameters: {
             query?: never;
@@ -434,22 +466,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["edit_pending_prompt"];
-        trace?: never;
-    };
-    "/v1/sessions/{session_id}/permissions/{request_id}/resolve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["resolve_permission"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/v1/sessions/{session_id}/prompt": {
@@ -1326,6 +1342,61 @@ export interface components {
             sourceWorkspacePath: string;
             workspaceId: string;
         };
+        /** @enum {string} */
+        InteractionDecision: "allow" | "deny";
+        /** @enum {string} */
+        InteractionKind: "permission" | "user_input" | "mcp_elicitation";
+        InteractionOutcome: {
+            optionId: string;
+            /** @enum {string} */
+            outcome: "selected";
+        } | {
+            answeredQuestionIds?: string[];
+            /** @enum {string} */
+            outcome: "submitted";
+        } | {
+            acceptedFieldIds?: string[];
+            /** @enum {string} */
+            outcome: "accepted";
+        } | {
+            /** @enum {string} */
+            outcome: "declined";
+        } | {
+            /** @enum {string} */
+            outcome: "cancelled";
+        } | {
+            /** @enum {string} */
+            outcome: "dismissed";
+        };
+        InteractionPayload: (components["schemas"]["PermissionInteractionPayload"] & {
+            /** @enum {string} */
+            type: "permission";
+        }) | (components["schemas"]["UserInputInteractionPayload"] & {
+            /** @enum {string} */
+            type: "user_input";
+        }) | (components["schemas"]["McpElicitationInteractionPayload"] & {
+            /** @enum {string} */
+            type: "mcp_elicitation";
+        });
+        InteractionRequestedEvent: {
+            description?: string | null;
+            kind: components["schemas"]["InteractionKind"];
+            payload: components["schemas"]["InteractionPayload"];
+            requestId: string;
+            source: components["schemas"]["InteractionSource"];
+            title: string;
+        };
+        InteractionResolvedEvent: {
+            kind: components["schemas"]["InteractionKind"];
+            outcome: components["schemas"]["InteractionOutcome"];
+            requestId: string;
+        };
+        InteractionSource: {
+            sourceMetadata?: unknown;
+            toolCallId?: string | null;
+            toolKind?: string | null;
+            toolStatus?: string | null;
+        };
         ItemCompletedEvent: {
             item: components["schemas"]["TranscriptItemPayload"];
         };
@@ -1338,6 +1409,111 @@ export interface components {
         LoginCommand: {
             args: string[];
             program: string;
+        };
+        McpElicitationBooleanField: components["schemas"]["McpElicitationFieldBase"];
+        McpElicitationField: (components["schemas"]["McpElicitationTextField"] & {
+            /** @enum {string} */
+            fieldType: "text";
+        }) | (components["schemas"]["McpElicitationNumberField"] & {
+            /** @enum {string} */
+            fieldType: "number";
+        }) | (components["schemas"]["McpElicitationBooleanField"] & {
+            /** @enum {string} */
+            fieldType: "boolean";
+        }) | (components["schemas"]["McpElicitationSelectField"] & {
+            /** @enum {string} */
+            fieldType: "single_select";
+        }) | (components["schemas"]["McpElicitationMultiSelectField"] & {
+            /** @enum {string} */
+            fieldType: "multi_select";
+        });
+        McpElicitationFieldBase: {
+            description?: string | null;
+            fieldId: string;
+            label: string;
+            required: boolean;
+        };
+        McpElicitationFormPayload: {
+            fields?: components["schemas"]["McpElicitationField"][];
+            message: string;
+        };
+        McpElicitationInteractionPayload: {
+            mode: components["schemas"]["McpElicitationMode"];
+            serverName: string;
+        };
+        McpElicitationMode: (components["schemas"]["McpElicitationFormPayload"] & {
+            /** @enum {string} */
+            mode: "form";
+        }) | (components["schemas"]["McpElicitationUrlPayload"] & {
+            /** @enum {string} */
+            mode: "url";
+        });
+        McpElicitationMultiSelectField: components["schemas"]["McpElicitationFieldBase"] & {
+            /** Format: int64 */
+            maxItems?: number | null;
+            /** Format: int64 */
+            minItems?: number | null;
+            options?: components["schemas"]["McpElicitationOption"][];
+        };
+        McpElicitationNumberField: components["schemas"]["McpElicitationFieldBase"] & {
+            integer: boolean;
+            maximum?: string | null;
+            minimum?: string | null;
+        };
+        McpElicitationOption: {
+            label: string;
+            optionId: string;
+        };
+        McpElicitationSelectField: components["schemas"]["McpElicitationFieldBase"] & {
+            options?: components["schemas"]["McpElicitationOption"][];
+        };
+        McpElicitationSubmittedField: {
+            fieldId: string;
+            value: components["schemas"]["McpElicitationSubmittedValue"];
+        };
+        McpElicitationSubmittedValue: {
+            /** @enum {string} */
+            type: "string";
+            value: string;
+        } | {
+            /** @enum {string} */
+            type: "integer";
+            /** Format: int64 */
+            value: number;
+        } | {
+            /** @enum {string} */
+            type: "number";
+            /** Format: double */
+            value: number;
+        } | {
+            /** @enum {string} */
+            type: "boolean";
+            value: boolean;
+        } | {
+            option_id: string;
+            /** @enum {string} */
+            type: "option";
+        } | {
+            option_ids: string[];
+            /** @enum {string} */
+            type: "option_array";
+        };
+        McpElicitationTextField: components["schemas"]["McpElicitationFieldBase"] & {
+            format?: null | components["schemas"]["McpElicitationTextFormat"];
+            /** Format: int32 */
+            maxLength?: number | null;
+            /** Format: int32 */
+            minLength?: number | null;
+        };
+        /** @enum {string} */
+        McpElicitationTextFormat: "email" | "uri" | "date" | "date-time";
+        McpElicitationUrlPayload: {
+            message: string;
+            requiresReveal: boolean;
+            urlDisplay: string;
+        };
+        McpElicitationUrlRevealResponse: {
+            url: string;
         };
         MobilityPendingConfigChangeRecord: {
             configId: string;
@@ -1483,11 +1659,31 @@ export interface components {
             model?: null | components["schemas"]["NormalizedSessionControl"];
             reasoning?: null | components["schemas"]["NormalizedSessionControl"];
         };
-        PendingApprovalSummary: {
-            requestId: string;
-            title: string;
+        PendingInteractionPayloadSummary: {
+            context?: null | components["schemas"]["PermissionInteractionContext"];
+            options?: components["schemas"]["PermissionInteractionOption"][];
+            /** @enum {string} */
+            type: "permission";
+        } | {
+            questions?: components["schemas"]["UserInputQuestion"][];
+            /** @enum {string} */
+            type: "user_input";
+        } | (components["schemas"]["McpElicitationInteractionPayload"] & {
+            /** @enum {string} */
+            type: "mcp_elicitation";
+        });
+        PendingInteractionSource: {
             toolCallId?: string | null;
             toolKind?: string | null;
+            toolStatus?: string | null;
+        };
+        PendingInteractionSummary: {
+            description?: string | null;
+            kind: components["schemas"]["InteractionKind"];
+            payload: components["schemas"]["PendingInteractionPayloadSummary"];
+            requestId: string;
+            source: components["schemas"]["PendingInteractionSource"];
+            title: string;
         };
         PendingPromptAddedPayload: {
             promptId?: string | null;
@@ -1515,30 +1711,24 @@ export interface components {
             seq: number;
             text: string;
         };
-        /** @enum {string} */
-        PermissionDecision: "allow" | "deny";
-        PermissionOutcome: {
-            optionId: string;
-            /** @enum {string} */
-            outcome: "selected";
-        } | {
-            /** @enum {string} */
-            outcome: "cancelled";
+        PermissionInteractionContext: {
+            agentId?: string | null;
+            blockedPath?: string | null;
+            decisionReason?: string | null;
+            displayName?: string | null;
         };
-        PermissionRequestedEvent: {
-            description?: string | null;
-            options?: unknown;
+        PermissionInteractionOption: {
+            kind: components["schemas"]["PermissionInteractionOptionKind"];
+            label: string;
+            optionId: string;
+        };
+        /** @enum {string} */
+        PermissionInteractionOptionKind: "allow_once" | "allow_always" | "reject_once" | "reject_always" | "unknown";
+        PermissionInteractionPayload: {
+            context?: null | components["schemas"]["PermissionInteractionContext"];
+            options?: components["schemas"]["PermissionInteractionOption"][];
             rawInput?: unknown;
             rawOutput?: unknown;
-            requestId: string;
-            title: string;
-            toolCallId?: string | null;
-            toolKind?: string | null;
-            toolStatus?: string | null;
-        };
-        PermissionResolvedEvent: {
-            outcome: components["schemas"]["PermissionOutcome"];
-            requestId: string;
         };
         PlanEntry: {
             content: string;
@@ -1679,9 +1869,31 @@ export interface components {
         };
         /** @enum {string} */
         RepoRootKind: "external" | "managed";
-        ResolvePermissionRequest: {
-            decision?: null | components["schemas"]["PermissionDecision"];
-            optionId?: string | null;
+        ResolveInteractionRequest: {
+            optionId: string;
+            /** @enum {string} */
+            outcome: "selected";
+        } | {
+            decision: components["schemas"]["InteractionDecision"];
+            /** @enum {string} */
+            outcome: "decision";
+        } | {
+            answers: components["schemas"]["UserInputSubmittedAnswer"][];
+            /** @enum {string} */
+            outcome: "submitted";
+        } | {
+            fields: components["schemas"]["McpElicitationSubmittedField"][];
+            /** @enum {string} */
+            outcome: "accepted";
+        } | {
+            /** @enum {string} */
+            outcome: "declined";
+        } | {
+            /** @enum {string} */
+            outcome: "cancelled";
+        } | {
+            /** @enum {string} */
+            outcome: "dismissed";
         };
         ResolveRepoRootFromPathRequest: {
             path: string;
@@ -1784,12 +1996,12 @@ export interface components {
         }) | (components["schemas"]["PendingPromptRemovedPayload"] & {
             /** @enum {string} */
             type: "pending_prompt_removed";
-        }) | (components["schemas"]["PermissionRequestedEvent"] & {
+        }) | (components["schemas"]["InteractionRequestedEvent"] & {
             /** @enum {string} */
-            type: "permission_requested";
-        }) | (components["schemas"]["PermissionResolvedEvent"] & {
+            type: "interaction_requested";
+        }) | (components["schemas"]["InteractionResolvedEvent"] & {
             /** @enum {string} */
-            type: "permission_resolved";
+            type: "interaction_resolved";
         }) | (components["schemas"]["ErrorEvent"] & {
             /** @enum {string} */
             type: "error";
@@ -1804,10 +2016,10 @@ export interface components {
             turnId?: string | null;
         };
         /** @enum {string} */
-        SessionExecutionPhase: "starting" | "running" | "awaiting_permission" | "idle" | "errored" | "closed";
+        SessionExecutionPhase: "starting" | "running" | "awaiting_interaction" | "idle" | "errored" | "closed";
         SessionExecutionSummary: {
             hasLiveHandle: boolean;
-            pendingApproval?: null | components["schemas"]["PendingApprovalSummary"];
+            pendingInteractions?: components["schemas"]["PendingInteractionSummary"][];
             phase: components["schemas"]["SessionExecutionPhase"];
             updatedAt: string;
         };
@@ -1944,6 +2156,7 @@ export interface components {
             appendContentParts?: components["schemas"]["ContentPart"][] | null;
             appendReasoning?: string | null;
             appendText?: string | null;
+            isTransient?: boolean | null;
             nativeToolName?: string | null;
             parentToolCallId?: string | null;
             rawInput?: unknown;
@@ -1956,6 +2169,7 @@ export interface components {
         TranscriptItemKind: "user_message" | "assistant_message" | "reasoning" | "tool_invocation" | "plan" | "error_item";
         TranscriptItemPayload: {
             contentParts?: components["schemas"]["ContentPart"][];
+            isTransient?: boolean;
             kind: components["schemas"]["TranscriptItemKind"];
             messageId?: string | null;
             nativeToolName?: string | null;
@@ -1997,6 +2211,26 @@ export interface components {
             /** Format: int64 */
             used: number;
         };
+        UserInputInteractionPayload: {
+            questions?: components["schemas"]["UserInputQuestion"][];
+        };
+        UserInputQuestion: {
+            header: string;
+            isOther: boolean;
+            isSecret: boolean;
+            options?: components["schemas"]["UserInputQuestionOption"][];
+            question: string;
+            questionId: string;
+        };
+        UserInputQuestionOption: {
+            description: string;
+            label: string;
+        };
+        UserInputSubmittedAnswer: {
+            questionId: string;
+            selectedOptionLabel?: string | null;
+            text?: string | null;
+        };
         Workspace: {
             createdAt: string;
             currentBranch?: string | null;
@@ -2011,9 +2245,9 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {string} */
-        WorkspaceExecutionPhase: "running" | "awaiting_permission" | "idle" | "errored";
+        WorkspaceExecutionPhase: "running" | "awaiting_interaction" | "idle" | "errored";
         WorkspaceExecutionSummary: {
-            awaitingPermissionCount: number;
+            awaitingInteractionCount: number;
             erroredCount: number;
             idleCount: number;
             liveSessionCount: number;
@@ -2944,6 +3178,94 @@ export interface operations {
             };
         };
     };
+    reveal_mcp_elicitation_url: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+                /** @description Interaction request ID */
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description MCP elicitation URL revealed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpElicitationUrlRevealResponse"];
+                };
+            };
+            /** @description Invalid interaction kind */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    resolve_interaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+                /** @description Interaction request ID */
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveInteractionRequest"];
+            };
+        };
+        responses: {
+            /** @description Interaction resolved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid interaction resolution */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_live_session_config: {
         parameters: {
             query?: never;
@@ -3038,42 +3360,6 @@ export interface operations {
                 };
             };
             /** @description Session or pending prompt not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    resolve_permission: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Session ID */
-                session_id: string;
-                /** @description Permission request ID */
-                request_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResolvePermissionRequest"];
-            };
-        };
-        responses: {
-            /** @description Permission resolved */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not found */
             404: {
                 headers: {
                     [name: string]: unknown;

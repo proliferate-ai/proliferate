@@ -36,9 +36,11 @@ export function buildTurnPresentation(
   transcript: TranscriptState,
 ): TurnPresentation {
   const itemOrderIndex = new Map(turn.itemOrder.map((itemId, index) => [itemId, index]));
-  const orderedItemIds = [...turn.itemOrder].sort((leftId, rightId) =>
-    compareItems(leftId, rightId, transcript, itemOrderIndex)
-  );
+  const orderedItemIds = [...turn.itemOrder]
+    .filter((itemId) => !isTransientTranscriptItem(transcript.itemsById[itemId]))
+    .sort((leftId, rightId) =>
+      compareItems(leftId, rightId, transcript, itemOrderIndex)
+    );
 
   const itemIds = new Set(orderedItemIds);
   const childrenByParentId = new Map<string, string[]>();
@@ -139,6 +141,10 @@ export function buildTurnPresentation(
     readGroups,
     readGroupedIds,
   };
+}
+
+export function isTransientTranscriptItem(item: TranscriptItem | undefined): boolean {
+  return !!item && "isTransient" in item && item.isTransient === true;
 }
 
 function compareItems(

@@ -61,7 +61,7 @@ function transcriptState(items: ToolCallItem[]): TranscriptState {
     itemsById: Object.fromEntries(items.map((item) => [item.itemId, item])),
     openAssistantItemId: null,
     openThoughtItemId: null,
-    pendingApproval: null,
+    pendingInteractions: [],
     availableCommands: [],
     liveConfig: null,
     currentModeId: null,

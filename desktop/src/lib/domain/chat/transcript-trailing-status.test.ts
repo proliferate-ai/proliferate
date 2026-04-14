@@ -3,6 +3,7 @@ import { createTranscriptState, type TranscriptState, type TurnRecord } from "@a
 import {
   lastTopLevelItemIsAssistantProseWithText,
   lastTopLevelItemIsStreamingAssistantProse,
+  latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
 } from "@/lib/domain/chat/transcript-trailing-status";
 
@@ -56,6 +57,16 @@ describe("transcript trailing status", () => {
       transcript,
       isLatestTurnInProgress: true,
     })).toBe(true);
+  });
+
+  it("selects the latest transient thought status", () => {
+    const { transcript, turn } = transcriptWithTurn([
+      transientThoughtItem("status-1", "Authenticating MCP"),
+      assistantItem("assistant", false),
+      transientThoughtItem("status-2", "Waiting for browser auth"),
+    ]);
+
+    expect(latestTransientStatusText(turn, transcript)).toBe("Waiting for browser auth");
   });
 });
 
@@ -126,5 +137,31 @@ function toolItem(itemId: string): TranscriptState["itemsById"][string] {
     toolKind: "other",
     semanticKind: "other",
     approvalState: "none",
+  };
+}
+
+function transientThoughtItem(
+  itemId: string,
+  text: string,
+): TranscriptState["itemsById"][string] {
+  return {
+    kind: "thought",
+    itemId,
+    turnId: "turn-1",
+    status: "in_progress",
+    sourceAgentKind: "codex",
+    isTransient: true,
+    messageId: null,
+    title: null,
+    nativeToolName: null,
+    parentToolCallId: null,
+    contentParts: [{ type: "reasoning", text, visibility: "private" }],
+    timestamp: "2026-04-13T12:00:01.000Z",
+    startedSeq: 1,
+    lastUpdatedSeq: 1,
+    completedSeq: null,
+    completedAt: null,
+    text,
+    isStreaming: true,
   };
 }

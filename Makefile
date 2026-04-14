@@ -15,10 +15,15 @@ PROD_APP_SECRET ?= proliferate/prod/server-app
 PROD_DB_SECRET ?= proliferate/prod/database
 PROD_DB_INSTANCE ?= proliferate-prod
 SQL ?= select version_num from alembic_version;
+LOCAL_CODEX_ACP ?= $(HOME)/codex-acp/target/debug/codex-acp
 SERVER_ENV_SOURCE = set -a; \
 	[ ! -f server/.env ] || . server/.env; \
 	[ ! -f server/.env.local ] || . server/.env.local; \
 	set +a;
+LOCAL_CODEX_ACP_ENV = if [ -z "$${ANYHARNESS_CODEX_AGENT_PROGRAM:-}" ] && [ -x "$(LOCAL_CODEX_ACP)" ]; then \
+	export ANYHARNESS_CODEX_AGENT_PROGRAM="$(LOCAL_CODEX_ACP)"; \
+	echo "Using local codex-acp: $$ANYHARNESS_CODEX_AGENT_PROGRAM"; \
+fi;
 
 .PHONY: dev dev-local dev-desktop dev-runtime dev-server server-db-up server-db-wait \
         server-db-down server-db-ready db db-local db-ah server-migrate serve install \
@@ -42,6 +47,7 @@ dev: sdk-build server-migrate
 	@echo "Starting runtime on :8457, backend on :8000, and desktop app..."
 	@trap 'kill 0' EXIT; \
 	$(SERVER_ENV_SOURCE) \
+	$(LOCAL_CODEX_ACP_ENV) \
 	RUST_LOG=info ANYHARNESS_DEV_CORS=1 $(CARGO) run --bin anyharness -- serve & \
 	cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port 8000 & \
 	sleep 2; \
@@ -63,10 +69,12 @@ dev-runtime: export ANYHARNESS_DEV_CORS := 1
 dev-runtime: export PROLIFERATE_DEV := 1
 dev-runtime: sdk-build
 	@$(SERVER_ENV_SOURCE) \
+	$(LOCAL_CODEX_ACP_ENV) \
 	$(CARGO) run --bin anyharness -- serve
 
 serve:
 	@$(SERVER_ENV_SOURCE) \
+	$(LOCAL_CODEX_ACP_ENV) \
 	$(CARGO) run --bin anyharness -- serve
 
 # --- Server (Python control plane) ---
@@ -322,7 +330,12 @@ clippy:
 # --- Cloud client (Python control plane → TypeScript types) ---
 
 cloud-openapi:
-	cd server && uv run python -c \
+	cd server && DEBUG=1 \
+	  JWT_SECRET=local-openapi-generation-secret \
+	  CLOUD_SECRET_KEY=local-openapi-generation-cloud-secret \
+	  GITHUB_OAUTH_CLIENT_ID=local-openapi-generation-github-client-id \
+	  GITHUB_OAUTH_CLIENT_SECRET=local-openapi-generation-github-client-secret \
+	  uv run python -c \
 	  "from proliferate.main import app; import json; print(json.dumps(app.openapi()))" \
 	  > openapi.json
 

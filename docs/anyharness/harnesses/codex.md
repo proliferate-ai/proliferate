@@ -3,7 +3,7 @@
 AnyHarness installs the Codex ACP wrapper from the published npm package line,
 not by building the Rust repo at runtime.
 
-- Agent-process package: `@proliferateai/codex-acp@0.11.5`
+- Agent-process package: `@proliferateai/codex-acp@0.11.7`
 - Install strategy: plain `ManagedNpmPackage` with `package_subdir = None` and
   `source_build_binary_name = None`
 - Runtime expectation: the npm package already contains the prebuilt platform

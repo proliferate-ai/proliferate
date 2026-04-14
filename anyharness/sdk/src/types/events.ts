@@ -86,13 +86,61 @@ export type PendingPromptRemovedEvent = PendingPromptRemovedPayload & {
 export type PendingPromptRemovalReason =
   components["schemas"]["PendingPromptRemovalReason"];
 export type PendingPromptSummary = components["schemas"]["PendingPromptSummary"];
-export type PermissionRequestedEvent =
-  components["schemas"]["PermissionRequestedEvent"] & {
-    type: "permission_requested";
+export type InteractionKind = components["schemas"]["InteractionKind"];
+export type InteractionSource = components["schemas"]["InteractionSource"];
+export type InteractionPayload = components["schemas"]["InteractionPayload"];
+export type InteractionOutcome = components["schemas"]["InteractionOutcome"];
+export type PermissionInteractionPayload =
+  components["schemas"]["PermissionInteractionPayload"];
+export type PermissionInteractionContext =
+  components["schemas"]["PermissionInteractionContext"];
+export type PermissionInteractionOption =
+  components["schemas"]["PermissionInteractionOption"];
+export type PermissionInteractionOptionKind =
+  components["schemas"]["PermissionInteractionOptionKind"];
+export type UserInputInteractionPayload =
+  components["schemas"]["UserInputInteractionPayload"];
+export type UserInputQuestion = components["schemas"]["UserInputQuestion"];
+export type UserInputQuestionOption =
+  components["schemas"]["UserInputQuestionOption"];
+export type UserInputSubmittedAnswer =
+  components["schemas"]["UserInputSubmittedAnswer"];
+export type McpElicitationInteractionPayload =
+  components["schemas"]["McpElicitationInteractionPayload"];
+export type McpElicitationMode = components["schemas"]["McpElicitationMode"];
+export type McpElicitationFormPayload =
+  components["schemas"]["McpElicitationFormPayload"];
+export type McpElicitationUrlPayload =
+  components["schemas"]["McpElicitationUrlPayload"];
+export type McpElicitationField =
+  components["schemas"]["McpElicitationField"];
+export type McpElicitationFieldBase =
+  components["schemas"]["McpElicitationFieldBase"];
+export type McpElicitationTextField =
+  components["schemas"]["McpElicitationTextField"];
+export type McpElicitationTextFormat =
+  components["schemas"]["McpElicitationTextFormat"];
+export type McpElicitationNumberField =
+  components["schemas"]["McpElicitationNumberField"];
+export type McpElicitationBooleanField =
+  components["schemas"]["McpElicitationBooleanField"];
+export type McpElicitationSelectField =
+  components["schemas"]["McpElicitationSelectField"];
+export type McpElicitationMultiSelectField =
+  components["schemas"]["McpElicitationMultiSelectField"];
+export type McpElicitationOption =
+  components["schemas"]["McpElicitationOption"];
+export type McpElicitationSubmittedField =
+  components["schemas"]["McpElicitationSubmittedField"];
+export type McpElicitationSubmittedValue =
+  components["schemas"]["McpElicitationSubmittedValue"];
+export type InteractionRequestedEvent =
+  components["schemas"]["InteractionRequestedEvent"] & {
+    type: "interaction_requested";
   };
-export type PermissionResolvedEvent =
-  components["schemas"]["PermissionResolvedEvent"] & {
-    type: "permission_resolved";
+export type InteractionResolvedEvent =
+  components["schemas"]["InteractionResolvedEvent"] & {
+    type: "interaction_resolved";
   };
 export type ErrorEvent = components["schemas"]["ErrorEvent"] & {
   type: "error";
@@ -115,8 +163,8 @@ export type SessionEvent =
   | PendingPromptAddedEvent
   | PendingPromptUpdatedEvent
   | PendingPromptRemovedEvent
-  | PermissionRequestedEvent
-  | PermissionResolvedEvent
+  | InteractionRequestedEvent
+  | InteractionResolvedEvent
   | ErrorEvent;
 
 export type SessionEndReason = components["schemas"]["SessionEndReason"];
@@ -147,8 +195,6 @@ export type FileChangeOperation = components["schemas"]["FileChangeOperation"];
 export type FileOpenTarget = components["schemas"]["FileOpenTarget"];
 
 export type PlanEntry = components["schemas"]["PlanEntry"];
-export type PermissionOutcome = components["schemas"]["PermissionOutcome"];
-
 export function normalizeSessionEventEnvelope(
   envelope: SessionEventEnvelope,
 ): SessionEventEnvelope {

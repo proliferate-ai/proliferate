@@ -2,16 +2,20 @@ import type {
   ContentPart,
   FileChangeContentPart,
   FileReadContentPart,
+  InteractionOutcome,
+  InteractionRequestedEvent,
   ItemCompletedEvent,
   ItemDeltaEvent,
-  PermissionRequestedEvent,
   SessionEventEnvelope,
   TranscriptItemPayload,
 } from "../types/events.js";
 import type {
   AssistantProseItem,
   ErrorItem,
+  PendingMcpElicitationInteraction,
+  PendingInteraction,
   PendingApproval,
+  PendingUserInputInteraction,
   PlanItem,
   ThoughtItem,
   ToolCallSemanticKind,
@@ -45,7 +49,7 @@ export function createTranscriptState(sessionId: string): TranscriptState {
     itemsById: {},
     openAssistantItemId: null,
     openThoughtItemId: null,
-    pendingApproval: null,
+    pendingInteractions: [],
     availableCommands: [],
     liveConfig: null,
     currentModeId: null,
@@ -96,7 +100,7 @@ export function reduceEvent(
       break;
 
     case "session_ended":
-      clearPendingApproval(s, "none");
+      clearPendingInteractions(s, "none");
       s.isStreaming = false;
       break;
 
@@ -211,18 +215,18 @@ export function reduceEvent(
       );
       break;
 
-    case "permission_requested":
-      applyPermissionRequested(s, evt);
+    case "interaction_requested":
+      applyInteractionRequested(s, evt);
       break;
 
-    case "permission_resolved":
-      applyPermissionResolved(s, evt.requestId, evt.outcome.outcome);
+    case "interaction_resolved":
+      applyInteractionResolved(s, evt.requestId, evt.outcome);
       break;
 
     case "error": {
       ensureTurn(s, turnId, ts);
       closeStreamingItems(s);
-      clearPendingApproval(s, "none");
+      clearPendingInteractions(s, "none");
       const item: ErrorItem = {
         kind: "error",
         itemId,
@@ -315,6 +319,9 @@ function applyItemDelta(item: KnownTranscriptItem, evt: ItemDeltaEvent, ts: stri
   if (delta.rawOutput !== undefined) {
     item.rawOutput = delta.rawOutput;
   }
+  if (delta.isTransient !== undefined && delta.isTransient !== null) {
+    item.isTransient = delta.isTransient;
+  }
   if (delta.appendText) {
     if (item.kind === "user_message" || item.kind === "assistant_prose") {
       item.text += delta.appendText;
@@ -355,6 +362,7 @@ function createItemFromPayload(
     turnId,
     status: payload.status,
     sourceAgentKind: payload.sourceAgentKind,
+    isTransient: payload.isTransient ?? false,
     messageId: payload.messageId ?? null,
     title: payload.title ?? null,
     nativeToolName: payload.nativeToolName ?? null,
@@ -432,6 +440,7 @@ function createItemFromPayload(
 function applyPayload(item: KnownTranscriptItem, payload: TranscriptItemPayload, ts: string, seq: number): void {
   item.status = payload.status;
   item.sourceAgentKind = payload.sourceAgentKind;
+  item.isTransient = payload.isTransient ?? item.isTransient;
   item.messageId = payload.messageId ?? item.messageId;
   item.title = payload.title ?? item.title;
   item.nativeToolName = payload.nativeToolName ?? item.nativeToolName;
@@ -483,41 +492,143 @@ function rederiveItem(item: KnownTranscriptItem): void {
   }
 }
 
-function applyPermissionRequested(s: TranscriptState, evt: PermissionRequestedEvent): void {
-  if (evt.toolCallId) {
-    const item = findToolItemByToolCallId(s, evt.toolCallId);
-    if (item) item.approvalState = "pending";
-  }
-  s.pendingApproval = {
-    requestId: evt.requestId,
-    toolCallId: evt.toolCallId ?? null,
-    toolKind: evt.toolKind ?? null,
-    title: evt.title,
-    options: evt.options,
-  } satisfies PendingApproval;
+export function selectPendingApprovalInteraction(
+  transcript: TranscriptState,
+): PendingApproval | null {
+  return transcript.pendingInteractions.find((interaction) => interaction.kind === "permission")
+    ?? null;
 }
 
-function applyPermissionResolved(
+export function selectPendingUserInputInteraction(
+  transcript: TranscriptState,
+): PendingUserInputInteraction | null {
+  return transcript.pendingInteractions.find((interaction) => interaction.kind === "user_input")
+    ?? null;
+}
+
+export function selectPendingMcpElicitationInteraction(
+  transcript: TranscriptState,
+): PendingMcpElicitationInteraction | null {
+  return transcript.pendingInteractions.find((interaction) => interaction.kind === "mcp_elicitation")
+    ?? null;
+}
+
+export function selectPrimaryPendingInteraction(
+  transcript: TranscriptState,
+): PendingInteraction | null {
+  return transcript.pendingInteractions[0] ?? null;
+}
+
+function applyInteractionRequested(s: TranscriptState, evt: InteractionRequestedEvent): void {
+  const toolCallId = evt.source.toolCallId ?? null;
+  const basePendingInteraction = {
+    requestId: evt.requestId,
+    toolCallId,
+    toolKind: evt.source.toolKind ?? null,
+    toolStatus: evt.source.toolStatus ?? null,
+    title: evt.title,
+    description: evt.description ?? null,
+  };
+
+  let pendingInteraction: PendingInteraction;
+  if (evt.kind === "permission" && evt.payload.type === "permission") {
+    if (toolCallId) {
+      const item = findToolItemByToolCallId(s, toolCallId);
+      if (item) item.approvalState = "pending";
+    }
+    pendingInteraction = {
+      ...basePendingInteraction,
+      kind: "permission",
+      options: evt.payload.options ?? [],
+      context: evt.payload.context ?? null,
+    };
+  } else if (evt.kind === "user_input" && evt.payload.type === "user_input") {
+    pendingInteraction = {
+      ...basePendingInteraction,
+      kind: "user_input",
+      questions: evt.payload.questions ?? [],
+    };
+  } else if (evt.kind === "mcp_elicitation" && evt.payload.type === "mcp_elicitation") {
+    pendingInteraction = {
+      ...basePendingInteraction,
+      kind: "mcp_elicitation",
+      mcpElicitation: {
+        serverName: evt.payload.serverName,
+        mode: evt.payload.mode,
+      },
+    };
+  } else {
+    return;
+  }
+
+  s.pendingInteractions = [
+    ...s.pendingInteractions.filter((entry) => entry.requestId !== evt.requestId),
+    pendingInteraction,
+  ];
+}
+
+function applyInteractionResolved(
   s: TranscriptState,
   requestId: string,
-  outcome: "selected" | "cancelled",
+  outcome: InteractionOutcome,
 ): void {
-  if (s.pendingApproval?.requestId !== requestId) return;
+  const pendingInteraction = s.pendingInteractions.find((entry) => entry.requestId === requestId);
+  if (!pendingInteraction) return;
 
-  clearPendingApproval(s, outcome === "selected" ? "approved" : "none");
+  clearPendingInteraction(s, requestId, approvalStateForOutcome(pendingInteraction, outcome));
 }
 
-function clearPendingApproval(
+function clearPendingInteraction(
   s: TranscriptState,
+  requestId: string,
   toolApprovalState: ToolCallItem["approvalState"],
 ): void {
-  if (s.pendingApproval?.toolCallId) {
-    const item = findToolItemByToolCallId(s, s.pendingApproval.toolCallId);
+  const pendingInteraction = s.pendingInteractions.find((entry) => entry.requestId === requestId);
+  if (pendingInteraction?.toolCallId) {
+    const item = findToolItemByToolCallId(s, pendingInteraction.toolCallId);
     if (item) {
       item.approvalState = toolApprovalState;
     }
   }
-  s.pendingApproval = null;
+  s.pendingInteractions = s.pendingInteractions.filter((entry) => entry.requestId !== requestId);
+}
+
+function clearPendingInteractions(
+  s: TranscriptState,
+  toolApprovalState: ToolCallItem["approvalState"],
+): void {
+  for (const pendingInteraction of s.pendingInteractions) {
+    if (pendingInteraction.toolCallId) {
+      const item = findToolItemByToolCallId(s, pendingInteraction.toolCallId);
+      if (item) {
+        item.approvalState = toolApprovalState;
+      }
+    }
+  }
+  s.pendingInteractions = [];
+}
+
+function approvalStateForOutcome(
+  pendingInteraction: PendingInteraction,
+  outcome: InteractionOutcome,
+): ToolCallItem["approvalState"] {
+  if (outcome.outcome !== "selected") {
+    return "none";
+  }
+  if (pendingInteraction.kind !== "permission") {
+    return "none";
+  }
+
+  const option = pendingInteraction.options.find((entry) => entry.optionId === outcome.optionId);
+  switch (option?.kind) {
+    case "reject_once":
+    case "reject_always":
+      return "rejected";
+    case "allow_once":
+    case "allow_always":
+    default:
+      return "approved";
+  }
 }
 
 function findToolItemByToolCallId(
@@ -957,6 +1068,13 @@ function deriveToolCallSemanticKind(
 
   if (nativeToolName === "Agent" || normalizedToolKind === "think") {
     return "subagent";
+  }
+  if (
+    nativeToolName === "CodexHook"
+    || nativeToolName === "ClaudeHook"
+    || normalizedToolKind === "hook"
+  ) {
+    return "hook";
   }
   if (parts.some((part) => part.type === "file_change")) {
     return "file_change";

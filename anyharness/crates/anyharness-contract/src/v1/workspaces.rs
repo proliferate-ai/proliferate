@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 #[serde(rename_all = "snake_case")]
 pub enum WorkspaceExecutionPhase {
     Running,
-    AwaitingPermission,
+    AwaitingInteraction,
     Idle,
     Errored,
 }
@@ -17,7 +17,7 @@ pub struct WorkspaceExecutionSummary {
     pub total_session_count: usize,
     pub live_session_count: usize,
     pub running_count: usize,
-    pub awaiting_permission_count: usize,
+    pub awaiting_interaction_count: usize,
     pub idle_count: usize,
     pub errored_count: usize,
 }

@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -9,7 +10,11 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use super::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry, BackgroundWorkUpdate};
 use super::event_sink::{AcpChunkPayload, AcpToolPayload, SessionEventSink};
-use super::permission_broker::PermissionBroker;
+use super::mcp_elicitation::McpElicitationOutcome;
+use super::permission_broker::{
+    InteractionBroker, InteractionBrokerOutcome, InteractionCancelOutcome, PermissionDecision,
+    PermissionOutcome, ResolveInteractionError, UserInputOutcome,
+};
 use super::runtime_client::RuntimeClient;
 use crate::agents::model::{AgentKind, ResolvedAgent};
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
@@ -24,11 +29,12 @@ use crate::sessions::model::SessionRecord;
 use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::{
     AvailableCommandsUpdatePayload, ConfigApplyState, ConfigOptionUpdatePayload,
-    CurrentModeUpdatePayload, NormalizedSessionControl, PendingApprovalSummary,
-    PendingPromptAddedPayload, PendingPromptRemovalReason, PendingPromptRemovedPayload,
-    PendingPromptUpdatedPayload, PermissionOutcome, SessionEndReason, SessionEventEnvelope,
-    SessionExecutionPhase, SessionExecutionSummary, SessionInfoUpdatePayload,
-    SessionLiveConfigSnapshot, SessionStateUpdatePayload, StopReason, UsageUpdatePayload,
+    CurrentModeUpdatePayload, InteractionKind, InteractionOutcome, McpElicitationSubmittedField,
+    NormalizedSessionControl, PendingInteractionSummary, PendingPromptAddedPayload,
+    PendingPromptRemovalReason, PendingPromptRemovedPayload, PendingPromptUpdatedPayload,
+    SessionEndReason, SessionEventEnvelope, SessionExecutionPhase, SessionExecutionSummary,
+    SessionInfoUpdatePayload, SessionLiveConfigSnapshot, SessionStateUpdatePayload, StopReason,
+    UsageUpdatePayload, UserInputSubmittedAnswer,
 };
 
 #[derive(Debug)]
@@ -52,6 +58,77 @@ pub enum QueueMutationError {
 #[derive(Debug)]
 pub enum SetConfigOptionCommandError {
     Rejected(String),
+}
+
+#[derive(Clone, PartialEq)]
+pub enum InteractionResolution {
+    Selected {
+        option_id: String,
+    },
+    Decision(PermissionDecision),
+    Submitted {
+        answers: Vec<UserInputSubmittedAnswer>,
+    },
+    Accepted {
+        fields: Vec<McpElicitationSubmittedField>,
+    },
+    Declined,
+    Cancelled,
+    Dismissed,
+}
+
+impl fmt::Debug for InteractionResolution {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Selected { option_id } => f
+                .debug_struct("Selected")
+                .field("option_id", option_id)
+                .finish(),
+            Self::Decision(decision) => f.debug_tuple("Decision").field(decision).finish(),
+            Self::Submitted { answers } => f
+                .debug_struct("Submitted")
+                .field("answer_count", &answers.len())
+                .field(
+                    "question_ids",
+                    &answers
+                        .iter()
+                        .map(|answer| answer.question_id.as_str())
+                        .collect::<Vec<_>>(),
+                )
+                .finish(),
+            Self::Accepted { fields } => f
+                .debug_struct("Accepted")
+                .field("field_count", &fields.len())
+                .field(
+                    "field_ids",
+                    &fields
+                        .iter()
+                        .map(|field| field.field_id.as_str())
+                        .collect::<Vec<_>>(),
+                )
+                .finish(),
+            Self::Declined => f.write_str("Declined"),
+            Self::Cancelled => f.write_str("Cancelled"),
+            Self::Dismissed => f.write_str("Dismissed"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolveInteractionCommandError {
+    NotFound,
+    KindMismatch,
+    InvalidOptionId,
+    InvalidQuestionId,
+    DuplicateQuestionAnswer,
+    MissingQuestionAnswer,
+    InvalidSelectedOptionLabel,
+    InvalidMcpFieldId,
+    DuplicateMcpField,
+    MissingMcpField,
+    InvalidMcpFieldValue,
+    NotMcpUrlElicitation,
+    ActorDead,
 }
 
 pub enum SessionCommand {
@@ -79,6 +156,11 @@ pub enum SessionCommand {
         config_id: String,
         value: String,
         respond_to: oneshot::Sender<Result<ConfigApplyState, SetConfigOptionCommandError>>,
+    },
+    ResolveInteraction {
+        request_id: String,
+        resolution: InteractionResolution,
+        respond_to: oneshot::Sender<Result<(), ResolveInteractionCommandError>>,
     },
     Cancel,
     Dismiss {
@@ -318,7 +400,7 @@ pub struct LiveSessionHandle {
 #[derive(Debug, Clone)]
 pub struct LiveSessionExecutionSnapshot {
     pub phase: SessionExecutionPhase,
-    pub pending_approval: Option<PendingApprovalSummary>,
+    pub pending_interactions: Vec<PendingInteractionSummary>,
     pub updated_at: String,
 }
 
@@ -326,7 +408,7 @@ impl LiveSessionExecutionSnapshot {
     pub fn new(phase: SessionExecutionPhase) -> Self {
         Self {
             phase,
-            pending_approval: None,
+            pending_interactions: Vec::new(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         }
     }
@@ -335,7 +417,7 @@ impl LiveSessionExecutionSnapshot {
         SessionExecutionSummary {
             phase: self.phase.clone(),
             has_live_handle,
-            pending_approval: self.pending_approval.clone(),
+            pending_interactions: self.pending_interactions.clone(),
             updated_at: self.updated_at.clone(),
         }
     }
@@ -359,19 +441,62 @@ impl LiveSessionHandle {
     pub async fn set_execution_phase(&self, phase: SessionExecutionPhase) {
         let mut execution = self.execution.write().await;
         execution.phase = phase;
-        execution.pending_approval = None;
         execution.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
-    pub async fn set_pending_approval(&self, pending_approval: PendingApprovalSummary) {
+    pub async fn add_pending_interaction(&self, pending_interaction: PendingInteractionSummary) {
         let mut execution = self.execution.write().await;
-        execution.phase = SessionExecutionPhase::AwaitingPermission;
-        execution.pending_approval = Some(pending_approval);
+        execution.phase = SessionExecutionPhase::AwaitingInteraction;
+        execution
+            .pending_interactions
+            .retain(|pending| pending.request_id != pending_interaction.request_id);
+        execution.pending_interactions.push(pending_interaction);
+        execution.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    pub async fn remove_pending_interaction(&self, request_id: &str) {
+        let mut execution = self.execution.write().await;
+        execution
+            .pending_interactions
+            .retain(|pending| pending.request_id != request_id);
+        if execution.pending_interactions.is_empty()
+            && matches!(execution.phase, SessionExecutionPhase::AwaitingInteraction)
+        {
+            execution.phase = SessionExecutionPhase::Running;
+        }
+        execution.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    pub async fn clear_pending_interactions_for_terminal_state(
+        &self,
+        phase: SessionExecutionPhase,
+    ) {
+        let mut execution = self.execution.write().await;
+        execution.phase = phase;
+        execution.pending_interactions.clear();
         execution.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
     pub async fn execution_snapshot(&self) -> LiveSessionExecutionSnapshot {
         self.execution.read().await.clone()
+    }
+
+    pub async fn resolve_interaction(
+        &self,
+        request_id: String,
+        resolution: InteractionResolution,
+    ) -> Result<(), ResolveInteractionCommandError> {
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(SessionCommand::ResolveInteraction {
+                request_id,
+                resolution,
+                respond_to: tx,
+            })
+            .await
+            .map_err(|_| ResolveInteractionCommandError::ActorDead)?;
+        rx.await
+            .map_err(|_| ResolveInteractionCommandError::ActorDead)?
     }
 
     pub fn native_session_id(&self) -> Option<String> {
@@ -406,7 +531,7 @@ pub struct SessionActorConfig {
     pub workspace_path: std::path::PathBuf,
     pub workspace_env: std::collections::BTreeMap<String, String>,
     pub session_launch_env: std::collections::BTreeMap<String, String>,
-    pub permission_broker: Arc<PermissionBroker>,
+    pub interaction_broker: Arc<InteractionBroker>,
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,
     pub session_store: SessionStore,
     pub mcp_servers: Vec<SessionMcpServer>,
@@ -915,7 +1040,7 @@ async fn run_actor(
     let client = RuntimeClient::new(
         session_id.clone(),
         notification_tx,
-        config.permission_broker.clone(),
+        config.interaction_broker.clone(),
         event_sink.clone(),
         handle.clone(),
     );
@@ -931,10 +1056,12 @@ async fn run_actor(
         }
     });
     let initialize_started = Instant::now();
+    let client_capabilities = build_client_capabilities(&source_agent_kind, &config.agent);
     let init_response = match conn
         .initialize(
             acp::InitializeRequest::new(acp::ProtocolVersion::V1)
-                .client_info(acp::Implementation::new("anyharness", "0.1.0")),
+                .client_info(acp::Implementation::new("anyharness", "0.1.0"))
+                .client_capabilities(client_capabilities),
         )
         .await
     {
@@ -1476,16 +1603,44 @@ async fn run_actor(
                                     cmd = command_rx.recv() => {
                                         match cmd {
                                             Some(SessionCommand::Cancel) => {
+                                                resolve_pending_interactions(
+                                                    &handle,
+                                                    &event_sink,
+                                                    &config.interaction_broker,
+                                                    &session_id,
+                                                    InteractionResolution::Cancelled,
+                                                )
+                                                .await;
                                                 let _ = conn
                                                     .cancel(acp::CancelNotification::new(native_session_id.clone()))
                                                     .await;
                                             }
                                             Some(SessionCommand::Dismiss { respond_to }) => {
+                                                resolve_pending_interactions(
+                                                    &handle,
+                                                    &event_sink,
+                                                    &config.interaction_broker,
+                                                    &session_id,
+                                                    InteractionResolution::Dismissed,
+                                                )
+                                                .await;
                                                 let _ = conn
                                                     .cancel(acp::CancelNotification::new(native_session_id.clone()))
                                                     .await;
                                                 let _ = respond_to.send(Ok(()));
                                                 exit_after_prompt = Some(ActorExitDisposition::Dismiss);
+                                            }
+                                            Some(SessionCommand::ResolveInteraction { request_id, resolution, respond_to }) => {
+                                                let result = handle_resolve_interaction(
+                                                    &handle,
+                                                    &event_sink,
+                                                    &config.interaction_broker,
+                                                    &session_id,
+                                                    request_id,
+                                                    resolution,
+                                                )
+                                                .await;
+                                                let _ = respond_to.send(result);
                                             }
                                             Some(SessionCommand::SetConfigOption { config_id, value, respond_to }) => {
                                                 let option = find_select_option_for_request(&startup_state.config_options, &config_id);
@@ -1520,6 +1675,14 @@ async fn run_actor(
                                                 let _ = respond_to.send(result);
                                             }
                                             Some(SessionCommand::Close { respond_to }) => {
+                                                resolve_pending_interactions(
+                                                    &handle,
+                                                    &event_sink,
+                                                    &config.interaction_broker,
+                                                    &session_id,
+                                                    InteractionResolution::Cancelled,
+                                                )
+                                                .await;
                                                 let _ = respond_to.send(Ok(()));
                                                 exit_after_prompt = Some(ActorExitDisposition::Close);
                                             }
@@ -1738,6 +1901,18 @@ async fn run_actor(
                     Some(SessionCommand::DeletePendingPrompt { seq, respond_to }) => {
                         let _ = respond_to.send(handle_delete_pending_prompt(&store, &event_sink, &session_id, seq).await);
                     }
+                    Some(SessionCommand::ResolveInteraction { request_id, resolution, respond_to }) => {
+                        let result = handle_resolve_interaction(
+                            &handle,
+                            &event_sink,
+                            &config.interaction_broker,
+                            &session_id,
+                            request_id,
+                            resolution,
+                        )
+                        .await;
+                        let _ = respond_to.send(result);
+                    }
                     Some(SessionCommand::SetConfigOption {
                         config_id,
                         value,
@@ -1772,11 +1947,27 @@ async fn run_actor(
                             .await;
                     }
                     Some(SessionCommand::Dismiss { respond_to }) => {
+                        resolve_pending_interactions(
+                            &handle,
+                            &event_sink,
+                            &config.interaction_broker,
+                            &session_id,
+                            InteractionResolution::Dismissed,
+                        )
+                        .await;
                         let _ = respond_to.send(Ok(()));
                         exit_reason = ActorExitDisposition::Dismiss;
                         break;
                     }
                     Some(SessionCommand::Close { respond_to }) => {
+                        resolve_pending_interactions(
+                            &handle,
+                            &event_sink,
+                            &config.interaction_broker,
+                            &session_id,
+                            InteractionResolution::Cancelled,
+                        )
+                        .await;
                         let _ = respond_to.send(Ok(()));
                         exit_reason = ActorExitDisposition::Close;
                         break;
@@ -1807,7 +1998,15 @@ async fn run_actor(
         }
     }
     background_work_registry.shutdown();
-    finalize_established_actor_exit(&handle, &event_sink, &store, &session_id, exit_reason).await;
+    finalize_established_actor_exit(
+        &handle,
+        &event_sink,
+        &config.interaction_broker,
+        &store,
+        &session_id,
+        exit_reason,
+    )
+    .await;
     handle.finish_prompt();
     drop(child);
     Ok(())
@@ -1816,12 +2015,13 @@ async fn run_actor(
 async fn finalize_established_actor_exit(
     handle: &Arc<LiveSessionHandle>,
     event_sink: &Arc<Mutex<SessionEventSink>>,
+    interaction_broker: &Arc<InteractionBroker>,
     store: &SessionStore,
     session_id: &str,
     disposition: ActorExitDisposition,
 ) {
-    let pending_approval = handle.execution_snapshot().await.pending_approval;
     let execution_snapshot = handle.execution_snapshot().await;
+    let pending_interactions = execution_snapshot.pending_interactions.clone();
     let busy = handle.busy.load(Ordering::Acquire);
     let sink_snapshot = {
         let sink = event_sink.lock().await;
@@ -1834,7 +2034,7 @@ async fn finalize_established_actor_exit(
         disposition = ?disposition,
         busy = busy,
         execution_phase = ?execution_snapshot.phase,
-        pending_approval = pending_approval.is_some(),
+        pending_interaction_count = pending_interactions.len(),
         turn_id = ?sink_snapshot.current_turn_id,
         open_assistant_item_id = ?sink_snapshot.open_assistant_item_id,
         open_reasoning_item_id = ?sink_snapshot.open_reasoning_item_id,
@@ -1844,15 +2044,23 @@ async fn finalize_established_actor_exit(
         "session.actor.exit.finalized"
     );
 
+    let pending_resolution = match disposition {
+        ActorExitDisposition::Dismiss => InteractionResolution::Dismissed,
+        ActorExitDisposition::Error { .. } | ActorExitDisposition::Close => {
+            InteractionResolution::Cancelled
+        }
+    };
+    resolve_pending_interactions(
+        handle,
+        event_sink,
+        interaction_broker,
+        session_id,
+        pending_resolution,
+    )
+    .await;
+
     {
         let mut sink = event_sink.lock().await;
-        if let Some(pending_approval) = &pending_approval {
-            sink.permission_resolved(
-                pending_approval.request_id.clone(),
-                PermissionOutcome::Cancelled,
-            );
-        }
-
         match &disposition {
             ActorExitDisposition::Error { message, code } => {
                 sink.error(message.clone(), code.clone());
@@ -1868,19 +2076,243 @@ async fn finalize_established_actor_exit(
     match disposition {
         ActorExitDisposition::Error { .. } => {
             handle
-                .set_execution_phase(SessionExecutionPhase::Errored)
+                .clear_pending_interactions_for_terminal_state(SessionExecutionPhase::Errored)
                 .await;
             let _ = store.update_status(session_id, "errored", &now);
         }
         ActorExitDisposition::Close => {
             handle
-                .set_execution_phase(SessionExecutionPhase::Closed)
+                .clear_pending_interactions_for_terminal_state(SessionExecutionPhase::Closed)
                 .await;
         }
         ActorExitDisposition::Dismiss => {
             handle
-                .set_execution_phase(SessionExecutionPhase::Idle)
+                .clear_pending_interactions_for_terminal_state(SessionExecutionPhase::Idle)
                 .await;
+        }
+    }
+}
+
+async fn handle_resolve_interaction(
+    handle: &Arc<LiveSessionHandle>,
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    interaction_broker: &Arc<InteractionBroker>,
+    session_id: &str,
+    request_id: String,
+    resolution: InteractionResolution,
+) -> Result<(), ResolveInteractionCommandError> {
+    let outcome = match resolution {
+        InteractionResolution::Selected { option_id } => interaction_broker
+            .resolve_with_option_id(session_id, &request_id, &option_id)
+            .await
+            .map(InteractionBrokerOutcome::Permission),
+        InteractionResolution::Decision(decision) => interaction_broker
+            .resolve_with_decision(session_id, &request_id, decision)
+            .await
+            .map(InteractionBrokerOutcome::Permission),
+        InteractionResolution::Submitted { answers } => interaction_broker
+            .submit_user_input(session_id, &request_id, answers)
+            .await
+            .map(InteractionBrokerOutcome::UserInput),
+        InteractionResolution::Accepted { fields } => interaction_broker
+            .accept_mcp_elicitation(session_id, &request_id, fields)
+            .await
+            .map(InteractionBrokerOutcome::McpElicitation),
+        InteractionResolution::Declined => interaction_broker
+            .decline_mcp_elicitation(session_id, &request_id)
+            .await
+            .map(InteractionBrokerOutcome::McpElicitation),
+        InteractionResolution::Cancelled => {
+            interaction_broker
+                .cancel(session_id, &request_id, InteractionCancelOutcome::Cancelled)
+                .await
+        }
+        InteractionResolution::Dismissed => {
+            interaction_broker
+                .cancel(session_id, &request_id, InteractionCancelOutcome::Dismissed)
+                .await
+        }
+    }
+    .map_err(map_resolve_interaction_error)?;
+
+    let (kind, contract_outcome) = broker_outcome_to_interaction_event(outcome);
+
+    {
+        let mut sink = event_sink.lock().await;
+        sink.interaction_resolved(request_id.clone(), kind, contract_outcome);
+    }
+    handle.remove_pending_interaction(&request_id).await;
+    Ok(())
+}
+
+async fn resolve_pending_interactions(
+    handle: &Arc<LiveSessionHandle>,
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    interaction_broker: &Arc<InteractionBroker>,
+    session_id: &str,
+    resolution: InteractionResolution,
+) {
+    let broker_outcome = match resolution {
+        InteractionResolution::Cancelled => InteractionCancelOutcome::Cancelled,
+        InteractionResolution::Dismissed => InteractionCancelOutcome::Dismissed,
+        InteractionResolution::Selected { .. }
+        | InteractionResolution::Decision(_)
+        | InteractionResolution::Submitted { .. }
+        | InteractionResolution::Accepted { .. }
+        | InteractionResolution::Declined => {
+            tracing::warn!(
+                session_id = %session_id,
+                resolution = ?resolution,
+                "cleanup attempted non-terminal interaction resolution"
+            );
+            return;
+        }
+    };
+
+    let cancelled = {
+        let mut sink = event_sink.lock().await;
+        let cancelled = interaction_broker
+            .cancel_session(session_id, broker_outcome)
+            .await;
+
+        for interaction in &cancelled {
+            let (kind, outcome) = broker_outcome_to_interaction_event(interaction.outcome.clone());
+            sink.interaction_resolved(interaction.request_id.clone(), kind, outcome);
+        }
+
+        cancelled
+    };
+
+    for interaction in cancelled {
+        handle
+            .remove_pending_interaction(&interaction.request_id)
+            .await;
+    }
+}
+
+fn broker_outcome_to_interaction_event(
+    outcome: InteractionBrokerOutcome,
+) -> (InteractionKind, InteractionOutcome) {
+    match outcome {
+        InteractionBrokerOutcome::Permission(outcome) => (
+            InteractionKind::Permission,
+            permission_outcome_to_interaction_outcome(outcome),
+        ),
+        InteractionBrokerOutcome::UserInput(outcome) => (
+            InteractionKind::UserInput,
+            user_input_outcome_to_interaction_outcome(outcome),
+        ),
+        InteractionBrokerOutcome::McpElicitation(outcome) => (
+            InteractionKind::McpElicitation,
+            mcp_elicitation_outcome_to_interaction_outcome(outcome),
+        ),
+    }
+}
+
+fn build_client_capabilities(
+    source_agent_kind: &str,
+    resolved_agent: &ResolvedAgent,
+) -> acp::ClientCapabilities {
+    let mut meta = serde_json::Map::new();
+
+    if source_agent_kind == AgentKind::Codex.as_str() {
+        let mut codex_capabilities = serde_json::Map::from_iter([(
+            "requestUserInput".to_string(),
+            serde_json::Value::Bool(true),
+        )]);
+        if should_advertise_codex_mcp_elicitation(source_agent_kind, resolved_agent) {
+            codex_capabilities.insert("mcpElicitation".to_string(), serde_json::Value::Bool(true));
+        }
+        meta.insert(
+            "codex".to_string(),
+            serde_json::Value::Object(codex_capabilities),
+        );
+    }
+
+    if source_agent_kind == AgentKind::Claude.as_str() {
+        meta.insert(
+            "claude".to_string(),
+            serde_json::Value::Object(serde_json::Map::from_iter([(
+                "mcpElicitation".to_string(),
+                serde_json::Value::Bool(true),
+            )])),
+        );
+    }
+
+    acp::ClientCapabilities::new().meta(acp::Meta::from_iter(meta))
+}
+
+fn should_advertise_codex_mcp_elicitation(
+    source_agent_kind: &str,
+    resolved_agent: &ResolvedAgent,
+) -> bool {
+    source_agent_kind == AgentKind::Codex.as_str()
+        && resolved_agent.agent_process.source.as_deref() == Some("override")
+}
+
+fn permission_outcome_to_interaction_outcome(outcome: PermissionOutcome) -> InteractionOutcome {
+    match outcome {
+        PermissionOutcome::Selected { option_id } => InteractionOutcome::Selected { option_id },
+        PermissionOutcome::Cancelled => InteractionOutcome::Cancelled,
+        PermissionOutcome::Dismissed => InteractionOutcome::Dismissed,
+    }
+}
+
+fn user_input_outcome_to_interaction_outcome(outcome: UserInputOutcome) -> InteractionOutcome {
+    match outcome {
+        UserInputOutcome::Submitted {
+            answered_question_ids,
+            ..
+        } => InteractionOutcome::Submitted {
+            answered_question_ids,
+        },
+        UserInputOutcome::Cancelled => InteractionOutcome::Cancelled,
+        UserInputOutcome::Dismissed => InteractionOutcome::Dismissed,
+    }
+}
+
+fn mcp_elicitation_outcome_to_interaction_outcome(
+    outcome: McpElicitationOutcome,
+) -> InteractionOutcome {
+    match outcome {
+        McpElicitationOutcome::Accepted {
+            accepted_field_ids, ..
+        } => InteractionOutcome::Accepted { accepted_field_ids },
+        McpElicitationOutcome::Declined => InteractionOutcome::Declined,
+        McpElicitationOutcome::Cancelled => InteractionOutcome::Cancelled,
+        McpElicitationOutcome::Dismissed => InteractionOutcome::Dismissed,
+    }
+}
+
+fn map_resolve_interaction_error(error: ResolveInteractionError) -> ResolveInteractionCommandError {
+    match error {
+        ResolveInteractionError::NotFound => ResolveInteractionCommandError::NotFound,
+        ResolveInteractionError::KindMismatch => ResolveInteractionCommandError::KindMismatch,
+        ResolveInteractionError::InvalidOptionId => ResolveInteractionCommandError::InvalidOptionId,
+        ResolveInteractionError::InvalidQuestionId => {
+            ResolveInteractionCommandError::InvalidQuestionId
+        }
+        ResolveInteractionError::DuplicateQuestionAnswer => {
+            ResolveInteractionCommandError::DuplicateQuestionAnswer
+        }
+        ResolveInteractionError::MissingQuestionAnswer => {
+            ResolveInteractionCommandError::MissingQuestionAnswer
+        }
+        ResolveInteractionError::InvalidSelectedOptionLabel => {
+            ResolveInteractionCommandError::InvalidSelectedOptionLabel
+        }
+        ResolveInteractionError::InvalidMcpFieldId => {
+            ResolveInteractionCommandError::InvalidMcpFieldId
+        }
+        ResolveInteractionError::DuplicateMcpField => {
+            ResolveInteractionCommandError::DuplicateMcpField
+        }
+        ResolveInteractionError::MissingMcpField => ResolveInteractionCommandError::MissingMcpField,
+        ResolveInteractionError::InvalidMcpFieldValue => {
+            ResolveInteractionCommandError::InvalidMcpFieldValue
+        }
+        ResolveInteractionError::NotMcpUrlElicitation => {
+            ResolveInteractionCommandError::NotMcpUrlElicitation
         }
     }
 }
@@ -3437,28 +3869,34 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use super::{
-        build_system_prompt_meta, classify_agent_stderr_line, finalize_established_actor_exit,
-        find_select_option_for_request, handle_notification,
+        build_client_capabilities, build_system_prompt_meta, classify_agent_stderr_line,
+        finalize_established_actor_exit, find_select_option_for_request, handle_notification,
         handle_notification_with_resume_replay_filter, is_missing_load_session_resource,
         is_mode_config_request, is_model_config_request, load_startup_restore_snapshot,
         merge_spawn_env, normalized_key_rank, pending_config_rank, persisted_control_values,
-        sanitize_agent_stderr_line, serialize_meta, should_try_direct_claude_model_setter,
-        tracked_config_purpose, ActorExitDisposition, AgentStderrSeverity,
-        LiveSessionExecutionSnapshot, LiveSessionHandle, NativeSessionStartupDisposition,
-        PersistedSessionConfigState, ResumeReplayFilter, SessionCommand, SessionStartupState,
-        IDLE_RESUME_REPLAY_QUIET_WINDOW,
+        resolve_pending_interactions, sanitize_agent_stderr_line, serialize_meta,
+        should_try_direct_claude_model_setter, tracked_config_purpose, ActorExitDisposition,
+        AgentStderrSeverity, InteractionResolution, LiveSessionExecutionSnapshot,
+        LiveSessionHandle, NativeSessionStartupDisposition, PersistedSessionConfigState,
+        ResumeReplayFilter, SessionCommand, SessionStartupState, IDLE_RESUME_REPLAY_QUIET_WINDOW,
     };
     use crate::acp::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
     use crate::acp::event_sink::SessionEventSink;
-    use crate::agents::model::AgentKind;
+    use crate::acp::permission_broker::{InteractionBroker, PermissionOutcome};
+    use crate::agents::model::{
+        AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus,
+        ResolvedArtifact,
+    };
+    use crate::agents::registry::built_in_registry;
     use crate::persistence::Db;
     use crate::sessions::live_config::{snapshot_to_record, NormalizedControlKind};
     use crate::sessions::{model::SessionRecord, store::SessionStore};
     use agent_client_protocol as acp;
     use anyharness_contract::v1::{
-        NormalizedSessionControl, NormalizedSessionControlValue, NormalizedSessionControls,
-        PendingApprovalSummary, SessionEventEnvelope, SessionExecutionPhase,
-        SessionLiveConfigSnapshot,
+        InteractionKind, NormalizedSessionControl, NormalizedSessionControlValue,
+        NormalizedSessionControls, PendingInteractionPayloadSummary, PendingInteractionSource,
+        PendingInteractionSummary, PermissionInteractionOption, PermissionInteractionOptionKind,
+        SessionEventEnvelope, SessionExecutionPhase, SessionLiveConfigSnapshot,
     };
     use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 
@@ -3477,6 +3915,69 @@ mod tests {
         let line = "2026-03-28T03:11:55.593240Z INFO codex_otel.log_only";
 
         assert_eq!(classify_agent_stderr_line(line), AgentStderrSeverity::Debug);
+    }
+
+    #[test]
+    fn client_capabilities_preserve_codex_managed_gate() {
+        let capabilities = build_client_capabilities(
+            AgentKind::Codex.as_str(),
+            &resolved_agent_with_source(AgentKind::Codex, "managed"),
+        );
+
+        assert_eq!(
+            capability_bool(&capabilities, "codex", "requestUserInput"),
+            Some(true)
+        );
+        assert_eq!(
+            capability_bool(&capabilities, "codex", "mcpElicitation"),
+            None
+        );
+        assert_eq!(
+            capability_bool(&capabilities, "claude", "mcpElicitation"),
+            None
+        );
+    }
+
+    #[test]
+    fn client_capabilities_preserve_codex_override_gate() {
+        let capabilities = build_client_capabilities(
+            AgentKind::Codex.as_str(),
+            &resolved_agent_with_source(AgentKind::Codex, "override"),
+        );
+
+        assert_eq!(
+            capability_bool(&capabilities, "codex", "requestUserInput"),
+            Some(true)
+        );
+        assert_eq!(
+            capability_bool(&capabilities, "codex", "mcpElicitation"),
+            Some(true)
+        );
+        assert_eq!(
+            capability_bool(&capabilities, "claude", "mcpElicitation"),
+            None
+        );
+    }
+
+    #[test]
+    fn client_capabilities_advertise_claude_mcp_only() {
+        let capabilities = build_client_capabilities(
+            AgentKind::Claude.as_str(),
+            &resolved_agent_with_source(AgentKind::Claude, "managed"),
+        );
+
+        assert_eq!(
+            capability_bool(&capabilities, "claude", "mcpElicitation"),
+            Some(true)
+        );
+        assert_eq!(
+            capability_bool(&capabilities, "claude", "requestUserInput"),
+            None
+        );
+        assert_eq!(
+            capability_bool(&capabilities, "codex", "requestUserInput"),
+            None
+        );
     }
 
     #[test]
@@ -3910,16 +4411,13 @@ mod tests {
 
     #[tokio::test]
     async fn finalize_error_exit_cancels_pending_permission_and_marks_session_errored() {
-        let (store, event_sink, handle) = actor_exit_test_context(Some(PendingApprovalSummary {
-            request_id: "perm-1".to_string(),
-            title: "Run command".to_string(),
-            tool_call_id: Some("tool-1".to_string()),
-            tool_kind: Some("execute".to_string()),
-        }));
+        let (store, event_sink, interaction_broker, handle) =
+            actor_exit_test_context(Some(pending_interaction_summary())).await;
 
         finalize_established_actor_exit(
             &handle,
             &event_sink,
+            &interaction_broker,
             &store,
             "session-1",
             ActorExitDisposition::Error {
@@ -3936,17 +4434,17 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             event_types,
-            vec!["permission_resolved", "error", "session_ended"]
+            vec!["interaction_resolved", "error", "session_ended"]
         );
 
-        let payload: serde_json::Value =
-            serde_json::from_str(&events[0].payload_json).expect("deserialize permission resolved");
+        let payload: serde_json::Value = serde_json::from_str(&events[0].payload_json)
+            .expect("deserialize interaction resolved");
         assert_eq!(payload["requestId"], "perm-1");
         assert_eq!(payload["outcome"]["outcome"], "cancelled");
 
         let snapshot = handle.execution_snapshot().await;
         assert_eq!(snapshot.phase, SessionExecutionPhase::Errored);
-        assert!(snapshot.pending_approval.is_none());
+        assert!(snapshot.pending_interactions.is_empty());
 
         let record = store
             .find_by_id("session-1")
@@ -3957,16 +4455,13 @@ mod tests {
 
     #[tokio::test]
     async fn finalize_close_exit_cancels_pending_permission_and_emits_closed_event() {
-        let (store, event_sink, handle) = actor_exit_test_context(Some(PendingApprovalSummary {
-            request_id: "perm-1".to_string(),
-            title: "Run command".to_string(),
-            tool_call_id: Some("tool-1".to_string()),
-            tool_kind: Some("execute".to_string()),
-        }));
+        let (store, event_sink, interaction_broker, handle) =
+            actor_exit_test_context(Some(pending_interaction_summary())).await;
 
         finalize_established_actor_exit(
             &handle,
             &event_sink,
+            &interaction_broker,
             &store,
             "session-1",
             ActorExitDisposition::Close,
@@ -3978,11 +4473,11 @@ mod tests {
             .iter()
             .map(|event| event.event_type.as_str())
             .collect::<Vec<_>>();
-        assert_eq!(event_types, vec!["permission_resolved", "session_ended"]);
+        assert_eq!(event_types, vec!["interaction_resolved", "session_ended"]);
 
         let snapshot = handle.execution_snapshot().await;
         assert_eq!(snapshot.phase, SessionExecutionPhase::Closed);
-        assert!(snapshot.pending_approval.is_none());
+        assert!(snapshot.pending_interactions.is_empty());
 
         let record = store
             .find_by_id("session-1")
@@ -3993,16 +4488,13 @@ mod tests {
 
     #[tokio::test]
     async fn finalize_dismiss_exit_cancels_pending_permission_without_terminal_event() {
-        let (store, event_sink, handle) = actor_exit_test_context(Some(PendingApprovalSummary {
-            request_id: "perm-1".to_string(),
-            title: "Run command".to_string(),
-            tool_call_id: Some("tool-1".to_string()),
-            tool_kind: Some("execute".to_string()),
-        }));
+        let (store, event_sink, interaction_broker, handle) =
+            actor_exit_test_context(Some(pending_interaction_summary())).await;
 
         finalize_established_actor_exit(
             &handle,
             &event_sink,
+            &interaction_broker,
             &store,
             "session-1",
             ActorExitDisposition::Dismiss,
@@ -4014,20 +4506,21 @@ mod tests {
             .iter()
             .map(|event| event.event_type.as_str())
             .collect::<Vec<_>>();
-        assert_eq!(event_types, vec!["permission_resolved"]);
+        assert_eq!(event_types, vec!["interaction_resolved"]);
 
         let snapshot = handle.execution_snapshot().await;
         assert_eq!(snapshot.phase, SessionExecutionPhase::Idle);
-        assert!(snapshot.pending_approval.is_none());
+        assert!(snapshot.pending_interactions.is_empty());
     }
 
     #[tokio::test]
-    async fn finalize_exit_without_pending_permission_skips_permission_resolved_event() {
-        let (store, event_sink, handle) = actor_exit_test_context(None);
+    async fn finalize_exit_without_pending_interaction_skips_interaction_resolved_event() {
+        let (store, event_sink, interaction_broker, handle) = actor_exit_test_context(None).await;
 
         finalize_established_actor_exit(
             &handle,
             &event_sink,
+            &interaction_broker,
             &store,
             "session-1",
             ActorExitDisposition::Error {
@@ -4044,6 +4537,92 @@ mod tests {
             .map(|event| event.event_type)
             .collect::<Vec<_>>();
         assert_eq!(event_types, vec!["error", "session_ended"]);
+    }
+
+    #[tokio::test]
+    async fn cleanup_resolves_pending_permission_immediately_and_finalizes_once() {
+        let (store, event_sink, interaction_broker, handle) =
+            actor_exit_test_context(Some(pending_interaction_summary())).await;
+
+        resolve_pending_interactions(
+            &handle,
+            &event_sink,
+            &interaction_broker,
+            "session-1",
+            InteractionResolution::Cancelled,
+        )
+        .await;
+
+        let events = store.list_events("session-1").expect("list events");
+        let event_types = events
+            .iter()
+            .map(|event| event.event_type.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(event_types, vec!["interaction_resolved"]);
+
+        let snapshot = handle.execution_snapshot().await;
+        assert_eq!(snapshot.phase, SessionExecutionPhase::Running);
+        assert!(snapshot.pending_interactions.is_empty());
+
+        finalize_established_actor_exit(
+            &handle,
+            &event_sink,
+            &interaction_broker,
+            &store,
+            "session-1",
+            ActorExitDisposition::Close,
+        )
+        .await;
+
+        let event_types = store
+            .list_events("session-1")
+            .expect("list events")
+            .into_iter()
+            .map(|event| event.event_type)
+            .collect::<Vec<_>>();
+        assert_eq!(event_types, vec!["interaction_resolved", "session_ended"]);
+    }
+
+    #[tokio::test]
+    async fn cleanup_cancels_registered_permission_not_yet_in_summary() {
+        let (store, event_sink, interaction_broker, handle) = actor_exit_test_context(None).await;
+        let wait = interaction_broker
+            .register_permission(
+                "session-1",
+                "hidden-perm",
+                &[acp::PermissionOption::new(
+                    acp::PermissionOptionId::new("allow"),
+                    "Allow",
+                    acp::PermissionOptionKind::AllowOnce,
+                )],
+            )
+            .await;
+
+        resolve_pending_interactions(
+            &handle,
+            &event_sink,
+            &interaction_broker,
+            "session-1",
+            InteractionResolution::Cancelled,
+        )
+        .await;
+
+        assert_eq!(wait.wait().await, PermissionOutcome::Cancelled);
+
+        let events = store.list_events("session-1").expect("list events");
+        let event_types = events
+            .iter()
+            .map(|event| event.event_type.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(event_types, vec!["interaction_resolved"]);
+
+        let payload: serde_json::Value = serde_json::from_str(&events[0].payload_json)
+            .expect("deserialize interaction resolved");
+        assert_eq!(payload["requestId"], "hidden-perm");
+        assert_eq!(payload["outcome"]["outcome"], "cancelled");
+
+        let snapshot = handle.execution_snapshot().await;
+        assert!(snapshot.pending_interactions.is_empty());
     }
 
     #[test]
@@ -4346,11 +4925,12 @@ mod tests {
         assert!(!is_missing_load_session_resource(&error, "session-123"));
     }
 
-    fn actor_exit_test_context(
-        pending_approval: Option<PendingApprovalSummary>,
+    async fn actor_exit_test_context(
+        pending_interaction: Option<PendingInteractionSummary>,
     ) -> (
         SessionStore,
         Arc<Mutex<SessionEventSink>>,
+        Arc<InteractionBroker>,
         Arc<LiveSessionHandle>,
     ) {
         let db = Db::open_in_memory().expect("open db");
@@ -4391,9 +4971,28 @@ mod tests {
 
         let (command_tx, _command_rx) = mpsc::channel::<SessionCommand>(4);
         let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(16);
-        let mut execution =
-            LiveSessionExecutionSnapshot::new(SessionExecutionPhase::AwaitingPermission);
-        execution.pending_approval = pending_approval;
+        let phase = if pending_interaction.is_some() {
+            SessionExecutionPhase::AwaitingInteraction
+        } else {
+            SessionExecutionPhase::Running
+        };
+        let mut execution = LiveSessionExecutionSnapshot::new(phase);
+        let interaction_broker = Arc::new(InteractionBroker::new());
+        if let Some(pending_interaction) = pending_interaction {
+            let request_id = pending_interaction.request_id.clone();
+            execution.pending_interactions.push(pending_interaction);
+            interaction_broker
+                .insert_pending_for_test(
+                    "session-1",
+                    &request_id,
+                    vec![acp::PermissionOption::new(
+                        acp::PermissionOptionId::new("allow"),
+                        "Allow",
+                        acp::PermissionOptionKind::AllowOnce,
+                    )],
+                )
+                .await;
+        }
 
         let handle = Arc::new(LiveSessionHandle {
             session_id: "session-1".to_string(),
@@ -4412,7 +5011,66 @@ mod tests {
             store.clone(),
         )));
 
-        (store, event_sink, handle)
+        (store, event_sink, interaction_broker, handle)
+    }
+
+    fn pending_interaction_summary() -> PendingInteractionSummary {
+        PendingInteractionSummary {
+            request_id: "perm-1".to_string(),
+            kind: InteractionKind::Permission,
+            title: "Run command".to_string(),
+            description: None,
+            source: PendingInteractionSource {
+                tool_call_id: Some("tool-1".to_string()),
+                tool_kind: Some("execute".to_string()),
+                tool_status: None,
+            },
+            payload: PendingInteractionPayloadSummary::Permission {
+                options: vec![PermissionInteractionOption {
+                    option_id: "allow".to_string(),
+                    label: "Allow".to_string(),
+                    kind: PermissionInteractionOptionKind::AllowOnce,
+                }],
+                context: None,
+            },
+        }
+    }
+
+    fn resolved_agent_with_source(kind: AgentKind, source: &str) -> ResolvedAgent {
+        let descriptor = built_in_registry()
+            .into_iter()
+            .find(|descriptor| descriptor.kind == kind)
+            .expect("missing descriptor");
+        let artifact_path = format!("/tmp/{}/agent", kind.as_str());
+
+        ResolvedAgent {
+            descriptor,
+            status: ResolvedAgentStatus::Ready,
+            credential_state: CredentialState::Ready,
+            native: None,
+            agent_process: ResolvedArtifact {
+                role: ArtifactRole::AgentProcess,
+                installed: true,
+                source: Some(source.to_string()),
+                version: None,
+                path: Some(PathBuf::from(artifact_path)),
+                message: None,
+            },
+            spawn: None,
+        }
+    }
+
+    fn capability_bool(
+        capabilities: &acp::ClientCapabilities,
+        agent: &str,
+        capability: &str,
+    ) -> Option<bool> {
+        capabilities
+            .meta
+            .as_ref()?
+            .get(agent)?
+            .get(capability)?
+            .as_bool()
     }
 
     fn test_background_work_registry(store: &SessionStore) -> BackgroundWorkRegistry {

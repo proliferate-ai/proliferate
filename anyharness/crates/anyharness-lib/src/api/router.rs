@@ -273,10 +273,14 @@ pub fn build_router(state: AppState) -> Router {
             "/sessions/{session_id}/raw-notifications",
             get(sessions::list_session_raw_notifications),
         )
-        // Permissions
+        // Interactions
         .route(
-            "/sessions/{session_id}/permissions/{request_id}/resolve",
-            post(sessions::resolve_permission),
+            "/sessions/{session_id}/interactions/{request_id}/resolve",
+            post(sessions::resolve_interaction),
+        )
+        .route(
+            "/sessions/{session_id}/interactions/{request_id}/mcp-url/reveal",
+            post(sessions::reveal_mcp_elicitation_url),
         )
         // SSE
         .route(

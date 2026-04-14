@@ -56,6 +56,12 @@ export function describeToolCallDisplay(
         hint: cleanedToolName && normalizedToolName !== "fetch" ? cleanedToolName : undefined,
         iconKey: "settings",
       };
+    case "hook":
+      return {
+        label: "Hook",
+        hint: cleanedToolName || nativeName || undefined,
+        iconKey: "settings",
+      };
     case "mode_switch":
       return {
         label: "Mode change",

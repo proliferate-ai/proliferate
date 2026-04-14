@@ -3,7 +3,10 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::{SessionLiveConfigSnapshot, SessionMcpServer};
+use super::{
+    InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
+    PermissionInteractionOption, SessionLiveConfigSnapshot, SessionMcpServer, UserInputQuestion,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -21,7 +24,7 @@ pub enum SessionStatus {
 pub enum SessionExecutionPhase {
     Starting,
     Running,
-    AwaitingPermission,
+    AwaitingInteraction,
     Idle,
     Errored,
     Closed,
@@ -29,13 +32,44 @@ pub enum SessionExecutionPhase {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct PendingApprovalSummary {
+pub struct PendingInteractionSummary {
     pub request_id: String,
+    pub kind: InteractionKind,
     pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub source: PendingInteractionSource,
+    pub payload: PendingInteractionPayloadSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingInteractionSource {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_status: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum PendingInteractionPayloadSummary {
+    Permission {
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        options: Vec<PermissionInteractionOption>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        context: Option<PermissionInteractionContext>,
+    },
+    UserInput {
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        questions: Vec<UserInputQuestion>,
+    },
+    McpElicitation {
+        #[serde(flatten)]
+        payload: McpElicitationInteractionPayload,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -43,8 +77,8 @@ pub struct PendingApprovalSummary {
 pub struct SessionExecutionSummary {
     pub phase: SessionExecutionPhase,
     pub has_live_handle: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pending_approval: Option<PendingApprovalSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending_interactions: Vec<PendingInteractionSummary>,
     pub updated_at: String,
 }
 
@@ -171,18 +205,158 @@ pub struct EditPendingPromptRequest {
     pub text: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "outcome", rename_all = "snake_case")]
+pub enum ResolveInteractionRequest {
+    #[serde(rename_all = "camelCase")]
+    Selected {
+        option_id: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    Decision {
+        decision: InteractionDecision,
+    },
+    #[serde(rename_all = "camelCase")]
+    Submitted {
+        answers: Vec<UserInputSubmittedAnswer>,
+    },
+    #[serde(rename_all = "camelCase")]
+    Accepted {
+        fields: Vec<McpElicitationSubmittedField>,
+    },
+    Declined,
+    Cancelled,
+    Dismissed,
+}
+
+impl fmt::Debug for ResolveInteractionRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Selected { option_id } => f
+                .debug_struct("Selected")
+                .field("option_id", option_id)
+                .finish(),
+            Self::Decision { decision } => f
+                .debug_struct("Decision")
+                .field("decision", decision)
+                .finish(),
+            Self::Submitted { answers } => f
+                .debug_struct("Submitted")
+                .field("answer_count", &answers.len())
+                .field(
+                    "question_ids",
+                    &answers
+                        .iter()
+                        .map(|answer| answer.question_id.as_str())
+                        .collect::<Vec<_>>(),
+                )
+                .finish(),
+            Self::Accepted { fields } => f
+                .debug_struct("Accepted")
+                .field("field_count", &fields.len())
+                .field(
+                    "field_ids",
+                    &fields
+                        .iter()
+                        .map(|field| field.field_id.as_str())
+                        .collect::<Vec<_>>(),
+                )
+                .finish(),
+            Self::Declined => f.write_str("Declined"),
+            Self::Cancelled => f.write_str("Cancelled"),
+            Self::Dismissed => f.write_str("Dismissed"),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct ResolvePermissionRequest {
+pub struct UserInputSubmittedAnswer {
+    pub question_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub decision: Option<PermissionDecision>,
+    pub selected_option_label: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub option_id: Option<String>,
+    pub text: Option<String>,
+}
+
+impl fmt::Debug for UserInputSubmittedAnswer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("UserInputSubmittedAnswer")
+            .field("question_id", &self.question_id)
+            .field(
+                "has_selected_option_label",
+                &self.selected_option_label.is_some(),
+            )
+            .field("has_text", &self.text.is_some())
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct McpElicitationSubmittedField {
+    pub field_id: String,
+    pub value: McpElicitationSubmittedValue,
+}
+
+impl fmt::Debug for McpElicitationSubmittedField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("McpElicitationSubmittedField")
+            .field("field_id", &self.field_id)
+            .field("value_kind", &self.value.kind())
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum McpElicitationSubmittedValue {
+    String { value: String },
+    Integer { value: i64 },
+    Number { value: f64 },
+    Boolean { value: bool },
+    Option { option_id: String },
+    OptionArray { option_ids: Vec<String> },
+}
+
+impl McpElicitationSubmittedValue {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::String { .. } => "string",
+            Self::Integer { .. } => "integer",
+            Self::Number { .. } => "number",
+            Self::Boolean { .. } => "boolean",
+            Self::Option { .. } => "option",
+            Self::OptionArray { .. } => "option_array",
+        }
+    }
+}
+
+impl fmt::Debug for McpElicitationSubmittedValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("McpElicitationSubmittedValue")
+            .field(&self.kind())
+            .finish()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct McpElicitationUrlRevealResponse {
+    pub url: String,
+}
+
+impl fmt::Debug for McpElicitationUrlRevealResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("McpElicitationUrlRevealResponse")
+            .field("url", &"<redacted>")
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum PermissionDecision {
+pub enum InteractionDecision {
     Allow,
     Deny,
 }
@@ -323,5 +497,34 @@ mod tests {
 
         let json = serde_json::to_value(&request).expect("serialize title update");
         assert_eq!(json, serde_json::json!({ "title": "Tighten retry logic" }));
+    }
+
+    #[test]
+    fn resolve_interaction_request_debug_redacts_submitted_answers() {
+        let request = ResolveInteractionRequest::Submitted {
+            answers: vec![UserInputSubmittedAnswer {
+                question_id: "secret".to_string(),
+                selected_option_label: Some("do-not-log-option".to_string()),
+                text: Some("do-not-log-text".to_string()),
+            }],
+        };
+
+        let debug = format!("{request:?}");
+        assert!(debug.contains("secret"));
+        assert!(debug.contains("answer_count"));
+        assert!(!debug.contains("do-not-log-option"));
+        assert!(!debug.contains("do-not-log-text"));
+    }
+
+    #[test]
+    fn mcp_url_reveal_response_debug_redacts_full_url() {
+        let response = McpElicitationUrlRevealResponse {
+            url: "https://accounts.example.com/oauth?token=do-not-log".to_string(),
+        };
+
+        let debug = format!("{response:?}");
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains("do-not-log"));
+        assert!(!debug.contains("accounts.example.com"));
     }
 }

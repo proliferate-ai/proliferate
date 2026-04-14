@@ -97,7 +97,7 @@ Owns session-facing transport types:
 - session summary
 - create and reconfigure requests
 - prompt request and response
-- permission resolution request
+- interaction resolution request
 
 ### `files.rs`
 
@@ -134,11 +134,23 @@ Owns the normalized session event stream:
 - lifecycle events
 - transcript item payloads
 - config updates
-- permission events
+- interaction events
 - error events
 
 This file is the public transcript/event contract and must remain stable and
 well-structured.
+
+Interaction payloads should expose only typed, UI-safe fields. Adapter-specific
+metadata that becomes stable UI behavior must be promoted into a typed contract
+field, such as `PermissionInteractionContext`, instead of being read from raw
+ACP `_meta` or raw tool input/output blobs.
+
+Adapter permission producers may provide display-safe context in vendor-scoped
+ACP metadata, currently `_meta.claudeCode.permissionContext` and
+`_meta.gemini.permissionContext`. `anyharness-lib/src/acp` is the only layer
+that should read those keys; SDK and Desktop consumers must use the normalized
+typed `PermissionInteractionContext` carried by interaction events and pending
+interaction summaries.
 
 ## Transport-Only Rule
 

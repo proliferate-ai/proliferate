@@ -70,7 +70,7 @@ describe("runtime agent planning compatibility", () => {
           timeoutMs: getPlanningPromptTimeoutMs(planningCase.agentKind),
           stopWhen: (envelope) =>
             isPlanEnvelope(envelope)
-            || envelope.event.type === "permission_requested"
+            || envelope.event.type === "interaction_requested"
             || envelope.event.type === "turn_ended"
             || envelope.event.type === "session_ended",
         });

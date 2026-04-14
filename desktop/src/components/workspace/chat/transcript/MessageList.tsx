@@ -67,6 +67,7 @@ import {
 } from "@/lib/domain/chat/pending-prompts";
 import {
   lastTopLevelItemIsAssistantProseWithText,
+  latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
 } from "@/lib/domain/chat/transcript-trailing-status";
 import type {
@@ -200,7 +201,11 @@ export function MessageList({
                 transcript,
                 isLatestTurnInProgress,
               })
-                ? resolveTurnTrailingStatus(turn.startedAt, sessionViewState)
+                ? resolveTurnTrailingStatus(
+                    turn.startedAt,
+                    sessionViewState,
+                    latestTransientStatusText(turn, transcript),
+                  )
                 : null;
 
             return (
@@ -276,7 +281,17 @@ function resolvePendingPromptTrailingStatus(
 function resolveTurnTrailingStatus(
   startedAt: string,
   sessionViewState: SessionViewState,
+  transientStatusText: string | null,
 ): ReactNode {
+  if (sessionViewState === "working" && transientStatusText) {
+    return (
+      <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
+        <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 truncate">{transientStatusText}</span>
+      </div>
+    );
+  }
+
   if (sessionViewState === "working") {
     return <StreamingIndicator startedAt={startedAt} />;
   }

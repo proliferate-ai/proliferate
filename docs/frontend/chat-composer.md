@@ -81,7 +81,10 @@ There is **one** `ApprovalCard` component with two exports:
 
 Do not split this into `ExecuteApprovalCard` / `EditApprovalCard` / `SwitchModeApprovalCard`. All three kinds use the same shell and the same button row. If a variant ever needs genuinely different rendering (e.g. a radio group with an inline rejection textarea for switch_mode), add a branch inside `ApprovalCard` on `pendingApproval.toolKind` — do not fork the component.
 
-`toolKind` is available on `pendingApproval` (preserved by the SDK reducer at `anyharness/sdk/src/reducer/transcript.ts:applyPermissionRequested`). Do not parse `toolCallId` with regexes.
+`toolKind` is available on the derived `pendingApproval` from pending
+interactions (preserved by the SDK reducer at
+`anyharness/sdk/src/reducer/transcript.ts:applyInteractionRequested`). Do not
+parse `toolCallId` with regexes.
 
 ### 3.2 Claude plan body lives in the transcript
 

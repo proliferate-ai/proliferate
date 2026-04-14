@@ -136,7 +136,10 @@ class CloudWorkspaceHarness:
         async with self.runtime_client(connection) as client:
             response = await client.post("/v1/workspaces", json={"path": path})
             response.raise_for_status()
-            return response.json()
+            payload = response.json()
+            if isinstance(payload, dict) and isinstance(payload.get("workspace"), dict):
+                return payload["workspace"]
+            return payload
 
     async def run_runtime_command(
         self,

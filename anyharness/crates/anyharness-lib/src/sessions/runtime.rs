@@ -1,11 +1,13 @@
 use std::collections::{BTreeMap, HashMap};
+use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
 use anyharness_contract::v1::{
-    ConfigApplyState, Session, SessionExecutionSummary, SessionLiveConfigSnapshot,
-    WorkspaceExecutionSummary,
+    ConfigApplyState, InteractionKind, McpElicitationSubmittedField,
+    McpElicitationUrlRevealResponse, Session, SessionExecutionSummary, SessionLiveConfigSnapshot,
+    UserInputSubmittedAnswer, WorkspaceExecutionSummary,
 };
 
 use super::execution_summary::{
@@ -18,9 +20,11 @@ use super::mcp::{
 use super::model::SessionRecord;
 use super::service::SessionService;
 use crate::acp::manager::AcpManager;
+use crate::acp::permission_broker::PermissionDecision;
 use crate::acp::session_actor::{
-    LiveSessionHandle, PromptAcceptError, PromptAcceptance, QueueMutationError, SessionCommand,
-    SessionStartupStrategy, SetConfigOptionCommandError,
+    InteractionResolution, LiveSessionHandle, PromptAcceptError, PromptAcceptance,
+    QueueMutationError, ResolveInteractionCommandError, SessionCommand, SessionStartupStrategy,
+    SetConfigOptionCommandError,
 };
 use crate::agents::model::{AgentKind, ResolvedAgent};
 use crate::agents::registry::built_in_registry;
@@ -90,17 +94,70 @@ pub enum SessionLifecycleError {
     Internal(anyhow::Error),
 }
 
-#[derive(Debug, Clone)]
-pub enum PermissionResolution {
-    Allow,
-    Deny,
+#[derive(Clone)]
+pub enum InteractionResolutionRequest {
+    Decision(PermissionDecision),
     OptionId(String),
+    Submitted {
+        answers: Vec<UserInputSubmittedAnswer>,
+    },
+    Accepted {
+        fields: Vec<McpElicitationSubmittedField>,
+    },
+    Declined,
+    Cancelled,
+    Dismissed,
+}
+
+impl fmt::Debug for InteractionResolutionRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Decision(decision) => f.debug_tuple("Decision").field(decision).finish(),
+            Self::OptionId(option_id) => f.debug_tuple("OptionId").field(option_id).finish(),
+            Self::Submitted { answers } => f
+                .debug_struct("Submitted")
+                .field("answer_count", &answers.len())
+                .field(
+                    "question_ids",
+                    &answers
+                        .iter()
+                        .map(|answer| answer.question_id.as_str())
+                        .collect::<Vec<_>>(),
+                )
+                .finish(),
+            Self::Accepted { fields } => f
+                .debug_struct("Accepted")
+                .field("field_count", &fields.len())
+                .field(
+                    "field_ids",
+                    &fields
+                        .iter()
+                        .map(|field| field.field_id.as_str())
+                        .collect::<Vec<_>>(),
+                )
+                .finish(),
+            Self::Declined => f.write_str("Declined"),
+            Self::Cancelled => f.write_str("Cancelled"),
+            Self::Dismissed => f.write_str("Dismissed"),
+        }
+    }
 }
 
 #[derive(Debug)]
-pub enum ResolvePermissionError {
+pub enum ResolveInteractionError {
     SessionNotLive(String),
-    PermissionNotFound(String),
+    InteractionNotFound(String),
+    InteractionKindMismatch(String),
+    InvalidOptionId(String),
+    InvalidQuestionId(String),
+    DuplicateQuestionAnswer(String),
+    MissingQuestionAnswer(String),
+    InvalidSelectedOptionLabel(String),
+    InvalidMcpFieldId(String),
+    DuplicateMcpField(String),
+    MissingMcpField(String),
+    InvalidMcpFieldValue(String),
+    NotMcpUrlElicitation(String),
 }
 
 #[derive(Debug)]
@@ -921,51 +978,172 @@ impl SessionRuntime {
         Ok(Some(restored))
     }
 
-    pub async fn resolve_permission_request(
+    pub async fn resolve_interaction_request(
         &self,
         session_id: &str,
         request_id: &str,
-        resolution: PermissionResolution,
-    ) -> Result<(), ResolvePermissionError> {
+        resolution: InteractionResolutionRequest,
+    ) -> Result<(), ResolveInteractionError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
-            .map_err(|error| ResolvePermissionError::SessionNotLive(error.to_string()))?;
-        use crate::acp::permission_broker::PermissionDecision;
+            .map_err(|error| ResolveInteractionError::SessionNotLive(error.to_string()))?;
 
-        let _handle = self
+        let handle = self
             .acp_manager
             .get_handle(session_id)
             .await
-            .ok_or_else(|| ResolvePermissionError::SessionNotLive(session_id.to_string()))?;
+            .ok_or_else(|| ResolveInteractionError::SessionNotLive(session_id.to_string()))?;
 
-        let resolved = match resolution {
-            PermissionResolution::Allow => {
-                self.acp_manager
-                    .permission_broker()
-                    .resolve_with_decision(request_id, PermissionDecision::Allow)
-                    .await
-            }
-            PermissionResolution::Deny => {
-                self.acp_manager
-                    .permission_broker()
-                    .resolve_with_decision(request_id, PermissionDecision::Deny)
-                    .await
-            }
-            PermissionResolution::OptionId(option_id) => {
-                self.acp_manager
-                    .permission_broker()
-                    .resolve_with_option_id(request_id, &option_id)
-                    .await
-            }
-        };
+        let pending_kind = handle
+            .execution_snapshot()
+            .await
+            .pending_interactions
+            .iter()
+            .find(|pending| pending.request_id == request_id)
+            .map(|pending| pending.kind.clone())
+            .ok_or_else(|| ResolveInteractionError::InteractionNotFound(request_id.to_string()))?;
 
-        if !resolved {
-            return Err(ResolvePermissionError::PermissionNotFound(
+        let kind_matches = matches!(
+            (&resolution, pending_kind),
+            (
+                InteractionResolutionRequest::Decision(_),
+                InteractionKind::Permission
+            ) | (
+                InteractionResolutionRequest::OptionId(_),
+                InteractionKind::Permission
+            ) | (
+                InteractionResolutionRequest::Submitted { .. },
+                InteractionKind::UserInput
+            ) | (
+                InteractionResolutionRequest::Accepted { .. },
+                InteractionKind::McpElicitation
+            ) | (
+                InteractionResolutionRequest::Declined,
+                InteractionKind::McpElicitation
+            ) | (InteractionResolutionRequest::Cancelled, _)
+                | (InteractionResolutionRequest::Dismissed, _)
+        );
+        if !kind_matches {
+            return Err(ResolveInteractionError::InteractionKindMismatch(
                 request_id.to_string(),
             ));
         }
 
+        let actor_resolution = match resolution {
+            InteractionResolutionRequest::Decision(decision) => {
+                InteractionResolution::Decision(decision)
+            }
+            InteractionResolutionRequest::OptionId(option_id) => {
+                InteractionResolution::Selected { option_id }
+            }
+            InteractionResolutionRequest::Submitted { answers } => {
+                InteractionResolution::Submitted { answers }
+            }
+            InteractionResolutionRequest::Accepted { fields } => {
+                InteractionResolution::Accepted { fields }
+            }
+            InteractionResolutionRequest::Declined => InteractionResolution::Declined,
+            InteractionResolutionRequest::Cancelled => InteractionResolution::Cancelled,
+            InteractionResolutionRequest::Dismissed => InteractionResolution::Dismissed,
+        };
+
+        handle
+            .resolve_interaction(request_id.to_string(), actor_resolution)
+            .await
+            .map_err(|error| match error {
+                ResolveInteractionCommandError::NotFound => {
+                    ResolveInteractionError::InteractionNotFound(request_id.to_string())
+                }
+                ResolveInteractionCommandError::KindMismatch => {
+                    ResolveInteractionError::InteractionKindMismatch(request_id.to_string())
+                }
+                ResolveInteractionCommandError::InvalidOptionId => {
+                    ResolveInteractionError::InvalidOptionId(request_id.to_string())
+                }
+                ResolveInteractionCommandError::InvalidQuestionId => {
+                    ResolveInteractionError::InvalidQuestionId(request_id.to_string())
+                }
+                ResolveInteractionCommandError::DuplicateQuestionAnswer => {
+                    ResolveInteractionError::DuplicateQuestionAnswer(request_id.to_string())
+                }
+                ResolveInteractionCommandError::MissingQuestionAnswer => {
+                    ResolveInteractionError::MissingQuestionAnswer(request_id.to_string())
+                }
+                ResolveInteractionCommandError::InvalidSelectedOptionLabel => {
+                    ResolveInteractionError::InvalidSelectedOptionLabel(request_id.to_string())
+                }
+                ResolveInteractionCommandError::InvalidMcpFieldId => {
+                    ResolveInteractionError::InvalidMcpFieldId(request_id.to_string())
+                }
+                ResolveInteractionCommandError::DuplicateMcpField => {
+                    ResolveInteractionError::DuplicateMcpField(request_id.to_string())
+                }
+                ResolveInteractionCommandError::MissingMcpField => {
+                    ResolveInteractionError::MissingMcpField(request_id.to_string())
+                }
+                ResolveInteractionCommandError::InvalidMcpFieldValue => {
+                    ResolveInteractionError::InvalidMcpFieldValue(request_id.to_string())
+                }
+                ResolveInteractionCommandError::NotMcpUrlElicitation => {
+                    ResolveInteractionError::NotMcpUrlElicitation(request_id.to_string())
+                }
+                ResolveInteractionCommandError::ActorDead => {
+                    ResolveInteractionError::SessionNotLive(session_id.to_string())
+                }
+            })?;
+
         Ok(())
+    }
+
+    pub async fn reveal_mcp_elicitation_url(
+        &self,
+        session_id: &str,
+        request_id: &str,
+    ) -> Result<McpElicitationUrlRevealResponse, ResolveInteractionError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| ResolveInteractionError::SessionNotLive(error.to_string()))?;
+
+        let handle = self
+            .acp_manager
+            .get_handle(session_id)
+            .await
+            .ok_or_else(|| ResolveInteractionError::SessionNotLive(session_id.to_string()))?;
+
+        let pending_kind = handle
+            .execution_snapshot()
+            .await
+            .pending_interactions
+            .iter()
+            .find(|pending| pending.request_id == request_id)
+            .map(|pending| pending.kind.clone())
+            .ok_or_else(|| ResolveInteractionError::InteractionNotFound(request_id.to_string()))?;
+
+        if pending_kind != InteractionKind::McpElicitation {
+            return Err(ResolveInteractionError::InteractionKindMismatch(
+                request_id.to_string(),
+            ));
+        }
+
+        let url = self
+            .acp_manager
+            .interaction_broker()
+            .reveal_mcp_elicitation_url(session_id, request_id)
+            .await
+            .map_err(|error| match error {
+                crate::acp::permission_broker::ResolveInteractionError::NotFound => {
+                    ResolveInteractionError::InteractionNotFound(request_id.to_string())
+                }
+                crate::acp::permission_broker::ResolveInteractionError::KindMismatch => {
+                    ResolveInteractionError::InteractionKindMismatch(request_id.to_string())
+                }
+                crate::acp::permission_broker::ResolveInteractionError::NotMcpUrlElicitation => {
+                    ResolveInteractionError::NotMcpUrlElicitation(request_id.to_string())
+                }
+                _ => ResolveInteractionError::InvalidMcpFieldValue(request_id.to_string()),
+            })?;
+
+        Ok(McpElicitationUrlRevealResponse { url })
     }
 
     async fn ensure_live_session_handle(

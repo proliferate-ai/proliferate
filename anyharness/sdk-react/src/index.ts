@@ -112,7 +112,7 @@ export {
   useDismissSessionMutation,
   useCloseSessionMutation,
   useRestoreDismissedSessionMutation,
-  useResolveSessionPermissionMutation,
+  useResolveSessionInteractionMutation,
 } from "./hooks/sessions.js";
 export {
   useGitStatusQuery,

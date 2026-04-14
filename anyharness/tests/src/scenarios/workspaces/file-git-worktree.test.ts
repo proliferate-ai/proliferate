@@ -5,6 +5,7 @@ import { createRuntimeHarness, type RuntimeHarness } from "../../harness/runtime
 
 describe("runtime workspace operations", () => {
   let harness!: RuntimeHarness;
+  const notesPath = "anyharness-cloud-runtime-notes.md";
 
   beforeAll(async () => {
     harness = await createRuntimeHarness({ requireAgents: false });
@@ -24,19 +25,19 @@ describe("runtime workspace operations", () => {
       const repoRootId = resolved.repoRoot.id;
 
       const write = await harness.client.files.write(workspaceId, {
-        path: "notes.txt",
+        path: notesPath,
         content: "hello from anyharness\n",
         expectedVersionToken: "",
       });
-      expect(write.path).toBe("notes.txt");
+      expect(write.path).toBe(notesPath);
 
-      const read = await harness.client.files.read(workspaceId, "notes.txt");
+      const read = await harness.client.files.read(workspaceId, notesPath);
       expect(read.content).toBe("hello from anyharness\n");
 
       const statusBeforeStage = await harness.client.git.getStatus(workspaceId);
       expect(statusBeforeStage.files.length).toBeGreaterThan(0);
 
-      await harness.client.git.stagePaths(workspaceId, ["notes.txt"]);
+      await harness.client.git.stagePaths(workspaceId, [notesPath]);
       const commit = await harness.client.git.commit(workspaceId, {
         summary: "Add notes",
       });

@@ -1,4 +1,6 @@
 import type {
+  InteractionPayload,
+  PendingInteractionPayloadSummary,
   SessionEventEnvelope,
   SessionExecutionSummary,
   SessionLiveConfigSnapshot,
@@ -40,6 +42,7 @@ export function buildSessionStreamPatch({
   const patch: SessionStreamPatch = {
     transcript: nextTranscript,
   };
+  const currentPendingInteractions = slot.executionSummary?.pendingInteractions ?? [];
 
   if (event.type === "current_mode_update") {
     patch.modeId = event.currentModeId;
@@ -72,32 +75,41 @@ export function buildSessionStreamPatch({
     patch.executionSummary = {
       phase: "running",
       hasLiveHandle: true,
-      pendingApproval: null,
+      pendingInteractions: currentPendingInteractions,
       updatedAt: envelope.timestamp,
     };
   }
 
-  if (event.type === "permission_requested") {
+  if (event.type === "interaction_requested") {
     patch.status = "running";
     patch.executionSummary = {
-      phase: "awaiting_permission",
+      phase: "awaiting_interaction",
       hasLiveHandle: true,
-      pendingApproval: {
-        requestId: event.requestId,
-        title: event.title,
-        toolCallId: event.toolCallId ?? null,
-        toolKind: event.toolKind ?? null,
-      },
+      pendingInteractions: [
+        ...currentPendingInteractions.filter((entry) => entry.requestId !== event.requestId),
+        {
+          requestId: event.requestId,
+          kind: event.kind,
+          title: event.title,
+          description: event.description ?? null,
+          source: {
+            toolCallId: event.source.toolCallId ?? null,
+            toolKind: event.source.toolKind ?? null,
+            toolStatus: event.source.toolStatus ?? null,
+          },
+          payload: summarizeInteractionPayload(event.payload),
+        },
+      ],
       updatedAt: envelope.timestamp,
     };
   }
 
-  if (event.type === "permission_resolved") {
+  if (event.type === "interaction_resolved") {
     patch.status = "running";
     patch.executionSummary = {
       phase: "running",
       hasLiveHandle: true,
-      pendingApproval: null,
+      pendingInteractions: currentPendingInteractions.filter((entry) => entry.requestId !== event.requestId),
       updatedAt: envelope.timestamp,
     };
   }
@@ -107,7 +119,7 @@ export function buildSessionStreamPatch({
     patch.executionSummary = {
       phase: event.type === "error" ? "errored" : "idle",
       hasLiveHandle: true,
-      pendingApproval: null,
+      pendingInteractions: [],
       updatedAt: envelope.timestamp,
     };
   }
@@ -117,7 +129,7 @@ export function buildSessionStreamPatch({
     patch.executionSummary = {
       phase: event.reason === "error" ? "errored" : "closed",
       hasLiveHandle: false,
-      pendingApproval: null,
+      pendingInteractions: [],
       updatedAt: envelope.timestamp,
     };
   }
@@ -127,4 +139,27 @@ export function buildSessionStreamPatch({
   }
 
   return patch;
+}
+
+function summarizeInteractionPayload(
+  payload: InteractionPayload,
+): PendingInteractionPayloadSummary {
+  if (payload.type === "user_input") {
+    return {
+      type: "user_input",
+      questions: payload.questions ?? [],
+    };
+  }
+  if (payload.type === "mcp_elicitation") {
+    return {
+      type: "mcp_elicitation",
+      serverName: payload.serverName,
+      mode: payload.mode,
+    };
+  }
+  return {
+    type: "permission",
+    options: payload.type === "permission" ? payload.options ?? [] : [],
+    context: payload.type === "permission" ? payload.context ?? null : null,
+  };
 }

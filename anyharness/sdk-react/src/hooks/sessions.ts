@@ -3,7 +3,7 @@ import type {
   CreateSessionRequest,
   ListSessionEventsOptions,
   PromptSessionRequest,
-  ResolvePermissionRequest,
+  ResolveInteractionRequest,
   SetSessionConfigOptionRequest,
   UpdateSessionTitleRequest,
 } from "@anyharness/sdk";
@@ -378,7 +378,7 @@ export function useRestoreDismissedSessionMutation(options?: { workspaceId?: str
   });
 }
 
-export function useResolveSessionPermissionMutation(options?: { workspaceId?: string | null }) {
+export function useResolveSessionInteractionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -386,11 +386,11 @@ export function useResolveSessionPermissionMutation(options?: { workspaceId?: st
     mutationFn: async (input: {
       sessionId: string;
       requestId: string;
-      request: ResolvePermissionRequest;
+      request: ResolveInteractionRequest;
     }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      await client.sessions.resolvePermission(input.sessionId, input.requestId, input.request);
+      await client.sessions.resolveInteraction(input.sessionId, input.requestId, input.request);
     },
   });
 }

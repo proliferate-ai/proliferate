@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use tokio::sync::{broadcast, RwLock};
 
-use super::permission_broker::PermissionBroker;
+use super::permission_broker::InteractionBroker;
 use super::session_actor::{
     spawn_session_actor, ActorReadyResult, LiveSessionHandle, SessionActorConfig,
     SessionStartupStrategy, SessionTurnFinishResult,
@@ -19,20 +19,20 @@ use anyharness_contract::v1::SessionEventEnvelope;
 
 pub struct AcpManager {
     live_sessions: Arc<RwLock<HashMap<String, Arc<LiveSessionHandle>>>>,
-    permission_broker: Arc<PermissionBroker>,
+    interaction_broker: Arc<InteractionBroker>,
 }
 
 impl AcpManager {
     pub fn new() -> Self {
-        let permission_broker = Arc::new(PermissionBroker::new());
+        let interaction_broker = Arc::new(InteractionBroker::new());
         Self {
             live_sessions: Arc::new(RwLock::new(HashMap::new())),
-            permission_broker,
+            interaction_broker,
         }
     }
 
-    pub fn permission_broker(&self) -> &Arc<PermissionBroker> {
-        &self.permission_broker
+    pub fn interaction_broker(&self) -> &Arc<InteractionBroker> {
+        &self.interaction_broker
     }
 
     pub async fn start_session(
@@ -117,7 +117,7 @@ impl AcpManager {
             workspace_path,
             workspace_env,
             session_launch_env,
-            permission_broker: self.permission_broker.clone(),
+            interaction_broker: self.interaction_broker.clone(),
             event_tx,
             session_store,
             mcp_servers,
@@ -164,7 +164,7 @@ impl Clone for AcpManager {
     fn clone(&self) -> Self {
         Self {
             live_sessions: self.live_sessions.clone(),
-            permission_broker: self.permission_broker.clone(),
+            interaction_broker: self.interaction_broker.clone(),
         }
     }
 }

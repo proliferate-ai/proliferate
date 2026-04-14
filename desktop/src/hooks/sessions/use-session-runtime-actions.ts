@@ -498,8 +498,8 @@ export function useSessionRuntimeActions() {
 
         if (
           event.type === "turn_started"
-          || event.type === "permission_requested"
-          || event.type === "permission_resolved"
+          || event.type === "interaction_requested"
+          || event.type === "interaction_resolved"
           || event.type === "turn_ended"
           || event.type === "error"
           || event.type === "session_ended"

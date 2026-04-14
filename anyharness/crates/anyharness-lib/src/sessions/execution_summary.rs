@@ -14,13 +14,13 @@ pub fn summarize_session_record(
         "closed" => SessionExecutionSummary {
             phase: SessionExecutionPhase::Closed,
             has_live_handle: false,
-            pending_approval: None,
+            pending_interactions: Vec::new(),
             updated_at: record.updated_at.clone(),
         },
         "errored" => SessionExecutionSummary {
             phase: SessionExecutionPhase::Errored,
             has_live_handle: false,
-            pending_approval: None,
+            pending_interactions: Vec::new(),
             updated_at: record.updated_at.clone(),
         },
         _ => live_snapshot
@@ -28,7 +28,7 @@ pub fn summarize_session_record(
             .unwrap_or_else(|| SessionExecutionSummary {
                 phase: SessionExecutionPhase::Idle,
                 has_live_handle: false,
-                pending_approval: None,
+                pending_interactions: Vec::new(),
                 updated_at: record.updated_at.clone(),
             }),
     }
@@ -40,7 +40,7 @@ pub fn summarize_workspace_sessions<'a>(
     let mut total_session_count = 0usize;
     let mut live_session_count = 0usize;
     let mut running_count = 0usize;
-    let mut awaiting_permission_count = 0usize;
+    let mut awaiting_interaction_count = 0usize;
     let mut idle_count = 0usize;
     let mut errored_count = 0usize;
     let mut phase = WorkspaceExecutionPhase::Idle;
@@ -52,13 +52,13 @@ pub fn summarize_workspace_sessions<'a>(
         }
 
         match summary.phase {
-            SessionExecutionPhase::AwaitingPermission => {
-                awaiting_permission_count += 1;
-                phase = WorkspaceExecutionPhase::AwaitingPermission;
+            SessionExecutionPhase::AwaitingInteraction => {
+                awaiting_interaction_count += 1;
+                phase = WorkspaceExecutionPhase::AwaitingInteraction;
             }
             SessionExecutionPhase::Starting | SessionExecutionPhase::Running => {
                 running_count += 1;
-                if !matches!(phase, WorkspaceExecutionPhase::AwaitingPermission) {
+                if !matches!(phase, WorkspaceExecutionPhase::AwaitingInteraction) {
                     phase = WorkspaceExecutionPhase::Running;
                 }
             }
@@ -80,7 +80,7 @@ pub fn summarize_workspace_sessions<'a>(
         total_session_count,
         live_session_count,
         running_count,
-        awaiting_permission_count,
+        awaiting_interaction_count,
         idle_count,
         errored_count,
     }
@@ -92,7 +92,7 @@ pub fn idle_workspace_execution_summary() -> WorkspaceExecutionSummary {
         total_session_count: 0,
         live_session_count: 0,
         running_count: 0,
-        awaiting_permission_count: 0,
+        awaiting_interaction_count: 0,
         idle_count: 0,
         errored_count: 0,
     }
@@ -100,7 +100,10 @@ pub fn idle_workspace_execution_summary() -> WorkspaceExecutionSummary {
 
 #[cfg(test)]
 mod tests {
-    use anyharness_contract::v1::{PendingApprovalSummary, SessionExecutionPhase};
+    use anyharness_contract::v1::{
+        InteractionKind, PendingInteractionPayloadSummary, PendingInteractionSource,
+        PendingInteractionSummary, SessionExecutionPhase,
+    };
 
     use super::*;
 
@@ -128,28 +131,41 @@ mod tests {
         }
     }
 
+    fn pending_interaction() -> PendingInteractionSummary {
+        PendingInteractionSummary {
+            request_id: "request-1".to_string(),
+            kind: InteractionKind::Permission,
+            title: "Approve".to_string(),
+            description: None,
+            source: PendingInteractionSource {
+                tool_call_id: Some("tool-1".to_string()),
+                tool_kind: Some("exec".to_string()),
+                tool_status: None,
+            },
+            payload: PendingInteractionPayloadSummary::Permission {
+                options: Vec::new(),
+                context: None,
+            },
+        }
+    }
+
     #[test]
     fn summarize_session_prefers_live_snapshot_for_nonterminal_records() {
         let record = session_record("running", "2026-04-06T00:00:00Z");
         let snapshot = LiveSessionExecutionSnapshot {
-            phase: SessionExecutionPhase::AwaitingPermission,
-            pending_approval: Some(PendingApprovalSummary {
-                request_id: "request-1".to_string(),
-                title: "Approve".to_string(),
-                tool_call_id: Some("tool-1".to_string()),
-                tool_kind: Some("exec".to_string()),
-            }),
+            phase: SessionExecutionPhase::AwaitingInteraction,
+            pending_interactions: vec![pending_interaction()],
             updated_at: "2026-04-06T00:00:01Z".to_string(),
         };
 
         let summary = summarize_session_record(&record, Some(&snapshot));
 
-        assert_eq!(summary.phase, SessionExecutionPhase::AwaitingPermission);
+        assert_eq!(summary.phase, SessionExecutionPhase::AwaitingInteraction);
         assert!(summary.has_live_handle);
         assert_eq!(
             summary
-                .pending_approval
-                .as_ref()
+                .pending_interactions
+                .first()
                 .map(|pending| pending.request_id.as_str()),
             Some("request-1")
         );
@@ -164,7 +180,7 @@ mod tests {
 
         assert_eq!(summary.phase, SessionExecutionPhase::Idle);
         assert!(!summary.has_live_handle);
-        assert!(summary.pending_approval.is_none());
+        assert!(summary.pending_interactions.is_empty());
         assert_eq!(summary.updated_at, "2026-04-06T00:00:00Z");
     }
 
@@ -173,40 +189,35 @@ mod tests {
         let running = SessionExecutionSummary {
             phase: SessionExecutionPhase::Running,
             has_live_handle: true,
-            pending_approval: None,
+            pending_interactions: Vec::new(),
             updated_at: "2026-04-06T00:00:00Z".to_string(),
         };
         let awaiting = SessionExecutionSummary {
-            phase: SessionExecutionPhase::AwaitingPermission,
+            phase: SessionExecutionPhase::AwaitingInteraction,
             has_live_handle: true,
-            pending_approval: Some(PendingApprovalSummary {
-                request_id: "request-1".to_string(),
-                title: "Approve".to_string(),
-                tool_call_id: None,
-                tool_kind: None,
-            }),
+            pending_interactions: vec![pending_interaction()],
             updated_at: "2026-04-06T00:00:01Z".to_string(),
         };
         let errored = SessionExecutionSummary {
             phase: SessionExecutionPhase::Errored,
             has_live_handle: false,
-            pending_approval: None,
+            pending_interactions: Vec::new(),
             updated_at: "2026-04-06T00:00:02Z".to_string(),
         };
         let closed = SessionExecutionSummary {
             phase: SessionExecutionPhase::Closed,
             has_live_handle: false,
-            pending_approval: None,
+            pending_interactions: Vec::new(),
             updated_at: "2026-04-06T00:00:03Z".to_string(),
         };
 
         let summary = summarize_workspace_sessions([&running, &awaiting, &errored, &closed]);
 
-        assert_eq!(summary.phase, WorkspaceExecutionPhase::AwaitingPermission);
+        assert_eq!(summary.phase, WorkspaceExecutionPhase::AwaitingInteraction);
         assert_eq!(summary.total_session_count, 4);
         assert_eq!(summary.live_session_count, 2);
         assert_eq!(summary.running_count, 1);
-        assert_eq!(summary.awaiting_permission_count, 1);
+        assert_eq!(summary.awaiting_interaction_count, 1);
         assert_eq!(summary.errored_count, 1);
     }
 }

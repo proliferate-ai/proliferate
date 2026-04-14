@@ -7,24 +7,26 @@ import {
 } from "./activity";
 
 describe("session activity", () => {
-  it("maps awaiting permission to needs_input", () => {
+  it("maps awaiting interaction to needs_input", () => {
     expect(resolveSessionViewState({
       status: "running",
       executionSummary: {
-        phase: "awaiting_permission",
+        phase: "awaiting_interaction",
         hasLiveHandle: true,
-        pendingApproval: {
+        pendingInteractions: [{
           requestId: "request-1",
+          kind: "permission",
           title: "Approve",
-          toolCallId: "tool-1",
-          toolKind: "exec",
-        },
+          description: null,
+          source: { toolCallId: "tool-1", toolKind: "exec", toolStatus: null },
+          payload: { type: "permission", options: [] },
+        }],
         updatedAt: "2026-04-06T00:00:00Z",
       },
       streamConnectionState: "open",
       transcript: {
         isStreaming: false,
-        pendingApproval: { requestId: "request-1" },
+        pendingInteractions: [{ requestId: "request-1" }],
       },
     })).toBe("needs_input");
   });
@@ -37,33 +39,35 @@ describe("session activity", () => {
         executionSummary: {
           phase: "running",
           hasLiveHandle: true,
-          pendingApproval: null,
+          pendingInteractions: [],
           updatedAt: "2026-04-06T00:00:00Z",
         },
         streamConnectionState: "open",
         transcript: {
           isStreaming: true,
-          pendingApproval: null,
+          pendingInteractions: [],
         },
       },
       "session-2": {
         workspaceId: "workspace-1",
         status: "idle",
         executionSummary: {
-          phase: "awaiting_permission",
+          phase: "awaiting_interaction",
           hasLiveHandle: true,
-          pendingApproval: {
+          pendingInteractions: [{
             requestId: "request-1",
+            kind: "permission",
             title: "Approve",
-            toolCallId: "tool-1",
-            toolKind: "exec",
-          },
+            description: null,
+            source: { toolCallId: "tool-1", toolKind: "exec", toolStatus: null },
+            payload: { type: "permission", options: [] },
+          }],
           updatedAt: "2026-04-06T00:00:01Z",
         },
         streamConnectionState: "open",
         transcript: {
           isStreaming: false,
-          pendingApproval: { requestId: "request-1" },
+          pendingInteractions: [{ requestId: "request-1" }],
         },
       },
     });
@@ -73,11 +77,11 @@ describe("session activity", () => {
 
   it("maps workspace summaries to execution view states", () => {
     expect(resolveWorkspaceExecutionViewState({
-      phase: "awaiting_permission",
+      phase: "awaiting_interaction",
       totalSessionCount: 1,
       liveSessionCount: 1,
       runningCount: 0,
-      awaitingPermissionCount: 1,
+      awaitingInteractionCount: 1,
       idleCount: 0,
       erroredCount: 0,
     })).toBe("needs_input");
@@ -89,13 +93,13 @@ describe("session activity", () => {
       executionSummary: {
         phase: "idle",
         hasLiveHandle: false,
-        pendingApproval: null,
+        pendingInteractions: [],
         updatedAt: "2026-04-06T00:00:00Z",
       },
       streamConnectionState: "disconnected",
       transcript: {
         isStreaming: false,
-        pendingApproval: null,
+        pendingInteractions: [],
       },
     }, true)).toBe(true);
 
@@ -104,13 +108,13 @@ describe("session activity", () => {
       executionSummary: {
         phase: "idle",
         hasLiveHandle: true,
-        pendingApproval: null,
+        pendingInteractions: [],
         updatedAt: "2026-04-06T00:00:00Z",
       },
       streamConnectionState: "disconnected",
       transcript: {
         isStreaming: false,
-        pendingApproval: null,
+        pendingInteractions: [],
       },
     }, true)).toBe(false);
   });

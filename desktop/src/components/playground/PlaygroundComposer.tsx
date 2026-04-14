@@ -5,6 +5,8 @@ import { ComposerControlButton } from "@/components/workspace/chat/input/Compose
 import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
 import { PendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
 import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerPanel";
+import { UserInputCard } from "@/components/workspace/chat/input/UserInputCard";
+import { McpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
 import { WorkspaceMobilityLocationPopover } from "@/components/workspace/chat/input/WorkspaceMobilityLocationPopover";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
@@ -22,6 +24,12 @@ import type { ScenarioKey } from "@/config/playground";
 import {
   EDIT_OPTIONS,
   EXECUTE_OPTIONS,
+  GEMINI_MCP_OPTIONS,
+  MCP_ELICITATION_BOOLEAN,
+  MCP_ELICITATION_ENUM,
+  MCP_ELICITATION_MIXED_REQUIRED,
+  MCP_ELICITATION_MULTI_SELECT,
+  MCP_ELICITATION_URL,
   PENDING_PROMPTS_MULTI,
   PENDING_PROMPTS_SINGLE,
   PENDING_PROMPTS_WITH_EDITING,
@@ -29,6 +37,11 @@ import {
   TODOS_LONG,
   TODOS_MID,
   TODOS_SHORT,
+  USER_INPUT_MULTI_QUESTION,
+  USER_INPUT_OPTION_PLUS_OTHER,
+  USER_INPUT_SECRET,
+  USER_INPUT_SINGLE_FREEFORM,
+  USER_INPUT_SINGLE_OPTION,
 } from "@/lib/domain/chat/__fixtures__/playground";
 
 interface PlaygroundComposerProps {
@@ -36,6 +49,8 @@ interface PlaygroundComposerProps {
 }
 
 const noop = () => {};
+const noopAsync = async () => {};
+const revealExampleUrl = async () => "https://accounts.example.com/oauth/authorize?client_id=redacted";
 
 export function PlaygroundComposer({ scenario }: PlaygroundComposerProps) {
   const topSlot = renderTopSlot(scenario);
@@ -55,6 +70,9 @@ export function PlaygroundComposer({ scenario }: PlaygroundComposerProps) {
 function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {
     case "clean":
+    case "gemini-retry-status":
+    case "gemini-blocked-warning":
+    case "gemini-no-response-warning":
       return null;
     case "todos-short":
       return <TodoTrackerPanel entries={TODOS_SHORT} />;
@@ -77,6 +95,17 @@ function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
         <ApprovalCard
           title="Edit desktop/src/components/workspace/chat/input/ApprovalCard.tsx"
           actions={EDIT_OPTIONS}
+          onSelectOption={noop}
+          onAllow={noop}
+          onDeny={noop}
+        />
+      );
+    case "gemini-mcp-approval-options":
+    case "gemini-tool-before-approval":
+      return (
+        <ApprovalCard
+          title="MCP: github.search_pull_requests"
+          actions={GEMINI_MCP_OPTIONS}
           onSelectOption={noop}
           onAllow={noop}
           onDeny={noop}
@@ -135,6 +164,135 @@ function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
             onDelete={noop}
           />
         </>
+      );
+    case "user-input-single-option":
+      return (
+        <UserInputCard
+          key="user-input-single-option"
+          title="Choose provider"
+          questions={USER_INPUT_SINGLE_OPTION}
+          onSubmit={noop}
+          onCancel={noop}
+        />
+      );
+    case "user-input-single-freeform":
+      return (
+        <UserInputCard
+          key="user-input-single-freeform"
+          title="Name workspace"
+          questions={USER_INPUT_SINGLE_FREEFORM}
+          onSubmit={noop}
+          onCancel={noop}
+        />
+      );
+    case "user-input-option-plus-other":
+      return (
+        <UserInputCard
+          key="user-input-option-plus-other"
+          title="Pick a strategy"
+          questions={USER_INPUT_OPTION_PLUS_OTHER}
+          onSubmit={noop}
+          onCancel={noop}
+        />
+      );
+    case "user-input-secret":
+      return (
+        <UserInputCard
+          key="user-input-secret"
+          title="Provide secret"
+          questions={USER_INPUT_SECRET}
+          onSubmit={noop}
+          onCancel={noop}
+        />
+      );
+    case "user-input-multi-question":
+      return (
+        <UserInputCard
+          key="user-input-multi-question"
+          title="Answer questions"
+          questions={USER_INPUT_MULTI_QUESTION}
+          onSubmit={noop}
+          onCancel={noop}
+        />
+      );
+    case "mcp-elicitation-boolean":
+      return (
+        <McpElicitationCard
+          title="MCP confirmation"
+          payload={MCP_ELICITATION_BOOLEAN}
+          onAccept={noopAsync}
+          onCancel={noopAsync}
+          onDecline={noopAsync}
+          onRevealUrl={revealExampleUrl}
+        />
+      );
+    case "mcp-elicitation-enum":
+      return (
+        <McpElicitationCard
+          title="MCP review choice"
+          payload={MCP_ELICITATION_ENUM}
+          onAccept={noopAsync}
+          onCancel={noopAsync}
+          onDecline={noopAsync}
+          onRevealUrl={revealExampleUrl}
+        />
+      );
+    case "mcp-elicitation-multi-select":
+      return (
+        <McpElicitationCard
+          title="MCP calendar scope"
+          payload={MCP_ELICITATION_MULTI_SELECT}
+          onAccept={noopAsync}
+          onCancel={noopAsync}
+          onDecline={noopAsync}
+          onRevealUrl={revealExampleUrl}
+        />
+      );
+    case "mcp-elicitation-mixed-required":
+      return (
+        <McpElicitationCard
+          title="MCP publish metadata"
+          payload={MCP_ELICITATION_MIXED_REQUIRED}
+          onAccept={noopAsync}
+          onCancel={noopAsync}
+          onDecline={noopAsync}
+          onRevealUrl={revealExampleUrl}
+        />
+      );
+    case "mcp-elicitation-url":
+      return (
+        <McpElicitationCard
+          title="MCP URL request"
+          payload={MCP_ELICITATION_URL}
+          onAccept={noopAsync}
+          onCancel={noopAsync}
+          onDecline={noopAsync}
+          onRevealUrl={revealExampleUrl}
+        />
+      );
+    case "mcp-elicitation-validation-error":
+      return (
+        <McpElicitationCard
+          title="MCP validation preview"
+          payload={MCP_ELICITATION_MIXED_REQUIRED}
+          onAccept={async () => {
+            throw new Error("Server validation failed: Review priority must be a safe integer.");
+          }}
+          onCancel={noopAsync}
+          onDecline={noopAsync}
+          onRevealUrl={revealExampleUrl}
+        />
+      );
+    case "mcp-elicitation-cancel-decline":
+      return (
+        <McpElicitationCard
+          title="MCP cancellation controls"
+          payload={MCP_ELICITATION_URL}
+          onAccept={noopAsync}
+          onCancel={noopAsync}
+          onDecline={noopAsync}
+          onRevealUrl={revealExampleUrl}
+        />
       );
   }
 }

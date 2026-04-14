@@ -1063,6 +1063,129 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/interactions/{request_id}/mcp-url/reveal": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "reveal_mcp_elicitation_url",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "Interaction request ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MCP elicitation URL revealed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpElicitationUrlRevealResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid interaction kind",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/interactions/{request_id}/resolve": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "resolve_interaction",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "Interaction request ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveInteractionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Interaction resolved"
+          },
+          "400": {
+            "description": "Invalid interaction resolution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}/live-config": {
       "get": {
         "tags": [
@@ -1203,59 +1326,6 @@
           },
           "404": {
             "description": "Session or pending prompt not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/sessions/{session_id}/permissions/{request_id}/resolve": {
-      "post": {
-        "tags": [
-          "sessions"
-        ],
-        "operationId": "resolve_permission",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "description": "Session ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "request_id",
-            "in": "path",
-            "description": "Permission request ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResolvePermissionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Permission resolved"
-          },
-          "404": {
-            "description": "Not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -4447,6 +4517,268 @@
           }
         }
       },
+      "InteractionDecision": {
+        "type": "string",
+        "enum": [
+          "allow",
+          "deny"
+        ]
+      },
+      "InteractionKind": {
+        "type": "string",
+        "enum": [
+          "permission",
+          "user_input",
+          "mcp_elicitation"
+        ]
+      },
+      "InteractionOutcome": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "optionId",
+              "outcome"
+            ],
+            "properties": {
+              "optionId": {
+                "type": "string"
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "selected"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "outcome"
+            ],
+            "properties": {
+              "answeredQuestionIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "submitted"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "outcome"
+            ],
+            "properties": {
+              "acceptedFieldIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "accepted"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "outcome"
+            ],
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "declined"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "outcome"
+            ],
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "cancelled"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "outcome"
+            ],
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "dismissed"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "InteractionPayload": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PermissionInteractionPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "permission"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserInputInteractionPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user_input"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/McpElicitationInteractionPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "mcp_elicitation"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "InteractionRequestedEvent": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "kind",
+          "title",
+          "source",
+          "payload"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/InteractionKind"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/InteractionPayload"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/InteractionSource"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "InteractionResolvedEvent": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "kind",
+          "outcome"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/InteractionKind"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/InteractionOutcome"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
+      "InteractionSource": {
+        "type": "object",
+        "properties": {
+          "sourceMetadata": {},
+          "toolCallId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "toolKind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "toolStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "ItemCompletedEvent": {
         "type": "object",
         "required": [
@@ -4494,6 +4826,531 @@
             }
           },
           "program": {
+            "type": "string"
+          }
+        }
+      },
+      "McpElicitationBooleanField": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/McpElicitationFieldBase"
+          }
+        ]
+      },
+      "McpElicitationField": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/McpElicitationTextField"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "fieldType"
+                ],
+                "properties": {
+                  "fieldType": {
+                    "type": "string",
+                    "enum": [
+                      "text"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/McpElicitationNumberField"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "fieldType"
+                ],
+                "properties": {
+                  "fieldType": {
+                    "type": "string",
+                    "enum": [
+                      "number"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/McpElicitationBooleanField"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "fieldType"
+                ],
+                "properties": {
+                  "fieldType": {
+                    "type": "string",
+                    "enum": [
+                      "boolean"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/McpElicitationSelectField"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "fieldType"
+                ],
+                "properties": {
+                  "fieldType": {
+                    "type": "string",
+                    "enum": [
+                      "single_select"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/McpElicitationMultiSelectField"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "fieldType"
+                ],
+                "properties": {
+                  "fieldType": {
+                    "type": "string",
+                    "enum": [
+                      "multi_select"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "McpElicitationFieldBase": {
+        "type": "object",
+        "required": [
+          "fieldId",
+          "label",
+          "required"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fieldId": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        }
+      },
+      "McpElicitationFormPayload": {
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpElicitationField"
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "McpElicitationInteractionPayload": {
+        "type": "object",
+        "required": [
+          "serverName",
+          "mode"
+        ],
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/McpElicitationMode"
+          },
+          "serverName": {
+            "type": "string"
+          }
+        }
+      },
+      "McpElicitationMode": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/McpElicitationFormPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "mode"
+                ],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "form"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/McpElicitationUrlPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "mode"
+                ],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "url"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "McpElicitationMultiSelectField": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/McpElicitationFieldBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "maxItems": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "minItems": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/McpElicitationOption"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "McpElicitationNumberField": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/McpElicitationFieldBase"
+          },
+          {
+            "type": "object",
+            "required": [
+              "integer"
+            ],
+            "properties": {
+              "integer": {
+                "type": "boolean"
+              },
+              "maximum": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "minimum": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "McpElicitationOption": {
+        "type": "object",
+        "required": [
+          "optionId",
+          "label"
+        ],
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "optionId": {
+            "type": "string"
+          }
+        }
+      },
+      "McpElicitationSelectField": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/McpElicitationFieldBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "options": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/McpElicitationOption"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "McpElicitationSubmittedField": {
+        "type": "object",
+        "required": [
+          "fieldId",
+          "value"
+        ],
+        "properties": {
+          "fieldId": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/McpElicitationSubmittedValue"
+          }
+        }
+      },
+      "McpElicitationSubmittedValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "value",
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "string"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "value",
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "integer"
+                ]
+              },
+              "value": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "value",
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "number"
+                ]
+              },
+              "value": {
+                "type": "number",
+                "format": "double"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "value",
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "boolean"
+                ]
+              },
+              "value": {
+                "type": "boolean"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "option_id",
+              "type"
+            ],
+            "properties": {
+              "option_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "option"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "option_ids",
+              "type"
+            ],
+            "properties": {
+              "option_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "option_array"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "McpElicitationTextField": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/McpElicitationFieldBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "format": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/McpElicitationTextFormat"
+                  }
+                ]
+              },
+              "maxLength": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32",
+                "minimum": 0
+              },
+              "minLength": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32",
+                "minimum": 0
+              }
+            }
+          }
+        ]
+      },
+      "McpElicitationTextFormat": {
+        "type": "string",
+        "enum": [
+          "email",
+          "uri",
+          "date",
+          "date-time"
+        ]
+      },
+      "McpElicitationUrlPayload": {
+        "type": "object",
+        "required": [
+          "message",
+          "urlDisplay",
+          "requiresReveal"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "requiresReveal": {
+            "type": "boolean"
+          },
+          "urlDisplay": {
+            "type": "string"
+          }
+        }
+      },
+      "McpElicitationUrlRevealResponse": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
             "type": "string"
           }
         }
@@ -4981,19 +5838,84 @@
           }
         }
       },
-      "PendingApprovalSummary": {
+      "PendingInteractionPayloadSummary": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "context": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PermissionInteractionContext"
+                  }
+                ]
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PermissionInteractionOption"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "permission"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "questions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/UserInputQuestion"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user_input"
+                ]
+              }
+            }
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/McpElicitationInteractionPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "mcp_elicitation"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "PendingInteractionSource": {
         "type": "object",
-        "required": [
-          "requestId",
-          "title"
-        ],
         "properties": {
-          "requestId": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
           "toolCallId": {
             "type": [
               "string",
@@ -5005,6 +5927,45 @@
               "string",
               "null"
             ]
+          },
+          "toolStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "PendingInteractionSummary": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "kind",
+          "title",
+          "source",
+          "payload"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/InteractionKind"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/PendingInteractionPayloadSummary"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PendingInteractionSource"
+          },
+          "title": {
+            "type": "string"
           }
         }
       },
@@ -5099,84 +6060,28 @@
           }
         }
       },
-      "PermissionDecision": {
-        "type": "string",
-        "enum": [
-          "allow",
-          "deny"
-        ]
-      },
-      "PermissionOutcome": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "optionId",
-              "outcome"
-            ],
-            "properties": {
-              "optionId": {
-                "type": "string"
-              },
-              "outcome": {
-                "type": "string",
-                "enum": [
-                  "selected"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "outcome"
-            ],
-            "properties": {
-              "outcome": {
-                "type": "string",
-                "enum": [
-                  "cancelled"
-                ]
-              }
-            }
-          }
-        ]
-      },
-      "PermissionRequestedEvent": {
+      "PermissionInteractionContext": {
         "type": "object",
-        "required": [
-          "requestId",
-          "title"
-        ],
         "properties": {
-          "description": {
+          "agentId": {
             "type": [
               "string",
               "null"
             ]
           },
-          "options": {},
-          "rawInput": {},
-          "rawOutput": {},
-          "requestId": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "toolCallId": {
+          "blockedPath": {
             "type": [
               "string",
               "null"
             ]
           },
-          "toolKind": {
+          "decisionReason": {
             "type": [
               "string",
               "null"
             ]
           },
-          "toolStatus": {
+          "displayName": {
             "type": [
               "string",
               "null"
@@ -5184,19 +6089,56 @@
           }
         }
       },
-      "PermissionResolvedEvent": {
+      "PermissionInteractionOption": {
         "type": "object",
         "required": [
-          "requestId",
-          "outcome"
+          "optionId",
+          "label",
+          "kind"
         ],
         "properties": {
-          "outcome": {
-            "$ref": "#/components/schemas/PermissionOutcome"
+          "kind": {
+            "$ref": "#/components/schemas/PermissionInteractionOptionKind"
           },
-          "requestId": {
+          "label": {
+            "type": "string"
+          },
+          "optionId": {
             "type": "string"
           }
+        }
+      },
+      "PermissionInteractionOptionKind": {
+        "type": "string",
+        "enum": [
+          "allow_once",
+          "allow_always",
+          "reject_once",
+          "reject_always",
+          "unknown"
+        ]
+      },
+      "PermissionInteractionPayload": {
+        "type": "object",
+        "properties": {
+          "context": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PermissionInteractionContext"
+              }
+            ]
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PermissionInteractionOption"
+            }
+          },
+          "rawInput": {},
+          "rawOutput": {}
         }
       },
       "PlanEntry": {
@@ -5703,26 +6645,129 @@
           "managed"
         ]
       },
-      "ResolvePermissionRequest": {
-        "type": "object",
-        "properties": {
-          "decision": {
-            "oneOf": [
-              {
-                "type": "null"
+      "ResolveInteractionRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "optionId",
+              "outcome"
+            ],
+            "properties": {
+              "optionId": {
+                "type": "string"
               },
-              {
-                "$ref": "#/components/schemas/PermissionDecision"
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "selected"
+                ]
               }
-            ]
+            }
           },
-          "optionId": {
-            "type": [
-              "string",
-              "null"
-            ]
+          {
+            "type": "object",
+            "required": [
+              "decision",
+              "outcome"
+            ],
+            "properties": {
+              "decision": {
+                "$ref": "#/components/schemas/InteractionDecision"
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "decision"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "answers",
+              "outcome"
+            ],
+            "properties": {
+              "answers": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/UserInputSubmittedAnswer"
+                }
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "submitted"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "fields",
+              "outcome"
+            ],
+            "properties": {
+              "fields": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/McpElicitationSubmittedField"
+                }
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "accepted"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "outcome"
+            ],
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "declined"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "outcome"
+            ],
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "cancelled"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "outcome"
+            ],
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "dismissed"
+                ]
+              }
+            }
           }
-        }
+        ]
       },
       "ResolveRepoRootFromPathRequest": {
         "type": "object",
@@ -6293,7 +7338,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/PermissionRequestedEvent"
+                "$ref": "#/components/schemas/InteractionRequestedEvent"
               },
               {
                 "type": "object",
@@ -6304,7 +7349,7 @@
                   "type": {
                     "type": "string",
                     "enum": [
-                      "permission_requested"
+                      "interaction_requested"
                     ]
                   }
                 }
@@ -6314,7 +7359,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/PermissionResolvedEvent"
+                "$ref": "#/components/schemas/InteractionResolvedEvent"
               },
               {
                 "type": "object",
@@ -6325,7 +7370,7 @@
                   "type": {
                     "type": "string",
                     "enum": [
-                      "permission_resolved"
+                      "interaction_resolved"
                     ]
                   }
                 }
@@ -6396,7 +7441,7 @@
         "enum": [
           "starting",
           "running",
-          "awaiting_permission",
+          "awaiting_interaction",
           "idle",
           "errored",
           "closed"
@@ -6413,15 +7458,11 @@
           "hasLiveHandle": {
             "type": "boolean"
           },
-          "pendingApproval": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/PendingApprovalSummary"
-              }
-            ]
+          "pendingInteractions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PendingInteractionSummary"
+            }
           },
           "phase": {
             "$ref": "#/components/schemas/SessionExecutionPhase"
@@ -6938,6 +7979,12 @@
               "null"
             ]
           },
+          "isTransient": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "nativeToolName": {
             "type": [
               "string",
@@ -7003,6 +8050,9 @@
             "items": {
               "$ref": "#/components/schemas/ContentPart"
             }
+          },
+          "isTransient": {
+            "type": "boolean"
           },
           "kind": {
             "$ref": "#/components/schemas/TranscriptItemKind"
@@ -7143,6 +8193,88 @@
           }
         }
       },
+      "UserInputInteractionPayload": {
+        "type": "object",
+        "properties": {
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserInputQuestion"
+            }
+          }
+        }
+      },
+      "UserInputQuestion": {
+        "type": "object",
+        "required": [
+          "questionId",
+          "header",
+          "question",
+          "isOther",
+          "isSecret"
+        ],
+        "properties": {
+          "header": {
+            "type": "string"
+          },
+          "isOther": {
+            "type": "boolean"
+          },
+          "isSecret": {
+            "type": "boolean"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserInputQuestionOption"
+            }
+          },
+          "question": {
+            "type": "string"
+          },
+          "questionId": {
+            "type": "string"
+          }
+        }
+      },
+      "UserInputQuestionOption": {
+        "type": "object",
+        "required": [
+          "label",
+          "description"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        }
+      },
+      "UserInputSubmittedAnswer": {
+        "type": "object",
+        "required": [
+          "questionId"
+        ],
+        "properties": {
+          "questionId": {
+            "type": "string"
+          },
+          "selectedOptionLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "Workspace": {
         "type": "object",
         "required": [
@@ -7210,7 +8342,7 @@
         "type": "string",
         "enum": [
           "running",
-          "awaiting_permission",
+          "awaiting_interaction",
           "idle",
           "errored"
         ]
@@ -7222,12 +8354,12 @@
           "totalSessionCount",
           "liveSessionCount",
           "runningCount",
-          "awaitingPermissionCount",
+          "awaitingInteractionCount",
           "idleCount",
           "erroredCount"
         ],
         "properties": {
-          "awaitingPermissionCount": {
+          "awaitingInteractionCount": {
             "type": "integer",
             "minimum": 0
           },

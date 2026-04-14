@@ -2,7 +2,7 @@ use super::model::*;
 use std::path::PathBuf;
 
 const CLAUDE_AGENT_ACP_PACKAGE: &str =
-    "git+https://github.com/proliferate-ai/claude-agent-acp.git#9ca5f44d730d48611800fb1ff7aca895c2fd5e79";
+    "git+https://github.com/proliferate-ai/claude-agent-acp.git#21faca424daead49bc50bbc499f3c20bb6fe18f0";
 const CLAUDE_AGENT_ACP_DOCS_URL: &str = "https://github.com/proliferate-ai/claude-agent-acp";
 const CODEX_AGENT_ACP_PACKAGE: &str = "@proliferateai/codex-acp@0.11.7";
 const CODEX_AGENT_ACP_DOCS_URL: &str = "https://github.com/proliferate-ai/codex-acp";

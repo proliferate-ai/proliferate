@@ -18,9 +18,9 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use std::time::Instant;
 
-use super::latency::{latency_trace_fields, LatencyRequestContext};
 use super::blocking::run_blocking;
 use super::error::ApiError;
+use super::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::app::AppState;
 use crate::mobility::model::{
     ImportedWorkspaceArchiveSummary, MobilityBlocker, MobilityFileData, MobilitySessionCandidate,

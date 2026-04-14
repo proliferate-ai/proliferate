@@ -1,4 +1,5 @@
 import type {
+  PendingInteraction,
   Session,
   SessionExecutionSummary,
   SessionLiveConfigSnapshot,
@@ -54,6 +55,54 @@ export function buildSessionSlotPatchFromSummary(
         text: entry.text,
         queuedAt: entry.queuedAt,
       })),
+      pendingInteractions: pendingInteractionsFromExecutionSummary(
+        session.executionSummary,
+        transcript.pendingInteractions,
+      ),
     },
   };
+}
+
+function pendingInteractionsFromExecutionSummary(
+  executionSummary: SessionExecutionSummary | null | undefined,
+  fallback: PendingInteraction[],
+): PendingInteraction[] {
+  if (!executionSummary) return fallback;
+
+  return (executionSummary.pendingInteractions ?? []).flatMap((interaction): PendingInteraction[] => {
+    const base = {
+      requestId: interaction.requestId,
+      toolCallId: interaction.source.toolCallId ?? null,
+      toolKind: interaction.source.toolKind ?? null,
+      toolStatus: interaction.source.toolStatus ?? null,
+      title: interaction.title,
+      description: interaction.description ?? null,
+    };
+    if (interaction.kind === "permission" && interaction.payload.type === "permission") {
+      return [{
+        ...base,
+        kind: "permission" as const,
+        options: interaction.payload.options ?? [],
+        context: interaction.payload.context ?? null,
+      }];
+    }
+    if (interaction.kind === "user_input" && interaction.payload.type === "user_input") {
+      return [{
+        ...base,
+        kind: "user_input" as const,
+        questions: interaction.payload.questions ?? [],
+      }];
+    }
+    if (interaction.kind === "mcp_elicitation" && interaction.payload.type === "mcp_elicitation") {
+      return [{
+        ...base,
+        kind: "mcp_elicitation" as const,
+        mcpElicitation: {
+          serverName: interaction.payload.serverName,
+          mode: interaction.payload.mode,
+        },
+      }];
+    }
+    return [];
+  });
 }

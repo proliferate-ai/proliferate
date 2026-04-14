@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::interactions::{InteractionRequestedEvent, InteractionResolvedEvent};
 use super::SessionLiveConfigSnapshot;
 
 // ---------------------------------------------------------------------------
@@ -56,8 +57,8 @@ pub enum SessionEvent {
     PendingPromptUpdated(PendingPromptUpdatedPayload),
     PendingPromptRemoved(PendingPromptRemovedPayload),
 
-    PermissionRequested(PermissionRequestedEvent),
-    PermissionResolved(PermissionResolvedEvent),
+    InteractionRequested(InteractionRequestedEvent),
+    InteractionResolved(InteractionResolvedEvent),
     Error(ErrorEvent),
 }
 
@@ -80,8 +81,8 @@ impl SessionEvent {
             Self::PendingPromptAdded(_) => "pending_prompt_added",
             Self::PendingPromptUpdated(_) => "pending_prompt_updated",
             Self::PendingPromptRemoved(_) => "pending_prompt_removed",
-            Self::PermissionRequested(_) => "permission_requested",
-            Self::PermissionResolved(_) => "permission_resolved",
+            Self::InteractionRequested(_) => "interaction_requested",
+            Self::InteractionResolved(_) => "interaction_resolved",
             Self::Error(_) => "error",
         }
     }
@@ -148,6 +149,8 @@ pub struct TranscriptItemPayload {
     pub kind: TranscriptItemKind,
     pub status: TranscriptItemStatus,
     pub source_agent_kind: String,
+    #[serde(default, rename = "isTransient", skip_serializing_if = "is_false")]
+    pub is_transient: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -188,6 +191,9 @@ pub enum TranscriptItemStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptItemDeltaPayload {
+    #[serde(rename = "isTransient")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_transient: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<TranscriptItemStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -208,6 +214,10 @@ pub struct TranscriptItemDeltaPayload {
     pub replace_content_parts: Option<Vec<ContentPart>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub append_content_parts: Option<Vec<ContentPart>>,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
@@ -438,48 +448,6 @@ pub struct PendingPromptRemovedPayload {
 pub enum PendingPromptRemovalReason {
     Executed,
     Deleted,
-}
-
-// ---------------------------------------------------------------------------
-// Permission / error events
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct PermissionRequestedEvent {
-    pub request_id: String,
-    pub title: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_call_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_kind: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_status: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub raw_input: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub raw_output: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub options: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct PermissionResolvedEvent {
-    pub request_id: String,
-    pub outcome: PermissionOutcome,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(tag = "outcome", rename_all = "snake_case")]
-pub enum PermissionOutcome {
-    #[serde(rename_all = "camelCase")]
-    Selected {
-        option_id: String,
-    },
-    Cancelled,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
