@@ -16,7 +16,6 @@ on:
         options:
           - all
           - macos
-          - windows
         default: all
 
 permissions:
@@ -52,9 +51,6 @@ jobs:
           - os: macos-latest
             target: x86_64-apple-darwin
             runner_os: macos
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            runner_os: windows
 
     runs-on: ${{ matrix.os }}
 
@@ -283,17 +279,6 @@ jobs:
             target/${{ matrix.target }}/release/bundle/dmg/*.dmg
             target/${{ matrix.target }}/release/bundle/macos/*_*.app.tar.gz
             target/${{ matrix.target }}/release/bundle/macos/*_*.app.tar.gz.sig
-          if-no-files-found: error
-
-      - name: Upload build artifacts (Windows)
-        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: desktop-${{ matrix.target }}
-          path: |
-            target/${{ matrix.target }}/release/bundle/**/*.msi
-            target/${{ matrix.target }}/release/bundle/**/*-setup.exe
-            target/${{ matrix.target }}/release/bundle/**/*-setup.exe.sig
           if-no-files-found: error
 
   create-release:

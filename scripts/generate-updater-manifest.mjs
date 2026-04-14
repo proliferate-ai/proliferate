@@ -60,15 +60,6 @@ const platforms = [
       pathIncludes(relPath, "desktop-x86_64-apple-darwin") &&
       /(x64|x86_64).*\.app\.tar\.gz\.sig$/i.test(name),
   },
-  {
-    key: "windows-x86_64",
-    artifactMatcher: (relPath, name) =>
-      pathIncludes(relPath, "desktop-x86_64-pc-windows-msvc") &&
-      /(x64|x86_64).*setup\.exe$/i.test(name),
-    sigMatcher: (relPath, name) =>
-      pathIncludes(relPath, "desktop-x86_64-pc-windows-msvc") &&
-      /(x64|x86_64).*setup\.exe\.sig$/i.test(name),
-  },
 ];
 
 const manifest = {

@@ -134,6 +134,9 @@ Flow:
 
 Note:
 
+- The current desktop release matrix is macOS-only. Windows packaging and
+  updater entries are temporarily disabled until the SDK generation step is
+  Windows-safe.
 - `dry_run: true` exercises the build matrix but skips `create-release` and
   `publish-updater`.
 - The release workflow is intentionally fail-closed now: manifest generation
