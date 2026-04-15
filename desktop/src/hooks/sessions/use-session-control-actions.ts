@@ -37,6 +37,13 @@ interface PromptLatencyFlowOptions extends SessionLatencyFlowOptions {
   promptId?: string | null;
 }
 
+interface LaunchPromptInput extends SessionLatencyFlowOptions {
+  workspaceId: string;
+  agentKind: string;
+  modelId: string;
+  text: string;
+}
+
 interface SessionConfigOptionUpdateOptions {
   persistDefaultPreference?: boolean;
 }
@@ -52,6 +59,7 @@ interface SessionControlDeps {
   ensureWorkspaceSessions: (workspaceId: string) => Promise<Array<{
     id: string;
     agentKind: string;
+    modelId?: string | null;
     workspaceId: string;
     lastPromptAt?: string | null;
   }>>;
@@ -486,9 +494,76 @@ export function useSessionControlActions({
     selectSession,
   ]);
 
+  const findOrCreateSessionForLaunch = useCallback(async ({
+    workspaceId,
+    agentKind,
+    modelId,
+    text,
+    latencyFlowId,
+  }: LaunchPromptInput) => {
+    const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
+    if (blockedReason) {
+      throw new Error(blockedReason);
+    }
+
+    const state = useHarnessStore.getState();
+    for (const slot of Object.values(state.sessionSlots)) {
+      if (
+        slot.agentKind === agentKind
+        && slot.modelId === modelId
+        && sessionSlotBelongsToWorkspace(slot, workspaceId)
+      ) {
+        activateSession(slot.sessionId);
+        await promptSession({
+          sessionId: slot.sessionId,
+          text,
+          workspaceId,
+          latencyFlowId,
+          onBeforePrompt: () =>
+            maybeStartFirstSessionBranchRenameTracking(slot.sessionId, workspaceId),
+        });
+        return;
+      }
+    }
+
+    const sessions = await ensureWorkspaceSessions(workspaceId);
+    const backendSession = sessions.find((session) =>
+      session.agentKind === agentKind && session.modelId === modelId
+    );
+    if (backendSession) {
+      await selectSession(backendSession.id, { latencyFlowId });
+      await promptSession({
+        sessionId: backendSession.id,
+        text,
+        workspaceId,
+        latencyFlowId,
+        onBeforePrompt: () =>
+          maybeStartFirstSessionBranchRenameTracking(backendSession.id, workspaceId),
+      });
+      return;
+    }
+
+    await createSessionWithResolvedConfig({
+      text,
+      agentKind,
+      modelId,
+      workspaceId,
+      latencyFlowId,
+    });
+  }, [
+    activateSession,
+    createSessionWithResolvedConfig,
+    ensureWorkspaceSessions,
+    getWorkspaceRuntimeBlockReason,
+    maybeStartFirstSessionBranchRenameTracking,
+    promptSession,
+    selectSession,
+  ]);
+
   return {
     cancelActiveSession,
     findOrCreateSession,
+    findOrCreateSessionForLaunch,
     promptActiveSession,
     resolvePermission,
     resolveMcpElicitation,

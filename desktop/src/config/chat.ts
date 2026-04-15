@@ -1,5 +1,6 @@
-/** Rem value; keep aligned with chat composer leading-relaxed on the input textarea. */
+/** Rem value; keep aligned with the chat composer textarea line-height. */
 export const CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM = 1.125;
+export const CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM = 2.5;
 
 export const CHAT_COMPOSER_INPUT = {
   minRows: 2,
@@ -7,7 +8,7 @@ export const CHAT_COMPOSER_INPUT = {
 } as const;
 
 export const CHAT_COMPOSER_LABELS = {
-  placeholder: "Describe a task — ⌘L to toggle terminal",
+  placeholder: "Describe a task",
   send: "Send message",
   stop: "Stop run",
 } as const;

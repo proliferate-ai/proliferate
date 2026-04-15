@@ -38,8 +38,6 @@ interface WorkspaceItemProps {
   active?: boolean;
   archived?: boolean;
   activity?: SessionViewState;
-  additions?: number;
-  deletions?: number;
   lastInteracted?: string | null;
   unread?: boolean;
   onSelect?: () => void;
@@ -62,8 +60,6 @@ export function WorkspaceItem({
   active = false,
   archived = false,
   activity = "idle",
-  additions,
-  deletions,
   lastInteracted,
   unread = false,
   onSelect,
@@ -163,20 +159,8 @@ export function WorkspaceItem({
         )}
       </div>
 
-      {/* Right-side info — timestamp or git stats */}
+      {/* Right-side info — timestamp and workspace variant */}
       <div className="flex shrink-0 items-stretch justify-end gap-1 min-w-[24px]">
-        {active && additions !== undefined && deletions !== undefined && (additions > 0 || deletions > 0) && (
-          <div
-            className={`overflow-hidden whitespace-nowrap text-sm leading-4 tabular-nums transition-[max-width,opacity,margin] duration-150 ease-out ${
-              hasArchiveAction
-                ? "max-w-12 opacity-100 group-hover:max-w-0 group-hover:opacity-0 group-focus-within:max-w-0 group-focus-within:opacity-0"
-                : ""
-            }`}
-          >
-            <span className="text-git-green">+{additions}</span>{" "}
-            <span className="text-git-red">-{deletions}</span>
-          </div>
-        )}
         {!active && lastInteracted && (
           <div
             className={`overflow-hidden whitespace-nowrap text-foreground/40 text-sm leading-4 tabular-nums truncate text-right transition-[max-width,opacity,margin] duration-150 ease-out ${

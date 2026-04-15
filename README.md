@@ -25,25 +25,20 @@ make install
 make dev-local
 ```
 
-## Core Features
-
-- **Bring your own agent** - use your existing coding-agent auth and
-  subscriptions.
-- **Isolated workspaces** - give each session its own local worktree or cloud
-  sandbox.
-- **Local to cloud handoff** - start work locally, then move it to the cloud
-  when you want it to keep running.
-- **Transcript and approval UI** - review plans, approvals, tool calls, and
-  results without digging through terminals.
-- **Fleet view** - keep many agent sessions moving across the same repo.
-
 ## Use Cases
 
-- Run multiple coding agents against one repo without branch/worktree chaos.
-- Start a task locally, approve the plan, then send it to the cloud.
-- Compare Codex, Claude Code, Gemini CLI, or custom agents on the same work.
-- Keep long-running agent work alive after you close your laptop.
-- Review what each agent did before merging.
+- Parallelize feature work, test fixes, and code review follow-ups across
+  multiple isolated agent sessions.
+- Compare Codex, Claude Code, Gemini CLI, and custom agents on the same repo
+  before choosing the best patch.
+- Triage failing CI, flaky tests, and pull request feedback while keeping your
+  local workspace focused on the next task.
+- Move long-running jobs to a cloud workspace so they can continue after you
+  close your laptop.
+- Review transcripts, approvals, tool calls, and diffs before deciding what to
+  merge.
+- Build custom agent workflows on top of AnyHarness through the HTTP and SSE
+  runtime APIs.
 
 ## Run The Full Stack
 
@@ -97,6 +92,11 @@ server/               FastAPI cloud control plane
 ## Contributing
 
 Issues, feedback, and pull requests are welcome.
+
+## Diff Test
+
+This short note is intentionally small so local diff rendering can be checked
+without changing product behavior.
 
 ## License
 

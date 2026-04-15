@@ -3,32 +3,43 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
+import {
+  classifyCollapsedAction,
+  getToolCallParsedCommands,
+  getToolCallShellCommand,
+  isExplorationParsedCommand,
+} from "@/lib/domain/chat/transcript-actions";
 
-export interface ReadGroupSummary {
-  reads: number;
-  searches: number;
-  fetches: number;
-}
+export {
+  classifyCollapsedAction,
+  formatCollapsedActionsSummary,
+  getToolCallParsedCommands,
+  getToolCallShellCommand,
+  getToolCallShellCommandName,
+  summarizeCollapsedActions,
+  type CollapsedActionSummary,
+  type ParsedToolCommand,
+  type ParsedToolCommandKind,
+} from "@/lib/domain/chat/transcript-actions";
 
-export interface ReadGroup {
-  anchorId: string;
-  memberIds: string[];
-  summary: ReadGroupSummary;
-  status: "running" | "completed";
+export type TurnDisplayBlock =
+  | { kind: "item"; itemId: string }
+  | { kind: "inline_tool"; itemId: string }
+  | { kind: "collapsed_actions"; blockId: string; itemIds: string[] };
+
+export interface CompletedHistorySummary {
+  messages: number;
+  toolCalls: number;
+  subagents: number;
 }
 
 export interface TurnPresentation {
   rootIds: string[];
   childrenByParentId: Map<string, string[]>;
-  collapsedRootIds: Set<string>;
-  collapsedSummary: {
-    messages: number;
-    toolCalls: number;
-    subagents: number;
-  } | null;
+  displayBlocks: TurnDisplayBlock[];
   finalAssistantItemId: string | null;
-  readGroups: Map<string, ReadGroup>;
-  readGroupedIds: Set<string>;
+  completedHistoryRootIds: string[];
+  completedHistorySummary: CompletedHistorySummary | null;
 }
 
 export function buildTurnPresentation(
@@ -49,10 +60,11 @@ export function buildTurnPresentation(
   for (const itemId of orderedItemIds) {
     const item = transcript.itemsById[itemId];
     const parentId = item && "parentToolCallId" in item ? item.parentToolCallId : null;
+    const parent = parentId ? transcript.itemsById[parentId] : undefined;
     if (
       parentId
       && itemIds.has(parentId)
-      && transcript.itemsById[parentId]?.kind === "tool_call"
+      && shouldGroupToolChildren(parent)
     ) {
       childrenByParentId.set(parentId, [
         ...(childrenByParentId.get(parentId) ?? []),
@@ -66,85 +78,39 @@ export function buildTurnPresentation(
   const finalAssistantItemId = turn.completedAt
     ? [...rootIds].reverse().find((itemId) => transcript.itemsById[itemId]?.kind === "assistant_prose") ?? null
     : null;
-
-  if (!turn.completedAt || !finalAssistantItemId) {
-    const noCollapsed = new Set<string>();
-    const { readGroups, readGroupedIds } = buildReadGroups(rootIds, transcript, noCollapsed);
-    return {
-      rootIds,
-      childrenByParentId,
-      collapsedRootIds: noCollapsed,
-      collapsedSummary: null,
-      finalAssistantItemId,
-      readGroups,
-      readGroupedIds,
-    };
-  }
-
-  const finalAssistantIndex = rootIds.indexOf(finalAssistantItemId);
-  const collapsedRootIds = new Set(
-    rootIds.filter((itemId, index) =>
-      index < finalAssistantIndex && transcript.itemsById[itemId]?.kind !== "user_message"
-    ),
+  const completedHistoryRootIds = buildCompletedHistoryRootIds(
+    rootIds,
+    transcript,
+    turn.completedAt,
+    finalAssistantItemId,
   );
 
-  if (collapsedRootIds.size === 0) {
-    const { readGroups, readGroupedIds } = buildReadGroups(rootIds, transcript, collapsedRootIds);
-    return {
-      rootIds,
-      childrenByParentId,
-      collapsedRootIds,
-      collapsedSummary: null,
-      finalAssistantItemId,
-      readGroups,
-      readGroupedIds,
-    };
-  }
-
-  const collapsedItemIds = flattenItemIds(
-    rootIds.filter((itemId) => collapsedRootIds.has(itemId)),
-    childrenByParentId,
-  );
-
-  const collapsedSummary = collapsedItemIds.reduce(
-    (summary, itemId) => {
-      const item = transcript.itemsById[itemId];
-      if (!item) {
-        return summary;
-      }
-      if (item.kind === "tool_call") {
-        if (item.semanticKind === "subagent") {
-          summary.subagents += 1;
-        } else {
-          summary.toolCalls += 1;
-        }
-      } else if (
-        item.kind === "assistant_prose"
-        || item.kind === "thought"
-        || item.kind === "plan"
-        || item.kind === "error"
-      ) {
-        summary.messages += 1;
-      }
-      return summary;
-    },
-    { messages: 0, toolCalls: 0, subagents: 0 },
-  );
-
-  const { readGroups, readGroupedIds } = buildReadGroups(rootIds, transcript, collapsedRootIds);
   return {
     rootIds,
     childrenByParentId,
-    collapsedRootIds,
-    collapsedSummary,
+    displayBlocks: buildDisplayBlocks(
+      rootIds,
+      transcript,
+      childrenByParentId,
+      !!turn.completedAt,
+    ),
     finalAssistantItemId,
-    readGroups,
-    readGroupedIds,
+    completedHistoryRootIds,
+    completedHistorySummary: summarizeCompletedHistory(
+      completedHistoryRootIds,
+      transcript,
+      childrenByParentId,
+    ),
   };
 }
 
 export function isTransientTranscriptItem(item: TranscriptItem | undefined): boolean {
-  return !!item && "isTransient" in item && item.isTransient === true;
+  return item?.kind === "thought" && item.isTransient === true;
+}
+
+function shouldGroupToolChildren(item: TranscriptItem | undefined): boolean {
+  return item?.kind === "tool_call"
+    && (item.semanticKind === "subagent" || item.nativeToolName === "Agent");
 }
 
 function compareItems(
@@ -172,116 +138,196 @@ function getStartedSeq(item: TranscriptItem | undefined): number {
   return (item as { startedSeq: number }).startedSeq;
 }
 
+function buildCompletedHistoryRootIds(
+  rootIds: string[],
+  transcript: TranscriptState,
+  completedAt: string | null,
+  finalAssistantItemId: string | null,
+): string[] {
+  if (!completedAt || !finalAssistantItemId) {
+    return [];
+  }
+
+  const finalAssistantIndex = rootIds.indexOf(finalAssistantItemId);
+  if (finalAssistantIndex <= 0) {
+    return [];
+  }
+
+  return rootIds.filter((itemId, index) =>
+    index < finalAssistantIndex && transcript.itemsById[itemId]?.kind !== "user_message"
+  );
+}
+
+function summarizeCompletedHistory(
+  rootIds: string[],
+  transcript: TranscriptState,
+  childrenByParentId: Map<string, string[]>,
+): CompletedHistorySummary | null {
+  if (rootIds.length === 0) {
+    return null;
+  }
+
+  const summary = flattenItemIds(rootIds, childrenByParentId).reduce<CompletedHistorySummary>(
+    (nextSummary, itemId) => {
+      const item = transcript.itemsById[itemId];
+      if (!item) {
+        return nextSummary;
+      }
+      if (item.kind === "tool_call") {
+        if (item.semanticKind === "subagent") {
+          nextSummary.subagents += 1;
+        } else {
+          nextSummary.toolCalls += 1;
+        }
+      } else if (
+        item.kind === "assistant_prose"
+        || item.kind === "thought"
+        || item.kind === "plan"
+        || item.kind === "error"
+      ) {
+        nextSummary.messages += 1;
+      }
+      return nextSummary;
+    },
+    { messages: 0, toolCalls: 0, subagents: 0 },
+  );
+
+  return summary.messages > 0 || summary.toolCalls > 0 || summary.subagents > 0
+    ? summary
+    : null;
+}
+
 function flattenItemIds(
   rootIds: string[],
   childrenByParentId: Map<string, string[]>,
 ): string[] {
   const flattened: string[] = [];
-
   for (const itemId of rootIds) {
     flattened.push(itemId);
     const childIds = childrenByParentId.get(itemId) ?? [];
     flattened.push(...flattenItemIds(childIds, childrenByParentId));
   }
-
   return flattened;
 }
 
-const NON_DESTRUCTIVE_KINDS = new Set(["file_read", "search", "fetch"]);
-const READ_GROUP_MIN_SIZE = 2;
-
-function isNonDestructiveToolCall(item: TranscriptItem | undefined): boolean {
-  return (
-    !!item
-    && item.kind === "tool_call"
-    && NON_DESTRUCTIVE_KINDS.has(item.semanticKind)
+function buildDisplayBlocks(
+  rootIds: string[],
+  transcript: TranscriptState,
+  childrenByParentId: Map<string, string[]>,
+  isTurnComplete: boolean,
+): TurnDisplayBlock[] {
+  const blocks: TurnDisplayBlock[] = [];
+  let pendingActionIds: string[] = [];
+  const trailingInlineActionIds = collectTrailingInlineActionIds(
+    rootIds,
+    transcript,
+    childrenByParentId,
+    isTurnComplete,
   );
-}
 
-function buildReadGroups(
-  rootIds: string[],
-  transcript: TranscriptState,
-  collapsedRootIds: Set<string>,
-): { readGroups: Map<string, ReadGroup>; readGroupedIds: Set<string> } {
-  const readGroups = new Map<string, ReadGroup>();
-  const readGroupedIds = new Set<string>();
-  let runStart = -1;
+  const flushActions = () => {
+    if (pendingActionIds.length === 0) return;
+    const firstId = pendingActionIds[0] ?? "actions";
+    const lastId = pendingActionIds[pendingActionIds.length - 1] ?? firstId;
+    blocks.push({
+      kind: "collapsed_actions",
+      blockId: `${firstId}-${lastId}`,
+      itemIds: pendingActionIds,
+    });
+    pendingActionIds = [];
+  };
 
-  for (let i = 0; i <= rootIds.length; i++) {
-    const itemId = rootIds[i];
-    const item = itemId ? transcript.itemsById[itemId] : undefined;
-    const eligible =
-      !!itemId && !collapsedRootIds.has(itemId) && isNonDestructiveToolCall(item);
+  for (const itemId of rootIds) {
+    const item = transcript.itemsById[itemId];
+    if (!item) continue;
 
-    if (eligible) {
-      if (runStart === -1) runStart = i;
-    } else {
-      if (runStart !== -1) {
-        sealReadGroup(rootIds, runStart, i - 1, transcript, readGroups, readGroupedIds);
-        runStart = -1;
+    if (item.kind === "tool_call" && isCollapsibleAction(item, childrenByParentId)) {
+      if (
+        trailingInlineActionIds.has(itemId)
+        || (isActiveToolCall(item) && (isKnownRealAction(item) || isPendingCommand(item)))
+      ) {
+        flushActions();
+        blocks.push({ kind: "inline_tool", itemId });
+      } else {
+        pendingActionIds.push(itemId);
       }
+      continue;
     }
+
+    flushActions();
+    blocks.push({ kind: "item", itemId });
   }
 
-  return { readGroups, readGroupedIds };
+  flushActions();
+  return blocks;
 }
 
-function sealReadGroup(
+function collectTrailingInlineActionIds(
   rootIds: string[],
-  start: number,
-  end: number,
   transcript: TranscriptState,
-  readGroups: Map<string, ReadGroup>,
-  readGroupedIds: Set<string>,
-): void {
-  const groupSize = end - start + 1;
-  if (groupSize < READ_GROUP_MIN_SIZE) return;
+  childrenByParentId: Map<string, string[]>,
+  isTurnComplete: boolean,
+): Set<string> {
+  if (isTurnComplete) {
+    return new Set();
+  }
 
-  const memberIds = rootIds.slice(start, end + 1);
-  const anchorId = memberIds[0];
-  const summary: ReadGroupSummary = { reads: 0, searches: 0, fetches: 0 };
-  let status: "running" | "completed" = "completed";
-
-  for (const id of memberIds) {
-    const item = transcript.itemsById[id];
-    if (item?.kind === "tool_call") {
-      if (item.semanticKind === "file_read") summary.reads++;
-      else if (item.semanticKind === "search") summary.searches++;
-      else if (item.semanticKind === "fetch") summary.fetches++;
-      if (item.status === "in_progress") status = "running";
+  const actionIds: string[] = [];
+  for (let i = rootIds.length - 1; i >= 0; i--) {
+    const itemId = rootIds[i];
+    const item = transcript.itemsById[itemId];
+    if (
+      item?.kind === "tool_call"
+      && isCollapsibleAction(item, childrenByParentId)
+    ) {
+      if (isPendingCommand(item)) {
+        continue;
+      }
+      if (!isKnownRealAction(item)) {
+        break;
+      }
+      actionIds.unshift(itemId);
+      continue;
     }
+    break;
   }
 
-  readGroups.set(anchorId, { anchorId, memberIds, summary, status });
-  for (const id of memberIds) {
-    readGroupedIds.add(id);
-  }
+  return new Set(actionIds);
 }
 
-export function formatReadGroupHeader(group: ReadGroup): string {
-  const { reads, searches, fetches } = group.summary;
-  if (group.status === "running") {
-    const fragments: string[] = [];
-    if (reads > 0) {
-      fragments.push(reads === 1 ? "reading a file" : `reading ${reads} files`);
-    }
-    if (searches > 0) fragments.push("searching");
-    if (fetches > 0) fragments.push("fetching");
-    if (fragments.length === 0) return "Working";
-    const joined = fragments.join(", ");
-    return joined.charAt(0).toUpperCase() + joined.slice(1);
+function isCollapsibleAction(
+  item: Extract<TranscriptItem, { kind: "tool_call" }>,
+  childrenByParentId: Map<string, string[]>,
+): boolean {
+  if ((childrenByParentId.get(item.itemId) ?? []).length > 0) {
+    return false;
   }
-
-  return [
-    formatPlural(reads, "read"),
-    formatPlural(searches, "search", "searches"),
-    formatPlural(fetches, "fetch", "fetches"),
-  ]
-    .filter((value): value is string => value !== null)
-    .join(", ");
+  return item.semanticKind !== "subagent"
+    && item.semanticKind !== "mode_switch"
+    && item.semanticKind !== "cowork_artifact_create"
+    && item.semanticKind !== "cowork_artifact_update"
+    && item.nativeToolName !== "Agent";
 }
 
-function formatPlural(count: number, singular: string, plural?: string): string | null {
-  if (count <= 0) return null;
-  return `${count} ${count === 1 ? singular : (plural ?? singular + "s")}`;
+function isActiveToolCall(item: Extract<TranscriptItem, { kind: "tool_call" }>): boolean {
+  return item.status !== "completed" && item.status !== "failed";
+}
+
+function isKnownRealAction(item: Extract<TranscriptItem, { kind: "tool_call" }>): boolean {
+  const parsedCommands = getToolCallParsedCommands(item);
+  if (parsedCommands.length > 0) {
+    return parsedCommands.some((command) => !isExplorationParsedCommand(command.kind));
+  }
+
+  const kind = classifyCollapsedAction(item);
+  if (kind === "command") {
+    return getToolCallShellCommand(item) !== null;
+  }
+  return kind === "edit" || kind === "action";
+}
+
+function isPendingCommand(item: Extract<TranscriptItem, { kind: "tool_call" }>): boolean {
+  return isActiveToolCall(item)
+    && classifyCollapsedAction(item) === "command"
+    && getToolCallShellCommand(item) === null;
 }

@@ -1,4 +1,4 @@
-import { HomeScreen } from "@/components/home/HomeScreen";
+import { HomeNextScreen } from "@/components/home/HomeNextScreen";
 import { CommitDialog } from "@/components/workspace/git/CommitDialog";
 import { PullRequestDialog } from "@/components/workspace/git/PullRequestDialog";
 import { PushDialog } from "@/components/workspace/git/PushDialog";
@@ -42,6 +42,8 @@ export function StandardWorkspaceShell() {
     rightPanelOpen,
     rightPanelMode,
     rightPanelWidth,
+    terminalCollapsed,
+    terminalFocusRequestToken,
     commitOpen,
     pushOpen,
     prOpen,
@@ -58,6 +60,7 @@ export function StandardWorkspaceShell() {
 
   useMainScreenShortcuts({
     onOpenFilePalette: actions.handleFilePaletteOpen,
+    onOpenTerminal: actions.openTerminalPanel,
   });
 
   return (
@@ -108,7 +111,7 @@ export function StandardWorkspaceShell() {
         <div
           className={`flex min-w-0 flex-1 flex-col overflow-hidden ${
             transparentChromeEnabled ? "bg-transparent" : "bg-background"
-          } ${sidebarOpen ? "rounded-tl-lg" : ""}`}
+          } ${sidebarOpen && !transparentChromeEnabled ? "rounded-tl-[22px] border-l border-t border-sidebar-border" : ""}`}
         >
           <div
             className={transparentChromeEnabled ? GLASS_HEADER_CLASS : SOLID_HEADER_CLASS}
@@ -181,6 +184,9 @@ export function StandardWorkspaceShell() {
                       isCloudWorkspaceSelected={isCloudWorkspaceSelected}
                       mode={rightPanelMode}
                       onModeChange={actions.onSetRightPanelMode}
+                      terminalCollapsed={terminalCollapsed}
+                      onTerminalCollapsedChange={layout.setTerminalCollapsed}
+                      terminalFocusRequestToken={terminalFocusRequestToken}
                     />
                   </div>
                 </div>
@@ -208,7 +214,7 @@ export function StandardWorkspaceShell() {
                 )}
               </>
             ) : (
-              <HomeScreen />
+              <HomeNextScreen />
             )}
           </div>
         </div>

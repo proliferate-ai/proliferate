@@ -1,7 +1,7 @@
 {
   "name": "proliferate",
   "private": true,
-  "version": "0.1.18",
+  "version": "0.1.19",
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && vite",

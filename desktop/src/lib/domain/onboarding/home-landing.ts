@@ -1,6 +1,6 @@
 import { isOnboardingGoalId, type OnboardingGoalId } from "@/config/onboarding";
 
-// Shape of the one-shot route state handed to HomeScreen when onboarding
+// Shape of the one-shot route state handed to the home surface when onboarding
 // completes. The consumer reads it once and clears it — see
 // useHomeOnboardingLanding.
 export interface OnboardingHomeLandingState {

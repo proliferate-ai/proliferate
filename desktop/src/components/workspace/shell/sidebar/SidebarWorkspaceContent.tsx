@@ -17,6 +17,7 @@ interface SidebarWorkspaceContentProps {
   emptyState: SidebarEmptyState;
   isLoading: boolean;
   groups: SidebarGroupState[];
+  collapsedRepoGroupKeys: ReadonlySet<string>;
   /**
    * Groups the user has explicitly expanded via "Show more". Used to decide
    * whether to show a "Show less" toggle (forced expansions get no toggle).
@@ -28,14 +29,18 @@ interface SidebarWorkspaceContentProps {
    * for slicing.
    */
   effectiveExpandedRepoKeys: Set<string>;
+  onToggleRepoCollapsed: (sourceRoot: string) => void;
   onToggleRepoExpansion: (sourceRoot: string) => void;
   configuredCloudRepoKeys: ReadonlySet<string>;
   cloudRepoConfigsInitialLoading: boolean;
   cloudWorkspaceEnabled: boolean;
   cloudWorkspaceTooltip: string;
-  onCreateWorktreeWorkspace: (repoRootId: string | null) => void;
-  onCreateLocalWorkspace: (sourceRoot: string | null) => void;
-  onCreateCloudWorkspace: (target: CloudWorkspaceRepoTarget) => void;
+  onCreateWorktreeWorkspace: (repoRootId: string | null, repoGroupKeyToExpand: string) => void;
+  onCreateLocalWorkspace: (sourceRoot: string | null, repoGroupKeyToExpand: string) => void;
+  onCreateCloudWorkspace: (
+    target: CloudWorkspaceRepoTarget,
+    repoGroupKeyToExpand: string,
+  ) => void;
   onOpenCloudRepoSettings: (target: CloudWorkspaceRepoTarget) => void;
   onSelectWorkspace: (workspaceId: string) => void;
   onArchiveWorkspace: (workspaceId: string) => void;
@@ -61,8 +66,10 @@ export function SidebarWorkspaceContent({
   emptyState,
   isLoading,
   groups,
+  collapsedRepoGroupKeys,
   explicitlyExpandedRepoKeys,
   effectiveExpandedRepoKeys,
+  onToggleRepoCollapsed,
   onToggleRepoExpansion,
   configuredCloudRepoKeys,
   cloudRepoConfigsInitialLoading,
@@ -109,7 +116,7 @@ export function SidebarWorkspaceContent({
     );
   }
 
-  return groups.map((group) => {
+  return groups.map((group, groupIndex) => {
     const overLimit = group.items.length > DEFAULT_REPO_GROUP_ITEM_LIMIT;
     const isExplicitlyExpanded = explicitlyExpandedRepoKeys.has(group.sourceRoot);
     const isEffectivelyExpanded = effectiveExpandedRepoKeys.has(group.sourceRoot);
@@ -136,12 +143,13 @@ export function SidebarWorkspaceContent({
 
     return (
       <RepoGroup
-        key={group.sourceRoot}
+        key={`${group.sourceRoot}:${group.repoRootId ?? "no-repo-root"}:${groupIndex}`}
         name={group.name}
-        sourceRoot={group.sourceRoot}
         count={group.items.length}
-        onNewWorkspace={() => onCreateWorktreeWorkspace(group.repoRootId)}
-        onNewLocalWorkspace={() => onCreateLocalWorkspace(group.localSourceRoot)}
+        collapsed={collapsedRepoGroupKeys.has(group.sourceRoot)}
+        onToggleCollapsed={() => onToggleRepoCollapsed(group.sourceRoot)}
+        onNewWorkspace={() => onCreateWorktreeWorkspace(group.repoRootId, group.sourceRoot)}
+        onNewLocalWorkspace={() => onCreateLocalWorkspace(group.localSourceRoot, group.sourceRoot)}
         cloudWorkspaceEnabled={cloudWorkspaceEnabled && cloudRepoAction.kind !== "loading"}
         cloudWorkspaceTooltip={
           cloudRepoAction.kind === "loading"
@@ -152,7 +160,7 @@ export function SidebarWorkspaceContent({
         onCloudWorkspaceAction={cloudRepoTarget
           ? () => {
             if (cloudRepoAction.kind === "create") {
-              onCreateCloudWorkspace(cloudRepoTarget);
+              onCreateCloudWorkspace(cloudRepoTarget, group.sourceRoot);
               return;
             }
             if (cloudRepoAction.kind === "configure") {
@@ -181,8 +189,6 @@ export function SidebarWorkspaceContent({
                 activity={item.activity}
                 variant={item.variant}
                 cloudStatus={item.cloudStatus}
-                additions={item.additions}
-                deletions={item.deletions}
                 lastInteracted={item.lastInteracted}
                 unread={item.unread}
                 onSelect={() => onSelectWorkspace(item.id)}

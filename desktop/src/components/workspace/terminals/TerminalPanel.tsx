@@ -14,6 +14,7 @@ interface TerminalPanelProps {
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   isRuntimeReady?: boolean;
+  focusRequestToken?: number;
 }
 
 const STATUS_DOT: Record<string, string> = {
@@ -31,6 +32,7 @@ export function TerminalPanel({
   collapsed,
   onToggleCollapse,
   isRuntimeReady = true,
+  focusRequestToken = 0,
 }: TerminalPanelProps) {
   const selectedWorkspaceId = useHarnessStore((s) => s.selectedWorkspaceId);
 
@@ -146,10 +148,10 @@ export function TerminalPanel({
             const isActive = tabId === activeTabId;
             const fallbackTitle = `Terminal ${idx + 1}`;
             const displayTitle = tab.title === "Terminal" ? fallbackTitle : tab.title;
-            const shapeClassName = transparentChromeEnabled ? "-mb-px rounded-t-md" : "rounded-md";
+            const shapeClassName = "-mb-px rounded-t-md";
             const activeClassName = transparentChromeEnabled
-              ? "border-border border-b-background bg-background/85 text-foreground shadow-subtle backdrop-blur-xl"
-              : "border-border bg-background text-foreground shadow-subtle";
+              ? "border-border border-b-background bg-background/85 text-foreground backdrop-blur-xl"
+              : "border-border border-b-background bg-background text-foreground";
 
             return (
               <div
@@ -158,7 +160,7 @@ export function TerminalPanel({
                 className={`group/tab flex h-8 min-w-0 max-w-44 shrink-0 items-center border px-0.5 transition-colors ${shapeClassName} ${
                   isActive
                     ? activeClassName
-                    : "border-transparent bg-foreground/5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+                    : "border-transparent bg-transparent text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground"
                 }`}
               >
                 <Button
@@ -231,6 +233,7 @@ export function TerminalPanel({
                 terminalId={tabId}
                 visible={tabId === activeTabId}
                 canConnect={isRuntimeReady && canConnectTabs && workspaceTabsLoaded}
+                focusRequestToken={focusRequestToken}
               />
             </TerminalErrorBoundary>
           ))
@@ -244,9 +247,15 @@ interface TerminalViewportProps {
   terminalId: string;
   visible: boolean;
   canConnect: boolean;
+  focusRequestToken: number;
 }
 
-function TerminalViewport({ terminalId, visible, canConnect }: TerminalViewportProps) {
+function TerminalViewport({
+  terminalId,
+  visible,
+  canConnect,
+  focusRequestToken,
+}: TerminalViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<import("@xterm/xterm").Terminal | null>(null);
   const fitAddonRef = useRef<import("@xterm/addon-fit").FitAddon | null>(null);
@@ -359,13 +368,13 @@ function TerminalViewport({ terminalId, visible, canConnect }: TerminalViewportP
   }, [canConnect, connectionVersion, ensureTabConnection, isTerminalReady, terminalId, visible]);
 
   useEffect(() => {
-    if (visible && fitAddonRef.current) {
+    if (visible && isTerminalReady && fitAddonRef.current) {
       requestAnimationFrame(() => {
         fitAddonRef.current?.fit();
         xtermRef.current?.focus();
       });
     }
-  }, [visible]);
+  }, [focusRequestToken, isTerminalReady, visible]);
 
   return (
     <div

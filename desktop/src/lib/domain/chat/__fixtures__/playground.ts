@@ -147,7 +147,6 @@ export const CLOUD_RUNTIME_RECONNECT_ERROR: SelectedCloudRuntimeViewModel = {
   preserveVisibleContent: true,
   showRetry: true,
 };
-
 export const CLAUDE_PLAN_SHORT = `# Tighten onboarding copy
 
 ## Context

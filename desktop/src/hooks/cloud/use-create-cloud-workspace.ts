@@ -22,6 +22,7 @@ import { clearCachedCloudConnections } from "@/lib/integrations/anyharness/runti
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceEntryFlow } from "@/hooks/workspaces/use-workspace-entry-flow";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { ensureRepoGroupExpanded } from "@/stores/preferences/workspace-ui-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { workspaceCollectionsScopeKey, getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/query-keys";
@@ -39,6 +40,10 @@ import {
 } from "@/lib/infra/debug-latency";
 
 const MAX_CLOUD_CREATE_ATTEMPTS = 3;
+
+interface CreateCloudWorkspaceAndEnterOptions {
+  repoGroupKeyToExpand?: string | null;
+}
 
 function resolveErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
@@ -106,10 +111,14 @@ export function useCreateCloudWorkspace() {
     target: CloudWorkspaceRepoTarget;
     initialRequest?: CreateCloudWorkspaceRequest;
     allowConflictRetry: boolean;
+    repoGroupKeyToExpand?: string | null;
   }) => {
     const startedAt = startLatencyTimer();
     const repoLabel = `${args.target.gitOwner}/${args.target.gitRepoName}`;
     const attemptId = createPendingWorkspaceAttemptId();
+    if (args.repoGroupKeyToExpand) {
+      ensureRepoGroupExpanded(args.repoGroupKeyToExpand);
+    }
     const cloudWorkspaces = getWorkspaceCollectionsFromCache(
       queryClient,
       runtimeUrl,
@@ -195,6 +204,9 @@ export function useCreateCloudWorkspace() {
           request: { kind: "select-existing", workspaceId },
         };
         setPendingWorkspaceEntry(updatedEntry);
+        if (args.repoGroupKeyToExpand) {
+          ensureRepoGroupExpanded(args.repoGroupKeyToExpand);
+        }
 
         if (workspace.status === "ready") {
           await finalizeSelection(updatedEntry, workspaceId);
@@ -258,10 +270,12 @@ export function useCreateCloudWorkspace() {
 
   const createCloudWorkspaceAndEnter = useCallback(async (
     target: CloudWorkspaceRepoTarget,
+    options?: CreateCloudWorkspaceAndEnterOptions,
   ) => {
     await runCloudWorkspaceCreateFlow({
       target,
       allowConflictRetry: true,
+      repoGroupKeyToExpand: options?.repoGroupKeyToExpand,
     });
   }, [runCloudWorkspaceCreateFlow]);
 

@@ -36,6 +36,9 @@ interface RightPanelProps {
   isCloudWorkspaceSelected: boolean;
   mode: RightPanelMode;
   onModeChange: (mode: RightPanelMode) => void;
+  terminalCollapsed: boolean;
+  onTerminalCollapsedChange: (collapsed: boolean) => void;
+  terminalFocusRequestToken: number;
 }
 
 export function RightPanel({
@@ -44,12 +47,14 @@ export function RightPanel({
   isCloudWorkspaceSelected,
   mode,
   onModeChange,
+  terminalCollapsed,
+  onTerminalCollapsedChange,
+  terminalFocusRequestToken,
 }: RightPanelProps) {
   const [pinnedModes, setPinnedModes] = useState<RightPanelMode[]>([
     "files",
     "changes",
   ]);
-  const [terminalCollapsed, setTerminalCollapsed] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(200);
 
   const onTerminalSeparatorDown = useResize({
@@ -177,7 +182,7 @@ export function RightPanel({
       {terminalCollapsed ? (
         <TerminalPanel
           collapsed
-          onToggleCollapse={() => setTerminalCollapsed(false)}
+          onToggleCollapse={() => onTerminalCollapsedChange(false)}
         />
       ) : (
         <>
@@ -197,11 +202,12 @@ export function RightPanel({
             {shouldRenderContent ? (
               <TerminalPanel
                 isRuntimeReady={isWorkspaceReady}
-                onToggleCollapse={() => setTerminalCollapsed(true)}
+                onToggleCollapse={() => onTerminalCollapsedChange(true)}
+                focusRequestToken={terminalFocusRequestToken}
               />
             ) : (
               <RightPanelTerminalPlaceholder
-                onToggleCollapse={() => setTerminalCollapsed(true)}
+                onToggleCollapse={() => onTerminalCollapsedChange(true)}
               />
             )}
           </SizedPanel>

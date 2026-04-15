@@ -55,7 +55,7 @@ export function SessionReasoningEffortControl({ control }: SessionReasoningEffor
               trailing={
                 <span className="flex items-center gap-1">
                   <PendingConfigIndicator pendingState={control.pendingState} />
-                  <ChevronDown className="size-3 shrink-0 text-muted-foreground/70" />
+                  <ChevronDown className="size-3.5 shrink-0 text-[color:var(--color-composer-control-muted-foreground)]" />
                 </span>
               }
               aria-label={tooltip}

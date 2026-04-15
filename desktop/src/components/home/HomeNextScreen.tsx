@@ -1,0 +1,510 @@
+import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  CHAT_COMPOSER_INPUT,
+  CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
+} from "@/config/chat";
+import { useHomeNextLaunch } from "@/hooks/home/use-home-next-launch";
+import { useHomeNextState } from "@/hooks/home/use-home-next-state";
+import { useHomeScreen } from "@/hooks/home/use-home-screen";
+import type { HomeNextRepositorySelection } from "@/lib/domain/home/home-next-launch";
+import { ChatComposerActions } from "@/components/workspace/chat/input/ChatComposerActions";
+import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
+import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+import { Textarea } from "@/components/ui/Textarea";
+import {
+  Check,
+  CircleAlert,
+  Clock,
+  Folder,
+  GitBranchIcon,
+  LoaderCircle,
+  Plus,
+  ProviderIcon,
+  Search,
+  Settings,
+  Sparkles,
+} from "@/components/ui/icons";
+import type { HomeActionId, HomeStatusIcon } from "@/lib/domain/home/home-screen";
+
+const HOME_COMPOSER_INPUT_MIN_HEIGHT_REM = 6.5;
+
+function resolveStatusIcon(icon: HomeStatusIcon) {
+  switch (icon) {
+    case "spinner":
+      return <LoaderCircle className="size-3.5 animate-spin" />;
+    case "check":
+      return <Check className="size-3.5" />;
+    case "warning":
+      return <CircleAlert className="size-3.5" />;
+  }
+}
+
+function resolveActionIcon(actionId: HomeActionId) {
+  switch (actionId) {
+    case "resume-last-workspace":
+      return <Clock className="size-3.5" />;
+    case "add-repository":
+      return <Folder className="size-3.5" />;
+    case "agent-settings":
+    case "repository-settings":
+      return <Settings className="size-3.5" />;
+  }
+}
+
+function matchesSearch(values: string[], search: string): boolean {
+  const normalizedSearch = search.trim().toLowerCase();
+  if (!normalizedSearch) {
+    return true;
+  }
+
+  return values.some((value) => value.toLowerCase().includes(normalizedSearch));
+}
+
+interface PickerControlProps {
+  icon: ReactNode;
+  label: string;
+  disabled?: boolean;
+  searchValue?: string;
+  searchPlaceholder?: string;
+  onSearchChange?: (value: string) => void;
+  children: (close: () => void) => ReactNode;
+}
+
+function PickerControl({
+  icon,
+  label,
+  disabled = false,
+  searchValue,
+  searchPlaceholder = "Search",
+  onSearchChange,
+  children,
+}: PickerControlProps) {
+  if (disabled) {
+    return (
+      <ComposerControlButton
+        disabled
+        tone="quiet"
+        icon={icon}
+        label={label}
+        className="max-w-[12rem]"
+      />
+    );
+  }
+
+  return (
+    <PopoverButton
+      trigger={(
+        <ComposerControlButton
+          icon={icon}
+          label={label}
+          className="max-w-[12rem]"
+        />
+      )}
+      side="top"
+      className="w-72 rounded-xl border border-border bg-popover p-1 shadow-floating"
+    >
+      {(close) => (
+        <div className="flex max-h-80 min-h-0 flex-col">
+          {onSearchChange ? (
+            <PickerSearch
+              value={searchValue ?? ""}
+              placeholder={searchPlaceholder}
+              onChange={onSearchChange}
+            />
+          ) : null}
+          <div className="min-h-0 overflow-y-auto py-1">
+            {children(close)}
+          </div>
+        </div>
+      )}
+    </PopoverButton>
+  );
+}
+
+interface PickerSearchProps {
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+}
+
+function PickerSearch({ value, placeholder, onChange }: PickerSearchProps) {
+  return (
+    <div className="border-b border-border/70 p-1 pb-2">
+      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-background/70 px-2.5">
+        <Search className="size-3.5 shrink-0 text-muted-foreground" />
+        <Input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className="h-8 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
+        />
+      </div>
+    </div>
+  );
+}
+
+function EmptyPickerRow({ label }: { label: string }) {
+  return (
+    <div className="px-2.5 py-2 text-sm text-muted-foreground">
+      {label}
+    </div>
+  );
+}
+
+export function HomeNextScreen() {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [draft, setDraft] = useState("");
+  const [selectedAgentKind, setSelectedAgentKind] = useState<string | null>(null);
+  const [repositorySelection, setRepositorySelection] = useState<HomeNextRepositorySelection>({ kind: "auto" });
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const [repoSearch, setRepoSearch] = useState("");
+  const [branchSearch, setBranchSearch] = useState("");
+  const {
+    actionCards,
+    statusMessage,
+    isAddingRepo,
+    handleHomeAction,
+  } = useHomeScreen();
+  const homeNext = useHomeNextState({
+    selectedAgentKind,
+    repositorySelection,
+    selectedBranch,
+  });
+  const { isLaunching, launch } = useHomeNextLaunch();
+
+  const filteredRepositories = useMemo(() => (
+    homeNext.repositories.filter((repository) =>
+      matchesSearch([repository.name, repository.sourceRoot], repoSearch)
+    )
+  ), [homeNext.repositories, repoSearch]);
+  const filteredBranches = useMemo(() => (
+    homeNext.branchOptions.filter((branch) => matchesSearch([branch], branchSearch))
+  ), [branchSearch, homeNext.branchOptions]);
+
+  const promptTarget = homeNext.selectedRepository?.name?.trim();
+  const heading = promptTarget
+    ? `What should we build in ${promptTarget}?`
+    : "What should we build?";
+  const selectedAgentLabel = homeNext.selectedAgent
+    ? homeNext.selectedAgent.modelDisplayName
+      ? `${homeNext.selectedAgent.displayName} · ${homeNext.selectedAgent.modelDisplayName}`
+      : homeNext.selectedAgent.displayName
+    : "No agents";
+  const branchLabel = homeNext.selectedRepository
+    ? homeNext.branchQuery.isLoading
+      ? "Loading branches"
+      : homeNext.selectedBranchName ?? "No branches"
+    : "Branch";
+  const submitDisabledReason = draft.trim().length === 0
+    ? null
+    : homeNext.targetDisabledReason;
+  const canSubmit =
+    draft.trim().length > 0
+    && homeNext.canLaunchTarget
+    && !!homeNext.selectedAgent?.modelId
+    && !isLaunching;
+
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) {
+      return;
+    }
+
+    const lineHeightPx = parseFloat(getComputedStyle(el).lineHeight);
+    if (!Number.isFinite(lineHeightPx) || lineHeightPx <= 0) {
+      return;
+    }
+
+    const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const homeMinHeightPx = Number.isFinite(rootFontSizePx)
+      ? rootFontSizePx * HOME_COMPOSER_INPUT_MIN_HEIGHT_REM
+      : lineHeightPx * CHAT_COMPOSER_INPUT.minRows;
+    const minPx = Math.max(lineHeightPx * CHAT_COMPOSER_INPUT.minRows, homeMinHeightPx);
+    const maxPx = lineHeightPx * CHAT_COMPOSER_INPUT.maxRows;
+    el.style.height = "auto";
+    const contentHeight = el.scrollHeight;
+    const next = Math.min(maxPx, Math.max(minPx, contentHeight));
+    el.style.height = `${next}px`;
+    el.style.overflowY = contentHeight > maxPx ? "auto" : "hidden";
+  }, [draft]);
+
+  async function handleSubmit() {
+    if (!canSubmit || !homeNext.selectedAgent || !homeNext.launchTarget) {
+      return;
+    }
+
+    const succeeded = await launch({
+      text: draft,
+      agent: homeNext.selectedAgent,
+      target: homeNext.launchTarget,
+    });
+    if (succeeded) {
+      setDraft("");
+    }
+  }
+
+  function handleCancel() {
+    if (!isLaunching) {
+      setDraft("");
+    }
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
+
+    if (
+      event.key === "Escape"
+      && !event.shiftKey
+      && !event.altKey
+      && !event.ctrlKey
+      && !event.metaKey
+    ) {
+      handleCancel();
+      return;
+    }
+
+    if (
+      event.key === "Enter"
+      && (event.metaKey || event.ctrlKey)
+      && !event.shiftKey
+      && !event.altKey
+      && canSubmit
+    ) {
+      event.preventDefault();
+      void handleSubmit();
+    }
+  }
+
+  return (
+    <div className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground" data-telemetry-block>
+      <div className="absolute inset-x-0 top-0 h-10" data-tauri-drag-region="true" />
+
+      <main className="flex min-h-0 flex-1 items-center justify-center overflow-auto px-6 py-16">
+        <div className="w-full max-w-3xl">
+          <div className="mb-5 flex flex-col items-center text-center">
+            <p className="max-w-[34rem] text-2xl font-medium leading-tight text-foreground">
+              {heading}
+            </p>
+          </div>
+
+          <ChatComposerSurface>
+            <form
+              className="relative flex flex-col"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (canSubmit) {
+                  void handleSubmit();
+                }
+              }}
+            >
+              <div className="px-2 py-1.5">
+                <div className="flex w-full flex-wrap items-center justify-start gap-1" />
+              </div>
+              <div
+                className="mb-2 flex-grow select-text overflow-y-auto px-3"
+                style={{
+                  minHeight: `${HOME_COMPOSER_INPUT_MIN_HEIGHT_REM}rem`,
+                  maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
+                }}
+              >
+                <Textarea
+                  data-telemetry-mask
+                  ref={textareaRef}
+                  variant="ghost"
+                  rows={4}
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Describe a task"
+                  spellCheck={false}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  style={{
+                    minHeight: `${HOME_COMPOSER_INPUT_MIN_HEIGHT_REM}rem`,
+                    maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
+                  }}
+                  className="min-h-0 px-0 py-0 text-chat leading-[var(--text-chat--line-height)] text-foreground placeholder:text-[color:color-mix(in_oklab,var(--color-faint)_50%,transparent)]"
+                />
+              </div>
+
+              <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-[5px] px-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-[5px]">
+                  <PickerControl
+                    icon={homeNext.selectedAgent ? <ProviderIcon kind={homeNext.selectedAgent.kind} className="size-4" /> : <Sparkles className="size-3.5" />}
+                    label={selectedAgentLabel}
+                    disabled={homeNext.agentOptions.length === 0}
+                  >
+                    {(close) => (
+                      <>
+                        {homeNext.agentOptions.map((agent) => {
+                          const agentLabel = agent.modelDisplayName
+                            ? `${agent.displayName} · ${agent.modelDisplayName}`
+                            : `${agent.displayName} · No model`;
+                          return (
+                            <PopoverMenuItem
+                              key={agent.kind}
+                              disabled={!!agent.disabledReason}
+                              icon={<ProviderIcon kind={agent.kind} className="size-4" />}
+                              label={agentLabel}
+                              trailing={homeNext.selectedAgent?.kind === agent.kind ? <Check className="size-3.5" /> : null}
+                              onClick={() => {
+                                setSelectedAgentKind(agent.kind);
+                                close();
+                              }}
+                            />
+                          );
+                        })}
+                      </>
+                    )}
+                  </PickerControl>
+
+                  <PickerControl
+                    icon={homeNext.selectedRepository ? <Folder className="size-3.5" /> : <Sparkles className="size-3.5" />}
+                    label={homeNext.selectedRepository?.name ?? "No repository"}
+                    searchValue={repoSearch}
+                    searchPlaceholder="Search repositories"
+                    onSearchChange={setRepoSearch}
+                  >
+                    {(close) => (
+                      <>
+                        <PopoverMenuItem
+                          icon={<Sparkles className="size-3.5" />}
+                          label="No repository"
+                          trailing={homeNext.selectedRepository ? null : <Check className="size-3.5" />}
+                          onClick={() => {
+                            setRepositorySelection({ kind: "none" });
+                            setSelectedBranch(null);
+                            setRepoSearch("");
+                            close();
+                          }}
+                        />
+                        <div className="my-1 h-px bg-border" />
+                        {filteredRepositories.map((repository) => (
+                          <PopoverMenuItem
+                            key={repository.sourceRoot}
+                            icon={<Folder className="size-3.5" />}
+                            label={repository.name}
+                            trailing={homeNext.selectedRepository?.sourceRoot === repository.sourceRoot ? <Check className="size-3.5" /> : null}
+                            onClick={() => {
+                              setRepositorySelection({ kind: "repository", sourceRoot: repository.sourceRoot });
+                              setSelectedBranch(null);
+                              setRepoSearch("");
+                              close();
+                            }}
+                          />
+                        ))}
+                        {filteredRepositories.length === 0 ? (
+                          <EmptyPickerRow label="No repositories found" />
+                        ) : null}
+                        {homeNext.repositories.length > 0 && <div className="my-1 h-px bg-border" />}
+                        <PopoverMenuItem
+                          icon={<Plus className="size-3.5" />}
+                          label="Add repository"
+                          onClick={() => {
+                            handleHomeAction("add-repository");
+                            setRepoSearch("");
+                            close();
+                          }}
+                        />
+                      </>
+                    )}
+                  </PickerControl>
+
+                  <PickerControl
+                    icon={<GitBranchIcon className="size-3.5" />}
+                    label={branchLabel}
+                    disabled={!homeNext.selectedRepository || homeNext.branchOptions.length === 0}
+                    searchValue={branchSearch}
+                    searchPlaceholder="Search branches"
+                    onSearchChange={setBranchSearch}
+                  >
+                    {(close) => (
+                      <>
+                        {filteredBranches.map((branch) => (
+                          <PopoverMenuItem
+                            key={branch}
+                            icon={<GitBranchIcon className="size-3.5" />}
+                            label={branch}
+                            trailing={homeNext.selectedBranchName === branch ? <Check className="size-3.5" /> : null}
+                            onClick={() => {
+                              setSelectedBranch(branch);
+                              setBranchSearch("");
+                              close();
+                            }}
+                          />
+                        ))}
+                        {filteredBranches.length === 0 ? (
+                          <EmptyPickerRow label="No branches found" />
+                        ) : null}
+                      </>
+                    )}
+                  </PickerControl>
+                </div>
+
+                <div className="flex items-center">
+                  <ChatComposerActions
+                    isRunning={false}
+                    isEmpty={draft.trim().length === 0}
+                    isDisabled={!canSubmit}
+                    onSubmit={() => { void handleSubmit(); }}
+                    onCancel={handleCancel}
+                  />
+                </div>
+              </div>
+            </form>
+          </ChatComposerSurface>
+
+          {submitDisabledReason ? (
+            <div className="mx-auto mt-2 max-w-2xl px-2 text-center text-sm text-muted-foreground">
+              {submitDisabledReason}
+            </div>
+          ) : null}
+
+          <div className="mx-auto mt-3 max-w-2xl">
+            <div className="flex flex-col gap-px">
+              {actionCards.map((action) => (
+                <Button
+                  key={action.id}
+                  variant="ghost"
+                  size="sm"
+                  loading={action.id === "add-repository" && isAddingRepo}
+                  onClick={() => handleHomeAction(action.id)}
+                  className="h-auto w-full justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-normal text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                >
+                  {resolveActionIcon(action.id)}
+                  <span className="min-w-0 flex-1 truncate">{action.title}</span>
+                </Button>
+              ))}
+            </div>
+
+            {statusMessage ? (
+              <div className="mt-3 flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
+                {statusMessage.icon && resolveStatusIcon(statusMessage.icon)}
+                <span>
+                  {statusMessage.text}{" "}
+                  {statusMessage.actionId && statusMessage.actionLabel ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleHomeAction(statusMessage.actionId!)}
+                      className="inline h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
+                    >
+                      {statusMessage.actionLabel}
+                    </Button>
+                  ) : null}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}

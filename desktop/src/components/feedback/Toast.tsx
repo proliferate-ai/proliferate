@@ -2,10 +2,12 @@ import { useEffect, useRef } from "react";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { X } from "@/components/ui/icons";
 
+type ToastTimer = ReturnType<typeof setTimeout>;
+
 export function ToastContainer() {
   const toasts = useToastStore((s) => s.toasts);
   const dismiss = useToastStore((s) => s.dismiss);
-  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const timers = useRef<Map<string, ToastTimer>>(new Map());
 
   useEffect(() => {
     for (const toast of toasts) {

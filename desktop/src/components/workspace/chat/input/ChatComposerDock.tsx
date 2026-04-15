@@ -34,7 +34,7 @@ export function ChatComposerDock({
       <div className={`relative px-4 pb-4 ${className}`} {...rest}>
         <div className="relative mx-auto max-w-3xl @container">
           {topSlot && (
-            <div className="relative z-10 flex flex-col px-5">{topSlot}</div>
+            <div className="relative flex flex-col px-5">{topSlot}</div>
           )}
           {children}
           {footerSlot ? (

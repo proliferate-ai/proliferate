@@ -178,7 +178,7 @@ export function CloudRepoSettingsScreen({
 
   return (
     <CloudRepoSettingsEditor
-      key={repository.sourceRoot}
+      key={`${repository.sourceRoot}:${repository.repoRootId}`}
       repository={repository}
       savedConfig={savedConfig}
       localSetupScript={localSetupScript}

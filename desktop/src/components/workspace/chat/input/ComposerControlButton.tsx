@@ -24,14 +24,38 @@ interface ComposerControlButtonProps extends Omit<ButtonHTMLAttributes<HTMLButto
 }
 
 const toneClassNames: Record<ComposerControlTone, { idle: string; active: string }> = {
-  neutral: { idle: "text-muted-foreground", active: "text-foreground" },
-  accent: { idle: "text-muted-foreground", active: "text-foreground" },
-  primary: { idle: "text-muted-foreground", active: "text-foreground" },
-  warning: { idle: "text-muted-foreground", active: "text-foreground" },
-  destructive: { idle: "text-muted-foreground", active: "text-foreground" },
-  success: { idle: "text-muted-foreground", active: "text-foreground" },
-  info: { idle: "text-muted-foreground", active: "text-foreground" },
-  quiet: { idle: "text-muted-foreground", active: "text-muted-foreground" },
+  neutral: {
+    idle: "text-[color:var(--color-composer-control-foreground)]",
+    active: "text-[color:var(--color-composer-control-active-foreground)]",
+  },
+  accent: {
+    idle: "text-[color:var(--color-composer-control-foreground)]",
+    active: "text-[color:var(--color-composer-control-active-foreground)]",
+  },
+  primary: {
+    idle: "text-[color:var(--color-composer-control-foreground)]",
+    active: "text-[color:var(--color-composer-control-active-foreground)]",
+  },
+  warning: {
+    idle: "text-[color:var(--color-composer-control-foreground)]",
+    active: "text-[color:var(--color-composer-control-active-foreground)]",
+  },
+  destructive: {
+    idle: "text-[color:var(--color-composer-control-foreground)]",
+    active: "text-[color:var(--color-composer-control-active-foreground)]",
+  },
+  success: {
+    idle: "text-[color:var(--color-composer-control-foreground)]",
+    active: "text-[color:var(--color-composer-control-active-foreground)]",
+  },
+  info: {
+    idle: "text-[color:var(--color-composer-control-foreground)]",
+    active: "text-[color:var(--color-composer-control-active-foreground)]",
+  },
+  quiet: {
+    idle: "text-[color:var(--color-composer-control-foreground)]",
+    active: "text-[color:var(--color-composer-control-foreground)]",
+  },
 };
 
 export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerControlButtonProps>(
@@ -50,7 +74,7 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
     ...props
   }, ref) {
     const classes = active ? toneClassNames[tone].active : toneClassNames[tone].idle;
-    const baseClassName = `gap-1 rounded-full border border-transparent bg-transparent transition-colors hover:bg-muted/60 focus:outline-none ${classes}`;
+    const baseClassName = `gap-1 rounded-full border border-transparent bg-transparent transition-colors hover:bg-[var(--color-composer-control-hover)] hover:text-current focus:outline-none data-[state=open]:bg-[var(--color-composer-control-hover)] ${classes}`;
     const buttonClassName = iconOnly
       ? `h-7 w-7 shrink-0 !justify-center px-0 ${baseClassName} ${className}`
       : `h-7 min-w-0 max-w-full !justify-start px-2 py-0 text-left text-sm leading-[18px] ${baseClassName} ${className}`;
@@ -76,7 +100,7 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
           <span className="flex min-w-0 items-center gap-1">
             <span className={`min-w-0 truncate text-left ${labelClassName}`}>{label}</span>
             {detail && (
-              <span className={`truncate text-left opacity-72 ${detailClassName}`}>
+              <span className={`truncate text-left text-[color:var(--color-composer-control-muted-foreground)] ${detailClassName}`}>
                 {detail}
               </span>
             )}

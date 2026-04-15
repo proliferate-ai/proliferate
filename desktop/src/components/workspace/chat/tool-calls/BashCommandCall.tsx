@@ -1,8 +1,7 @@
-import {
-  ToolCallBlock,
-  TOOL_CALL_BODY_MAX_HEIGHT_CLASS,
-} from "./ToolCallBlock";
 import { Terminal } from "@/components/ui/icons";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
+import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
+import { ToolActionRow } from "./ToolActionRow";
 
 interface BashCommandCallProps {
   command: string;
@@ -22,22 +21,21 @@ export function BashCommandCall({
   defaultExpanded = false,
 }: BashCommandCallProps) {
   const label = description
-    ?? (status === "running" ? "Running command" : "Command");
+    ?? (status === "failed" ? "Command" : "Running command");
 
   return (
-    <ToolCallBlock
+    <ToolActionRow
       icon={<Terminal />}
-      name={
+      label={
         <span className="font-[460] text-foreground/90">{label}</span>
       }
       hint={command}
       status={status}
       duration={duration}
       defaultExpanded={defaultExpanded}
-      bodyClassName="overflow-hidden"
     >
       {output && (
-        <div className="overflow-hidden rounded-md border border-border/60 bg-muted/25">
+        <ToolActionDetailsPanel>
           <div
             className={`w-full overflow-y-auto px-3 py-2 ${TOOL_CALL_BODY_MAX_HEIGHT_CLASS}`}
           >
@@ -45,8 +43,8 @@ export function BashCommandCall({
               <code>{output}</code>
             </pre>
           </div>
-        </div>
+        </ToolActionDetailsPanel>
       )}
-    </ToolCallBlock>
+    </ToolActionRow>
   );
 }

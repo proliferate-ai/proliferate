@@ -8,7 +8,8 @@ import {
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
 import { FileDiffCard } from "@/components/ui/content/FileDiffCard";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
-import { ArrowUpRight, Check, ChevronDown, Plus } from "@/components/ui/icons";
+import { Button } from "@/components/ui/Button";
+import { ArrowUpRight, Check, ChevronDown, Plus, RefreshCw } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
@@ -95,9 +96,10 @@ export function GitPanel() {
   const files: GitPanelFile[] = (gitStatus?.files ?? []).filter(
     (file: GitPanelFile) => file.path.length > 0 && !file.path.startsWith(".claude/worktrees/"),
   );
-  const unstagedFiles = files.filter((file) => file.includedState === "excluded");
+  const unstagedFiles = files.filter((file) => file.includedState !== "included");
   const stagedFiles = files.filter((file) => file.includedState !== "excluded");
   const visibleFiles = changesFilter === "staged" ? stagedFiles : unstagedFiles;
+  const totalChangedCount = files.length;
   const visibleChangedCount = visibleFiles.length;
   const activeFilterLabel = FILTER_OPTIONS.find((o) => o.id === changesFilter)!.label;
   const gitStatusMessage = gitStatusError instanceof Error ? gitStatusError.message : null;
@@ -126,20 +128,22 @@ export function GitPanel() {
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between px-2 py-2 border-b border-sidebar-border/70 shrink-0">
         <p className="px-1 text-xs text-muted-foreground">
-          {visibleChangedCount > 0
-            ? `${visibleChangedCount} ${activeFilterLabel.toLowerCase()} file${visibleChangedCount !== 1 ? "s" : ""}`
-            : "Working tree clean"}
+          {totalChangedCount === 0
+            ? "Working tree clean"
+            : `${visibleChangedCount} ${activeFilterLabel.toLowerCase()} file${visibleChangedCount !== 1 ? "s" : ""}`}
         </p>
         <div className="flex items-center gap-1">
           <PopoverButton
             trigger={
-              <button
+              <Button
                 type="button"
-                className="inline-flex h-6 items-center gap-1 rounded-md border border-sidebar-border/70 bg-sidebar-accent/50 px-2 text-[10px] text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
+                variant="secondary"
+                size="sm"
+                className="h-6 gap-1 rounded-md border-sidebar-border/70 bg-sidebar-accent/50 px-2 text-[10px] text-sidebar-foreground hover:bg-sidebar-accent"
               >
                 <span>{activeFilterLabel}</span>
                 <ChevronDown className="size-2.5" />
-              </button>
+              </Button>
             }
             align="end"
             className="w-36 rounded-lg border border-border bg-popover p-1 shadow-floating"
@@ -147,14 +151,16 @@ export function GitPanel() {
             {(close) => (
               <div className="flex flex-col gap-px">
                 {FILTER_OPTIONS.map((option) => (
-                  <button
+                  <Button
                     key={option.id}
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => {
                       setChangesFilter(option.id);
                       close();
                     }}
-                    className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-accent/40 ${
+                    className={`h-auto w-full justify-between rounded-md px-2 py-1.5 text-xs hover:bg-accent/40 ${
                       changesFilter === option.id
                         ? "text-foreground"
                         : "text-muted-foreground"
@@ -164,20 +170,23 @@ export function GitPanel() {
                     {changesFilter === option.id && (
                       <Check className="size-3 text-foreground" />
                     )}
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}
           </PopoverButton>
-          <button
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
             onClick={() => void refetchGitStatus()}
             disabled={!isRuntimeReady}
-            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-xs text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+            className="h-6 w-6 rounded-md text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
             title="Refresh changes"
             aria-label="Refresh changes"
           >
-            ↻
-          </button>
+            <RefreshCw className="size-3" />
+          </Button>
         </div>
       </div>
 
@@ -198,8 +207,8 @@ export function GitPanel() {
         {!gitStatusLoading && !gitStatusMessage && visibleFiles.length === 0 && (
           <p className="px-2 py-4 text-xs text-muted-foreground text-center">
             {changesFilter === "staged"
-              ? "No staged changes to review"
-              : "No changes to review"}
+              ? "No staged changes"
+              : "No unstaged changes"}
           </p>
         )}
 
@@ -220,8 +229,10 @@ export function GitPanel() {
                   onToggleExpand={() => toggleExpanded(file.path)}
                   actions={
                     <>
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (isStaged) {
@@ -232,7 +243,7 @@ export function GitPanel() {
                         }}
                         disabled={!isRuntimeReady}
                         aria-label={isStaged ? `Unstage ${baseName}` : `Stage ${baseName}`}
-                        className={`inline-flex size-6 items-center justify-center rounded-full transition-colors hover:bg-sidebar-accent ${
+                        className={`size-6 hover:bg-sidebar-accent ${
                           isStaged
                             ? "text-git-green"
                             : "text-muted-foreground"
@@ -244,20 +255,22 @@ export function GitPanel() {
                         ) : (
                           <Plus className="size-3" />
                         )}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={(e) => {
                           e.stopPropagation();
                           void openFileDiff(file.path);
                         }}
                         disabled={!isRuntimeReady}
                         aria-label={`Open ${baseName}`}
-                        className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-sidebar-accent"
+                        className="size-6 text-muted-foreground hover:bg-sidebar-accent"
                         title="Open file"
                       >
                         <ArrowUpRight className="size-3" />
-                      </button>
+                      </Button>
                     </>
                   }
                 >

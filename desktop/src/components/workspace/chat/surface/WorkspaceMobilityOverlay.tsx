@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
 import { useWorkspaceMobility } from "@/hooks/workspaces/use-workspace-mobility";
 import { useMobilityFooterContext } from "@/hooks/workspaces/mobility/use-mobility-footer-context";
@@ -9,17 +8,11 @@ import {
   mobilityReconnectCopy,
   mobilityStatusCopy,
 } from "@/config/mobility-copy";
-import {
-  ArrowUpRight,
-  CheckCircleFilled,
-  CircleAlert,
-  LoaderCircle,
-} from "@/components/ui/icons";
+import { CheckCircleFilled, CircleAlert, LoaderCircle } from "@/components/ui/icons";
 
 type WorkspaceMobilityOverlayMode = "progress" | "cleanup_failed" | "completion";
 
 export function WorkspaceMobilityOverlay() {
-  const navigate = useNavigate();
   const mobility = useWorkspaceMobility();
   const footerContext = useMobilityFooterContext();
   const [completionVisible, setCompletionVisible] = useState(false);
@@ -107,7 +100,6 @@ export function WorkspaceMobilityOverlay() {
       mode={mode}
       onContinueWorking={() => setCleanupFailureDismissed(true)}
       onDismissNotice={mobility.dismissNotice}
-      onOpenPowers={() => navigate("/powers")}
       onRetryCleanup={() => {
         void mobility.retryCleanup();
       }}
@@ -124,7 +116,6 @@ export function WorkspaceMobilityOverlayView({
   mode,
   onContinueWorking,
   onDismissNotice,
-  onOpenPowers,
   onRetryCleanup,
   statusLabel,
   title,
@@ -135,7 +126,6 @@ export function WorkspaceMobilityOverlayView({
   mode: WorkspaceMobilityOverlayMode;
   onContinueWorking?: () => void;
   onDismissNotice?: () => void;
-  onOpenPowers?: () => void;
   onRetryCleanup?: () => void;
   statusLabel?: string | null;
   title: string;
@@ -185,20 +175,12 @@ export function WorkspaceMobilityOverlayView({
             <p className="text-sm text-muted-foreground">
               {mcpNotice}
             </p>
-            <div className="mt-3 flex items-center justify-end gap-2">
+            <div className="mt-3 flex items-center justify-end">
               <Button
                 size="sm"
-                variant="ghost"
                 onClick={onDismissNotice}
               >
-                Dismiss
-              </Button>
-              <Button
-                size="sm"
-                onClick={onOpenPowers}
-              >
-                Open Powers
-                <ArrowUpRight className="ml-1 size-3.5" />
+                Use workspace
               </Button>
             </div>
           </div>

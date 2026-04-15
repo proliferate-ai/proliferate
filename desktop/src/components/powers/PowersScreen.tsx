@@ -84,7 +84,7 @@ export function PowersScreen() {
       <div
         className={`flex min-w-0 flex-1 flex-col overflow-hidden ${
           transparentChromeEnabled ? "bg-transparent" : "bg-background"
-        } ${sidebarOpen ? "rounded-tl-lg" : ""}`}
+        } ${sidebarOpen && !transparentChromeEnabled ? "rounded-tl-[22px] border-l border-t border-sidebar-border" : ""}`}
       >
         <div
           className={transparentChromeEnabled ? GLASS_HEADER_CLASS : SOLID_HEADER_CLASS}

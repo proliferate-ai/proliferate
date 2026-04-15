@@ -23,6 +23,7 @@ export function useSessionActions() {
     dismissSession: selectionActions.dismissSession,
     createSessionWithResolvedConfig: creationActions.createSessionWithResolvedConfig,
     findOrCreateSession: controlActions.findOrCreateSession,
+    findOrCreateSessionForLaunch: controlActions.findOrCreateSessionForLaunch,
     openWorkspaceSessionWithResolvedConfig:
       creationActions.openWorkspaceSessionWithResolvedConfig,
     promptActiveSession: controlActions.promptActiveSession,

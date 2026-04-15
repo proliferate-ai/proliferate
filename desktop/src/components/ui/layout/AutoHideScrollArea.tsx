@@ -169,6 +169,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       <div className={`relative min-h-0 overflow-hidden ${className}`}>
         <div
           ref={viewportRef}
+          style={{ overscrollBehavior: "none" }}
           className={`h-full w-full ${
             allowHorizontal
               ? "overflow-auto"

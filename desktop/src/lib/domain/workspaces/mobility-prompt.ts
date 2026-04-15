@@ -1,5 +1,8 @@
 import type { WorkspaceMobilityConfirmSnapshot } from "@/stores/workspaces/workspace-mobility-ui-store";
-import type { WorkspaceMobilityStatusModel } from "@/lib/domain/workspaces/mobility-state-machine";
+import {
+  isWorkspaceMobilityTransitionPhase,
+  type WorkspaceMobilityStatusModel,
+} from "@/lib/domain/workspaces/mobility-state-machine";
 import type { WorkspaceMobilityDirection } from "@/stores/workspaces/workspace-mobility-ui-store";
 import {
   mobilityActionableCopy,
@@ -49,6 +52,24 @@ export interface MobilityPromptState {
   warning: string | null;
   blocker: WorkspaceMobilityPrimaryBlocker | null;
   primaryActionKind: MobilityPromptPrimaryActionKind;
+}
+
+export function isMobilityPromptPrimaryActionPending(
+  prompt: MobilityPromptState,
+  pending: {
+    isMobilityPending: boolean;
+    isBranchSyncing: boolean;
+  },
+): boolean {
+  switch (prompt.primaryActionKind) {
+    case "publish_branch":
+    case "push_commits":
+      return pending.isBranchSyncing;
+    case "retry_cleanup":
+      return pending.isMobilityPending;
+    default:
+      return false;
+  }
 }
 
 function buildBlockedPrompt(args: {
@@ -123,9 +144,7 @@ export function buildMobilityPromptState(args: {
 
   if (
     args.selectionLocked
-    && args.status.phase !== "failed"
-    && args.status.phase !== "cleanup_failed"
-    && args.status.phase !== "idle"
+    && isWorkspaceMobilityTransitionPhase(args.status.phase)
   ) {
     return {
       variant: "in_flight",
@@ -133,8 +152,8 @@ export function buildMobilityPromptState(args: {
       headline: args.status.direction === "cloud_to_local"
         ? "Bringing workspace back local"
         : "Moving workspace to cloud",
-      body: "This workspace is already mid-move.",
-      helper: "Stay here while the current move finishes.",
+      body: args.status.description ?? "The move is still in progress.",
+      helper: null,
       actionLabel: null,
       secondaryActionLabel: null,
       warning: null,

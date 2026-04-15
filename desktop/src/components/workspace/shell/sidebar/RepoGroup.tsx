@@ -4,14 +4,14 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { SHORTCUTS } from "@/config/shortcuts";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { SidebarActionButton } from "./SidebarActionButton";
 
 interface RepoGroupProps {
   name: string;
-  sourceRoot: string;
   count: number;
+  collapsed: boolean;
   children: ReactNode;
+  onToggleCollapsed: () => void;
   onNewWorkspace?: () => void;
   onNewLocalWorkspace?: () => void;
   onCloudWorkspaceAction?: () => void;
@@ -27,9 +27,10 @@ const POPOVER_ROW =
 
 export function RepoGroup({
   name,
-  sourceRoot,
   count,
+  collapsed,
   children,
+  onToggleCollapsed,
   onNewWorkspace,
   onNewLocalWorkspace,
   onCloudWorkspaceAction,
@@ -39,25 +40,26 @@ export function RepoGroup({
   onRemoveRepo,
   onOpenSettings,
 }: RepoGroupProps) {
-  const collapsed = useWorkspaceUiStore((s) => s.collapsedRepoGroups.includes(sourceRoot));
-  const toggleCollapsed = useWorkspaceUiStore((s) => s.toggleRepoGroupCollapsed);
-
   const headerRow = (
     <div
       role="button"
       tabIndex={0}
-      onClick={() => toggleCollapsed(sourceRoot)}
+      onClick={onToggleCollapsed}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          toggleCollapsed(sourceRoot);
+          onToggleCollapsed();
         }
       }}
       className="group/folder-row flex cursor-pointer select-none items-center justify-between overflow-x-hidden text-sm rounded-lg hover:bg-sidebar-accent py-0.5 h-[30px] focus-visible:outline focus-visible:outline-offset-2"
     >
       <div className="flex min-w-0 flex-1 items-center gap-1 pl-1">
         <span className="relative flex h-6 w-6 items-center justify-center">
-          <FolderFilled className="size-3.5 shrink-0 group-hover/folder-row:opacity-0" />
+          {collapsed ? (
+            <Folder className="size-3.5 shrink-0 group-hover/folder-row:opacity-0" />
+          ) : (
+            <FolderFilled className="size-3.5 shrink-0 group-hover/folder-row:opacity-0" />
+          )}
           <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/folder-row:opacity-100">
             <ChevronRight
               className={`size-3 transition-transform ${collapsed ? "" : "rotate-90"}`}

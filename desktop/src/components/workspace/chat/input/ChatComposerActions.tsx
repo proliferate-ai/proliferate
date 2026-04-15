@@ -26,7 +26,7 @@ export function ChatComposerActions({
         type="button"
         onClick={onCancel}
         title={CHAT_COMPOSER_LABELS.stop}
-        className="flex size-7 items-center justify-center rounded-full bg-foreground text-background transition-colors hover:bg-foreground/90"
+        className="flex size-7 items-center justify-center rounded-full bg-[var(--color-composer-send-background)] text-[color:var(--color-composer-send-foreground)] transition-opacity hover:opacity-90"
       >
         <StopSquare className="size-3.5" />
       </button>
@@ -44,10 +44,10 @@ export function ChatComposerActions({
       onClick={canSubmit ? onSubmit : undefined}
       disabled={!canSubmit}
       title={title}
-      className={`flex size-7 items-center justify-center rounded-full transition-colors disabled:cursor-default ${
+      className={`flex size-7 items-center justify-center rounded-full bg-[var(--color-composer-send-background)] text-[color:var(--color-composer-send-foreground)] transition-opacity disabled:cursor-default ${
         canSubmit
-          ? "bg-foreground text-background hover:bg-foreground/90"
-          : "bg-muted text-muted-foreground"
+          ? "hover:opacity-90"
+          : "opacity-50"
       }`}
     >
       <ArrowUp className="size-3.5" />

@@ -56,6 +56,22 @@ const SIDEBAR_WORKSPACE_TYPE_OPTIONS: Array<{
   { label: "Cloud", variant: "cloud" },
 ];
 
+function removeRepoKeys(current: Set<string>, keys: Iterable<string>): Set<string> {
+  const keysToRemove = new Set(keys);
+  let changed = false;
+  const next = new Set<string>();
+
+  for (const key of current) {
+    if (keysToRemove.has(key)) {
+      changed = true;
+      continue;
+    }
+    next.add(key);
+  }
+
+  return changed ? next : current;
+}
+
 export function MainSidebar() {
   const actions = useWorkspaceSidebarActions();
   const supportContext = useSidebarSupportContext();
@@ -120,6 +136,10 @@ export function MainSidebar() {
   const [explicitlyExpandedRepoKeys, setExplicitlyExpandedRepoKeys] = useState<
     Set<string>
   >(() => new Set());
+  const collapsedRepoGroupKeys = useMemo(
+    () => new Set(collapsedRepoGroups),
+    [collapsedRepoGroups],
+  );
   const handleToggleRepoExpansion = useCallback((sourceRoot: string) => {
     setExplicitlyExpandedRepoKeys((prev) => {
       const next = new Set(prev);
@@ -131,6 +151,15 @@ export function MainSidebar() {
       return next;
     });
   }, []);
+  const handleToggleRepoCollapsed = useCallback((sourceRoot: string) => {
+    if (collapsedRepoGroupKeys.has(sourceRoot)) {
+      setCollapsedRepoGroups(collapsedRepoGroups.filter((key) => key !== sourceRoot));
+      return;
+    }
+
+    setCollapsedRepoGroups([...collapsedRepoGroups, sourceRoot]);
+    setExplicitlyExpandedRepoKeys((prev) => removeRepoKeys(prev, [sourceRoot]));
+  }, [collapsedRepoGroupKeys, collapsedRepoGroups, setCollapsedRepoGroups]);
 
   // Force-expand any group whose currently selected workspace would be
   // hidden by the cap, so the selection is always visible. Unions the
@@ -177,6 +206,7 @@ export function MainSidebar() {
       setCollapsedRepoGroups([]);
     } else {
       setCollapsedRepoGroups(allRepoKeys);
+      setExplicitlyExpandedRepoKeys((prev) => removeRepoKeys(prev, allRepoKeys));
     }
   }, [allRepoGroupsCollapsed, allRepoKeys, setCollapsedRepoGroups]);
 
@@ -323,8 +353,10 @@ export function MainSidebar() {
               emptyState={emptyState}
               isLoading={isLoading}
               groups={groups}
+              collapsedRepoGroupKeys={collapsedRepoGroupKeys}
               explicitlyExpandedRepoKeys={explicitlyExpandedRepoKeys}
               effectiveExpandedRepoKeys={effectiveExpandedRepoKeys}
+              onToggleRepoCollapsed={handleToggleRepoCollapsed}
               onToggleRepoExpansion={handleToggleRepoExpansion}
               configuredCloudRepoKeys={configuredCloudRepoKeys}
               cloudRepoConfigsInitialLoading={cloudRepoConfigsInitialLoading}

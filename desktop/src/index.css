@@ -169,6 +169,15 @@
 
   /* -- Composer -- */
   --color-composer-background: hsl(24 9% 12%);
+  --color-composer-border: var(--color-border);
+  --color-composer-control-foreground: var(--color-muted-foreground);
+  --color-composer-control-active-foreground: var(--color-foreground);
+  --color-composer-control-muted-foreground: var(--color-faint);
+  --color-composer-control-hover: var(--color-muted);
+  --color-composer-send-background: var(--color-foreground);
+  --color-composer-send-foreground: var(--color-background);
+  --color-composer-shadow: var(--shadow-subtle);
+  --color-composer-backdrop-filter: none;
 
   /* -- Prose -- */
   --color-prose-border: hsl(25 7% 26%);
@@ -250,6 +259,28 @@
   --git-removed-line-bg: color-mix(in oklab, hsl(0 100% 45%) 10%, transparent);
   --git-removed-line-border: color-mix(in oklab, hsl(0 100% 45%) 60%, transparent);
   --git-removed-line-highlight: color-mix(in oklab, hsl(0 100% 45%) 20%, transparent);
+  --color-diff-surface: color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  --color-diff-header-surface: color-mix(in oklab, var(--color-foreground) 8%, transparent);
+  --color-diff-added: var(--color-git-new-line);
+  --color-diff-deleted: var(--color-git-removed-line);
+  --diffs-font-family: var(--font-mono);
+  --diffs-font-size: 10px;
+  --diffs-line-height: calc(var(--diffs-font-size, 12px) * 1.8);
+  --diffs-min-number-column-width: 4ch;
+  --diffs-fg: var(--color-foreground);
+  --diffs-addition-color-override: var(--color-diff-added);
+  --diffs-deletion-color-override: var(--color-diff-deleted);
+  --codex-diffs-surface: var(--color-diff-surface);
+  --codex-diffs-header-surface: var(--color-diff-header-surface);
+  --diffs-bg-context-override: color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-background));
+  --diffs-bg-separator-override: color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-link-foreground));
+  --diffs-bg-hover-override: color-mix(in srgb, var(--codex-diffs-surface) 92%, var(--color-background));
+  --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 88%, var(--diffs-addition-color-override));
+  --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 88%, var(--diffs-deletion-color-override));
+  --diffs-bg-addition-number-override: color-mix(in srgb, var(--codex-diffs-surface) 91%, var(--diffs-addition-color-override));
+  --diffs-bg-deletion-number-override: color-mix(in srgb, var(--codex-diffs-surface) 91%, var(--diffs-deletion-color-override));
+  --color-diff-added-bg: var(--diffs-bg-addition-override);
+  --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
 
 
@@ -265,7 +296,7 @@
 :root[data-theme="mono"],
 :root[data-theme="original"] {
   /* -- Typography -- */
-  --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 
   /* -- Composer shape (codex-style 24px pill) -- */
   --radius-composer: 1.5rem;
@@ -425,10 +456,80 @@
   --git-removed-line-highlight: color-mix(in oklab, #fa423e 23%, transparent);
 }
 
+/* Mono dark tracks Codex Electron dark while `original` keeps the legacy dark preset above. */
+:root[data-theme="mono"] {
+  --color-background: #181818;
+  --color-foreground: #ffffff;
+
+  --color-primary: #ffffff;
+  --color-primary-foreground: #0d0d0d;
+
+  --color-secondary: #212121;
+  --color-secondary-foreground: #ffffff;
+  --color-accent: color-mix(in oklab, #ffffff 5%, transparent);
+  --color-accent-foreground: #ffffff;
+  --color-muted: #212121;
+  --color-muted-foreground: color-mix(in oklab, #ffffff 70%, transparent);
+  --color-faint: color-mix(in oklab, #ffffff 50%, transparent);
+  --color-helper: color-mix(in oklab, #ffffff 70%, transparent);
+
+  --color-card: #212121;
+  --color-card-foreground: #ffffff;
+  --color-popover: #212121;
+  --color-popover-foreground: #ffffff;
+  --color-popover-accent: color-mix(in oklab, #ffffff 5%, transparent);
+  --color-popover-ring: color-mix(in oklab, #ffffff 8%, transparent);
+
+  --color-border: color-mix(in oklab, #ffffff 8%, transparent);
+  --color-input: color-mix(in oklab, #ffffff 12%, transparent);
+  --color-input-border: color-mix(in oklab, #ffffff 12%, transparent);
+  --color-separator: color-mix(in oklab, #ffffff 4%, transparent);
+  --color-ring: color-mix(in oklab, #339cff 70%, transparent);
+
+  --color-link: color-mix(in oklab, #339cff 12%, transparent);
+  --color-link-foreground: #339cff;
+  --color-link-elevated: color-mix(in oklab, #339cff 20%, transparent);
+
+  --color-composer-background: #212121;
+  --color-prose-border: color-mix(in oklab, #ffffff 8%, transparent);
+
+  --color-sidebar: #141414;
+  --color-sidebar-background: #141414;
+  --color-sidebar-foreground: color-mix(in oklab, #ffffff 82%, transparent);
+  --color-sidebar-primary: #ffffff;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-muted-foreground: color-mix(in oklab, #ffffff 50%, transparent);
+  --color-sidebar-accent: color-mix(in oklab, #ffffff 5%, transparent);
+  --color-sidebar-accent-foreground: #ffffff;
+  --color-sidebar-border: color-mix(in oklab, #ffffff 8%, transparent);
+  --color-sidebar-ring: color-mix(in oklab, #339cff 70%, transparent);
+  --color-sidebar-blue: #339cff;
+
+  --color-git-green: #40c977;
+  --color-git-red: #fa423e;
+  --color-git-yellow: #ffd240;
+  --color-git-gray: color-mix(in oklab, #ffffff 50%, transparent);
+  --color-git-new-line: #40c977;
+  --color-git-removed-line: #fa423e;
+
+  --git-new-line-bg: color-mix(in oklab, #40c977 15%, transparent);
+  --git-new-line-border: color-mix(in oklab, #40c977 60%, transparent);
+  --git-new-line-highlight: color-mix(in oklab, #40c977 23%, transparent);
+  --git-removed-line-bg: color-mix(in oklab, #fa423e 15%, transparent);
+  --git-removed-line-border: color-mix(in oklab, #fa423e 60%, transparent);
+  --git-removed-line-highlight: color-mix(in oklab, #fa423e 23%, transparent);
+  --color-diff-surface: color-mix(in srgb, #181818 94%, #ffffff);
+  --color-diff-header-surface: color-mix(in srgb, #181818 90%, #ffffff);
+  --color-diff-added: #40c977;
+  --color-diff-deleted: #fa423e;
+  --color-diff-added-bg: var(--diffs-bg-addition-override);
+  --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
+}
+
 /* ========================================================================
- * ORIGINAL PRESET — mono palette + Manrope typography + sharper composer.
- * Inherits everything from the mono selectors above; only the bits below
- * change. Keep this block tiny so the diff vs. mono stays legible.
+ * ORIGINAL PRESET — legacy dark mono palette + Manrope typography + sharper composer.
+ * Inherits the shared original/mono base block, but not the Codex-dark mono
+ * override above.
  * ======================================================================== */
 
 :root[data-theme="original"] {
@@ -902,11 +1003,248 @@
   --git-removed-line-bg: color-mix(in oklab, #ba2623 10%, transparent);
   --git-removed-line-border: color-mix(in oklab, #ba2623 60%, transparent);
   --git-removed-line-highlight: color-mix(in oklab, #ba2623 15%, transparent);
+  --color-diff-surface: color-mix(in srgb, #ffffff 94%, #0d0d0d);
+  --color-diff-header-surface: color-mix(in srgb, #ffffff 90%, #0d0d0d);
+  --color-diff-added: #00a240;
+  --color-diff-deleted: #ba2623;
+  --color-diff-added-bg: var(--diffs-bg-addition-override);
+  --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
+}
+
+/* Mono light tracks Codex Electron light without changing the original preset. */
+:root[data-theme="mono"][data-mode="light"] {
+  --color-scrollbar-thumb: rgba(13, 13, 13, 0.08);
+  --color-scrollbar-thumb-active: rgba(13, 13, 13, 0.16);
+
+  --color-background: #ffffff;
+  --color-foreground: #0d0d0d;
+  --color-overlay: #000000;
+
+  --color-primary: #0d0d0d;
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: rgba(13, 13, 13, 0.05);
+  --color-secondary-foreground: #0d0d0d;
+
+  --color-accent: rgba(13, 13, 13, 0.05);
+  --color-accent-foreground: #0d0d0d;
+  --color-muted: rgba(13, 13, 13, 0.025);
+  --color-muted-foreground: rgba(13, 13, 13, 0.7);
+  --color-faint: rgba(13, 13, 13, 0.5);
+  --color-helper: rgba(13, 13, 13, 0.7);
+
+  --color-card: rgba(255, 255, 255, 0.96);
+  --color-card-foreground: #0d0d0d;
+
+  --color-popover: #ffffff;
+  --color-popover-foreground: #0d0d0d;
+  --color-popover-accent: rgba(13, 13, 13, 0.05);
+  --color-popover-ring: rgba(13, 13, 13, 0.08);
+
+  --color-border: rgba(13, 13, 13, 0.08);
+  --color-input: rgba(13, 13, 13, 0.1);
+  --color-input-border: rgba(13, 13, 13, 0.08);
+  --color-separator: rgba(13, 13, 13, 0.05);
+  --color-ring: #0169cc;
+
+  --color-highlight: #deecf8;
+  --color-highlight-foreground: #0d0d0d;
+  --color-highlight-muted: #0169cc;
+  --color-border-highlight: #0169cc;
+  --color-unread: #0169cc;
+  --color-special: #0169cc;
+
+  --color-destructive: #e02e2a;
+  --color-destructive-foreground: #ffffff;
+  --color-success: #00a240;
+  --color-success-foreground: #ffffff;
+  --color-warning: #fff8e6;
+  --color-warning-foreground: #0d0d0d;
+  --color-warning-foreground-secondary: rgba(13, 13, 13, 0.5);
+  --color-warning-border: rgba(13, 13, 13, 0.08);
+  --color-info: #0169cc;
+  --color-info-foreground: #ffffff;
+  --color-positive: #00a240;
+  --color-positive-muted: rgba(0, 162, 64, 0.1);
+  --color-positive-foreground: #ffffff;
+
+  --color-link: #deecf8;
+  --color-link-foreground: #0169cc;
+  --color-link-elevated: #d8e8f7;
+
+  --color-tip: #deecf8;
+  --color-tip-border: rgba(13, 13, 13, 0.08);
+  --color-tip-secondary: #d8e8f7;
+  --color-tip-secondary-border: rgba(13, 13, 13, 0.08);
+  --color-tip-muted: #0169cc;
+  --color-tip-foreground: #0d0d0d;
+  --color-plan-border: #0169cc;
+
+  --color-switch-background: #0d0d0d;
+  --color-switch-foreground: #ffffff;
+
+  --color-composer-background: rgba(255, 255, 255, 0.864);
+  --color-composer-border: rgba(0, 0, 0, 0.1);
+  --color-composer-control-foreground: rgba(13, 13, 13, 0.5);
+  --color-composer-control-active-foreground: #0d0d0d;
+  --color-composer-control-muted-foreground: rgba(13, 13, 13, 0.5);
+  --color-composer-control-hover: rgba(13, 13, 13, 0.055);
+  --color-composer-send-background: #0d0d0d;
+  --color-composer-send-foreground: #ffffff;
+  --color-composer-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.05);
+  --color-composer-backdrop-filter: blur(16px);
+
+  --color-prose-border: rgba(13, 13, 13, 0.12);
+
+  --color-sidebar: #f5f5f5;
+  --color-sidebar-background: #f5f5f5;
+  --color-sidebar-foreground: rgba(13, 13, 13, 0.7);
+  --color-sidebar-primary: #0d0d0d;
+  --color-sidebar-primary-foreground: #0d0d0d;
+  --color-sidebar-muted-foreground: rgba(13, 13, 13, 0.5);
+  --color-sidebar-accent: rgba(13, 13, 13, 0.05);
+  --color-sidebar-accent-foreground: #0d0d0d;
+  --color-sidebar-border: rgba(13, 13, 13, 0.08);
+  --color-sidebar-ring: #0169cc;
+  --color-sidebar-blue: #0169cc;
+
+  --color-status-backlog: rgba(13, 13, 13, 0.5);
+  --color-status-backlog-hover: rgba(13, 13, 13, 0.7);
+  --color-status-in-progress: #bd5800;
+  --color-status-in-progress-hover: #9a4600;
+  --color-status-in-review: #00a240;
+  --color-status-in-review-hover: #008833;
+  --color-status-done: #0169cc;
+  --color-status-done-hover: #0057aa;
+  --color-status-canceled: rgba(13, 13, 13, 0.5);
+  --color-status-canceled-hover: rgba(13, 13, 13, 0.7);
+
+  --color-todo-in-progress: #0169cc;
+  --color-todo-completed: #00a240;
+  --color-todo-pending: rgba(13, 13, 13, 0.5);
+
+  --color-app-switcher-bg: rgba(13, 13, 13, 0.1);
+
+  --color-git-green: #00a240;
+  --color-git-red: #e02e2a;
+  --color-git-yellow: #ffc300;
+  --color-git-gray: rgba(13, 13, 13, 0.5);
+  --color-git-new-line: #00a240;
+  --color-git-removed-line: #e02e2a;
+
+  --color-terminal-black: rgba(13, 13, 13, 0.5);
+  --color-terminal-red: #d53538;
+  --color-terminal-green: #008809;
+  --color-terminal-yellow: #bd5800;
+  --color-terminal-blue: #001bcb;
+  --color-terminal-magenta: #751ed9;
+  --color-terminal-cyan: #0071ea;
+  --color-terminal-white: #666666;
+
+  --color-terminal-bright-black: #000000;
+  --color-terminal-bright-red: #f44a4c;
+  --color-terminal-bright-green: #59d24e;
+  --color-terminal-bright-yellow: #f87915;
+  --color-terminal-bright-blue: #006aff;
+  --color-terminal-bright-magenta: #9840ff;
+  --color-terminal-bright-cyan: #20b8ff;
+  --color-terminal-bright-white: #828282;
+
+  --git-new-line-bg: color-mix(in oklab, #00a240 15%, transparent);
+  --git-new-line-border: color-mix(in oklab, #00a240 60%, transparent);
+  --git-new-line-highlight: color-mix(in oklab, #00a240 15%, transparent);
+  --git-removed-line-bg: color-mix(in oklab, #e02e2a 15%, transparent);
+  --git-removed-line-border: color-mix(in oklab, #e02e2a 60%, transparent);
+  --git-removed-line-highlight: color-mix(in oklab, #e02e2a 15%, transparent);
+  --color-diff-surface: color-mix(in srgb, #ffffff 94%, #0d0d0d);
+  --color-diff-header-surface: color-mix(in srgb, #ffffff 90%, #0d0d0d);
+  --color-diff-added: #00a240;
+  --color-diff-deleted: #e02e2a;
+  --color-diff-added-bg: var(--diffs-bg-addition-override);
+  --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
 
 /* ========================================================================
  * NON-THEME STYLES
  * ======================================================================== */
+
+.chat-composer-surface {
+  background-color: var(--color-composer-background);
+  box-shadow:
+    0 0 0 1px var(--color-composer-border),
+    var(--color-composer-shadow);
+  -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
+  backdrop-filter: var(--color-composer-backdrop-filter);
+}
+
+/* ---- Codex-style chat diffs ---- */
+.thread-diff-virtualized {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 36px;
+}
+
+.composer-diff-simple-line {
+  --codex-diffs-surface: var(--color-diff-surface);
+  --codex-diffs-header-surface: var(--color-diff-header-surface);
+  background-color: var(--codex-diffs-surface);
+  scrollbar-color: var(--color-scrollbar-thumb) transparent;
+}
+
+.composer-diff-simple-line:hover {
+  scrollbar-color: var(--color-scrollbar-thumb-active) transparent;
+}
+
+.composer-diff-simple-line [data-diff] {
+  background-color: var(--codex-diffs-surface);
+  color: var(--diffs-fg);
+}
+
+.composer-diff-simple-line [data-code] {
+  background-color: var(--codex-diffs-surface);
+}
+
+.composer-diff-simple-line [data-line-type="context"] {
+  background-color: var(--diffs-bg-context-override);
+}
+
+.composer-diff-simple-line [data-line-type="change-addition"] {
+  background-color: var(--diffs-bg-addition-override);
+}
+
+.composer-diff-simple-line [data-line-type="change-deletion"] {
+  background-color: var(--diffs-bg-deletion-override);
+}
+
+.composer-diff-simple-line [data-separator] {
+  background-color: var(--diffs-bg-separator-override);
+}
+
+.composer-diff-simple-line [data-gutter] [data-line-type="context"] {
+  color: color-mix(in srgb, var(--diffs-fg) 35%, transparent);
+}
+
+.composer-diff-simple-line [data-gutter] [data-line-type="change-addition"] {
+  background-color: var(--diffs-bg-addition-number-override);
+  color: var(--color-diff-added);
+}
+
+.composer-diff-simple-line [data-gutter] [data-line-type="change-deletion"] {
+  background-color: var(--diffs-bg-deletion-number-override);
+  color: var(--color-diff-deleted);
+}
+
+.composer-diff-simple-line [data-separator]:empty {
+  display: flex;
+  align-items: center;
+  background-color: transparent;
+}
+
+.composer-diff-simple-line [data-content] [data-separator]:empty::after {
+  content: "";
+  flex: 1;
+  margin-inline: 1ch;
+  border-top: 1px solid color-mix(in srgb, var(--diffs-fg) 18%, transparent);
+}
 
 /* ---- Base styles ---- */
 html,

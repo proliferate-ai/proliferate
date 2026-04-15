@@ -2,11 +2,11 @@ import type { ToolCallItem } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { FileText } from "@/components/ui/icons";
-import { ToolCallBlock } from "./ToolCallBlock";
+import { ToolActionRow } from "./ToolActionRow";
 import { useBrailleFillsweep } from "@/hooks/ui/use-braille-sweep";
 import { deriveCoworkArtifactToolPresentation } from "@/lib/domain/chat/cowork-artifact-tool-presentation";
 
-interface CoworkArtifactToolCallBlockProps {
+interface CoworkArtifactToolActionRowProps {
   item: ToolCallItem;
   onOpenArtifact?: (artifactId: string) => void;
 }
@@ -14,10 +14,10 @@ interface CoworkArtifactToolCallBlockProps {
 const ARTIFACT_SPINNER_COLOR =
   "color-mix(in oklab, var(--color-link-foreground) 74%, var(--color-highlight-muted) 26%)";
 
-export function CoworkArtifactToolCallBlock({
+export function CoworkArtifactToolActionRow({
   item,
   onOpenArtifact,
-}: CoworkArtifactToolCallBlockProps) {
+}: CoworkArtifactToolActionRowProps) {
   const presentation = deriveCoworkArtifactToolPresentation(item);
   if (!presentation) {
     return null;
@@ -30,13 +30,13 @@ export function CoworkArtifactToolCallBlock({
   const canOpenArtifact = !!presentation.summary?.id && !!onOpenArtifact;
 
   return (
-    <ToolCallBlock
+    <ToolActionRow
       icon={presentation.running ? (
         <ArtifactRunningIcon />
       ) : (
         <FileText className="size-3 text-faint" />
       )}
-      name={<span className="font-[460] text-foreground/90">{label}</span>}
+      label={<span className="font-[460] text-foreground/90">{label}</span>}
       status={status}
       hint={chipBasename && chipPath ? (
         <ArtifactChip

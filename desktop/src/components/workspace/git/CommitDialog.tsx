@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useCommitGitMutation,
   useGitStatusQuery,
@@ -24,14 +24,15 @@ interface CommitDialogProps {
 
 const MODE_OPTIONS: { id: CommitMode; label: string; icon: React.ReactNode }[] = [
   { id: "commit", label: "Commit", icon: <GitCommit className="size-3.5" /> },
-  { id: "commit-push", label: "Push", icon: <CloudUpload className="size-3.5" /> },
-  { id: "commit-pr", label: "PR", icon: <GitPullRequest className="size-3.5" /> },
+  { id: "commit-push", label: "Commit + push", icon: <CloudUpload className="size-3.5" /> },
+  { id: "commit-pr", label: "Commit + PR", icon: <GitPullRequest className="size-3.5" /> },
 ];
+
+const EMPTY_GIT_FILES: GitChangedFile[] = [];
 
 export function CommitDialog({ open, onClose, onOpenPrDialog }: CommitDialogProps) {
   const [summary, setSummary] = useState("");
   const [includeUnstaged, setIncludeUnstaged] = useState(true);
-  const [draft, setDraft] = useState(false);
   const [mode, setMode] = useState<CommitMode>("commit");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,42 +51,53 @@ export function CommitDialog({ open, onClose, onOpenPrDialog }: CommitDialogProp
   const { data: gitStatus } = useGitStatusQuery({ enabled: runtimeBlockedReason === null });
 
   const branchName = gitStatus?.currentBranch ?? null;
-  const allFiles = gitStatus?.files ?? [];
-  const includedFiles = gitStatus?.summary.includedFiles ?? 0;
-  const additions = gitStatus?.summary.additions ?? 0;
-  const deletions = gitStatus?.summary.deletions ?? 0;
+  const allFiles = gitStatus?.files ?? EMPTY_GIT_FILES;
   const hasUnstagedFiles = allFiles.some((file: GitChangedFile) => file.includedState !== "included");
-  const fileCount = includeUnstaged ? allFiles.length : includedFiles;
+  const selectedFiles = useMemo(
+    () => includeUnstaged
+      ? allFiles
+      : allFiles.filter((file: GitChangedFile) => file.includedState !== "excluded"),
+    [allFiles, includeUnstaged],
+  );
+  const selectedStats = useMemo(() => summarizeChangedFiles(selectedFiles), [selectedFiles]);
+  const fileCount = selectedStats.files;
+  const requiresPush = mode === "commit-push" || mode === "commit-pr";
+  const pushBlockedReason = requiresPush && (!branchName || gitStatus?.detached)
+    ? "Switch to a branch before pushing."
+    : null;
+  const blockedReason = runtimeBlockedReason ?? gitStatus?.actions.reasonIfBlocked ?? pushBlockedReason;
 
-  const canSubmit = !loading && !runtimeBlockedReason && summary.trim().length > 0 && fileCount > 0;
+  const canSubmit = !loading
+    && !blockedReason
+    && !!gitStatus
+    && summary.trim().length > 0
+    && fileCount > 0;
 
   async function handleSubmit() {
-    if (runtimeBlockedReason) {
-      setError(runtimeBlockedReason);
+    if (blockedReason) {
+      setError(blockedReason);
       return;
     }
     const msg = summary.trim();
-    if (!msg && fileCount === 0) return;
+    if (!msg || fileCount === 0) return;
     setLoading(true);
     setError(null);
     try {
       if (includeUnstaged && hasUnstagedFiles) {
-        await stageMutation.mutateAsync(allFiles.map((file: GitChangedFile) => file.path));
+        await stageMutation.mutateAsync(selectedFiles.map((file: GitChangedFile) => file.path));
       }
-      const finalMsg = draft ? `[draft] ${msg}` : msg;
-      await commitMutation.mutateAsync({ summary: finalMsg });
+      await commitMutation.mutateAsync({ summary: msg });
       if (mode === "commit-push" || mode === "commit-pr") {
         await pushMutation.mutateAsync({});
       }
       setSummary("");
-      setDraft(false);
       setMode("commit");
       onClose();
       if (mode === "commit-pr" && onOpenPrDialog) {
         onOpenPrDialog();
       }
     } catch (e) {
-      setError(String(e));
+      setError(errorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -95,7 +107,13 @@ export function CommitDialog({ open, onClose, onOpenPrDialog }: CommitDialogProp
     ? "Commit"
     : mode === "commit-push"
       ? "Commit & push"
-      : "Commit & create PR";
+      : "Commit, push, then PR";
+
+  const modeDescription = mode === "commit"
+    ? "Create a local commit from the selected changes."
+    : mode === "commit-push"
+      ? "Create the commit, then push the current branch."
+      : "Create the commit, push the current branch, then open the pull request form.";
 
   return (
     <ModalShell
@@ -111,27 +129,19 @@ export function CommitDialog({ open, onClose, onOpenPrDialog }: CommitDialogProp
         </div>
       }
       footer={
-        <div className="flex w-full items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Switch checked={draft} onChange={setDraft} />
-            <span
-              className="text-sm text-foreground cursor-pointer select-none"
-              onClick={() => setDraft((d) => !d)}
-            >
-              Draft
-            </span>
-          </div>
-          <span className="ml-auto">
-            <Button
-              variant="inverted"
-              size="sm"
-              loading={loading}
-              disabled={!canSubmit}
-              onClick={handleSubmit}
-            >
-              {submitLabel}
-            </Button>
-          </span>
+        <div className="flex w-full justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="inverted"
+            size="sm"
+            loading={loading}
+            disabled={!canSubmit}
+            onClick={handleSubmit}
+          >
+            {submitLabel}
+          </Button>
         </div>
       }
     >
@@ -148,8 +158,8 @@ export function CommitDialog({ open, onClose, onOpenPrDialog }: CommitDialogProp
                 {fileCount} file{fileCount !== 1 ? "s" : ""}
               </span>
               <span className="inline-flex items-center gap-1 tabular-nums text-xs">
-                <span className="text-git-green">+{additions}</span>
-                <span className="text-git-red">-{deletions}</span>
+                <span className="text-git-green">+{selectedStats.additions}</span>
+                <span className="text-git-red">-{selectedStats.deletions}</span>
               </span>
             </div>
           </div>
@@ -161,7 +171,7 @@ export function CommitDialog({ open, onClose, onOpenPrDialog }: CommitDialogProp
                 className="text-xs text-muted-foreground cursor-pointer select-none"
                 onClick={() => setIncludeUnstaged((v) => !v)}
               >
-                Include unstaged files
+                Stage unstaged changes before committing
               </span>
             </div>
           )}
@@ -172,7 +182,7 @@ export function CommitDialog({ open, onClose, onOpenPrDialog }: CommitDialogProp
           rows={3}
           value={summary}
           onChange={(e) => setSummary(e.target.value)}
-          placeholder="Commit message (leave blank to autogenerate)"
+          placeholder="Commit message"
           autoFocus
         />
 
@@ -181,9 +191,11 @@ export function CommitDialog({ open, onClose, onOpenPrDialog }: CommitDialogProp
           {MODE_OPTIONS.map((opt) => {
             const selected = mode === opt.id;
             return (
-              <button
+              <Button
                 key={opt.id}
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => setMode(opt.id)}
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
                   selected
@@ -193,16 +205,32 @@ export function CommitDialog({ open, onClose, onOpenPrDialog }: CommitDialogProp
               >
                 {opt.icon}
                 {opt.label}
-              </button>
+              </Button>
             );
           })}
         </div>
+        <p className="text-xs text-muted-foreground">{modeDescription}</p>
 
         {error && <p className="text-xs text-destructive">{error}</p>}
-        {!error && runtimeBlockedReason && (
-          <p className="text-xs text-muted-foreground">{runtimeBlockedReason}</p>
+        {!error && blockedReason && (
+          <p className="text-xs text-muted-foreground">{blockedReason}</p>
         )}
       </div>
     </ModalShell>
   );
+}
+
+function summarizeChangedFiles(files: GitChangedFile[]) {
+  return files.reduce(
+    (summary, file) => ({
+      files: summary.files + 1,
+      additions: summary.additions + file.additions,
+      deletions: summary.deletions + file.deletions,
+    }),
+    { files: 0, additions: 0, deletions: 0 },
+  );
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

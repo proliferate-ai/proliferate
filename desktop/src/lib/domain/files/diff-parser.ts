@@ -4,6 +4,12 @@ export interface DiffLine {
   type: DiffLineType;
   marker: "+" | "-" | " ";
   content: string;
+  oldLineNum: number | null;
+  newLineNum: number | null;
+  /**
+   * Single-column display number kept for existing non-chat diff renderers.
+   * Chat diffs use `oldLineNum` / `newLineNum` directly.
+   */
   lineNum: number | null;
   /** Index into the flat list of all code lines (for token lookup) */
   tokenIndex: number;
@@ -27,7 +33,7 @@ export interface ParsedPatch {
   allCodeLines: string[];
 }
 
-const HUNK_RE = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+const HUNK_RE = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
 const HUNK_CONTEXT_RE = /^@@ .+? @@\s*(.*)$/;
 
 function classifyLine(line: string): "added" | "removed" | "context" | "hunk" | "meta" {
@@ -101,7 +107,8 @@ export function parsePatch(patch: string): ParsedPatch {
 
   let currentLines: DiffLine[] = [];
   let currentLabel = "";
-  let newNum = 0;
+  let oldNum = 1;
+  let newNum = 1;
   let tokenIndex = 0;
 
   function flushHunk() {
@@ -123,7 +130,8 @@ export function parsePatch(patch: string): ParsedPatch {
       flushHunk();
       const match = HUNK_RE.exec(raw);
       if (match) {
-        newNum = parseInt(match[1], 10);
+        oldNum = parseInt(match[1], 10);
+        newNum = parseInt(match[2], 10);
       }
       const ctxMatch = HUNK_CONTEXT_RE.exec(raw);
       currentLabel = ctxMatch?.[1]?.trim() ?? "";
@@ -139,6 +147,8 @@ export function parsePatch(patch: string): ParsedPatch {
         type: "added",
         marker: "+",
         content,
+        oldLineNum: null,
+        newLineNum: newNum,
         lineNum: newNum,
         tokenIndex: idx,
       });
@@ -148,17 +158,23 @@ export function parsePatch(patch: string): ParsedPatch {
         type: "removed",
         marker: "-",
         content,
-        lineNum: null,
+        oldLineNum: oldNum,
+        newLineNum: null,
+        lineNum: oldNum,
         tokenIndex: idx,
       });
+      oldNum++;
     } else {
       currentLines.push({
         type: "context",
         marker: " ",
         content,
+        oldLineNum: oldNum,
+        newLineNum: newNum,
         lineNum: newNum,
         tokenIndex: idx,
       });
+      oldNum++;
       newNum++;
     }
   }

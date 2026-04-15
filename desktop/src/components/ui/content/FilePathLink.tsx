@@ -47,7 +47,7 @@ export function FilePathLink({ rawPath, children }: FilePathLinkProps) {
       type="button"
       onClick={handleOpen}
       title={absolute ?? rawPath}
-      className="cursor-pointer font-mono text-sm leading-none text-link-foreground hover:underline focus-visible:outline-none focus-visible:underline"
+      className="m-0 inline cursor-pointer border-0 bg-transparent p-0 align-baseline font-mono text-[inherit] leading-[inherit] text-link-foreground hover:underline focus-visible:outline-none focus-visible:underline"
     >
       {children ?? rawPath}
     </button>

@@ -100,7 +100,10 @@ export function useWorkspaceSidebarActions() {
     showToast,
   ]);
 
-  const handleCreateLocalWorkspace = useCallback((sourceRoot: string | null) => {
+  const handleCreateLocalWorkspace = useCallback((
+    sourceRoot: string | null,
+    repoGroupKeyToExpand?: string | null,
+  ) => {
     if (!sourceRoot) {
       return;
     }
@@ -109,7 +112,10 @@ export function useWorkspaceSidebarActions() {
     // Use lightweight path when already in a workspace (sidebar creation)
     // to avoid disrupting the current workspace with a pending shell.
     const lightweight = !!selectedWorkspaceId;
-    void createLocalWorkspaceAndEnter(sourceRoot, { lightweight }).catch((error) => {
+    void createLocalWorkspaceAndEnter(sourceRoot, {
+      lightweight,
+      repoGroupKeyToExpand: repoGroupKeyToExpand ?? sourceRoot,
+    }).catch((error) => {
       if (lightweight) {
         const message = error instanceof Error ? error.message : "Failed to create workspace.";
         showToast(message);
@@ -117,7 +123,10 @@ export function useWorkspaceSidebarActions() {
     });
   }, [createLocalWorkspaceAndEnter, navigateToWorkspaceShell, selectedWorkspaceId, showToast]);
 
-  const handleCreateWorktreeWorkspace = useCallback((repoRootId: string | null) => {
+  const handleCreateWorktreeWorkspace = useCallback((
+    repoRootId: string | null,
+    repoGroupKeyToExpand?: string | null,
+  ) => {
     if (!repoRootId || isCreatingWorktreeWorkspace) {
       return;
     }
@@ -134,6 +143,7 @@ export function useWorkspaceSidebarActions() {
     void createWorktreeAndEnter({ repoRootId }, {
       lightweight,
       latencyFlowId,
+      repoGroupKeyToExpand,
     }).catch((error) => {
       failLatencyFlow(latencyFlowId, "worktree_enter_failed");
       if (lightweight) {
@@ -149,13 +159,16 @@ export function useWorkspaceSidebarActions() {
     showToast,
   ]);
 
-  const handleCreateCloudWorkspace = useCallback((target: CloudWorkspaceRepoTarget | null) => {
+  const handleCreateCloudWorkspace = useCallback((
+    target: CloudWorkspaceRepoTarget | null,
+    repoGroupKeyToExpand?: string | null,
+  ) => {
     if (!target || isCreatingCloudWorkspace) {
       return;
     }
 
     navigateToWorkspaceShell();
-    void createCloudWorkspaceAndEnter(target);
+    void createCloudWorkspaceAndEnter(target, { repoGroupKeyToExpand });
   }, [
     createCloudWorkspaceAndEnter,
     isCreatingCloudWorkspace,

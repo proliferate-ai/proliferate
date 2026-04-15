@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
-import { FileDiffCard } from "@/components/ui/content/FileDiffCard";
-import { ArrowUpRight } from "@/components/ui/icons";
+import {
+  FileChangesCard,
+  FileDiffCard,
+} from "@/components/ui/content/FileDiffCard";
 import { collectTurnFilePatches } from "@/lib/domain/chat/turn-file-patches";
 import type { TranscriptState, TurnRecord } from "@anyharness/sdk";
 
@@ -13,10 +15,10 @@ interface TurnDiffPanelProps {
 
 export function TurnDiffPanel({ turn, transcript, onOpenFile }: TurnDiffPanelProps) {
   const filePatches = useMemo(
-    () => collectTurnFilePatches(turn, transcript),
+    () => collectTurnFilePatches(turn, transcript).filter((fp) => fp.patches.length > 0),
     [turn, transcript],
   );
-  const hasPatches = filePatches.some((fp) => fp.patches.length > 0);
+  const hasPatches = filePatches.length > 0;
   const [manualToggled, setManualToggled] = useState<Set<string>>(new Set());
 
   if (!hasPatches) {
@@ -38,52 +40,32 @@ export function TurnDiffPanel({ turn, transcript, onOpenFile }: TurnDiffPanelPro
   };
 
   return (
-    <div className="mt-2 flex flex-col overflow-hidden rounded-xl bg-foreground/[0.03]">
-      <div className="flex items-center px-3 py-2 bg-foreground/[0.03]">
-        <span className="text-xs text-muted-foreground">
-          {fileCount} file{fileCount !== 1 ? "s" : ""} changed
-        </span>
-      </div>
-      <div className="flex flex-col divide-y divide-border/30">
-        {filePatches.map((fp) => {
-          const isExpanded = manualToggled.has(fp.path);
-          const combinedPatch = fp.patches.join("\n");
+    <FileChangesCard fileCount={fileCount} className="mt-2">
+      {filePatches.map((fp) => {
+        const isExpanded = !manualToggled.has(fp.path);
+        const combinedPatch = fp.patches.join("\n");
 
-          return (
-            <FileDiffCard
-              key={fp.path}
-              filePath={fp.path}
-              additions={fp.additions}
-              deletions={fp.deletions}
-              isExpanded={isExpanded}
-              onToggleExpand={() => toggleExpanded(fp.path)}
-              actions={
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenFile(fp.path);
-                  }}
-                  aria-label={`Open ${fp.path}`}
-                  className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-sidebar-accent"
-                  title="Open file"
-                >
-                  <ArrowUpRight className="size-3" />
-                </button>
-              }
-            >
-              {combinedPatch && (
-                <div className="max-h-64 overflow-y-auto">
-                  <DiffViewer
-                    patch={combinedPatch}
-                    filePath={fp.path}
-                  />
-                </div>
-              )}
-            </FileDiffCard>
-          );
-        })}
-      </div>
-    </div>
+        return (
+          <FileDiffCard
+            key={fp.path}
+            filePath={fp.path}
+            additions={fp.additions}
+            deletions={fp.deletions}
+            isExpanded={isExpanded}
+            onToggleExpand={() => toggleExpanded(fp.path)}
+            onOpenFile={() => onOpenFile(fp.path)}
+            embedded
+          >
+            {combinedPatch && (
+              <DiffViewer
+                patch={combinedPatch}
+                filePath={fp.path}
+                variant="chat"
+              />
+            )}
+          </FileDiffCard>
+        );
+      })}
+    </FileChangesCard>
   );
 }

@@ -21,6 +21,10 @@ import {
   groupSidebarEntries,
 } from "@/lib/domain/workspaces/sidebar";
 import {
+  sidebarRepoGroupKeyForCloudTarget,
+  sidebarRepoGroupKeyForWorkspace,
+} from "@/lib/domain/workspaces/sidebar-group-key";
+import {
   isUsableWorkspace,
 } from "@/lib/domain/workspaces/usability";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -42,6 +46,7 @@ export function useAppShortcuts(): void {
     isPending: isCloudRepoConfigsPending,
   } = useCloudRepoConfigs(cloudActive);
   const {
+    repoRoots,
     localWorkspaces,
     cloudWorkspaces,
   } = useStandardRepoProjection();
@@ -118,6 +123,7 @@ export function useAppShortcuts(): void {
 
     void createLocalWorkspaceAndEnter(sourceRoot, {
       lightweight: true,
+      repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(ctx.repoWs, repoRoots),
     }).catch((error) => {
       showToast(error instanceof Error ? error.message : "Failed to create workspace.");
     });
@@ -149,6 +155,7 @@ export function useAppShortcuts(): void {
     }, {
       lightweight: true,
       latencyFlowId,
+      repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(ctx.repoWs, repoRoots),
     }).catch((error) => {
       failLatencyFlow(latencyFlowId, "worktree_enter_failed");
       showToast(error instanceof Error ? error.message : "Failed to create worktree.");
@@ -179,7 +186,9 @@ export function useAppShortcuts(): void {
       return;
     }
 
-    void createCloudWorkspaceAndEnter(target);
+    void createCloudWorkspaceAndEnter(target, {
+      repoGroupKeyToExpand: sidebarRepoGroupKeyForCloudTarget(target, repoRoots),
+    });
   });
 
   useShortcutHandler("workspace.add-repository", () => {

@@ -69,7 +69,7 @@ export function SessionModeControl({ agentKind, control }: SessionModeControlPro
           trailing={
             <span className="flex items-center gap-1">
               <PendingConfigIndicator pendingState={control.pendingState} />
-              <ChevronDown className="size-3 shrink-0 text-muted-foreground/70" />
+              <ChevronDown className="size-3 shrink-0 text-[color:var(--color-composer-control-muted-foreground)]" />
             </span>
           }
           title={`${CHAT_MODE_CONTROL_LABELS.cycleHint} (${CHAT_MODE_CONTROL_LABELS.shortcut})`}

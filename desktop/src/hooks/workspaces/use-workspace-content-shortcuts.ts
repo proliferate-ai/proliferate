@@ -1,6 +1,6 @@
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
-import { getFocusZone } from "@/hooks/ui/use-focus-zone";
+import { getFocusZone } from "@/lib/domain/focus-zone";
 import type { WorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";
 
 interface WorkspaceContentShortcutActions extends Pick<

@@ -135,12 +135,20 @@ export const SHORTCUTS = {
     match: { kind: "fixed", key: "w", meta: true, shift: false, alt: false },
     allowInInputs: true,
   },
-  focusToggle: {
-    id: "workspace.focus-toggle",
+  focusChat: {
+    id: "workspace.focus-chat",
     label: "⌘L",
-    description: "Toggle chat / terminal focus",
+    description: "Focus chat input",
     owner: "js",
     match: { kind: "fixed", key: "l", meta: true, shift: false, alt: false },
+    allowInInputs: true,
+  },
+  openTerminal: {
+    id: "workspace.open-terminal",
+    label: "⌘J",
+    description: "Open terminal",
+    owner: "js",
+    match: { kind: "fixed", key: "j", meta: true, shift: false, alt: false },
     allowInInputs: true,
   },
   openFilePalette: {
@@ -225,7 +233,8 @@ export const SHORTCUT_GROUPS = [
   {
     title: "Current Workspace",
     shortcutKeys: [
-      "focusToggle",
+      "focusChat",
+      "openTerminal",
       "openFilePalette",
       "renameSession",
     ],

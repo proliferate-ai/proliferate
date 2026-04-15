@@ -1,4 +1,4 @@
-import type { JSX } from "react";
+import { useEffect, type JSX } from "react";
 import { ChatInput } from "@/components/workspace/chat/input/ChatInput";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
 import { WorkspaceMobilityFooterRow } from "@/components/workspace/chat/input/WorkspaceMobilityFooterRow";
@@ -15,11 +15,7 @@ import { useComposerTopSlot } from "@/hooks/chat/use-composer-top-slot";
 import { useSelectedCloudRuntimeRehydration } from "@/hooks/workspaces/use-selected-cloud-runtime-rehydration";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 
-function ChatContent({
-  mode,
-}: {
-  mode: ChatSurfaceState;
-}): JSX.Element | null {
+function ChatContent({ mode }: { mode: ChatSurfaceState }): JSX.Element | null {
   switch (mode.kind) {
     case "no-workspace":
       return <NoWorkspaceState />;
@@ -72,6 +68,17 @@ export function ChatView() {
   useCloudWorkspacePolling();
   useSelectedCloudRuntimeRehydration(selectedCloudRuntime);
   useChatSelectionBoundary();
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
+    console.debug("[chat-view] surface mode", {
+      kind: mode.kind,
+      composerChrome: isSessionMode,
+    });
+  }, [isSessionMode, mode.kind]);
 
   return (
     <div className="chat-selection-root relative flex h-full min-h-0 flex-1 flex-col select-none overflow-hidden">

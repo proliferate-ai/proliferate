@@ -89,7 +89,7 @@ export function ModelSelector({
           <span className="flex items-center gap-1">
             <PendingConfigIndicator pendingState={currentModel?.pendingState ?? null} />
             <ChevronDown
-              className={`size-3 text-muted-foreground/70 transition-transform ${open ? "rotate-180" : ""}`}
+              className={`size-3 text-[color:var(--color-composer-control-muted-foreground)] transition-transform ${open ? "rotate-180" : ""}`}
             />
           </span>
         )}

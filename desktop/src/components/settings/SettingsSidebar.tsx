@@ -8,6 +8,7 @@ import {
   type SettingsNavItem,
   type SettingsStaticSection,
 } from "@/config/settings";
+import { useAppVersion } from "@/hooks/settings/use-app-version";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { useState } from "react";
 
@@ -52,6 +53,7 @@ export function SettingsSidebar({
 }: SettingsSidebarProps) {
   const location = useLocation();
   const [supportOpen, setSupportOpen] = useState(false);
+  const appVersion = useAppVersion().data?.trim();
 
   function handleItemClick(item: SettingsNavItem) {
     if (item.kind === "action") {
@@ -206,7 +208,7 @@ export function SettingsSidebar({
                 const letter = (repository.name[0] ?? "?").toUpperCase();
                 return (
                   <button
-                    key={repository.sourceRoot}
+                    key={`${repository.sourceRoot}:${repository.repoRootId}`}
                     type="button"
                     onClick={() => onSelectRepo(repository.sourceRoot)}
                     className={active ? NAV_ITEM_ACTIVE : NAV_ITEM_INACTIVE}
@@ -224,6 +226,11 @@ export function SettingsSidebar({
           )}
         </div>
       </nav>
+      {appVersion ? (
+        <div className="shrink-0 border-t border-sidebar-border px-3 py-2 text-xs text-sidebar-muted-foreground">
+          Proliferate v{appVersion}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -3,10 +3,23 @@ import { ProposedPlanCard } from "@/components/workspace/chat/transcript/Propose
 import { AssistantMessage } from "@/components/workspace/chat/transcript/AssistantMessage";
 import { MessageList } from "@/components/workspace/chat/transcript/MessageList";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
-import { ToolCallBlock } from "@/components/workspace/chat/tool-calls/ToolCallBlock";
+import { BashCommandCall } from "@/components/workspace/chat/tool-calls/BashCommandCall";
+import { CoworkArtifactToolActionRow } from "@/components/workspace/chat/tool-calls/CoworkArtifactToolActionRow";
+import { FileChangeCall } from "@/components/workspace/chat/tool-calls/FileChangeCall";
+import { FileReadCall } from "@/components/workspace/chat/tool-calls/FileReadCall";
+import { GenericToolResultRow } from "@/components/workspace/chat/tool-calls/GenericToolResultRow";
+import { ReasoningBlock } from "@/components/workspace/chat/tool-calls/ReasoningBlock";
+import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
+import { ToolActionRow } from "@/components/workspace/chat/tool-calls/ToolActionRow";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { CircleAlert, Settings, Sparkles } from "@/components/ui/icons";
-import { CLAUDE_PLAN_LONG, CLAUDE_PLAN_SHORT } from "@/lib/domain/chat/__fixtures__/playground";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
+import {
+  CLAUDE_PLAN_LONG,
+  CLAUDE_PLAN_SHORT,
+  PLAYGROUND_COWORK_ARTIFACT_TOOL_CALL,
+  PLAYGROUND_SUBAGENT_TRANSCRIPT,
+} from "@/lib/domain/chat/__fixtures__/playground";
 import type { PlaygroundScenarioSelection } from "@/config/playground";
 import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-session";
 import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
@@ -201,6 +214,150 @@ export function PlaygroundTranscript({ selection, replay }: PlaygroundTranscript
       </TranscriptPreviewShell>
     );
   }
+  if (scenario === "tool-bash-running") {
+    return (
+      <TranscriptPreviewShell>
+        <BashCommandCall
+          command="pnpm --dir desktop exec vitest run src/config/playground.test.ts"
+          output="RUN  src/config/playground.test.ts\n"
+          status="running"
+          duration="for 12s"
+          defaultExpanded
+        />
+      </TranscriptPreviewShell>
+    );
+  }
+  if (scenario === "tool-bash-completed") {
+    return (
+      <TranscriptPreviewShell>
+        <BashCommandCall
+          command="pnpm --dir desktop exec tsc --noEmit"
+          output="Done in 4.2s\n"
+          status="completed"
+          duration="for 4s"
+          defaultExpanded
+        />
+      </TranscriptPreviewShell>
+    );
+  }
+  if (scenario === "tool-bash-failed") {
+    return (
+      <TranscriptPreviewShell>
+        <BashCommandCall
+          command="pnpm --dir desktop exec vite build"
+          output="error TS2322: Type 'string' is not assignable to type 'number'.\n"
+          status="failed"
+          duration="for 7s"
+          defaultExpanded
+        />
+      </TranscriptPreviewShell>
+    );
+  }
+  if (scenario === "tool-read-preview") {
+    return (
+      <TranscriptPreviewShell>
+        <FileReadCall
+          path="/Users/pablo/proliferate/desktop/src/components/workspace/chat/tool-calls/ToolActionRow.tsx"
+          workspacePath="desktop/src/components/workspace/chat/tool-calls/ToolActionRow.tsx"
+          basename="ToolActionRow.tsx"
+          scope="range"
+          startLine={1}
+          endLine={10}
+          preview={"export function ToolActionRow() {\n  return null;\n}"}
+          status="completed"
+          defaultExpanded
+        />
+      </TranscriptPreviewShell>
+    );
+  }
+  if (scenario === "tool-file-change-running") {
+    return (
+      <TranscriptPreviewShell>
+        <FileChangeCall
+          operation="edit"
+          path="/Users/pablo/proliferate/README.md"
+          workspacePath="README.md"
+          basename="README.md"
+          additions={3}
+          deletions={1}
+          status="running"
+          duration="for 9s"
+        />
+      </TranscriptPreviewShell>
+    );
+  }
+  if (scenario === "tool-file-change-failed") {
+    return (
+      <TranscriptPreviewShell>
+        <FileChangeCall
+          operation="edit"
+          path="/Users/pablo/proliferate/desktop/src/App.tsx"
+          workspacePath="desktop/src/App.tsx"
+          basename="App.tsx"
+          preview={"<<<<<<< ours\n<App />\n=======\n<Broken />\n>>>>>>> theirs\n"}
+          status="failed"
+          duration="for 3s"
+          defaultExpanded
+        />
+      </TranscriptPreviewShell>
+    );
+  }
+  if (scenario === "tool-file-change-diff") {
+    return (
+      <TranscriptPreviewShell>
+        <FileChangeCall
+          operation="edit"
+          path="/Users/pablo/proliferate/README.md"
+          workspacePath="README.md"
+          basename="README.md"
+          additions={2}
+          deletions={1}
+          patch={"@@ -1,3 +1,4 @@\n Proliferate\n-Old transcript rows\n+Compact transcript rows\n+Visible nested tool calls\n"}
+          status="completed"
+        />
+      </TranscriptPreviewShell>
+    );
+  }
+  if (scenario === "tool-reasoning") {
+    return (
+      <TranscriptPreviewShell>
+        <ReasoningBlock content={"Inspecting transcript rendering paths.\nChecking subagent nested tool output.\nChoosing the compact row migration."} />
+      </TranscriptPreviewShell>
+    );
+  }
+  if (scenario === "tool-cowork-artifact") {
+    return (
+      <TranscriptPreviewShell>
+        <CoworkArtifactToolActionRow item={PLAYGROUND_COWORK_ARTIFACT_TOOL_CALL} />
+      </TranscriptPreviewShell>
+    );
+  }
+  if (scenario === "tool-generic-result") {
+    return (
+      <TranscriptPreviewShell>
+        <GenericToolResultRow
+          icon={<Settings className="size-3 text-faint" />}
+          label={<span className="font-[460] text-foreground/90">MCP tool</span>}
+          hint="github.search_pull_requests"
+          status="completed"
+          resultText={'{\n  "total_count": 3,\n  "items": ["#123", "#124", "#125"]\n}'}
+        />
+      </TranscriptPreviewShell>
+    );
+  }
+  if (scenario === "tool-subagent-task") {
+    return (
+      <div className="h-[min(720px,calc(100vh-13rem))] min-h-[420px]">
+        <MessageList
+          activeSessionId="playground-subagent"
+          selectedWorkspaceId={selectedWorkspaceId ?? "playground-workspace"}
+          optimisticPrompt={null}
+          transcript={PLAYGROUND_SUBAGENT_TRANSCRIPT}
+          sessionViewState="idle"
+        />
+      </div>
+    );
+  }
   return (
     <div className="text-sm text-muted-foreground">
       <p className="leading-relaxed">
@@ -238,20 +395,23 @@ function HookPreview({
   body: string;
 }) {
   return (
-    <ToolCallBlock
+    <ToolActionRow
       icon={<Settings className="size-3 text-faint" />}
-      name={<span className="font-[460] text-foreground/90">{name}</span>}
+      label={<span className="font-[460] text-foreground/90">{name}</span>}
       hint={title}
       status={status}
       defaultExpanded
     >
-      <div className="overflow-hidden rounded-md border border-border/60 bg-muted/25">
-        <AutoHideScrollArea className="w-full" viewportClassName="max-h-[160px]">
+      <ToolActionDetailsPanel>
+        <AutoHideScrollArea
+          className="w-full"
+          viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+        >
           <pre className="m-0 whitespace-pre-wrap px-3 py-2 font-mono text-xs text-foreground">
             {body}
           </pre>
         </AutoHideScrollArea>
-      </div>
-    </ToolCallBlock>
+      </ToolActionDetailsPanel>
+    </ToolActionRow>
   );
 }

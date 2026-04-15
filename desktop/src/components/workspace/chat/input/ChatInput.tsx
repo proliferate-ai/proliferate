@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import {
   CHAT_COMPOSER_INPUT,
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
+  CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM,
   CHAT_COMPOSER_LABELS,
 } from "@/config/chat";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -113,7 +114,11 @@ export function ChatInput() {
       return;
     }
 
-    const minPx = lineHeightPx * CHAT_COMPOSER_INPUT.minRows;
+    const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const codexMinHeightPx = Number.isFinite(rootFontSizePx)
+      ? rootFontSizePx * CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM
+      : lineHeightPx * CHAT_COMPOSER_INPUT.minRows;
+    const minPx = Math.max(lineHeightPx * CHAT_COMPOSER_INPUT.minRows, codexMinHeightPx);
     const maxPx = lineHeightPx * CHAT_COMPOSER_INPUT.maxRows;
     el.style.height = "auto";
     const contentHeight = el.scrollHeight;
@@ -138,10 +143,13 @@ export function ChatInput() {
             </Button>
           </div>
         )}
+        <div className="px-2 py-1.5">
+          <div className="flex w-full flex-wrap items-center justify-start gap-1" />
+        </div>
         <div
-          className="mb-2 flex-grow select-text overflow-y-auto px-5 pt-3.5"
+          className="mb-2 flex-grow select-text overflow-y-auto px-3"
           style={{
-            minHeight: `${CHAT_COMPOSER_INPUT.minRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
+            minHeight: `${CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM}rem`,
             maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
           }}
         >
@@ -159,15 +167,16 @@ export function ChatInput() {
             autoCorrect="off"
             autoCapitalize="off"
             style={{
+              minHeight: `${CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM}rem`,
               maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
             }}
-            className="min-h-0 px-0 py-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/70"
+            className="min-h-0 px-0 py-0 text-chat leading-[var(--text-chat--line-height)] text-foreground placeholder:text-[color:color-mix(in_oklab,var(--color-faint)_50%,transparent)]"
           />
         </div>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 px-2 pb-2">
+        <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-[5px] px-2">
           <div
-            className={`flex min-w-0 flex-nowrap items-center gap-1 ${
+            className={`flex min-w-0 flex-nowrap items-center gap-[5px] ${
               areRuntimeControlsDisabled ? "pointer-events-none opacity-55" : ""
             }`}
           >

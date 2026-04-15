@@ -25,6 +25,10 @@ function hasTrailingTable(content: string): boolean {
   return tableLikeLines.length >= 2;
 }
 
+function needsStableStreamingSplit(content: string): boolean {
+  return content.includes("```") || hasTrailingTable(content);
+}
+
 function selectVisibleTarget(content: string, currentLength: number): string {
   if (content.length <= currentLength) {
     return content;
@@ -62,6 +66,14 @@ function splitAssistantContent(content: string): {
   }
 
   const structuredTail = hasOpenCodeFence(content) || hasTrailingTable(content);
+  if (!needsStableStreamingSplit(content)) {
+    return {
+      stableContent: "",
+      liveContent: content,
+      animateLiveContent: true,
+    };
+  }
+
   const boundary = content.lastIndexOf("\n\n");
 
   if (boundary < 0 || boundary + 2 >= content.length) {
@@ -156,6 +168,12 @@ function AssistantMessageContent({
     [visibleContent],
   );
   const isRevealing = visibleContent.length < content.length;
+  const stableClassName = splitContent.liveContent
+    ? "[&>*:first-child]:mt-0"
+    : "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0";
+  const liveClassName = splitContent.stableContent
+    ? "[&>*:last-child]:mb-0"
+    : "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0";
 
   // Restart `animate-streaming-fade` on the live-tail div only when a new
   // paragraph is starting — either the very first paragraph of the turn
@@ -201,14 +219,14 @@ function AssistantMessageContent({
       {splitContent.stableContent && (
         <MarkdownRenderer
           content={splitContent.stableContent}
-          className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+          className={stableClassName}
         />
       )}
       {splitContent.liveContent && (
         <div ref={liveRef}>
           <MarkdownRenderer
             content={splitContent.liveContent}
-            className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+            className={liveClassName}
           />
         </div>
       )}

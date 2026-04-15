@@ -69,4 +69,65 @@ describe("resolveKeyboardShortcut", () => {
       altKey: false,
     } as KeyboardEvent)).toBeNull();
   });
+
+  it("resolves directional chat and terminal shortcuts on mac", () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "l",
+      code: "KeyL",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.focus-chat",
+      shortcut: expect.objectContaining({ id: "workspace.focus-chat" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "j",
+      code: "KeyJ",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.open-terminal",
+      shortcut: expect.objectContaining({ id: "workspace.open-terminal" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+  });
+
+  it("resolves directional chat and terminal shortcuts with ctrl on non-mac", () => {
+    expect(resolveKeyboardShortcut({
+      key: "l",
+      code: "KeyL",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.focus-chat",
+      shortcut: expect.objectContaining({ id: "workspace.focus-chat" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "j",
+      code: "KeyJ",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.open-terminal",
+      shortcut: expect.objectContaining({ id: "workspace.open-terminal" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+  });
 });

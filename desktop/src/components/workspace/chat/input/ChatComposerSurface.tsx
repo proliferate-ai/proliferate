@@ -12,7 +12,7 @@ export function ChatComposerSurface({
   return (
     <div
       {...props}
-      className={`relative flex flex-col overflow-y-auto rounded-[var(--radius-composer)] border border-border bg-card transition-shadow shadow-xs focus-within:shadow-sm ${className}`}
+      className={`chat-composer-surface relative flex flex-col overflow-y-auto rounded-[var(--radius-composer)] ${className}`}
     >
       {children}
     </div>

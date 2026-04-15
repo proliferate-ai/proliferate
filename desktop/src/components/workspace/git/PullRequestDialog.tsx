@@ -55,8 +55,14 @@ export function PullRequestDialog({ open, onClose }: PullRequestDialogProps) {
     setBaseBranch(gitStatus?.suggestedBaseBranch ?? (repoDefaultBranch || "main"));
   }, [gitStatus?.suggestedBaseBranch, open, repoDefaultBranch]);
 
-  const headBranch = gitStatus?.currentBranch ?? "(unknown)";
-  const canSubmit = !loading && !runtimeBlockedReason && title.trim().length > 0 && baseBranch.trim().length > 0;
+  const headBranch = gitStatus?.currentBranch?.trim() ?? "";
+  const blockedReason = runtimeBlockedReason
+    ?? gitStatus?.actions.reasonIfBlocked
+    ?? (!headBranch && gitStatus ? "A current branch is required before creating a pull request." : null);
+  const canSubmit = !loading
+    && !blockedReason
+    && title.trim().length > 0
+    && baseBranch.trim().length > 0;
 
   async function handleCreate() {
     if (runtimeBlockedReason) {
@@ -78,7 +84,7 @@ export function PullRequestDialog({ open, onClose }: PullRequestDialogProps) {
       setDraft(false);
       onClose();
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -88,6 +94,7 @@ export function PullRequestDialog({ open, onClose }: PullRequestDialogProps) {
     <ModalShell
       open={open}
       onClose={onClose}
+      sizeClassName="max-w-lg"
       title={
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
@@ -104,12 +111,14 @@ export function PullRequestDialog({ open, onClose }: PullRequestDialogProps) {
               className="text-sm text-foreground cursor-pointer select-none"
               onClick={() => setDraft((d) => !d)}
             >
-              Draft
+              Draft pull request
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
             <Button
+              variant="inverted"
+              size="sm"
               loading={loading}
               disabled={!canSubmit}
               onClick={handleCreate}
@@ -122,8 +131,9 @@ export function PullRequestDialog({ open, onClose }: PullRequestDialogProps) {
     >
       <div className="flex flex-col gap-3">
         <div>
-          <Label>Title</Label>
+          <Label htmlFor="pull-request-title">Title</Label>
           <Input
+            id="pull-request-title"
             type="text"
             placeholder="PR title"
             value={title}
@@ -132,9 +142,10 @@ export function PullRequestDialog({ open, onClose }: PullRequestDialogProps) {
           />
         </div>
         <div>
-          <Label>Description</Label>
+          <Label htmlFor="pull-request-description">Description</Label>
           <Textarea
-            placeholder="Optional description..."
+            id="pull-request-description"
+            placeholder="Optional description"
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={4}
@@ -142,8 +153,9 @@ export function PullRequestDialog({ open, onClose }: PullRequestDialogProps) {
         </div>
         <div className="flex gap-3">
           <div className="flex-1">
-            <Label>Base branch</Label>
+            <Label htmlFor="pull-request-base">Base branch</Label>
             <Input
+              id="pull-request-base"
               type="text"
               value={baseBranch}
               onChange={(e) => setBaseBranch(e.target.value)}
@@ -152,14 +164,17 @@ export function PullRequestDialog({ open, onClose }: PullRequestDialogProps) {
           <div className="flex-1">
             <Label>Head branch</Label>
             <div className="h-9 px-3 rounded-md border border-input bg-muted/30 text-sm text-muted-foreground flex items-center truncate">
-              {headBranch}
+              {headBranch || "Unknown branch"}
             </div>
           </div>
         </div>
+        <p className="text-xs text-muted-foreground">
+          The head branch must already be pushed before GitHub can create the pull request.
+        </p>
 
         {error && <p className="text-xs text-destructive">{error}</p>}
-        {!error && runtimeBlockedReason && (
-          <p className="text-xs text-muted-foreground">{runtimeBlockedReason}</p>
+        {!error && blockedReason && (
+          <p className="text-xs text-muted-foreground">{blockedReason}</p>
         )}
       </div>
     </ModalShell>

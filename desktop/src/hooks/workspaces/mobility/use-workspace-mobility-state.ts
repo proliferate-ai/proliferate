@@ -3,7 +3,10 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useSelectedLogicalWorkspace } from "@/hooks/workspaces/use-selected-logical-workspace";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { resolveLogicalWorkspaceMaterializationId } from "@/lib/domain/workspaces/logical-workspaces";
-import { resolveWorkspaceMobilityStatusModel } from "@/lib/domain/workspaces/mobility-state-machine";
+import {
+  isWorkspaceMobilityTransitionPhase,
+  resolveWorkspaceMobilityStatusModel,
+} from "@/lib/domain/workspaces/mobility-state-machine";
 import { useCloudMobilityWorkspaceDetail } from "@/hooks/cloud/use-cloud-mobility-workspace-detail";
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 
@@ -37,12 +40,7 @@ export function useWorkspaceMobilityState() {
     selectedLogicalWorkspace,
     mobilityWorkspaceDetail?.activeHandoff ?? selectedLogicalWorkspace?.mobilityWorkspace?.activeHandoff ?? null,
   ), [mobilityWorkspaceDetail?.activeHandoff, selectedLogicalWorkspace]);
-  const handoffActive = Boolean(
-    mobilityWorkspaceDetail?.activeHandoff
-    ?? selectedLogicalWorkspace?.mobilityWorkspace?.activeHandoff
-    ?? (selectedLogicalWorkspace?.lifecycle === "moving_to_cloud"
-      || selectedLogicalWorkspace?.lifecycle === "moving_to_local"),
-  );
+  const handoffActive = isWorkspaceMobilityTransitionPhase(status.phase);
 
   const repoBacked = Boolean(
     selectedLogicalWorkspace?.provider

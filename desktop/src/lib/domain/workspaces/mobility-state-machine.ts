@@ -42,6 +42,15 @@ export function mobilityDestinationKind(
   }
 }
 
+export function isWorkspaceMobilityTransitionPhase(
+  phase: WorkspaceMobilityUiPhase,
+): boolean {
+  return phase === "provisioning"
+    || phase === "transferring"
+    || phase === "finalizing"
+    || phase === "cleanup_pending";
+}
+
 function normalizeDirection(
   direction: string | null | undefined,
 ): "local_to_cloud" | "cloud_to_local" | null {

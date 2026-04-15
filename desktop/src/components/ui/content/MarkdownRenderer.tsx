@@ -55,8 +55,15 @@ export function MarkdownRenderer({
   content,
   className = "",
 }: MarkdownRendererProps) {
+  const markdownClassName = [
+    "[&_li>p]:my-0",
+    "[&_li>ol]:mt-2",
+    "[&_li>ul]:mt-2",
+    className,
+  ].filter(Boolean).join(" ");
+
   return (
-    <div className={className}>
+    <div className={markdownClassName}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -134,7 +141,7 @@ export function MarkdownRenderer({
               return (
                 <code
                   {...rest}
-                  className="rounded-sm bg-foreground/[0.06] px-1.5 py-0.5 text-sm leading-none font-mono font-medium text-foreground"
+                  className="rounded-sm bg-foreground/[0.06] px-1 py-0 align-baseline font-mono text-[inherit] leading-[inherit] font-medium text-foreground"
                   dangerouslySetInnerHTML={dangerouslySetInnerHTML}
                 />
               );
@@ -167,7 +174,7 @@ export function MarkdownRenderer({
             return (
               <code
                 {...rest}
-                className="rounded-sm bg-foreground/[0.06] px-1.5 py-0.5 text-sm leading-none font-mono font-medium text-foreground"
+                className="rounded-sm bg-foreground/[0.06] px-1 py-0 align-baseline font-mono text-[inherit] leading-[inherit] font-medium text-foreground"
               >
                 {children}
               </code>

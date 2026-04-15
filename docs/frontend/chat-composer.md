@@ -36,7 +36,7 @@ Non-negotiable:
 
 - **`ChatComposerDock` owns the dock shell.** Background, scrim, padding, max-width column, and the inset `px-5` top-slot wrapper all live in `ChatComposerDock.tsx`. The production app (`ChatView`) and the dev playground (`ChatPlaygroundPage`) both render `ChatComposerDock` directly. Do not reconstruct this backdrop in a third place — if you need it somewhere new, reuse the dock.
 - **`ChatInput` is the composer surface only.** It does not own any of the outer wrapping. It takes no `topSlot` prop. Everything above and below the composer surface is the dock's responsibility, and the workspace footer row is rendered via the dock's dedicated footer slot rather than ad hoc workspace logic in `ChatInput.tsx`.
-- **The composer always keeps its full rounded shape.** There is no `flatTop` mode. Top-slot panels are a narrower, inset card above the composer — they are not fused to the composer surface.
+- **The composer surface stays unchanged and paints the seam.** There is no `flatTop` mode. Top-slot panels are narrower attached trays that sit directly above the composer: rounded top corners, side/top borders, no bottom border, and no gap. The composer surface paints after the top slot so its own top outline remains visible at the seam.
 
 ## 2. Top-slot precedence
 
@@ -111,7 +111,7 @@ Borrowed directly from `references/codex_todo.html` and `references/codex_plan.h
 
 ### 4.1 Panels are narrower than the composer
 
-`ChatComposerDock` wraps the top-slot in `<div className="... px-5">` so the panel is inset 20px from the composer surface on each side. The composer below keeps its full rounded shape. The panel and composer are visually separate, not fused. Do not remove the `px-5` inset and do not reintroduce any "flatTop" fusion.
+`ChatComposerDock` wraps the top-slot in `<div className="... px-5">` so the panel is inset 20px from the composer surface on each side. The slot has no bottom margin and no positive z-index: `ComposerAttachedPanel` is an attached cap above the composer, using `rounded-t-2xl border-x border-t border-border/80`, while the composer surface paints after it so the input's top outline stays visible. Do not add a `flatTop` mode, a detached gap, a full-perimeter top-slot card, or a `z-*` layer that lets the top slot cover the composer border.
 
 ### 4.2 Headers are minimalist
 
@@ -161,8 +161,10 @@ Rules that apply everywhere in `desktop/src/**` but are easy to violate in this 
 
 These are patterns that were tried and rejected. Reintroducing them reopens known problems:
 
-- **`first:rounded-t-2xl` on `ComposerAttachedPanel`.** This was prep for stacking that had no real consumer. Use plain `rounded-t-2xl`. When real stacking lands, update `useComposerTopSlot` and the dock together, not via a CSS trick alone.
-- **`flatTop` on `ChatComposerSurface`.** The prop was deleted. The composer surface is always fully rounded. Panels above are inset cards, not fused shells.
+- **Detached top-slot cards (`rounded-2xl border` plus a dock gap).** Top-slot panels are attached trays, not separate floating cards. Keep `ComposerAttachedPanel` on the `rounded-t-2xl border-x border-t` shell and keep the dock top-slot wrapper gapless.
+- **Positive z-index on the top-slot wrapper.** The composer must paint after the attached tray so its top outline remains visible at the seam.
+- **Ad hoc `first:*` stacking rounded-corner tricks.** The top slot currently has one inhabitant. When real stacking lands, update `useComposerTopSlot` and the dock together, not via a CSS trick alone.
+- **`flatTop` on `ChatComposerSurface`.** The prop was deleted. The composer surface keeps its normal styling. Panels above are attached trays, not a replacement shell for the composer.
 - **Regex classifier on `toolCallId` in `permission-prompt.ts`.** Dead code. Read `pendingApproval.toolKind` directly.
 - **`embeddedInComposer` permission variant that replaces the textarea.** Dead code. Approvals always sit above the composer; the textarea stays usable.
 - **Merging generic tool approval buttons into `ProposedPlanCard`.** Generic
@@ -181,6 +183,7 @@ Scenarios (selectable via `?s=<key>`):
 - `clean` — baseline, no panel
 - `todos-short`, `todos-mid`, `todos-long` — TodoTrackerPanel at three sizes
 - `execute-approval`, `edit-approval` — ApprovalCard execute/edit variants
+- `workspace-arrival-created` — WorkspaceArrivalAttachedPanel above the composer
 - `claude-plan-short`, `claude-plan-long` — ProposedPlanCard in transcript
 - `mobility-local-actionable`, `mobility-unpublished-branch`, `mobility-unpushed-commits`, `mobility-out-of-sync-branch`, `mobility-in-flight`, `mobility-failed` — composer footer row + mobility states
 

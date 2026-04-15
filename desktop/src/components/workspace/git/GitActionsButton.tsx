@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
-import { GitCommit, CloudUpload, GitHub, GitBranchIcon, ChevronDown } from "@/components/ui/icons";
+import { GitCommit, CloudUpload, GitHub, ChevronDown } from "@/components/ui/icons";
+import { Button } from "@/components/ui/Button";
 import type { GitStatusSnapshot } from "@anyharness/sdk";
 
 interface GitActionsButtonProps {
@@ -57,7 +58,7 @@ export function GitActionsButton({
     primaryIcon = <GitCommit className="size-3.5" />;
     primaryOnClick = onCommit;
   } else if (!disabled && clean && actions.canPush) {
-    primaryLabel = "Push";
+    primaryLabel = actions.pushLabel;
     primaryIcon = <CloudUpload className="size-3.5" />;
     primaryOnClick = onPush;
   } else if (!disabled && existingPr) {
@@ -74,14 +75,14 @@ export function GitActionsButton({
 
   const items: DropdownItem[] = [
     {
-      icon: <GitCommit className="size-4" />,
+      icon: <GitCommit className="size-3.5" />,
       label: "Commit",
       disabled: disabled || clean || !actions.canCommit,
       onClick: onCommit,
     },
     {
-      icon: <CloudUpload className="size-4" />,
-      label: "Push",
+      icon: <CloudUpload className="size-3.5" />,
+      label: actions.pushLabel,
       disabled: disabled || !actions.canPush,
       onClick: onPush,
     },
@@ -91,54 +92,65 @@ export function GitActionsButton({
       disabled: disabled || !actions.canCreatePullRequest || !!existingPr,
       onClick: onCreatePr,
     },
-    {
-      icon: <GitBranchIcon className="size-3.5" />,
-      label: "Create branch",
-      disabled: disabled || !actions.canCreateBranchWorkspace,
-      onClick: () => {},
-    },
+    ...(existingPr
+      ? [{
+          icon: <GitHub className="size-3.5" />,
+          label: "View PR",
+          disabled,
+          onClick: onViewPr,
+        }]
+      : []),
   ];
 
   return (
     <div ref={containerRef} className="relative">
       <div className="flex">
-        <button
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
           onClick={() => {
             if (!primaryDisabled) primaryOnClick();
           }}
           disabled={primaryDisabled}
-          className="inline-flex items-center whitespace-nowrap border border-border bg-background hover:bg-accent hover:text-accent-foreground h-6 px-2 text-xs rounded-lg rounded-r-none border-r-0 font-medium gap-1.5 disabled:opacity-50"
+          className="h-6 gap-1.5 rounded-lg rounded-r-none border-r-0 bg-background px-2 text-xs font-medium"
         >
           {primaryIcon}
           <span>{primaryLabel}</span>
-        </button>
-        <button
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
           onClick={() => setOpen((v) => !v)}
           aria-haspopup="menu"
           aria-expanded={open}
           disabled={disabled}
-          className="inline-flex items-center justify-center whitespace-nowrap border border-border hover:bg-accent hover:text-accent-foreground h-6 text-xs rounded-lg rounded-l-none px-1.5 bg-sidebar-background/4"
+          className="h-6 rounded-lg rounded-l-none bg-background px-1.5 text-xs"
         >
           <ChevronDown className="size-3" />
-        </button>
+        </Button>
       </div>
 
       {open && (
         <div className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-lg border border-border bg-popover shadow-lg py-1 px-1 backdrop-blur-sm">
           <div className="px-2 py-1.5 text-xs text-muted-foreground">Git actions</div>
           {items.map((item) => (
-            <button
+            <Button
               key={item.label}
+              type="button"
+              variant="ghost"
+              size="sm"
               disabled={item.disabled}
               onClick={() => {
                 setOpen(false);
                 item.onClick();
               }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 text-[13px] rounded-md text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent"
+              className="h-auto w-full justify-start gap-2 rounded-md px-2 py-1.5 text-xs font-normal text-foreground hover:bg-muted/60 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <span className="shrink-0">{item.icon}</span>
               <span className="min-w-0 truncate">{item.label}</span>
-            </button>
+            </Button>
           ))}
         </div>
       )}

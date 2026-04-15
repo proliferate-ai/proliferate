@@ -89,8 +89,6 @@ export interface SidebarWorkspaceItemState {
   activity: SessionViewState;
   variant: SidebarWorkspaceVariant;
   cloudStatus: CloudWorkspaceStatus | null;
-  additions: number | undefined;
-  deletions: number | undefined;
   lastInteracted: string | null;
   unread: boolean;
 }
@@ -415,14 +413,6 @@ export function buildSidebarGroupStates(args: {
           cloudStatus: preferredCloudWorkspace
             ? preferredCloudWorkspace.status as CloudWorkspaceStatus
             : null,
-          additions:
-            active && preferredLocalWorkspace && args.selectedWorkspaceId === preferredLocalWorkspace.id
-              ? args.gitStatus?.summary.additions
-              : undefined,
-          deletions:
-            active && preferredLocalWorkspace && args.selectedWorkspaceId === preferredLocalWorkspace.id
-              ? args.gitStatus?.summary.deletions
-              : undefined,
           lastInteracted,
           unread: isWorkspaceUnread({
             isActive: active,

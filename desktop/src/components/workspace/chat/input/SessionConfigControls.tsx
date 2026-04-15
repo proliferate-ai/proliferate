@@ -112,7 +112,7 @@ function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
           trailing={
             <span className="flex items-center gap-1">
               <PendingConfigIndicator pendingState={control.pendingState} />
-              <ChevronDown className="size-3 text-muted-foreground/70" />
+              <ChevronDown className="size-3 text-[color:var(--color-composer-control-muted-foreground)]" />
             </span>
           }
           className="max-w-[14rem]"

@@ -18,17 +18,17 @@ import { TurnSeparator } from "./TurnSeparator";
 import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
 import { Button } from "@/components/ui/Button";
 import { ReasoningBlock } from "@/components/workspace/chat/tool-calls/ReasoningBlock";
-import {
-  ToolCallBlock,
-  ToolCallLeadingAffordance,
-  TOOL_CALL_BODY_MAX_HEIGHT_CLASS,
-} from "@/components/workspace/chat/tool-calls/ToolCallBlock";
+import { GenericToolResultRow } from "@/components/workspace/chat/tool-calls/GenericToolResultRow";
+import { ToolActionLeadingAffordance } from "@/components/workspace/chat/tool-calls/ToolActionRow";
 import { BashCommandCall } from "@/components/workspace/chat/tool-calls/BashCommandCall";
+import {
+  CollapsedActions,
+  InlineToolAction,
+} from "@/components/workspace/chat/tool-calls/CollapsedActions";
 import { FileChangeCall } from "@/components/workspace/chat/tool-calls/FileChangeCall";
 import { FileReadCall } from "@/components/workspace/chat/tool-calls/FileReadCall";
-import { ReadGroupBlock } from "@/components/workspace/chat/tool-calls/ReadGroupBlock";
 import { ToolCallSummary } from "@/components/workspace/chat/tool-calls/ToolCallSummary";
-import { CoworkArtifactToolCallBlock } from "@/components/workspace/chat/tool-calls/CoworkArtifactToolCallBlock";
+import { CoworkArtifactToolActionRow } from "@/components/workspace/chat/tool-calls/CoworkArtifactToolActionRow";
 import { CoworkArtifactTurnCard } from "@/components/workspace/chat/tool-calls/CoworkArtifactTurnCard";
 import { TurnDiffPanel } from "./TurnDiffPanel";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
@@ -56,7 +56,11 @@ import {
   describeToolCallDisplay,
   type ToolDisplayIconKey,
 } from "@/lib/domain/chat/tool-call-display";
-import { buildTurnPresentation } from "@/lib/domain/chat/transcript-presentation";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
+import {
+  buildTurnPresentation,
+  summarizeCollapsedActions,
+} from "@/lib/domain/chat/transcript-presentation";
 import {
   extractClaudePlanBody,
   isClaudeExitPlanModeCall,
@@ -105,22 +109,12 @@ const ProposedPlanToolCallIdsContext = createContext<Set<string>>(
 type ProposedPlanTranscriptItem = Extract<TranscriptItem, { kind: "proposed_plan" }>;
 
 /**
- * Minimum height of the trailing-status slot at the bottom of an in-progress
- * turn (StreamingIndicator while "working", "Waiting for your input" while
- * "needs_input"). Pinned so that swapping the indicator for the first line of
- * the assistant's prose reply is a zero-delta layout transition — no scroll
- * bump, no content jump.
- *
- * Value derivation (keep in sync if any of these move):
- *   • text-chat single-line height — `--text-chat--line-height` in index.css
- *     (currently `1.125rem` / 18px)
- *   • trailing assistant action slot — `h-6` in this file
- *     (24px, reserved only once the latest in-progress turn has tail
- *     assistant prose)
- *   ----
- *   = 18px + 24px = 42px = 2.625rem
+ * Minimum height for a turn that has no assistant text yet. Once prose exists,
+ * the trailing status should stay compact instead of creating an empty block
+ * between the prose and future tool activity.
  */
 const TRAILING_STATUS_MIN_HEIGHT = "min-h-[2.625rem]";
+const LIVE_STATUS_GRACE_MS = 700;
 
 interface MessageListProps {
   activeSessionId: string;
@@ -172,6 +166,84 @@ export function MessageList({
       optimisticPrompt !== null,
     )
     : null;
+  const visibleTurnIds = transcript.turnOrder.filter((turnId) => {
+    const turn = transcript.turnsById[turnId];
+    if (!turn) return false;
+
+    const isLatestTurn = turnId === latestTurnId;
+    const isLatestTurnInProgress = isLatestTurn && !turn.completedAt;
+    return !(
+      visiblePendingPrompt !== null
+      && isLatestTurnInProgress
+      && !latestTurnHasAssistantRenderableContent
+    );
+  });
+  const latestTurnInProgress = !!latestTurn && !latestTurn.completedAt;
+  const latestTurnPresentation = useMemo(
+    () => latestTurn ? buildTurnPresentation(latestTurn, transcript) : null,
+    [latestTurn, transcript],
+  );
+  const latestLiveExplorationBlock = useMemo(
+    () => latestTurnPresentation
+      ? findTrailingLiveExplorationBlock(
+          latestTurnPresentation,
+          transcript,
+          latestTurnInProgress,
+        )
+      : null,
+    [latestTurnInProgress, latestTurnPresentation, transcript],
+  );
+  const latestLiveWorkBlock = useMemo(
+    () => latestTurnPresentation
+      ? findTrailingLiveWorkBlock(
+          latestTurnPresentation,
+          transcript,
+          latestTurnInProgress,
+        )
+      : null,
+    [latestTurnInProgress, latestTurnPresentation, transcript],
+  );
+  const latestTransientText = latestTurn
+    ? latestTransientStatusText(latestTurn, transcript)
+    : null;
+  const shouldShowDelayedLatestLiveStatus = !!latestTurn
+    && latestTurnInProgress
+    && !latestLiveWorkBlock
+    && sessionViewState === "working"
+    && shouldAllowTurnTrailingStatus({
+      turn: latestTurn,
+      transcript,
+      isLatestTurnInProgress: true,
+    });
+  const [showDelayedLatestLiveStatus, setShowDelayedLatestLiveStatus] = useState(false);
+
+  useEffect(() => {
+    if (!shouldShowDelayedLatestLiveStatus) {
+      setShowDelayedLatestLiveStatus(false);
+      return;
+    }
+
+    setShowDelayedLatestLiveStatus(false);
+    const timeout = window.setTimeout(() => {
+      setShowDelayedLatestLiveStatus(true);
+    }, LIVE_STATUS_GRACE_MS);
+    return () => window.clearTimeout(timeout);
+  }, [
+    latestTransientText,
+    latestTurn?.itemOrder.length,
+    latestTurn?.startedAt,
+    latestTurnId,
+    shouldShowDelayedLatestLiveStatus,
+  ]);
+
+  const latestLiveStatus = latestTurn
+    && showDelayedLatestLiveStatus
+      ? resolveTurnTrailingStatus(
+          latestTurn.startedAt,
+          sessionViewState,
+          latestTransientText,
+        )
+      : null;
   const { scrollRef, contentRef } = useMessageListScroll({
     totalItems,
     pendingPromptText: visiblePendingPrompt?.text ?? null,
@@ -179,27 +251,22 @@ export function MessageList({
     selectedWorkspaceId,
     activeSessionId,
   });
-
   return (
     <div className="flex-1 min-h-0" data-telemetry-block>
       <ProposedPlanToolCallIdsContext.Provider value={toolCallIdsWithProposedPlan}>
         <AutoHideScrollArea className="h-full" ref={scrollRef}>
           <div ref={contentRef} className="max-w-3xl mx-auto pt-4 pb-10">
-            {transcript.turnOrder.map((turnId, turnIdx) => {
+            {visibleTurnIds.map((turnId, turnIdx) => {
               const turn = transcript.turnsById[turnId];
               if (!turn) return null;
               const isLatestTurn = turnId === latestTurnId;
               const isLatestTurnInProgress =
                 isLatestTurn && !turn.completedAt;
-              const shouldHideEmptyLatestTurn =
-                visiblePendingPrompt !== null
-                && isLatestTurnInProgress
-                && !latestTurnHasAssistantRenderableContent;
-              if (shouldHideEmptyLatestTurn) {
-                return null;
-              }
               const hasFileBadges = turn.fileBadges.length > 0;
-              const presentation = buildTurnPresentation(turn, transcript);
+              const presentation = isLatestTurn && latestTurnPresentation
+                ? latestTurnPresentation
+                : buildTurnPresentation(turn, transcript);
+              const liveExplorationBlock = isLatestTurn ? latestLiveExplorationBlock : null;
               const tailAssistantProseRootId = findTailAssistantProseRootId(
                 presentation,
                 transcript,
@@ -208,36 +275,40 @@ export function MessageList({
                 tailAssistantProseRootId,
                 transcript,
               );
-              const shouldReserveTurnAssistantActionSlot =
-                isLatestTurnInProgress
-                && !!tailAssistantCopyContent
-                && lastTopLevelItemIsAssistantProseWithText(turn, transcript);
-
               // Hide the trailing indicator only while the assistant prose item
               // itself is actively streaming. If Codex closes the prose item but
               // keeps working internally, the trailing indicator should return.
-              const trailingStatus =
-                shouldAllowTurnTrailingStatus({
-                  turn,
-                  transcript,
-                  isLatestTurnInProgress,
-                })
-                  ? resolveTurnTrailingStatus(
-                      turn.startedAt,
-                      sessionViewState,
-                      latestTransientStatusText(turn, transcript),
-                    )
-                  : null;
+              const trailingStatus = isLatestTurn
+                ? latestLiveStatus
+                : shouldAllowTurnTrailingStatus({
+                    turn,
+                    transcript,
+                    isLatestTurnInProgress,
+                  })
+                    ? resolveTurnTrailingStatus(
+                        turn.startedAt,
+                        sessionViewState,
+                        latestTransientStatusText(turn, transcript),
+                      )
+                    : null;
+              const shouldReserveTurnAssistantActionSlot =
+                isLatestTurnInProgress
+                && !!tailAssistantCopyContent
+                && !trailingStatus
+                && lastTopLevelItemIsAssistantProseWithText(turn, transcript);
+              const trailingStatusClassName = tailAssistantCopyContent
+                ? undefined
+                : TRAILING_STATUS_MIN_HEIGHT;
 
               return (
                 <TurnShell key={turnId} isFirst={turnIdx === 0}>
                   <div className={`flex flex-col gap-2 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
                     <TurnItemSequence
-                      turnId={turnId}
                       turn={turn}
                       transcript={transcript}
                       isTurnComplete={!!turn.completedAt}
                       presentation={presentation}
+                      forceExpandedCollapsedActionBlockId={liveExplorationBlock?.blockId ?? null}
                       tailAssistantProseRootId={tailAssistantProseRootId}
                       workspaceId={selectedWorkspaceId}
                       onOpenArtifact={openArtifact}
@@ -256,16 +327,16 @@ export function MessageList({
                       reserveSlot={shouldReserveTurnAssistantActionSlot}
                     />
                     {trailingStatus && (
-                      <div className={TRAILING_STATUS_MIN_HEIGHT}>{trailingStatus}</div>
+                      <div className={trailingStatusClassName}>{trailingStatus}</div>
                     )}
                   </div>
                 </TurnShell>
               );
             })}
             {visiblePendingPrompt && (
-              <TurnShell key="pending-prompt" isFirst={transcript.turnOrder.length === 0}>
+              <TurnShell key="pending-prompt" isFirst={visibleTurnIds.length === 0}>
                 <div className="flex flex-col gap-2">
-                  <UserMessage content={visiblePendingPrompt.text} />
+                  <UserMessage content={visiblePendingPrompt.text} showCopyButton />
                   {pendingPromptTrailingStatus && (
                     <div className={TRAILING_STATUS_MIN_HEIGHT}>{pendingPromptTrailingStatus}</div>
                   )}
@@ -334,12 +405,12 @@ function findTailAssistantProseRootId(
   presentation: ReturnType<typeof buildTurnPresentation>,
   transcript: TranscriptState,
 ): string | null {
-  for (let i = presentation.rootIds.length - 1; i >= 0; i--) {
-    const rootId = presentation.rootIds[i];
-    if (presentation.collapsedRootIds.has(rootId)) continue;
-    const item = transcript.itemsById[rootId];
+  for (let i = presentation.displayBlocks.length - 1; i >= 0; i--) {
+    const block = presentation.displayBlocks[i];
+    if (block?.kind !== "item") continue;
+    const item = transcript.itemsById[block.itemId];
     if (item?.kind === "assistant_prose" && item.text) {
-      return rootId;
+      return block.itemId;
     }
   }
   return null;
@@ -379,21 +450,21 @@ function hasProposedPlanForToolCall(
 }
 
 function TurnItemSequence({
-  turnId,
   turn,
   transcript,
   isTurnComplete,
   presentation,
+  forceExpandedCollapsedActionBlockId,
   tailAssistantProseRootId,
   workspaceId,
   onOpenArtifact,
   subagentBrailleColors,
 }: {
-  turnId: string;
   turn: TurnRecord;
   transcript: TranscriptState;
   isTurnComplete: boolean;
   presentation: ReturnType<typeof buildTurnPresentation>;
+  forceExpandedCollapsedActionBlockId?: string | null;
   tailAssistantProseRootId: string | null;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
@@ -403,79 +474,83 @@ function TurnItemSequence({
   const completedArtifactToolCalls = isTurnComplete
     ? artifactToolCalls.filter((item) => item.status === "completed")
     : [];
-  let hasRenderedSummary = false;
+  const completedHistoryRootIdSet = new Set(presentation.completedHistoryRootIds);
+  let hasRenderedCompletedHistory = false;
 
   return (
     <>
-      {presentation.rootIds.map((itemId) => {
-        if (presentation.collapsedRootIds.has(itemId)) {
-          if (hasRenderedSummary || !presentation.collapsedSummary) {
+      {presentation.displayBlocks.map((block) => {
+        if (presentation.completedHistorySummary && blockBelongsToCompletedHistory(block, completedHistoryRootIdSet)) {
+          if (hasRenderedCompletedHistory) {
             return null;
           }
-          hasRenderedSummary = true;
-
-          const collapsedRootIds = presentation.rootIds.filter((rootId) =>
-            presentation.collapsedRootIds.has(rootId)
-          );
-
-          // Check if there's a final assistant message after the collapsed block
-          const hasTrailingAssistantProse = presentation.rootIds.some((rootId) => {
-            if (presentation.collapsedRootIds.has(rootId)) return false;
-            const item = transcript.itemsById[rootId];
-            return item?.kind === "assistant_prose" && !!item.text;
-          });
-
+          hasRenderedCompletedHistory = true;
           return (
             <ToolCallSummary
-              key={`${turnId}-collapsed-summary`}
+              key={`${turn.turnId}-completed-history`}
               icon={<ClipboardList />}
               label="Work history"
-              summary={formatCollapsedSummary(presentation.collapsedSummary)}
-              typeIcons={buildCollapsedSummaryIcons(presentation.collapsedSummary)}
-              itemCount={collapsedRootIds.length}
-              showFinalSeparator={hasTrailingAssistantProse}
+              summary={formatCollapsedSummary(presentation.completedHistorySummary)}
+              typeIcons={buildCollapsedSummaryIcons(presentation.completedHistorySummary)}
+              showFinalSeparator={tailAssistantProseRootId !== null}
             >
               <div className="space-y-1">
-                {collapsedRootIds.map((collapsedRootId) => (
-                  <TranscriptTreeNode
-                    key={collapsedRootId}
-                    itemId={collapsedRootId}
-                    transcript={transcript}
-                    childrenByParentId={presentation.childrenByParentId}
-                    workspaceId={workspaceId}
-                    onOpenArtifact={onOpenArtifact}
-                    subagentBrailleColors={subagentBrailleColors}
-                  />
-                ))}
+                {presentation.displayBlocks
+                  .filter((historyBlock) =>
+                    blockBelongsToCompletedHistory(historyBlock, completedHistoryRootIdSet)
+                  )
+                  .map((historyBlock) => (
+                    <TurnDisplayBlockNode
+                      key={`history-${getTurnDisplayBlockKey(historyBlock)}`}
+                      block={historyBlock}
+                      transcript={transcript}
+                      forceExpanded={false}
+                      childrenByParentId={presentation.childrenByParentId}
+                      subagentBrailleColors={subagentBrailleColors}
+                      workspaceId={workspaceId}
+                      onOpenArtifact={onOpenArtifact}
+                    />
+                  ))}
               </div>
             </ToolCallSummary>
           );
         }
 
-        if (presentation.readGroupedIds.has(itemId)) {
-          const group = presentation.readGroups.get(itemId);
-          if (!group) return null;
-
+        if (block.kind === "collapsed_actions") {
           return (
-            <ReadGroupBlock key={`read-group-${itemId}`} group={group}>
-              {group.memberIds.map((memberId) => (
-                <TranscriptTreeNode
-                  key={memberId}
-                  itemId={memberId}
-                  transcript={transcript}
-                  childrenByParentId={presentation.childrenByParentId}
-                  workspaceId={workspaceId}
-                  onOpenArtifact={onOpenArtifact}
-                  subagentBrailleColors={subagentBrailleColors}
-                />
-              ))}
-            </ReadGroupBlock>
+            <TurnDisplayBlockNode
+              key={`collapsed-actions-${block.itemIds[0] ?? block.blockId}`}
+              block={block}
+              transcript={transcript}
+              forceExpanded={block.blockId === forceExpandedCollapsedActionBlockId}
+              childrenByParentId={presentation.childrenByParentId}
+              subagentBrailleColors={subagentBrailleColors}
+              workspaceId={workspaceId}
+              onOpenArtifact={onOpenArtifact}
+            />
           );
         }
 
+        if (block.kind === "inline_tool") {
+          return (
+            <TurnDisplayBlockNode
+              key={`inline-tool-${block.itemId}`}
+              block={block}
+              transcript={transcript}
+              forceExpanded={false}
+              childrenByParentId={presentation.childrenByParentId}
+              subagentBrailleColors={subagentBrailleColors}
+              workspaceId={workspaceId}
+              onOpenArtifact={onOpenArtifact}
+            />
+          );
+        }
+
+        const itemId = block.itemId;
+
         return (
           <FragmentWithArtifacts
-            key={itemId}
+            key={`${block.kind}-${itemId}`}
             itemId={itemId}
             transcript={transcript}
             childrenByParentId={presentation.childrenByParentId}
@@ -503,6 +578,144 @@ function TurnItemSequence({
       )}
     </>
   );
+}
+
+function TurnDisplayBlockNode({
+  block,
+  transcript,
+  forceExpanded = false,
+  childrenByParentId,
+  subagentBrailleColors,
+  workspaceId,
+  onOpenArtifact,
+}: {
+  block: ReturnType<typeof buildTurnPresentation>["displayBlocks"][number];
+  transcript: TranscriptState;
+  forceExpanded?: boolean;
+  childrenByParentId: Map<string, string[]>;
+  subagentBrailleColors: Map<string, string>;
+  workspaceId: string | null;
+  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
+}) {
+  if (block.kind === "collapsed_actions") {
+    return (
+      <CollapsedActions
+        itemIds={block.itemIds}
+        transcript={transcript}
+        forceExpanded={forceExpanded}
+      />
+    );
+  }
+
+  if (block.kind === "inline_tool") {
+    const item = transcript.itemsById[block.itemId];
+    if (item?.kind === "tool_call") {
+      return <InlineToolAction item={item} />;
+    }
+  }
+
+  return (
+    <FragmentWithArtifacts
+      itemId={block.itemId}
+      transcript={transcript}
+      childrenByParentId={childrenByParentId}
+      subagentBrailleColors={subagentBrailleColors}
+      artifactToolCalls={null}
+      workspaceId={workspaceId}
+      onOpenArtifact={onOpenArtifact}
+    />
+  );
+}
+
+function shouldForceExpandActionBlock(
+  itemIds: readonly string[],
+  transcript: TranscriptState,
+  isTurnComplete: boolean,
+): boolean {
+  if (isTurnComplete) {
+    return false;
+  }
+
+  const summary = summarizeCollapsedActions(itemIds, transcript);
+  return summary.reads > 0
+    || summary.listings > 0
+    || summary.searches > 0
+    || summary.fetches > 0;
+}
+
+function findTrailingLiveExplorationBlock(
+  presentation: ReturnType<typeof buildTurnPresentation>,
+  transcript: TranscriptState,
+  isLatestTurnInProgress: boolean,
+): Extract<ReturnType<typeof buildTurnPresentation>["displayBlocks"][number], { kind: "collapsed_actions" }> | null {
+  if (!isLatestTurnInProgress) {
+    return null;
+  }
+
+  const block = presentation.displayBlocks[presentation.displayBlocks.length - 1];
+  if (block?.kind !== "collapsed_actions") {
+    return null;
+  }
+
+  return shouldForceExpandActionBlock(block.itemIds, transcript, false)
+    ? block
+    : null;
+}
+
+function findTrailingLiveWorkBlock(
+  presentation: ReturnType<typeof buildTurnPresentation>,
+  transcript: TranscriptState,
+  isLatestTurnInProgress: boolean,
+): ReturnType<typeof buildTurnPresentation>["displayBlocks"][number] | null {
+  if (!isLatestTurnInProgress) {
+    return null;
+  }
+
+  for (let index = presentation.displayBlocks.length - 1; index >= 0; index--) {
+    const block = presentation.displayBlocks[index];
+    if (blockContainsActiveToolWork(block, transcript)) {
+      return block;
+    }
+  }
+
+  return null;
+}
+
+function blockContainsActiveToolWork(
+  block: ReturnType<typeof buildTurnPresentation>["displayBlocks"][number] | undefined,
+  transcript: TranscriptState,
+): boolean {
+  if (!block) {
+    return false;
+  }
+
+  if (block.kind === "collapsed_actions") {
+    return block.itemIds.some((itemId) => isActiveToolItem(transcript.itemsById[itemId]));
+  }
+
+  return isActiveToolItem(transcript.itemsById[block.itemId]);
+}
+
+function isActiveToolItem(item: TranscriptItem | undefined): boolean {
+  return item?.kind === "tool_call"
+    && item.status !== "completed"
+    && item.status !== "failed";
+}
+
+function getTurnDisplayBlockKey(
+  block: ReturnType<typeof buildTurnPresentation>["displayBlocks"][number],
+): string {
+  return block.kind === "collapsed_actions" ? block.blockId : block.itemId;
+}
+
+function blockBelongsToCompletedHistory(
+  block: ReturnType<typeof buildTurnPresentation>["displayBlocks"][number],
+  completedHistoryRootIds: Set<string>,
+): boolean {
+  if (block.kind === "collapsed_actions") {
+    return block.itemIds.every((itemId) => completedHistoryRootIds.has(itemId));
+  }
+  return completedHistoryRootIds.has(block.itemId);
 }
 
 function FragmentWithArtifacts({
@@ -583,7 +796,10 @@ function TranscriptItemBlock({
 
       return (
         <div className="flex justify-start relative">
-          <div data-chat-selection-unit className="flex flex-col w-full min-w-0 max-w-full break-words">
+          <div
+            data-chat-selection-unit
+            className="flex flex-col w-full min-w-0 max-w-full break-words"
+          >
             <AssistantMessage
               content={item.text}
               isStreaming={item.isStreaming}
@@ -786,7 +1002,7 @@ function ToolCallItemBlock({
     || item.semanticKind === "cowork_artifact_update"
   ) {
     return (
-      <CoworkArtifactToolCallBlock
+      <CoworkArtifactToolActionRow
         item={item}
         onOpenArtifact={
           workspaceId
@@ -871,6 +1087,7 @@ function ToolCallItemBlock({
         description={bashDescription}
         output={output || (typeof item.rawOutput === "string" ? item.rawOutput : undefined)}
         status={status}
+        duration={formatToolDuration(item)}
       />,
     );
   }
@@ -884,6 +1101,7 @@ function ToolCallItemBlock({
           description={bashDescription}
           output={normalizedResultText}
           status={status}
+          duration={formatToolDuration(item)}
         />,
       );
     } else if (item.nativeToolName === "Read" || item.toolKind === "read") {
@@ -903,30 +1121,23 @@ function ToolCallItemBlock({
 
   if (rows.length === 0 && normalizedResultText) {
     rows.push(
-      <ToolCallBlock
+      <GenericToolResultRow
         key="result"
         icon={<ToolKindIcon iconKey={fallbackDisplay.iconKey} />}
-        name={<span className="font-[460] text-foreground/90">{fallbackDisplay.label}</span>}
+        label={<span className="font-[460] text-foreground/90">{fallbackDisplay.label}</span>}
         status={status}
         hint={fallbackDisplay.hint}
-      >
-        <div className="overflow-hidden rounded-md border border-border/60 bg-muted/25">
-          <AutoHideScrollArea className="w-full" viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}>
-            <pre className="m-0 whitespace-pre-wrap px-3 py-2 font-mono text-xs text-foreground">
-              {normalizedResultText}
-            </pre>
-          </AutoHideScrollArea>
-        </div>
-      </ToolCallBlock>,
+        resultText={normalizedResultText}
+      />,
     );
   }
 
   if (rows.length === 0) {
     rows.push(
-      <ToolCallBlock
+      <GenericToolResultRow
         key="tool"
         icon={<ToolKindIcon iconKey={fallbackDisplay.iconKey} />}
-        name={<span className="font-[460] text-foreground/90">{fallbackDisplay.label}</span>}
+        label={<span className="font-[460] text-foreground/90">{fallbackDisplay.label}</span>}
         status={status}
         hint={fallbackDisplay.hint}
       />,
@@ -1108,7 +1319,7 @@ function AgentGroupBlock({
             : "cursor-default text-muted-foreground"
         }`}
       >
-        <ToolCallLeadingAffordance
+        <ToolActionLeadingAffordance
           icon={<AgentHeaderIcon state={executionState} color={brailleColor} />}
           expandable={headerExpandable}
           expanded={expanded}
@@ -1411,6 +1622,36 @@ function mapStatus(
   if (status === "completed") return "completed";
   if (status === "failed") return "failed";
   return "running";
+}
+
+function formatToolDuration(item: ToolCallItem): string | undefined {
+  const rawItem = isRecord(item);
+  const startedAtValue =
+    readString(rawItem?.startedAt)
+    ?? readString(rawItem?.timestamp);
+  if (!startedAtValue) {
+    return undefined;
+  }
+
+  const startedAt = Date.parse(startedAtValue);
+  if (!Number.isFinite(startedAt)) {
+    return undefined;
+  }
+
+  const completedAtValue = readString(rawItem?.completedAt);
+  const completedAt = completedAtValue ? Date.parse(completedAtValue) : Date.now();
+  if (!Number.isFinite(completedAt) || completedAt < startedAt) {
+    return undefined;
+  }
+
+  const elapsedSeconds = Math.max(0, Math.round((completedAt - startedAt) / 1000));
+  if (elapsedSeconds < 60) {
+    return `for ${elapsedSeconds}s`;
+  }
+
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  return seconds === 0 ? `for ${minutes}m` : `for ${minutes}m ${seconds}s`;
 }
 
 function ToolKindIcon({ iconKey }: { iconKey: ToolDisplayIconKey }) {

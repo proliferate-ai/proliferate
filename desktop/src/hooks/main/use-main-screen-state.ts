@@ -38,6 +38,10 @@ export interface MainScreenLayoutState {
   setSidebarWidth: Dispatch<SetStateAction<number>>;
   rightPanelOpen: boolean;
   setRightPanelOpen: Dispatch<SetStateAction<boolean>>;
+  terminalCollapsed: boolean;
+  setTerminalCollapsed: Dispatch<SetStateAction<boolean>>;
+  terminalFocusRequestToken: number;
+  setTerminalFocusRequestToken: Dispatch<SetStateAction<number>>;
   commitOpen: boolean;
   setCommitOpen: Dispatch<SetStateAction<boolean>>;
   pushOpen: boolean;
@@ -71,6 +75,8 @@ export interface MainScreenState {
 export function useMainScreenState(): MainScreenState {
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>("files");
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [terminalCollapsed, setTerminalCollapsed] = useState(false);
+  const [terminalFocusRequestToken, setTerminalFocusRequestToken] = useState(0);
   const [commitOpen, setCommitOpen] = useState(false);
   const [pushOpen, setPushOpen] = useState(false);
   const [prOpen, setPrOpen] = useState(false);
@@ -156,6 +162,10 @@ export function useMainScreenState(): MainScreenState {
       setSidebarWidth,
       rightPanelOpen,
       setRightPanelOpen,
+      terminalCollapsed,
+      setTerminalCollapsed,
+      terminalFocusRequestToken,
+      setTerminalFocusRequestToken,
       commitOpen,
       setCommitOpen,
       pushOpen,

@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { Workspace } from "@anyharness/sdk";
+import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import {
@@ -17,11 +17,12 @@ import {
   type CreateWorktreeWorkspaceInput,
   type WorktreeCreationParams,
 } from "@/lib/domain/workspaces/workspace-creation";
-import { localWorkspaceGroupKey } from "@/lib/domain/workspaces/collections";
+import { sidebarRepoGroupKeyForWorkspace } from "@/lib/domain/workspaces/sidebar-group-key";
 import {
   ensureRepoGroupExpanded,
 } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceActions } from "./use-workspace-actions";
+import { useWorkspaceEntryFlow } from "./use-workspace-entry-flow";
 import { useWorkspaceSelection } from "./selection/use-workspace-selection";
 import {
   elapsedMs,
@@ -37,6 +38,9 @@ import {
 function resolveDisplayNameFromPath(path: string): string {
   return path.split("/").filter(Boolean).pop() ?? "workspace";
 }
+
+const EMPTY_REPO_ROOTS: RepoRoot[] = [];
+const EMPTY_WORKSPACES: Workspace[] = [];
 
 function normalizeWorktreeInput(
   input: string | CreateWorktreeWorkspaceInput,
@@ -68,8 +72,28 @@ function resolveErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+interface CreateLocalWorkspaceAndEnterOptions {
+  lightweight?: boolean;
+  repoGroupKeyToExpand?: string | null;
+}
+
+interface CreateWorktreeAndEnterOptions {
+  lightweight?: boolean;
+  latencyFlowId?: string | null;
+  repoGroupKeyToExpand?: string | null;
+}
+
+interface CreateWorktreeAndEnterInternalOptions extends CreateWorktreeAndEnterOptions {
+  throwOnFailure?: boolean;
+}
+
+interface WorkspaceEntryResult {
+  workspaceId: string;
+}
+
 export function useWorkspaceEntryActions() {
   const { data: workspaceCollections } = useWorkspaces();
+  const repoRoots = workspaceCollections?.repoRoots ?? EMPTY_REPO_ROOTS;
   const {
     resolveWorktreeCreationInput,
     createLocalWorkspace,
@@ -77,6 +101,7 @@ export function useWorkspaceEntryActions() {
     createWorktreeWorkspace,
     isCreatingWorktreeWorkspace,
   } = useWorkspaceActions();
+  const { selectWorkspaceWithArrival } = useWorkspaceEntryFlow();
   const { selectWorkspace } = useWorkspaceSelection();
   const enterPendingWorkspaceShell = useHarnessStore(
     (state) => state.enterPendingWorkspaceShell,
@@ -105,8 +130,8 @@ export function useWorkspaceEntryActions() {
   const finalizeSelection = useCallback(async (
     entry: PendingWorkspaceEntry,
     workspaceId: string,
-    options?: { latencyFlowId?: string | null },
-  ) => {
+    options?: { latencyFlowId?: string | null; repoGroupKeyToExpand?: string | null },
+  ): Promise<boolean> => {
     const selectionStartedAt = startLatencyTimer();
     logLatency("workspace.entry.selection.start", {
       attemptId: entry.attemptId,
@@ -125,6 +150,9 @@ export function useWorkspaceEntryActions() {
       attemptId: entry.attemptId,
       targetWorkspaceId: workspaceId,
     });
+    if (options?.repoGroupKeyToExpand) {
+      ensureRepoGroupExpanded(options.repoGroupKeyToExpand);
+    }
 
     await selectWorkspace(workspaceId, {
       force: true,
@@ -139,7 +167,7 @@ export function useWorkspaceEntryActions() {
         workspaceId,
         selectionElapsedMs: elapsedMs(selectionStartedAt),
       });
-      return;
+      return false;
     }
 
     setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
@@ -156,6 +184,7 @@ export function useWorkspaceEntryActions() {
       selectionElapsedMs: elapsedMs(selectionStartedAt),
       totalElapsedMs: elapsedSince(entry.createdAt),
     });
+    return true;
   }, [selectWorkspace, setPendingWorkspaceEntry, setWorkspaceArrivalEvent]);
 
   const failPendingEntry = useCallback((
@@ -186,9 +215,12 @@ export function useWorkspaceEntryActions() {
 
   const createLocalWorkspaceAndEnter = useCallback(async (
     sourceRoot: string,
-    options?: { lightweight?: boolean },
+    options?: CreateLocalWorkspaceAndEnterOptions,
   ) => {
     const startedAt = startLatencyTimer();
+    const sourceRepoGroupKey = options?.repoGroupKeyToExpand ?? sourceRoot;
+    // Open immediately for feedback; success reopens using the returned workspace.
+    ensureRepoGroupExpanded(sourceRepoGroupKey);
 
     // Lightweight path: skip pending shell, keep current workspace visible,
     // just run the mutation and select on success. Used when creating from
@@ -196,14 +228,13 @@ export function useWorkspaceEntryActions() {
     if (options?.lightweight) {
       try {
         const workspace = await createLocalWorkspace(sourceRoot);
-        ensureRepoGroupExpanded(localWorkspaceGroupKey(workspace));
-        setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
+        await selectWorkspaceWithArrival({
           workspaceId: workspace.id,
           source: "local-created",
           setupScript: null,
           baseBranchName: null,
-        }));
-        await selectWorkspace(workspace.id, { force: true });
+          repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(workspace, repoRoots),
+        });
       } catch (error) {
         throw error;
       }
@@ -239,7 +270,9 @@ export function useWorkspaceEntryActions() {
         workspaceId: workspace.id,
         request: { kind: "select-existing", workspaceId: workspace.id },
       };
-      await finalizeSelection(selectionEntry, workspace.id);
+      await finalizeSelection(selectionEntry, workspace.id, {
+        repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(workspace, repoRoots),
+      });
     } catch (error) {
       const currentPending = useHarnessStore.getState().pendingWorkspaceEntry;
       const workspaceId = currentPending?.attemptId === entry.attemptId
@@ -256,15 +289,29 @@ export function useWorkspaceEntryActions() {
         resolveErrorMessage(error, "Failed to create workspace."),
       );
     }
-  }, [beginPendingWorkspace, createLocalWorkspace, failPendingEntry, finalizeSelection, selectWorkspace, setWorkspaceArrivalEvent]);
+  }, [
+    beginPendingWorkspace,
+    createLocalWorkspace,
+    failPendingEntry,
+    finalizeSelection,
+    repoRoots,
+    selectWorkspaceWithArrival,
+  ]);
 
-  const createWorktreeAndEnter = useCallback(async (
+  const createWorktreeAndEnterInternal = useCallback(async (
     input: string | CreateWorktreeWorkspaceInput,
-    options?: { lightweight?: boolean; latencyFlowId?: string | null },
-  ) => {
+    options?: CreateWorktreeAndEnterInternalOptions,
+  ): Promise<WorkspaceEntryResult | null> => {
     const startedAt = startLatencyTimer();
-    const allWorkspaces = workspaceCollections?.localWorkspaces ?? [];
+    const allWorkspaces = workspaceCollections?.localWorkspaces ?? EMPTY_WORKSPACES;
     const repoRootId = typeof input === "string" ? input : input.repoRootId;
+    const sourceRepoGroupKey = options?.repoGroupKeyToExpand
+      ?? repoRoots.find((repoRoot) => repoRoot.id === repoRootId)?.path
+      ?? null;
+    if (sourceRepoGroupKey) {
+      // Open immediately for feedback; success reopens using the returned workspace.
+      ensureRepoGroupExpanded(sourceRepoGroupKey);
+    }
     const sourceWorkspaceId = typeof input === "string" ? null : input.sourceWorkspaceId ?? null;
     const source = sourceWorkspaceId
       ? allWorkspaces.find((workspace) => workspace.id === sourceWorkspaceId) ?? null
@@ -280,25 +327,23 @@ export function useWorkspaceEntryActions() {
         const result = await createWorktreeWorkspace(resolved.params, {
           latencyFlowId: options.latencyFlowId,
         });
-        ensureRepoGroupExpanded(localWorkspaceGroupKey(result.workspace));
-        setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
+        const repoGroupKeyToExpand = sidebarRepoGroupKeyForWorkspace(result.workspace, repoRoots);
+        annotateLatencyFlow(options.latencyFlowId, {
+          targetWorkspaceId: result.workspace.id,
+        });
+        await selectWorkspaceWithArrival({
           workspaceId: result.workspace.id,
           source: "worktree-created",
           setupScript: result.setupScript ?? null,
           baseBranchName: resolved.params.baseRef,
-        }));
-        annotateLatencyFlow(options.latencyFlowId, {
-          targetWorkspaceId: result.workspace.id,
-        });
-        await selectWorkspace(result.workspace.id, {
-          force: true,
+          repoGroupKeyToExpand,
           latencyFlowId: options.latencyFlowId,
         });
+        return { workspaceId: result.workspace.id };
       } catch (error) {
         failLatencyFlow(options?.latencyFlowId, "worktree_enter_failed");
         throw error;
       }
-      return;
     }
 
     const entry = buildSubmittingPendingEntry({
@@ -336,7 +381,7 @@ export function useWorkspaceEntryActions() {
       });
 
       if (!isAttemptCurrent(entry.attemptId)) {
-        return;
+        return null;
       }
 
       const updatedEntry: PendingWorkspaceEntry = {
@@ -370,7 +415,7 @@ export function useWorkspaceEntryActions() {
         totalElapsedMs: elapsedMs(startedAt),
       });
       if (!isAttemptCurrent(entry.attemptId)) {
-        return;
+        return null;
       }
 
       const selectionEntry: PendingWorkspaceEntry = {
@@ -381,9 +426,14 @@ export function useWorkspaceEntryActions() {
         setupScript: result.setupScript ?? null,
       };
 
-      await finalizeSelection(selectionEntry, result.workspace.id, {
+      const selectionFinalized = await finalizeSelection(selectionEntry, result.workspace.id, {
         latencyFlowId: options?.latencyFlowId,
+        repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(result.workspace, repoRoots),
       });
+      if (!selectionFinalized) {
+        return null;
+      }
+      return { workspaceId: result.workspace.id };
     } catch (error) {
       const currentPending = useHarnessStore.getState().pendingWorkspaceEntry;
       failLatencyFlow(options?.latencyFlowId, "worktree_enter_failed");
@@ -394,23 +444,49 @@ export function useWorkspaceEntryActions() {
         resolveErrorMessage(error, "Failed to create worktree."),
         params ? { request: { kind: "worktree", input: normalizedInput } } : undefined,
       );
+      if (options?.throwOnFailure) {
+        throw error;
+      }
+      return null;
     }
   }, [
     beginPendingWorkspace,
     createWorktreeWorkspace,
     failPendingEntry,
     finalizeSelection,
+    repoRoots,
     resolveWorktreeCreationInput,
-    selectWorkspace,
+    selectWorkspaceWithArrival,
     setPendingWorkspaceEntry,
-    setWorkspaceArrivalEvent,
     workspaceCollections,
   ]);
+
+  const createWorktreeAndEnter = useCallback(async (
+    input: string | CreateWorktreeWorkspaceInput,
+    options?: CreateWorktreeAndEnterOptions,
+  ) => {
+    await createWorktreeAndEnterInternal(input, options);
+  }, [createWorktreeAndEnterInternal]);
+
+  const createWorktreeAndEnterWithResult = useCallback(async (
+    input: string | CreateWorktreeWorkspaceInput,
+    options?: CreateWorktreeAndEnterOptions,
+  ): Promise<WorkspaceEntryResult> => {
+    const result = await createWorktreeAndEnterInternal(input, {
+      ...options,
+      throwOnFailure: true,
+    });
+    if (!result) {
+      throw new Error("Worktree creation was interrupted.");
+    }
+    return result;
+  }, [createWorktreeAndEnterInternal]);
 
   return {
     createLocalWorkspaceAndEnter,
     isCreatingLocalWorkspace,
     createWorktreeAndEnter,
+    createWorktreeAndEnterWithResult,
     isCreatingWorktreeWorkspace,
   };
 }

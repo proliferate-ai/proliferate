@@ -5,6 +5,7 @@ import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobil
 import { useWorkspaceMobility } from "@/hooks/workspaces/use-workspace-mobility";
 import { useMobilityFooterContext } from "@/hooks/workspaces/mobility/use-mobility-footer-context";
 import { useMobilityPromptState } from "@/hooks/workspaces/mobility/use-mobility-prompt-state";
+import { isMobilityPromptPrimaryActionPending } from "@/lib/domain/workspaces/mobility-prompt";
 import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/debug-latency";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import {
@@ -239,7 +240,7 @@ export function WorkspaceMobilityFooterRow() {
         <ComposerControlButton
           icon={locationIcon(footerContext.locationKind)}
           label={<AnimatedSwapText value={footerContext.locationLabel} />}
-          trailing={<ChevronDown className="size-3 text-muted-foreground/70" />}
+          trailing={<ChevronDown className="size-3.5 text-muted-foreground/70" />}
           active={popoverOpen || footerContext.isActive}
           disabled={!footerContext.isInteractive}
           data-telemetry-mask
@@ -253,14 +254,10 @@ export function WorkspaceMobilityFooterRow() {
       {(close) => (
         <WorkspaceMobilityLocationPopover
           prompt={prompt}
-          isActionPending={
-            prompt.primaryActionKind === "publish_branch"
-            || prompt.primaryActionKind === "push_commits"
-              ? mobility.isSyncingBranch
-              : prompt.primaryActionKind === "retry_cleanup"
-                ? mobility.isPending
-                : false
-          }
+          isActionPending={isMobilityPromptPrimaryActionPending(prompt, {
+            isMobilityPending: mobility.isPending,
+            isBranchSyncing: mobility.isSyncingBranch,
+          })}
           onClose={() => {
             close();
             closePopover();
@@ -273,7 +270,7 @@ export function WorkspaceMobilityFooterRow() {
 
   return (
     <>
-      <div className="rounded-[var(--radius-composer)]  px-2 pt-2 shadow-xs">
+      <div className="rounded-[var(--radius-composer)]  px-2 pt-2 ">
         <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
           {locationTrigger}
 

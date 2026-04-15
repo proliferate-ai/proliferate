@@ -7,6 +7,7 @@ import { useCloudWorkspaceHandoffHeartbeatLoop } from "@/hooks/workspaces/mobili
 import { useCloudToLocalHandoff } from "@/hooks/workspaces/mobility/use-cloud-to-local-handoff";
 import { useLocalToCloudHandoff } from "@/hooks/workspaces/mobility/use-local-to-cloud-handoff";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
+import { isWorkspaceMobilityTransitionPhase } from "@/lib/domain/workspaces/mobility-state-machine";
 import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/debug-latency";
 
 const PROMPT_PREPARE_TIMEOUT_MS = 12_000;
@@ -65,10 +66,7 @@ export function useWorkspaceMobility() {
     handoffOpId: state.mobilityWorkspaceDetail?.activeHandoff?.id
       ?? state.selectedLogicalWorkspace?.mobilityWorkspace?.activeHandoff?.id
       ?? null,
-    enabled: state.status.phase !== "idle"
-      && state.status.phase !== "failed"
-      && state.status.phase !== "cleanup_failed"
-      && state.status.phase !== "success",
+    enabled: isWorkspaceMobilityTransitionPhase(state.status.phase),
   });
 
   const preparePrompt = useCallback(async (requestId?: number) => {

@@ -1,7 +1,9 @@
 import { FileText } from "@/components/ui/icons";
 import { HighlightedCodePanel } from "@/components/ui/content/HighlightedCodePanel";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
+import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
+import { ToolActionRow } from "./ToolActionRow";
 import { ToolFileChip } from "./ToolFileChip";
-import { ToolCallBlock, TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "./ToolCallBlock";
 import type { FileReadScope } from "@anyharness/sdk";
 
 interface FileReadCallProps {
@@ -34,19 +36,19 @@ export function FileReadCall({
   const resolvedBasename = basename || extractBasename(path);
   const isPartialRead = scope === "line" || scope === "range";
   const scopeLabel = formatScopeLabel(scope, line, startLine, endLine);
-  const previewPanel = isPartialRead && preview
+  const previewPanel = preview
     ? (
-      <div className="overflow-hidden rounded-md border border-border/60 bg-muted/25">
+      <ToolActionDetailsPanel>
         <HighlightedCodePanel
           code={preview}
           filename={workspacePath ?? path}
           showLanguageLabel={false}
-          showLineNumbers
+          showLineNumbers={isPartialRead}
           lineNumberStart={resolvePreviewStartLine(line, startLine)}
           className="border-0 bg-transparent"
           contentClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
         />
-      </div>
+      </ToolActionDetailsPanel>
     )
     : null;
   const fileLabel = (
@@ -64,16 +66,16 @@ export function FileReadCall({
   );
 
   return (
-    <ToolCallBlock
+    <ToolActionRow
       icon={<FileText />}
-      name={fileLabel}
+      label={fileLabel}
       status={status}
       duration={duration}
       defaultExpanded={defaultExpanded}
-      expandable={isPartialRead && !!preview}
+      expandable={!!preview}
     >
       {previewPanel}
-    </ToolCallBlock>
+    </ToolActionRow>
   );
 }
 

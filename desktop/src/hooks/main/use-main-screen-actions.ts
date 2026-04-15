@@ -34,6 +34,8 @@ export function useMainScreenActions({
     setRightPanelMode,
     setSidebarOpen,
     setRightPanelOpen,
+    setTerminalCollapsed,
+    setTerminalFocusRequestToken,
     setCommitOpen,
     setFilePaletteOpen,
     setPushOpen,
@@ -44,6 +46,22 @@ export function useMainScreenActions({
     setRightPanelMode(mode);
     setRightPanelOpen(true);
   }, [setRightPanelMode, setRightPanelOpen]);
+
+  const openTerminalPanel = useCallback(() => {
+    if (!selectedWorkspaceId) {
+      return false;
+    }
+
+    setRightPanelOpen(true);
+    setTerminalCollapsed(false);
+    setTerminalFocusRequestToken((token) => token + 1);
+    return true;
+  }, [
+    selectedWorkspaceId,
+    setRightPanelOpen,
+    setTerminalCollapsed,
+    setTerminalFocusRequestToken,
+  ]);
 
   const toggleRightPanel = useCallback(() => {
     if (rightPanelOpen) {
@@ -114,6 +132,7 @@ export function useMainScreenActions({
     renameBranch,
     onToggleSidebar: () => setSidebarOpen((value) => !value),
     toggleRightPanel,
+    openTerminalPanel,
     onSetRightPanelMode: setRightPanelMode,
     handleCommitOpen,
     handlePushOpen,

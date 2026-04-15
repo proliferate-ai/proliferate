@@ -91,7 +91,7 @@ export function ConnectorCatalogPage() {
   };
 
   return (
-    <div className="mx-auto min-h-full w-full max-w-5xl px-6 pb-16 pt-16">
+    <div className="mx-auto min-h-full w-full max-w-5xl px-6 pb-14 pt-10">
       <section className="space-y-6">
         <div>
           <h2 className="text-2xl font-medium text-foreground">Powers</h2>

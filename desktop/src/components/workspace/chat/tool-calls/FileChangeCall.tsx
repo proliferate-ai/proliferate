@@ -1,11 +1,22 @@
-import type { ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
-import { HighlightedCodePanel } from "@/components/ui/content/HighlightedCodePanel";
-import { ArrowRight, FilePen, FilePlus, Minus } from "@/components/ui/icons";
 import {
-  ToolCallBlock,
-  TOOL_CALL_BODY_MAX_HEIGHT_CLASS,
-} from "./ToolCallBlock";
+  FileChangeInlineRow,
+  FileChangesCard,
+  FileDiffCard,
+} from "@/components/ui/content/FileDiffCard";
+import { HighlightedCodePanel } from "@/components/ui/content/HighlightedCodePanel";
+import {
+  ArrowRight,
+  FilePen,
+  FilePlus,
+  Minus,
+} from "@/components/ui/icons";
+import { useOpenInDefaultEditor } from "@/hooks/editor/use-open-in-default-editor";
+import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
+import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
+import { ToolActionRow } from "./ToolActionRow";
 import { ToolFileChip } from "./ToolFileChip";
 import type { FileChangeOperation } from "@anyharness/sdk";
 
@@ -43,7 +54,17 @@ export function FileChangeCall({
   defaultExpanded = false,
 }: FileChangeCallProps) {
   const hasDiff = !!patch;
+  const [rowExpanded, setRowExpanded] = useState(defaultExpanded);
+  const [diffExpanded, setDiffExpanded] = useState(true);
+  const { resolveAbsolute } = useWorkspacePath();
+  const { openInDefaultEditor } = useOpenInDefaultEditor();
   const actionLabel = getOperationLabel(operation, status);
+  const displayPath = newWorkspacePath || workspacePath || newPath || path;
+  const absolutePath = resolveAbsolute(displayPath);
+  const handleOpenFile = useCallback(() => {
+    if (!absolutePath) return;
+    void openInDefaultEditor(absolutePath);
+  }, [absolutePath, openInDefaultEditor]);
   const label = buildLabel(
     actionLabel,
     operation,
@@ -56,40 +77,79 @@ export function FileChangeCall({
   );
   const statsHint = buildStatsHint(additions, deletions);
 
+  if (status === "completed" && hasDiff) {
+    const nextAdditions = additions ?? 0;
+    const nextDeletions = deletions ?? 0;
+
+    return (
+      <div className="flex min-w-0 flex-col gap-1">
+        <FileChangeInlineRow
+          label={actionLabel}
+          filePath={displayPath}
+          additions={nextAdditions}
+          deletions={nextDeletions}
+          isExpanded={rowExpanded}
+          onToggle={() => setRowExpanded((expanded) => !expanded)}
+          onOpenFile={absolutePath ? handleOpenFile : undefined}
+        />
+        {rowExpanded && (
+          <FileChangesCard fileCount={1} className="mt-1 mb-1">
+            <FileDiffCard
+              filePath={displayPath}
+              additions={nextAdditions}
+              deletions={nextDeletions}
+              isExpanded={diffExpanded}
+              onToggleExpand={() => setDiffExpanded((expanded) => !expanded)}
+              onOpenFile={absolutePath ? handleOpenFile : undefined}
+              embedded
+            >
+              <DiffViewer
+                patch={patch!}
+                filePath={displayPath}
+                className="w-full"
+                variant="chat"
+              />
+            </FileDiffCard>
+          </FileChangesCard>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <ToolCallBlock
+    <ToolActionRow
       icon={getOperationIcon(operation)}
-      name={label}
+      label={label}
       hint={statsHint}
       status={status}
       duration={duration}
       defaultExpanded={defaultExpanded}
       expandable={hasDiff || !!preview}
-      bodyClassName="overflow-hidden"
     >
       {hasDiff || preview ? (
-        <div className="overflow-hidden rounded-md border border-border/60 bg-muted/25">
+        <ToolActionDetailsPanel>
           {hasDiff ? (
             <DiffViewer
               patch={patch!}
-              filePath={newWorkspacePath || workspacePath || newPath || path}
+              filePath={displayPath}
               className="w-full"
               viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+              variant="chat"
             />
           ) : preview ? (
             <div className="p-2">
               <HighlightedCodePanel
                 code={preview}
-                filename={newWorkspacePath || workspacePath || newPath || path}
+                filename={displayPath}
                 showLanguageLabel={false}
                 className="border-0 bg-transparent"
                 contentClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
               />
             </div>
           ) : null}
-        </div>
+        </ToolActionDetailsPanel>
       ) : null}
-    </ToolCallBlock>
+    </ToolActionRow>
   );
 }
 

@@ -121,6 +121,7 @@ export function useWorkspaceEntryFlow() {
     setupScript?: PendingWorkspaceEntry["setupScript"];
     baseBranchName?: string | null;
     repoGroupKeyToExpand?: string | null;
+    latencyFlowId?: string | null;
   }) => {
     if (input.repoGroupKeyToExpand) {
       ensureRepoGroupExpanded(input.repoGroupKeyToExpand);
@@ -131,7 +132,9 @@ export function useWorkspaceEntryFlow() {
       setupScript: input.setupScript ?? null,
       baseBranchName: input.baseBranchName ?? null,
     }));
-    await selectWorkspace(input.workspaceId, { force: true });
+    await selectWorkspace(input.workspaceId, input.latencyFlowId
+      ? { force: true, latencyFlowId: input.latencyFlowId }
+      : { force: true });
   }, [selectWorkspace, setWorkspaceArrivalEvent]);
 
   return {
