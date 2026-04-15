@@ -1,107 +1,158 @@
 # Proliferate
 
-**One app to run every coding agent.** Switch between Claude Code, Codex, Gemini, and more — using your existing subscriptions, in isolated workspaces, locally or in the cloud.
+**Run coding agents locally or in the cloud.**
 
-![Screenshot of Proliferate](./screenshot.png)
+Proliferate is a Mac app for working with coding agents at scale: many agents,
+many workspaces, local and cloud execution, automations, teams, and artifacts.
 
-Proliferate is a 35 MB desktop app built in Tauri that gives you a unified workspace for any coding agent. No lock-in, no bloat, no extra subscriptions.
+![Proliferate overview](./assets/readme/overview.png)
 
-## Why
+## What It Does
 
-Coding agents are changing fast. The best model today might not be the best model tomorrow. Proliferate lets you:
+### One Place For Your Agents
 
-- **Run any agent** — Claude Code, Codex, Gemini, Amp, Cursor, and more coming
-- **Switch instantly** — change agents mid-project without losing context
-- **Use your own keys** — bring your existing subscriptions, no middleman
-- **Isolate work** — every task gets its own git worktree, no conflicts
-- **Go cloud** — spin up E2B sandboxes for long-running tasks and close your laptop
+Run Codex, Claude Code, Gemini CLI, and custom agents from one app, using the
+auth and subscriptions you already have.
+
+![Agent selector](./assets/readme/agents.gif)
+
+### Local And Cloud Workspaces
+
+Give each agent its own isolated workspace. Work locally when you want control,
+or move sessions to the cloud when you want them to keep running.
+
+![Local to cloud handoff](./assets/readme/local-to-cloud.gif)
+
+### Multi-Agent Workflows
+
+Agents can create other agents, wait for them, read their chats, send messages,
+and bring results back into the main workflow.
+
+![Subagents](./assets/readme/subagents.gif)
+
+### Automations
+
+Schedule recurring agent runs for bug triage, docs drift, PR review, repo
+hygiene, morning briefs, customer feedback, and other work you keep asking
+agents to do manually.
+
+![Automations](./assets/readme/automations.gif)
+
+### Teams
+
+Share cloud workspaces, collaborate in the same agent session, run team-wide
+automations, and claim results together.
+
+![Teams](./assets/readme/teams.gif)
+
+### Cowork And Artifacts
+
+Use agents for work that does not start in a repo. Chat with an LLM, use your
+tools, create live artifacts, and spin up coding agents when the work becomes
+concrete.
+
+![Cowork artifacts](./assets/readme/cowork-artifacts.gif)
+
+## Architecture
+
+Proliferate is built around AnyHarness, a Rust runtime that runs and controls
+coding agents through a shared interface.
+
+```text
+desktop/              Tauri app and React UI
+anyharness/crates/    Rust runtime, sessions, workspaces, tools, git, SSE
+anyharness/sdk/       TypeScript client
+anyharness/sdk-react/ React hooks
+server/               FastAPI cloud control plane
+```
+
+AnyHarness parses agent activity into structured events: messages, tool calls,
+approvals, plans, mode changes, task state, workspace state, and results.
 
 ## Install
 
-Download from [proliferate.com](https://proliferate.com) or grab the latest release:
+Download Proliferate from [proliferate.com](https://proliferate.com) or from the
+[latest GitHub release](https://github.com/proliferate-ai/proliferate/releases/latest).
 
-| Platform              | Download                                                               |
-|-----------------------|------------------------------------------------------------------------|
-| macOS (Apple Silicon) | [DMG](https://github.com/proliferate-ai/proliferate/releases/latest)  |
-| macOS (Intel)         | [DMG](https://github.com/proliferate-ai/proliferate/releases/latest)  |
-| Windows (x64)         | [Installer](https://github.com/proliferate-ai/proliferate/releases/latest) |
+## Run Locally
 
-## Run it yourself
+Requirements:
 
-Proliferate can be entirely self-hosted with just your own API keys. No account required for local use.
-
-**You'll need:** [Rust](https://rustup.rs), [Node.js 22+](https://nodejs.org), [pnpm](https://pnpm.io/installation)
+- Rust stable
+- Node.js 22+
+- pnpm
 
 ```bash
-pnpm install
-make sdk-build
-make dev
+make install
+make dev-local
 ```
 
-That's it. The desktop app and runtime start together.
+## Run The Full Stack
 
-### Cloud workspaces (optional)
+Cloud workspaces and hosted team features use the Python control plane.
 
-For cloud sandboxes that keep running even when you close the app, spin up the backend control plane:
+Additional requirements:
 
-**Additional requirements:** [Python 3.12+](https://www.python.org), [uv](https://docs.astral.sh/uv/), [Docker](https://www.docker.com/)
+- Python 3.12+
+- uv
+- Docker
 
 ```bash
 make server-install
-make dev-server
+make dev
 ```
 
-`make dev-server` and `make server-migrate` automatically start the local PostgreSQL container, wait for it to become healthy, and then apply Alembic migrations.
+`make dev` starts local Postgres, applies migrations, starts AnyHarness on
+`:8457`, starts the server on `:8000`, and opens the desktop app.
 
-For the fast default cloud runtime, set:
+For cloud sandbox development, configure `server/.env.local` with:
 
 ```env
 E2B_API_KEY=...
-E2B_TEMPLATE_NAME=TEAM_SLUG/proliferate-runtime-cloud:production
+E2B_TEMPLATE_NAME=...
 ```
 
-Replace `TEAM_SLUG` with the published E2B team slug. `base` remains a low-level fallback for debugging, not the recommended cloud template.
-
-Cloud sandboxes persist across disconnects — reconnect and pick up where you left off. For production hosting of the control plane, see the [server deployment docs](https://docs.proliferate.com).
-
-## How it works
-
-Proliferate is three pieces:
-
-**Desktop app** (`desktop/`) — Tauri 2 (React + Rust). Handles workspace UI, agent configuration, session management. The Rust layer manages the runtime sidecar, keychain, and native integrations.
-
-**AnyHarness runtime** (`anyharness/crates/`) — A Rust HTTP server that runs as a local sidecar. Manages agent processes, terminals, file ops, and git. Each agent runs as an isolated subprocess. Exposes an SSE streaming API consumed by the desktop app and the TypeScript SDK (`anyharness/sdk/`).
-
-**Control plane** (`server/`) — FastAPI backend for cloud features: auth, credential sync, E2B sandbox provisioning, and billing. Only needed for cloud workspaces — local use runs entirely without it.
+Self-hosting and deployment guides live in
+[`docs/reference`](./docs/reference).
 
 ## Development
 
 ```bash
-make dev              # Start runtime, backend, desktop, and local Postgres
-make dev-runtime      # AnyHarness runtime on :8457
-make server-db-up     # Start local Postgres
-make server-db-down   # Stop local Postgres
-make server-migrate   # Apply backend DB migrations
-make dev-server       # Backend on :8000
-make dev-desktop      # Desktop app
+make dev-local          # Desktop app with bundled local runtime
+make dev                # Runtime + server + desktop + local Postgres
+make dev-runtime        # AnyHarness runtime on :8457
+make dev-server         # FastAPI server on :8000
+make sdk-build          # Generate and build the TypeScript SDK
+make desktop-build      # Type-check and build the desktop frontend
+make test               # Rust workspace tests
+make test-server        # Server tests
+make all                # Rust checks + repo boundary checks + SDK build
 ```
+
+Read the relevant docs before making changes:
+
+- [`docs/frontend/README.md`](./docs/frontend/README.md)
+- [`docs/anyharness/README.md`](./docs/anyharness/README.md)
+- [`docs/sdk/README.md`](./docs/sdk/README.md)
+- [`docs/server/README.md`](./docs/server/README.md)
+- [`docs/ci-cd/README.md`](./docs/ci-cd/README.md)
 
 ## Release
 
-Tag-based releases via GitHub Actions:
+Desktop releases are tag-based.
 
-- `desktop-v*` — builds the desktop app for macOS and Windows
-- `runtime-v*` — builds the AnyHarness runtime for all platforms and publishes the SDK to npm
-- `main` — builds and publishes the public E2B cloud template with immutable `sha-*` tags and rolling `staging`
-- `Promote Cloud Template` — manually moves a tested immutable template tag to `production`
+```bash
+git tag desktop-v<VERSION>
+git push origin desktop-v<VERSION>
+```
 
-## Community
-
-Join the [Discord](https://discord.gg/eEUTBMXF) to chat with us, ask questions, share feedback, or see what's coming next.
+Do not run the desktop release workflow from `main`. See
+[`AGENTS.md`](./AGENTS.md) and [`docs/ci-cd/README.md`](./docs/ci-cd/README.md)
+for the full release procedure.
 
 ## Contributing
 
-We'd love contributions. See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+Issues, feedback, and pull requests are welcome.
 
 ## License
 
