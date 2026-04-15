@@ -18,6 +18,7 @@ import {
 const now = new Date("2026-04-16T18:30:05.000Z");
 const runtimeUrl = "http://127.0.0.1:7007";
 const health = {
+  capabilities: { replay: false },
   runtimeHome: "/Users/pablo/.proliferate/anyharness",
   status: "ok",
   version: "0.1.17",

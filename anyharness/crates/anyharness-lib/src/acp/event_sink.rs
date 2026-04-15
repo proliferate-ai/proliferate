@@ -1064,49 +1064,70 @@ impl SessionEventSink {
         turn_id: Option<String>,
         item_id: Option<String>,
     ) {
-        let seq = self.next_seq;
-        self.next_seq += 1;
-        let timestamp = chrono::Utc::now().to_rfc3339();
-        let event_type = event.event_type().to_string();
-        tracing::info!(
-            session_id = %self.session_id,
-            seq = seq,
-            event_type = %event_type,
-            "event_sink: emitting event"
-        );
-
-        let envelope = SessionEventEnvelope {
-            session_id: self.session_id.clone(),
-            seq,
-            timestamp: timestamp.clone(),
-            turn_id: turn_id.clone(),
-            item_id: item_id.clone(),
+        publish_session_event(
+            &self.session_id,
+            &mut self.next_seq,
+            &self.event_tx,
+            &self.store,
             event,
-        };
-
-        let payload_json = serde_json::to_string(&envelope.event).unwrap_or_default();
-        tracing::debug!(
-            session_id = %self.session_id,
-            seq = seq,
-            payload = %payload_json,
-            "event_sink: event payload"
-        );
-        let record = SessionEventRecord {
-            id: 0,
-            session_id: self.session_id.clone(),
-            seq,
-            timestamp,
-            event_type,
             turn_id,
             item_id,
-            payload_json,
-        };
-        if let Err(e) = self.store.append_event(&record) {
-            tracing::warn!(error = %e, "failed to persist session event");
-        }
-
-        let _ = self.event_tx.send(envelope);
+        );
     }
+}
+
+pub(crate) fn publish_session_event(
+    session_id: &str,
+    next_seq: &mut i64,
+    event_tx: &broadcast::Sender<SessionEventEnvelope>,
+    store: &SessionStore,
+    event: SessionEvent,
+    turn_id: Option<String>,
+    item_id: Option<String>,
+) -> SessionEventEnvelope {
+    let seq = *next_seq;
+    *next_seq += 1;
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    let event_type = event.event_type().to_string();
+    tracing::info!(
+        session_id = %session_id,
+        seq = seq,
+        event_type = %event_type,
+        "event_sink: emitting event"
+    );
+
+    let envelope = SessionEventEnvelope {
+        session_id: session_id.to_string(),
+        seq,
+        timestamp: timestamp.clone(),
+        turn_id: turn_id.clone(),
+        item_id: item_id.clone(),
+        event,
+    };
+
+    let payload_json = serde_json::to_string(&envelope.event).unwrap_or_default();
+    tracing::debug!(
+        session_id = %session_id,
+        seq = seq,
+        payload = %payload_json,
+        "event_sink: event payload"
+    );
+    let record = SessionEventRecord {
+        id: 0,
+        session_id: session_id.to_string(),
+        seq,
+        timestamp,
+        event_type,
+        turn_id,
+        item_id,
+        payload_json,
+    };
+    if let Err(e) = store.append_event(&record) {
+        tracing::warn!(error = %e, "failed to persist session event");
+    }
+
+    let _ = event_tx.send(envelope.clone());
+    envelope
 }
 
 fn parse_meta(meta: Option<&serde_json::Value>) -> ParsedMeta {

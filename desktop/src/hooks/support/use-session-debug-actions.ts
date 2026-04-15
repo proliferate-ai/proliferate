@@ -7,11 +7,12 @@ import {
 import type {
   GetSessionLiveConfigResponse,
   HealthResponse,
+  ReplayRecordingSummary,
   Session,
   SessionEventEnvelope,
   SessionRawNotificationEnvelope,
 } from "@anyharness/sdk";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   buildSessionDebugExport,
   buildSessionDebugLocator,
@@ -43,6 +44,12 @@ export interface SessionDebugClient {
     listEvents: (sessionId: string) => Promise<SessionEventEnvelope[]>;
     listRawNotifications: (sessionId: string) => Promise<SessionRawNotificationEnvelope[]>;
     getLiveConfig: (sessionId: string) => Promise<GetSessionLiveConfigResponse>;
+  };
+  replay?: {
+    exportRecording: (input: {
+      sessionId: string;
+      name?: string;
+    }) => Promise<{ recording: ReplayRecordingSummary }>;
   };
 }
 
@@ -95,6 +102,8 @@ interface BuildLocatorInput {
 
 export function useSessionDebugActions() {
   const workspaceContext = useAnyHarnessWorkspaceContext();
+  const contextWorkspaceId = workspaceContext.workspaceId;
+  const resolveConnection = workspaceContext.resolveConnection;
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const activeSessionId = useHarnessStore((state) => state.activeSessionId);
@@ -106,6 +115,8 @@ export function useSessionDebugActions() {
   const [isCopyingInvestigationJson, setIsCopyingInvestigationJson] = useState(false);
   const [isExportingSessionDebugJson, setIsExportingSessionDebugJson] = useState(false);
   const [isExportingWorkspaceDebugJson, setIsExportingWorkspaceDebugJson] = useState(false);
+  const [isExportingReplayRecording, setIsExportingReplayRecording] = useState(false);
+  const [replayExportAvailable, setReplayExportAvailable] = useState(false);
 
   const actionState: SessionDebugActionState = {
     runtimeUrl,
@@ -119,17 +130,53 @@ export function useSessionDebugActions() {
   const canExportActiveSessionJson = isTauriDesktop()
     && Boolean(activeSessionId && activeSessionWorkspaceId);
   const canExportWorkspaceJson = isTauriDesktop() && Boolean(selectedWorkspaceId);
+  const canExportReplayRecording = import.meta.env.DEV
+    && replayExportAvailable
+    && Boolean(activeSessionId && activeSessionWorkspaceId);
 
-  const dependencies: SessionDebugActionDependencies = {
+  const dependencies = useMemo<SessionDebugActionDependencies>(() => ({
     now: () => new Date(),
     copyText,
     saveDiagnosticJson,
     resolveWorkspace: (workspaceId) => resolveWorkspaceConnectionFromContext(
-      workspaceContext,
+      {
+        workspaceId: contextWorkspaceId,
+        resolveConnection,
+      },
       workspaceId,
     ),
     getClient: (connection) => getAnyHarnessClient(connection),
-  };
+  }), [contextWorkspaceId, resolveConnection]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setReplayExportAvailable(false);
+    if (!import.meta.env.DEV || !activeSessionWorkspaceId) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    const workspaceId = activeSessionWorkspaceId;
+
+    async function refreshReplayCapability() {
+      try {
+        const resolved = await dependencies.resolveWorkspace(workspaceId);
+        const health = await dependencies.getClient(resolved.connection).runtime.getHealth();
+        if (!cancelled) {
+          setReplayExportAvailable(health.capabilities?.replay === true);
+        }
+      } catch {
+        if (!cancelled) {
+          setReplayExportAvailable(false);
+        }
+      }
+    }
+
+    void refreshReplayCapability();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionWorkspaceId, dependencies]);
 
   async function handleCopyInvestigationJson() {
     setIsCopyingInvestigationJson(true);
@@ -157,6 +204,18 @@ export function useSessionDebugActions() {
     }
   }
 
+  async function handleExportReplayRecording() {
+    setIsExportingReplayRecording(true);
+    try {
+      const recording = await exportReplayRecordingAction(actionState, dependencies);
+      showToast(`Replay recording exported: ${recording.label}`, "info");
+    } catch (error) {
+      showToast(errorMessage(error));
+    } finally {
+      setIsExportingReplayRecording(false);
+    }
+  }
+
   async function handleExportWorkspaceJson() {
     setIsExportingWorkspaceDebugJson(true);
     try {
@@ -174,12 +233,15 @@ export function useSessionDebugActions() {
   return {
     canCopyInvestigationJson,
     canExportActiveSessionJson,
+    canExportReplayRecording,
     canExportWorkspaceJson,
     handleCopyInvestigationJson,
     handleExportActiveSessionJson,
+    handleExportReplayRecording,
     handleExportWorkspaceJson,
     isCopyingInvestigationJson,
     isExportingSessionDebugJson,
+    isExportingReplayRecording,
     isExportingWorkspaceDebugJson,
   };
 }
@@ -293,6 +355,34 @@ export async function exportWorkspaceDebugJsonAction(
   const fileName = suggestSessionDebugFileName("workspace", anyharnessWorkspaceId, generatedAt);
 
   return dependencies.saveDiagnosticJson(fileName, contents);
+}
+
+export async function exportReplayRecordingAction(
+  state: SessionDebugActionState,
+  dependencies: SessionDebugActionDependencies,
+): Promise<ReplayRecordingSummary> {
+  const sessionId = state.activeSessionId;
+  if (!sessionId) {
+    throw new Error("Select an active session before exporting a replay recording.");
+  }
+
+  const workspaceId = resolveActiveSessionWorkspaceId(state);
+  if (!workspaceId) {
+    throw new Error("The active session does not have an owning workspace.");
+  }
+
+  const runtimeContext = await loadRuntimeDebugContext(state, dependencies, workspaceId);
+  if (runtimeContext.health.capabilities?.replay !== true) {
+    throw new Error("Replay recording export is disabled for this runtime.");
+  }
+  if (!runtimeContext.client.replay) {
+    throw new Error("The AnyHarness SDK does not support replay export.");
+  }
+
+  const response = await runtimeContext.client.replay.exportRecording({
+    sessionId,
+  });
+  return response.recording;
 }
 
 async function loadRuntimeDebugContext(

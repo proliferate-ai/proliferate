@@ -13,6 +13,7 @@ pub mod model_registries;
 pub mod plans;
 pub mod processes;
 pub mod provider_configs;
+pub mod replay;
 pub mod repo_roots;
 pub mod sessions;
 pub mod terminals;

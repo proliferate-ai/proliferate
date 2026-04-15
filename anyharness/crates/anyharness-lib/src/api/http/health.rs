@@ -1,4 +1,4 @@
-use anyharness_contract::v1::HealthResponse;
+use anyharness_contract::v1::{HealthResponse, RuntimeCapabilities};
 use axum::Json;
 
 use crate::app::AppState;
@@ -18,5 +18,8 @@ pub async fn get_health(
         status: "ok".into(),
         version: env!("CARGO_PKG_VERSION").into(),
         runtime_home: state.runtime_home.display().to_string(),
+        capabilities: RuntimeCapabilities {
+            replay: crate::sessions::replay::replay_enabled(),
+        },
     })
 }

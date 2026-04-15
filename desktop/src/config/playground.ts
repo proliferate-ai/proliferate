@@ -99,3 +99,41 @@ export function resolveScenarioKey(raw: string | null): ScenarioKey {
   }
   return DEFAULT_SCENARIO;
 }
+
+export type PlaygroundScenarioSelection =
+  | {
+      kind: "fixture";
+      key: ScenarioKey;
+      raw: string;
+    }
+  | {
+      kind: "recording";
+      recordingId: string;
+      raw: string;
+    };
+
+export function resolvePlaygroundScenarioSelection(
+  raw: string | null,
+): PlaygroundScenarioSelection {
+  if (raw && raw in SCENARIOS) {
+    return {
+      kind: "fixture",
+      key: raw as ScenarioKey,
+      raw,
+    };
+  }
+
+  if (raw && raw.trim().endsWith(".json")) {
+    return {
+      kind: "recording",
+      recordingId: raw.trim(),
+      raw: raw.trim(),
+    };
+  }
+
+  return {
+    kind: "fixture",
+    key: DEFAULT_SCENARIO,
+    raw: DEFAULT_SCENARIO,
+  };
+}

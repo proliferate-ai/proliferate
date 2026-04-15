@@ -1,18 +1,65 @@
 import type { ReactNode } from "react";
 import { ProposedPlanCard } from "@/components/workspace/chat/transcript/ProposedPlanCard";
 import { AssistantMessage } from "@/components/workspace/chat/transcript/AssistantMessage";
+import { MessageList } from "@/components/workspace/chat/transcript/MessageList";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
 import { ToolCallBlock } from "@/components/workspace/chat/tool-calls/ToolCallBlock";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { CircleAlert, Settings, Sparkles } from "@/components/ui/icons";
 import { CLAUDE_PLAN_LONG, CLAUDE_PLAN_SHORT } from "@/lib/domain/chat/__fixtures__/playground";
-import type { ScenarioKey } from "@/config/playground";
+import type { PlaygroundScenarioSelection } from "@/config/playground";
+import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-session";
+import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
+import { useHarnessStore } from "@/stores/sessions/harness-store";
 
 interface PlaygroundTranscriptProps {
-  scenario: ScenarioKey;
+  selection: PlaygroundScenarioSelection;
+  replay: PlaygroundReplayState;
 }
 
-export function PlaygroundTranscript({ scenario }: PlaygroundTranscriptProps) {
+export function PlaygroundTranscript({ selection, replay }: PlaygroundTranscriptProps) {
+  const replaySlot = useHarnessStore((state) =>
+    replay.sessionId ? state.sessionSlots[replay.sessionId] ?? null : null
+  );
+  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+
+  if (selection.kind === "recording") {
+    if (replay.error) {
+      return (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {replay.error}
+        </div>
+      );
+    }
+    if (!replay.enabled) {
+      return (
+        <div className="text-sm text-muted-foreground">
+          Replay is disabled for this runtime.
+        </div>
+      );
+    }
+    if (!replay.sessionId || !replaySlot) {
+      return (
+        <div className="text-sm text-muted-foreground">
+          Loading replay session...
+        </div>
+      );
+    }
+    return (
+      <div className="h-[min(720px,calc(100vh-13rem))] min-h-[420px]">
+        <MessageList
+          activeSessionId={replay.sessionId}
+          selectedWorkspaceId={selectedWorkspaceId ?? replay.workspaceId}
+          optimisticPrompt={replaySlot.optimisticPrompt}
+          transcript={replaySlot.transcript}
+          sessionViewState={resolveSessionViewState(replaySlot)}
+        />
+      </div>
+    );
+  }
+
+  const scenario = selection.key;
+
   if (scenario === "claude-plan-short") {
     return (
       <ProposedPlanCard

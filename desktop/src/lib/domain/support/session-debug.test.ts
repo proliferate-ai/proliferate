@@ -8,6 +8,7 @@ import {
 
 const generatedAt = "2026-04-16T18:30:00.000Z";
 const localHealth = {
+  capabilities: { replay: false },
   runtimeHome: "/Users/pablo/.proliferate/anyharness",
   status: "ok",
   version: "0.1.17",
@@ -73,6 +74,7 @@ describe("buildSessionDebugLocator", () => {
         location: "cloud",
         url: "https://runtime.example.test",
         health: {
+          capabilities: { replay: false },
           runtimeHome: "/srv/anyharness",
           status: "ok",
           version: "0.1.17",

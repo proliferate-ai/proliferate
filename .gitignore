@@ -49,6 +49,9 @@ anyharness-sdk.tgz
 
 # Logs and runtime artifacts
 logs/
+recordings/
+anyharness/recordings/
+desktop/src/lib/domain/chat/__fixtures__/recorded/
 
 # Terraform
 .terraform/

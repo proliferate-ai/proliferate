@@ -10,4 +10,5 @@
 import type { components } from "../generated/openapi.js";
 
 export type HealthResponse = components["schemas"]["HealthResponse"];
+export type RuntimeCapabilities = components["schemas"]["RuntimeCapabilities"];
 export type ProblemDetails = components["schemas"]["ProblemDetails"];

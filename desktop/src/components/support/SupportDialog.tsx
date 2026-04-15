@@ -29,11 +29,13 @@ export function SupportDialog({
     canExportDebugBundle,
     canCopyInvestigationJson,
     canExportActiveSessionJson,
+    canExportReplayRecording,
     canExportWorkspaceJson,
     contextLabel,
     fallbackEmail,
     handleCopyInvestigationJson,
     handleExportActiveSessionJson,
+    handleExportReplayRecording,
     handleExportDebugBundle,
     handleExportWorkspaceJson,
     handleCopyEmail,
@@ -44,6 +46,7 @@ export function SupportDialog({
     inAppSupportEnabled,
     isCopyingInvestigationJson,
     isExportingDebugBundle,
+    isExportingReplayRecording,
     isExportingSessionDebugJson,
     isExportingWorkspaceDebugJson,
     isSendingSupportMessage,
@@ -100,13 +103,16 @@ export function SupportDialog({
             <SupportDebugSection
               canCopyInvestigationJson={canCopyInvestigationJson}
               canExportActiveSessionJson={canExportActiveSessionJson}
+              canExportReplayRecording={canExportReplayRecording}
               canExportWorkspaceJson={canExportWorkspaceJson}
               handleCopyInvestigationJson={handleCopyInvestigationJson}
               handleExportActiveSessionJson={handleExportActiveSessionJson}
+              handleExportReplayRecording={handleExportReplayRecording}
               handleExportDebugBundle={handleExportDebugBundle}
               handleExportWorkspaceJson={handleExportWorkspaceJson}
               isCopyingInvestigationJson={isCopyingInvestigationJson}
               isExportingDebugBundle={isExportingDebugBundle}
+              isExportingReplayRecording={isExportingReplayRecording}
               isExportingSessionDebugJson={isExportingSessionDebugJson}
               isExportingWorkspaceDebugJson={isExportingWorkspaceDebugJson}
             />
@@ -156,13 +162,16 @@ export function SupportDialog({
             <SupportDebugSection
               canCopyInvestigationJson={canCopyInvestigationJson}
               canExportActiveSessionJson={canExportActiveSessionJson}
+              canExportReplayRecording={canExportReplayRecording}
               canExportWorkspaceJson={canExportWorkspaceJson}
               handleCopyInvestigationJson={handleCopyInvestigationJson}
               handleExportActiveSessionJson={handleExportActiveSessionJson}
+              handleExportReplayRecording={handleExportReplayRecording}
               handleExportDebugBundle={handleExportDebugBundle}
               handleExportWorkspaceJson={handleExportWorkspaceJson}
               isCopyingInvestigationJson={isCopyingInvestigationJson}
               isExportingDebugBundle={isExportingDebugBundle}
+              isExportingReplayRecording={isExportingReplayRecording}
               isExportingSessionDebugJson={isExportingSessionDebugJson}
               isExportingWorkspaceDebugJson={isExportingWorkspaceDebugJson}
             />
@@ -176,13 +185,16 @@ export function SupportDialog({
 interface SupportDebugSectionProps {
   canCopyInvestigationJson: boolean;
   canExportActiveSessionJson: boolean;
+  canExportReplayRecording: boolean;
   canExportWorkspaceJson: boolean;
   handleCopyInvestigationJson: () => Promise<void>;
   handleExportActiveSessionJson: () => Promise<void>;
+  handleExportReplayRecording: () => Promise<void>;
   handleExportDebugBundle: () => Promise<void>;
   handleExportWorkspaceJson: () => Promise<void>;
   isCopyingInvestigationJson: boolean;
   isExportingDebugBundle: boolean;
+  isExportingReplayRecording: boolean;
   isExportingSessionDebugJson: boolean;
   isExportingWorkspaceDebugJson: boolean;
 }
@@ -190,13 +202,16 @@ interface SupportDebugSectionProps {
 function SupportDebugSection({
   canCopyInvestigationJson,
   canExportActiveSessionJson,
+  canExportReplayRecording,
   canExportWorkspaceJson,
   handleCopyInvestigationJson,
   handleExportActiveSessionJson,
+  handleExportReplayRecording,
   handleExportDebugBundle,
   handleExportWorkspaceJson,
   isCopyingInvestigationJson,
   isExportingDebugBundle,
+  isExportingReplayRecording,
   isExportingSessionDebugJson,
   isExportingWorkspaceDebugJson,
 }: SupportDebugSectionProps) {
@@ -230,6 +245,17 @@ function SupportDebugSection({
             <FileText className="size-3.5 shrink-0" />
             Export active session JSON
           </Button>
+          {canExportReplayRecording && (
+            <Button
+              variant="outline"
+              size="sm"
+              loading={isExportingReplayRecording}
+              onClick={() => { void handleExportReplayRecording(); }}
+            >
+              <FileText className="size-3.5 shrink-0" />
+              Export replay recording
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"

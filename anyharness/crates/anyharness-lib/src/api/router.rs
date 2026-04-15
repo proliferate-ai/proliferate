@@ -12,7 +12,7 @@ use url::form_urlencoded;
 
 use super::http::{
     agents, cowork, files, git, health, hosting, mobility, model_registries, plans, processes,
-    provider_configs, repo_roots, sessions, terminals, workspaces,
+    provider_configs, replay, repo_roots, sessions, terminals, workspaces,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -248,6 +248,16 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}/processes/run",
             post(processes::run_command),
+        )
+        // Replay
+        .route(
+            "/replay/recordings",
+            get(replay::list_replay_recordings).post(replay::export_replay_recording),
+        )
+        .route("/replay/sessions", post(replay::create_replay_session))
+        .route(
+            "/replay/sessions/{session_id}/advance",
+            post(replay::advance_replay_session),
         )
         // Sessions
         .route("/sessions", post(sessions::create_session))

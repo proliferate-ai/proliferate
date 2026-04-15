@@ -178,6 +178,9 @@ pub enum SessionCommand {
     Close {
         respond_to: oneshot::Sender<anyhow::Result<()>>,
     },
+    ReplayAdvance {
+        respond_to: oneshot::Sender<anyhow::Result<()>>,
+    },
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -433,6 +436,23 @@ impl LiveSessionExecutionSnapshot {
 }
 
 impl LiveSessionHandle {
+    pub(crate) fn new(
+        session_id: impl Into<String>,
+        command_tx: mpsc::Sender<SessionCommand>,
+        event_tx: broadcast::Sender<SessionEventEnvelope>,
+        native_session_id: Option<String>,
+        phase: SessionExecutionPhase,
+    ) -> Self {
+        Self {
+            session_id: session_id.into(),
+            command_tx,
+            event_tx,
+            busy: Arc::new(AtomicBool::new(false)),
+            execution: Arc::new(RwLock::new(LiveSessionExecutionSnapshot::new(phase))),
+            native_session_id: Arc::new(std::sync::RwLock::new(native_session_id)),
+        }
+    }
+
     pub fn subscribe(&self) -> broadcast::Receiver<SessionEventEnvelope> {
         self.event_tx.subscribe()
     }
@@ -523,14 +543,7 @@ impl LiveSessionHandle {
         native_session_id: Option<String>,
         phase: SessionExecutionPhase,
     ) -> Self {
-        Self {
-            session_id: session_id.into(),
-            command_tx,
-            event_tx,
-            busy: Arc::new(AtomicBool::new(false)),
-            execution: Arc::new(RwLock::new(LiveSessionExecutionSnapshot::new(phase))),
-            native_session_id: Arc::new(std::sync::RwLock::new(native_session_id)),
-        }
+        Self::new(session_id, command_tx, event_tx, native_session_id, phase)
     }
 }
 
@@ -1744,6 +1757,9 @@ async fn run_actor(
                                             Some(SessionCommand::DeletePendingPrompt { seq, respond_to }) => {
                                                 let _ = respond_to.send(handle_delete_pending_prompt(&store, &event_sink, &session_id, seq).await);
                                             }
+                                            Some(SessionCommand::ReplayAdvance { respond_to }) => {
+                                                let _ = respond_to.send(Err(anyhow::anyhow!("session is not a replay session")));
+                                            }
                                             None => {}
                                         }
                                     }
@@ -2014,6 +2030,9 @@ async fn run_actor(
                         let _ = respond_to.send(Ok(()));
                         exit_reason = ActorExitDisposition::Close;
                         break;
+                    }
+                    Some(SessionCommand::ReplayAdvance { respond_to }) => {
+                        let _ = respond_to.send(Err(anyhow::anyhow!("session is not a replay session")));
                     }
                     None => break,
                 }

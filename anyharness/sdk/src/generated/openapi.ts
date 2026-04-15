@@ -196,6 +196,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/replay/recordings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_replay_recordings"];
+        put?: never;
+        post: operations["export_replay_recording"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/replay/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["create_replay_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/replay/sessions/{session_id}/advance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["advance_replay_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/repo-roots": {
         parameters: {
             query?: never;
@@ -1080,6 +1128,9 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AdvanceReplaySessionResponse: {
+            advanced: boolean;
+        };
         /** @enum {string} */
         AgentCredentialState: "ready" | "missing_env" | "login_required" | "unknown";
         /** @enum {string} */
@@ -1289,6 +1340,15 @@ export interface components {
             manualUrl?: string | null;
             pullRequest: components["schemas"]["PullRequestSummary"];
         };
+        CreateReplaySessionRequest: {
+            recordingId: string;
+            /** Format: float */
+            speed?: number | null;
+            workspaceId: string;
+        };
+        CreateReplaySessionResponse: {
+            session: components["schemas"]["Session"];
+        };
         CreateSessionRequest: {
             agentKind: string;
             mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
@@ -1333,6 +1393,13 @@ export interface components {
         ErrorEvent: {
             code?: string | null;
             message: string;
+        };
+        ExportReplayRecordingRequest: {
+            name?: string | null;
+            sessionId: string;
+        };
+        ExportReplayRecordingResponse: {
+            recording: components["schemas"]["ReplayRecordingSummary"];
         };
         ExportWorkspaceMobilityArchiveRequest: {
             excludePaths?: string[];
@@ -1448,6 +1515,7 @@ export interface components {
             targetSessionId: string;
         };
         HealthResponse: {
+            capabilities: components["schemas"]["RuntimeCapabilities"];
             runtimeHome: string;
             status: string;
             version: string;
@@ -1541,6 +1609,9 @@ export interface components {
         };
         ListProposedPlansResponse: {
             plans: components["schemas"]["ProposedPlanSummary"][];
+        };
+        ListReplayRecordingsResponse: {
+            recordings: components["schemas"]["ReplayRecordingSummary"][];
         };
         LoginCommand: {
             args: string[];
@@ -2032,6 +2103,12 @@ export interface components {
         ReconcileJobStatus: "idle" | "queued" | "running" | "completed" | "failed";
         /** @enum {string} */
         ReconcileOutcome: "installed" | "already_installed" | "skipped" | "failed";
+        ReplayRecordingSummary: {
+            createdAt?: string | null;
+            id: string;
+            label: string;
+            sourceSessionId?: string | null;
+        };
         RepoRoot: {
             createdAt: string;
             defaultBranch?: string | null;
@@ -2095,6 +2172,9 @@ export interface components {
             exitCode: number;
             stderr: string;
             stdout: string;
+        };
+        RuntimeCapabilities: {
+            replay: boolean;
         };
         Session: {
             agentKind: string;
@@ -2894,6 +2974,169 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderConfig"][];
+                };
+            };
+        };
+    };
+    list_replay_recordings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Available replay recordings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListReplayRecordingsResponse"];
+                };
+            };
+            /** @description Replay is disabled or misconfigured */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    export_replay_recording: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportReplayRecordingRequest"];
+            };
+        };
+        responses: {
+            /** @description Exported replay recording */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportReplayRecordingResponse"];
+                };
+            };
+            /** @description Invalid recording export request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Recording already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_replay_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReplaySessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Created replay session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateReplaySessionResponse"];
+                };
+            };
+            /** @description Invalid replay session request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Workspace or recording not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    advance_replay_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Replay session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Advanced replay session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdvanceReplaySessionResponse"];
+                };
+            };
+            /** @description Replay is disabled or not paused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Replay session is not live */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

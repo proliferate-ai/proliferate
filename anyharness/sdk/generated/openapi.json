@@ -462,6 +462,195 @@
         }
       }
     },
+    "/v1/replay/recordings": {
+      "get": {
+        "tags": [
+          "replay"
+        ],
+        "operationId": "list_replay_recordings",
+        "responses": {
+          "200": {
+            "description": "Available replay recordings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListReplayRecordingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Replay is disabled or misconfigured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "replay"
+        ],
+        "operationId": "export_replay_recording",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportReplayRecordingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Exported replay recording",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportReplayRecordingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid recording export request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Recording already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/replay/sessions": {
+      "post": {
+        "tags": [
+          "replay"
+        ],
+        "operationId": "create_replay_session",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReplaySessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Created replay session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateReplaySessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid replay session request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace or recording not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/replay/sessions/{session_id}/advance": {
+      "post": {
+        "tags": [
+          "replay"
+        ],
+        "operationId": "advance_replay_session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Replay session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Advanced replay session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdvanceReplaySessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Replay is disabled or not paused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Replay session is not live",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/repo-roots": {
       "get": {
         "tags": [
@@ -3238,6 +3427,17 @@
   },
   "components": {
     "schemas": {
+      "AdvanceReplaySessionResponse": {
+        "type": "object",
+        "required": [
+          "advanced"
+        ],
+        "properties": {
+          "advanced": {
+            "type": "boolean"
+          }
+        }
+      },
       "AgentCredentialState": {
         "type": "string",
         "enum": [
@@ -4172,6 +4372,39 @@
           }
         }
       },
+      "CreateReplaySessionRequest": {
+        "type": "object",
+        "required": [
+          "workspaceId",
+          "recordingId"
+        ],
+        "properties": {
+          "recordingId": {
+            "type": "string"
+          },
+          "speed": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateReplaySessionResponse": {
+        "type": "object",
+        "required": [
+          "session"
+        ],
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          }
+        }
+      },
       "CreateSessionRequest": {
         "type": "object",
         "required": [
@@ -4375,6 +4608,34 @@
           },
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "ExportReplayRecordingRequest": {
+        "type": "object",
+        "required": [
+          "sessionId"
+        ],
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessionId": {
+            "type": "string"
+          }
+        }
+      },
+      "ExportReplayRecordingResponse": {
+        "type": "object",
+        "required": [
+          "recording"
+        ],
+        "properties": {
+          "recording": {
+            "$ref": "#/components/schemas/ReplayRecordingSummary"
           }
         }
       },
@@ -4845,9 +5106,13 @@
         "required": [
           "status",
           "version",
-          "runtimeHome"
+          "runtimeHome",
+          "capabilities"
         ],
         "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/RuntimeCapabilities"
+          },
           "runtimeHome": {
             "type": "string"
           },
@@ -5264,6 +5529,20 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ProposedPlanSummary"
+            }
+          }
+        }
+      },
+      "ListReplayRecordingsResponse": {
+        "type": "object",
+        "required": [
+          "recordings"
+        ],
+        "properties": {
+          "recordings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReplayRecordingSummary"
             }
           }
         }
@@ -7210,6 +7489,33 @@
           "failed"
         ]
       },
+      "ReplayRecordingSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "sourceSessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "RepoRoot": {
         "type": "object",
         "required": [
@@ -7493,6 +7799,17 @@
           },
           "stdout": {
             "type": "string"
+          }
+        }
+      },
+      "RuntimeCapabilities": {
+        "type": "object",
+        "required": [
+          "replay"
+        ],
+        "properties": {
+          "replay": {
+            "type": "boolean"
           }
         }
       },

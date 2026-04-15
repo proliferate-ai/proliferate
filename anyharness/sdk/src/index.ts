@@ -3,8 +3,19 @@ export type { AnyHarnessClientOptions, AnyHarnessRequestOptions } from "./client
 
 export type {
   HealthResponse,
+  RuntimeCapabilities,
   ProblemDetails,
 } from "./types/runtime.js";
+
+export type {
+  ReplayRecordingSummary,
+  ListReplayRecordingsResponse,
+  ExportReplayRecordingRequest,
+  ExportReplayRecordingResponse,
+  CreateReplaySessionRequest,
+  CreateReplaySessionResponse,
+  AdvanceReplaySessionResponse,
+} from "./types/replay.js";
 
 export type {
   AgentInstallState,

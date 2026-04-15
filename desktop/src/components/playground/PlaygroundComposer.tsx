@@ -8,10 +8,12 @@ import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerP
 import { UserInputCard } from "@/components/workspace/chat/input/UserInputCard";
 import { McpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
 import { WorkspaceMobilityLocationPopover } from "@/components/workspace/chat/input/WorkspaceMobilityLocationPopover";
+import { useComposerTopSlot } from "@/hooks/chat/use-composer-top-slot";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { type MobilityPromptState } from "@/lib/domain/workspaces/mobility-prompt";
 import {
+  ArrowRight,
   ArrowUp,
   BrailleSweepBadge,
   ChevronDown,
@@ -20,7 +22,8 @@ import {
   FolderOpen,
   GitBranch,
 } from "@/components/ui/icons";
-import type { ScenarioKey } from "@/config/playground";
+import type { PlaygroundScenarioSelection, ScenarioKey } from "@/config/playground";
+import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-session";
 import {
   EDIT_OPTIONS,
   EXECUTE_OPTIONS,
@@ -44,22 +47,27 @@ import {
 } from "@/lib/domain/chat/__fixtures__/playground";
 
 interface PlaygroundComposerProps {
-  scenario: ScenarioKey;
+  selection: PlaygroundScenarioSelection;
+  replay: PlaygroundReplayState;
 }
 
 const noop = () => {};
 const noopAsync = async () => {};
 const revealExampleUrl = async () => "https://accounts.example.com/oauth/authorize?client_id=redacted";
 
-export function PlaygroundComposer({ scenario }: PlaygroundComposerProps) {
-  const topSlot = renderTopSlot(scenario);
+export function PlaygroundComposer({ selection, replay }: PlaygroundComposerProps) {
+  const replayTopSlot = useComposerTopSlot();
+  const scenario = selection.kind === "fixture" ? selection.key : null;
+  const topSlot = scenario ? renderTopSlot(scenario) : replayTopSlot;
   return (
     <div className="relative">
       <ChatComposerDock
         topSlot={topSlot ?? undefined}
-        footerSlot={<PlaygroundMobilityFooterRow scenario={scenario} />}
+        footerSlot={scenario ? <PlaygroundMobilityFooterRow scenario={scenario} /> : undefined}
       >
-        <PlaygroundComposerSurface />
+        {selection.kind === "recording"
+          ? <ReplayComposerSurface replay={replay} />
+          : <PlaygroundComposerSurface />}
       </ChatComposerDock>
       {scenario === "mobility-in-flight" && <MobilityOverlayPreview />}
     </div>
@@ -317,6 +325,53 @@ function PlaygroundComposerSurface() {
           </Button>
         </div>
       </form>
+    </ChatComposerSurface>
+  );
+}
+
+function ReplayComposerSurface({ replay }: { replay: PlaygroundReplayState }) {
+  const statusText = replay.hasPendingInteraction
+    ? "Waiting for interaction"
+    : replay.isBusy
+      ? "Playing"
+      : replay.canAdvance
+        ? "Paused"
+        : replay.isCreatingSession
+          ? "Loading"
+          : "Ready";
+
+  return (
+    <ChatComposerSurface>
+      <div className="relative flex flex-col">
+        <div
+          className="mb-2 flex-grow select-text overflow-y-auto px-5 pt-3.5"
+          style={{ minHeight: "3.5rem" }}
+        >
+          <Textarea
+            variant="ghost"
+            rows={2}
+            value=""
+            placeholder={statusText}
+            spellCheck={false}
+            readOnly
+            className="min-h-0 px-0 py-0 text-base leading-relaxed text-foreground placeholder:text-muted-foreground/70"
+          />
+        </div>
+        <div className="flex items-center justify-between gap-2 px-2 pb-2">
+          <span className="px-2 text-xs text-muted-foreground">{statusText}</span>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={!replay.canAdvance}
+            loading={replay.isAdvancing}
+            onClick={() => { void replay.advance(); }}
+          >
+            <ArrowRight className="size-3.5" />
+            Next turn
+          </Button>
+        </div>
+      </div>
     </ChatComposerSurface>
   );
 }
