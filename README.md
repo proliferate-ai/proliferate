@@ -7,6 +7,24 @@ coding agents in isolated workspaces with one clean interface.
 
 ![Proliferate screenshot](./assets/readme/overview.png)
 
+## Install
+
+Download Proliferate from [proliferate.com](https://proliferate.com) or from the
+[latest GitHub release](https://github.com/proliferate-ai/proliferate/releases/latest).
+
+## Run Locally
+
+Requirements:
+
+- Rust stable
+- Node.js 22+
+- pnpm
+
+```bash
+make install
+make dev-local
+```
+
 ## Core Features
 
 - **Bring your own agent** - use your existing coding-agent auth and
@@ -26,24 +44,6 @@ coding agents in isolated workspaces with one clean interface.
 - Compare Codex, Claude Code, Gemini CLI, or custom agents on the same work.
 - Keep long-running agent work alive after you close your laptop.
 - Review what each agent did before merging.
-
-## Install
-
-Download Proliferate from [proliferate.com](https://proliferate.com) or from the
-[latest GitHub release](https://github.com/proliferate-ai/proliferate/releases/latest).
-
-## Run Locally
-
-Requirements:
-
-- Rust stable
-- Node.js 22+
-- pnpm
-
-```bash
-make install
-make dev-local
-```
 
 ## Run The Full Stack
 
