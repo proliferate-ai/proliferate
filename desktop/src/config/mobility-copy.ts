@@ -1,5 +1,7 @@
 import type { WorkspaceMobilityDirection } from "@/stores/workspaces/workspace-mobility-ui-store";
 
+export const MOBILITY_SUCCESS_DWELL_MS = 1_400;
+
 export type WorkspaceMobilityLocationKind =
   | "local_workspace"
   | "local_worktree"
@@ -131,46 +133,46 @@ export function mobilityStatusCopy(
       return direction === "cloud_to_local"
         ? {
           title: "Preparing local workspace",
-          description: "Preparing a local workspace at the requested base commit.",
+          description: "Preparing this branch on your machine.",
         }
         : {
-          title: "Provisioning cloud workspace",
-          description: "Starting a cloud runtime on the current branch.",
+          title: "Preparing cloud workspace",
+          description: "Starting this branch in the cloud.",
         };
     case "transferring":
       return {
-        title: "Syncing files and supported sessions",
-        description: "Moving portable state into the destination workspace.",
+        title: "Syncing workspace",
+        description: "Moving workspace state to the new runtime.",
       };
     case "finalizing":
       return {
-        title: "Finalizing workspace move",
-        description: "Switching this workspace to its new runtime.",
+        title: "Switching workspace",
+        description: "Opening this workspace on its new runtime.",
       };
     case "cleanup_pending":
       return {
-        title: "Cleaning up old workspace",
-        description: "The destination is ready. Finishing cleanup on the old source.",
+        title: "Finishing cleanup",
+        description: "The workspace is ready. Finishing cleanup in the background.",
       };
     case "cleanup_failed":
       return {
-        title: "Source cleanup needs another pass",
+        title: "Cleanup needs retry",
         description: "The workspace moved successfully, but cleanup needs to be retried.",
       };
     case "success":
       return direction === "cloud_to_local"
         ? {
-          title: "Now running locally",
+          title: "Now local",
           description: "This workspace has moved back to your local machine.",
         }
         : {
-          title: "Now running in cloud",
-          description: "This workspace has moved to the cloud runtime.",
+          title: "Now in cloud",
+          description: "This workspace has moved to the cloud.",
         };
     case "failed":
       return {
-        title: "Workspace move failed",
-        description: "The workspace stayed on its current runtime.",
+        title: "Move did not finish",
+        description: "The workspace stayed where it was.",
       };
     default:
       return {
@@ -178,6 +180,22 @@ export function mobilityStatusCopy(
         description: "Starting the handoff workflow.",
       };
   }
+}
+
+export function getMobilityOverlayTitle(
+  direction: WorkspaceMobilityDirection | null,
+  phase: string,
+): string {
+  if (
+    phase === "provisioning"
+    || phase === "transferring"
+    || phase === "finalizing"
+    || phase === "cleanup_pending"
+  ) {
+    return direction === "cloud_to_local" ? "Bringing back local" : "Moving to cloud";
+  }
+
+  return mobilityStatusCopy(phase, direction).title;
 }
 
 export function mobilityBlockerCopy(args: {

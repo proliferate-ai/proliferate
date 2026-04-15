@@ -1,9 +1,15 @@
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
-import type { WorkspaceMobilityStatusModel } from "@/lib/domain/workspaces/mobility-state-machine";
+import {
+  mobilityDestinationKind,
+  type WorkspaceMobilityDestinationKind,
+  type WorkspaceMobilityStatusModel,
+} from "@/lib/domain/workspaces/mobility-state-machine";
 import {
   mobilityLocationLabel,
   type WorkspaceMobilityLocationKind,
 } from "@/config/mobility-copy";
+
+export type WorkspaceMobilitySelectedMaterializationKind = "local" | "cloud";
 
 export interface MobilityFooterContext {
   locationKind: WorkspaceMobilityLocationKind;
@@ -18,8 +24,16 @@ export interface MobilityFooterContext {
 
 function resolveLocationKind(
   logicalWorkspace: LogicalWorkspace | null,
+  selectedMaterializationKind: WorkspaceMobilitySelectedMaterializationKind | null,
+  status: WorkspaceMobilityStatusModel,
 ): WorkspaceMobilityLocationKind {
-  if (logicalWorkspace?.effectiveOwner === "cloud") {
+  const ownerKind: WorkspaceMobilityDestinationKind | null =
+    mobilityDestinationKind(status)
+    ?? selectedMaterializationKind
+    ?? logicalWorkspace?.effectiveOwner
+    ?? null;
+
+  if (ownerKind === "cloud") {
     return "cloud_workspace";
   }
 
@@ -28,12 +42,15 @@ function resolveLocationKind(
     : "local_workspace";
 }
 
-function resolvePathValue(logicalWorkspace: LogicalWorkspace | null): string | null {
+function resolvePathValue(
+  logicalWorkspace: LogicalWorkspace | null,
+  locationKind: WorkspaceMobilityLocationKind,
+): string | null {
   if (!logicalWorkspace) {
     return null;
   }
 
-  if (logicalWorkspace.effectiveOwner === "local") {
+  if (locationKind !== "cloud_workspace") {
     return logicalWorkspace.localWorkspace?.path?.trim()
       || logicalWorkspace.localWorkspace?.sourceRepoRootPath?.trim()
       || logicalWorkspace.repoRoot?.path?.trim()
@@ -49,14 +66,15 @@ function resolvePathValue(logicalWorkspace: LogicalWorkspace | null): string | n
 export function buildMobilityFooterContext(args: {
   logicalWorkspace: LogicalWorkspace | null;
   status: WorkspaceMobilityStatusModel;
+  selectedMaterializationKind?: WorkspaceMobilitySelectedMaterializationKind | null;
 }): MobilityFooterContext | null {
-  const { logicalWorkspace, status } = args;
+  const { logicalWorkspace, selectedMaterializationKind = null, status } = args;
   if (!logicalWorkspace) {
     return null;
   }
 
-  const locationKind = resolveLocationKind(logicalWorkspace);
-  const pathValue = resolvePathValue(logicalWorkspace);
+  const locationKind = resolveLocationKind(logicalWorkspace, selectedMaterializationKind, status);
+  const pathValue = resolvePathValue(logicalWorkspace, locationKind);
   const branchValue = logicalWorkspace.branchKey?.trim() || null;
 
   return {

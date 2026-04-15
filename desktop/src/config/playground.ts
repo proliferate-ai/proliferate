@@ -11,6 +11,13 @@ export type ScenarioKey =
   | "pending-prompts-multi"
   | "pending-prompts-editing"
   | "pending-prompts-with-approval"
+  | "workspace-arrival-created"
+  | "cloud-provisioning"
+  | "cloud-applying-files"
+  | "cloud-blocked"
+  | "cloud-error"
+  | "cloud-reconnecting"
+  | "cloud-reconnect-error"
   | "user-input-single-option"
   | "user-input-single-freeform"
   | "user-input-option-plus-other"
@@ -34,6 +41,17 @@ export type ScenarioKey =
   | "gemini-no-response-warning"
   | "gemini-mcp-approval-options"
   | "gemini-tool-before-approval"
+  | "tool-bash-running"
+  | "tool-bash-completed"
+  | "tool-bash-failed"
+  | "tool-read-preview"
+  | "tool-file-change-running"
+  | "tool-file-change-failed"
+  | "tool-file-change-diff"
+  | "tool-reasoning"
+  | "tool-cowork-artifact"
+  | "tool-generic-result"
+  | "tool-subagent-task"
   | "mobility-local-actionable"
   | "mobility-local-blocked"
   | "mobility-unpublished-branch"
@@ -59,6 +77,13 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "pending-prompts-multi": { label: "Queue (3 rows)" },
   "pending-prompts-editing": { label: "Queue (editing row)" },
   "pending-prompts-with-approval": { label: "Queue + approval" },
+  "workspace-arrival-created": { label: "Workspace arrival" },
+  "cloud-provisioning": { label: "Cloud provisioning" },
+  "cloud-applying-files": { label: "Cloud applying files" },
+  "cloud-blocked": { label: "Cloud blocked" },
+  "cloud-error": { label: "Cloud error" },
+  "cloud-reconnecting": { label: "Cloud reconnecting" },
+  "cloud-reconnect-error": { label: "Cloud reconnect error" },
   "user-input-single-option": { label: "User input (option)" },
   "user-input-single-freeform": { label: "User input (text)" },
   "user-input-option-plus-other": { label: "User input (other)" },
@@ -82,6 +107,17 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "gemini-no-response-warning": { label: "Gemini no response" },
   "gemini-mcp-approval-options": { label: "Gemini MCP approval" },
   "gemini-tool-before-approval": { label: "Gemini pre-approval tool" },
+  "tool-bash-running": { label: "Tool bash running" },
+  "tool-bash-completed": { label: "Tool bash completed" },
+  "tool-bash-failed": { label: "Tool bash failed" },
+  "tool-read-preview": { label: "Tool read preview" },
+  "tool-file-change-running": { label: "Tool file running" },
+  "tool-file-change-failed": { label: "Tool file failed" },
+  "tool-file-change-diff": { label: "Tool file diff" },
+  "tool-reasoning": { label: "Tool reasoning" },
+  "tool-cowork-artifact": { label: "Tool artifact" },
+  "tool-generic-result": { label: "Tool generic result" },
+  "tool-subagent-task": { label: "Tool subagent task" },
   "mobility-local-actionable": { label: "Mobility (actionable)" },
   "mobility-local-blocked": { label: "Mobility (blocked)" },
   "mobility-unpublished-branch": { label: "Mobility (publish branch)" },

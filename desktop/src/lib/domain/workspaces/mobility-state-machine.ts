@@ -23,6 +23,25 @@ export interface WorkspaceMobilityStatusModel {
   canRetryCleanup: boolean;
 }
 
+export type WorkspaceMobilityDestinationKind = "local" | "cloud";
+
+export function mobilityDestinationKind(
+  status: Pick<WorkspaceMobilityStatusModel, "direction" | "isBlocking">,
+): WorkspaceMobilityDestinationKind | null {
+  if (!status.isBlocking) {
+    return null;
+  }
+
+  switch (status.direction) {
+    case "local_to_cloud":
+      return "cloud";
+    case "cloud_to_local":
+      return "local";
+    default:
+      return null;
+  }
+}
+
 function normalizeDirection(
   direction: string | null | undefined,
 ): "local_to_cloud" | "cloud_to_local" | null {

@@ -1,6 +1,20 @@
-import type { McpElicitationInteractionPayload, PlanEntry, UserInputQuestion } from "@anyharness/sdk";
+import type {
+  CoworkArtifactSummary,
+  McpElicitationInteractionPayload,
+  PlanEntry,
+  ToolCallItem,
+  TranscriptState,
+  UserInputQuestion,
+} from "@anyharness/sdk";
 import type { PendingPromptListEntry } from "@/components/workspace/chat/input/PendingPromptList";
 import type { PermissionOptionAction } from "@/lib/domain/chat/chat-input-helpers";
+import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/arrival";
+import {
+  buildCloudWorkspaceStatusScreenModel,
+  type CloudWorkspaceStatusScreenModel,
+} from "@/lib/domain/workspaces/cloud-workspace-status";
+import type { SelectedCloudRuntimeViewModel } from "@/lib/domain/workspaces/cloud-runtime-state";
+import type { CloudWorkspaceStatus, CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
 
 export const TODOS_SHORT: PlanEntry[] = [
   { content: "Read authoritative repo docs and MCP spec material", status: "completed" },
@@ -30,6 +44,109 @@ export const TODOS_LONG: PlanEntry[] = [
   { content: "Rebase onto main and verify typecheck + tests pass", status: "pending" },
   { content: "Write a playground page so UI iteration doesn't require an LLM", status: "pending" },
 ];
+
+export const WORKSPACE_ARRIVAL_CREATED: WorkspaceArrivalViewModel = {
+  workspaceId: "workspace-arrival-created",
+  source: "worktree-created",
+  kind: "worktree",
+  workspacePath: "/Users/pablo/.proliferate/worktrees/proliferate/prism",
+  workspaceKind: "worktree",
+  workspaceName: "Prism",
+  repoName: "proliferate",
+  badgeLabel: "New worktree",
+  eyebrow: "Ready to open",
+  title: "Prism",
+  subtitle: "Created in proliferate from main",
+  setupTitle: "Repository setup",
+  setupSummary: "No setup script configured yet",
+  setupCommand: null,
+  setupActionLabel: "Add setup script",
+  setupStatusLabel: "Optional",
+  setupTone: "default",
+  setupDetail: null,
+  branchName: "prism",
+  baseBranchName: "main",
+};
+
+function cloudWorkspaceFixture(
+  overrides: Partial<CloudWorkspaceSummary> = {},
+): CloudWorkspaceSummary {
+  return {
+    id: "cloud-playground",
+    displayName: "Cloud playground",
+    actionBlockKind: null,
+    actionBlockReason: null,
+    postReadyPhase: "idle",
+    postReadyFilesApplied: 0,
+    postReadyFilesTotal: 0,
+    postReadyStartedAt: null,
+    postReadyCompletedAt: null,
+    status: "queued",
+    statusDetail: null,
+    lastError: null,
+    templateVersion: null,
+    runtimeGeneration: 1,
+    createdAt: "2026-04-14T00:00:00Z",
+    updatedAt: "2026-04-14T00:01:00Z",
+    repo: {
+      provider: "github",
+      owner: "proliferate-ai",
+      name: "proliferate",
+      baseBranch: "main",
+      branch: "feature/cloud-status",
+    },
+    ...overrides,
+  };
+}
+
+function cloudStatusFixture(
+  overrides: Partial<CloudWorkspaceSummary> & { status?: CloudWorkspaceStatus } = {},
+): CloudWorkspaceStatusScreenModel {
+  return buildCloudWorkspaceStatusScreenModel(cloudWorkspaceFixture(overrides));
+}
+
+export const CLOUD_STATUS_PROVISIONING = cloudStatusFixture({
+  status: "starting_runtime",
+});
+
+export const CLOUD_STATUS_APPLYING_FILES = cloudStatusFixture({
+  postReadyFilesApplied: 7,
+  postReadyFilesTotal: 18,
+  postReadyPhase: "applying_files",
+  status: "ready",
+});
+
+export const CLOUD_STATUS_BLOCKED = cloudStatusFixture({
+  actionBlockKind: "billing_quota",
+  actionBlockReason: "Cloud usage is paused for this account.",
+});
+
+export const CLOUD_STATUS_ERROR = cloudStatusFixture({
+  lastError: "Cloud setup could not finish. Check repo access, then retry.",
+  status: "error",
+});
+
+export const CLOUD_RUNTIME_RECONNECTING: SelectedCloudRuntimeViewModel = {
+  phase: "resuming",
+  variant: "warm",
+  tone: "pending",
+  title: "Reconnecting cloud workspace",
+  subtitle: "Runtime-backed actions are paused while the workspace reconnects.",
+  actionBlockReason: "Cloud workspace is reconnecting. Runtime-backed actions are paused until it comes back.",
+  preserveVisibleContent: true,
+  showRetry: false,
+};
+
+export const CLOUD_RUNTIME_RECONNECT_ERROR: SelectedCloudRuntimeViewModel = {
+  phase: "failed",
+  variant: "warm",
+  tone: "error",
+  title: "Couldn't reconnect cloud workspace",
+  subtitle: "Retry to restore chat, files, and terminals.",
+  actionBlockReason: "Cloud workspace couldn't reconnect. Retry to restore chat, files, and terminals.",
+  preserveVisibleContent: true,
+  showRetry: true,
+};
 
 export const CLAUDE_PLAN_SHORT = `# Tighten onboarding copy
 
@@ -82,6 +199,150 @@ With the single-list migration, the header no longer needs its own \`Sheet\`/\`S
 - Manual: every existing shortcut still fires, the new Settings shortcut opens settings, and the menu shows the accelerator
 - Manual: \`Esc\` in the composer still clears focus without triggering workspace-level shortcuts
 `;
+
+const PLAYGROUND_ARTIFACT_SUMMARY: CoworkArtifactSummary = {
+  id: "artifact-playground",
+  path: "artifacts/status-board.tsx",
+  type: "application/vnd.proliferate.react",
+  title: "Status board",
+  description: "Compact artifact row preview",
+  createdAt: "2026-04-12T00:00:00Z",
+  updatedAt: "2026-04-12T00:00:01Z",
+  exists: true,
+  sizeBytes: 2048,
+  modifiedAt: "2026-04-12T00:00:01Z",
+};
+
+export const PLAYGROUND_COWORK_ARTIFACT_TOOL_CALL = toolCallItem({
+  itemId: "tool-artifact",
+  toolCallId: "tool-artifact",
+  title: "Create artifact",
+  nativeToolName: "mcp__cowork__create_artifact",
+  semanticKind: "cowork_artifact_create",
+  rawInput: {
+    title: "Status board",
+    path: "artifacts/status-board.tsx",
+  },
+  rawOutput: PLAYGROUND_ARTIFACT_SUMMARY,
+});
+
+const subagentItem = toolCallItem({
+  itemId: "tool-agent",
+  toolCallId: "tool-agent",
+  title: "Task: inspect compact rows",
+  nativeToolName: "Agent",
+  semanticKind: "subagent",
+  contentParts: [
+    {
+      type: "tool_input_text",
+      text: "Inspect the transcript rendering path and report whether nested tool calls use compact rows.",
+    },
+    {
+      type: "tool_result_text",
+      text: "Nested command and file-read rows now use the compact transcript action surface.",
+    },
+  ],
+});
+
+const subagentCommandItem = toolCallItem({
+  itemId: "tool-agent-command",
+  toolCallId: "tool-agent-command",
+  parentToolCallId: "tool-agent",
+  title: "npm test -- --runInBand",
+  nativeToolName: "Bash",
+  semanticKind: "terminal",
+  rawInput: {
+    command: "pnpm --dir desktop exec vitest run src/config/playground.test.ts",
+  },
+  contentParts: [
+    {
+      type: "terminal_output",
+      terminalId: "terminal-playground",
+      event: "output",
+      data: "RUN  src/config/playground.test.ts\nPASS compact tool-call scenarios\n",
+    },
+  ],
+});
+
+const subagentReadItem = toolCallItem({
+  itemId: "tool-agent-read",
+  toolCallId: "tool-agent-read",
+  parentToolCallId: "tool-agent",
+  title: "Read ToolActionRow.tsx",
+  nativeToolName: "Read",
+  toolKind: "read",
+  semanticKind: "file_read",
+  contentParts: [
+    {
+      type: "file_read",
+      path: "/Users/pablo/proliferate/desktop/src/components/workspace/chat/tool-calls/ToolActionRow.tsx",
+      workspacePath: "desktop/src/components/workspace/chat/tool-calls/ToolActionRow.tsx",
+      basename: "ToolActionRow.tsx",
+      scope: "range",
+      startLine: 1,
+      endLine: 12,
+      preview: "export function ToolActionRow() {\n  return null;\n}",
+    },
+  ],
+});
+
+export const PLAYGROUND_SUBAGENT_TRANSCRIPT: TranscriptState = {
+  sessionMeta: {
+    sessionId: "playground-subagent",
+    title: "Tool row playground",
+    updatedAt: "2026-04-12T00:00:02Z",
+    nativeSessionId: null,
+    sourceAgentKind: "codex",
+  },
+  turnOrder: ["turn-subagent"],
+  turnsById: {
+    "turn-subagent": {
+      turnId: "turn-subagent",
+      itemOrder: ["assistant-intro", "tool-agent"],
+      startedAt: "2026-04-12T00:00:00Z",
+      completedAt: "2026-04-12T00:00:03Z",
+      stopReason: "end_turn",
+      fileBadges: [],
+    },
+  },
+  itemsById: {
+    "assistant-intro": {
+      kind: "assistant_prose",
+      itemId: "assistant-intro",
+      turnId: "turn-subagent",
+      status: "completed",
+      sourceAgentKind: "codex",
+      messageId: null,
+      title: null,
+      nativeToolName: null,
+      parentToolCallId: null,
+      rawInput: undefined,
+      rawOutput: undefined,
+      contentParts: [],
+      timestamp: "2026-04-12T00:00:00Z",
+      startedSeq: 1,
+      lastUpdatedSeq: 1,
+      completedSeq: 1,
+      completedAt: "2026-04-12T00:00:00Z",
+      text: "I will delegate the transcript check and inspect the nested activity.",
+      isStreaming: false,
+    },
+    "tool-agent": subagentItem,
+    "tool-agent-command": subagentCommandItem,
+    "tool-agent-read": subagentReadItem,
+  },
+  openAssistantItemId: null,
+  openThoughtItemId: null,
+  pendingInteractions: [],
+  availableCommands: [],
+  liveConfig: null,
+  currentModeId: null,
+  usageState: null,
+  unknownEvents: [],
+  isStreaming: false,
+  lastSeq: 4,
+  pendingPrompts: [],
+};
 
 export const EXECUTE_OPTIONS: PermissionOptionAction[] = [
   { optionId: "allow_always", label: "Always Allow", kind: "allow_always" },
@@ -305,3 +566,30 @@ export const MCP_ELICITATION_URL: McpElicitationInteractionPayload = {
     requiresReveal: true,
   },
 };
+
+function toolCallItem(overrides: Partial<ToolCallItem>): ToolCallItem {
+  return {
+    kind: "tool_call",
+    itemId: "tool-playground",
+    turnId: "turn-subagent",
+    status: "completed",
+    sourceAgentKind: "codex",
+    messageId: null,
+    title: "Tool call",
+    nativeToolName: "Tool",
+    parentToolCallId: null,
+    rawInput: undefined,
+    rawOutput: undefined,
+    contentParts: [],
+    timestamp: "2026-04-12T00:00:00Z",
+    startedSeq: 1,
+    lastUpdatedSeq: 1,
+    completedSeq: 2,
+    completedAt: "2026-04-12T00:00:01Z",
+    toolCallId: "tool-playground",
+    toolKind: "other",
+    semanticKind: "other",
+    approvalState: "none",
+    ...overrides,
+  } as ToolCallItem;
+}

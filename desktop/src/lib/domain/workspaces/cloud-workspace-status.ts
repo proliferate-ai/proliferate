@@ -5,6 +5,10 @@ import type {
 import {
   CLOUD_WORKSPACE_PROVISIONING_STEPS,
 } from "@/config/cloud-workspaces";
+import {
+  CLOUD_STATUS_ACTION_COPY,
+  CLOUD_STATUS_COMPACT_COPY,
+} from "@/config/cloud-status-copy";
 
 const PENDING_STATUSES = new Set<CloudWorkspaceStatus>([
   "queued",
@@ -48,6 +52,15 @@ export interface CloudWorkspaceStatusScreenModel {
     | { kind: "auto-refresh"; message: string }
     | { kind: "action"; action: "retry" | "start"; label: string; helperText: string }
     | { kind: "status"; message: string };
+}
+
+export type CloudWorkspaceCompactStatusTone = "info" | "warning" | "destructive";
+
+export interface CloudWorkspaceCompactStatusView {
+  title: string;
+  phaseLabel: string;
+  tone: CloudWorkspaceCompactStatusTone;
+  primaryAction: { action: "retry" | "start"; label: string } | null;
 }
 
 export function isCloudWorkspacePending(status: string): boolean {
@@ -225,6 +238,52 @@ export function buildCloudWorkspaceStatusScreenModel(
       message: isReady ? READY_MESSAGE : AUTO_REFRESH_MESSAGE,
     },
   };
+}
+
+export function buildCloudWorkspaceCompactStatusView(
+  model: CloudWorkspaceStatusScreenModel,
+): CloudWorkspaceCompactStatusView {
+  const primaryAction = model.footer.kind === "action"
+    ? {
+      action: model.footer.action,
+      label: CLOUD_STATUS_ACTION_COPY[model.footer.action],
+    }
+    : null;
+
+  switch (model.mode) {
+    case "error":
+      return {
+        title: CLOUD_STATUS_COMPACT_COPY.attentionTitle,
+        phaseLabel: model.title,
+        tone: "destructive",
+        primaryAction,
+      };
+    case "blocked":
+      return {
+        title: CLOUD_STATUS_COMPACT_COPY.attentionTitle,
+        phaseLabel: model.title,
+        tone: "warning",
+        primaryAction,
+      };
+    case "stopped":
+      return {
+        title: CLOUD_STATUS_COMPACT_COPY.stoppedTitle,
+        phaseLabel: model.title,
+        tone: "warning",
+        primaryAction,
+      };
+    case "pending": {
+      const title = model.stepCounter
+        ? CLOUD_STATUS_COMPACT_COPY.preparingTitle
+        : CLOUD_STATUS_COMPACT_COPY.syncingTitle;
+      return {
+        title,
+        phaseLabel: model.title,
+        tone: "info",
+        primaryAction,
+      };
+    }
+  }
 }
 
 function getProvisioningStepIndex(status: string): number {

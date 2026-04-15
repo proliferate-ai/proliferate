@@ -10,17 +10,17 @@ export const CLOUD_WORKSPACE_PROVISIONING_STEPS: CloudWorkspaceStepDefinition[] 
   {
     status: "queued",
     label: "Queued",
-    description: "Waiting for the backend to start provisioning your sandbox.",
+    description: "Waiting to prepare the cloud workspace.",
   },
   {
     status: "provisioning",
-    label: "Provisioning sandbox",
-    description: "Allocating the cloud sandbox and preparing the base environment.",
+    label: "Preparing workspace",
+    description: "Allocating the cloud runtime and preparing the base environment.",
   },
   {
     status: "syncing_credentials",
     label: "Syncing credentials",
-    description: "Making your configured cloud agent credentials available in the sandbox.",
+    description: "Making configured agent credentials available in the cloud workspace.",
   },
   {
     status: "cloning_repo",
@@ -35,6 +35,6 @@ export const CLOUD_WORKSPACE_PROVISIONING_STEPS: CloudWorkspaceStepDefinition[] 
   {
     status: "ready",
     label: "Ready",
-    description: "The workspace is ready for sessions, terminals, and file operations.",
+    description: "The workspace is ready for chat, terminals, and file operations.",
   },
 ];

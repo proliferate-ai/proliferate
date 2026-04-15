@@ -123,32 +123,3 @@ const fillsweepAnim = createBrailleAnimation(
   BRAILLE_FILLSWEEP_FRAME_INTERVAL_MS,
 );
 export const useBrailleFillsweep = fillsweepAnim.use;
-
-/** snake — a single curve that coils down through the two-char grid.
- *  16 frames @ 80ms. No "fully lit" moment, so there is no landed frame. */
-export const BRAILLE_SNAKE_FRAMES = [
-  "⣁⡀", "⣉⠀", "⡉⠁", "⠉⠉", "⠈⠙", "⠀⠛", "⠐⠚", "⠒⠒",
-  "⠖⠂", "⠶⠀", "⠦⠄", "⠤⠤", "⠠⢤", "⠀⣤", "⢀⣠", "⣀⣀",
-] as const;
-export const BRAILLE_SNAKE_FRAME_INTERVAL_MS = 80;
-
-const snakeAnim = createBrailleAnimation(
-  BRAILLE_SNAKE_FRAMES,
-  BRAILLE_SNAKE_FRAME_INTERVAL_MS,
-);
-export const useBrailleSnake = snakeAnim.use;
-
-/** cascade — begins fully filled, then drops off in sweeping diagonal bands.
- *  Intended for handoff completion and reveal states. 12 frames @ 90ms. */
-export const BRAILLE_CASCADE_FRAMES = [
-  "⣿⣿", "⣿⣷", "⣾⣿", "⣶⣷", "⣴⣶", "⣤⣦",
-  "⣀⣤", "⠀⣄", "⠀⠄", "⠀⠂", "⠀⠀", "⠀⠀",
-] as const;
-export const BRAILLE_CASCADE_FRAME_INTERVAL_MS = 90;
-export const BRAILLE_CASCADE_LANDED_FRAME = BRAILLE_CASCADE_FRAMES[0];
-
-const cascadeAnim = createBrailleAnimation(
-  BRAILLE_CASCADE_FRAMES,
-  BRAILLE_CASCADE_FRAME_INTERVAL_MS,
-);
-export const useBrailleCascade = cascadeAnim.use;

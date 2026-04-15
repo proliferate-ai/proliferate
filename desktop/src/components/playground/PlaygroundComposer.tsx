@@ -8,14 +8,21 @@ import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerP
 import { UserInputCard } from "@/components/workspace/chat/input/UserInputCard";
 import { McpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
 import { WorkspaceMobilityLocationPopover } from "@/components/workspace/chat/input/WorkspaceMobilityLocationPopover";
+import { WorkspaceArrivalAttachedPanelView } from "@/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel";
+import { CloudRuntimeAttachedPanelView } from "@/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
+import { WorkspaceArrivalCloudPanel } from "@/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
+import { WorkspaceMobilityOverlayView } from "@/components/workspace/chat/surface/WorkspaceMobilityOverlay";
 import { useComposerTopSlot } from "@/hooks/chat/use-composer-top-slot";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { type MobilityPromptState } from "@/lib/domain/workspaces/mobility-prompt";
 import {
+  getMobilityOverlayTitle,
+  mobilityStatusCopy,
+} from "@/config/mobility-copy";
+import {
   ArrowRight,
   ArrowUp,
-  BrailleSweepBadge,
   ChevronDown,
   Copy,
   Folder,
@@ -25,6 +32,12 @@ import {
 import type { PlaygroundScenarioSelection, ScenarioKey } from "@/config/playground";
 import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-session";
 import {
+  CLOUD_RUNTIME_RECONNECT_ERROR,
+  CLOUD_RUNTIME_RECONNECTING,
+  CLOUD_STATUS_APPLYING_FILES,
+  CLOUD_STATUS_BLOCKED,
+  CLOUD_STATUS_ERROR,
+  CLOUD_STATUS_PROVISIONING,
   EDIT_OPTIONS,
   EXECUTE_OPTIONS,
   GEMINI_MCP_OPTIONS,
@@ -39,6 +52,7 @@ import {
   TODOS_LONG,
   TODOS_MID,
   TODOS_SHORT,
+  WORKSPACE_ARRIVAL_CREATED,
   USER_INPUT_MULTI_QUESTION,
   USER_INPUT_OPTION_PLUS_OTHER,
   USER_INPUT_SECRET,
@@ -69,12 +83,12 @@ export function PlaygroundComposer({ selection, replay }: PlaygroundComposerProp
           ? <ReplayComposerSurface replay={replay} />
           : <PlaygroundComposerSurface />}
       </ChatComposerDock>
-      {scenario === "mobility-in-flight" && <MobilityOverlayPreview />}
+      {scenario && renderMobilityOverlayPreview(scenario)}
     </div>
   );
 }
 
-function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
+export function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {
     case "clean":
     case "gemini-retry-status":
@@ -163,6 +177,62 @@ function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
             onDelete={noop}
           />
         </>
+      );
+    case "workspace-arrival-created":
+      return (
+        <WorkspaceArrivalAttachedPanelView
+          viewModel={WORKSPACE_ARRIVAL_CREATED}
+          expanded
+          onToggleExpanded={noop}
+          onDismiss={noop}
+          onSetupAction={noop}
+        />
+      );
+    case "cloud-provisioning":
+      return (
+        <WorkspaceArrivalCloudPanel
+          model={CLOUD_STATUS_PROVISIONING}
+          isPrimaryActionPending={false}
+          onPrimaryAction={noop}
+        />
+      );
+    case "cloud-applying-files":
+      return (
+        <WorkspaceArrivalCloudPanel
+          model={CLOUD_STATUS_APPLYING_FILES}
+          isPrimaryActionPending={false}
+          onPrimaryAction={noop}
+        />
+      );
+    case "cloud-blocked":
+      return (
+        <WorkspaceArrivalCloudPanel
+          model={CLOUD_STATUS_BLOCKED}
+          isPrimaryActionPending={false}
+          onPrimaryAction={noop}
+        />
+      );
+    case "cloud-error":
+      return (
+        <WorkspaceArrivalCloudPanel
+          model={CLOUD_STATUS_ERROR}
+          isPrimaryActionPending={false}
+          onPrimaryAction={noop}
+        />
+      );
+    case "cloud-reconnecting":
+      return (
+        <CloudRuntimeAttachedPanelView
+          state={CLOUD_RUNTIME_RECONNECTING}
+          retry={noop}
+        />
+      );
+    case "cloud-reconnect-error":
+      return (
+        <CloudRuntimeAttachedPanelView
+          state={CLOUD_RUNTIME_RECONNECT_ERROR}
+          retry={noop}
+        />
       );
     case "user-input-single-option":
       return (
@@ -378,7 +448,8 @@ function ReplayComposerSurface({ replay }: { replay: PlaygroundReplayState }) {
 
 function PlaygroundMobilityFooterRow({ scenario }: { scenario: ScenarioKey }) {
   const prompt = mobilityPromptForScenario(scenario);
-  const locationLabel = scenario === "mobility-in-flight"
+  const isCloudScenario = scenario === "mobility-in-flight" || scenario.startsWith("cloud-");
+  const locationLabel = isCloudScenario
     ? "Cloud workspace"
     : "Local worktree";
 
@@ -386,7 +457,7 @@ function PlaygroundMobilityFooterRow({ scenario }: { scenario: ScenarioKey }) {
     <div className="relative rounded-[var(--radius-composer)] border border-border bg-card px-2 py-2 shadow-xs">
       <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
         <ComposerControlButton
-          icon={(scenario === "mobility-in-flight" ? <Folder className="size-3.5" /> : <FolderOpen className="size-3.5" />)}
+          icon={(isCloudScenario ? <Folder className="size-3.5" /> : <FolderOpen className="size-3.5" />)}
           label={locationLabel}
           active={Boolean(prompt) || scenario === "mobility-in-flight"}
           trailing={<ChevronDown className="size-3 text-muted-foreground/70" />}
@@ -419,41 +490,37 @@ function PlaygroundMobilityFooterRow({ scenario }: { scenario: ScenarioKey }) {
   );
 }
 
-function MobilityOverlayPreview() {
-  return (
-    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-background/66 backdrop-blur-[2px]">
-      <div className="pointer-events-none absolute inset-0 grid grid-cols-4 gap-x-8 gap-y-10 px-8 py-10">
-        {Array.from({ length: 24 }, (_, index) => (
-          <span
-            key={index}
-            className={`font-mono text-2xl leading-none tracking-[-0.18em] ${
-              index % 2 === 0 ? "text-foreground/14" : "text-foreground/10"
-            }`}
-          >
-            {index % 3 === 0 ? "⣿⣿" : "⣶⣤"}
-          </span>
-        ))}
-      </div>
-      <div className="relative z-10 flex max-w-lg flex-col items-center px-6 text-center">
-        <span className="font-mono text-7xl leading-none tracking-[-0.22em] text-foreground">
-          ⣿⣿
-        </span>
-        <p className="mt-6 text-xs uppercase tracking-[0.12em] text-muted-foreground/80">
-          Cloud workspace
-        </p>
-        <h2 className="mt-3 text-2xl font-medium tracking-tight text-foreground">
-          Finalizing workspace move
-        </h2>
-        <p className="mt-2 max-w-md text-sm text-muted-foreground">
-          Switching this workspace to its new runtime.
-        </p>
-        <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-foreground/6 px-3 py-1.5 text-sm text-muted-foreground">
-          <BrailleSweepBadge className="text-base text-foreground" />
-          <span>Syncing files and supported sessions</span>
-        </div>
-      </div>
-    </div>
-  );
+export function renderMobilityOverlayPreview(scenario: ScenarioKey): ReactNode | null {
+  if (scenario === "mobility-in-flight") {
+    const phase = "transferring";
+    const direction = "local_to_cloud";
+    return (
+      <WorkspaceMobilityOverlayView
+        description={mobilityStatusCopy(phase, direction).description}
+        locationLabel="Cloud workspace"
+        mode="progress"
+        statusLabel={mobilityStatusCopy(phase, direction).title}
+        title={getMobilityOverlayTitle(direction, phase)}
+      />
+    );
+  }
+
+  if (scenario === "mobility-failed") {
+    const phase = "cleanup_failed";
+    const direction = "local_to_cloud";
+    return (
+      <WorkspaceMobilityOverlayView
+        description={mobilityStatusCopy(phase, direction).description}
+        locationLabel="Cloud workspace"
+        mode="cleanup_failed"
+        onContinueWorking={noop}
+        onRetryCleanup={noop}
+        title={getMobilityOverlayTitle(direction, phase)}
+      />
+    );
+  }
+
+  return null;
 }
 
 function mobilityPromptForScenario(
