@@ -156,6 +156,30 @@ export function anyHarnessSessionEventsKey(
   return [...anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId), "events", afterSeq ?? null] as const;
 }
 
+export function anyHarnessPlansKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+) {
+  return [...anyHarnessRuntimeKey(runtimeUrl), "plans", workspaceId ?? null] as const;
+}
+
+export function anyHarnessPlanKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+  planId: string | null | undefined,
+) {
+  return [...anyHarnessPlansKey(runtimeUrl, workspaceId), planId ?? null] as const;
+}
+
+export function anyHarnessPlanDocumentKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+  planId: string | null | undefined,
+  materialize = false,
+) {
+  return [...anyHarnessPlanKey(runtimeUrl, workspaceId, planId), "document", materialize] as const;
+}
+
 export function anyHarnessGitStatusKey(
   runtimeUrl: string | null | undefined,
   workspaceId: string | null | undefined,
@@ -278,6 +302,7 @@ export function anyHarnessWorkspaceQueryKeyRoots(
     anyHarnessWorkspaceSessionLaunchKey(runtimeUrl, workspaceId),
     anyHarnessSessionsKey(runtimeUrl, workspaceId),
     anyHarnessSessionScopeKey(runtimeUrl, workspaceId),
+    anyHarnessPlansKey(runtimeUrl, workspaceId),
     anyHarnessGitStatusKey(runtimeUrl, workspaceId),
     anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
     anyHarnessGitBranchesKey(runtimeUrl, workspaceId),

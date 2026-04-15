@@ -141,6 +141,7 @@ mod tests {
                 tool_call_id: Some("tool-1".to_string()),
                 tool_kind: Some("exec".to_string()),
                 tool_status: None,
+                linked_plan_id: None,
             },
             payload: PendingInteractionPayloadSummary::Permission {
                 options: Vec::new(),

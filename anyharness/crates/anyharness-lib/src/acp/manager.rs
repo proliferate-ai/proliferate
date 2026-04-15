@@ -12,6 +12,7 @@ use super::session_actor::{
 };
 use crate::agents::model::ResolvedAgent;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::plans::service::PlanService;
 use crate::sessions::mcp::SessionMcpServer;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::store::SessionStore;
@@ -20,14 +21,16 @@ use anyharness_contract::v1::SessionEventEnvelope;
 pub struct AcpManager {
     live_sessions: Arc<RwLock<HashMap<String, Arc<LiveSessionHandle>>>>,
     interaction_broker: Arc<InteractionBroker>,
+    plan_service: Arc<PlanService>,
 }
 
 impl AcpManager {
-    pub fn new() -> Self {
+    pub fn new(plan_service: Arc<PlanService>) -> Self {
         let interaction_broker = Arc::new(InteractionBroker::new());
         Self {
             live_sessions: Arc::new(RwLock::new(HashMap::new())),
             interaction_broker,
+            plan_service,
         }
     }
 
@@ -118,6 +121,7 @@ impl AcpManager {
             workspace_env,
             session_launch_env,
             interaction_broker: self.interaction_broker.clone(),
+            plan_service: self.plan_service.clone(),
             event_tx,
             session_store,
             mcp_servers,
@@ -165,6 +169,7 @@ impl Clone for AcpManager {
         Self {
             live_sessions: self.live_sessions.clone(),
             interaction_broker: self.interaction_broker.clone(),
+            plan_service: self.plan_service.clone(),
         }
     }
 }
@@ -184,6 +189,7 @@ mod tests {
     };
     use crate::agents::registry::built_in_registry;
     use crate::persistence::Db;
+    use crate::plans::{service::PlanService, store::PlanStore};
     use crate::sessions::model::SessionRecord;
     use crate::sessions::store::SessionStore;
     use anyharness_contract::v1::{SessionEventEnvelope, SessionExecutionPhase};
@@ -244,7 +250,8 @@ mod tests {
 
     #[tokio::test]
     async fn reused_live_handle_reports_the_live_native_session_id() {
-        let manager = AcpManager::new();
+        let plan_db = Db::open_in_memory().expect("open plan db");
+        let manager = AcpManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
         let (command_tx, _command_rx) = mpsc::channel(4);
         let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
         let handle = Arc::new(LiveSessionHandle::new_for_test(

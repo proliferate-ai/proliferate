@@ -6,8 +6,8 @@ use std::time::Instant;
 
 use anyharness_contract::v1::{
     ConfigApplyState, InteractionKind, McpElicitationSubmittedField,
-    McpElicitationUrlRevealResponse, Session, SessionExecutionSummary, SessionLiveConfigSnapshot,
-    UserInputSubmittedAnswer, WorkspaceExecutionSummary,
+    McpElicitationUrlRevealResponse, ProposedPlanDecisionState, Session, SessionExecutionSummary,
+    SessionLiveConfigSnapshot, UserInputSubmittedAnswer, WorkspaceExecutionSummary,
 };
 
 use super::execution_summary::{
@@ -31,6 +31,8 @@ use crate::agents::registry::built_in_registry;
 use crate::agents::resolver::resolve_agent;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::cowork::runtime::CoworkSessionHooks;
+use crate::plans::model::PlanRecord;
+use crate::plans::service::{PlanDecisionError, PlanService};
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::runtime::WorkspaceRuntime;
 
@@ -42,6 +44,7 @@ pub struct SessionRuntime {
     session_data_cipher: Option<SessionDataCipher>,
     cowork_session_hooks: Arc<CoworkSessionHooks>,
     access_gate: Arc<WorkspaceAccessGate>,
+    plan_service: Arc<PlanService>,
 }
 
 #[derive(Debug)]
@@ -148,6 +151,7 @@ pub enum ResolveInteractionError {
     SessionNotLive(String),
     InteractionNotFound(String),
     InteractionKindMismatch(String),
+    PlanLinkedInteraction(String),
     InvalidOptionId(String),
     InvalidQuestionId(String),
     DuplicateQuestionAnswer(String),
@@ -158,6 +162,7 @@ pub enum ResolveInteractionError {
     MissingMcpField(String),
     InvalidMcpFieldValue(String),
     NotMcpUrlElicitation(String),
+    Internal(anyhow::Error),
 }
 
 #[derive(Debug)]
@@ -201,6 +206,7 @@ impl SessionRuntime {
         session_data_cipher: Option<SessionDataCipher>,
         cowork_session_hooks: Arc<CoworkSessionHooks>,
         access_gate: Arc<WorkspaceAccessGate>,
+        plan_service: Arc<PlanService>,
     ) -> Self {
         Self {
             session_service,
@@ -210,6 +216,7 @@ impl SessionRuntime {
             session_data_cipher,
             cowork_session_hooks,
             access_gate,
+            plan_service,
         }
     }
 
@@ -707,6 +714,50 @@ impl SessionRuntime {
         })
     }
 
+    pub async fn apply_plan_decision(
+        &self,
+        plan_id: &str,
+        expected_version: i64,
+        decision: ProposedPlanDecisionState,
+    ) -> Result<PlanRecord, PlanDecisionError> {
+        let plan = self
+            .plan_service
+            .get(plan_id)
+            .map_err(PlanDecisionError::Store)?
+            .ok_or(PlanDecisionError::NotFound)?;
+        self.access_gate
+            .assert_can_mutate_for_session(&plan.session_id)
+            .map_err(|error| PlanDecisionError::Store(anyhow::anyhow!(error.to_string())))?;
+
+        if let Some(handle) = self.acp_manager.get_handle(&plan.session_id).await {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            handle
+                .command_tx
+                .send(SessionCommand::ApplyPlanDecision {
+                    plan_id: plan_id.to_string(),
+                    expected_version,
+                    decision,
+                    respond_to: tx,
+                })
+                .await
+                .map_err(|_| {
+                    PlanDecisionError::Store(anyhow::anyhow!(
+                        "session actor is not available for plan decision"
+                    ))
+                })?;
+            return rx.await.map_err(|_| {
+                PlanDecisionError::Store(anyhow::anyhow!(
+                    "session actor dropped plan decision response"
+                ))
+            })?;
+        }
+
+        let (plan, _) =
+            self.plan_service
+                .update_decision_offline(plan_id, expected_version, decision)?;
+        Ok(plan)
+    }
+
     pub async fn edit_pending_prompt(
         &self,
         session_id: &str,
@@ -1002,6 +1053,18 @@ impl SessionRuntime {
             .find(|pending| pending.request_id == request_id)
             .map(|pending| pending.kind.clone())
             .ok_or_else(|| ResolveInteractionError::InteractionNotFound(request_id.to_string()))?;
+
+        if self
+            .plan_service
+            .store()
+            .find_link_by_request(session_id, request_id)
+            .map_err(ResolveInteractionError::Internal)?
+            .is_some()
+        {
+            return Err(ResolveInteractionError::PlanLinkedInteraction(
+                request_id.to_string(),
+            ));
+        }
 
         let kind_matches = matches!(
             (&resolution, pending_kind),

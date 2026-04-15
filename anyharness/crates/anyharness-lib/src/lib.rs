@@ -8,6 +8,7 @@ pub mod git;
 pub mod hosting;
 pub mod mobility;
 pub mod persistence;
+pub mod plans;
 pub mod processes;
 pub mod repo_roots;
 pub mod sessions;

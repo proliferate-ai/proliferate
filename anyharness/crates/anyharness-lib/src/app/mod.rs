@@ -12,6 +12,9 @@ use crate::files::runtime::WorkspaceFilesRuntime;
 use crate::git::WorkspaceFileSearchCache;
 use crate::mobility::service::MobilityService;
 use crate::persistence::Db;
+use crate::plans::runtime::PlanRuntime;
+use crate::plans::service::PlanService;
+use crate::plans::store::PlanStore;
 use crate::processes::ProcessService;
 use crate::repo_roots::service::RepoRootService;
 use crate::repo_roots::store::RepoRootStore;
@@ -58,6 +61,8 @@ pub struct AppState {
     pub session_runtime: Arc<SessionRuntime>,
     pub workspace_access_gate: Arc<WorkspaceAccessGate>,
     pub mobility_service: Arc<MobilityService>,
+    pub plan_service: Arc<PlanService>,
+    pub plan_runtime: Arc<PlanRuntime>,
     pub acp_manager: AcpManager,
     pub terminal_service: Arc<TerminalService>,
     pub setup_execution_service: Arc<SetupExecutionService>,
@@ -105,7 +110,8 @@ impl AppState {
             WorkspaceStore::new(db.clone()),
             runtime_home.clone(),
         ));
-        let acp_manager = AcpManager::new();
+        let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));
+        let acp_manager = AcpManager::new(plan_service.clone());
         let terminal_service = Arc::new(TerminalService::new());
         let workspace_access_gate = Arc::new(WorkspaceAccessGate::new(
             WorkspaceStore::new(db.clone()),
@@ -121,6 +127,7 @@ impl AppState {
             session_data_cipher,
             cowork_session_hooks.clone(),
             workspace_access_gate.clone(),
+            plan_service.clone(),
         ));
         let cowork_runtime = Arc::new(CoworkRuntime::new(
             (*cowork_service).clone(),
@@ -139,6 +146,12 @@ impl AppState {
             workspace_access_gate.clone(),
             setup_execution_service.clone(),
             terminal_service.clone(),
+        ));
+        let plan_runtime = Arc::new(PlanRuntime::new(
+            plan_service.clone(),
+            session_runtime.clone(),
+            session_service.clone(),
+            runtime_home.clone(),
         ));
         Ok(Self {
             runtime_home,
@@ -159,6 +172,8 @@ impl AppState {
             session_runtime,
             workspace_access_gate,
             mobility_service,
+            plan_service,
+            plan_runtime,
             acp_manager,
             terminal_service,
             setup_execution_service,

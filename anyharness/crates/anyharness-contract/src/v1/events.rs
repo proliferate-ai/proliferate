@@ -57,7 +57,9 @@ pub enum SessionEvent {
     PendingPromptUpdated(PendingPromptUpdatedPayload),
     PendingPromptRemoved(PendingPromptRemovedPayload),
 
+    #[serde(alias = "permission_requested")]
     InteractionRequested(InteractionRequestedEvent),
+    #[serde(alias = "permission_resolved")]
     InteractionResolved(InteractionResolvedEvent),
     Error(ErrorEvent),
 }
@@ -177,6 +179,7 @@ pub enum TranscriptItemKind {
     Reasoning,
     ToolInvocation,
     Plan,
+    ProposedPlan,
     ErrorItem,
 }
 
@@ -308,6 +311,41 @@ pub enum ContentPart {
     Plan {
         entries: Vec<PlanEntry>,
     },
+    ProposedPlan {
+        #[serde(rename = "planId")]
+        plan_id: String,
+        title: String,
+        #[serde(rename = "bodyMarkdown")]
+        body_markdown: String,
+        #[serde(rename = "snapshotHash")]
+        snapshot_hash: String,
+        #[serde(rename = "sourceSessionId")]
+        source_session_id: String,
+        #[serde(rename = "sourceTurnId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source_turn_id: Option<String>,
+        #[serde(rename = "sourceItemId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source_item_id: Option<String>,
+        #[serde(rename = "sourceKind")]
+        source_kind: String,
+        #[serde(rename = "sourceToolCallId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source_tool_call_id: Option<String>,
+    },
+    ProposedPlanDecision {
+        #[serde(rename = "planId")]
+        plan_id: String,
+        #[serde(rename = "decisionState")]
+        decision_state: ProposedPlanDecisionState,
+        #[serde(rename = "nativeResolutionState")]
+        native_resolution_state: ProposedPlanNativeResolutionState,
+        #[serde(rename = "decisionVersion")]
+        decision_version: i64,
+        #[serde(rename = "errorMessage")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error_message: Option<String>,
+    },
     ToolInputText {
         text: String,
     },
@@ -360,6 +398,25 @@ pub enum FileChangeOperation {
 pub struct PlanEntry {
     pub content: String,
     pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ProposedPlanDecisionState {
+    Pending,
+    Approved,
+    Rejected,
+    Superseded,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ProposedPlanNativeResolutionState {
+    None,
+    PendingLink,
+    PendingResolution,
+    Finalized,
+    Failed,
 }
 
 // ---------------------------------------------------------------------------

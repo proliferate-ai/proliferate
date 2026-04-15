@@ -141,6 +141,20 @@ export type {
 } from "./types/sessions.js";
 
 export type {
+  ProposedPlanSummary,
+  ProposedPlanDetail,
+  ListProposedPlansResponse,
+  ProposedPlanDocumentResponse,
+  PlanDecisionRequest,
+  PlanDecisionResponse,
+  HandoffPlanRequest,
+  HandoffPlanResponse,
+  PlanHandoffPromptStatus,
+  ProposedPlanDecisionState,
+  ProposedPlanNativeResolutionState,
+} from "./types/plans.js";
+
+export type {
   SessionEventEnvelope,
   SessionRawNotificationEnvelope,
   SessionEvent,
@@ -170,6 +184,8 @@ export type {
   FileChangeOperation,
   FileOpenTarget,
   PlanContentPart,
+  ProposedPlanContentPart,
+  ProposedPlanDecisionContentPart,
   ToolInputTextContentPart,
   ToolResultTextContentPart,
   PlanEntry,
@@ -227,6 +243,7 @@ export type {
   ToolCallItem,
   ToolCallSemanticKind,
   PlanItem,
+  ProposedPlanItem,
   CanonicalPlan,
   CanonicalPlanSourceKind,
   ErrorItem,

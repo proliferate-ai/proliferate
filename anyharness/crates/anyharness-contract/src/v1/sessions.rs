@@ -51,6 +51,8 @@ pub struct PendingInteractionSource {
     pub tool_kind: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub linked_plan_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

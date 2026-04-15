@@ -2661,6 +2661,277 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/plans": {
+      "get": {
+        "tags": [
+          "plans"
+        ],
+        "operationId": "list_workspace_plans",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace proposed plans",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListProposedPlansResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}": {
+      "get": {
+        "tags": [
+          "plans"
+        ],
+        "operationId": "get_plan",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "plan_id",
+            "in": "path",
+            "description": "Plan ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Proposed plan detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposedPlanDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Plan not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}/approve": {
+      "post": {
+        "tags": [
+          "plans"
+        ],
+        "operationId": "approve_plan",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "plan_id",
+            "in": "path",
+            "description": "Plan ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Approved proposed plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDecisionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}/document": {
+      "get": {
+        "tags": [
+          "plans"
+        ],
+        "operationId": "get_plan_document",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "plan_id",
+            "in": "path",
+            "description": "Plan ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Proposed plan markdown document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposedPlanDocumentResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}/handoff": {
+      "post": {
+        "tags": [
+          "plans"
+        ],
+        "operationId": "handoff_plan",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "plan_id",
+            "in": "path",
+            "description": "Plan ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandoffPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Handed off proposed plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HandoffPlanResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}/reject": {
+      "post": {
+        "tags": [
+          "plans"
+        ],
+        "operationId": "reject_plan",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "plan_id",
+            "in": "path",
+            "description": "Plan ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Rejected proposed plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDecisionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/processes/run": {
       "post": {
         "tags": [
@@ -3461,6 +3732,99 @@
                 "type": "string",
                 "enum": [
                   "plan"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "planId",
+              "title",
+              "bodyMarkdown",
+              "snapshotHash",
+              "sourceSessionId",
+              "sourceKind",
+              "type"
+            ],
+            "properties": {
+              "bodyMarkdown": {
+                "type": "string"
+              },
+              "planId": {
+                "type": "string"
+              },
+              "snapshotHash": {
+                "type": "string"
+              },
+              "sourceItemId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceKind": {
+                "type": "string"
+              },
+              "sourceSessionId": {
+                "type": "string"
+              },
+              "sourceToolCallId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceTurnId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "proposed_plan"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "planId",
+              "decisionState",
+              "nativeResolutionState",
+              "decisionVersion",
+              "type"
+            ],
+            "properties": {
+              "decisionState": {
+                "$ref": "#/components/schemas/ProposedPlanDecisionState"
+              },
+              "decisionVersion": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "errorMessage": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "nativeResolutionState": {
+                "$ref": "#/components/schemas/ProposedPlanNativeResolutionState"
+              },
+              "planId": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "proposed_plan_decision"
                 ]
               }
             }
@@ -4404,6 +4768,78 @@
           }
         }
       },
+      "HandoffPlanRequest": {
+        "type": "object",
+        "properties": {
+          "agentKind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "instruction": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "targetSessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "HandoffPlanResponse": {
+        "type": "object",
+        "required": [
+          "handoffId",
+          "planId",
+          "sourceSessionId",
+          "targetSessionId",
+          "promptStatus"
+        ],
+        "properties": {
+          "handoffId": {
+            "type": "string"
+          },
+          "planId": {
+            "type": "string"
+          },
+          "promptStatus": {
+            "$ref": "#/components/schemas/PlanHandoffPromptStatus"
+          },
+          "session": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Session"
+              }
+            ]
+          },
+          "sourceSessionId": {
+            "type": "string"
+          },
+          "targetSessionId": {
+            "type": "string"
+          }
+        }
+      },
       "HealthResponse": {
         "type": "object",
         "required": [
@@ -4758,6 +5194,12 @@
       "InteractionSource": {
         "type": "object",
         "properties": {
+          "linkedPlanId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "sourceMetadata": {},
           "toolCallId": {
             "type": [
@@ -4809,6 +5251,20 @@
         "properties": {
           "item": {
             "$ref": "#/components/schemas/TranscriptItemPayload"
+          }
+        }
+      },
+      "ListProposedPlansResponse": {
+        "type": "object",
+        "required": [
+          "plans"
+        ],
+        "properties": {
+          "plans": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProposedPlanSummary"
+            }
           }
         }
       },
@@ -5916,6 +6372,12 @@
       "PendingInteractionSource": {
         "type": "object",
         "properties": {
+          "linkedPlanId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "toolCallId": {
             "type": [
               "string",
@@ -6141,6 +6603,29 @@
           "rawOutput": {}
         }
       },
+      "PlanDecisionRequest": {
+        "type": "object",
+        "required": [
+          "expectedDecisionVersion"
+        ],
+        "properties": {
+          "expectedDecisionVersion": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "PlanDecisionResponse": {
+        "type": "object",
+        "required": [
+          "plan"
+        ],
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/ProposedPlanDetail"
+          }
+        }
+      },
       "PlanEntry": {
         "type": "object",
         "required": [
@@ -6155,6 +6640,14 @@
             "type": "string"
           }
         }
+      },
+      "PlanHandoffPromptStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "sent",
+          "failed"
+        ]
       },
       "PrepareRepoRootMobilityDestinationRequest": {
         "type": "object",
@@ -6291,6 +6784,148 @@
           "running",
           "queued"
         ]
+      },
+      "ProposedPlanDecisionState": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected",
+          "superseded"
+        ]
+      },
+      "ProposedPlanDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ProposedPlanSummary"
+          },
+          {
+            "type": "object",
+            "required": [
+              "bodyMarkdown"
+            ],
+            "properties": {
+              "bodyMarkdown": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "ProposedPlanDocumentResponse": {
+        "type": "object",
+        "required": [
+          "markdown",
+          "snapshotHash"
+        ],
+        "properties": {
+          "markdown": {
+            "type": "string"
+          },
+          "projectionHash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "projectionPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "snapshotHash": {
+            "type": "string"
+          }
+        }
+      },
+      "ProposedPlanNativeResolutionState": {
+        "type": "string",
+        "enum": [
+          "none",
+          "pending_link",
+          "pending_resolution",
+          "finalized",
+          "failed"
+        ]
+      },
+      "ProposedPlanSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "workspaceId",
+          "sessionId",
+          "itemId",
+          "title",
+          "snapshotHash",
+          "decisionState",
+          "nativeResolutionState",
+          "decisionVersion",
+          "sourceAgentKind",
+          "sourceKind",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "decisionState": {
+            "$ref": "#/components/schemas/ProposedPlanDecisionState"
+          },
+          "decisionVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "id": {
+            "type": "string"
+          },
+          "itemId": {
+            "type": "string"
+          },
+          "nativeResolutionState": {
+            "$ref": "#/components/schemas/ProposedPlanNativeResolutionState"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "snapshotHash": {
+            "type": "string"
+          },
+          "sourceAgentKind": {
+            "type": "string"
+          },
+          "sourceItemId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceKind": {
+            "type": "string"
+          },
+          "sourceToolCallId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceTurnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
       },
       "ProviderConfig": {
         "type": "object",
@@ -8034,6 +8669,7 @@
           "reasoning",
           "tool_invocation",
           "plan",
+          "proposed_plan",
           "error_item"
         ]
       },

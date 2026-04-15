@@ -4,6 +4,7 @@ use std::path::{Component, Path, PathBuf};
 use serde::Deserialize;
 use tokio::sync::broadcast;
 
+use crate::plans::service::PlanEventContext;
 use crate::sessions::model::{SessionBackgroundWorkState, SessionEventRecord};
 use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::{
@@ -229,6 +230,28 @@ impl SessionEventSink {
 
     pub fn current_turn_id(&self) -> Option<String> {
         self.current_turn_id.clone()
+    }
+
+    pub fn plan_event_context(&self) -> PlanEventContext {
+        PlanEventContext {
+            session_id: self.session_id.clone(),
+            source_agent_kind: self.source_agent_kind.clone(),
+            turn_id: self.current_turn_id.clone(),
+            next_seq: self.next_seq,
+        }
+    }
+
+    pub fn close_open_transcript_items(&mut self) {
+        self.close_open_items();
+    }
+
+    pub fn publish_persisted_events(&mut self, envelopes: Vec<SessionEventEnvelope>) {
+        for envelope in envelopes {
+            if envelope.seq >= self.next_seq {
+                self.next_seq = envelope.seq + 1;
+            }
+            let _ = self.event_tx.send(envelope);
+        }
     }
 
     pub fn debug_snapshot(&self) -> SessionEventSinkDebugSnapshot {

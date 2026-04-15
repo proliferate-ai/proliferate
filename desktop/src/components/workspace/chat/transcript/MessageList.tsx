@@ -1,6 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { AssistantMessage } from "./AssistantMessage";
 import { ClaudePlanCard } from "./ClaudePlanCard";
+import { ProposedPlanCard } from "./ProposedPlanCard";
 import { CopyMessageButton } from "./CopyMessageButton";
 import { SystemMessage } from "./SystemMessage";
 import { UserMessage } from "./UserMessage";
@@ -39,6 +48,7 @@ import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actio
 import { useMessageListScroll } from "@/hooks/chat/use-message-list-scroll";
 import { useOpenCoworkArtifact } from "@/hooks/cowork/use-open-cowork-artifact";
 import { useBrailleFillsweep } from "@/hooks/ui/use-braille-sweep";
+import { useProposedPlanActions } from "@/hooks/plans/use-proposed-plan-actions";
 import {
   collectTurnCoworkArtifactToolCalls,
 } from "@/lib/domain/chat/cowork-artifact-tool-presentation";
@@ -87,6 +97,12 @@ import type { SessionViewState } from "@/lib/domain/sessions/activity";
 
 const TURN_HORIZONTAL_PADDING = "px-7";
 const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
+const EMPTY_PROPOSED_PLAN_TOOL_CALL_IDS = new Set<string>();
+const ProposedPlanToolCallIdsContext = createContext<Set<string>>(
+  EMPTY_PROPOSED_PLAN_TOOL_CALL_IDS,
+);
+
+type ProposedPlanTranscriptItem = Extract<TranscriptItem, { kind: "proposed_plan" }>;
 
 /**
  * Minimum height of the trailing-status slot at the bottom of an in-progress
@@ -129,6 +145,10 @@ export function MessageList({
     () => buildSubagentBrailleColorMap(transcript),
     [transcript],
   );
+  const toolCallIdsWithProposedPlan = useMemo(
+    () => collectToolCallIdsWithProposedPlan(transcript),
+    [transcript.itemsById],
+  );
 
   const totalItems = transcript.turnOrder.reduce(
     (sum, tid) => sum + (transcript.turnsById[tid]?.itemOrder.length ?? 0),
@@ -162,97 +182,99 @@ export function MessageList({
 
   return (
     <div className="flex-1 min-h-0" data-telemetry-block>
-      <AutoHideScrollArea className="h-full" ref={scrollRef}>
-        <div ref={contentRef} className="max-w-3xl mx-auto pt-4 pb-10">
-          {transcript.turnOrder.map((turnId, turnIdx) => {
-            const turn = transcript.turnsById[turnId];
-            if (!turn) return null;
-            const isLatestTurn = turnId === latestTurnId;
-            const isLatestTurnInProgress =
-              isLatestTurn && !turn.completedAt;
-            const shouldHideEmptyLatestTurn =
-              visiblePendingPrompt !== null
-              && isLatestTurnInProgress
-              && !latestTurnHasAssistantRenderableContent;
-            if (shouldHideEmptyLatestTurn) {
-              return null;
-            }
-            const hasFileBadges = turn.fileBadges.length > 0;
-            const presentation = buildTurnPresentation(turn, transcript);
-            const tailAssistantProseRootId = findTailAssistantProseRootId(
-              presentation,
-              transcript,
-            );
-            const tailAssistantCopyContent = getAssistantProseContent(
-              tailAssistantProseRootId,
-              transcript,
-            );
-            const shouldReserveTurnAssistantActionSlot =
-              isLatestTurnInProgress
-              && !!tailAssistantCopyContent
-              && lastTopLevelItemIsAssistantProseWithText(turn, transcript);
-
-            // Hide the trailing indicator only while the assistant prose item
-            // itself is actively streaming. If Codex closes the prose item but
-            // keeps working internally, the trailing indicator should return.
-            const trailingStatus =
-              shouldAllowTurnTrailingStatus({
-                turn,
+      <ProposedPlanToolCallIdsContext.Provider value={toolCallIdsWithProposedPlan}>
+        <AutoHideScrollArea className="h-full" ref={scrollRef}>
+          <div ref={contentRef} className="max-w-3xl mx-auto pt-4 pb-10">
+            {transcript.turnOrder.map((turnId, turnIdx) => {
+              const turn = transcript.turnsById[turnId];
+              if (!turn) return null;
+              const isLatestTurn = turnId === latestTurnId;
+              const isLatestTurnInProgress =
+                isLatestTurn && !turn.completedAt;
+              const shouldHideEmptyLatestTurn =
+                visiblePendingPrompt !== null
+                && isLatestTurnInProgress
+                && !latestTurnHasAssistantRenderableContent;
+              if (shouldHideEmptyLatestTurn) {
+                return null;
+              }
+              const hasFileBadges = turn.fileBadges.length > 0;
+              const presentation = buildTurnPresentation(turn, transcript);
+              const tailAssistantProseRootId = findTailAssistantProseRootId(
+                presentation,
                 transcript,
-                isLatestTurnInProgress,
-              })
-                ? resolveTurnTrailingStatus(
-                    turn.startedAt,
-                    sessionViewState,
-                    latestTransientStatusText(turn, transcript),
-                  )
-                : null;
+              );
+              const tailAssistantCopyContent = getAssistantProseContent(
+                tailAssistantProseRootId,
+                transcript,
+              );
+              const shouldReserveTurnAssistantActionSlot =
+                isLatestTurnInProgress
+                && !!tailAssistantCopyContent
+                && lastTopLevelItemIsAssistantProseWithText(turn, transcript);
 
-            return (
-              <TurnShell key={turnId} isFirst={turnIdx === 0}>
-                <div className={`flex flex-col gap-2 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
-                  <TurnItemSequence
-                    turnId={turnId}
-                    turn={turn}
-                    transcript={transcript}
-                    isTurnComplete={!!turn.completedAt}
-                    presentation={presentation}
-                    tailAssistantProseRootId={tailAssistantProseRootId}
-                    workspaceId={selectedWorkspaceId}
-                    onOpenArtifact={openArtifact}
-                    subagentBrailleColors={subagentBrailleColors}
-                  />
-                  {turn.completedAt && hasFileBadges && (
-                    <TurnDiffPanel
+              // Hide the trailing indicator only while the assistant prose item
+              // itself is actively streaming. If Codex closes the prose item but
+              // keeps working internally, the trailing indicator should return.
+              const trailingStatus =
+                shouldAllowTurnTrailingStatus({
+                  turn,
+                  transcript,
+                  isLatestTurnInProgress,
+                })
+                  ? resolveTurnTrailingStatus(
+                      turn.startedAt,
+                      sessionViewState,
+                      latestTransientStatusText(turn, transcript),
+                    )
+                  : null;
+
+              return (
+                <TurnShell key={turnId} isFirst={turnIdx === 0}>
+                  <div className={`flex flex-col gap-2 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
+                    <TurnItemSequence
+                      turnId={turnId}
                       turn={turn}
                       transcript={transcript}
-                      onOpenFile={(filePath) => void openFileDiff(filePath)}
+                      isTurnComplete={!!turn.completedAt}
+                      presentation={presentation}
+                      tailAssistantProseRootId={tailAssistantProseRootId}
+                      workspaceId={selectedWorkspaceId}
+                      onOpenArtifact={openArtifact}
+                      subagentBrailleColors={subagentBrailleColors}
                     />
-                  )}
-                  <TurnAssistantActionRow
-                    content={tailAssistantCopyContent}
-                    showCopyButton={!!turn.completedAt}
-                    reserveSlot={shouldReserveTurnAssistantActionSlot}
-                  />
-                  {trailingStatus && (
-                    <div className={TRAILING_STATUS_MIN_HEIGHT}>{trailingStatus}</div>
+                    {turn.completedAt && hasFileBadges && (
+                      <TurnDiffPanel
+                        turn={turn}
+                        transcript={transcript}
+                        onOpenFile={(filePath) => void openFileDiff(filePath)}
+                      />
+                    )}
+                    <TurnAssistantActionRow
+                      content={tailAssistantCopyContent}
+                      showCopyButton={!!turn.completedAt}
+                      reserveSlot={shouldReserveTurnAssistantActionSlot}
+                    />
+                    {trailingStatus && (
+                      <div className={TRAILING_STATUS_MIN_HEIGHT}>{trailingStatus}</div>
+                    )}
+                  </div>
+                </TurnShell>
+              );
+            })}
+            {visiblePendingPrompt && (
+              <TurnShell key="pending-prompt" isFirst={transcript.turnOrder.length === 0}>
+                <div className="flex flex-col gap-2">
+                  <UserMessage content={visiblePendingPrompt.text} />
+                  {pendingPromptTrailingStatus && (
+                    <div className={TRAILING_STATUS_MIN_HEIGHT}>{pendingPromptTrailingStatus}</div>
                   )}
                 </div>
               </TurnShell>
-            );
-          })}
-          {visiblePendingPrompt && (
-            <TurnShell key="pending-prompt" isFirst={transcript.turnOrder.length === 0}>
-              <div className="flex flex-col gap-2">
-                <UserMessage content={visiblePendingPrompt.text} />
-                {pendingPromptTrailingStatus && (
-                  <div className={TRAILING_STATUS_MIN_HEIGHT}>{pendingPromptTrailingStatus}</div>
-                )}
-              </div>
-            </TurnShell>
-          )}
-        </div>
-      </AutoHideScrollArea>
+            )}
+          </div>
+        </AutoHideScrollArea>
+      </ProposedPlanToolCallIdsContext.Provider>
     </div>
   );
 }
@@ -332,6 +354,28 @@ function getAssistantProseContent(
   }
   const item = transcript.itemsById[itemId];
   return item?.kind === "assistant_prose" && item.text ? item.text : null;
+}
+
+function collectToolCallIdsWithProposedPlan(
+  transcript: TranscriptState,
+): Set<string> {
+  const toolCallIds = new Set<string>();
+  for (const item of Object.values(transcript.itemsById)) {
+    if (item.kind === "proposed_plan" && item.plan.sourceToolCallId) {
+      toolCallIds.add(item.plan.sourceToolCallId);
+    }
+  }
+  return toolCallIds;
+}
+
+function hasProposedPlanForToolCall(
+  toolCallIdsWithProposedPlan: Set<string>,
+  toolCallId: string | null,
+): boolean {
+  if (!toolCallId) {
+    return false;
+  }
+  return toolCallIdsWithProposedPlan.has(toolCallId);
 }
 
 function TurnItemSequence({
@@ -528,6 +572,8 @@ function TranscriptItemBlock({
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
 }) {
+  const toolCallIdsWithProposedPlan = useContext(ProposedPlanToolCallIdsContext);
+
   switch (item.kind) {
     case "user_message":
       return <UserMessage content={item.text} showCopyButton />;
@@ -558,6 +604,9 @@ function TranscriptItemBlock({
 
     case "tool_call": {
       if (isClaudeExitPlanModeCall(item)) {
+        if (hasProposedPlanForToolCall(toolCallIdsWithProposedPlan, item.toolCallId)) {
+          return null;
+        }
         const body = extractClaudePlanBody(item) ?? "";
         return (
           <div className="flex justify-start relative">
@@ -588,6 +637,10 @@ function TranscriptItemBlock({
       // TodoTrackerPanel above the composer, not inline in the transcript.
       return null;
 
+    case "proposed_plan": {
+      return <ProposedPlanItemBlock item={item} />;
+    }
+
     case "error":
       return (
         <p className="text-xs text-destructive py-1">{item.message}</p>
@@ -601,6 +654,53 @@ function TranscriptItemBlock({
     default:
       return null;
   }
+}
+
+function ProposedPlanItemBlock({ item }: { item: ProposedPlanTranscriptItem }) {
+  const {
+    approvePlan,
+    rejectPlan,
+    implementPlanHere,
+    isApprovingPlan,
+    isRejectingPlan,
+    isMaterializingPlanDocument,
+  } = useProposedPlanActions();
+  const decision = item.decision;
+
+  return (
+    <div className="flex justify-start relative">
+      <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
+        <ProposedPlanCard
+          title={item.plan.title}
+          content={item.plan.bodyMarkdown}
+          isStreaming={item.status === "in_progress"}
+          decisionState={decision?.decisionState ?? null}
+          nativeResolutionState={decision?.nativeResolutionState ?? null}
+          decisionVersion={decision?.decisionVersion ?? null}
+          errorMessage={decision?.errorMessage ?? null}
+          onApprove={
+            decision
+              ? () => approvePlan(item.plan.planId, decision.decisionVersion)
+              : undefined
+          }
+          onReject={
+            decision
+              ? () => rejectPlan(item.plan.planId, decision.decisionVersion)
+              : undefined
+          }
+          onImplementHere={() => {
+            implementPlanHere({
+              planId: item.plan.planId,
+              sessionId: item.plan.sourceSessionId,
+            });
+          }}
+          isApproving={isApprovingPlan}
+          isRejecting={isRejectingPlan}
+          isImplementingHere={isMaterializingPlanDocument}
+        />
+      </div>
+    </div>
+  );
 }
 
 function TranscriptTreeNode({

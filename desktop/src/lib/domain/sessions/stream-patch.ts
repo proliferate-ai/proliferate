@@ -96,6 +96,7 @@ export function buildSessionStreamPatch({
             toolCallId: event.source.toolCallId ?? null,
             toolKind: event.source.toolKind ?? null,
             toolStatus: event.source.toolStatus ?? null,
+            linkedPlanId: event.source.linkedPlanId ?? null,
           },
           payload: summarizeInteractionPayload(event.payload),
         },

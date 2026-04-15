@@ -5,6 +5,7 @@ import { FilesClient } from "./files.js";
 import { GitClient } from "./git.js";
 import { ModelRegistriesClient } from "./model-registries.js";
 import { MobilityClient } from "./mobility.js";
+import { PlansClient } from "./plans.js";
 import { ProcessesClient } from "./processes.js";
 import { ProvidersClient } from "./providers.js";
 import { PullRequestsClient } from "./pull-requests.js";
@@ -137,6 +138,7 @@ export class AnyHarnessClient {
   readonly agents: AgentsClient;
   readonly modelRegistries: ModelRegistriesClient;
   readonly mobility: MobilityClient;
+  readonly plans: PlansClient;
   readonly providers: ProvidersClient;
   readonly repoRoots: RepoRootsClient;
   readonly workspaces: WorkspacesClient;
@@ -154,6 +156,7 @@ export class AnyHarnessClient {
     this.agents = new AgentsClient(transport);
     this.modelRegistries = new ModelRegistriesClient(transport);
     this.mobility = new MobilityClient(transport);
+    this.plans = new PlansClient(transport);
     this.providers = new ProvidersClient(transport);
     this.repoRoots = new RepoRootsClient(transport);
     this.workspaces = new WorkspacesClient(transport);

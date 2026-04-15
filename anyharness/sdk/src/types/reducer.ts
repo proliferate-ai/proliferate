@@ -4,6 +4,8 @@ import type {
   PermissionInteractionContext,
   PlanEntry,
   PermissionInteractionOption,
+  ProposedPlanContentPart,
+  ProposedPlanDecisionContentPart,
   SessionEventEnvelope,
   StopReason,
   TranscriptItemStatus,
@@ -63,6 +65,7 @@ export type TranscriptItem =
   | ThoughtItem
   | ToolCallItem
   | PlanItem
+  | ProposedPlanItem
   | ErrorItem
   | UnknownItem;
 
@@ -117,6 +120,12 @@ export interface PlanItem extends TranscriptBaseItem {
   entries: PlanEntry[];
 }
 
+export interface ProposedPlanItem extends TranscriptBaseItem {
+  kind: "proposed_plan";
+  plan: ProposedPlanContentPart;
+  decision: ProposedPlanDecisionContentPart | null;
+}
+
 export type CanonicalPlanSourceKind = "structured_plan" | "mode_switch";
 
 export interface CanonicalPlan {
@@ -150,6 +159,7 @@ interface PendingInteractionBase {
   toolCallId: string | null;
   toolKind: string | null;
   toolStatus: string | null;
+  linkedPlanId: string | null;
   title: string;
   description: string | null;
 }

@@ -23,7 +23,7 @@ export const TODOS_LONG: PlanEntry[] = [
   { content: "Delete PlanBlock, InlinePermissionPrompt embeddedInComposer, merge booleans", status: "completed" },
   { content: "Create TodoTrackerPanel with fade mask and line-through", status: "in_progress" },
   { content: "Create ApprovalCard covering execute, edit, switch_mode variants", status: "pending" },
-  { content: "Move Claude plan body into the transcript as ClaudePlanCard", status: "pending" },
+  { content: "Move presented plan bodies into first-class ProposedPlanCard items", status: "pending" },
   { content: "Intercept Claude ExitPlanMode in MessageList dispatch", status: "pending" },
   { content: "Update ChatView single-slot precedence (approval > todos > workspace > cloud)", status: "pending" },
   { content: "Add fade-mask CSS utility to index.css", status: "pending" },

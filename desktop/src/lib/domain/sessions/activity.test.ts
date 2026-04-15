@@ -31,6 +31,35 @@ describe("session activity", () => {
     })).toBe("needs_input");
   });
 
+  it("does not treat plan-owned native permissions as session activity", () => {
+    expect(resolveSessionViewState({
+      status: "running",
+      executionSummary: {
+        phase: "awaiting_interaction",
+        hasLiveHandle: true,
+        pendingInteractions: [{
+          requestId: "request-1",
+          kind: "permission",
+          title: "Ready to code?",
+          description: null,
+          source: {
+            toolCallId: "tool-1",
+            toolKind: "switch_mode",
+            toolStatus: null,
+            linkedPlanId: "plan-1",
+          },
+          payload: { type: "permission", options: [] },
+        }],
+        updatedAt: "2026-04-06T00:00:00Z",
+      },
+      streamConnectionState: "open",
+      transcript: {
+        isStreaming: false,
+        pendingInteractions: [{ requestId: "request-1", linkedPlanId: "plan-1" }],
+      },
+    })).toBe("idle");
+  });
+
   it("aggregates workspace activity using the expected precedence", () => {
     const states = collectWorkspaceSessionViewStates({
       "session-1": {

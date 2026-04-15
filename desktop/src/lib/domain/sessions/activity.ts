@@ -20,8 +20,16 @@ interface SessionActivitySnapshot {
   streamConnectionState?: StreamConnectionState;
   transcript: {
     isStreaming: boolean;
-    pendingInteractions: unknown[];
+    pendingInteractions: PendingInteractionLike[];
   };
+}
+
+interface PendingInteractionLike {
+  requestId?: string;
+  linkedPlanId?: string | null;
+  source?: {
+    linkedPlanId?: string | null;
+  } | null;
 }
 
 export function resolveStatusFromExecutionSummary(
@@ -60,17 +68,27 @@ export function resolveSessionStatus(
   if (reconciledStatus === "closed" || reconciledStatus === "errored") {
     return reconciledStatus;
   }
+  const hasActionablePending = hasActionablePendingInteractions(input);
+  const effectivelyStreaming = isSessionEffectivelyStreaming({
+    status: reconciledStatus ?? null,
+    executionSummary: input.executionSummary,
+    streamConnectionState: input.streamConnectionState,
+    transcript: input.transcript,
+  });
+
+  if (
+    input.executionSummary?.phase === "awaiting_interaction"
+    && !hasActionablePending
+    && !effectivelyStreaming
+  ) {
+    return "idle";
+  }
 
   if (
     reconciledStatus === "starting"
     || reconciledStatus === "running"
-    || isSessionEffectivelyStreaming({
-      status: reconciledStatus ?? null,
-      executionSummary: input.executionSummary,
-      streamConnectionState: input.streamConnectionState,
-      transcript: input.transcript,
-    })
-    || input.transcript.pendingInteractions.length > 0
+    || effectivelyStreaming
+    || hasActionablePending
   ) {
     return reconciledStatus === "starting" ? "starting" : "running";
   }
@@ -105,6 +123,13 @@ export function resolveSessionExecutionPhase(
     return null;
   }
 
+  if (
+    slot.executionSummary?.phase === "awaiting_interaction"
+    && !hasActionablePendingInteractions(slot)
+  ) {
+    return isSessionEffectivelyStreaming(slot) ? "running" : "idle";
+  }
+
   if (slot.executionSummary?.phase) {
     return slot.executionSummary.phase;
   }
@@ -115,7 +140,7 @@ export function resolveSessionExecutionPhase(
   if (slot.status === "errored") {
     return "errored";
   }
-  if (slot.transcript.pendingInteractions.length > 0) {
+  if (hasActionablePendingInteractions(slot)) {
     return "awaiting_interaction";
   }
   if (slot.status === "starting") {
@@ -183,6 +208,27 @@ export function isSessionSlotBusy(
 ): boolean {
   const viewState = resolveSessionViewState(slot);
   return viewState === "working" || viewState === "needs_input";
+}
+
+function hasActionablePendingInteractions(
+  slot: Pick<SessionActivitySnapshot, "executionSummary" | "transcript">,
+): boolean {
+  return pendingInteractionsForActivity(slot).some((interaction) =>
+    !isPlanOwnedPendingInteraction(interaction)
+  );
+}
+
+function pendingInteractionsForActivity(
+  slot: Pick<SessionActivitySnapshot, "executionSummary" | "transcript">,
+): PendingInteractionLike[] {
+  const summaryPending = slot.executionSummary?.pendingInteractions;
+  return summaryPending && summaryPending.length > 0
+    ? summaryPending
+    : slot.transcript.pendingInteractions;
+}
+
+function isPlanOwnedPendingInteraction(interaction: PendingInteractionLike): boolean {
+  return Boolean(interaction.linkedPlanId || interaction.source?.linkedPlanId);
 }
 
 export function sessionSlotBelongsToWorkspace(

@@ -884,6 +884,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_workspace_plans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_plan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["approve_plan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_plan_document"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}/handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["handoff_plan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reject_plan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/processes/run": {
         parameters: {
             query?: never;
@@ -1092,6 +1188,27 @@ export interface components {
             entries: components["schemas"]["PlanEntry"][];
             /** @enum {string} */
             type: "plan";
+        } | {
+            bodyMarkdown: string;
+            planId: string;
+            snapshotHash: string;
+            sourceItemId?: string | null;
+            sourceKind: string;
+            sourceSessionId: string;
+            sourceToolCallId?: string | null;
+            sourceTurnId?: string | null;
+            title: string;
+            /** @enum {string} */
+            type: "proposed_plan";
+        } | {
+            decisionState: components["schemas"]["ProposedPlanDecisionState"];
+            /** Format: int64 */
+            decisionVersion: number;
+            errorMessage?: string | null;
+            nativeResolutionState: components["schemas"]["ProposedPlanNativeResolutionState"];
+            planId: string;
+            /** @enum {string} */
+            type: "proposed_plan_decision";
         } | {
             text: string;
             /** @enum {string} */
@@ -1315,6 +1432,21 @@ export interface components {
             /** Format: int32 */
             includedFiles: number;
         };
+        HandoffPlanRequest: {
+            agentKind?: string | null;
+            instruction?: string | null;
+            modeId?: string | null;
+            modelId?: string | null;
+            targetSessionId?: string | null;
+        };
+        HandoffPlanResponse: {
+            handoffId: string;
+            planId: string;
+            promptStatus: components["schemas"]["PlanHandoffPromptStatus"];
+            session?: null | components["schemas"]["Session"];
+            sourceSessionId: string;
+            targetSessionId: string;
+        };
         HealthResponse: {
             runtimeHome: string;
             status: string;
@@ -1392,6 +1524,7 @@ export interface components {
             requestId: string;
         };
         InteractionSource: {
+            linkedPlanId?: string | null;
             sourceMetadata?: unknown;
             toolCallId?: string | null;
             toolKind?: string | null;
@@ -1405,6 +1538,9 @@ export interface components {
         };
         ItemStartedEvent: {
             item: components["schemas"]["TranscriptItemPayload"];
+        };
+        ListProposedPlansResponse: {
+            plans: components["schemas"]["ProposedPlanSummary"][];
         };
         LoginCommand: {
             args: string[];
@@ -1673,6 +1809,7 @@ export interface components {
             type: "mcp_elicitation";
         });
         PendingInteractionSource: {
+            linkedPlanId?: string | null;
             toolCallId?: string | null;
             toolKind?: string | null;
             toolStatus?: string | null;
@@ -1730,10 +1867,19 @@ export interface components {
             rawInput?: unknown;
             rawOutput?: unknown;
         };
+        PlanDecisionRequest: {
+            /** Format: int64 */
+            expectedDecisionVersion: number;
+        };
+        PlanDecisionResponse: {
+            plan: components["schemas"]["ProposedPlanDetail"];
+        };
         PlanEntry: {
             content: string;
             status: string;
         };
+        /** @enum {string} */
+        PlanHandoffPromptStatus: "queued" | "sent" | "failed";
         PrepareRepoRootMobilityDestinationRequest: {
             preferredWorkspaceName?: string | null;
             requestedBaseSha: string;
@@ -1767,6 +1913,38 @@ export interface components {
         };
         /** @enum {string} */
         PromptSessionStatus: "running" | "queued";
+        /** @enum {string} */
+        ProposedPlanDecisionState: "pending" | "approved" | "rejected" | "superseded";
+        ProposedPlanDetail: components["schemas"]["ProposedPlanSummary"] & {
+            bodyMarkdown: string;
+        };
+        ProposedPlanDocumentResponse: {
+            markdown: string;
+            projectionHash?: string | null;
+            projectionPath?: string | null;
+            snapshotHash: string;
+        };
+        /** @enum {string} */
+        ProposedPlanNativeResolutionState: "none" | "pending_link" | "pending_resolution" | "finalized" | "failed";
+        ProposedPlanSummary: {
+            createdAt: string;
+            decisionState: components["schemas"]["ProposedPlanDecisionState"];
+            /** Format: int64 */
+            decisionVersion: number;
+            id: string;
+            itemId: string;
+            nativeResolutionState: components["schemas"]["ProposedPlanNativeResolutionState"];
+            sessionId: string;
+            snapshotHash: string;
+            sourceAgentKind: string;
+            sourceItemId?: string | null;
+            sourceKind: string;
+            sourceToolCallId?: string | null;
+            sourceTurnId?: string | null;
+            title: string;
+            updatedAt: string;
+            workspaceId: string;
+        };
         /**
          * @description Provider-level configuration metadata describing which models AnyHarness
          *     intentionally exposes for this agent.
@@ -2166,7 +2344,7 @@ export interface components {
             title?: string | null;
         };
         /** @enum {string} */
-        TranscriptItemKind: "user_message" | "assistant_message" | "reasoning" | "tool_invocation" | "plan" | "error_item";
+        TranscriptItemKind: "user_message" | "assistant_message" | "reasoning" | "tool_invocation" | "plan" | "proposed_plan" | "error_item";
         TranscriptItemPayload: {
             contentParts?: components["schemas"]["ContentPart"][];
             isTransient?: boolean;
@@ -4363,6 +4541,175 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_workspace_plans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace proposed plans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListProposedPlansResponse"];
+                };
+            };
+        };
+    };
+    get_plan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+                /** @description Plan ID */
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Proposed plan detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposedPlanDetail"];
+                };
+            };
+            /** @description Plan not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    approve_plan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+                /** @description Plan ID */
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Approved proposed plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDecisionResponse"];
+                };
+            };
+        };
+    };
+    get_plan_document: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+                /** @description Plan ID */
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Proposed plan markdown document */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposedPlanDocumentResponse"];
+                };
+            };
+        };
+    };
+    handoff_plan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+                /** @description Plan ID */
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandoffPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Handed off proposed plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoffPlanResponse"];
+                };
+            };
+        };
+    };
+    reject_plan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+                /** @description Plan ID */
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Rejected proposed plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDecisionResponse"];
                 };
             };
         };

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ClaudePlanCard } from "@/components/workspace/chat/transcript/ClaudePlanCard";
+import { ProposedPlanCard } from "@/components/workspace/chat/transcript/ProposedPlanCard";
 import { AssistantMessage } from "@/components/workspace/chat/transcript/AssistantMessage";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
 import { ToolCallBlock } from "@/components/workspace/chat/tool-calls/ToolCallBlock";
@@ -14,10 +14,29 @@ interface PlaygroundTranscriptProps {
 
 export function PlaygroundTranscript({ scenario }: PlaygroundTranscriptProps) {
   if (scenario === "claude-plan-short") {
-    return <ClaudePlanCard content={CLAUDE_PLAN_SHORT} isStreaming={false} />;
+    return (
+      <ProposedPlanCard
+        content={CLAUDE_PLAN_SHORT}
+        isStreaming={false}
+        decisionState="pending"
+        nativeResolutionState="none"
+        decisionVersion={1}
+        onApprove={noop}
+        onReject={noop}
+      />
+    );
   }
   if (scenario === "claude-plan-long") {
-    return <ClaudePlanCard content={CLAUDE_PLAN_LONG} isStreaming={false} />;
+    return (
+      <ProposedPlanCard
+        content={CLAUDE_PLAN_LONG}
+        isStreaming={false}
+        decisionState="approved"
+        nativeResolutionState="finalized"
+        decisionVersion={2}
+        onImplementHere={noop}
+      />
+    );
   }
   if (scenario === "status-background") {
     return (
@@ -144,6 +163,8 @@ export function PlaygroundTranscript({ scenario }: PlaygroundTranscriptProps) {
     </div>
   );
 }
+
+function noop() {}
 
 function TranscriptPreviewShell({ children }: { children: ReactNode }) {
   return <div className="flex flex-col gap-3">{children}</div>;

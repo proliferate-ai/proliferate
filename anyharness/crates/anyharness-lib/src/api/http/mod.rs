@@ -10,6 +10,7 @@ pub mod hosting;
 pub mod latency;
 pub mod mobility;
 pub mod model_registries;
+pub mod plans;
 pub mod processes;
 pub mod provider_configs;
 pub mod repo_roots;

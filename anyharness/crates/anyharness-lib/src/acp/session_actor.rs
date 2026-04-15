@@ -18,6 +18,8 @@ use super::permission_broker::{
 use super::runtime_client::RuntimeClient;
 use crate::agents::model::{AgentKind, ResolvedAgent};
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::plans::model::{NewPlan, PlanRecord};
+use crate::plans::service::{PlanCreateError, PlanDecisionError, PlanService};
 use crate::sessions::live_config::{
     build_live_config_snapshot, normalized_key_rank, option_matches_key, snapshot_from_record,
     snapshot_to_record, LegacyModeOption, LegacyModeState, NormalizedControlKind,
@@ -32,9 +34,10 @@ use anyharness_contract::v1::{
     CurrentModeUpdatePayload, InteractionKind, InteractionOutcome, McpElicitationSubmittedField,
     NormalizedSessionControl, PendingInteractionSummary, PendingPromptAddedPayload,
     PendingPromptRemovalReason, PendingPromptRemovedPayload, PendingPromptUpdatedPayload,
-    SessionEndReason, SessionEventEnvelope, SessionExecutionPhase, SessionExecutionSummary,
-    SessionInfoUpdatePayload, SessionLiveConfigSnapshot, SessionStateUpdatePayload, StopReason,
-    UsageUpdatePayload, UserInputSubmittedAnswer,
+    ProposedPlanDecisionState, ProposedPlanNativeResolutionState, SessionEndReason,
+    SessionEventEnvelope, SessionExecutionPhase, SessionExecutionSummary, SessionInfoUpdatePayload,
+    SessionLiveConfigSnapshot, SessionStateUpdatePayload, StopReason, UsageUpdatePayload,
+    UserInputSubmittedAnswer,
 };
 
 #[derive(Debug)]
@@ -161,6 +164,12 @@ pub enum SessionCommand {
         request_id: String,
         resolution: InteractionResolution,
         respond_to: oneshot::Sender<Result<(), ResolveInteractionCommandError>>,
+    },
+    ApplyPlanDecision {
+        plan_id: String,
+        expected_version: i64,
+        decision: ProposedPlanDecisionState,
+        respond_to: oneshot::Sender<Result<PlanRecord, PlanDecisionError>>,
     },
     Cancel,
     Dismiss {
@@ -532,6 +541,7 @@ pub struct SessionActorConfig {
     pub workspace_env: std::collections::BTreeMap<String, String>,
     pub session_launch_env: std::collections::BTreeMap<String, String>,
     pub interaction_broker: Arc<InteractionBroker>,
+    pub plan_service: Arc<PlanService>,
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,
     pub session_store: SessionStore,
     pub mcp_servers: Vec<SessionMcpServer>,
@@ -1043,6 +1053,7 @@ async fn run_actor(
         config.interaction_broker.clone(),
         event_sink.clone(),
         handle.clone(),
+        config.plan_service.clone(),
     );
 
     let (conn, io_task) =
@@ -1589,7 +1600,9 @@ async fn run_actor(
                                                 &mut background_work_registry,
                                                 &store,
                                                 &session_id,
+                                                &workspace_id,
                                                 &source_agent_kind,
+                                                config.plan_service.clone(),
                                                 &mut persisted_config_state,
                                                 &mut startup_state,
                                             ).await;
@@ -1638,6 +1651,20 @@ async fn run_actor(
                                                     &session_id,
                                                     request_id,
                                                     resolution,
+                                                )
+                                                .await;
+                                                let _ = respond_to.send(result);
+                                            }
+                                            Some(SessionCommand::ApplyPlanDecision { plan_id, expected_version, decision, respond_to }) => {
+                                                let result = handle_apply_plan_decision(
+                                                    &handle,
+                                                    &event_sink,
+                                                    &config.interaction_broker,
+                                                    config.plan_service.as_ref(),
+                                                    &session_id,
+                                                    &plan_id,
+                                                    expected_version,
+                                                    decision,
                                                 )
                                                 .await;
                                                 let _ = respond_to.send(result);
@@ -1735,7 +1762,9 @@ async fn run_actor(
                                             &mut background_work_registry,
                                             &store,
                                             &session_id,
+                                            &workspace_id,
                                             &source_agent_kind,
+                                            config.plan_service.clone(),
                                             &mut persisted_config_state,
                                             &mut startup_state,
                                         ).await;
@@ -1913,6 +1942,20 @@ async fn run_actor(
                         .await;
                         let _ = respond_to.send(result);
                     }
+                    Some(SessionCommand::ApplyPlanDecision { plan_id, expected_version, decision, respond_to }) => {
+                        let result = handle_apply_plan_decision(
+                            &handle,
+                            &event_sink,
+                            &config.interaction_broker,
+                            config.plan_service.as_ref(),
+                            &session_id,
+                            &plan_id,
+                            expected_version,
+                            decision,
+                        )
+                        .await;
+                        let _ = respond_to.send(result);
+                    }
                     Some(SessionCommand::SetConfigOption {
                         config_id,
                         value,
@@ -1984,7 +2027,9 @@ async fn run_actor(
                         &mut background_work_registry,
                         &store,
                         &session_id,
+                        &workspace_id,
                         &source_agent_kind,
+                        config.plan_service.clone(),
                         &mut persisted_config_state,
                         &mut startup_state,
                     ).await;
@@ -2143,6 +2188,111 @@ async fn handle_resolve_interaction(
     }
     handle.remove_pending_interaction(&request_id).await;
     Ok(())
+}
+
+async fn handle_apply_plan_decision(
+    handle: &Arc<LiveSessionHandle>,
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    interaction_broker: &Arc<InteractionBroker>,
+    plan_service: &PlanService,
+    session_id: &str,
+    plan_id: &str,
+    expected_version: i64,
+    decision: ProposedPlanDecisionState,
+) -> Result<PlanRecord, PlanDecisionError> {
+    let (mut plan, native_resolution) = {
+        let mut sink = event_sink.lock().await;
+        let context = sink.plan_event_context();
+        let (plan, envelopes) = plan_service.update_decision_with_context(
+            plan_id,
+            expected_version,
+            decision.clone(),
+            context,
+        )?;
+        sink.publish_persisted_events(envelopes);
+        let native_resolution = plan_decision_native_resolution(plan_service, &plan.id, &decision);
+        (plan, native_resolution)
+    };
+
+    if let Some((request_id, resolution)) = native_resolution {
+        let resolution_result = handle_resolve_interaction(
+            handle,
+            event_sink,
+            interaction_broker,
+            session_id,
+            request_id.clone(),
+            resolution,
+        )
+        .await;
+        let next_native_state = if resolution_result.is_ok() {
+            ProposedPlanNativeResolutionState::Finalized
+        } else {
+            if let Err(error) = &resolution_result {
+                tracing::warn!(
+                    session_id = %session_id,
+                    request_id = %request_id,
+                    error = ?error,
+                    "failed to resolve native interaction for proposed plan decision"
+                );
+            }
+            ProposedPlanNativeResolutionState::Failed
+        };
+        let error_message = resolution_result
+            .err()
+            .map(|error| format!("Failed to resolve native interaction: {error:?}"));
+        let mut sink = event_sink.lock().await;
+        let context = sink.plan_event_context();
+        let (updated, envelopes) = plan_service.update_native_resolution_with_context(
+            &plan.id,
+            next_native_state,
+            context,
+            error_message,
+        )?;
+        sink.publish_persisted_events(envelopes);
+        plan = updated;
+    }
+
+    Ok(plan)
+}
+
+fn plan_decision_native_resolution(
+    plan_service: &PlanService,
+    plan_id: &str,
+    decision: &ProposedPlanDecisionState,
+) -> Option<(String, InteractionResolution)> {
+    let link = plan_service
+        .store()
+        .find_link_by_plan(plan_id)
+        .ok()
+        .flatten()?;
+    let mappings: serde_json::Value = serde_json::from_str(&link.option_mappings_json).ok()?;
+
+    match decision {
+        // Product approval means "accept this plan document", not "select the
+        // agent's native implementation option." Dismiss the parked native
+        // permission so the broker and pending-interaction state do not leak;
+        // implementation remains a separate explicit action.
+        ProposedPlanDecisionState::Approved => {
+            Some((link.request_id, InteractionResolution::Dismissed))
+        }
+        ProposedPlanDecisionState::Rejected => {
+            let option_id = mappings
+                .get("reject")
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|option_id| !option_id.is_empty());
+            match option_id {
+                Some(option_id) => Some((
+                    link.request_id,
+                    InteractionResolution::Selected {
+                        option_id: option_id.to_string(),
+                    },
+                )),
+                None => Some((link.request_id, InteractionResolution::Dismissed)),
+            }
+        }
+        _ => None,
+    }
 }
 
 async fn resolve_pending_interactions(
@@ -2438,7 +2588,9 @@ async fn handle_notification(
     background_work_registry: &mut BackgroundWorkRegistry,
     session_store: &SessionStore,
     session_id: &str,
+    workspace_id: &str,
     source_agent_kind: &str,
+    plan_service: Arc<PlanService>,
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,
 ) {
@@ -2450,7 +2602,9 @@ async fn handle_notification(
         background_work_registry,
         session_store,
         session_id,
+        workspace_id,
         source_agent_kind,
+        plan_service,
         persisted_config_state,
         startup_state,
     )
@@ -2464,7 +2618,9 @@ async fn handle_notification_with_resume_replay_filter(
     background_work_registry: &mut BackgroundWorkRegistry,
     session_store: &SessionStore,
     session_id: &str,
+    workspace_id: &str,
     source_agent_kind: &str,
+    plan_service: Arc<PlanService>,
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,
 ) {
@@ -2500,7 +2656,9 @@ async fn handle_notification_with_resume_replay_filter(
         background_work_registry,
         session_store,
         session_id,
+        workspace_id,
         source_agent_kind,
+        plan_service,
         persisted_config_state,
         startup_state,
     )
@@ -2513,19 +2671,34 @@ async fn normalize_notification(
     background_work_registry: &mut BackgroundWorkRegistry,
     session_store: &SessionStore,
     session_id: &str,
+    workspace_id: &str,
     source_agent_kind: &str,
+    plan_service: Arc<PlanService>,
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,
 ) {
     use acp::SessionUpdate::*;
     match &notif.update {
         AgentMessageChunk(chunk) => {
-            let mut sink = event_sink.lock().await;
-            sink.agent_message_chunk(AcpChunkPayload {
+            let payload = AcpChunkPayload {
                 content: serialize_content_block(&chunk.content),
                 meta: serialize_meta(chunk.meta.as_ref()),
                 message_id: chunk.message_id.clone(),
-            });
+            };
+            if maybe_ingest_codex_completed_plan(
+                event_sink,
+                plan_service.as_ref(),
+                session_id,
+                workspace_id,
+                source_agent_kind,
+                &payload,
+            )
+            .await
+            {
+                return;
+            }
+            let mut sink = event_sink.lock().await;
+            sink.agent_message_chunk(payload);
         }
         AgentThoughtChunk(chunk) => {
             let mut sink = event_sink.lock().await;
@@ -2573,8 +2746,18 @@ async fn normalize_notification(
                 sink.current_turn_id()
             };
             background_work_registry
-                .observe_tool_payload(turn_id, &payload)
+                .observe_tool_payload(turn_id.clone(), &payload)
                 .await;
+            maybe_ingest_claude_exit_plan(
+                event_sink,
+                plan_service.as_ref(),
+                session_id,
+                workspace_id,
+                source_agent_kind,
+                turn_id,
+                &payload,
+            )
+            .await;
         }
         ToolCallUpdate(tcu) => {
             let payload = AcpToolPayload {
@@ -2620,8 +2803,18 @@ async fn normalize_notification(
                 sink.current_turn_id()
             };
             background_work_registry
-                .observe_tool_payload(turn_id, &payload)
+                .observe_tool_payload(turn_id.clone(), &payload)
                 .await;
+            maybe_ingest_claude_exit_plan(
+                event_sink,
+                plan_service.as_ref(),
+                session_id,
+                workspace_id,
+                source_agent_kind,
+                turn_id,
+                &payload,
+            )
+            .await;
         }
         Plan(plan) => {
             let entries = plan
@@ -2742,6 +2935,193 @@ async fn normalize_notification(
             tracing::debug!("unrecognized ACP SessionUpdate variant: {other:?}");
         }
     }
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProposedPlanChunkAnyHarnessMeta {
+    transcript_event: Option<String>,
+    source_item_id: Option<String>,
+    title: Option<String>,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct ProposedPlanChunkMeta {
+    #[serde(default)]
+    anyharness: Option<ProposedPlanChunkAnyHarnessMeta>,
+    #[serde(rename = "claudeCode")]
+    claude_code: Option<ProposedPlanClaudeMeta>,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProposedPlanClaudeMeta {
+    tool_name: Option<String>,
+}
+
+async fn maybe_ingest_codex_completed_plan(
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    plan_service: &PlanService,
+    session_id: &str,
+    workspace_id: &str,
+    source_agent_kind: &str,
+    payload: &AcpChunkPayload,
+) -> bool {
+    let meta = parse_proposed_plan_meta(payload.meta.as_ref());
+    let Some(anyharness_meta) = meta.anyharness else {
+        return false;
+    };
+    if anyharness_meta.transcript_event.as_deref() == Some("proposed_plan_delta") {
+        // V1 treats Codex plan deltas as non-canonical preview evidence. A later
+        // version can surface these as a transient proposed-plan item.
+        return true;
+    }
+    if anyharness_meta.transcript_event.as_deref() != Some("proposed_plan_completed") {
+        return false;
+    }
+    let Some(body) = extract_text_from_value(&payload.content) else {
+        return true;
+    };
+    let title = anyharness_meta
+        .title
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| title_from_markdown(&body))
+        .unwrap_or_else(|| "Plan".to_string());
+    let source_item_id = anyharness_meta
+        .source_item_id
+        .or_else(|| payload.message_id.clone());
+    ingest_completed_plan(
+        event_sink,
+        plan_service,
+        NewPlan {
+            workspace_id: workspace_id.to_string(),
+            session_id: session_id.to_string(),
+            title,
+            body_markdown: body,
+            source_agent_kind: source_agent_kind.to_string(),
+            source_kind: "codex_turn_plan".to_string(),
+            source_turn_id: None,
+            source_item_id,
+            source_tool_call_id: None,
+        },
+    )
+    .await;
+    true
+}
+
+async fn maybe_ingest_claude_exit_plan(
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    plan_service: &PlanService,
+    session_id: &str,
+    workspace_id: &str,
+    source_agent_kind: &str,
+    turn_id: Option<String>,
+    payload: &AcpToolPayload,
+) {
+    if source_agent_kind != "claude" {
+        return;
+    }
+    let meta = parse_proposed_plan_meta(payload.meta.as_ref());
+    let is_exit_plan =
+        meta.claude_code.and_then(|meta| meta.tool_name).as_deref() == Some("ExitPlanMode");
+    if !is_exit_plan {
+        return;
+    }
+    let body = payload
+        .content
+        .as_ref()
+        .and_then(|values| extract_text_from_values(values))
+        .or_else(|| extract_string_field(payload.raw_input.as_ref(), "plan"))
+        .or_else(|| extract_string_field(payload.raw_output.as_ref(), "plan"));
+    let Some(body) = body else {
+        return;
+    };
+    let title = title_from_markdown(&body).unwrap_or_else(|| "Plan".to_string());
+    ingest_completed_plan(
+        event_sink,
+        plan_service,
+        NewPlan {
+            workspace_id: workspace_id.to_string(),
+            session_id: session_id.to_string(),
+            title,
+            body_markdown: body,
+            source_agent_kind: source_agent_kind.to_string(),
+            source_kind: "claude_exit_plan_mode".to_string(),
+            source_turn_id: turn_id,
+            source_item_id: Some(payload.tool_call_id.clone()),
+            source_tool_call_id: Some(payload.tool_call_id.clone()),
+        },
+    )
+    .await;
+}
+
+async fn ingest_completed_plan(
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    plan_service: &PlanService,
+    input: NewPlan,
+) {
+    let mut sink = event_sink.lock().await;
+    sink.close_open_transcript_items();
+    let context = sink.plan_event_context();
+    let input = NewPlan {
+        source_turn_id: input.source_turn_id.or_else(|| context.turn_id.clone()),
+        ..input
+    };
+    match plan_service.create_completed_plan(input, context) {
+        Ok(batch) => sink.publish_persisted_events(batch.envelopes),
+        Err(PlanCreateError::EmptyBody) => {}
+        Err(error) => {
+            tracing::warn!(error = %error, "failed to ingest proposed plan");
+        }
+    }
+}
+
+fn parse_proposed_plan_meta(meta: Option<&serde_json::Value>) -> ProposedPlanChunkMeta {
+    meta.and_then(|value| serde_json::from_value(value.clone()).ok())
+        .unwrap_or_default()
+}
+
+fn extract_text_from_values(values: &[serde_json::Value]) -> Option<String> {
+    let text = values
+        .iter()
+        .filter_map(extract_text_from_value)
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    (!text.trim().is_empty()).then(|| text.trim().to_string())
+}
+
+fn extract_text_from_value(value: &serde_json::Value) -> Option<String> {
+    value
+        .get("text")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| value.get("content").and_then(serde_json::Value::as_str))
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn extract_string_field(value: Option<&serde_json::Value>, key: &str) -> Option<String> {
+    value?
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn title_from_markdown(value: &str) -> Option<String> {
+    value
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .find_map(|line| {
+            line.strip_prefix("# ")
+                .or_else(|| line.strip_prefix("## "))
+                .or(Some(line))
+                .map(str::trim)
+                .filter(|title| !title.is_empty())
+                .map(|title| title.chars().take(80).collect())
+        })
 }
 
 fn persist_raw_notification(
@@ -3875,10 +4255,11 @@ mod tests {
         is_mode_config_request, is_model_config_request, load_startup_restore_snapshot,
         merge_spawn_env, normalized_key_rank, pending_config_rank, persisted_control_values,
         resolve_pending_interactions, sanitize_agent_stderr_line, serialize_meta,
-        should_try_direct_claude_model_setter, tracked_config_purpose, ActorExitDisposition,
-        AgentStderrSeverity, InteractionResolution, LiveSessionExecutionSnapshot,
-        LiveSessionHandle, NativeSessionStartupDisposition, PersistedSessionConfigState,
-        ResumeReplayFilter, SessionCommand, SessionStartupState, IDLE_RESUME_REPLAY_QUIET_WINDOW,
+        should_try_direct_claude_model_setter, title_from_markdown, tracked_config_purpose,
+        ActorExitDisposition, AgentStderrSeverity, InteractionResolution,
+        LiveSessionExecutionSnapshot, LiveSessionHandle, NativeSessionStartupDisposition,
+        PersistedSessionConfigState, ResumeReplayFilter, SessionCommand, SessionStartupState,
+        IDLE_RESUME_REPLAY_QUIET_WINDOW,
     };
     use crate::acp::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
     use crate::acp::event_sink::SessionEventSink;
@@ -3889,6 +4270,7 @@ mod tests {
     };
     use crate::agents::registry::built_in_registry;
     use crate::persistence::Db;
+    use crate::plans::{service::PlanService, store::PlanStore};
     use crate::sessions::live_config::{snapshot_to_record, NormalizedControlKind};
     use crate::sessions::{model::SessionRecord, store::SessionStore};
     use agent_client_protocol as acp;
@@ -3899,6 +4281,10 @@ mod tests {
         SessionEventEnvelope, SessionExecutionPhase, SessionLiveConfigSnapshot,
     };
     use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
+
+    fn test_plan_service(db: &Db) -> Arc<PlanService> {
+        Arc::new(PlanService::new(PlanStore::new(db.clone())))
+    }
 
     #[test]
     fn sanitize_agent_stderr_line_strips_ansi_sequences() {
@@ -3915,6 +4301,14 @@ mod tests {
         let line = "2026-03-28T03:11:55.593240Z INFO codex_otel.log_only";
 
         assert_eq!(classify_agent_stderr_line(line), AgentStderrSeverity::Debug);
+    }
+
+    #[test]
+    fn title_from_markdown_uses_first_heading_without_marker() {
+        assert_eq!(
+            title_from_markdown("# Repo Issue Investigation\n\n## Goal\nFind issues"),
+            Some("Repo Issue Investigation".to_string())
+        );
     }
 
     #[test]
@@ -4073,7 +4467,9 @@ mod tests {
             &mut background_work_registry,
             &store,
             "session-1",
+            "workspace-1",
             "claude",
+            test_plan_service(&db),
             &mut persisted_config_state,
             &mut startup_state,
         )
@@ -4236,7 +4632,9 @@ mod tests {
             &mut background_work_registry,
             &store,
             "session-1",
+            "workspace-1",
             "claude",
+            test_plan_service(&db),
             &mut persisted_config_state,
             &mut startup_state,
         )
@@ -4262,7 +4660,9 @@ mod tests {
             &mut background_work_registry,
             &store,
             "session-1",
+            "workspace-1",
             "claude",
+            test_plan_service(&db),
             &mut persisted_config_state,
             &mut startup_state,
         )
@@ -5024,6 +5424,7 @@ mod tests {
                 tool_call_id: Some("tool-1".to_string()),
                 tool_kind: Some("execute".to_string()),
                 tool_status: None,
+                linked_plan_id: None,
             },
             payload: PendingInteractionPayloadSummary::Permission {
                 options: vec![PermissionInteractionOption {

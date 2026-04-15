@@ -38,6 +38,9 @@ export {
   anyHarnessSessionKey,
   anyHarnessSessionLiveConfigKey,
   anyHarnessSessionEventsKey,
+  anyHarnessPlansKey,
+  anyHarnessPlanKey,
+  anyHarnessPlanDocumentKey,
   anyHarnessGitStatusKey,
   anyHarnessGitDiffScopeKey,
   anyHarnessGitDiffKey,
@@ -121,6 +124,15 @@ export {
   useRestoreDismissedSessionMutation,
   useResolveSessionInteractionMutation,
 } from "./hooks/sessions.js";
+export {
+  useWorkspacePlansQuery,
+  usePlanDetailQuery,
+  usePlanDocumentQuery,
+  useMaterializePlanDocumentMutation,
+  useApprovePlanMutation,
+  useRejectPlanMutation,
+  useHandoffPlanMutation,
+} from "./hooks/plans.js";
 export {
   useGitStatusQuery,
   useGitDiffQuery,

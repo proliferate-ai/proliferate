@@ -33,7 +33,6 @@ import {
   PENDING_PROMPTS_MULTI,
   PENDING_PROMPTS_SINGLE,
   PENDING_PROMPTS_WITH_EDITING,
-  PLAN_OPTIONS,
   TODOS_LONG,
   TODOS_MID,
   TODOS_SHORT,
@@ -113,15 +112,7 @@ function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
       );
     case "claude-plan-short":
     case "claude-plan-long":
-      return (
-        <ApprovalCard
-          title="Ready to code?"
-          actions={PLAN_OPTIONS}
-          onSelectOption={noop}
-          onAllow={noop}
-          onDeny={noop}
-        />
-      );
+      return null;
     case "pending-prompts-single":
       return (
         <PendingPromptList

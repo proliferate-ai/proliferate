@@ -48,6 +48,7 @@ describe("active todo tracker derivation", () => {
       toolCallId: "toolu_plan_1",
       toolKind: "switch_mode",
       toolStatus: null,
+      linkedPlanId: null,
       title: "Ready to code?",
       description: null,
       options: [],

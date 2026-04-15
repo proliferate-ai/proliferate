@@ -17,6 +17,7 @@ import type {
   PendingApproval,
   PendingUserInputInteraction,
   PlanItem,
+  ProposedPlanItem,
   ThoughtItem,
   ToolCallSemanticKind,
   ToolCallItem,
@@ -33,6 +34,7 @@ type KnownTranscriptItem =
   | ThoughtItem
   | ToolCallItem
   | PlanItem
+  | ProposedPlanItem
   | ErrorItem;
 
 export function createTranscriptState(sessionId: string): TranscriptState {
@@ -427,6 +429,24 @@ function createItemFromPayload(
         entries: extractPlanEntries(base.contentParts),
       };
 
+    case "proposed_plan": {
+      const plan = extractProposedPlan(base.contentParts);
+      if (!plan) {
+        return {
+          kind: "error",
+          ...base,
+          message: "Malformed proposed plan",
+          code: "MALFORMED_PROPOSED_PLAN",
+        };
+      }
+      return {
+        kind: "proposed_plan",
+        ...base,
+        plan,
+        decision: extractLatestProposedPlanDecision(base.contentParts),
+      };
+    }
+
     case "error_item":
       return {
         kind: "error",
@@ -486,6 +506,10 @@ function rederiveItem(item: KnownTranscriptItem): void {
       item.entries = extractPlanEntries(item.contentParts);
       break;
 
+    case "proposed_plan":
+      item.decision = extractLatestProposedPlanDecision(item.contentParts);
+      break;
+
     case "error":
       item.message = extractText(item.contentParts) || item.message;
       break;
@@ -495,7 +519,9 @@ function rederiveItem(item: KnownTranscriptItem): void {
 export function selectPendingApprovalInteraction(
   transcript: TranscriptState,
 ): PendingApproval | null {
-  return transcript.pendingInteractions.find((interaction) => interaction.kind === "permission")
+  return transcript.pendingInteractions.find((interaction): interaction is PendingApproval =>
+    interaction.kind === "permission" && !isPlanOwnedInteraction(transcript, interaction)
+  )
     ?? null;
 }
 
@@ -516,7 +542,9 @@ export function selectPendingMcpElicitationInteraction(
 export function selectPrimaryPendingInteraction(
   transcript: TranscriptState,
 ): PendingInteraction | null {
-  return transcript.pendingInteractions[0] ?? null;
+  return transcript.pendingInteractions.find((interaction) =>
+    !isPlanOwnedInteraction(transcript, interaction)
+  ) ?? null;
 }
 
 function applyInteractionRequested(s: TranscriptState, evt: InteractionRequestedEvent): void {
@@ -526,6 +554,7 @@ function applyInteractionRequested(s: TranscriptState, evt: InteractionRequested
     toolCallId,
     toolKind: evt.source.toolKind ?? null,
     toolStatus: evt.source.toolStatus ?? null,
+    linkedPlanId: evt.source.linkedPlanId ?? null,
     title: evt.title,
     description: evt.description ?? null,
   };
@@ -820,6 +849,32 @@ function normalizeContentPart(part: ContentPart): ContentPart {
         entries: Array.isArray(raw.entries) ? (raw.entries as typeof part.entries) : [],
       };
 
+    case "proposed_plan":
+      return {
+        type: "proposed_plan",
+        planId: coerceString(raw.planId ?? raw.plan_id),
+        title: coerceString(raw.title) || "Plan",
+        bodyMarkdown: coerceString(raw.bodyMarkdown ?? raw.body_markdown),
+        snapshotHash: coerceString(raw.snapshotHash ?? raw.snapshot_hash),
+        sourceSessionId: coerceString(raw.sourceSessionId ?? raw.source_session_id),
+        sourceTurnId: coerceNullableString(raw.sourceTurnId ?? raw.source_turn_id),
+        sourceItemId: coerceNullableString(raw.sourceItemId ?? raw.source_item_id),
+        sourceKind: coerceString(raw.sourceKind ?? raw.source_kind),
+        sourceToolCallId: coerceNullableString(raw.sourceToolCallId ?? raw.source_tool_call_id),
+      };
+
+    case "proposed_plan_decision":
+      return {
+        type: "proposed_plan_decision",
+        planId: coerceString(raw.planId ?? raw.plan_id),
+        decisionState: coerceProposedPlanDecisionState(raw.decisionState ?? raw.decision_state),
+        nativeResolutionState: coerceProposedPlanNativeResolutionState(
+          raw.nativeResolutionState ?? raw.native_resolution_state,
+        ),
+        decisionVersion: coerceNullableNumber(raw.decisionVersion ?? raw.decision_version) ?? 1,
+        errorMessage: coerceNullableString(raw.errorMessage ?? raw.error_message),
+      };
+
     case "tool_input_text":
       return {
         type: "tool_input_text",
@@ -850,6 +905,8 @@ function mergeContentParts(existing: ContentPart[], incoming: ContentPart[]): Co
   ] as const;
   const trailingSnapshotTypes = [
     "plan",
+    "proposed_plan",
+    "proposed_plan_decision",
     "tool_input_text",
     "tool_result_text",
   ] as const;
@@ -1011,6 +1068,21 @@ function coerceFileOpenTarget(value: unknown): FileChangeContentPart["openTarget
   return value === "file" || value === "diff" ? value : null;
 }
 
+function coerceProposedPlanDecisionState(value: unknown) {
+  return value === "approved" || value === "rejected" || value === "superseded"
+    ? value
+    : "pending";
+}
+
+function coerceProposedPlanNativeResolutionState(value: unknown) {
+  return value === "pending_link"
+    || value === "pending_resolution"
+    || value === "finalized"
+    || value === "failed"
+    ? value
+    : "none";
+}
+
 function extractReasoning(parts: ContentPart[]): string {
   return parts
     .filter((part): part is Extract<ContentPart, { type: "reasoning" }> => part.type === "reasoning")
@@ -1039,6 +1111,42 @@ function appendToReasoningContentPart(item: KnownTranscriptItem, text: string): 
 function extractPlanEntries(parts: ContentPart[]) {
   const part = parts.find((entry): entry is Extract<ContentPart, { type: "plan" }> => entry.type === "plan");
   return part?.entries ?? [];
+}
+
+function extractProposedPlan(parts: ContentPart[]) {
+  return parts.find((part): part is Extract<ContentPart, { type: "proposed_plan" }> =>
+    part.type === "proposed_plan"
+  ) ?? null;
+}
+
+function extractLatestProposedPlanDecision(parts: ContentPart[]) {
+  const decisions = parts.filter((
+    part,
+  ): part is Extract<ContentPart, { type: "proposed_plan_decision" }> =>
+    part.type === "proposed_plan_decision"
+  );
+  return decisions.reduce<Extract<ContentPart, { type: "proposed_plan_decision" }> | null>(
+    (latest, decision) =>
+      !latest || decision.decisionVersion >= latest.decisionVersion ? decision : latest,
+    null,
+  );
+}
+
+function isPlanOwnedInteraction(
+  transcript: TranscriptState,
+  interaction: PendingInteraction,
+): boolean {
+  if (interaction.linkedPlanId) {
+    return true;
+  }
+  if (!interaction.toolCallId) {
+    return false;
+  }
+  return Object.values(transcript.itemsById).some((item) =>
+    item.kind === "proposed_plan"
+    && item.plan.sourceToolCallId === interaction.toolCallId
+    && item.decision?.decisionState === "pending"
+  );
 }
 
 function findToolCallPart(parts: ContentPart[]) {

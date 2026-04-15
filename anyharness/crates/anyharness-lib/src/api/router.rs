@@ -11,7 +11,7 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agents, cowork, files, git, health, hosting, mobility, model_registries, processes,
+    agents, cowork, files, git, health, hosting, mobility, model_registries, plans, processes,
     provider_configs, repo_roots, sessions, terminals, workspaces,
 };
 use super::sse::sessions as sse_sessions;
@@ -117,6 +117,30 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}/sessions/restore",
             post(sessions::restore_dismissed_session),
+        )
+        .route(
+            "/workspaces/{workspace_id}/plans",
+            get(plans::list_workspace_plans),
+        )
+        .route(
+            "/workspaces/{workspace_id}/plans/{plan_id}",
+            get(plans::get_plan),
+        )
+        .route(
+            "/workspaces/{workspace_id}/plans/{plan_id}/document",
+            get(plans::get_plan_document),
+        )
+        .route(
+            "/workspaces/{workspace_id}/plans/{plan_id}/approve",
+            post(plans::approve_plan),
+        )
+        .route(
+            "/workspaces/{workspace_id}/plans/{plan_id}/reject",
+            post(plans::reject_plan),
+        )
+        .route(
+            "/workspaces/{workspace_id}/plans/{plan_id}/handoff",
+            post(plans::handoff_plan),
         )
         .route(
             "/workspaces/{workspace_id}/mobility/preflight",

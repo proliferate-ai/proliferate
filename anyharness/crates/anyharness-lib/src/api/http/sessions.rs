@@ -776,6 +776,10 @@ fn map_resolve_interaction_error(error: ResolveInteractionError) -> ApiError {
             format!("No pending interaction request: {request_id}"),
             "INTERACTION_NOT_FOUND",
         ),
+        ResolveInteractionError::PlanLinkedInteraction(request_id) => ApiError::conflict(
+            format!("Interaction request is linked to a proposed plan: {request_id}"),
+            "PLAN_LINKED_INTERACTION",
+        ),
         ResolveInteractionError::InteractionKindMismatch(request_id) => ApiError::bad_request(
             format!("Resolution outcome does not match interaction kind: {request_id}"),
             "INTERACTION_KIND_MISMATCH",
@@ -820,6 +824,7 @@ fn map_resolve_interaction_error(error: ResolveInteractionError) -> ApiError {
             format!("Interaction request is not an MCP URL elicitation: {request_id}"),
             "INTERACTION_NOT_MCP_URL_ELICITATION",
         ),
+        ResolveInteractionError::Internal(error) => ApiError::internal(error.to_string()),
     }
 }
 

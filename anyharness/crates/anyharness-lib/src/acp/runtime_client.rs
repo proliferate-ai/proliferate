@@ -13,15 +13,16 @@ use super::mcp_elicitation::{
 };
 use super::permission_broker::{InteractionBroker, PermissionOutcome, UserInputOutcome};
 use super::permission_context::permission_context_from_meta;
+use super::permission_payload::{bound_raw_json, permission_option_mappings, permission_options};
 use super::session_actor::LiveSessionHandle;
+use crate::plans::service::PlanService;
 use anyharness_contract::v1::{
     InteractionKind, InteractionPayload, InteractionRequestedEvent, InteractionSource,
     PendingInteractionPayloadSummary, PendingInteractionSource, PendingInteractionSummary,
-    PermissionInteractionOption, PermissionInteractionOptionKind, PermissionInteractionPayload,
-    UserInputInteractionPayload, UserInputQuestion, UserInputSubmittedAnswer,
+    PermissionInteractionPayload, UserInputInteractionPayload, UserInputQuestion,
+    UserInputSubmittedAnswer,
 };
 
-const MAX_PERMISSION_RAW_JSON_BYTES: usize = 32 * 1024;
 const CODEX_REQUEST_USER_INPUT_METHOD: &str = "experimental/codex/requestUserInput";
 const CODEX_MCP_ELICITATION_METHOD: &str = "experimental/codex/mcpElicitation";
 const CLAUDE_REQUEST_USER_INPUT_METHOD: &str = "experimental/claude/requestUserInput";
@@ -33,6 +34,7 @@ pub struct RuntimeClient {
     pub interaction_broker: Arc<InteractionBroker>,
     pub event_sink: Arc<Mutex<SessionEventSink>>,
     pub live_session_handle: Arc<LiveSessionHandle>,
+    pub plan_service: Arc<PlanService>,
 }
 
 impl RuntimeClient {
@@ -42,6 +44,7 @@ impl RuntimeClient {
         interaction_broker: Arc<InteractionBroker>,
         event_sink: Arc<Mutex<SessionEventSink>>,
         live_session_handle: Arc<LiveSessionHandle>,
+        plan_service: Arc<PlanService>,
     ) -> Self {
         Self {
             session_id,
@@ -49,6 +52,7 @@ impl RuntimeClient {
             interaction_broker,
             event_sink,
             live_session_handle,
+            plan_service,
         }
     }
 }
@@ -104,10 +108,27 @@ impl acp::Client for RuntimeClient {
 
         let options = permission_options(&args.options);
         let context = permission_context_from_meta(args.meta.as_ref());
+        let linked_plan = match tool_call_id.as_deref() {
+            Some(tool_call_id) => self
+                .plan_service
+                .find_by_session_tool_call(&self.session_id, tool_call_id)
+                .ok()
+                .flatten(),
+            None => None,
+        };
+        if let (Some(plan), Some(tool_call_id)) = (linked_plan.as_ref(), tool_call_id.as_deref()) {
+            let _ = self.plan_service.register_interaction_link(
+                plan,
+                &request_id,
+                tool_call_id,
+                permission_option_mappings(&options),
+            );
+        }
         let source = InteractionSource {
             tool_call_id: tool_call_id.clone(),
             tool_kind: tool_kind.clone(),
             tool_status: tool_status.clone(),
+            linked_plan_id: linked_plan.as_ref().map(|plan| plan.id.clone()),
             source_metadata: None,
         };
         let payload = InteractionPayload::Permission(PermissionInteractionPayload {
@@ -134,6 +155,7 @@ impl acp::Client for RuntimeClient {
                         tool_call_id,
                         tool_kind,
                         tool_status,
+                        linked_plan_id: linked_plan.as_ref().map(|plan| plan.id.clone()),
                     },
                     payload: PendingInteractionPayloadSummary::Permission { options, context },
                 })
@@ -214,6 +236,7 @@ impl RuntimeClient {
             tool_call_id: None,
             tool_kind: None,
             tool_status: None,
+            linked_plan_id: None,
             source_metadata: None,
         };
         let payload = InteractionPayload::UserInput(UserInputInteractionPayload {
@@ -237,6 +260,7 @@ impl RuntimeClient {
                         tool_call_id: None,
                         tool_kind: None,
                         tool_status: None,
+                        linked_plan_id: None,
                     },
                     payload: PendingInteractionPayloadSummary::UserInput { questions },
                 })
@@ -301,6 +325,7 @@ impl RuntimeClient {
             tool_call_id: None,
             tool_kind: None,
             tool_status: None,
+            linked_plan_id: None,
             source_metadata: None,
         };
 
@@ -321,6 +346,7 @@ impl RuntimeClient {
                         tool_call_id: None,
                         tool_kind: None,
                         tool_status: None,
+                        linked_plan_id: None,
                     },
                     payload: pending_payload,
                 })
@@ -358,6 +384,7 @@ impl RuntimeClient {
             tool_call_id: None,
             tool_kind: None,
             tool_status: None,
+            linked_plan_id: None,
             source_metadata: None,
         };
 
@@ -378,6 +405,7 @@ impl RuntimeClient {
                         tool_call_id: None,
                         tool_kind: None,
                         tool_status: None,
+                        linked_plan_id: None,
                     },
                     payload: pending_payload,
                 })
@@ -419,6 +447,7 @@ impl RuntimeClient {
             tool_call_id: None,
             tool_kind: None,
             tool_status: None,
+            linked_plan_id: None,
             source_metadata: None,
         };
         let payload = InteractionPayload::UserInput(UserInputInteractionPayload {
@@ -442,6 +471,7 @@ impl RuntimeClient {
                         tool_call_id: None,
                         tool_kind: None,
                         tool_status: None,
+                        linked_plan_id: None,
                     },
                     payload: PendingInteractionPayloadSummary::UserInput { questions },
                 })
@@ -528,40 +558,6 @@ fn raw_ext_response<T: Serialize>(value: T) -> acp::Result<acp::ExtResponse> {
     let raw = RawValue::from_string(serialized)
         .map_err(|error| acp::Error::internal_error().data(error.to_string()))?;
     Ok(acp::ExtResponse::new(raw.into()))
-}
-
-fn permission_options(options: &[acp::PermissionOption]) -> Vec<PermissionInteractionOption> {
-    options
-        .iter()
-        .map(|option| PermissionInteractionOption {
-            option_id: option.option_id.to_string(),
-            label: option.name.clone(),
-            kind: permission_option_kind(option.kind),
-        })
-        .collect()
-}
-
-fn permission_option_kind(kind: acp::PermissionOptionKind) -> PermissionInteractionOptionKind {
-    match kind {
-        acp::PermissionOptionKind::AllowOnce => PermissionInteractionOptionKind::AllowOnce,
-        acp::PermissionOptionKind::AllowAlways => PermissionInteractionOptionKind::AllowAlways,
-        acp::PermissionOptionKind::RejectOnce => PermissionInteractionOptionKind::RejectOnce,
-        acp::PermissionOptionKind::RejectAlways => PermissionInteractionOptionKind::RejectAlways,
-        _ => PermissionInteractionOptionKind::Unknown,
-    }
-}
-
-fn bound_raw_json(value: serde_json::Value) -> serde_json::Value {
-    let Ok(bytes) = serde_json::to_vec(&value) else {
-        return value;
-    };
-    if bytes.len() <= MAX_PERMISSION_RAW_JSON_BYTES {
-        return value;
-    }
-    serde_json::json!({
-        "truncated": true,
-        "originalSizeBytes": bytes.len(),
-    })
 }
 
 pub(crate) fn session_update_kind(update: &acp::SessionUpdate) -> &'static str {

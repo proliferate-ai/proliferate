@@ -39,6 +39,8 @@ pub struct InteractionSource {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_status: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub linked_plan_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub source_metadata: Option<serde_json::Value>,
 }
 

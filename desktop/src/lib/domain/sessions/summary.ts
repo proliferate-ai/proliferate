@@ -75,6 +75,7 @@ function pendingInteractionsFromExecutionSummary(
       toolCallId: interaction.source.toolCallId ?? null,
       toolKind: interaction.source.toolKind ?? null,
       toolStatus: interaction.source.toolStatus ?? null,
+      linkedPlanId: interaction.source.linkedPlanId ?? null,
       title: interaction.title,
       description: interaction.description ?? null,
     };

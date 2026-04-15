@@ -5,7 +5,7 @@ Status: authoritative for the chat composer area (`desktop/src/components/worksp
 Scope:
 
 - `desktop/src/components/workspace/chat/input/**`
-- `desktop/src/components/workspace/chat/transcript/ClaudePlanCard.tsx`
+- `desktop/src/components/workspace/chat/transcript/ProposedPlanCard.tsx`
 - `desktop/src/hooks/chat/use-composer-top-slot.tsx`
 - `desktop/src/hooks/chat/use-active-todo-tracker.ts`
 - `desktop/src/lib/domain/chat/active-todo-tracker.ts`
@@ -70,7 +70,7 @@ All three sit inside the composer area. They differ by lifecycle and role, and t
 |---|---|---|---|
 | `TodoTrackerPanel` | Long-lived, non-gating (ambient status) | `PlanEntry[]` as a fade-masked list | tiny muted icon + muted status text |
 | `ApprovalCard` | Short-lived, gating (demands a decision) | options from `pendingApproval`, one variant for all three `toolKind`s | plain title only — NO icon, NO label chip, NO separator |
-| `ClaudePlanCard` | Lives in the **transcript**, not above composer | markdown plan body with collapse-with-fade | bold "Plan" label + icon-only Copy/Collapse buttons |
+| `ProposedPlanCard` | Lives in the **transcript**, not above composer | immutable markdown plan snapshot, decision state, and plan actions | bold plan title + icon-only Copy/Collapse buttons |
 
 ### 3.1 `ApprovalCard` covers all three approval kinds
 
@@ -86,13 +86,20 @@ interactions (preserved by the SDK reducer at
 `anyharness/sdk/src/reducer/transcript.ts:applyInteractionRequested`). Do not
 parse `toolCallId` with regexes.
 
-### 3.2 Claude plan body lives in the transcript
+### 3.2 Proposed plans live in the transcript
 
-Claude's `ExitPlanMode` tool call carries a markdown plan body. It renders in the **transcript** as a `ClaudePlanCard`, not above the composer.
+Claude's `ExitPlanMode` tool call and Codex's explicit proposed-plan adapter
+signal carry markdown plan bodies. They render in the **transcript** as
+`ProposedPlanCard`, not above the composer.
 
-- The intercept is in `MessageList.tsx` via `isClaudeExitPlanModeCall(item)` from `lib/domain/chat/claude-plan-tool-call.ts`. The helper checks `sourceAgentKind === "claude"` and either `nativeToolName === "ExitPlanMode"` or `semanticKind === "mode_switch" && title === "ready to code?"`.
-- The plan approval (the actual decision) renders above the composer as `ApprovalCard` with `toolKind === "switch_mode"`.
-- Do not duplicate the plan body inside the approval card, and do not move it back above the composer. The plan is a transcript artifact that persists after the approval resolves.
+- New runtime sessions emit `proposed_plan` transcript items, and the card owns
+  approve/reject/implement-here actions.
+- The Claude tool-call intercept in `MessageList.tsx` is a compatibility
+  fallback for older runtimes. If a first-class proposed plan exists for the
+  same tool call, the tool-call fallback is hidden.
+- Do not duplicate the plan body inside the approval card, and do not move it
+  above the composer. The plan is a transcript artifact that persists after the
+  approval resolves.
 
 ### 3.3 Todo tracker is Codex/Gemini only
 
@@ -113,7 +120,7 @@ At most **one** visual element in a header's leading position:
 | Pattern | Example | Where |
 |---|---|---|
 | Tiny muted icon + muted text | `ClipboardList` icon + "1 out of 5 tasks completed" | TodoTrackerPanel |
-| Bold content label (no icon) | "Plan" | ClaudePlanCard |
+| Bold content label (no icon) | "Plan" / plan title | ProposedPlanCard |
 | Plain medium-weight title (no icon, no label chip) | "git push origin main" / "Ready to code?" | ApprovalCard |
 
 Do **not** stack icon + uppercase label + `·` separator + title. That was the pre-cleanup pattern and it read as noise. If you find yourself adding a second leading element, stop and pick one.
@@ -131,12 +138,15 @@ All approval action buttons use `size="sm"` with `className="rounded-xl px-2.5 t
 
 Do **not** grow the scroll cap past `max-h-40` — the Codex reference is exactly this size and larger caps dominate the composer visually.
 
-### 4.5 ClaudePlanCard specifics
+### 4.5 ProposedPlanCard specifics
 
 - Shell: `rounded-lg bg-foreground/5` (borderless, very subtle tint — no outline).
-- Header: bold "Plan" + `Button size="icon-sm"` Copy + `Button size="icon-sm"` Collapse.
+- Header: bold plan title + optional decision state + `Button size="icon-sm"` Copy + `Button size="icon-sm"` Collapse.
 - Body expanded: plain markdown at `px-4 py-3`.
 - Body collapsed: `max-height: min(20rem, 45vh)` with a bottom-only `mask-image` fade + a floating `Button size="pill" variant="inverted"` "Expand plan" pill centered near the bottom.
+- Pending decision actions render in the transcript card, not in the composer
+  top slot. Generic linked permission interactions are suppressed from
+  `ConnectedApprovalCard`.
 - Default: expanded. Collapse is via the header chevron.
 
 ## 5. No raw primitives, no inline SVGs
@@ -155,7 +165,9 @@ These are patterns that were tried and rejected. Reintroducing them reopens know
 - **`flatTop` on `ChatComposerSurface`.** The prop was deleted. The composer surface is always fully rounded. Panels above are inset cards, not fused shells.
 - **Regex classifier on `toolCallId` in `permission-prompt.ts`.** Dead code. Read `pendingApproval.toolKind` directly.
 - **`embeddedInComposer` permission variant that replaces the textarea.** Dead code. Approvals always sit above the composer; the textarea stays usable.
-- **Merging approval buttons into `PlanAttachedPanel`.** The whole `PlanAttachedPanel` is gone. Approvals go in `ApprovalCard`, plan bodies go in `ClaudePlanCard`. They never share a shell.
+- **Merging generic tool approval buttons into `ProposedPlanCard`.** Generic
+  tool approvals go in `ApprovalCard`; formal plan decisions go in
+  `ProposedPlanCard`.
 - **`!h-8 !px-2.5` style `!important` button overrides.** Fixed at the root by adding `tailwind-merge` to the `Button` primitive. Don't reintroduce `!` bangs.
 - **`useActivePlan` hook.** Renamed to `useActiveTodoTracker` and narrowed to `structured_plan` only. The old name and signature are gone.
 - **Icons + label chips + separator + title stacked in a header.** The whole "RUN COMMAND · git push origin main" pattern was dropped. Just the title.
@@ -169,7 +181,7 @@ Scenarios (selectable via `?s=<key>`):
 - `clean` — baseline, no panel
 - `todos-short`, `todos-mid`, `todos-long` — TodoTrackerPanel at three sizes
 - `execute-approval`, `edit-approval` — ApprovalCard execute/edit variants
-- `claude-plan-short`, `claude-plan-long` — ApprovalCard switch_mode + ClaudePlanCard in transcript
+- `claude-plan-short`, `claude-plan-long` — ProposedPlanCard in transcript
 - `mobility-local-actionable`, `mobility-unpublished-branch`, `mobility-unpushed-commits`, `mobility-out-of-sync-branch`, `mobility-in-flight`, `mobility-failed` — composer footer row + mobility states
 
 The playground is **dev-only**. It is lazy-loaded via `React.lazy()` gated on `import.meta.env.DEV` in `App.tsx`, so neither the page nor its fixtures land in production bundles.
@@ -184,7 +196,7 @@ Thin page → fat components, per the `pages/**` orchestration-only rule:
 - `config/playground.ts` — `ScenarioKey`, `SCENARIOS`, `resolveScenarioKey`
 - `lib/domain/chat/__fixtures__/playground.ts` — fixture data (`TODOS_*`, `CLAUDE_PLAN_*`, `*_OPTIONS`)
 - `components/playground/PlaygroundScenarioBar.tsx` — top-bar scenario picker
-- `components/playground/PlaygroundTranscript.tsx` — transcript area (renders `ClaudePlanCard` when applicable)
+- `components/playground/PlaygroundTranscript.tsx` — transcript area (renders `ProposedPlanCard` when applicable)
 - `components/playground/PlaygroundComposer.tsx` — `ChatComposerDock` + scenario-driven top slot + read-only composer surface
 
 Adding a new scenario: update `config/playground.ts` (add the key + label), optionally add fixture data in `__fixtures__/playground.ts`, then extend the switch in `PlaygroundComposer.renderTopSlot` and/or `PlaygroundTranscript`.

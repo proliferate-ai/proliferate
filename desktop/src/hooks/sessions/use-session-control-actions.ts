@@ -37,6 +37,10 @@ interface PromptLatencyFlowOptions extends SessionLatencyFlowOptions {
   promptId?: string | null;
 }
 
+interface SessionConfigOptionUpdateOptions {
+  persistDefaultPreference?: boolean;
+}
+
 interface SessionControlDeps {
   createSessionWithResolvedConfig: (options: {
     text: string;
@@ -99,7 +103,11 @@ export function useSessionControlActions({
   const { promptSession } = useSessionPromptWorkflow();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
 
-  const setActiveSessionConfigOption = useCallback(async (configId: string, value: string) => {
+  const setActiveSessionConfigOption = useCallback(async (
+    configId: string,
+    value: string,
+    options?: SessionConfigOptionUpdateOptions,
+  ) => {
     const state = useHarnessStore.getState();
     const sessionId = state.activeSessionId;
     if (!sessionId) {
@@ -210,7 +218,11 @@ export function useSessionControlActions({
         showToast("Config update queued. It will apply at end of turn.", "info");
       }
 
-      if (isLatestMutation && response.applyState === "applied") {
+      if (
+        isLatestMutation
+        && response.applyState === "applied"
+        && options?.persistDefaultPreference !== false
+      ) {
         persistDefaultSessionModePreference({
           agentKind: response.session.agentKind ?? latestSlot.agentKind,
           liveConfigRawConfigId: effectiveLiveConfig?.normalizedControls.mode?.rawConfigId ?? null,
