@@ -87,44 +87,8 @@ export function WorkspaceArrivalCloudPanel({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base text-muted-foreground">
           <span className="text-foreground">{model.repoLabel}</span>
           <span>{model.branchLabel}</span>
-          {model.stepCounter && (
-            <span>
-              Step {model.stepCounter.current} of {model.stepCounter.total}
-            </span>
-          )}
         </div>
       </SectionRow>
-
-      <div className="border-t border-border/40">
-        {model.steps.map((step) => (
-          <div key={step.status} className="flex items-start gap-3 px-4 py-2.5">
-            <div className="mt-0.5 flex size-4 shrink-0 items-center justify-center">
-              {step.state === "active" ? (
-                <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
-              ) : step.state === "complete" ? (
-                <span className="size-2 rounded-full bg-foreground/70" />
-              ) : (
-                <span className="size-2 rounded-full bg-muted-foreground/30" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className={step.state === "idle" ? "text-muted-foreground" : "text-foreground"}>
-                  {step.label}
-                </span>
-                {step.statusBadge === "in-progress" && (
-                  <span className="text-xs text-muted-foreground">In progress</span>
-                )}
-              </div>
-              {step.showDescription && (
-                <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
-                  {step.description}
-                </p>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
 
       {model.footer.kind === "action" ? (
         <SectionRow label="Actions">

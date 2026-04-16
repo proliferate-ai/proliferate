@@ -30,24 +30,14 @@ const START_HELPER_TEXT = "The workspace record is kept and we will start the ru
 
 export type CloudWorkspaceStatusScreenMode = "pending" | "error" | "stopped" | "blocked";
 
-export interface CloudWorkspaceStatusStepView {
-  status: CloudWorkspaceStatus;
-  label: string;
-  description: string;
-  state: "complete" | "active" | "idle";
-  showDescription: boolean;
-  statusBadge: "in-progress" | null;
-}
-
 export interface CloudWorkspaceStatusScreenModel {
   mode: CloudWorkspaceStatusScreenMode;
+  pendingStage: "preparing" | "syncing" | null;
   eyebrowTone: "pending" | "error";
   title: string;
   description: string;
   repoLabel: string;
   branchLabel: string;
-  stepCounter: { current: number; total: number } | null;
-  steps: CloudWorkspaceStatusStepView[];
   footer:
     | { kind: "auto-refresh"; message: string }
     | { kind: "action"; action: "retry" | "start"; label: string; helperText: string }
@@ -92,20 +82,12 @@ export function buildCloudWorkspaceStatusScreenModel(
   if (workspace.actionBlockKind === "billing_quota") {
     return {
       mode: "blocked",
+      pendingStage: null,
       eyebrowTone: "pending",
       title: "Cloud usage is paused",
       description: GENERIC_BLOCKED_DESCRIPTION,
       repoLabel,
       branchLabel,
-      stepCounter: null,
-      steps: CLOUD_WORKSPACE_PROVISIONING_STEPS.map((step) => ({
-        status: step.status,
-        label: step.label,
-        description: step.description,
-        state: "complete",
-        showDescription: false,
-        statusBadge: null,
-      })),
       footer: {
         kind: "status",
         message: GENERIC_BLOCKED_DESCRIPTION,
@@ -116,6 +98,7 @@ export function buildCloudWorkspaceStatusScreenModel(
   if (workspace.status === "error") {
     return {
       mode: "error",
+      pendingStage: null,
       eyebrowTone: "error",
       title: "Provisioning failed",
       description:
@@ -124,15 +107,6 @@ export function buildCloudWorkspaceStatusScreenModel(
         || GENERIC_FAILURE_DESCRIPTION,
       repoLabel,
       branchLabel,
-      stepCounter: null,
-      steps: CLOUD_WORKSPACE_PROVISIONING_STEPS.map((step) => ({
-        status: step.status,
-        label: step.label,
-        description: step.description,
-        state: "idle",
-        showDescription: false,
-        statusBadge: null,
-      })),
       footer: {
         kind: "action",
         action: "retry",
@@ -145,20 +119,12 @@ export function buildCloudWorkspaceStatusScreenModel(
   if (workspace.status === "stopped") {
     return {
       mode: "stopped",
+      pendingStage: null,
       eyebrowTone: "pending",
       title: "Workspace stopped",
       description: workspace.statusDetail || GENERIC_STOPPED_DESCRIPTION,
       repoLabel,
       branchLabel,
-      stepCounter: null,
-      steps: CLOUD_WORKSPACE_PROVISIONING_STEPS.map((step) => ({
-        status: step.status,
-        label: step.label,
-        description: step.description,
-        state: "complete",
-        showDescription: false,
-        statusBadge: null,
-      })),
       footer: {
         kind: "action",
         action: "start",
@@ -178,20 +144,12 @@ export function buildCloudWorkspaceStatusScreenModel(
 
     return {
       mode: "pending",
+      pendingStage: "syncing",
       eyebrowTone: "pending",
       title,
       description,
       repoLabel,
       branchLabel,
-      stepCounter: null,
-      steps: CLOUD_WORKSPACE_PROVISIONING_STEPS.map((step) => ({
-        status: step.status,
-        label: step.label,
-        description: step.description,
-        state: "complete",
-        showDescription: false,
-        statusBadge: null,
-      })),
       footer: {
         kind: "auto-refresh",
         message: REPO_CONFIG_MESSAGE,
@@ -209,30 +167,15 @@ export function buildCloudWorkspaceStatusScreenModel(
 
   return {
     mode: "pending",
+    pendingStage: "preparing",
     eyebrowTone: "pending",
-    title: activeStep?.label ?? "Preparing workspace",
+    title: CLOUD_STATUS_COMPACT_COPY.preparingTitle,
     description:
       workspace.statusDetail
       || activeStep?.description
       || GENERIC_PREPARING_DESCRIPTION,
     repoLabel,
     branchLabel,
-    stepCounter: {
-      current: normalizedStepIndex + 1,
-      total: CLOUD_WORKSPACE_PROVISIONING_STEPS.length,
-    },
-    steps: CLOUD_WORKSPACE_PROVISIONING_STEPS.map((step, index) => ({
-      status: step.status,
-      label: step.label,
-      description: step.description,
-      state: isReady || index < normalizedStepIndex
-        ? "complete"
-        : index === normalizedStepIndex
-          ? "active"
-          : "idle",
-      showDescription: index === normalizedStepIndex,
-      statusBadge: !isReady && index === normalizedStepIndex ? "in-progress" : null,
-    })),
     footer: {
       kind: "auto-refresh",
       message: isReady ? READY_MESSAGE : AUTO_REFRESH_MESSAGE,
@@ -273,12 +216,15 @@ export function buildCloudWorkspaceCompactStatusView(
         primaryAction,
       };
     case "pending": {
-      const title = model.stepCounter
+      const title = model.pendingStage === "preparing"
         ? CLOUD_STATUS_COMPACT_COPY.preparingTitle
         : CLOUD_STATUS_COMPACT_COPY.syncingTitle;
+      const phaseLabel = model.pendingStage === "preparing"
+        ? CLOUD_STATUS_COMPACT_COPY.preparingPhaseLabel
+        : model.title;
       return {
         title,
-        phaseLabel: model.title,
+        phaseLabel,
         tone: "info",
         primaryAction,
       };

@@ -37,6 +37,17 @@ function makeCloudWorkspace(
 }
 
 describe("buildCloudWorkspaceStatusScreenModel", () => {
+  it("keeps provisioning progress to the current phase instead of row steps", () => {
+    const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
+      status: "syncing_credentials",
+    }));
+
+    expect(model.title).toBe("Preparing cloud workspace");
+    expect(model.pendingStage).toBe("preparing");
+    expect("stepCounter" in model).toBe(false);
+    expect("steps" in model).toBe(false);
+  });
+
   it("returns a passive status footer for billing blocks", () => {
     const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
       actionBlockKind: "billing_quota",
@@ -57,11 +68,31 @@ describe("buildCloudWorkspaceCompactStatusView", () => {
     expectedTitle: string;
     status: CloudWorkspaceStatus;
   }>([
-    { status: "queued", expectedTitle: "Preparing cloud workspace", expectedPhaseLabel: "Queued" },
-    { status: "provisioning", expectedTitle: "Preparing cloud workspace", expectedPhaseLabel: "Preparing workspace" },
-    { status: "syncing_credentials", expectedTitle: "Preparing cloud workspace", expectedPhaseLabel: "Syncing credentials" },
-    { status: "cloning_repo", expectedTitle: "Preparing cloud workspace", expectedPhaseLabel: "Cloning repository" },
-    { status: "starting_runtime", expectedTitle: "Preparing cloud workspace", expectedPhaseLabel: "Starting runtime" },
+    {
+      status: "queued",
+      expectedTitle: "Preparing cloud workspace",
+      expectedPhaseLabel: "Opening automatically when ready",
+    },
+    {
+      status: "provisioning",
+      expectedTitle: "Preparing cloud workspace",
+      expectedPhaseLabel: "Opening automatically when ready",
+    },
+    {
+      status: "syncing_credentials",
+      expectedTitle: "Preparing cloud workspace",
+      expectedPhaseLabel: "Opening automatically when ready",
+    },
+    {
+      status: "cloning_repo",
+      expectedTitle: "Preparing cloud workspace",
+      expectedPhaseLabel: "Opening automatically when ready",
+    },
+    {
+      status: "starting_runtime",
+      expectedTitle: "Preparing cloud workspace",
+      expectedPhaseLabel: "Opening automatically when ready",
+    },
   ])("maps $status to a compact pending view", ({ expectedPhaseLabel, expectedTitle, status }) => {
     const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({ status }));
     const compact = buildCloudWorkspaceCompactStatusView(model);
