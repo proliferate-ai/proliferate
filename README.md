@@ -5,7 +5,7 @@
 Proliferate is a Mac app for running Codex, Claude Code, Gemini CLI, and other
 coding agents in isolated workspaces with one clean interface.
 
-![Proliferate screenshot](./assets/readme/overview.png)
+
 
 ## Install
 
