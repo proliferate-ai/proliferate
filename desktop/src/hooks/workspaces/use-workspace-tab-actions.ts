@@ -131,6 +131,7 @@ export function useWorkspaceTabActions() {
       agentKind: selection.kind,
       modelId: selection.modelId,
       latencyFlowId,
+      reuseInFlightEmptySession: false,
     }).catch((error) => {
       failLatencyFlow(latencyFlowId, "session_create_failed");
       const message = error instanceof Error ? error.message : String(error);
