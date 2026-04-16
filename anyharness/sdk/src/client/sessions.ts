@@ -11,6 +11,7 @@ import type {
   PromptSessionRequest,
   PromptSessionResponse,
   ResolveInteractionRequest,
+  ResumeSessionRequest,
   SetSessionConfigOptionRequest,
   SetSessionConfigOptionResponse,
   Session,
@@ -156,10 +157,14 @@ export class SessionsClient {
     );
   }
 
-  async resume(sessionId: string, options?: AnyHarnessRequestOptions): Promise<Session> {
+  async resume(
+    sessionId: string,
+    input?: ResumeSessionRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<Session> {
     return normalizeSession(await this.transport.post<Session>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/resume`,
-      {},
+      input ?? {},
       options,
     ));
   }

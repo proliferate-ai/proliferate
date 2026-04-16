@@ -14,7 +14,8 @@ export type ConnectorSkipReasonKind =
   | "needs_reconnect"
   | "missing_stdio_command"
   | "workspace_path_unresolved"
-  | "unsupported_target";
+  | "unsupported_target"
+  | "resolver_error";
 
 export interface DesktopProductEventMap {
   app_update_available: { version: string };

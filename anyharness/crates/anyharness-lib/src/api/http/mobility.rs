@@ -579,6 +579,7 @@ fn from_contract_session_record(
         dismissed_at: record.dismissed_at,
         // MCP bindings are workspace-local encrypted state; sessions rebind after handoff.
         mcp_bindings_ciphertext: None,
+        mcp_binding_summaries_json: None,
         system_prompt_append: record.system_prompt_append,
     }
 }

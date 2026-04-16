@@ -1321,6 +1321,7 @@ export interface components {
         };
         CreateCoworkThreadRequest: {
             agentKind: string;
+            mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][] | null;
             mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
             modeId?: string | null;
             modelId?: string | null;
@@ -1351,6 +1352,7 @@ export interface components {
         };
         CreateSessionRequest: {
             agentKind: string;
+            mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][] | null;
             mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
             modeId?: string | null;
             modelId?: string | null;
@@ -2160,6 +2162,10 @@ export interface components {
             repoRoot: components["schemas"]["RepoRoot"];
             workspace: components["schemas"]["Workspace"];
         };
+        ResumeSessionRequest: {
+            mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][] | null;
+            mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
+        };
         RunCommandRequest: {
             command: string[];
             cwd?: string | null;
@@ -2185,6 +2191,7 @@ export interface components {
             id: string;
             lastPromptAt?: string | null;
             liveConfig?: null | components["schemas"]["SessionLiveConfigSnapshot"];
+            mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][] | null;
             modeId?: string | null;
             modelId?: string | null;
             nativeSessionId?: string | null;
@@ -2304,6 +2311,18 @@ export interface components {
             /** @description Timestamp when this snapshot was last updated. */
             updatedAt: string;
         };
+        /** @enum {string} */
+        SessionMcpBindingNotAppliedReason: "missing_secret" | "needs_reconnect" | "unsupported_target" | "workspace_path_unresolved" | "policy_disabled" | "resolver_error";
+        /** @enum {string} */
+        SessionMcpBindingOutcome: "applied" | "not_applied";
+        SessionMcpBindingSummary: {
+            displayName?: string | null;
+            id: string;
+            outcome: components["schemas"]["SessionMcpBindingOutcome"];
+            reason?: null | components["schemas"]["SessionMcpBindingNotAppliedReason"];
+            serverName: string;
+            transport: components["schemas"]["SessionMcpTransport"];
+        };
         SessionMcpEnvVar: {
             name: string;
             value: string;
@@ -2334,6 +2353,8 @@ export interface components {
             env?: components["schemas"]["SessionMcpEnvVar"][];
             serverName: string;
         };
+        /** @enum {string} */
+        SessionMcpTransport: "http" | "stdio";
         SessionRawNotificationEnvelope: {
             notification: unknown;
             notificationKind: string;
@@ -3872,7 +3893,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResumeSessionRequest"];
+            };
+        };
         responses: {
             /** @description Session resumed */
             200: {

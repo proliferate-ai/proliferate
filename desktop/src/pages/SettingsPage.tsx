@@ -9,8 +9,6 @@ export function SettingsPage() {
   const {
     activeSection,
     activeRepoSourceRoot,
-    activeCloudRepoOwner,
-    activeCloudRepoName,
     selectSection,
     selectRepo,
   } = useSettingsNavigation({ repositories });
@@ -19,8 +17,6 @@ export function SettingsPage() {
     <SettingsScreen
       activeSection={activeSection}
       activeRepoSourceRoot={activeRepoSourceRoot}
-      activeCloudRepoOwner={activeCloudRepoOwner}
-      activeCloudRepoName={activeCloudRepoName}
       repositories={repositories}
       onNavigateHome={() => navigate("/")}
       onSelectSection={selectSection}

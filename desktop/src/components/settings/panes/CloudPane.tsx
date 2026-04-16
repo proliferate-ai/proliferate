@@ -11,7 +11,7 @@ import { getProviderDisplayName } from "@/config/providers";
 import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
 import { describeCloudCredentialStatus } from "@/lib/domain/cloud/credentials";
 import {
-  buildCloudRepoSettingsHref,
+  buildSettingsHref,
 } from "@/lib/domain/settings/navigation";
 import {
   cloudRepositoryKey,
@@ -149,7 +149,7 @@ export function CloudPane({ repositories }: CloudPaneProps) {
               description={row.description}
             >
               <div className="flex items-center gap-2">
-                <span className={`text-xs ${status?.synced ? "text-primary" : "text-muted-foreground"}`}>
+                <span className={`text-xs ${status?.synced ? "text-foreground" : "text-muted-foreground"}`}>
                   {status?.synced ? "Synced" : status?.localDetected ? "Available locally" : "Not detected"}
                 </span>
                 <Button
@@ -221,7 +221,10 @@ export function CloudPane({ repositories }: CloudPaneProps) {
                     type="button"
                     variant="outline"
                     onClick={() => navigate(
-                      buildCloudRepoSettingsHref(repository.gitOwner, repository.gitRepoName),
+                      buildSettingsHref({
+                        section: "repo",
+                        repo: repository.sourceRoot,
+                      }),
                     )}
                   >
                     {config?.configured ? "Manage" : "Configure cloud"}

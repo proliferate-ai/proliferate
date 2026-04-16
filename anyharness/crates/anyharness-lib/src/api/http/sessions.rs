@@ -3,10 +3,12 @@ use std::time::Instant;
 use anyharness_contract::v1::{
     CreateSessionRequest, EditPendingPromptRequest, GetSessionLiveConfigResponse,
     InteractionDecision, PromptInputBlock, PromptSessionRequest, PromptSessionResponse,
-    ResolveInteractionRequest, Session, SessionEventEnvelope, SessionRawNotificationEnvelope,
-    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, UpdateSessionTitleRequest,
+    ResolveInteractionRequest, ResumeSessionRequest, Session, SessionEventEnvelope,
+    SessionRawNotificationEnvelope, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
+    UpdateSessionTitleRequest,
 };
 use axum::{
+    body::Bytes,
     extract::{Path, Query, State},
     http::{HeaderMap, HeaderValue},
     Json,
@@ -18,11 +20,11 @@ use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::acp::permission_broker::PermissionDecision;
 use crate::app::AppState;
-use crate::sessions::mcp::bindings_from_contract;
+use crate::sessions::mcp::{bindings_from_contract, validate_binding_summaries};
 use crate::sessions::runtime::{
     CreateAndStartSessionError, EnsureLiveSessionError, InteractionResolutionRequest,
     PendingPromptMutationError, ResolveInteractionError, SendPromptError, SendPromptOutcome,
-    SessionLifecycleError, SetSessionConfigOptionError,
+    SessionLifecycleError, SessionMcpRefresh, SetSessionConfigOptionError,
 };
 use crate::sessions::service::{GetLiveConfigSnapshotError, UpdateSessionTitleError};
 
@@ -64,6 +66,10 @@ pub async fn create_session(
     let model_id = req.model_id.clone();
     let mode_id = req.mode_id.clone();
     let mcp_servers = bindings_from_contract(req.mcp_servers.clone().unwrap_or_default());
+    if let Some(summaries) = req.mcp_binding_summaries.as_deref() {
+        validate_binding_summaries(summaries)
+            .map_err(|error| ApiError::bad_request(error.to_string(), "INVALID_MCP_SUMMARY"))?;
+    }
     let system_prompt_append_count = req
         .system_prompt_append
         .as_ref()
@@ -92,6 +98,7 @@ pub async fn create_session(
             mode_id.as_deref(),
             req.system_prompt_append,
             mcp_servers,
+            req.mcp_binding_summaries,
             latency.as_ref(),
         )
         .await
@@ -343,6 +350,7 @@ pub async fn delete_pending_prompt(
     post,
     path = "/v1/sessions/{session_id}/resume",
     params(("session_id" = String, Path, description = "Session ID")),
+    request_body = ResumeSessionRequest,
     responses(
         (status = 200, description = "Session resumed", body = Session),
         (status = 404, description = "Session not found", body = anyharness_contract::v1::ProblemDetails),
@@ -353,15 +361,41 @@ pub async fn resume_session(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(session_id): Path<String>,
+    body: Bytes,
 ) -> Result<Json<Session>, ApiError> {
     let latency = LatencyRequestContext::from_headers(&headers);
+    let req = parse_optional_resume_request(body)?;
+    if let Some(summaries) = req.mcp_binding_summaries.as_deref() {
+        validate_binding_summaries(summaries)
+            .map_err(|error| ApiError::bad_request(error.to_string(), "INVALID_MCP_SUMMARY"))?;
+    }
+    let mcp_refresh = if req.mcp_servers.is_some() || req.mcp_binding_summaries.is_some() {
+        Some(SessionMcpRefresh {
+            mcp_servers: bindings_from_contract(req.mcp_servers.unwrap_or_default()),
+            mcp_binding_summaries: req.mcp_binding_summaries,
+        })
+    } else {
+        None
+    };
     let updated = state
         .session_runtime
-        .ensure_live_session(&session_id, latency.as_ref())
+        .ensure_live_session(&session_id, mcp_refresh, latency.as_ref())
         .await
         .map_err(map_ensure_live_session_error)?;
 
     Ok(Json(session_to_contract(&state, &updated).await?))
+}
+
+fn parse_optional_resume_request(body: Bytes) -> Result<ResumeSessionRequest, ApiError> {
+    if body.is_empty() {
+        return Ok(ResumeSessionRequest::default());
+    }
+    serde_json::from_slice::<ResumeSessionRequest>(&body).map_err(|error| {
+        ApiError::bad_request(
+            format!("invalid resume request: {error}"),
+            "INVALID_RESUME_REQUEST",
+        )
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -859,6 +893,12 @@ fn map_ensure_live_session_error(error: EnsureLiveSessionError) -> ApiError {
         EnsureLiveSessionError::RestartRequired(detail) => {
             ApiError::conflict(detail, "SESSION_RESTART_REQUIRED")
         }
+        EnsureLiveSessionError::Invalid(detail) => {
+            ApiError::bad_request(detail, "SESSION_RESUME_FAILED")
+        }
+        EnsureLiveSessionError::MissingDataKey => ApiError::internal(
+            crate::sessions::mcp::SessionMcpBindingsError::missing_data_key_detail(),
+        ),
         EnsureLiveSessionError::Internal(error) => {
             ApiError::internal(format!("resume failed: {error}"))
         }
@@ -948,4 +988,43 @@ async fn session_to_contract(
         .session_to_contract(record)
         .await
         .map_err(|error| ApiError::internal(error.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resume_request_accepts_missing_body() {
+        let request = match parse_optional_resume_request(Bytes::new()) {
+            Ok(request) => request,
+            Err(_) => panic!("parse empty body"),
+        };
+
+        assert!(request.mcp_servers.is_none());
+        assert!(request.mcp_binding_summaries.is_none());
+    }
+
+    #[test]
+    fn resume_request_accepts_empty_object() {
+        let request = match parse_optional_resume_request(Bytes::from_static(br#"{}"#)) {
+            Ok(request) => request,
+            Err(_) => panic!("parse empty object"),
+        };
+
+        assert!(request.mcp_servers.is_none());
+        assert!(request.mcp_binding_summaries.is_none());
+    }
+
+    #[test]
+    fn resume_request_accepts_empty_mcp_servers() {
+        let request =
+            match parse_optional_resume_request(Bytes::from_static(br#"{"mcpServers":[]}"#)) {
+                Ok(request) => request,
+                Err(_) => panic!("parse empty MCP server list"),
+            };
+
+        assert_eq!(request.mcp_servers.unwrap_or_default().len(), 0);
+        assert!(request.mcp_binding_summaries.is_none());
+    }
 }

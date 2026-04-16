@@ -106,9 +106,14 @@ export function useCoworkThreadWorkflow() {
 
     try {
       const resolveStartedAt = startLatencyTimer();
-      const { mcpServers } = await resolveSessionMcpServersForLaunch({
+      const { mcpServers, mcpBindingSummaries } = await resolveSessionMcpServersForLaunch({
         targetLocation: "local",
         workspacePath: null,
+        policy: {
+          workspaceSurface: "cowork",
+          lifecycle: "create",
+          enabled: true,
+        },
       });
       logLatency("workspace.cowork.create.mcp_resolved", {
         attemptId: entry.attemptId,
@@ -135,6 +140,9 @@ export function useCoworkThreadWorkflow() {
         modelId: input.modelId,
         ...(modeId ? { modeId } : {}),
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
+        ...(mcpBindingSummaries && mcpBindingSummaries.length > 0
+          ? { mcpBindingSummaries }
+          : {}),
       });
 
       logLatency("workspace.cowork.create.request.success", {

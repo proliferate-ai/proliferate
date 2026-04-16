@@ -17,6 +17,7 @@ export interface UserPreferences {
   turnEndSoundEnabled: boolean;
   turnEndSoundId: TurnEndSoundId;
   transparentChromeEnabled: boolean;
+  powersInCodingSessionsEnabled: boolean;
   onboardingCompletedVersion: number;
   onboardingPrimaryGoalId: OnboardingGoalId | "";
 }
@@ -36,6 +37,7 @@ export const USER_PREFERENCE_DEFAULTS: UserPreferences = {
   turnEndSoundEnabled: false,
   turnEndSoundId: "ding",
   transparentChromeEnabled: true,
+  powersInCodingSessionsEnabled: false,
   onboardingCompletedVersion: 0,
   onboardingPrimaryGoalId: "",
 };
@@ -103,6 +105,7 @@ async function readLegacyUserPreferences(): Promise<UserPreferences> {
     turnEndSoundEnabled: USER_PREFERENCE_DEFAULTS.turnEndSoundEnabled,
     turnEndSoundId: USER_PREFERENCE_DEFAULTS.turnEndSoundId,
     transparentChromeEnabled: USER_PREFERENCE_DEFAULTS.transparentChromeEnabled,
+    powersInCodingSessionsEnabled: USER_PREFERENCE_DEFAULTS.powersInCodingSessionsEnabled,
     onboardingCompletedVersion: USER_PREFERENCE_DEFAULTS.onboardingCompletedVersion,
     onboardingPrimaryGoalId: USER_PREFERENCE_DEFAULTS.onboardingPrimaryGoalId,
   };
@@ -136,7 +139,7 @@ async function readAll(): Promise<UserPreferences> {
   return readLegacyUserPreferences();
 }
 
-function migrateUserPreferences(preferences: UserPreferences): {
+export function migrateUserPreferences(preferences: UserPreferences): {
   preferences: UserPreferences;
   changed: boolean;
 } {
@@ -162,6 +165,11 @@ function migrateUserPreferences(preferences: UserPreferences): {
 
   if (typeof next.transparentChromeEnabled !== "boolean") {
     next.transparentChromeEnabled = USER_PREFERENCE_DEFAULTS.transparentChromeEnabled;
+    changed = true;
+  }
+
+  if (typeof next.powersInCodingSessionsEnabled !== "boolean") {
+    next.powersInCodingSessionsEnabled = USER_PREFERENCE_DEFAULTS.powersInCodingSessionsEnabled;
     changed = true;
   }
 
@@ -197,6 +205,7 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
     turnEndSoundEnabled: state.turnEndSoundEnabled,
     turnEndSoundId: state.turnEndSoundId,
     transparentChromeEnabled: state.transparentChromeEnabled,
+    powersInCodingSessionsEnabled: state.powersInCodingSessionsEnabled,
     onboardingCompletedVersion: state.onboardingCompletedVersion,
     onboardingPrimaryGoalId: state.onboardingPrimaryGoalId,
   };

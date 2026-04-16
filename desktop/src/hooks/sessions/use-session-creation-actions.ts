@@ -272,9 +272,20 @@ export function useSessionCreationActions({
       target.anyharnessWorkspaceId,
       requestOptions,
     ).catch(() => null);
-    const { mcpServers, warnings: connectorWarnings } = await resolveSessionMcpServersForLaunch({
+    const powersInCodingSessionsEnabled = useUserPreferencesStore.getState()
+      .powersInCodingSessionsEnabled;
+    const {
+      mcpServers,
+      mcpBindingSummaries,
+      warnings: connectorWarnings,
+    } = await resolveSessionMcpServersForLaunch({
       targetLocation: target.location,
       workspacePath: targetWorkspace?.path ?? null,
+      policy: {
+        workspaceSurface: "coding",
+        lifecycle: "create",
+        enabled: powersInCodingSessionsEnabled,
+      },
     });
     const localWorkspace = cloudWorkspaceId ? null : targetWorkspace;
     const cloudWorkspace = cloudWorkspaceId
@@ -348,6 +359,9 @@ export function useSessionCreationActions({
           modelId: options.modelId,
           ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
           mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
+          mcpBindingSummaries: mcpBindingSummaries && mcpBindingSummaries.length > 0
+            ? mcpBindingSummaries
+            : undefined,
           systemPromptAppend,
         }, requestOptions);
 
@@ -362,6 +376,7 @@ export function useSessionCreationActions({
             title: session.title ?? null,
             liveConfig: session.liveConfig ?? null,
             executionSummary: session.executionSummary ?? null,
+            mcpBindingSummaries: session.mcpBindingSummaries ?? null,
             lastPromptAt: session.lastPromptAt ?? null,
             optimisticPrompt: optimisticPendingPrompt,
           }),

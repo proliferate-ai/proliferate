@@ -5,7 +5,8 @@ use utoipa::ToSchema;
 
 use super::{
     InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
-    PermissionInteractionOption, SessionLiveConfigSnapshot, SessionMcpServer, UserInputQuestion,
+    PermissionInteractionOption, SessionLiveConfigSnapshot, SessionMcpBindingSummary,
+    SessionMcpServer, UserInputQuestion,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -106,6 +107,8 @@ pub struct Session {
     pub live_config: Option<SessionLiveConfigSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_summary: Option<SessionExecutionSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
     pub status: SessionStatus,
     pub created_at: String,
     pub updated_at: String,
@@ -142,6 +145,8 @@ pub struct CreateSessionRequest {
     pub system_prompt_append: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp_servers: Option<Vec<SessionMcpServer>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
 }
 
 impl fmt::Debug for CreateSessionRequest {
@@ -161,6 +166,40 @@ impl fmt::Debug for CreateSessionRequest {
             .field(
                 "mcp_server_count",
                 &self.mcp_servers.as_ref().map(|servers| servers.len()),
+            )
+            .field(
+                "mcp_binding_summary_count",
+                &self
+                    .mcp_binding_summaries
+                    .as_ref()
+                    .map(|summaries| summaries.len()),
+            )
+            .finish()
+    }
+}
+
+#[derive(Clone, Default, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ResumeSessionRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_servers: Option<Vec<SessionMcpServer>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+}
+
+impl fmt::Debug for ResumeSessionRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ResumeSessionRequest")
+            .field(
+                "mcp_server_count",
+                &self.mcp_servers.as_ref().map(|servers| servers.len()),
+            )
+            .field(
+                "mcp_binding_summary_count",
+                &self
+                    .mcp_binding_summaries
+                    .as_ref()
+                    .map(|summaries| summaries.len()),
             )
             .finish()
     }
@@ -401,6 +440,7 @@ mod tests {
                     }],
                 }),
             ]),
+            mcp_binding_summaries: None,
         };
 
         let json = serde_json::to_value(&request).expect("serialize create request");
@@ -472,6 +512,7 @@ mod tests {
             title: Some("Fix auth refresh".to_string()),
             live_config: None,
             execution_summary: None,
+            mcp_binding_summaries: None,
             status: SessionStatus::Idle,
             created_at: "2026-03-25T00:00:00Z".to_string(),
             updated_at: "2026-03-25T00:00:00Z".to_string(),

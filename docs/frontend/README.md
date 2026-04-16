@@ -123,6 +123,9 @@ without explicit approval.
   in `platform/tauri/`. Generated API types live in cloud client. App-defined
   domain models live in `lib/domain/`. Store types live in store files.
   Do not create shared type folders.
+- Settings routes use flat section ids. Visual sidebar groups, such as
+  Configuration, are headings only and must not introduce nested route state.
+  Repo settings compose local and cloud repo sections inside the repo pane.
 
 ## 3. State Management Rules
 
@@ -327,6 +330,11 @@ told you which layer should own the logic.
   `workspace/chat/transcript/**`, `workspace/git/**`, or `workspace/shell/**`.
   New code should prefer domain-first grouping over root buckets like
   `modals/`, `panels/`, `sidebar/`, or `topbar/`.
+  Settings panes live under `components/settings/panes/**`; each pane should
+  own one product area. Shared settings controls belong under
+  `components/settings/**`, while repo-specific settings should split into
+  child sections such as local repo and cloud repo configuration instead of
+  growing one mixed pane.
 - `hooks/`: this is where UI-facing orchestration should accumulate; do not add
   JSX, provider composition, raw client construction, or duplicate generic
   AnyHarness resource hooks. `hooks/ui/` holds domain-agnostic interaction

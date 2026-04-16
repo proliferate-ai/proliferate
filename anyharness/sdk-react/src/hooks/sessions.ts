@@ -4,6 +4,7 @@ import type {
   ListSessionEventsOptions,
   PromptSessionRequest,
   ResolveInteractionRequest,
+  ResumeSessionRequest,
   SetSessionConfigOptionRequest,
   UpdateSessionTitleRequest,
 } from "@anyharness/sdk";
@@ -248,12 +249,17 @@ export function useResumeSessionMutation(options?: { workspaceId?: string | null
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
-    mutationFn: async (sessionId: string) => {
+    mutationFn: async (
+      input: string | { sessionId: string; request?: ResumeSessionRequest },
+    ) => {
+      const sessionId = typeof input === "string" ? input : input.sessionId;
+      const request = typeof input === "string" ? undefined : input.request;
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.sessions.resume(sessionId);
+      return client.sessions.resume(sessionId, request);
     },
-    onSuccess: async (_response, sessionId) => {
+    onSuccess: async (_response, input) => {
+      const sessionId = typeof input === "string" ? input : input.sessionId;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId) }),
         queryClient.invalidateQueries({ queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId) }),

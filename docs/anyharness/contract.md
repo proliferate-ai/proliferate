@@ -96,8 +96,21 @@ Owns session-facing transport types:
 
 - session summary
 - create and reconfigure requests
+- optional resume request body
+- redacted MCP binding summary read models
 - prompt request and response
 - interaction resolution request
+
+`Session.mcpBindingSummaries` is a non-secret launch-time read model. It may
+describe which MCP bindings were applied or not applied, but it must not carry
+URLs, headers, env vars, command args, absolute paths, tokens, or raw error
+strings. `null` means the session predates this read model or the state is
+unknown; it does not mean the session had no MCP bindings.
+
+`ResumeSessionRequest` must remain backwards-compatible with no body and `{}`.
+When present, it may carry refreshed secret-bearing `mcpServers` plus matching
+redacted `mcpBindingSummaries`; runtime liveness remains authoritative for
+whether those refreshed bindings are persisted.
 
 ### `files.rs`
 

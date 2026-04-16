@@ -3,6 +3,7 @@ import type {
   SessionEventEnvelope,
   SessionExecutionSummary,
   SessionLiveConfigSnapshot,
+  SessionMcpBindingSummary,
   SessionStatus,
   SessionStreamHandle,
   TranscriptState,
@@ -30,6 +31,7 @@ export interface SessionSlot {
   title: string | null;
   liveConfig: SessionLiveConfigSnapshot | null;
   executionSummary: SessionExecutionSummary | null;
+  mcpBindingSummaries: SessionMcpBindingSummary[] | null;
   events: SessionEventEnvelope[];
   transcript: TranscriptState;
   pendingConfigChanges: PendingSessionConfigChanges;

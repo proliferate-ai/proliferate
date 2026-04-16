@@ -6,9 +6,10 @@ import {
 } from "@/config/settings";
 import { AgentsPane } from "./AgentsPane";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
-import { ConfigurationPane } from "./panes/ConfigurationPane";
 import { AccountPane } from "./panes/AccountPane";
-import { CoworkPane } from "./panes/CoworkPane";
+import { AdvancedPane } from "./panes/AdvancedPane";
+import { AppearancePane } from "./panes/AppearancePane";
+import { DefaultsPane } from "./panes/DefaultsPane";
 import { KeyboardShortcutsPane } from "./panes/KeyboardShortcutsPane";
 import { CloudAuthUnavailablePane } from "./panes/CloudAuthUnavailablePane";
 import { CloudPane } from "./panes/CloudPane";
@@ -16,20 +17,15 @@ import { CloudSignInRequiredPane } from "./panes/CloudSignInRequiredPane";
 import { CloudUnavailablePane } from "./panes/CloudUnavailablePane";
 import { RepositoryPane } from "./panes/RepositoryPane";
 import {
-  cloudRepositoryKey,
-  isCloudRepository,
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useUpdater } from "@/hooks/updater/use-updater";
-import { CloudRepoSettingsScreen } from "@/components/cloud/repo-settings/CloudRepoSettingsScreen";
 
 interface SettingsScreenProps {
   activeSection: SettingsSection;
   activeRepoSourceRoot: string | null;
-  activeCloudRepoOwner: string | null;
-  activeCloudRepoName: string | null;
   repositories: SettingsRepositoryEntry[];
   onNavigateHome: () => void;
   onSelectSection: (section: SettingsStaticSection) => void;
@@ -39,21 +35,23 @@ interface SettingsScreenProps {
 function renderSettingsSection(
   activeSection: SettingsSection,
   repository: SettingsRepositoryEntry | null,
-  cloudRepository: SettingsRepositoryEntry | null,
   repositories: SettingsRepositoryEntry[],
   cloudEnabled: boolean,
   cloudActive: boolean,
   cloudSignInChecking: boolean,
   cloudSignInAvailable: boolean,
 ): ReactNode {
-  if (activeSection === "configuration") {
-    return <ConfigurationPane />;
+  if (activeSection === "agents") {
+    return <AgentsPane />;
+  }
+  if (activeSection === "defaults") {
+    return <DefaultsPane />;
+  }
+  if (activeSection === "appearance") {
+    return <AppearancePane />;
   }
   if (activeSection === "keyboard") {
     return <KeyboardShortcutsPane />;
-  }
-  if (activeSection === "cowork") {
-    return <CoworkPane />;
   }
   if (activeSection === "account") {
     return <AccountPane />;
@@ -73,23 +71,8 @@ function renderSettingsSection(
 
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
-  if (activeSection === "cloudRepo") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <CloudRepoSettingsScreen repository={cloudRepository} />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
-  }
-  if (activeSection === "agents") {
-    return <AgentsPane />;
+  if (activeSection === "advanced") {
+    return <AdvancedPane />;
   }
   return <RepositoryPane repository={repository} />;
 }
@@ -97,8 +80,6 @@ function renderSettingsSection(
 export function SettingsScreen({
   activeSection,
   activeRepoSourceRoot,
-  activeCloudRepoOwner,
-  activeCloudRepoName,
   repositories,
   onNavigateHome,
   onSelectSection,
@@ -116,13 +97,6 @@ export function SettingsScreen({
   } = useUpdater();
   const activeRepository = repositories.find(
     (repository) => repository.sourceRoot === activeRepoSourceRoot,
-  ) ?? null;
-  const activeCloudRepository = repositories.find(
-    (repository) => isCloudRepository(repository)
-      && activeCloudRepoOwner
-      && activeCloudRepoName
-      && cloudRepositoryKey(repository.gitOwner, repository.gitRepoName)
-        === cloudRepositoryKey(activeCloudRepoOwner, activeCloudRepoName),
   ) ?? null;
 
   return (
@@ -157,7 +131,6 @@ export function SettingsScreen({
                 {renderSettingsSection(
                   activeSection,
                   activeRepository,
-                  activeCloudRepository,
                   repositories,
                   cloudEnabled,
                   cloudActive,

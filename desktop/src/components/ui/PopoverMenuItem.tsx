@@ -15,6 +15,7 @@ export function PopoverMenuItem({
   trailing,
   variant = "default",
   className = "",
+  children,
   type = "button",
   ...props
 }: PopoverMenuItemProps) {
@@ -29,7 +30,10 @@ export function PopoverMenuItem({
       {...props}
     >
       {icon && <span className="flex shrink-0 items-center justify-center">{icon}</span>}
-      <span className="flex-1 truncate text-left">{label}</span>
+      <span className="min-w-0 flex-1 text-left">
+        <span className="block truncate">{label}</span>
+        {children}
+      </span>
       {trailing && <span className="flex shrink-0 items-center justify-center">{trailing}</span>}
     </button>
   );

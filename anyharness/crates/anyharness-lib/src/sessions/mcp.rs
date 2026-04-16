@@ -3,7 +3,10 @@ use std::fmt;
 use aes_gcm_siv::aead::{Aead, AeadCore, KeyInit, OsRng};
 use aes_gcm_siv::Aes256GcmSiv;
 use agent_client_protocol as acp;
-use anyharness_contract::v1::SessionMcpServer as ContractSessionMcpServer;
+use anyharness_contract::v1::{
+    SessionMcpBindingSummary as ContractSessionMcpBindingSummary,
+    SessionMcpServer as ContractSessionMcpServer,
+};
 use anyhow::Context;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use base64::Engine;
@@ -15,6 +18,7 @@ const NONCE_LEN: usize = 12;
 
 pub const SESSION_RESTART_REQUIRED_DETAIL: &str =
     "This session's MCP bindings can't be decrypted. Please restart the session.";
+const MAX_SUMMARY_TEXT_LEN: usize = 128;
 
 #[derive(Clone)]
 pub struct SessionDataCipher {
@@ -179,6 +183,37 @@ impl SessionMcpBindingsError {
     }
 }
 
+pub enum SessionMcpSummaryError {
+    Invalid(String),
+    Serialize(anyhow::Error),
+}
+
+impl fmt::Debug for SessionMcpSummaryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Invalid(detail) => f
+                .debug_tuple("SessionMcpSummaryError::Invalid")
+                .field(detail)
+                .finish(),
+            Self::Serialize(error) => f
+                .debug_tuple("SessionMcpSummaryError::Serialize")
+                .field(&error.to_string())
+                .finish(),
+        }
+    }
+}
+
+impl fmt::Display for SessionMcpSummaryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Invalid(detail) => write!(f, "{detail}"),
+            Self::Serialize(error) => write!(f, "{error}"),
+        }
+    }
+}
+
+impl std::error::Error for SessionMcpSummaryError {}
+
 pub fn load_data_cipher_from_env() -> Result<Option<SessionDataCipher>, String> {
     let Some(value) = std::env::var(DATA_KEY_ENV_VAR).ok() else {
         return Ok(None);
@@ -258,6 +293,68 @@ pub fn encrypt_bindings(
     )))
 }
 
+pub fn serialize_binding_summaries(
+    summaries: Option<Vec<ContractSessionMcpBindingSummary>>,
+) -> Result<Option<String>, SessionMcpSummaryError> {
+    let Some(summaries) = summaries else {
+        return Ok(None);
+    };
+    validate_binding_summaries(&summaries)?;
+    serde_json::to_string(&summaries)
+        .map(Some)
+        .context("serialize MCP binding summaries")
+        .map_err(SessionMcpSummaryError::Serialize)
+}
+
+pub fn validate_binding_summaries(
+    summaries: &[ContractSessionMcpBindingSummary],
+) -> Result<(), SessionMcpSummaryError> {
+    for summary in summaries {
+        validate_summary_text("id", &summary.id)?;
+        validate_summary_text("serverName", &summary.server_name)?;
+        if let Some(display_name) = summary.display_name.as_deref() {
+            validate_summary_text("displayName", display_name)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_summary_text(field: &'static str, value: &str) -> Result<(), SessionMcpSummaryError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(SessionMcpSummaryError::Invalid(format!(
+            "{field} must not be blank"
+        )));
+    }
+    if trimmed.len() > MAX_SUMMARY_TEXT_LEN {
+        return Err(SessionMcpSummaryError::Invalid(format!(
+            "{field} is too long"
+        )));
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    let looks_secret_bearing = lower.contains("://")
+        || lower.contains("authorization")
+        || lower.contains("bearer ")
+        || lower.contains("token=")
+        || lower.contains("api_key")
+        || lower.contains("apikey")
+        || lower.contains("secret=")
+        || lower.contains("password=")
+        || trimmed.starts_with('/')
+        || trimmed.starts_with("~/")
+        || trimmed
+            .as_bytes()
+            .get(1)
+            .copied()
+            .is_some_and(|byte| byte == b':');
+    if looks_secret_bearing {
+        return Err(SessionMcpSummaryError::Invalid(format!(
+            "{field} contains transport or secret-bearing data"
+        )));
+    }
+    Ok(())
+}
+
 pub fn decrypt_bindings(
     cipher: Option<&SessionDataCipher>,
     ciphertext: Option<&str>,
@@ -329,6 +426,7 @@ pub fn to_acp_servers(bindings: &[SessionMcpServer]) -> Vec<acp::McpServer> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyharness_contract::v1::{SessionMcpBindingOutcome, SessionMcpTransport};
 
     fn sample_http_binding() -> SessionMcpServer {
         SessionMcpServer::Http(SessionMcpHttpServer {
@@ -360,6 +458,17 @@ mod tests {
     fn sample_cipher() -> SessionDataCipher {
         SessionDataCipher::from_env_value("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
             .expect("cipher")
+    }
+
+    fn sample_summary() -> ContractSessionMcpBindingSummary {
+        ContractSessionMcpBindingSummary {
+            id: "connection-1".to_string(),
+            server_name: "github".to_string(),
+            display_name: Some("GitHub".to_string()),
+            transport: SessionMcpTransport::Http,
+            outcome: SessionMcpBindingOutcome::Applied,
+            reason: None,
+        }
     }
 
     #[test]
@@ -402,5 +511,26 @@ mod tests {
         let mapped = to_acp_servers(&bindings);
         assert_eq!(mapped.len(), 1);
         assert!(matches!(mapped[0], acp::McpServer::Stdio(_)));
+    }
+
+    #[test]
+    fn binding_summary_validation_accepts_redacted_metadata() {
+        let json = serialize_binding_summaries(Some(vec![sample_summary()]))
+            .expect("valid summary")
+            .expect("summary json");
+
+        assert!(json.contains("GitHub"));
+        assert!(!json.contains("https://"));
+        assert!(!json.contains("secret"));
+    }
+
+    #[test]
+    fn binding_summary_validation_rejects_secret_bearing_fields() {
+        let mut summary = sample_summary();
+        summary.server_name = "https://mcp.example.com?token=secret".to_string();
+
+        let error = serialize_binding_summaries(Some(vec![summary])).expect_err("invalid summary");
+
+        assert!(matches!(error, SessionMcpSummaryError::Invalid(_)));
     }
 }

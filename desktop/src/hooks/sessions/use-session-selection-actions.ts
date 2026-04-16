@@ -204,6 +204,7 @@ export function useSessionSelectionActions() {
           title: sessionMeta?.title ?? null,
           liveConfig: sessionMeta?.liveConfig ?? null,
           executionSummary: sessionMeta?.executionSummary ?? null,
+          mcpBindingSummaries: sessionMeta?.mcpBindingSummaries ?? null,
           lastPromptAt: sessionMeta?.lastPromptAt ?? null,
         }),
         status: resolveStatusFromExecutionSummary(
@@ -221,6 +222,7 @@ export function useSessionSelectionActions() {
         title: sessionMeta?.title ?? existingSlot.title ?? null,
         liveConfig: sessionMeta?.liveConfig ?? existingSlot.liveConfig ?? null,
         executionSummary: sessionMeta?.executionSummary ?? existingSlot.executionSummary ?? null,
+        mcpBindingSummaries: sessionMeta?.mcpBindingSummaries ?? existingSlot.mcpBindingSummaries ?? null,
         status: resolveStatusFromExecutionSummary(
           sessionMeta?.executionSummary ?? existingSlot.executionSummary ?? null,
           sessionMeta?.status ?? existingSlot.status,

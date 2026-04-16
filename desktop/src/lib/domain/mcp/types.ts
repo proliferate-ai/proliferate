@@ -149,4 +149,5 @@ export type ConnectorLaunchResolutionWarning =
   | (ConnectorLaunchResolutionWarningBase & { kind: "needs_reconnect" })
   | (ConnectorLaunchResolutionWarningBase & { kind: "missing_stdio_command" })
   | (ConnectorLaunchResolutionWarningBase & { kind: "workspace_path_unresolved" })
-  | (ConnectorLaunchResolutionWarningBase & { kind: "unsupported_target" });
+  | (ConnectorLaunchResolutionWarningBase & { kind: "unsupported_target" })
+  | (ConnectorLaunchResolutionWarningBase & { kind: "resolver_error" });

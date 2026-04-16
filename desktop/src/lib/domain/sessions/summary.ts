@@ -3,6 +3,7 @@ import type {
   Session,
   SessionExecutionSummary,
   SessionLiveConfigSnapshot,
+  SessionMcpBindingSummary,
   SessionStatus,
   TranscriptState,
 } from "@anyharness/sdk";
@@ -16,6 +17,7 @@ export interface SessionSlotSummaryPatch {
   title: string | null;
   liveConfig: SessionLiveConfigSnapshot | null;
   executionSummary: SessionExecutionSummary | null;
+  mcpBindingSummaries: SessionMcpBindingSummary[] | null;
   status: SessionStatus | null;
   lastPromptAt: string | null;
   transcript: TranscriptState;
@@ -40,6 +42,7 @@ export function buildSessionSlotPatchFromSummary(
     title,
     liveConfig: session.liveConfig ?? null,
     executionSummary: session.executionSummary ?? null,
+    mcpBindingSummaries: session.mcpBindingSummaries ?? null,
     status: resolveStatusFromExecutionSummary(session.executionSummary, session.status),
     lastPromptAt: session.lastPromptAt ?? null,
     transcript: {

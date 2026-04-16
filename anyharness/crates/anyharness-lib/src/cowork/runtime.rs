@@ -5,6 +5,7 @@ use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use anyharness_contract::v1::SessionMcpBindingSummary;
 use uuid::Uuid;
 
 use super::mcp_auth::CoworkMcpAuth;
@@ -29,6 +30,7 @@ pub struct CoworkSessionLaunchExtras {
 #[derive(Debug)]
 pub enum CoworkCreateThreadError {
     NotEnabled,
+    Setup(anyhow::Error),
     CreateSession(CreateAndStartSessionError),
     Internal(anyhow::Error),
 }
@@ -213,7 +215,7 @@ impl CoworkRuntime {
         Ok((root, thread_count))
     }
 
-    pub fn enable(&self) -> anyhow::Result<(CoworkRootRecord, RepoRootRecord)> {
+    pub fn ensure_root(&self) -> anyhow::Result<(CoworkRootRecord, RepoRootRecord)> {
         if let Some(root) = self.get_root()? {
             return Ok(root);
         }
@@ -236,12 +238,17 @@ impl CoworkRuntime {
         Ok((root, repo_root))
     }
 
+    pub fn enable(&self) -> anyhow::Result<(CoworkRootRecord, RepoRootRecord)> {
+        self.ensure_root()
+    }
+
     pub async fn create_thread(
         &self,
         agent_kind: &str,
         model_id: Option<&str>,
         mode_id: Option<&str>,
         mcp_servers: Vec<SessionMcpServer>,
+        mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
     ) -> Result<CreateCoworkThreadResult, CoworkCreateThreadError> {
         let total_started = Instant::now();
         let mcp_server_count = mcp_servers.len();
@@ -253,9 +260,7 @@ impl CoworkRuntime {
             "[workspace-latency] cowork.runtime.create_thread.start"
         );
 
-        let Some((root, repo_root)) = self.get_root()? else {
-            return Err(CoworkCreateThreadError::NotEnabled);
-        };
+        let (root, repo_root) = self.ensure_root().map_err(CoworkCreateThreadError::Setup)?;
 
         let thread_id = Uuid::new_v4().to_string();
         let branch_name = format!("thread/{thread_id}");
@@ -291,6 +296,7 @@ impl CoworkRuntime {
             mode_id,
             None,
             mcp_servers,
+            mcp_binding_summaries,
         ) {
             Ok(session) => session,
             Err(error) => {
