@@ -38,7 +38,7 @@ def test_create_sandbox_prefers_timeout_ms(monkeypatch) -> None:
         "metadata": {},
         "lifecycle": {
             "on_timeout": "pause",
-            "auto_resume": False,
+            "auto_resume": True,
         },
         "timeout": e2b_runtime.E2B_TIMEOUT_SECONDS,
     }
@@ -75,7 +75,7 @@ def test_create_sandbox_falls_back_to_timeout_ms(monkeypatch) -> None:
         "metadata": {},
         "lifecycle": {
             "on_timeout": "pause",
-            "auto_resume": False,
+            "auto_resume": True,
         },
         "timeoutMs": e2b_runtime.E2B_TIMEOUT_SECONDS * 1000,
     }
@@ -105,7 +105,7 @@ def test_create_sandbox_preserves_namespaced_tagged_template_ref(monkeypatch) ->
         "metadata": {},
         "lifecycle": {
             "on_timeout": "pause",
-            "auto_resume": False,
+            "auto_resume": True,
         },
         "timeout": e2b_runtime.E2B_TIMEOUT_SECONDS,
     }
@@ -131,6 +131,29 @@ def test_connect_prefers_timeout_seconds(monkeypatch) -> None:
     assert captured["kwargs"] == {
         "api_key": "e2b_test_key",
         "timeout": 45,
+    }
+
+
+def test_connect_defaults_to_cloud_timeout(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeSandbox:
+        @staticmethod
+        def connect(sandbox_id: str, **kwargs):
+            captured["sandbox_id"] = sandbox_id
+            captured["kwargs"] = kwargs
+            return {"sandbox_id": sandbox_id}
+
+    monkeypatch.setattr(e2b_runtime, "_load_sdk", lambda: FakeSandbox)
+    monkeypatch.setattr(e2b_runtime.settings, "e2b_api_key", "e2b_test_key")
+
+    result = e2b_runtime.E2BSandboxProvider()._connect("sandbox-123")
+
+    assert result == {"sandbox_id": "sandbox-123"}
+    assert captured["sandbox_id"] == "sandbox-123"
+    assert captured["kwargs"] == {
+        "api_key": "e2b_test_key",
+        "timeout": e2b_runtime.E2B_TIMEOUT_SECONDS,
     }
 
 

@@ -268,7 +268,7 @@ class E2BSandboxProvider:
             {
                 "api_key": api_key,
                 "metadata": metadata or {},
-                "lifecycle": {"on_timeout": "pause", "auto_resume": False},
+                "lifecycle": {"on_timeout": "pause", "auto_resume": True},
             },
             E2B_TIMEOUT_SECONDS,
             label="sandbox create",
@@ -296,11 +296,14 @@ class E2BSandboxProvider:
             raise E2BRuntimeError("E2B SDK does not expose Sandbox.connect")
         connect_started = time.perf_counter()
         logger.info("e2b sandbox connect started sandbox_id=%s", sandbox_id)
+        effective_timeout_seconds = (
+            timeout_seconds if timeout_seconds is not None else E2B_TIMEOUT_SECONDS
+        )
         sandbox = _try_timeout_variants(
             lambda **kw: connect_fn(sandbox_id, **kw),
             (),
             {"api_key": api_key},
-            timeout_seconds,
+            effective_timeout_seconds,
             label="sandbox connect",
         )
         logger.info(

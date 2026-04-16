@@ -37,6 +37,8 @@ _DAYTONA_ENDPOINT_HEALTH_ATTEMPTS = 30
 _DAYTONA_ENDPOINT_HEALTH_DELAY_SECONDS = 1.0
 _DAYTONA_RESTART_HEALTH_ATTEMPTS = 45
 _DAYTONA_RESTART_HEALTH_DELAY_SECONDS = 1.0
+_RUNNING_SANDBOX_STATES = frozenset({"running", "started"})
+_RESUMABLE_SANDBOX_STATES = frozenset({"paused", "stopped"})
 
 
 async def _relaunch_runtime(
@@ -103,6 +105,33 @@ async def _runtime_is_ready(
     return True
 
 
+async def _connect_or_resume_sandbox(
+    provider: SandboxProvider,
+    sandbox_id: str,
+    sandbox_state: str,
+) -> object:
+    normalized_state = sandbox_state.strip().lower()
+    if normalized_state in _RUNNING_SANDBOX_STATES:
+        try:
+            return await provider.connect_running_sandbox(
+                sandbox_id,
+                timeout_seconds=None,
+            )
+        except Exception as exc:
+            raise CloudRuntimeReconnectError("Failed to reconnect to the cloud sandbox.") from exc
+
+    if normalized_state in _RESUMABLE_SANDBOX_STATES:
+        try:
+            return await provider.resume_sandbox(
+                sandbox_id,
+                timeout_seconds=None,
+            )
+        except Exception as exc:
+            raise CloudRuntimeReconnectError("Failed to resume the cloud sandbox.") from exc
+
+    raise CloudRuntimeReconnectError("Cloud workspace sandbox is unavailable.")
+
+
 async def ensure_workspace_runtime_ready(
     workspace: CloudWorkspace,
     *,
@@ -134,15 +163,11 @@ async def ensure_workspace_runtime_ready(
     sandbox_state = await provider.get_sandbox_state(sandbox_record.external_sandbox_id)
     if sandbox_state is None:
         raise CloudRuntimeReconnectError("Cloud workspace sandbox could not be observed.")
-    if sandbox_state.state not in {"running", "started"}:
-        raise CloudRuntimeReconnectError("Cloud workspace sandbox is paused or unavailable.")
-    try:
-        sandbox = await provider.connect_running_sandbox(
-            sandbox_record.external_sandbox_id,
-            timeout_seconds=None,
-        )
-    except Exception as exc:
-        raise CloudRuntimeReconnectError("Failed to reconnect to the cloud sandbox.") from exc
+    sandbox = await _connect_or_resume_sandbox(
+        provider,
+        sandbox_record.external_sandbox_id,
+        sandbox_state.state,
+    )
 
     endpoint = await provider.resolve_runtime_endpoint(sandbox)
     # Daytona preview URLs are signed and may rotate even while the same
