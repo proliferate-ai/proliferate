@@ -228,6 +228,7 @@ export function useWorkspaceBootstrapActions() {
           agentKind: defaultLaunch.kind,
           modelId: defaultLaunch.modelId,
           latencyFlowId,
+          reuseInFlightEmptySession: true,
         });
         logLatency("workspace.select.initial_session_open.dispatched", {
           workspaceId,

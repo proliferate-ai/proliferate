@@ -223,6 +223,7 @@ export function useSessionCreationActions({
     modelId: string;
     workspaceId?: string;
     latencyFlowId?: string | null;
+    reuseInFlightEmptySession?: boolean;
   }) => {
     const current = useHarnessStore.getState();
     const workspaceId = options.workspaceId ?? current.selectedWorkspaceId;
@@ -237,7 +238,8 @@ export function useSessionCreationActions({
 
     const hasPrompt = options.text.trim().length > 0;
     const previousActiveSessionId = current.activeSessionId;
-    if (!hasPrompt) {
+    const shouldReuseInFlightEmptySession = options.reuseInFlightEmptySession === true;
+    if (!hasPrompt && shouldReuseInFlightEmptySession) {
       const inFlightCreate = inFlightSessionCreatesByWorkspace.get(workspaceId) ?? null;
       if (
         inFlightCreate
@@ -393,7 +395,7 @@ export function useSessionCreationActions({
         }
       })();
 
-      if (!hasPrompt) {
+      if (!hasPrompt && shouldReuseInFlightEmptySession) {
         inFlightSessionCreatesByWorkspace.set(workspaceId, {
           sessionId: pendingSessionId,
           agentKind: options.agentKind,
@@ -436,6 +438,7 @@ export function useSessionCreationActions({
     modelId: string;
     workspaceId?: string;
     latencyFlowId?: string | null;
+    reuseInFlightEmptySession?: boolean;
   }) => {
     await createSessionWithResolvedConfig({
       text: "",
@@ -443,6 +446,7 @@ export function useSessionCreationActions({
       modelId: options.modelId,
       workspaceId: options.workspaceId,
       latencyFlowId: options.latencyFlowId,
+      reuseInFlightEmptySession: options.reuseInFlightEmptySession,
     });
   }, [createSessionWithResolvedConfig]);
 
