@@ -9,6 +9,7 @@ from uuid import UUID
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
+    BILLING_DECISION_ENFORCE_ACTIVE_SPEND,
     BILLING_MODE_ENFORCE,
     BILLING_RECONCILE_INTERVAL_SECONDS,
     USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
@@ -20,6 +21,7 @@ from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
     list_all_open_usage_segments,
     open_usage_segment_for_sandbox,
+    record_billing_decision_event,
     with_billing_reconciler_lock,
 )
 from proliferate.db.store.cloud_workspaces import (
@@ -33,7 +35,7 @@ from proliferate.db.store.cloud_workspaces import (
 from proliferate.integrations.sandbox import ProviderSandboxState, get_configured_sandbox_provider
 from proliferate.integrations.sentry import capture_server_sentry_exception
 from proliferate.server.billing.models import BillingSnapshot
-from proliferate.server.billing.service import get_billing_snapshot
+from proliferate.server.billing.service import get_billing_snapshot_for_subject
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger("proliferate.billing.reconciler")
@@ -125,10 +127,33 @@ async def _enforce_or_reconcile_segment(
         await _mark_workspace_stopped(sandbox.cloud_workspace_id, destroyed=True)
         return
 
-    if settings.cloud_billing_mode == BILLING_MODE_ENFORCE and billing_snapshot.blocked:
+    if billing_snapshot.active_spend_hold:
+        await record_billing_decision_event(
+            billing_subject_id=billing_snapshot.billing_subject_id,
+            actor_user_id=segment.user_id,
+            workspace_id=segment.workspace_id,
+            decision_type=BILLING_DECISION_ENFORCE_ACTIVE_SPEND,
+            mode=settings.cloud_billing_mode,
+            would_block_start=billing_snapshot.start_blocked,
+            would_pause_active=True,
+            reason=billing_snapshot.hold_reason,
+            active_sandbox_count=billing_snapshot.active_sandbox_count,
+            remaining_seconds=billing_snapshot.remaining_seconds,
+        )
+    if settings.cloud_billing_mode == BILLING_MODE_ENFORCE and billing_snapshot.active_spend_hold:
         provider = get_configured_sandbox_provider()
         if sandbox.external_sandbox_id:
-            await provider.pause_sandbox(sandbox.external_sandbox_id)
+            try:
+                await provider.pause_sandbox(sandbox.external_sandbox_id)
+            except Exception:
+                logger.exception(
+                    "billing enforcement failed to pause sandbox",
+                    extra={
+                        "sandbox_id": str(sandbox.id),
+                        "external_sandbox_id": sandbox.external_sandbox_id,
+                    },
+                )
+                return
         ended_at = utcnow()
         await close_usage_segment_for_sandbox(
             sandbox_id=sandbox.id,
@@ -156,13 +181,15 @@ async def run_billing_reconcile_pass() -> None:
 
         await _repair_placeholders(states_by_placeholder_id=states_by_placeholder_id)
 
-        snapshots_by_user: dict[UUID, BillingSnapshot] = {}
+        snapshots_by_subject: dict[UUID, BillingSnapshot] = {}
         open_segments = await list_all_open_usage_segments()
         for segment in open_segments:
-            billing_snapshot = snapshots_by_user.get(segment.user_id)
+            billing_snapshot = snapshots_by_subject.get(segment.billing_subject_id)
             if billing_snapshot is None:
-                billing_snapshot = await get_billing_snapshot(segment.user_id)
-                snapshots_by_user[segment.user_id] = billing_snapshot
+                billing_snapshot = await get_billing_snapshot_for_subject(
+                    segment.billing_subject_id
+                )
+                snapshots_by_subject[segment.billing_subject_id] = billing_snapshot
             await _enforce_or_reconcile_segment(
                 segment=segment,
                 state=(

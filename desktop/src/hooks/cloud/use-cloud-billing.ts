@@ -16,6 +16,9 @@ function hasUsableBillingPlan(
     typeof billingPlan.billingMode === "string"
     && typeof billingPlan.isUnlimited === "boolean"
     && typeof billingPlan.overQuota === "boolean"
+    && typeof billingPlan.startBlocked === "boolean"
+    && typeof billingPlan.activeSpendHold === "boolean"
+    && typeof billingPlan.blocked === "boolean"
     && Number.isFinite(billingPlan.usedSandboxHours)
     && Number.isFinite(billingPlan.concurrentSandboxLimit)
     && Number.isFinite(billingPlan.activeSandboxCount)

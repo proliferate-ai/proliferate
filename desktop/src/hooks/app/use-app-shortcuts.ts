@@ -71,7 +71,7 @@ export function useAppShortcuts(): void {
   const cloudRepoConfigsInitialLoading = cloudActive
     && isCloudRepoConfigsPending
     && !cloudRepoConfigs;
-  const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.blocked;
+  const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.startBlocked;
 
   const orderedWorkspaceIds = useMemo(() => {
     const entries = buildSidebarWorkspaceEntries(workspaces, cloudWorkspaces);

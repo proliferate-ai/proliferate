@@ -68,6 +68,11 @@ class WorkspaceSummary(BaseModel):
     created_at: str | None = Field(serialization_alias="createdAt")
     action_block_kind: str | None = Field(default=None, serialization_alias="actionBlockKind")
     action_block_reason: str | None = Field(default=None, serialization_alias="actionBlockReason")
+    billing_suspension_state: str | None = Field(
+        default=None,
+        serialization_alias="billingSuspensionState",
+    )
+    can_resume: bool = Field(default=False, serialization_alias="canResume")
     post_ready_phase: str = Field(serialization_alias="postReadyPhase")
     post_ready_files_total: int = Field(serialization_alias="postReadyFilesTotal")
     post_ready_files_applied: int = Field(serialization_alias="postReadyFilesApplied")
@@ -109,6 +114,8 @@ def workspace_summary_payload(
     *,
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,
+    billing_suspension_state: str | None = None,
+    can_resume: bool = False,
 ) -> WorkspaceSummary:
     return WorkspaceSummary(
         id=str(workspace.id),
@@ -123,6 +130,8 @@ def workspace_summary_payload(
         created_at=_to_iso(workspace.created_at),
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
+        billing_suspension_state=billing_suspension_state,
+        can_resume=can_resume,
         post_ready_phase=workspace.repo_post_ready_phase,
         post_ready_files_total=workspace.repo_post_ready_files_total,
         post_ready_files_applied=workspace.repo_post_ready_files_applied,
@@ -138,6 +147,8 @@ def workspace_detail_payload(
     *,
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,
+    billing_suspension_state: str | None = None,
+    can_resume: bool = False,
 ) -> WorkspaceDetail:
     return WorkspaceDetail(
         id=str(workspace.id),
@@ -152,6 +163,8 @@ def workspace_detail_payload(
         created_at=_to_iso(workspace.created_at),
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
+        billing_suspension_state=billing_suspension_state,
+        can_resume=can_resume,
         post_ready_phase=workspace.repo_post_ready_phase,
         post_ready_files_total=workspace.repo_post_ready_files_total,
         post_ready_files_applied=workspace.repo_post_ready_files_applied,

@@ -39,6 +39,8 @@ def _make_user(*, email: str, display_name: str | None = "Cloud Tester") -> User
 def _make_workspace(user_id: uuid.UUID) -> CloudWorkspace:
     return CloudWorkspace(
         user_id=user_id,
+        billing_subject_id=user_id,
+        created_by_user_id=user_id,
         display_name="acme/rocket",
         git_provider="github",
         git_owner="acme",
