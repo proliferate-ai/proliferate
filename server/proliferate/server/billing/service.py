@@ -28,10 +28,10 @@ from proliferate.db.store.billing import (
     BillingSnapshotState,
     load_billing_snapshot_state,
     load_billing_snapshot_state_for_subject,
-    record_billing_decision_event,
     resolve_billing_subject_id_for_user,
     resolve_billing_subject_id_for_workspace,
 )
+from proliferate.db.store.billing_decisions import record_billing_decision_event
 from proliferate.server.billing.models import (
     BillingOverview,
     BillingSnapshot,

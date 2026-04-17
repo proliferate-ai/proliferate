@@ -2,25 +2,21 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TypeVar
 from uuid import UUID
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
-    BILLING_RECONCILER_LOCK_KEY,
     FREE_INCLUDED_GRANT_TYPE,
     USAGE_SEGMENT_RECENT_LOOKBACK_DAYS,
 )
 from proliferate.db import engine as db_engine
 from proliferate.db.models.billing import (
-    BillingDecisionEvent,
     BillingEntitlement,
     BillingGrant,
     BillingHold,
@@ -30,8 +26,6 @@ from proliferate.db.models.billing import (
 )
 from proliferate.db.models.cloud import CloudSandbox, CloudWorkspace
 from proliferate.server.billing.models import coerce_utc, utcnow
-
-T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -446,21 +440,6 @@ async def ensure_sandbox_usage_stopped(
     )
 
 
-async def try_acquire_billing_reconciler_lock(db: AsyncSession) -> bool:
-    result = await db.scalar(
-        text("SELECT pg_try_advisory_lock(:lock_key)"),
-        {"lock_key": BILLING_RECONCILER_LOCK_KEY},
-    )
-    return bool(result)
-
-
-async def release_billing_reconciler_lock(db: AsyncSession) -> None:
-    await db.execute(
-        text("SELECT pg_advisory_unlock(:lock_key)"),
-        {"lock_key": BILLING_RECONCILER_LOCK_KEY},
-    )
-
-
 async def _build_billing_snapshot_state_for_subject(
     db: AsyncSession,
     billing_subject_id: UUID,
@@ -598,50 +577,3 @@ async def remember_sandbox_event_receipt(
         )
         await db.commit()
         return created
-
-
-async def record_billing_decision_event(
-    *,
-    billing_subject_id: UUID,
-    actor_user_id: UUID | None,
-    workspace_id: UUID | None,
-    decision_type: str,
-    mode: str,
-    would_block_start: bool,
-    would_pause_active: bool,
-    reason: str | None,
-    active_sandbox_count: int,
-    remaining_seconds: float | None,
-) -> None:
-    async with db_engine.async_session_factory() as db:
-        db.add(
-            BillingDecisionEvent(
-                billing_subject_id=billing_subject_id,
-                actor_user_id=actor_user_id,
-                workspace_id=workspace_id,
-                decision_type=decision_type,
-                mode=mode,
-                would_block_start=would_block_start,
-                would_pause_active=would_pause_active,
-                reason=reason,
-                active_sandbox_count=active_sandbox_count,
-                remaining_seconds=remaining_seconds,
-                created_at=utcnow(),
-            )
-        )
-        await db.commit()
-
-
-async def with_billing_reconciler_lock[T](
-    callback: Callable[[AsyncSession], Awaitable[T]],
-) -> tuple[bool, T | None]:
-    async with db_engine.async_session_factory() as db:
-        acquired = await try_acquire_billing_reconciler_lock(db)
-        if not acquired:
-            return False, None
-        try:
-            result = await callback(db)
-            await db.commit()
-            return True, result
-        finally:
-            await release_billing_reconciler_lock(db)
