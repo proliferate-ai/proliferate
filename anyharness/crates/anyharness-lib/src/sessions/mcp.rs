@@ -18,7 +18,8 @@ const NONCE_LEN: usize = 12;
 
 pub const SESSION_RESTART_REQUIRED_DETAIL: &str =
     "This session's MCP bindings can't be decrypted. Please restart the session.";
-const MAX_SUMMARY_TEXT_LEN: usize = 128;
+const MAX_SUMMARY_IDENTIFIER_LEN: usize = 64;
+const MAX_SUMMARY_DISPLAY_TEXT_LEN: usize = 128;
 
 #[derive(Clone)]
 pub struct SessionDataCipher {
@@ -310,46 +311,54 @@ pub fn validate_binding_summaries(
     summaries: &[ContractSessionMcpBindingSummary],
 ) -> Result<(), SessionMcpSummaryError> {
     for summary in summaries {
-        validate_summary_text("id", &summary.id)?;
-        validate_summary_text("serverName", &summary.server_name)?;
+        validate_summary_identifier("id", &summary.id)?;
+        validate_summary_identifier("serverName", &summary.server_name)?;
         if let Some(display_name) = summary.display_name.as_deref() {
-            validate_summary_text("displayName", display_name)?;
+            validate_summary_display_text("displayName", display_name)?;
         }
     }
     Ok(())
 }
 
-fn validate_summary_text(field: &'static str, value: &str) -> Result<(), SessionMcpSummaryError> {
+fn validate_summary_identifier(
+    field: &'static str,
+    value: &str,
+) -> Result<(), SessionMcpSummaryError> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return Err(SessionMcpSummaryError::Invalid(format!(
             "{field} must not be blank"
         )));
     }
-    if trimmed.len() > MAX_SUMMARY_TEXT_LEN {
+    if trimmed.len() > MAX_SUMMARY_IDENTIFIER_LEN {
         return Err(SessionMcpSummaryError::Invalid(format!(
             "{field} is too long"
         )));
     }
-    let lower = trimmed.to_ascii_lowercase();
-    let looks_secret_bearing = lower.contains("://")
-        || lower.contains("authorization")
-        || lower.contains("bearer ")
-        || lower.contains("token=")
-        || lower.contains("api_key")
-        || lower.contains("apikey")
-        || lower.contains("secret=")
-        || lower.contains("password=")
-        || trimmed.starts_with('/')
-        || trimmed.starts_with("~/")
-        || trimmed
-            .as_bytes()
-            .get(1)
-            .copied()
-            .is_some_and(|byte| byte == b':');
-    if looks_secret_bearing {
+    let valid = trimmed
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b':'));
+    if !valid {
         return Err(SessionMcpSummaryError::Invalid(format!(
-            "{field} contains transport or secret-bearing data"
+            "{field} contains unsupported characters"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_summary_display_text(
+    field: &'static str,
+    value: &str,
+) -> Result<(), SessionMcpSummaryError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(SessionMcpSummaryError::Invalid(format!(
+            "{field} must not be blank"
+        )));
+    }
+    if trimmed.len() > MAX_SUMMARY_DISPLAY_TEXT_LEN {
+        return Err(SessionMcpSummaryError::Invalid(format!(
+            "{field} is too long"
         )));
     }
     Ok(())
@@ -525,7 +534,19 @@ mod tests {
     }
 
     #[test]
-    fn binding_summary_validation_rejects_secret_bearing_fields() {
+    fn binding_summary_validation_allows_display_names_with_security_words() {
+        let mut summary = sample_summary();
+        summary.display_name = Some("Stripe OAuth Token".to_string());
+
+        let json = serialize_binding_summaries(Some(vec![summary]))
+            .expect("valid summary")
+            .expect("summary json");
+
+        assert!(json.contains("Stripe OAuth Token"));
+    }
+
+    #[test]
+    fn binding_summary_validation_rejects_non_identifier_fields() {
         let mut summary = sample_summary();
         summary.server_name = "https://mcp.example.com?token=secret".to_string();
 

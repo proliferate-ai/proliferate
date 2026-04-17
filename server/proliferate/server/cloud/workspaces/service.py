@@ -10,11 +10,6 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_CLOSED_BY_MANUAL_STOP,
     USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
     USAGE_SEGMENT_OPENED_BY_RESUME,
-    WORKSPACE_ACTION_BLOCK_KIND_ADMIN_HOLD,
-    WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT,
-    WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
-    WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD,
-    WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED,
 )
 from proliferate.constants.cloud import SUPPORTED_GIT_PROVIDER, WorkspaceStatus
 from proliferate.db.models.auth import User
@@ -48,6 +43,7 @@ from proliferate.server.billing.models import BillingSnapshot, SandboxStartAutho
 from proliferate.server.billing.service import (
     authorize_sandbox_start,
     get_billing_snapshot_for_subject,
+    sandbox_start_block_message,
 )
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.credentials.models import allowed_agent_kinds
@@ -198,26 +194,14 @@ def _prefer_fresher_workspace_state(
     return workspace
 
 
-def _cloud_workspace_block_message(blocked_reason: str | None) -> str:
-    if blocked_reason == WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT:
-        return "Sandbox limit reached. Stop another cloud workspace before starting a new one."
-    if blocked_reason == WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED:
-        return "Cloud usage is paused because your included sandbox hours are exhausted."
-    if blocked_reason == WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED:
-        return "Cloud usage is paused because billing needs attention."
-    if blocked_reason == WORKSPACE_ACTION_BLOCK_KIND_ADMIN_HOLD:
-        return "Cloud usage is paused for this account."
-    if blocked_reason == WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD:
-        return "Cloud usage is paused because billing needs attention."
-    return "Cloud usage is currently unavailable."
-
-
 def _raise_if_cloud_workspace_start_denied(authorization: SandboxStartAuthorization) -> None:
     if authorization.allowed:
         return
     raise CloudApiError(
         "quota_exceeded",
-        authorization.message or _cloud_workspace_block_message(authorization.start_block_reason),
+        authorization.message
+        or sandbox_start_block_message(authorization.start_block_reason)
+        or "Cloud usage is currently unavailable.",
         status_code=403,
     )
 
@@ -232,7 +216,8 @@ def _workspace_action_block(
         return None, None
     return (
         billing.start_block_reason,
-        _cloud_workspace_block_message(billing.start_block_reason),
+        sandbox_start_block_message(billing.start_block_reason)
+        or "Cloud usage is currently unavailable.",
     )
 
 
@@ -262,11 +247,10 @@ async def get_cloud_workspace_detail(
     workspace_id: UUID,
 ) -> WorkspaceDetail:
     workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
-    return await _build_workspace_detail(user_id, workspace)
+    return await _build_workspace_detail(workspace)
 
 
 async def _build_workspace_detail(
-    _user_id: UUID,
     workspace: CloudWorkspace,
 ) -> WorkspaceDetail:
     statuses = await load_cloud_credential_statuses(workspace.user_id)
@@ -444,7 +428,7 @@ async def create_cloud_workspace(
         branch_name=cleaned_branch_name,
     )
     schedule_workspace_provision(workspace.id)
-    return await _build_workspace_detail(user.id, workspace)
+    return await _build_workspace_detail(workspace)
 
 
 async def ensure_cloud_workspace_for_existing_branch(
@@ -556,7 +540,7 @@ async def start_cloud_workspace(
 ) -> WorkspaceDetail:
     workspace = await _require_cloud_workspace_for_user(user.id, workspace_id)
     if workspace.status in PROVISIONING_STATUSES and workspace.status != WorkspaceStatus.queued:
-        return await _build_workspace_detail(user.id, workspace)
+        return await _build_workspace_detail(workspace)
 
     repo_branches = await get_github_repo_branches(
         user,
@@ -616,7 +600,7 @@ async def start_cloud_workspace(
             workspace.id,
             requested_base_sha=requested_base_sha,
         )
-        return await _build_workspace_detail(user.id, workspace)
+        return await _build_workspace_detail(workspace)
 
     sandbox = await load_active_sandbox_for_workspace(workspace)
     if (
@@ -669,7 +653,7 @@ async def start_cloud_workspace(
                     workspace,
                     await load_cloud_workspace_by_id(workspace.id),
                 )
-            return await _build_workspace_detail(user.id, workspace)
+            return await _build_workspace_detail(workspace)
         except Exception as exc:
             reconnect_error = (
                 exc
@@ -706,7 +690,7 @@ async def start_cloud_workspace(
         workspace.id,
         requested_base_sha=requested_base_sha,
     )
-    return await _build_workspace_detail(user.id, workspace)
+    return await _build_workspace_detail(workspace)
 
 
 async def sync_cloud_workspace_branch(
@@ -730,7 +714,7 @@ async def sync_cloud_workspace_branch(
     )
     if workspace is None:
         raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
-    return await _build_workspace_detail(user_id, workspace)
+    return await _build_workspace_detail(workspace)
 
 
 async def sync_cloud_workspace_display_name(
@@ -767,7 +751,7 @@ async def sync_cloud_workspace_display_name(
     )
     if workspace is None:
         raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
-    return await _build_workspace_detail(user_id, workspace)
+    return await _build_workspace_detail(workspace)
 
 
 async def sync_cloud_workspace_credentials(
@@ -777,7 +761,7 @@ async def sync_cloud_workspace_credentials(
     workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
     await sync_workspace_credentials(workspace)
     reloaded_workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
-    return await _build_workspace_detail(user_id, reloaded_workspace)
+    return await _build_workspace_detail(reloaded_workspace)
 
 
 async def stop_cloud_workspace(
@@ -787,7 +771,7 @@ async def stop_cloud_workspace(
     workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
     await _stop_workspace_runtime(workspace)
     workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
-    return await _build_workspace_detail(user_id, workspace)
+    return await _build_workspace_detail(workspace)
 
 
 async def delete_cloud_workspace(

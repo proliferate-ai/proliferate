@@ -1,4 +1,7 @@
-import type { SessionMcpBindingSummary } from "@anyharness/sdk";
+import type {
+  SessionMcpBindingNotAppliedReason,
+  SessionMcpBindingSummary,
+} from "@anyharness/sdk";
 import { useMemo } from "react";
 import { useConnectors } from "@/hooks/mcp/use-connectors";
 
@@ -6,7 +9,7 @@ interface SessionPowersSummaryProps {
   summaries: SessionMcpBindingSummary[] | null;
 }
 
-const REASON_LABELS: Record<string, string> = {
+const REASON_LABELS: Record<SessionMcpBindingNotAppliedReason, string> = {
   missing_secret: "missing secret",
   needs_reconnect: "needs reconnect",
   unsupported_target: "unsupported target",
@@ -14,6 +17,18 @@ const REASON_LABELS: Record<string, string> = {
   policy_disabled: "policy disabled",
   resolver_error: "resolver error",
 };
+
+function setsEqual(left: Set<string>, right: Set<string>): boolean {
+  if (left.size !== right.size) {
+    return false;
+  }
+  for (const value of left) {
+    if (!right.has(value)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 export function SessionPowersSummary({ summaries }: SessionPowersSummaryProps) {
   const { data } = useConnectors();
@@ -33,15 +48,7 @@ export function SessionPowersSummary({ summaries }: SessionPowersSummaryProps) {
         .map((record) => record.metadata.connectionId),
     );
 
-    if (appliedIds.size !== enabledIds.size) {
-      return true;
-    }
-    for (const id of enabledIds) {
-      if (!appliedIds.has(id)) {
-        return true;
-      }
-    }
-    return false;
+    return !setsEqual(appliedIds, enabledIds);
   }, [data?.installed, summaries]);
 
   if (!summaries || summaries.length === 0) {

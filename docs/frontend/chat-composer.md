@@ -36,6 +36,7 @@ Non-negotiable:
 
 - **`ChatComposerDock` owns the dock shell.** Background, scrim, padding, max-width column, and the inset `px-5` top-slot wrapper all live in `ChatComposerDock.tsx`. The production app (`ChatView`) and the dev playground (`ChatPlaygroundPage`) both render `ChatComposerDock` directly. Do not reconstruct this backdrop in a third place — if you need it somewhere new, reuse the dock.
 - **`ChatInput` is the composer surface only.** It does not own any of the outer wrapping. It takes no `topSlot` prop. Everything above and below the composer surface is the dock's responsibility, and the workspace footer row is rendered via the dock's dedicated footer slot rather than ad hoc workspace logic in `ChatInput.tsx`.
+- **Powers status is in-composer status chrome.** `SessionPowersSummary` is the only approved read-only strip inside `ChatInput`. It summarizes MCP/Powers bindings applied at session launch or resume; it is not a gating top-slot inhabitant and must not compete with approvals, todo tracker, workspace arrival, or runtime status precedence.
 - **The composer surface stays unchanged and paints the seam.** There is no `flatTop` mode. Top-slot panels are narrower attached trays that sit directly above the composer: rounded top corners, side/top borders, no bottom border, and no gap. The composer surface paints after the top slot so its own top outline remains visible at the seam.
 
 ## 2. Top-slot precedence

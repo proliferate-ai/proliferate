@@ -25,7 +25,6 @@ import {
   type RuntimeTarget,
 } from "@/lib/integrations/anyharness/runtime-target";
 import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import type { SessionSlot } from "@/stores/sessions/harness-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 
@@ -188,33 +187,32 @@ export async function fetchSessionSummary(
 
 export async function resumeSession(
   sessionId: string,
-  options?: { requestHeaders?: HeadersInit },
+  options?: {
+    powersInCodingSessionsEnabled: boolean;
+    requestHeaders?: HeadersInit;
+  },
 ) {
   const { connection, target } = await getSessionClientAndWorkspace(sessionId);
   const client = getAnyHarnessClient(connection);
   const workspace = await client.workspaces.get(
     target.anyharnessWorkspaceId,
     options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
-  ).catch(() => null);
-  const isCowork = workspace?.surface === "cowork";
-  const powersInCodingSessionsEnabled = useUserPreferencesStore.getState()
-    .powersInCodingSessionsEnabled;
+  );
+  const isCowork = workspace.surface === "cowork";
   const { mcpServers, mcpBindingSummaries } = await resolveSessionMcpServersForLaunch({
     targetLocation: target.location,
-    workspacePath: workspace?.path ?? null,
+    workspacePath: workspace.path ?? null,
     policy: {
       workspaceSurface: isCowork ? "cowork" : "coding",
       lifecycle: "resume",
-      enabled: isCowork || powersInCodingSessionsEnabled,
+      enabled: isCowork || options?.powersInCodingSessionsEnabled === true,
     },
   });
   return client.sessions.resume(
     sessionId,
     {
-      ...(mcpServers.length > 0 ? { mcpServers } : {}),
-      ...(mcpBindingSummaries && mcpBindingSummaries.length > 0
-        ? { mcpBindingSummaries }
-        : {}),
+      mcpServers,
+      mcpBindingSummaries: mcpBindingSummaries ?? [],
     },
     options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
   );

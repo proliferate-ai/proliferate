@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useDetectRepoRootSetupQuery } from "@anyharness/sdk-react";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
-import { SettingsMenu } from "@/components/settings/SettingsMenu";
+import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { SetupCommandEditor } from "@/components/workspace/repo-setup/SetupCommandEditor";
 import { useRepositorySettings } from "@/hooks/settings/use-repository-settings";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";

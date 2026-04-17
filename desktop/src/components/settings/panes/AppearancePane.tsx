@@ -1,7 +1,7 @@
 import type { FC } from "react";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
-import { SettingsMenu } from "@/components/settings/SettingsMenu";
+import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { Button } from "@/components/ui/Button";
 import { Monitor, Moon, Sun } from "@/components/ui/icons";
@@ -155,6 +155,7 @@ export function AppearancePane() {
                   groups={[{
                     id: "turn-end-sounds",
                     options: TURN_END_SOUND_OPTIONS
+                      // Gong is intentionally tied to the TBPN preset's notification style.
                       .filter((option) => option.id !== "gong" || preset === "tbpn")
                       .map((option) => ({
                         id: option.id,

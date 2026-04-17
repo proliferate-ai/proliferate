@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCloudWorkspaceCompactStatusView,
   buildCloudWorkspaceStatusScreenModel,
+  shouldShowCloudWorkspaceStatusScreen,
 } from "@/lib/domain/workspaces/cloud-workspace-status";
 import type { CloudWorkspaceStatus, CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
 
@@ -51,6 +52,15 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
     expect(model.description).toBe(
       "Cloud usage is paused because your included sandbox hours are exhausted.",
     );
+  });
+});
+
+describe("shouldShowCloudWorkspaceStatusScreen", () => {
+  it("does not show the full status screen when optional block fields are omitted", () => {
+    const { actionBlockKind: _actionBlockKind, actionBlockReason: _actionBlockReason, ...workspace } =
+      makeCloudWorkspace({ status: "ready" });
+
+    expect(shouldShowCloudWorkspaceStatusScreen(workspace)).toBe(false);
   });
 });
 

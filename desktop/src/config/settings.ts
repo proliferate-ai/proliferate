@@ -35,7 +35,7 @@ export type SettingsNavItem =
   | { kind: "action"; id: "checkForUpdates" | "support"; label: string; icon: ComponentType<IconProps> };
 
 export interface SettingsNavGroup {
-  id: "configuration" | "primary" | "cloud";
+  id: "configuration" | "primary" | "cloud" | "updates";
   heading?: string;
   items: SettingsNavItem[];
 }
@@ -64,6 +64,12 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     heading: "Cloud",
     items: [
       { kind: "section", id: "cloud", label: "Cloud", icon: CloudIcon },
+    ],
+  },
+  {
+    id: "updates",
+    heading: "Updates",
+    items: [
       {
         kind: "action",
         id: "checkForUpdates",
@@ -73,21 +79,6 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     ],
   },
 ];
-
-// ── Legacy flat list (used by SettingsSidebar until migration) ────────
-
-export type SettingsStaticNavItem =
-  | { kind: "section"; id: SettingsStaticSection; label: string }
-  | { kind: "action"; id: "checkForUpdates" | "support"; label: string };
-
-export const SETTINGS_STATIC_NAV_ITEMS: SettingsStaticNavItem[] =
-  SETTINGS_NAV_GROUPS.flatMap((g) =>
-    g.items.map((item): SettingsStaticNavItem =>
-      item.kind === "section"
-        ? { kind: "section", id: item.id, label: item.label }
-        : { kind: "action", id: item.id, label: item.label },
-    ),
-  );
 
 export const SETTINGS_COPY = {
   back: "Back",

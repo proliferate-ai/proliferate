@@ -177,7 +177,7 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
     )
 
 
-def _authorization_message(reason: str | None) -> str | None:
+def sandbox_start_block_message(reason: str | None) -> str | None:
     if reason == WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT:
         return "Sandbox limit reached. Stop another cloud workspace before starting a new one."
     if reason == WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED:
@@ -223,7 +223,7 @@ async def authorize_sandbox_start(
         start_block_reason=snapshot.start_block_reason,
         active_spend_hold=snapshot.active_spend_hold,
         hold_reason=snapshot.hold_reason,
-        message=_authorization_message(reason),
+        message=sandbox_start_block_message(reason),
         active_sandbox_count=snapshot.active_sandbox_count,
         remaining_seconds=snapshot.remaining_seconds,
     )

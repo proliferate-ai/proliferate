@@ -5,7 +5,7 @@ import { useShallow } from "zustand/react/shallow";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
-import { SettingsMenu } from "@/components/settings/SettingsMenu";
+import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { ProviderIcon } from "@/components/ui/icons";
 import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
@@ -25,6 +25,11 @@ const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 const EMPTY_EDITORS: EditorInfo[] = [];
 const FINDER_TARGET = { id: "finder", label: "Finder", iconId: "finder" as const };
 const TERMINAL_TARGET = { id: "terminal", label: "Terminal", iconId: "terminal" as const };
+const BRANCH_PREFIX_OPTIONS = [
+  { id: "none" as const, label: "None" },
+  { id: "proliferate" as const, label: "Proliferate" },
+  { id: "github_username" as const, label: "GitHub username" },
+];
 
 export function DefaultsPane() {
   const connectionState = useHarnessStore((state) => state.connectionState);
@@ -81,12 +86,7 @@ export function DefaultsPane() {
 
   const currentTarget = targets.find((target) => target.id === preferences.defaultOpenInTargetId) ?? null;
   const currentTargetLabel = currentTarget?.label ?? preferences.defaultOpenInTargetId;
-  const branchPrefixOptions = [
-    { id: "none" as const, label: "None" },
-    { id: "proliferate" as const, label: "Proliferate" },
-    { id: "github_username" as const, label: "GitHub username" },
-  ];
-  const currentBranchPrefixLabel = branchPrefixOptions.find(
+  const currentBranchPrefixLabel = BRANCH_PREFIX_OPTIONS.find(
     (option) => option.id === preferences.branchPrefixType,
   )?.label ?? "None";
 
@@ -222,7 +222,7 @@ export function DefaultsPane() {
             menuClassName="w-48"
             groups={[{
               id: "branch-prefix",
-              options: branchPrefixOptions.map((option) => ({
+              options: BRANCH_PREFIX_OPTIONS.map((option) => ({
                 id: option.id,
                 label: option.label,
                 selected: preferences.branchPrefixType === option.id,

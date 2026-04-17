@@ -76,7 +76,7 @@ export function shouldShowCloudWorkspaceStatusScreen(
   workspace: CloudWorkspaceSummary,
 ): boolean {
   return (
-    workspace.actionBlockKind !== null
+    !!workspace.actionBlockKind
     || isCloudWorkspacePending(workspace.status)
     || workspace.status === "error"
     || workspace.status === "stopped"

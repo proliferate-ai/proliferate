@@ -19,36 +19,7 @@ impl SessionStore {
 
     pub fn insert(&self, record: &SessionRecord) -> anyhow::Result<()> {
         self.db.with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO sessions (id, workspace_id, agent_kind, native_session_id,
-                 requested_model_id, current_model_id, requested_mode_id, current_mode_id,
-                 title, thinking_level_id, thinking_budget_tokens, status, created_at,
-                 updated_at, last_prompt_at, closed_at, dismissed_at, mcp_bindings_ciphertext,
-                 mcp_binding_summaries_json, system_prompt_append)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
-                params![
-                    record.id,
-                    record.workspace_id,
-                    record.agent_kind,
-                    record.native_session_id,
-                    record.requested_model_id,
-                    record.current_model_id,
-                    record.requested_mode_id,
-                    record.current_mode_id,
-                    record.title,
-                    record.thinking_level_id,
-                    record.thinking_budget_tokens,
-                    record.status,
-                    record.created_at,
-                    record.updated_at,
-                    record.last_prompt_at,
-                    record.closed_at,
-                    record.dismissed_at,
-                    record.mcp_bindings_ciphertext,
-                    record.mcp_binding_summaries_json,
-                    record.system_prompt_append,
-                ],
-            )?;
+            insert_session_row(conn, record)?;
             Ok(())
         })
     }
