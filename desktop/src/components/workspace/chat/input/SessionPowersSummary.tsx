@@ -4,6 +4,7 @@ import type {
 } from "@anyharness/sdk";
 import { useMemo } from "react";
 import { useConnectors } from "@/hooks/mcp/use-connectors";
+import type { InstalledConnectorRecord } from "@/lib/domain/mcp/types";
 
 interface SessionPowersSummaryProps {
   summaries: SessionMcpBindingSummary[] | null;
@@ -18,6 +19,11 @@ const REASON_LABELS: Record<SessionMcpBindingNotAppliedReason, string> = {
   resolver_error: "resolver error",
 };
 
+const NON_RESTARTABLE_REASONS: ReadonlySet<SessionMcpBindingNotAppliedReason> = new Set([
+  "policy_disabled",
+  "unsupported_target",
+]);
+
 function setsEqual(left: Set<string>, right: Set<string>): boolean {
   if (left.size !== right.size) {
     return false;
@@ -30,26 +36,51 @@ function setsEqual(left: Set<string>, right: Set<string>): boolean {
   return true;
 }
 
+export function shouldShowPowersNeedsRestart(input: {
+  connectorDataReady: boolean;
+  installed: InstalledConnectorRecord[];
+  summaries: SessionMcpBindingSummary[] | null;
+}): boolean {
+  if (!input.connectorDataReady || !input.summaries || input.summaries.length === 0) {
+    return false;
+  }
+
+  const appliedIds = new Set(
+    input.summaries
+      .filter((summary) => summary.outcome === "applied")
+      .map((summary) => summary.id),
+  );
+  const notRestartableIds = new Set(
+    input.summaries
+      .filter((summary) => (
+        summary.outcome === "not_applied"
+        && !!summary.reason
+        && NON_RESTARTABLE_REASONS.has(summary.reason)
+      ))
+      .map((summary) => summary.id),
+  );
+  const expectedIds = new Set(
+    input.installed
+      .filter((record) => (
+        record.metadata.enabled
+        && !record.broken
+        && !notRestartableIds.has(record.metadata.connectionId)
+      ))
+      .map((record) => record.metadata.connectionId),
+  );
+
+  return !setsEqual(appliedIds, expectedIds);
+}
+
 export function SessionPowersSummary({ summaries }: SessionPowersSummaryProps) {
-  const { data } = useConnectors();
+  const { data, isPlaceholderData } = useConnectors();
   const needsRestart = useMemo(() => {
-    if (!summaries || summaries.length === 0) {
-      return false;
-    }
-
-    const appliedIds = new Set(
-      summaries
-        .filter((summary) => summary.outcome === "applied")
-        .map((summary) => summary.id),
-    );
-    const enabledIds = new Set(
-      (data?.installed ?? [])
-        .filter((record) => record.metadata.enabled && !record.broken)
-        .map((record) => record.metadata.connectionId),
-    );
-
-    return !setsEqual(appliedIds, enabledIds);
-  }, [data?.installed, summaries]);
+    return shouldShowPowersNeedsRestart({
+      connectorDataReady: !isPlaceholderData,
+      installed: data?.installed ?? [],
+      summaries,
+    });
+  }, [data?.installed, isPlaceholderData, summaries]);
 
   if (!summaries || summaries.length === 0) {
     return null;

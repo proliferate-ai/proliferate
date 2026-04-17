@@ -212,7 +212,7 @@ export async function resumeSession(
     sessionId,
     {
       mcpServers,
-      mcpBindingSummaries: mcpBindingSummaries ?? [],
+      mcpBindingSummaries,
     },
     options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
   );

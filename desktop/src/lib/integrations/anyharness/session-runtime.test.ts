@@ -101,7 +101,7 @@ describe("resumeSession", () => {
       surface: "coding",
     });
     mocks.resolveSessionMcpServersForLaunch.mockResolvedValue({
-      mcpBindingSummaries: undefined,
+      mcpBindingSummaries: [],
       mcpServers: [],
       warnings: [],
     });

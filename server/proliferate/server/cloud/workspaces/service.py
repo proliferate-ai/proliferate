@@ -199,9 +199,7 @@ def _raise_if_cloud_workspace_start_denied(authorization: SandboxStartAuthorizat
         return
     raise CloudApiError(
         "quota_exceeded",
-        authorization.message
-        or sandbox_start_block_message(authorization.start_block_reason)
-        or "Cloud usage is currently unavailable.",
+        authorization.message or sandbox_start_block_message(authorization.start_block_reason),
         status_code=403,
     )
 
@@ -216,8 +214,7 @@ def _workspace_action_block(
         return None, None
     return (
         billing.start_block_reason,
-        sandbox_start_block_message(billing.start_block_reason)
-        or "Cloud usage is currently unavailable.",
+        sandbox_start_block_message(billing.start_block_reason),
     )
 
 

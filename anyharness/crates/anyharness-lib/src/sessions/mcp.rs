@@ -312,7 +312,7 @@ pub fn validate_binding_summaries(
 ) -> Result<(), SessionMcpSummaryError> {
     for summary in summaries {
         validate_summary_identifier("id", &summary.id)?;
-        validate_summary_identifier("serverName", &summary.server_name)?;
+        validate_summary_display_text("serverName", &summary.server_name)?;
         if let Some(display_name) = summary.display_name.as_deref() {
             validate_summary_display_text("displayName", display_name)?;
         }
@@ -546,9 +546,21 @@ mod tests {
     }
 
     #[test]
+    fn binding_summary_validation_allows_display_server_names() {
+        let mut summary = sample_summary();
+        summary.server_name = "GitHub Filesystem".to_string();
+
+        let json = serialize_binding_summaries(Some(vec![summary]))
+            .expect("valid summary")
+            .expect("summary json");
+
+        assert!(json.contains("GitHub Filesystem"));
+    }
+
+    #[test]
     fn binding_summary_validation_rejects_non_identifier_fields() {
         let mut summary = sample_summary();
-        summary.server_name = "https://mcp.example.com?token=secret".to_string();
+        summary.id = "https://mcp.example.com?token=secret".to_string();
 
         let error = serialize_binding_summaries(Some(vec![summary])).expect_err("invalid summary");
 

@@ -177,7 +177,7 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
     )
 
 
-def sandbox_start_block_message(reason: str | None) -> str | None:
+def sandbox_start_block_message(reason: str | None) -> str:
     if reason == WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT:
         return "Sandbox limit reached. Stop another cloud workspace before starting a new one."
     if reason == WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED:
@@ -188,7 +188,7 @@ def sandbox_start_block_message(reason: str | None) -> str | None:
         return "Cloud usage is paused for this account."
     if reason == WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD:
         return "Cloud usage is paused because billing needs attention."
-    return None
+    return "Cloud usage is currently unavailable."
 
 
 async def authorize_sandbox_start(

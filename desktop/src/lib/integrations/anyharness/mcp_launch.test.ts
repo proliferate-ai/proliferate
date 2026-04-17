@@ -79,7 +79,10 @@ vi.mock("@/lib/integrations/cloud/mcp_connections", () => ({
 }));
 
 import { connectOAuthConnector, installConnector } from "@/lib/infra/mcp/persistence";
-import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
+import {
+  COWORK_WORKSPACE_PATH_PLACEHOLDER,
+  resolveSessionMcpServersForLaunch,
+} from "@/lib/integrations/anyharness/mcp_launch";
 
 type LaunchContext = Parameters<typeof resolveSessionMcpServersForLaunch>[0];
 
@@ -168,6 +171,17 @@ describe("mcp launch resolution", () => {
         reason: "policy_disabled",
       }),
     ]);
+  });
+
+  it("returns an empty known summary list when resolution runs with no connectors", async () => {
+    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
+      targetLocation: "local",
+      workspacePath: "/workspace",
+    }));
+
+    expect(resolution.mcpServers).toEqual([]);
+    expect(resolution.warnings).toEqual([]);
+    expect(resolution.mcpBindingSummaries).toEqual([]);
   });
 
   it("resolves Exa API keys into MCP query auth", async () => {
@@ -284,6 +298,33 @@ describe("mcp launch resolution", () => {
       }),
     ]);
     expect(JSON.stringify(resolution.mcpBindingSummaries)).not.toContain("/workspace");
+  });
+
+  it("keeps cowork workspace-bound stdio connectors resolvable before thread path exists", async () => {
+    await installConnector("filesystem", "");
+
+    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
+      targetLocation: "local",
+      workspacePath: COWORK_WORKSPACE_PATH_PLACEHOLDER,
+      policy: {
+        workspaceSurface: "cowork",
+      },
+    }));
+
+    expect(resolution.warnings).toEqual([]);
+    expect(resolution.mcpServers).toEqual([
+      expect.objectContaining({
+        args: expect.arrayContaining([COWORK_WORKSPACE_PATH_PLACEHOLDER]),
+        catalogEntryId: "filesystem",
+        transport: "stdio",
+      }),
+    ]);
+    expect(resolution.mcpBindingSummaries).toEqual([
+      expect.objectContaining({
+        outcome: "applied",
+        transport: "stdio",
+      }),
+    ]);
   });
 
   it("downgrades OAuth token refresh failures into reconnect warnings", async () => {

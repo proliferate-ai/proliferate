@@ -26,7 +26,10 @@ import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
-import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
+import {
+  COWORK_WORKSPACE_PATH_PLACEHOLDER,
+  resolveSessionMcpServersForLaunch,
+} from "@/lib/integrations/anyharness/mcp_launch";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -108,7 +111,7 @@ export function useCoworkThreadWorkflow() {
       const resolveStartedAt = startLatencyTimer();
       const { mcpServers, mcpBindingSummaries } = await resolveSessionMcpServersForLaunch({
         targetLocation: "local",
-        workspacePath: null,
+        workspacePath: COWORK_WORKSPACE_PATH_PLACEHOLDER,
         policy: {
           workspaceSurface: "cowork",
           lifecycle: "create",
@@ -140,9 +143,7 @@ export function useCoworkThreadWorkflow() {
         modelId: input.modelId,
         ...(modeId ? { modeId } : {}),
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
-        ...(mcpBindingSummaries && mcpBindingSummaries.length > 0
-          ? { mcpBindingSummaries }
-          : {}),
+        mcpBindingSummaries,
       });
 
       logLatency("workspace.cowork.create.request.success", {

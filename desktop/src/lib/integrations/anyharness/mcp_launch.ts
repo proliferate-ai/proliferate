@@ -39,11 +39,14 @@ export interface SessionMcpLaunchRequest extends ConnectorLaunchContext {
   policy: SessionMcpLaunchPolicy;
 }
 
+export const COWORK_WORKSPACE_PATH_PLACEHOLDER =
+  "__PROLIFERATE_COWORK_WORKSPACE_PATH__";
+
 export async function resolveSessionMcpServersForLaunch(
   launchContext: SessionMcpLaunchRequest,
 ): Promise<{
   mcpServers: SessionMcpServer[];
-  mcpBindingSummaries?: SessionMcpBindingSummary[];
+  mcpBindingSummaries: SessionMcpBindingSummary[];
   warnings: ConnectorLaunchResolutionWarning[];
 }> {
   const installed = await listInstalledConnectorLaunchRecords();
@@ -76,7 +79,7 @@ export async function resolveSessionMcpServersForLaunch(
     }
     return {
       mcpServers,
-      mcpBindingSummaries: mcpBindingSummaries.length > 0 ? mcpBindingSummaries : undefined,
+      mcpBindingSummaries,
       warnings,
     };
   }
@@ -220,7 +223,7 @@ export async function resolveSessionMcpServersForLaunch(
 
   return {
     mcpServers,
-    mcpBindingSummaries: mcpBindingSummaries.length > 0 ? mcpBindingSummaries : undefined,
+    mcpBindingSummaries,
     warnings,
   };
 }

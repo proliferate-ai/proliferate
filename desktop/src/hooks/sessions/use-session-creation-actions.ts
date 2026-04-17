@@ -359,9 +359,7 @@ export function useSessionCreationActions({
           modelId: options.modelId,
           ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
           mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
-          mcpBindingSummaries: mcpBindingSummaries && mcpBindingSummaries.length > 0
-            ? mcpBindingSummaries
-            : undefined,
+          mcpBindingSummaries,
           systemPromptAppend,
         }, requestOptions);
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
 import { ArrowLeft } from "@/components/ui/icons";
@@ -175,7 +175,7 @@ export function SettingsSidebar({
                   && !updateActionState.updatesSupported;
                 const disabled = sectionDisabled || actionDisabled;
                 return (
-                  <div key={item.id} className="contents">
+                  <Fragment key={item.id}>
                     <Button
                       type="button"
                       variant="ghost"
@@ -204,7 +204,7 @@ export function SettingsSidebar({
                     {item.kind === "action" && item.id === "checkForUpdates"
                       ? renderUpdateCommand()
                       : null}
-                  </div>
+                  </Fragment>
                 );
               })}
             </div>
