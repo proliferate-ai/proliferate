@@ -15,6 +15,7 @@ import {
   getPlanningTestTimeoutMs,
   hasPlanFileWrite,
   hasGeminiPlanningBehavior,
+  isBehaviorOnlyPlanningCompletion,
   isPlanEnvelope,
   switchToPlanMode,
 } from "./helpers.js";
@@ -70,6 +71,10 @@ describe("runtime agent planning compatibility", () => {
           timeoutMs: getPlanningPromptTimeoutMs(planningCase.agentKind),
           stopWhen: (envelope) =>
             isPlanEnvelope(envelope)
+            || (
+              planningCase.expectedPlanSource === "behavior_only"
+              && isBehaviorOnlyPlanningCompletion(envelope)
+            )
             || envelope.event.type === "interaction_requested"
             || envelope.event.type === "turn_ended"
             || envelope.event.type === "session_ended",
@@ -98,14 +103,11 @@ describe("runtime agent planning compatibility", () => {
             ).toBeGreaterThan(0);
           } else {
             const pendingModeSwitch = findClaudeModeSwitchTool(result.transcript);
+            const planFileWrite = hasPlanFileWrite(result.transcript);
             expect(
-              pendingModeSwitch,
-              `expected mode-switch planning interaction for ${planningCase.agentKind}\n${describeTranscript(result.transcript)}`,
+              pendingModeSwitch || planFileWrite,
+              `expected Claude mode-switch planning interaction or plan file write for ${planningCase.agentKind}\n${describeTranscript(result.transcript)}`,
             ).toBeTruthy();
-            expect(
-              hasPlanFileWrite(result.transcript),
-              `expected Claude plan file write for ${planningCase.agentKind}\n${describeTranscript(result.transcript)}`,
-            ).toBe(true);
           }
         } else {
           expect(

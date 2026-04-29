@@ -25,7 +25,7 @@ export function RepoEnvVarsCard({
   return (
     <SettingsCard>
       <SettingsCardRow
-        label="Repo env vars"
+        label="Cloud repo env vars"
         description="Injected broadly into new cloud workspaces. Existing workspaces do not re-sync env vars in v1."
       >
         <div className="w-[32rem] max-w-full space-y-3">

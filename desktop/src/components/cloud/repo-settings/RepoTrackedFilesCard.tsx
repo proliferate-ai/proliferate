@@ -38,7 +38,7 @@ export function RepoTrackedFilesCard({
   return (
     <SettingsCard>
       <SettingsCardRow
-        label="Tracked files"
+        label="Cloud tracked files"
         description="Saving syncs every tracked path from your local repo into cloud storage. Existing cloud workspaces only get updated when you re-sync files from that workspace."
       >
         <div className="w-[32rem] max-w-full space-y-4">

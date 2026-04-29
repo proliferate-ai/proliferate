@@ -86,6 +86,7 @@ impl SessionService {
         model_id: Option<&str>,
         mode_id: Option<&str>,
         mcp_bindings_ciphertext: Option<String>,
+        mcp_binding_summaries_json: Option<String>,
         system_prompt_append: Option<String>,
     ) -> Result<SessionRecord, CreateSessionError> {
         let started = Instant::now();
@@ -205,6 +206,7 @@ impl SessionService {
             closed_at: None,
             dismissed_at: None,
             mcp_bindings_ciphertext,
+            mcp_binding_summaries_json,
             system_prompt_append,
         };
 

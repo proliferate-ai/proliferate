@@ -19,7 +19,7 @@ use crate::cowork::mcp::handle_json_rpc;
 use crate::cowork::model::CoworkRootRecord;
 use crate::cowork::runtime::{CoworkCreateThreadError, CoworkThreadSummary};
 use crate::repo_roots::model::RepoRootRecord;
-use crate::sessions::mcp::bindings_from_contract;
+use crate::sessions::mcp::{bindings_from_contract, validate_binding_summaries};
 use crate::workspaces::model::WorkspaceRecord;
 
 #[utoipa::path(
@@ -98,6 +98,10 @@ pub async fn create_cowork_thread(
     State(state): State<AppState>,
     Json(req): Json<CreateCoworkThreadRequest>,
 ) -> Result<Json<CreateCoworkThreadResponse>, ApiError> {
+    if let Some(summaries) = req.mcp_binding_summaries.as_deref() {
+        validate_binding_summaries(summaries)
+            .map_err(|error| ApiError::bad_request(error.to_string(), "INVALID_MCP_SUMMARY"))?;
+    }
     let mcp_servers = bindings_from_contract(req.mcp_servers.unwrap_or_default());
     let result = state
         .cowork_runtime
@@ -106,6 +110,7 @@ pub async fn create_cowork_thread(
             req.model_id.as_deref(),
             req.mode_id.as_deref(),
             mcp_servers,
+            req.mcp_binding_summaries,
         )
         .await
         .map_err(map_create_cowork_thread_error)?;
@@ -236,6 +241,9 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
     match error {
         CoworkCreateThreadError::NotEnabled => {
             ApiError::conflict("cowork is not enabled", "COWORK_NOT_ENABLED")
+        }
+        CoworkCreateThreadError::Setup(error) => {
+            ApiError::internal(format!("cowork setup failed: {error}"))
         }
         CoworkCreateThreadError::CreateSession(error) => match error {
             crate::sessions::runtime::CreateAndStartSessionError::WorkspaceSingleSession {

@@ -182,3 +182,9 @@ export function buildUnsupportedTargetWarning(
 ): ConnectorLaunchResolutionWarning {
   return buildLaunchWarning(connector, "unsupported_target");
 }
+
+export function buildResolverErrorWarning(
+  connector: InstalledConnectorRecord,
+): ConnectorLaunchResolutionWarning {
+  return buildLaunchWarning(connector, "resolver_error");
+}

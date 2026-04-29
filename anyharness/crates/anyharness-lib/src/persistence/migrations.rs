@@ -80,6 +80,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0023_proposed_plans",
         include_str!("sql/0023_proposed_plans.sql"),
     ),
+    (
+        "0024_session_mcp_binding_summaries",
+        include_str!("sql/0024_session_mcp_binding_summaries.sql"),
+    ),
 ];
 
 const CUSTOM_MIGRATIONS: &[(&str, fn(&Transaction<'_>) -> rusqlite::Result<()>)] = &[(

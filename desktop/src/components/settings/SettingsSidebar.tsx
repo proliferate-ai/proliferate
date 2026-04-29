@@ -1,20 +1,21 @@
+import { Fragment, useState } from "react";
 import { useLocation } from "react-router-dom";
-import type { UpdaterPhase } from "@/hooks/updater/use-updater";
+import { Button } from "@/components/ui/Button";
 import { ArrowLeft } from "@/components/ui/icons";
 import { SupportDialog } from "@/components/support/SupportDialog";
 import {
-  SETTINGS_NAV_GROUPS,
   SETTINGS_COPY,
+  SETTINGS_NAV_GROUPS,
   type SettingsNavItem,
   type SettingsStaticSection,
 } from "@/config/settings";
 import { useAppVersion } from "@/hooks/settings/use-app-version";
+import type { UpdaterPhase } from "@/hooks/updater/use-updater";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import { useState } from "react";
 
 interface SettingsSidebarProps {
   repositories: SettingsRepositoryEntry[];
-  activeSection: SettingsStaticSection | "repo" | "cloudRepo";
+  activeSection: SettingsStaticSection | "repo";
   activeRepoSourceRoot: string | null;
   disabledSections?: Partial<Record<SettingsStaticSection, boolean>>;
   onNavigateHome: () => void;
@@ -34,9 +35,10 @@ interface SettingsSidebarProps {
 }
 
 const NAV_ITEM_BASE =
-  "w-full flex items-center gap-3 px-2 py-1.5 text-sm text-left rounded-md transition-all hover:bg-sidebar-accent focus:outline-none";
+  "h-auto w-full justify-start gap-3 rounded-md px-2 py-1.5 text-left text-sm transition-all hover:bg-sidebar-accent focus:outline-none";
 const NAV_ITEM_ACTIVE = `${NAV_ITEM_BASE} bg-sidebar-accent font-medium text-sidebar-foreground`;
-const NAV_ITEM_INACTIVE = `${NAV_ITEM_BASE} text-muted-foreground`;
+const NAV_ITEM_INACTIVE = `${NAV_ITEM_BASE} text-sidebar-muted-foreground`;
+const NAV_STATUS_CLASS = "ml-auto shrink-0 text-xs text-sidebar-muted-foreground";
 
 export function SettingsSidebar({
   repositories,
@@ -75,12 +77,15 @@ export function SettingsSidebar({
   }
 
   function isItemActive(item: SettingsNavItem) {
-    return item.kind === "section"
-      && (activeSection === item.id || (item.id === "cloud" && activeSection === "cloudRepo"));
+    return item.kind === "section" && activeSection === item.id;
   }
 
   function renderUpdateCommand() {
-    if (updateActionState.phase !== "available" && updateActionState.phase !== "downloading" && updateActionState.phase !== "ready") {
+    if (
+      updateActionState.phase !== "available"
+      && updateActionState.phase !== "downloading"
+      && updateActionState.phase !== "ready"
+    ) {
       return null;
     }
 
@@ -101,8 +106,9 @@ export function SettingsSidebar({
             : "Available";
 
     return (
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => {
           if (disabled) {
             return;
@@ -117,9 +123,9 @@ export function SettingsSidebar({
         aria-disabled={disabled || undefined}
         disabled={disabled}
       >
-        <span className="flex-1">{label}</span>
-        <span className="text-base text-muted-foreground">{status}</span>
-      </button>
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <span className={NAV_STATUS_CLASS}>{status}</span>
+      </Button>
     );
   }
 
@@ -136,21 +142,25 @@ export function SettingsSidebar({
       />
       <div className="h-10 pl-[82px]" data-tauri-drag-region="true" />
 
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={onNavigateHome}
-        className="mx-1.5 mb-4 flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+        className="mx-1.5 mb-4 h-auto w-fit justify-start gap-2 bg-transparent px-2 py-1.5 text-sm text-sidebar-muted-foreground transition-colors hover:bg-transparent hover:text-sidebar-foreground"
       >
         <ArrowLeft className="size-4" />
         <span>{SETTINGS_COPY.back}</span>
-      </button>
+      </Button>
 
       <nav className="flex-1 overflow-y-auto px-1.5 pb-4">
-        <div className="flex flex-col gap-4">
-          {SETTINGS_NAV_GROUPS.map((group) => (
-            <div key={group.id} className="flex flex-col gap-0.5">
+        <div className="flex flex-col">
+          {SETTINGS_NAV_GROUPS.map((group, index) => (
+            <div
+              key={group.id}
+              className={`flex flex-col gap-0.5 ${index > 0 && group.heading ? "mt-3" : ""}`}
+            >
               {group.heading && (
-                <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                <div className="px-2 py-1.5 text-sm text-sidebar-muted-foreground">
                   {group.heading}
                 </div>
               )}
@@ -165,40 +175,44 @@ export function SettingsSidebar({
                   && !updateActionState.updatesSupported;
                 const disabled = sectionDisabled || actionDisabled;
                 return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleItemClick(item)}
-                    className={`${active ? NAV_ITEM_ACTIVE : NAV_ITEM_INACTIVE} ${
-                      disabled ? "cursor-not-allowed opacity-60 hover:bg-transparent" : ""
-                    }`}
-                    aria-current={active ? "page" : undefined}
-                    aria-disabled={disabled || undefined}
-                    disabled={disabled}
-                  >
-                    <Icon className="size-4 shrink-0" />
-                    <span className="flex-1">{item.label}</span>
-                    {item.kind === "action" && item.id === "checkForUpdates" && (
-                      <span className="text-base text-muted-foreground">
-                        {!updateActionState.updatesSupported
-                          ? "Packaged only"
-                          : updateActionState.isChecking
-                          ? "Checking…"
-                          : updateActionState.hasAvailableUpdate
-                            ? "Available"
-                            : ""}
-                      </span>
-                    )}
-                  </button>
+                  <Fragment key={item.id}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => handleItemClick(item)}
+                      className={`${active ? NAV_ITEM_ACTIVE : NAV_ITEM_INACTIVE} ${
+                        disabled ? "cursor-not-allowed opacity-60 hover:bg-transparent" : ""
+                      }`}
+                      aria-current={active ? "page" : undefined}
+                      aria-disabled={disabled || undefined}
+                      disabled={disabled}
+                    >
+                      <Icon className="size-4 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                      {item.kind === "action" && item.id === "checkForUpdates" && (
+                        <span className={NAV_STATUS_CLASS}>
+                          {!updateActionState.updatesSupported
+                            ? "Packaged only"
+                            : updateActionState.isChecking
+                              ? "Checking..."
+                              : updateActionState.hasAvailableUpdate
+                                ? "Available"
+                                : ""}
+                        </span>
+                      )}
+                    </Button>
+                    {item.kind === "action" && item.id === "checkForUpdates"
+                      ? renderUpdateCommand()
+                      : null}
+                  </Fragment>
                 );
               })}
-              {group.id === "cloud" && renderUpdateCommand()}
             </div>
           ))}
 
           {repositories.length > 0 && (
-            <div className="flex flex-col gap-0.5">
-              <div className="px-2 py-1.5 text-sm text-muted-foreground">
+            <div className="mt-3 flex flex-col gap-0.5">
+              <div className="px-2 py-1.5 text-sm text-sidebar-muted-foreground">
                 Repos
               </div>
               {repositories.map((repository) => {
@@ -207,19 +221,20 @@ export function SettingsSidebar({
                   activeRepoSourceRoot === repository.sourceRoot;
                 const letter = (repository.name[0] ?? "?").toUpperCase();
                 return (
-                  <button
+                  <Button
                     key={`${repository.sourceRoot}:${repository.repoRootId}`}
                     type="button"
+                    variant="ghost"
                     onClick={() => onSelectRepo(repository.sourceRoot)}
                     className={active ? NAV_ITEM_ACTIVE : NAV_ITEM_INACTIVE}
                     aria-current={active ? "page" : undefined}
                     title={repository.sourceRoot}
                   >
-                    <div className="flex size-4 shrink-0 items-center justify-center rounded-sm bg-muted text-[10px] font-medium text-muted-foreground">
+                    <div className="flex size-4 shrink-0 items-center justify-center rounded-sm bg-sidebar-accent text-[10px] font-medium text-sidebar-muted-foreground">
                       {letter}
                     </div>
                     <span className="w-0 flex-1 truncate">{repository.name}</span>
-                  </button>
+                  </Button>
                 );
               })}
             </div>

@@ -11,6 +11,7 @@ import type {
   PromptSessionRequest,
   PromptSessionResponse,
   ResolveInteractionRequest,
+  ResumeSessionRequest,
   SetSessionConfigOptionRequest,
   SetSessionConfigOptionResponse,
   Session,
@@ -156,11 +157,24 @@ export class SessionsClient {
     );
   }
 
-  async resume(sessionId: string, options?: AnyHarnessRequestOptions): Promise<Session> {
+  async resume(sessionId: string): Promise<Session>;
+  async resume(sessionId: string, options?: AnyHarnessRequestOptions): Promise<Session>;
+  async resume(
+    sessionId: string,
+    input: ResumeSessionRequest | undefined,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<Session>;
+  async resume(
+    sessionId: string,
+    inputOrOptions?: ResumeSessionRequest | AnyHarnessRequestOptions,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<Session> {
+    const input = isResumeRequestOptions(inputOrOptions) ? undefined : inputOrOptions;
+    const requestOptions = isResumeRequestOptions(inputOrOptions) ? inputOrOptions : options;
     return normalizeSession(await this.transport.post<Session>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/resume`,
-      {},
-      options,
+      input ?? {},
+      requestOptions,
     ));
   }
 
@@ -244,4 +258,15 @@ export class SessionsClient {
       {},
     );
   }
+}
+
+function isResumeRequestOptions(
+  value: ResumeSessionRequest | AnyHarnessRequestOptions | undefined,
+): value is AnyHarnessRequestOptions {
+  return Boolean(
+    value
+    && "headers" in value
+    && !("mcpServers" in value)
+    && !("mcpBindingSummaries" in value),
+  );
 }

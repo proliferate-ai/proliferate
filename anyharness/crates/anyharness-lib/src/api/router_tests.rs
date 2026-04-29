@@ -347,6 +347,7 @@ async fn raw_notification_history_route_returns_persisted_notifications() {
             closed_at: None,
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
+            mcp_binding_summaries_json: None,
             system_prompt_append: None,
         })
         .expect("insert session");
@@ -421,6 +422,7 @@ async fn restore_route_returns_cold_visible_session_without_live_handle() {
             closed_at: None,
             dismissed_at: Some("2026-03-25T01:00:00Z".to_string()),
             mcp_bindings_ciphertext: None,
+            mcp_binding_summaries_json: None,
             system_prompt_append: None,
         })
         .expect("insert dismissed session");

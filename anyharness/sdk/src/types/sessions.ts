@@ -30,6 +30,14 @@ export type SessionMcpHeader = components["schemas"]["SessionMcpHeader"];
 export type SessionMcpHttpServer = components["schemas"]["SessionMcpHttpServer"];
 export type SessionMcpStdioServer = components["schemas"]["SessionMcpStdioServer"];
 export type SessionMcpServer = components["schemas"]["SessionMcpServer"];
+export type SessionMcpTransport = components["schemas"]["SessionMcpTransport"];
+export type SessionMcpBindingOutcome =
+  components["schemas"]["SessionMcpBindingOutcome"];
+export type SessionMcpBindingNotAppliedReason =
+  components["schemas"]["SessionMcpBindingNotAppliedReason"];
+export type SessionMcpBindingSummary =
+  components["schemas"]["SessionMcpBindingSummary"];
+export type ResumeSessionRequest = components["schemas"]["ResumeSessionRequest"];
 export type UpdateSessionTitleRequest =
   components["schemas"]["UpdateSessionTitleRequest"];
 export type RawSessionConfigValue = components["schemas"]["RawSessionConfigValue"];

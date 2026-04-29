@@ -20,6 +20,7 @@ pub struct SessionRecord {
     pub closed_at: Option<String>,
     pub dismissed_at: Option<String>,
     pub mcp_bindings_ciphertext: Option<String>,
+    pub mcp_binding_summaries_json: Option<String>,
     pub system_prompt_append: Option<String>,
 }
 
@@ -52,6 +53,9 @@ impl SessionRecord {
             title: self.title.clone(),
             live_config,
             execution_summary,
+            mcp_binding_summaries: parse_mcp_binding_summaries(
+                self.mcp_binding_summaries_json.as_deref(),
+            ),
             status: parse_status(&self.status),
             created_at: self.created_at.clone(),
             updated_at: self.updated_at.clone(),
@@ -59,6 +63,17 @@ impl SessionRecord {
             closed_at: self.closed_at.clone(),
             dismissed_at: self.dismissed_at.clone(),
             pending_prompts: Vec::new(),
+        }
+    }
+}
+
+fn parse_mcp_binding_summaries(value: Option<&str>) -> Option<Vec<v1::SessionMcpBindingSummary>> {
+    let value = value.map(str::trim).filter(|value| !value.is_empty())?;
+    match serde_json::from_str(value) {
+        Ok(summaries) => Some(summaries),
+        Err(error) => {
+            tracing::warn!(error = %error, "invalid session MCP binding summaries JSON");
+            None
         }
     }
 }

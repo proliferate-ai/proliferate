@@ -5,6 +5,7 @@ use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use anyharness_contract::v1::SessionMcpBindingSummary;
 use uuid::Uuid;
 
 use super::mcp_auth::CoworkMcpAuth;
@@ -29,6 +30,7 @@ pub struct CoworkSessionLaunchExtras {
 #[derive(Debug)]
 pub enum CoworkCreateThreadError {
     NotEnabled,
+    Setup(anyhow::Error),
     CreateSession(CreateAndStartSessionError),
     Internal(anyhow::Error),
 }
@@ -52,6 +54,21 @@ pub struct CreateCoworkThreadResult {
     pub thread: CoworkThreadSummary,
     pub workspace: WorkspaceRecord,
     pub session: SessionRecord,
+}
+
+const COWORK_WORKSPACE_PATH_PLACEHOLDER: &str = "__PROLIFERATE_COWORK_WORKSPACE_PATH__";
+
+fn materialize_cowork_workspace_path(mcp_servers: &mut [SessionMcpServer], workspace_path: &str) {
+    for server in mcp_servers {
+        let SessionMcpServer::Stdio(server) = server else {
+            continue;
+        };
+        for arg in &mut server.args {
+            if arg == COWORK_WORKSPACE_PATH_PLACEHOLDER {
+                *arg = workspace_path.to_string();
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -213,7 +230,7 @@ impl CoworkRuntime {
         Ok((root, thread_count))
     }
 
-    pub fn enable(&self) -> anyhow::Result<(CoworkRootRecord, RepoRootRecord)> {
+    pub fn ensure_root(&self) -> anyhow::Result<(CoworkRootRecord, RepoRootRecord)> {
         if let Some(root) = self.get_root()? {
             return Ok(root);
         }
@@ -236,12 +253,17 @@ impl CoworkRuntime {
         Ok((root, repo_root))
     }
 
+    pub fn enable(&self) -> anyhow::Result<(CoworkRootRecord, RepoRootRecord)> {
+        self.ensure_root()
+    }
+
     pub async fn create_thread(
         &self,
         agent_kind: &str,
         model_id: Option<&str>,
         mode_id: Option<&str>,
-        mcp_servers: Vec<SessionMcpServer>,
+        mut mcp_servers: Vec<SessionMcpServer>,
+        mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
     ) -> Result<CreateCoworkThreadResult, CoworkCreateThreadError> {
         let total_started = Instant::now();
         let mcp_server_count = mcp_servers.len();
@@ -253,9 +275,7 @@ impl CoworkRuntime {
             "[workspace-latency] cowork.runtime.create_thread.start"
         );
 
-        let Some((root, repo_root)) = self.get_root()? else {
-            return Err(CoworkCreateThreadError::NotEnabled);
-        };
+        let (root, repo_root) = self.ensure_root().map_err(CoworkCreateThreadError::Setup)?;
 
         let thread_id = Uuid::new_v4().to_string();
         let branch_name = format!("thread/{thread_id}");
@@ -283,6 +303,7 @@ impl CoworkRuntime {
             elapsed_ms = worktree_started.elapsed().as_millis(),
             "[workspace-latency] cowork.runtime.create_thread.worktree_created"
         );
+        materialize_cowork_workspace_path(&mut mcp_servers, &worktree.workspace.path);
         let durable_create_started = Instant::now();
         let durable_session = match self.session_runtime.create_durable_session(
             &worktree.workspace.id,
@@ -291,6 +312,7 @@ impl CoworkRuntime {
             mode_id,
             None,
             mcp_servers,
+            mcp_binding_summaries,
         ) {
             Ok(session) => session,
             Err(error) => {
@@ -481,4 +503,29 @@ fn run_git<const N: usize>(cwd: Option<&PathBuf>, args: [&str; N]) -> anyhow::Re
         args.join(" "),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{materialize_cowork_workspace_path, COWORK_WORKSPACE_PATH_PLACEHOLDER};
+    use crate::sessions::mcp::{SessionMcpServer, SessionMcpStdioServer};
+
+    #[test]
+    fn materializes_cowork_workspace_path_in_stdio_args() {
+        let mut servers = vec![SessionMcpServer::Stdio(SessionMcpStdioServer {
+            connection_id: "filesystem-1".to_string(),
+            catalog_entry_id: Some("filesystem".to_string()),
+            server_name: "filesystem".to_string(),
+            command: "filesystem".to_string(),
+            args: vec![COWORK_WORKSPACE_PATH_PLACEHOLDER.to_string()],
+            env: vec![],
+        })];
+
+        materialize_cowork_workspace_path(&mut servers, "/tmp/cowork/thread-1");
+
+        let SessionMcpServer::Stdio(server) = &servers[0] else {
+            panic!("expected stdio server");
+        };
+        assert_eq!(server.args, vec!["/tmp/cowork/thread-1"]);
+    }
 }

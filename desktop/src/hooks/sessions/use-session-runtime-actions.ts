@@ -47,6 +47,7 @@ import {
 } from "@/stores/preferences/workspace-ui-store";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { persistDefaultSessionModePreference } from "@/hooks/sessions/session-mode-preferences";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
@@ -63,6 +64,9 @@ export function useSessionRuntimeActions() {
   const queryClient = useQueryClient();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const showToast = useToastStore((state) => state.show);
+  const powersInCodingSessionsEnabled = useUserPreferencesStore(
+    (state) => state.powersInCodingSessionsEnabled,
+  );
 
   const persistReconciledModePreferences = useCallback((
     workspaceId: string | null | undefined,
@@ -272,6 +276,7 @@ export function useSessionRuntimeActions() {
         }) === "running"
       ) {
         session = await resumeSession(sessionId, {
+          powersInCodingSessionsEnabled,
           requestHeaders: options?.requestHeaders,
         });
         applySessionSummary(sessionId, session, workspaceId);
@@ -279,7 +284,7 @@ export function useSessionRuntimeActions() {
     } catch {
       // Session fetch failed.
     }
-  }, [applySessionSummary]);
+  }, [applySessionSummary, powersInCodingSessionsEnabled]);
 
   const closeSessionSlotStream = useCallback((sessionId: string) => {
     clearSessionReconnectTimer(sessionId);

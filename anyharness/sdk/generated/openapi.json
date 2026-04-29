@@ -1648,6 +1648,22 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ResumeSessionRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Session resumed",
@@ -4289,6 +4305,15 @@
           "agentKind": {
             "type": "string"
           },
+          "mcpBindingSummaries": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SessionMcpBindingSummary"
+            }
+          },
           "mcpServers": {
             "type": [
               "array",
@@ -4414,6 +4439,15 @@
         "properties": {
           "agentKind": {
             "type": "string"
+          },
+          "mcpBindingSummaries": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SessionMcpBindingSummary"
+            }
           },
           "mcpServers": {
             "type": [
@@ -7747,6 +7781,29 @@
           }
         }
       },
+      "ResumeSessionRequest": {
+        "type": "object",
+        "properties": {
+          "mcpBindingSummaries": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SessionMcpBindingSummary"
+            }
+          },
+          "mcpServers": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SessionMcpServer"
+            }
+          }
+        }
+      },
       "RunCommandRequest": {
         "type": "object",
         "required": [
@@ -7870,6 +7927,15 @@
                 "$ref": "#/components/schemas/SessionLiveConfigSnapshot"
               }
             ]
+          },
+          "mcpBindingSummaries": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SessionMcpBindingSummary"
+            }
           },
           "modeId": {
             "type": [
@@ -8473,6 +8539,63 @@
           }
         }
       },
+      "SessionMcpBindingNotAppliedReason": {
+        "type": "string",
+        "enum": [
+          "missing_secret",
+          "needs_reconnect",
+          "unsupported_target",
+          "workspace_path_unresolved",
+          "policy_disabled",
+          "resolver_error"
+        ]
+      },
+      "SessionMcpBindingOutcome": {
+        "type": "string",
+        "enum": [
+          "applied",
+          "not_applied"
+        ]
+      },
+      "SessionMcpBindingSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "serverName",
+          "transport",
+          "outcome"
+        ],
+        "properties": {
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/SessionMcpBindingOutcome"
+          },
+          "reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionMcpBindingNotAppliedReason"
+              }
+            ]
+          },
+          "serverName": {
+            "type": "string"
+          },
+          "transport": {
+            "$ref": "#/components/schemas/SessionMcpTransport"
+          }
+        }
+      },
       "SessionMcpEnvVar": {
         "type": "object",
         "required": [
@@ -8616,6 +8739,13 @@
             "type": "string"
           }
         }
+      },
+      "SessionMcpTransport": {
+        "type": "string",
+        "enum": [
+          "http",
+          "stdio"
+        ]
       },
       "SessionRawNotificationEnvelope": {
         "type": "object",

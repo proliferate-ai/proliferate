@@ -143,6 +143,20 @@ export function isPlanEnvelope(
   );
 }
 
+export function isBehaviorOnlyPlanningCompletion(
+  envelope: { event: { type: string; item?: { kind?: string } } },
+): boolean {
+  return (
+    envelope.event.type === "item_completed"
+    && (
+      envelope.event.item?.kind === "assistant_message"
+      || envelope.event.item?.kind === "tool_invocation"
+      || envelope.event.item?.kind === "plan"
+      || envelope.event.item?.kind === "proposed_plan"
+    )
+  );
+}
+
 export function describeTranscript(transcript: TranscriptState): string {
   const canonicalPlan = deriveCanonicalPlan(transcript);
   const summary = getSortedItems(transcript).map((item) => {
@@ -238,9 +252,9 @@ function hasPlanLikeAssistantResponse(transcript: TranscriptState): boolean {
     const normalized = text.toLowerCase();
     return (
       normalized.includes("plan")
-      && /(###\s*1\.|(?:^|\n)1\.)/.test(text)
-      && /(###\s*2\.|(?:^|\n)2\.)/.test(text)
-      && /(###\s*3\.|(?:^|\n)3\.)/.test(text)
+      && /(?:^|\n)\s*(?:#{1,6}\s*)?(?:step\s*)?1[.)\s:-]/i.test(text)
+      && /(?:^|\n)\s*(?:#{1,6}\s*)?(?:step\s*)?2[.)\s:-]/i.test(text)
+      && /(?:^|\n)\s*(?:#{1,6}\s*)?(?:step\s*)?3[.)\s:-]/i.test(text)
     );
   });
 }

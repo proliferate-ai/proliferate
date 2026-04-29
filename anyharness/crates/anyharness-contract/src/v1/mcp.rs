@@ -112,6 +112,44 @@ impl fmt::Debug for SessionMcpServer {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionMcpTransport {
+    Http,
+    Stdio,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionMcpBindingOutcome {
+    Applied,
+    NotApplied,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionMcpBindingNotAppliedReason {
+    MissingSecret,
+    NeedsReconnect,
+    UnsupportedTarget,
+    WorkspacePathUnresolved,
+    PolicyDisabled,
+    ResolverError,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionMcpBindingSummary {
+    pub id: String,
+    pub server_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    pub transport: SessionMcpTransport,
+    pub outcome: SessionMcpBindingOutcome,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<SessionMcpBindingNotAppliedReason>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

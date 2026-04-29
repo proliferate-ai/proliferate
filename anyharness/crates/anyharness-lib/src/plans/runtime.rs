@@ -175,6 +175,7 @@ impl PlanRuntime {
                         None,
                         Vec::new(),
                         None,
+                        None,
                     )
                     .await
                     .map_err(HandoffPlanError::CreateSession)?;

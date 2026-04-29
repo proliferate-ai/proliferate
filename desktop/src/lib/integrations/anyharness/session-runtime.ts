@@ -11,6 +11,7 @@ import type {
   SessionEventEnvelope,
   SessionExecutionSummary,
   SessionLiveConfigSnapshot,
+  SessionMcpBindingSummary,
   SessionStreamHandle,
 } from "@anyharness/sdk";
 import {
@@ -23,6 +24,7 @@ import {
   resolveRuntimeTargetForWorkspace,
   type RuntimeTarget,
 } from "@/lib/integrations/anyharness/runtime-target";
+import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
 import type { SessionSlot } from "@/stores/sessions/harness-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 
@@ -87,6 +89,7 @@ export function createEmptySessionSlot(
     title?: string | null;
     liveConfig?: SessionLiveConfigSnapshot | null;
     executionSummary?: SessionExecutionSummary | null;
+    mcpBindingSummaries?: SessionMcpBindingSummary[] | null;
     lastPromptAt?: string | null;
     optimisticPrompt?: PendingPromptEntry | null;
   },
@@ -105,6 +108,7 @@ export function createEmptySessionSlot(
     title,
     liveConfig: config?.liveConfig ?? null,
     executionSummary: config?.executionSummary ?? null,
+    mcpBindingSummaries: config?.mcpBindingSummaries ?? null,
     events: [],
     transcript: {
       ...transcript,
@@ -183,11 +187,35 @@ export async function fetchSessionSummary(
 
 export async function resumeSession(
   sessionId: string,
-  options?: { requestHeaders?: HeadersInit },
+  options?: {
+    powersInCodingSessionsEnabled: boolean;
+    requestHeaders?: HeadersInit;
+  },
 ) {
-  const { connection } = await getSessionClientAndWorkspace(sessionId);
-  return getAnyHarnessClient(connection).sessions.resume(
+  const { connection, target } = await getSessionClientAndWorkspace(sessionId);
+  const client = getAnyHarnessClient(connection);
+  const workspace = await client.workspaces.get(
+    target.anyharnessWorkspaceId,
+    options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
+  );
+  const isCowork = workspace.surface === "cowork";
+  const { mcpServers, mcpBindingSummaries } = await resolveSessionMcpServersForLaunch({
+    targetLocation: target.location,
+    workspacePath: workspace.path ?? null,
+    policy: {
+      workspaceSurface: isCowork ? "cowork" : "coding",
+      lifecycle: "resume",
+      enabled: isCowork || options?.powersInCodingSessionsEnabled === true,
+    },
+  });
+  return client.sessions.resume(
     sessionId,
+    {
+      mcpServers,
+      mcpBindingSummaries: mcpBindingSummaries.length > 0
+        ? mcpBindingSummaries
+        : undefined,
+    },
     options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
   );
 }

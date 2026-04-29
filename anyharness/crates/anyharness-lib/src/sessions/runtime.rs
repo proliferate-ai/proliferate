@@ -7,16 +7,17 @@ use std::time::Instant;
 use anyharness_contract::v1::{
     ConfigApplyState, InteractionKind, McpElicitationSubmittedField,
     McpElicitationUrlRevealResponse, ProposedPlanDecisionState, ReplayRecordingSummary, Session,
-    SessionExecutionSummary, SessionLiveConfigSnapshot, UserInputSubmittedAnswer,
-    WorkspaceExecutionSummary,
+    SessionExecutionSummary, SessionLiveConfigSnapshot, SessionMcpBindingSummary,
+    UserInputSubmittedAnswer, WorkspaceExecutionSummary,
 };
 
 use super::execution_summary::{
     idle_workspace_execution_summary, summarize_session_record, summarize_workspace_sessions,
 };
 use super::mcp::{
-    decrypt_bindings, encrypt_bindings, SessionDataCipher, SessionMcpBindingsError,
-    SessionMcpServer, SESSION_RESTART_REQUIRED_DETAIL,
+    decrypt_bindings, encrypt_bindings, serialize_binding_summaries, SessionDataCipher,
+    SessionMcpBindingsError, SessionMcpServer, SessionMcpSummaryError,
+    SESSION_RESTART_REQUIRED_DETAIL,
 };
 use super::model::SessionRecord;
 use super::replay::{
@@ -66,7 +67,15 @@ pub enum CreateAndStartSessionError {
 pub enum EnsureLiveSessionError {
     SessionNotFound(String),
     RestartRequired(String),
+    Invalid(String),
+    MissingDataKey,
     Internal(anyhow::Error),
+}
+
+#[derive(Debug)]
+pub struct SessionMcpRefresh {
+    pub mcp_servers: Vec<SessionMcpServer>,
+    pub mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
 }
 
 #[derive(Debug)]
@@ -306,6 +315,7 @@ impl SessionRuntime {
         mode_id: Option<&str>,
         system_prompt_append: Option<Vec<String>>,
         mcp_servers: Vec<SessionMcpServer>,
+        mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
         self.access_gate
@@ -338,6 +348,7 @@ impl SessionRuntime {
             mode_id,
             system_prompt_append,
             mcp_servers,
+            mcp_binding_summaries,
         )?;
         tracing::info!(
             workspace_id = %workspace_id,
@@ -444,6 +455,7 @@ impl SessionRuntime {
             closed_at: None,
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
+            mcp_binding_summaries_json: None,
             system_prompt_append: None,
         };
         self.session_service
@@ -491,11 +503,14 @@ impl SessionRuntime {
         mode_id: Option<&str>,
         system_prompt_append: Option<Vec<String>>,
         mcp_servers: Vec<SessionMcpServer>,
+        mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
         let system_prompt_append = join_system_prompt_append(system_prompt_append);
         let mcp_bindings_ciphertext =
             encrypt_bindings(self.session_data_cipher.as_ref(), &mcp_servers)
                 .map_err(map_encrypt_bindings_error_to_create)?;
+        let mcp_binding_summaries_json = serialize_binding_summaries(mcp_binding_summaries)
+            .map_err(map_mcp_summary_error_to_create)?;
         self.session_service
             .create_session(
                 workspace_id,
@@ -503,6 +518,7 @@ impl SessionRuntime {
                 model_id,
                 mode_id,
                 mcp_bindings_ciphertext,
+                mcp_binding_summaries_json,
                 system_prompt_append,
             )
             .map_err(map_create_session_service_error)
@@ -578,6 +594,7 @@ impl SessionRuntime {
     pub async fn ensure_live_session(
         &self,
         session_id: &str,
+        mcp_refresh: Option<SessionMcpRefresh>,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<SessionRecord, EnsureLiveSessionError> {
         self.access_gate
@@ -594,7 +611,7 @@ impl SessionRuntime {
                 SessionLifecycleError::Internal(error) => EnsureLiveSessionError::Internal(error),
             })?;
 
-        self.ensure_live_session_handle(&record, latency)
+        self.ensure_live_session_handle(&record, mcp_refresh, latency)
             .await
             .map_err(|error| match error {
                 StartSessionError::WorkspaceNotFound => EnsureLiveSessionError::Internal(
@@ -605,9 +622,7 @@ impl SessionRuntime {
                         "agent descriptor not found: {agent_kind}"
                     ))
                 }
-                StartSessionError::MissingDataKey => EnsureLiveSessionError::RestartRequired(
-                    SESSION_RESTART_REQUIRED_DETAIL.to_string(),
-                ),
+                StartSessionError::MissingDataKey => EnsureLiveSessionError::MissingDataKey,
                 StartSessionError::RestartRequired(detail) => {
                     EnsureLiveSessionError::RestartRequired(detail)
                 }
@@ -661,7 +676,7 @@ impl SessionRuntime {
         // Config mutations go through the live ACP actor. If the actor is not
         // running yet, start or resume it and return its control handle.
         let handle = self
-            .ensure_live_session_handle(&record, None)
+            .ensure_live_session_handle(&record, None, None)
             .await
             .map_err(|error| match error {
                 StartSessionError::WorkspaceNotFound => SetSessionConfigOptionError::Internal(
@@ -758,7 +773,7 @@ impl SessionRuntime {
 
         let ensure_started = Instant::now();
         let handle = self
-            .ensure_live_session_handle(&record, latency)
+            .ensure_live_session_handle(&record, None, latency)
             .await
             .map_err(map_start_error_to_prompt)?;
         tracing::info!(
@@ -903,7 +918,7 @@ impl SessionRuntime {
                 }
             })?;
         let handle = self
-            .ensure_live_session_handle(&record, None)
+            .ensure_live_session_handle(&record, None, None)
             .await
             .map_err(|error| {
                 PendingPromptMutationError::Internal(anyhow::anyhow!(
@@ -966,7 +981,7 @@ impl SessionRuntime {
                 }
             })?;
         let handle = self
-            .ensure_live_session_handle(&record, None)
+            .ensure_live_session_handle(&record, None, None)
             .await
             .map_err(|error| {
                 PendingPromptMutationError::Internal(anyhow::anyhow!(
@@ -1335,6 +1350,7 @@ impl SessionRuntime {
     async fn ensure_live_session_handle(
         &self,
         record: &SessionRecord,
+        mcp_refresh: Option<SessionMcpRefresh>,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<Arc<LiveSessionHandle>, StartSessionError> {
         self.access_gate
@@ -1354,6 +1370,26 @@ impl SessionRuntime {
                 "[workspace-latency] session.runtime.ensure_live_handle.reused"
             );
             return Ok(handle);
+        }
+
+        let mut record = record.clone();
+        if let Some(refresh) = mcp_refresh {
+            let mcp_bindings_ciphertext =
+                encrypt_bindings(self.session_data_cipher.as_ref(), &refresh.mcp_servers)
+                    .map_err(map_encrypt_bindings_error_to_start)?;
+            let mcp_binding_summaries_json =
+                serialize_binding_summaries(refresh.mcp_binding_summaries)
+                    .map_err(map_mcp_summary_error_to_start)?;
+            self.session_service
+                .store()
+                .update_mcp_bindings(
+                    &record.id,
+                    mcp_bindings_ciphertext.clone(),
+                    mcp_binding_summaries_json.clone(),
+                )
+                .map_err(StartSessionError::Internal)?;
+            record.mcp_bindings_ciphertext = mcp_bindings_ciphertext;
+            record.mcp_binding_summaries_json = mcp_binding_summaries_json;
         }
 
         let session_store = self.session_service.store().clone();
@@ -1382,12 +1418,12 @@ impl SessionRuntime {
         let last_seq = session_store
             .last_event_seq(&record.id)
             .map_err(StartSessionError::Internal)?;
-        let startup_strategy = choose_session_startup_strategy(record, &session_store)
+        let startup_strategy = choose_session_startup_strategy(&record, &session_store)
             .map_err(StartSessionError::Internal)?;
 
         let (handle, native_session_id) = self
             .start_live_session(
-                record,
+                &record,
                 startup_strategy,
                 last_seq,
                 record.system_prompt_append.clone(),
@@ -1678,6 +1714,31 @@ fn map_encrypt_bindings_error_to_create(
     }
 }
 
+fn map_encrypt_bindings_error_to_start(error: SessionMcpBindingsError) -> StartSessionError {
+    match error {
+        SessionMcpBindingsError::MissingDataKey => StartSessionError::MissingDataKey,
+        SessionMcpBindingsError::Encrypt(error) | SessionMcpBindingsError::Decrypt(error) => {
+            StartSessionError::Internal(error)
+        }
+    }
+}
+
+fn map_mcp_summary_error_to_create(error: SessionMcpSummaryError) -> CreateAndStartSessionError {
+    match error {
+        SessionMcpSummaryError::Invalid(detail) => CreateAndStartSessionError::Invalid(detail),
+        SessionMcpSummaryError::Serialize(error) => CreateAndStartSessionError::Internal(error),
+    }
+}
+
+fn map_mcp_summary_error_to_start(error: SessionMcpSummaryError) -> StartSessionError {
+    match error {
+        SessionMcpSummaryError::Invalid(detail) => {
+            StartSessionError::Internal(anyhow::anyhow!(detail))
+        }
+        SessionMcpSummaryError::Serialize(error) => StartSessionError::Internal(error),
+    }
+}
+
 fn map_decrypt_bindings_error_to_start(error: SessionMcpBindingsError) -> StartSessionError {
     match error {
         SessionMcpBindingsError::MissingDataKey => StartSessionError::MissingDataKey,
@@ -1802,6 +1863,7 @@ mod tests {
             closed_at: None,
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
+            mcp_binding_summaries_json: None,
             system_prompt_append: None,
         }
     }

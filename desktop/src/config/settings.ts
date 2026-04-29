@@ -1,29 +1,32 @@
 import type { ComponentType } from "react";
 import {
-  Settings,
   Blocks,
   CircleQuestion,
   CircleUser,
   CloudIcon,
   Keyboard,
   RefreshCw,
-  Tree,
+  Settings,
+  Shield,
+  Sparkles,
 } from "@/components/ui/icons";
 import type { IconProps } from "@/components/ui/icons";
 
 export const SETTINGS_CONTENT_SECTIONS = [
-  "configuration",
-  "keyboard",
-  "cowork",
-  "account",
-  "cloud",
-  "cloudRepo",
   "agents",
+  "defaults",
+  "appearance",
+  "account",
+  "keyboard",
+  "cloud",
+  "advanced",
   "repo",
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_CONTENT_SECTIONS)[number];
-export type SettingsStaticSection = Exclude<SettingsSection, "repo" | "cloudRepo">;
+export type SettingsStaticSection = Exclude<SettingsSection, "repo">;
+
+export const SETTINGS_DEFAULT_SECTION: SettingsStaticSection = "agents";
 
 // ── Grouped sidebar nav ──────────────────────────────────────────────
 
@@ -32,21 +35,28 @@ export type SettingsNavItem =
   | { kind: "action"; id: "checkForUpdates" | "support"; label: string; icon: ComponentType<IconProps> };
 
 export interface SettingsNavGroup {
-  id: "primary" | "cloud";
+  id: "configuration" | "primary" | "cloud" | "updates";
   heading?: string;
   items: SettingsNavItem[];
 }
 
 export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   {
+    id: "configuration",
+    heading: "Configuration",
+    items: [
+      { kind: "section", id: "agents", label: "Agents", icon: Blocks },
+      { kind: "section", id: "defaults", label: "Defaults", icon: Shield },
+    ],
+  },
+  {
     id: "primary",
     items: [
-      { kind: "section", id: "configuration", label: "Configuration", icon: Settings },
-      { kind: "action", id: "support", label: "Support", icon: CircleQuestion },
-      { kind: "section", id: "cowork", label: "Cowork", icon: Tree },
-      { kind: "section", id: "agents", label: "Agents", icon: Blocks },
+      { kind: "section", id: "appearance", label: "Appearance", icon: Sparkles },
       { kind: "section", id: "account", label: "Account", icon: CircleUser },
       { kind: "section", id: "keyboard", label: "Keyboard", icon: Keyboard },
+      { kind: "section", id: "advanced", label: "Advanced", icon: Settings },
+      { kind: "action", id: "support", label: "Support", icon: CircleQuestion },
     ],
   },
   {
@@ -54,6 +64,12 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     heading: "Cloud",
     items: [
       { kind: "section", id: "cloud", label: "Cloud", icon: CloudIcon },
+    ],
+  },
+  {
+    id: "updates",
+    heading: "Updates",
+    items: [
       {
         kind: "action",
         id: "checkForUpdates",
@@ -63,21 +79,6 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     ],
   },
 ];
-
-// ── Legacy flat list (used by SettingsSidebar until migration) ────────
-
-export type SettingsStaticNavItem =
-  | { kind: "section"; id: SettingsStaticSection; label: string }
-  | { kind: "action"; id: "checkForUpdates" | "support"; label: string };
-
-export const SETTINGS_STATIC_NAV_ITEMS: SettingsStaticNavItem[] =
-  SETTINGS_NAV_GROUPS.flatMap((g) =>
-    g.items.map((item): SettingsStaticNavItem =>
-      item.kind === "section"
-        ? { kind: "section", id: item.id, label: item.label }
-        : { kind: "action", id: item.id, label: item.label },
-    ),
-  );
 
 export const SETTINGS_COPY = {
   back: "Back",
