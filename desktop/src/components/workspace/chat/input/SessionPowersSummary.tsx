@@ -23,6 +23,7 @@ const NON_RESTARTABLE_REASONS: ReadonlySet<SessionMcpBindingNotAppliedReason> = 
   "policy_disabled",
   "unsupported_target",
 ]);
+const EMPTY_INSTALLED_CONNECTORS: InstalledConnectorRecord[] = [];
 
 function setsEqual(left: Set<string>, right: Set<string>): boolean {
   if (left.size !== right.size) {
@@ -41,7 +42,7 @@ export function shouldShowPowersNeedsRestart(input: {
   installed: InstalledConnectorRecord[];
   summaries: SessionMcpBindingSummary[] | null;
 }): boolean {
-  if (!input.connectorDataReady || !input.summaries || input.summaries.length === 0) {
+  if (!input.connectorDataReady || !input.summaries) {
     return false;
   }
 
@@ -77,24 +78,26 @@ export function SessionPowersSummary({ summaries }: SessionPowersSummaryProps) {
   const needsRestart = useMemo(() => {
     return shouldShowPowersNeedsRestart({
       connectorDataReady: !isPlaceholderData,
-      installed: data?.installed ?? [],
+      installed: data?.installed ?? EMPTY_INSTALLED_CONNECTORS,
       summaries,
     });
   }, [data?.installed, isPlaceholderData, summaries]);
 
-  if (!summaries || summaries.length === 0) {
+  if (!summaries || (summaries.length === 0 && !needsRestart)) {
     return null;
   }
 
   const applied = summaries.filter((summary) => summary.outcome === "applied");
   const notApplied = summaries.filter((summary) => summary.outcome === "not_applied");
-  const title = summaries
-    .map((summary) => {
-      const name = summary.displayName || summary.serverName;
-      const reason = summary.reason ? ` (${REASON_LABELS[summary.reason] ?? summary.reason})` : "";
-      return `${name}: ${summary.outcome === "applied" ? "applied" : "not applied"}${reason}`;
-    })
-    .join("\n");
+  const title = summaries.length > 0
+    ? summaries
+      .map((summary) => {
+        const name = summary.displayName || summary.serverName;
+        const reason = summary.reason ? ` (${REASON_LABELS[summary.reason] ?? summary.reason})` : "";
+        return `${name}: ${summary.outcome === "applied" ? "applied" : "not applied"}${reason}`;
+      })
+      .join("\n")
+    : "No Powers were applied to this session.";
 
   return (
     <div
@@ -105,6 +108,11 @@ export function SessionPowersSummary({ summaries }: SessionPowersSummaryProps) {
       {applied.length > 0 && (
         <span className="rounded-sm bg-foreground/5 px-1.5 py-0.5 text-foreground">
           Applied to this session: {applied.length}
+        </span>
+      )}
+      {summaries.length === 0 && (
+        <span className="rounded-sm bg-foreground/5 px-1.5 py-0.5 text-foreground">
+          None applied
         </span>
       )}
       {notApplied.length > 0 && (

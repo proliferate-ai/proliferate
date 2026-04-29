@@ -49,6 +49,22 @@ describe("shouldShowPowersNeedsRestart", () => {
     })).toBe(false);
   });
 
+  it("treats null summaries as an unknown snapshot", () => {
+    expect(shouldShowPowersNeedsRestart({
+      connectorDataReady: true,
+      installed: [installedConnector("connector-1")],
+      summaries: null,
+    })).toBe(false);
+  });
+
+  it("shows when a known-empty snapshot differs from enabled connectors", () => {
+    expect(shouldShowPowersNeedsRestart({
+      connectorDataReady: true,
+      installed: [installedConnector("connector-1")],
+      summaries: [],
+    })).toBe(true);
+  });
+
   it("ignores not-applied connectors that restart cannot fix", () => {
     expect(shouldShowPowersNeedsRestart({
       connectorDataReady: true,

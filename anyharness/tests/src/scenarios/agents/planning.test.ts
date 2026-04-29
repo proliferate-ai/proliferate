@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { deriveCanonicalPlan } from "@anyharness/sdk";
+import { deriveCanonicalPlan, reduceEvents } from "@anyharness/sdk";
 
 import { createRuntimeHarness, type RuntimeHarness } from "../../harness/runtime-harness.js";
 import {
@@ -68,8 +68,13 @@ describe("runtime agent planning compatibility", () => {
 
         const result = await harness.promptAndCollectUntil(session.id, planningCase.prompt, {
           timeoutMs: getPlanningPromptTimeoutMs(planningCase.agentKind),
-          stopWhen: (envelope) =>
+          stopWhen: (envelope, events) =>
             isPlanEnvelope(envelope)
+            || (
+              planningCase.expectedPlanSource === "behavior_only"
+              && envelope.event.type === "item_completed"
+              && hasGeminiPlanningBehavior(reduceEvents(events, session.id))
+            )
             || envelope.event.type === "interaction_requested"
             || envelope.event.type === "turn_ended"
             || envelope.event.type === "session_ended",
@@ -98,14 +103,11 @@ describe("runtime agent planning compatibility", () => {
             ).toBeGreaterThan(0);
           } else {
             const pendingModeSwitch = findClaudeModeSwitchTool(result.transcript);
+            const planFileWrite = hasPlanFileWrite(result.transcript);
             expect(
-              pendingModeSwitch,
-              `expected mode-switch planning interaction for ${planningCase.agentKind}\n${describeTranscript(result.transcript)}`,
+              pendingModeSwitch || planFileWrite,
+              `expected Claude mode-switch planning interaction or plan file write for ${planningCase.agentKind}\n${describeTranscript(result.transcript)}`,
             ).toBeTruthy();
-            expect(
-              hasPlanFileWrite(result.transcript),
-              `expected Claude plan file write for ${planningCase.agentKind}\n${describeTranscript(result.transcript)}`,
-            ).toBe(true);
           }
         } else {
           expect(

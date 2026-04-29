@@ -350,7 +350,7 @@ pub async fn delete_pending_prompt(
     post,
     path = "/v1/sessions/{session_id}/resume",
     params(("session_id" = String, Path, description = "Session ID")),
-    request_body = ResumeSessionRequest,
+    request_body = Option<ResumeSessionRequest>,
     responses(
         (status = 200, description = "Session resumed", body = Session),
         (status = 404, description = "Session not found", body = anyharness_contract::v1::ProblemDetails),

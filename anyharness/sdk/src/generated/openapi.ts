@@ -3893,9 +3893,9 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
-                "application/json": components["schemas"]["ResumeSessionRequest"];
+                "application/json": null | components["schemas"]["ResumeSessionRequest"];
             };
         };
         responses: {
