@@ -1131,9 +1131,7 @@ async def claim_usage_exports_for_sending(limit: int = 100) -> list[ClaimedUsage
                                 BILLING_USAGE_EXPORT_STATUS_FAILED_RETRYABLE,
                             ]
                         ),
-                        (
-                            BillingUsageExport.status == BILLING_USAGE_EXPORT_STATUS_SENDING
-                        )
+                        (BillingUsageExport.status == BILLING_USAGE_EXPORT_STATUS_SENDING)
                         & (BillingUsageExport.updated_at < stale_sending_before),
                     )
                 )

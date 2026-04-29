@@ -220,8 +220,7 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
     paid_overage_allowed = is_paid_cloud and state.subject.overage_enabled and payment_healthy
     concurrent_sandbox_limit = None if is_paid_cloud else settings.cloud_concurrent_sandbox_limit
     concurrency_limited = (
-        concurrent_sandbox_limit is not None
-        and active_sandbox_count >= concurrent_sandbox_limit
+        concurrent_sandbox_limit is not None and active_sandbox_count >= concurrent_sandbox_limit
     )
     hold_reason = _hold_reason(state.holds)
     credit_reason = (
