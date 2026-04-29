@@ -39,7 +39,6 @@ import type {
 } from "@/lib/integrations/cloud/client";
 import { isCloudAgentKind } from "@/lib/integrations/cloud/client";
 import type { RuntimeInputSyncStatus } from "@/lib/domain/cloud/runtime-input-sync";
-import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { openExternal } from "@/platform/tauri/shell";
 
@@ -50,6 +49,7 @@ const RUNTIME_INPUT_STATUS_LABELS: Record<RuntimeInputSyncStatus, string> = {
   local_only: "Available locally",
   syncing: "Syncing",
   synced_to_cloud: "Synced to cloud",
+  manual_sync: "Manual resync",
   sync_failed: "Sync issue",
   needs_reconnect: "Needs reconnect",
   cloud_owned_sync_unsupported: "Cloud-owned sync unsupported",
@@ -60,6 +60,7 @@ const RUNTIME_INPUT_STATUS_CLASSES: Record<RuntimeInputSyncStatus, string> = {
   local_only: "border-border/50 bg-muted/40 text-foreground",
   syncing: "border-border/50 bg-muted/40 text-foreground",
   synced_to_cloud: "border-border/50 bg-muted/40 text-foreground",
+  manual_sync: "border-border/50 bg-muted/40 text-muted-foreground",
   sync_failed: "border-border/60 bg-muted/40 text-foreground",
   needs_reconnect: "border-destructive/40 bg-destructive/10 text-destructive",
   cloud_owned_sync_unsupported: "border-border/50 bg-muted/40 text-muted-foreground",
@@ -313,14 +314,11 @@ export function CloudPane({ repositories }: CloudPaneProps) {
       <SettingsCard>
         <SettingsCardRow
           label="Runtime input sync"
-          description="Keep agent credentials, API-key Powers, and configured repo files synced to cloud in the background."
+          description="Keep agent credentials and API-key Powers synced to cloud in the background. Repo tracked files can be manually resynced from repo settings."
         >
           <Switch
             checked={runtimeInputSync.enabled}
-            onChange={(enabled) => {
-              runtimeInputSync.setEnabled(enabled);
-              trackProductEvent("runtime_input_sync_toggled", { enabled });
-            }}
+            onChange={runtimeInputSync.setEnabled}
             aria-label="Start runtime input sync"
           />
         </SettingsCardRow>

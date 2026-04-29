@@ -1,7 +1,9 @@
-import { type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { ApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
 import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
+import { ComposerFileMentionBadge } from "@/components/workspace/chat/input/ComposerFileMentionBadge";
+import { ComposerFileMentionSearch } from "@/components/workspace/chat/input/ComposerFileMentionSearch";
 import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
 import { PendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
 import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerPanel";
@@ -40,6 +42,7 @@ import {
   CLOUD_STATUS_PROVISIONING,
   EDIT_OPTIONS,
   EXECUTE_OPTIONS,
+  FILE_MENTION_SEARCH_RESULTS,
   GEMINI_MCP_OPTIONS,
   MCP_ELICITATION_BOOLEAN,
   MCP_ELICITATION_ENUM,
@@ -81,6 +84,8 @@ export function PlaygroundComposer({ selection, replay }: PlaygroundComposerProp
       >
         {selection.kind === "recording"
           ? <ReplayComposerSurface replay={replay} />
+          : scenario === "file-mention-search"
+            ? <PlaygroundFileMentionComposerSurface />
           : <PlaygroundComposerSurface />}
       </ChatComposerDock>
       {scenario && renderMobilityOverlayPreview(scenario)}
@@ -396,6 +401,61 @@ function PlaygroundComposerSurface() {
         </div>
       </form>
     </ChatComposerSurface>
+  );
+}
+
+function PlaygroundFileMentionComposerSurface() {
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  return (
+    <>
+      <div className="relative z-20 flex flex-col px-5">
+        <ComposerFileMentionSearch
+          query="chat"
+          results={FILE_MENTION_SEARCH_RESULTS}
+          highlightedIndex={0}
+          isLoading={false}
+          errorMessage={null}
+          listRef={listRef}
+          onSelect={noop}
+          onRowMouseEnter={noop}
+          setRowRef={(index, element) => {
+            rowRefs.current[index] = element;
+          }}
+          className="mx-0"
+        />
+      </div>
+      <ChatComposerSurface>
+        <form className="relative flex flex-col">
+        <div
+          data-telemetry-mask
+          className="mb-2 flex min-h-14 flex-grow select-text items-start px-5 text-base leading-relaxed text-foreground"
+        >
+          <span>
+            Update{" "}
+            <ComposerFileMentionBadge
+              name="ChatInput.tsx"
+              path="desktop/src/components/workspace/chat/input/ChatInput.tsx"
+              onRemove={noop}
+            />
+            {" "}and @chat
+          </span>
+        </div>
+        <div className="flex items-center justify-end gap-1 px-2 pb-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon-sm"
+            disabled
+            aria-label="Send (playground — disabled)"
+          >
+            <ArrowUp className="size-3.5" />
+          </Button>
+        </div>
+        </form>
+      </ChatComposerSurface>
+    </>
   );
 }
 

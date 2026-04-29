@@ -7,6 +7,10 @@ import {
 } from "@anyharness/sdk-react";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { resolveChatDraftWorkspaceId } from "@/lib/domain/chat/chat-input";
+import {
+  EMPTY_CHAT_DRAFT,
+  isChatDraftEmpty,
+} from "@/lib/domain/chat/file-mentions";
 import { resolvePlanImplementationModeSwitch } from "@/lib/domain/plans/implementation-mode";
 import { formatImplementPlanDraft } from "@/lib/domain/plans/implementation-prompt";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
@@ -24,7 +28,7 @@ export function useProposedPlanActions() {
   const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
-  const setDraft = useChatInputStore((state) => state.setDraft);
+  const appendDraftText = useChatInputStore((state) => state.appendDraftText);
   const showToast = useToastStore((state) => state.show);
   const approveMutation = useApprovePlanMutation({ workspaceId: selectedWorkspaceId });
   const rejectMutation = useRejectPlanMutation({ workspaceId: selectedWorkspaceId });
@@ -97,13 +101,13 @@ export function useProposedPlanActions() {
         return;
       }
 
-      const currentDraft =
-        useChatInputStore.getState().draftByWorkspaceId[draftWorkspaceId] ?? "";
       const implementationDraft = formatImplementPlanDraft(projectionPath);
-      const nextDraft = currentDraft.trim().length > 0
-        ? `${currentDraft.trim()}\n\n${implementationDraft}`
-        : implementationDraft;
-      setDraft(draftWorkspaceId, nextDraft);
+      const currentDraft =
+        useChatInputStore.getState().draftByWorkspaceId[draftWorkspaceId] ?? EMPTY_CHAT_DRAFT;
+      appendDraftText(
+        draftWorkspaceId,
+        isChatDraftEmpty(currentDraft) ? implementationDraft : `\n\n${implementationDraft}`,
+      );
     })().catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
       showToast(`Failed to prepare plan document: ${message}`);
@@ -112,7 +116,7 @@ export function useProposedPlanActions() {
     materializeDocument,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
-    setDraft,
+    appendDraftText,
     setActiveSessionConfigOption,
     showToast,
   ]);

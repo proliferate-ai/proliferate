@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { connectorSupportsCloudSecretSync, isOAuthConnectorCatalogEntry } from "@/lib/domain/mcp/catalog";
 import type { RuntimeInputSyncStatus } from "@/lib/domain/cloud/runtime-input-sync";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { cloudRepositoryKey, isCloudRepository } from "@/lib/domain/settings/repositories";
+import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useConnectors } from "@/hooks/mcp/use-connectors";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useCloudCredentials } from "./use-cloud-credentials";
@@ -106,9 +107,9 @@ function summarizeRepoRows(
     id: "repo-files",
     label: "Repo tracked files",
     description: configuredLocalCount > 0
-      ? `${configuredLocalCount} repo${configuredLocalCount === 1 ? " has" : "s have"} tracked files configured for cloud.`
+      ? `${configuredLocalCount} repo${configuredLocalCount === 1 ? " has" : "s have"} tracked files saved for cloud; local edits resync from repo settings.`
       : "Configure tracked files from each repo settings page.",
-    status: configuredLocalCount > 0 ? "synced_to_cloud" : "not_configured",
+    status: configuredLocalCount > 0 ? "manual_sync" : "not_configured",
   };
 }
 
@@ -122,6 +123,10 @@ export function useRuntimeInputSyncSummary(
   const credentials = useCloudCredentials();
   const connectors = useConnectors();
   const repoConfigs = useCloudRepoConfigs();
+  const setEnabled = useCallback((enabled: boolean) => {
+    setPreference("cloudRuntimeInputSyncEnabled", enabled);
+    trackProductEvent("runtime_input_sync_toggled", { enabled });
+  }, [setPreference]);
 
   const rows = useMemo(() => [
     summarizeCredentialRows(credentials.data),
@@ -131,9 +136,7 @@ export function useRuntimeInputSyncSummary(
 
   return {
     enabled: cloudRuntimeInputSyncEnabled,
-    setEnabled: (enabled: boolean) => {
-      setPreference("cloudRuntimeInputSyncEnabled", enabled);
-    },
+    setEnabled,
     rows,
   };
 }

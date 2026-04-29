@@ -10,6 +10,7 @@ export type RuntimeInputSyncStatus =
   | "local_only"
   | "syncing"
   | "synced_to_cloud"
+  | "manual_sync"
   | "sync_failed"
   | "needs_reconnect"
   | "cloud_owned_sync_unsupported";

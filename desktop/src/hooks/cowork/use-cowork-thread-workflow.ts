@@ -65,7 +65,7 @@ export function useCoworkThreadWorkflow() {
   const showToast = useToastStore((state) => state.show);
   const { selectWorkspace } = useWorkspaceSelection();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
-  const setDraft = useChatInputStore((state) => state.setDraft);
+  const setDraftText = useChatInputStore((state) => state.setDraftText);
   const clearDraft = useChatInputStore((state) => state.clearDraft);
   const createCoworkThreadMutation = useCreateCoworkThreadMutation();
 
@@ -164,7 +164,7 @@ export function useCoworkThreadWorkflow() {
       );
       upsertWorkspaceSessionRecord(result.workspace.id, result.session);
       if (input.draftText?.length) {
-        setDraft(result.workspace.id, input.draftText);
+        setDraftText(result.workspace.id, input.draftText);
         if (input.sourceWorkspaceId && input.sourceWorkspaceId !== result.workspace.id) {
           clearDraft(input.sourceWorkspaceId);
         }
@@ -215,7 +215,7 @@ export function useCoworkThreadWorkflow() {
     queryClient,
     runtimeUrl,
     selectWorkspace,
-    setDraft,
+    setDraftText,
     setPendingWorkspaceEntry,
     showToast,
     upsertWorkspaceSessionRecord,

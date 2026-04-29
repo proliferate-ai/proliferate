@@ -18,7 +18,7 @@ describe("focus-zone helpers", () => {
     expect(getFocusZone()).toBe("terminal");
   });
 
-  it("focuses the chat textarea when the chat focus zone exists", () => {
+  it("focuses the chat composer editor when the chat focus zone exists", () => {
     const focus = vi.fn();
     const querySelector = vi.fn(() => ({ focus }));
     vi.stubGlobal("document", {
@@ -26,7 +26,7 @@ describe("focus-zone helpers", () => {
     });
 
     expect(focusChatInput()).toBe(true);
-    expect(querySelector).toHaveBeenCalledWith("textarea");
+    expect(querySelector).toHaveBeenCalledWith("[data-chat-composer-editor], textarea");
     expect(focus).toHaveBeenCalledWith({ preventScroll: false });
   });
 

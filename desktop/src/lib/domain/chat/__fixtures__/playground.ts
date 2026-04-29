@@ -2,6 +2,7 @@ import type {
   CoworkArtifactSummary,
   McpElicitationInteractionPayload,
   PlanEntry,
+  SearchWorkspaceFilesResponse,
   ToolCallItem,
   TranscriptState,
   UserInputQuestion,
@@ -43,6 +44,21 @@ export const TODOS_LONG: PlanEntry[] = [
   { content: "Add fade-mask CSS utility to index.css", status: "pending" },
   { content: "Rebase onto main and verify typecheck + tests pass", status: "pending" },
   { content: "Write a playground page so UI iteration doesn't require an LLM", status: "pending" },
+];
+
+export const FILE_MENTION_SEARCH_RESULTS: SearchWorkspaceFilesResponse["results"] = [
+  {
+    name: "ChatInput.tsx",
+    path: "desktop/src/components/workspace/chat/input/ChatInput.tsx",
+  },
+  {
+    name: "file-mentions.ts",
+    path: "desktop/src/lib/domain/chat/file-mentions.ts",
+  },
+  {
+    name: "chat-composer.md",
+    path: "docs/frontend/chat-composer.md",
+  },
 ];
 
 export const WORKSPACE_ARRIVAL_CREATED: WorkspaceArrivalViewModel = {
