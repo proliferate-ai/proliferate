@@ -14,6 +14,8 @@ class CloudWorkspace(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    billing_subject_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(index=True)
 
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     git_provider: Mapped[str] = mapped_column(String(32))

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 @dataclass(frozen=True)
 class BillingSnapshot:
+    billing_subject_id: UUID
     plan: str
     billing_mode: str
     is_unlimited: bool
@@ -19,8 +21,26 @@ class BillingSnapshot:
     remaining_hours: float | None
     concurrent_sandbox_limit: int
     active_sandbox_count: int
+    start_blocked: bool
+    start_block_reason: str | None
+    active_spend_hold: bool
+    hold_reason: str | None
+    remaining_seconds: float | None
     blocked: bool
     blocked_reason: str | None
+
+
+@dataclass(frozen=True)
+class SandboxStartAuthorization:
+    allowed: bool
+    billing_subject_id: UUID
+    start_blocked: bool
+    start_block_reason: str | None
+    active_spend_hold: bool
+    hold_reason: str | None
+    message: str | None
+    active_sandbox_count: int
+    remaining_seconds: float | None
 
 
 @dataclass(frozen=True)
@@ -77,6 +97,10 @@ class CloudPlanInfo(BillingBaseModel):
     remaining_sandbox_hours: float | None = Field(alias="remainingSandboxHours")
     concurrent_sandbox_limit: int = Field(alias="concurrentSandboxLimit")
     active_sandbox_count: int = Field(alias="activeSandboxCount")
+    start_blocked: bool = Field(alias="startBlocked")
+    start_block_reason: str | None = Field(default=None, alias="startBlockReason")
+    active_spend_hold: bool = Field(alias="activeSpendHold")
+    hold_reason: str | None = Field(default=None, alias="holdReason")
     blocked: bool
     blocked_reason: str | None = Field(default=None, alias="blockedReason")
 
@@ -91,5 +115,9 @@ class BillingOverview(BillingBaseModel):
     remaining_hours: float | None = Field(alias="remainingHours")
     concurrent_sandbox_limit: int = Field(alias="concurrentSandboxLimit")
     active_sandbox_count: int = Field(alias="activeSandboxCount")
+    start_blocked: bool = Field(alias="startBlocked")
+    start_block_reason: str | None = Field(default=None, alias="startBlockReason")
+    active_spend_hold: bool = Field(alias="activeSpendHold")
+    hold_reason: str | None = Field(default=None, alias="holdReason")
     blocked: bool
     blocked_reason: str | None = Field(default=None, alias="blockedReason")

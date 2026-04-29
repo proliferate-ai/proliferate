@@ -18,6 +18,7 @@ from proliferate.db.models.cloud import (
     CloudSandbox,
     CloudWorkspace,
 )
+from proliferate.db.store.billing import ensure_personal_billing_subject
 from proliferate.integrations.github import GitHubRepoBranches
 from proliferate.integrations.sandbox.base import ProviderSandboxState
 from proliferate.server.cloud.errors import CloudApiError
@@ -29,6 +30,10 @@ from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.workspaces import service as cloud_service
 from proliferate.utils.crypto import encrypt_text
 from proliferate.utils.time import utcnow
+
+
+async def _billing_subject_for_user(db_session: AsyncSession, user_id: uuid.UUID):
+    return await ensure_personal_billing_subject(db_session, user_id)
 
 
 async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]:
@@ -1277,9 +1282,13 @@ class TestCloudWorkspaces:
 
         session = await _register_and_login(client, "cloud-connection-ready@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
+        user_id = uuid.UUID(session["user_id"])
+        billing_subject = await _billing_subject_for_user(db_session, user_id)
 
         workspace = CloudWorkspace(
-            user_id=uuid.UUID(session["user_id"]),
+            user_id=user_id,
+            billing_subject_id=billing_subject.id,
+            created_by_user_id=user_id,
             display_name="acme/rocket",
             git_provider="github",
             git_owner="acme",
@@ -1333,9 +1342,13 @@ class TestCloudWorkspaces:
 
         session = await _register_and_login(client, "cloud-connection-not-ready@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
+        user_id = uuid.UUID(session["user_id"])
+        billing_subject = await _billing_subject_for_user(db_session, user_id)
 
         workspace = CloudWorkspace(
-            user_id=uuid.UUID(session["user_id"]),
+            user_id=user_id,
+            billing_subject_id=billing_subject.id,
+            created_by_user_id=user_id,
             display_name="acme/rocket",
             git_provider="github",
             git_owner="acme",
@@ -1429,9 +1442,13 @@ class TestCloudWorkspaces:
 
         session = await _register_and_login(client, "cloud-sync-credentials@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
+        user_id = uuid.UUID(session["user_id"])
+        billing_subject = await _billing_subject_for_user(db_session, user_id)
 
         workspace = CloudWorkspace(
-            user_id=uuid.UUID(session["user_id"]),
+            user_id=user_id,
+            billing_subject_id=billing_subject.id,
+            created_by_user_id=user_id,
             display_name="acme/rocket",
             git_provider="github",
             git_owner="acme",
@@ -1522,6 +1539,8 @@ class TestCloudWorkspaces:
         session = await _register_and_login(client, "cloud-start-reuse@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         await _link_github_account(db_session, session["user_id"])
+        user_id = uuid.UUID(session["user_id"])
+        billing_subject = await _billing_subject_for_user(db_session, user_id)
 
         await client.put(
             "/v1/cloud/credentials/claude",
@@ -1533,7 +1552,9 @@ class TestCloudWorkspaces:
         )
 
         workspace = CloudWorkspace(
-            user_id=uuid.UUID(session["user_id"]),
+            user_id=user_id,
+            billing_subject_id=billing_subject.id,
+            created_by_user_id=user_id,
             display_name="acme/rocket",
             git_provider="github",
             git_owner="acme",
@@ -1616,6 +1637,8 @@ class TestCloudWorkspaces:
         session = await _register_and_login(client, "cloud-start-reprovision@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         await _link_github_account(db_session, session["user_id"])
+        user_id = uuid.UUID(session["user_id"])
+        billing_subject = await _billing_subject_for_user(db_session, user_id)
 
         await client.put(
             "/v1/cloud/credentials/claude",
@@ -1627,7 +1650,9 @@ class TestCloudWorkspaces:
         )
 
         workspace = CloudWorkspace(
-            user_id=uuid.UUID(session["user_id"]),
+            user_id=user_id,
+            billing_subject_id=billing_subject.id,
+            created_by_user_id=user_id,
             display_name="acme/rocket",
             git_provider="github",
             git_owner="acme",
@@ -1676,9 +1701,13 @@ class TestCloudWorkspaces:
     ) -> None:
         session = await _register_and_login(client, "cloud-display-name-set@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
+        user_id = uuid.UUID(session["user_id"])
+        billing_subject = await _billing_subject_for_user(db_session, user_id)
 
         workspace = CloudWorkspace(
-            user_id=uuid.UUID(session["user_id"]),
+            user_id=user_id,
+            billing_subject_id=billing_subject.id,
+            created_by_user_id=user_id,
             display_name=None,
             git_provider="github",
             git_owner="acme",
@@ -1741,9 +1770,13 @@ class TestCloudWorkspaces:
     ) -> None:
         session = await _register_and_login(client, "cloud-display-name-too-long@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
+        user_id = uuid.UUID(session["user_id"])
+        billing_subject = await _billing_subject_for_user(db_session, user_id)
 
         workspace = CloudWorkspace(
-            user_id=uuid.UUID(session["user_id"]),
+            user_id=user_id,
+            billing_subject_id=billing_subject.id,
+            created_by_user_id=user_id,
             display_name=None,
             git_provider="github",
             git_owner="acme",

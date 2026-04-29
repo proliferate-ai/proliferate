@@ -136,11 +136,17 @@ export function CloudPane({ repositories }: CloudPaneProps) {
               </div>
             )}
 
-            {billingPlan.blocked && (
+            {billingPlan.startBlocked && (
               <div className="rounded-lg border border-border bg-background px-3 py-2">
-                <p className="font-medium text-foreground">Cloud usage is paused</p>
+                <p className="font-medium text-foreground">
+                  {billingPlan.startBlockReason === "concurrency_limit"
+                    ? "Sandbox limit reached"
+                    : "Cloud usage is paused"}
+                </p>
                 <p className="mt-1 text-muted-foreground">
-                  Cloud usage is unavailable right now.
+                  {billingPlan.startBlockReason === "concurrency_limit"
+                    ? "Stop another cloud workspace before starting a new one."
+                    : "Cloud usage is unavailable right now."}
                 </p>
               </div>
             )}

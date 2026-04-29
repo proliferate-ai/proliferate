@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCloudWorkspaceCompactStatusView,
   buildCloudWorkspaceStatusScreenModel,
+  descriptionForStartBlockReason,
   shouldShowCloudWorkspaceStatusScreen,
 } from "@/lib/domain/workspaces/cloud-workspace-status";
 import type { CloudWorkspaceStatus, CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
@@ -14,6 +15,7 @@ function makeCloudWorkspace(
     displayName: null,
     actionBlockKind: null,
     actionBlockReason: null,
+    canResume: false,
     postReadyPhase: "idle",
     postReadyFilesApplied: 0,
     postReadyFilesTotal: 0,
@@ -51,16 +53,16 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
 
   it("returns a passive status footer for billing blocks", () => {
     const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
-      actionBlockKind: "billing_quota",
-      actionBlockReason: "Cloud usage is paused.",
+      actionBlockKind: "credits_exhausted",
+      actionBlockReason: "Cloud usage is paused because your included sandbox hours are exhausted.",
     }));
 
     expect(model.footer).toEqual({
       kind: "status",
-      message: "Cloud usage is unavailable for this workspace right now.",
+      message: "Cloud usage is paused because your included sandbox hours are exhausted.",
     });
     expect(model.description).toBe(
-      "Cloud usage is unavailable for this workspace right now.",
+      "Cloud usage is paused because your included sandbox hours are exhausted.",
     );
   });
 });
@@ -176,5 +178,32 @@ describe("buildCloudWorkspaceCompactStatusView", () => {
         buildCloudWorkspaceCompactStatusView(model).tone,
       );
     }
+  });
+});
+
+describe("descriptionForStartBlockReason", () => {
+  it.each([
+    {
+      reason: "concurrency_limit",
+      description: "Stop another cloud workspace before starting this one.",
+    },
+    {
+      reason: "credits_exhausted",
+      description: "Cloud usage is paused because your included sandbox hours are exhausted.",
+    },
+    {
+      reason: "payment_failed",
+      description: "Cloud usage is paused because billing needs attention.",
+    },
+    {
+      reason: "admin_hold",
+      description: "Cloud usage is paused for this account.",
+    },
+    {
+      reason: "external_billing_hold",
+      description: "Cloud usage is paused because billing needs attention.",
+    },
+  ])("maps $reason to actionable copy", ({ description, reason }) => {
+    expect(descriptionForStartBlockReason(reason)).toBe(description);
   });
 });
