@@ -390,6 +390,12 @@ fn parse_optional_resume_request(body: Bytes) -> Result<ResumeSessionRequest, Ap
     if body.is_empty() {
         return Ok(ResumeSessionRequest::default());
     }
+    if body.iter().all(u8::is_ascii_whitespace) {
+        return Ok(ResumeSessionRequest::default());
+    }
+    if body.as_ref().trim_ascii() == b"null" {
+        return Ok(ResumeSessionRequest::default());
+    }
     serde_json::from_slice::<ResumeSessionRequest>(&body).map_err(|error| {
         ApiError::bad_request(
             format!("invalid resume request: {error}"),
@@ -1010,6 +1016,17 @@ mod tests {
         let request = match parse_optional_resume_request(Bytes::from_static(br#"{}"#)) {
             Ok(request) => request,
             Err(_) => panic!("parse empty object"),
+        };
+
+        assert!(request.mcp_servers.is_none());
+        assert!(request.mcp_binding_summaries.is_none());
+    }
+
+    #[test]
+    fn resume_request_accepts_null_body() {
+        let request = match parse_optional_resume_request(Bytes::from_static(br#" null "#)) {
+            Ok(request) => request,
+            Err(_) => panic!("parse null body"),
         };
 
         assert!(request.mcp_servers.is_none());

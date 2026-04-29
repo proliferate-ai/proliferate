@@ -89,7 +89,7 @@ describe("collectInactiveSessionStreamIds", () => {
 });
 
 describe("resumeSession", () => {
-  it("sends explicit empty MCP arrays when resolution finds no launchable connectors", async () => {
+  it("sends explicit empty MCP bindings without empty summaries when none are launchable", async () => {
     mocks.resolveRuntimeTargetForWorkspace.mockResolvedValue({
       anyharnessWorkspaceId: "runtime-workspace-1",
       baseUrl: "http://runtime.local",
@@ -114,7 +114,7 @@ describe("resumeSession", () => {
     expect(mocks.resume).toHaveBeenCalledWith(
       "session-1",
       {
-        mcpBindingSummaries: [],
+        mcpBindingSummaries: undefined,
         mcpServers: [],
       },
       undefined,

@@ -111,7 +111,7 @@ export function getToolCalls(transcript: TranscriptState): ToolCallItem[] {
 }
 
 export function hasGeminiPlanningBehavior(transcript: TranscriptState): boolean {
-  return hasPlanFileWrite(transcript) || hasPlanLikeAssistantResponse(transcript) || hasAssistantResponse(transcript);
+  return hasPlanFileWrite(transcript) || hasPlanLikeAssistantResponse(transcript);
 }
 
 export function findClaudeModeSwitchTool(transcript: TranscriptState): ToolCallItem | null {
@@ -252,15 +252,11 @@ function hasPlanLikeAssistantResponse(transcript: TranscriptState): boolean {
     const normalized = text.toLowerCase();
     return (
       normalized.includes("plan")
-      && /(###\s*1\.|(?:^|\n)1\.)/.test(text)
-      && /(###\s*2\.|(?:^|\n)2\.)/.test(text)
-      && /(###\s*3\.|(?:^|\n)3\.)/.test(text)
+      && /(?:^|\n)\s*(?:#{1,6}\s*)?(?:step\s*)?1[.)\s:-]/i.test(text)
+      && /(?:^|\n)\s*(?:#{1,6}\s*)?(?:step\s*)?2[.)\s:-]/i.test(text)
+      && /(?:^|\n)\s*(?:#{1,6}\s*)?(?:step\s*)?3[.)\s:-]/i.test(text)
     );
   });
-}
-
-function hasAssistantResponse(transcript: TranscriptState): boolean {
-  return getAssistantTexts(transcript).some((text) => text.length > 0);
 }
 
 function getSortedItems(transcript: TranscriptState): TranscriptItem[] {
