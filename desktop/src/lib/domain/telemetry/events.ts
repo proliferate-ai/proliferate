@@ -4,6 +4,27 @@ import type { TelemetryFailureKind } from "./failures";
 export type DesktopTelemetryRoute = "login" | "main" | "settings" | "setup" | "unknown";
 export type DesktopWorkspaceKind = "cloud" | "local";
 export type RuntimeConnectionTelemetryState = "connecting" | "failed" | "healthy";
+export type RuntimeInputSyncTelemetryTrigger =
+  | "preference_enabled"
+  | "startup"
+  | "online"
+  | "hourly"
+  | "retry"
+  | "credential_mutation"
+  | "mcp_mutation"
+  | "repo_config_mutation"
+  | "runtime_reconnected";
+export type RuntimeInputSyncTelemetrySourceKind =
+  | "credential"
+  | "mcp_api_key_replica"
+  | "repo_tracked_file";
+export type RuntimeInputSyncTelemetryFailureKind =
+  | "cloud_unavailable"
+  | "missing_local_source"
+  | "needs_reconnect"
+  | "too_large"
+  | "runtime_unavailable"
+  | "request_failed";
 export type AuthTelemetryProvider = "dev_bypass" | "github";
 export type AuthSignInSource = "desktop_callback" | "dev_bypass" | "interactive_poll";
 export type WorkspaceCreationKind = "repo" | "worktree" | "local";
@@ -137,6 +158,20 @@ export interface DesktopProductEventMap {
   runtime_connection_state_changed: {
     connection_state: RuntimeConnectionTelemetryState;
     has_error: boolean;
+  };
+  runtime_input_sync_cycle_completed: {
+    trigger: RuntimeInputSyncTelemetryTrigger;
+    credential_count: number;
+    mcp_count: number;
+    repo_file_count: number;
+    failure_count: number;
+  };
+  runtime_input_sync_item_failed: {
+    source_kind: RuntimeInputSyncTelemetrySourceKind;
+    failure_kind: RuntimeInputSyncTelemetryFailureKind;
+  };
+  runtime_input_sync_toggled: {
+    enabled: boolean;
   };
   screen_viewed: {
     route: DesktopTelemetryRoute;

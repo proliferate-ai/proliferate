@@ -13,6 +13,7 @@ import {
   cloudRepoConfigsKey,
   isCloudWorkspaceRepoConfigStatusQueryKey,
 } from "./query-keys";
+import { emitRuntimeInputSyncEvent } from "./runtime-input-sync-events";
 
 interface SaveCloudRepoConfigInput {
   defaultBranch: string | null;
@@ -88,6 +89,19 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
         tracked_file_count: response.trackedFiles.length,
         has_setup_script: response.setupScript.trim().length > 0,
       });
+      if (repository.localWorkspaceId && repository.gitOwner && repository.gitRepoName) {
+        const { gitOwner, gitRepoName, localWorkspaceId } = repository;
+        emitRuntimeInputSyncEvent({
+          trigger: "repo_config_mutation",
+          descriptors: response.trackedFiles.map((file) => ({
+            kind: "repo_tracked_file",
+            gitOwner,
+            gitRepoName,
+            localWorkspaceId,
+            relativePath: file.relativePath,
+          })),
+        });
+      }
     },
     onError: (error, variables) => {
       captureTelemetryException(error, {

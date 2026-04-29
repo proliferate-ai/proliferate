@@ -7,6 +7,7 @@ from proliferate.db.store.cloud_mcp_connections import (
     load_cloud_mcp_connections_for_user,
     persist_cloud_mcp_connection_delete,
     persist_cloud_mcp_connection_sync,
+    persist_cloud_mcp_connection_touch,
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mcp_connections.models import (
@@ -14,7 +15,7 @@ from proliferate.server.cloud.mcp_connections.models import (
     SyncCloudMcpConnectionRequest,
     cloud_mcp_connection_status_payload,
 )
-from proliferate.utils.crypto import encrypt_json
+from proliferate.utils.crypto import decrypt_json, encrypt_json
 
 
 def _invalid_payload(message: str) -> NoReturn:
@@ -54,16 +55,30 @@ async def sync_cloud_mcp_connection_for_user(
         _invalid_payload("Cloud connector sync requires a connection id.")
     if not cleaned_catalog_entry_id:
         _invalid_payload("Cloud connector sync requires a catalog entry id.")
+    payload = {
+        "catalogEntryId": cleaned_catalog_entry_id,
+        "secretFields": _clean_secret_fields(body.secret_fields),
+    }
+    records = await load_cloud_mcp_connections_for_user(user_id)
+    existing = next(
+        (
+            record for record in records
+            if record.connection_id == cleaned_connection_id
+        ),
+        None,
+    )
+    if existing is not None and decrypt_json(existing.payload_ciphertext) == payload:
+        await persist_cloud_mcp_connection_touch(
+            user_id=user_id,
+            connection_id=cleaned_connection_id,
+        )
+        return
+
     await persist_cloud_mcp_connection_sync(
         user_id=user_id,
         connection_id=cleaned_connection_id,
         catalog_entry_id=cleaned_catalog_entry_id,
-        payload_ciphertext=encrypt_json(
-            {
-                "catalogEntryId": cleaned_catalog_entry_id,
-                "secretFields": _clean_secret_fields(body.secret_fields),
-            }
-        ),
+        payload_ciphertext=encrypt_json(payload),
     )
 
 

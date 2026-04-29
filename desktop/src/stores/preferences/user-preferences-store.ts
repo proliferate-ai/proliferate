@@ -18,6 +18,7 @@ export interface UserPreferences {
   turnEndSoundId: TurnEndSoundId;
   transparentChromeEnabled: boolean;
   powersInCodingSessionsEnabled: boolean;
+  cloudRuntimeInputSyncEnabled: boolean;
   onboardingCompletedVersion: number;
   onboardingPrimaryGoalId: OnboardingGoalId | "";
 }
@@ -38,6 +39,7 @@ export const USER_PREFERENCE_DEFAULTS: UserPreferences = {
   turnEndSoundId: "ding",
   transparentChromeEnabled: true,
   powersInCodingSessionsEnabled: false,
+  cloudRuntimeInputSyncEnabled: false,
   onboardingCompletedVersion: 0,
   onboardingPrimaryGoalId: "",
 };
@@ -106,6 +108,7 @@ async function readLegacyUserPreferences(): Promise<UserPreferences> {
     turnEndSoundId: USER_PREFERENCE_DEFAULTS.turnEndSoundId,
     transparentChromeEnabled: USER_PREFERENCE_DEFAULTS.transparentChromeEnabled,
     powersInCodingSessionsEnabled: USER_PREFERENCE_DEFAULTS.powersInCodingSessionsEnabled,
+    cloudRuntimeInputSyncEnabled: USER_PREFERENCE_DEFAULTS.cloudRuntimeInputSyncEnabled,
     onboardingCompletedVersion: USER_PREFERENCE_DEFAULTS.onboardingCompletedVersion,
     onboardingPrimaryGoalId: USER_PREFERENCE_DEFAULTS.onboardingPrimaryGoalId,
   };
@@ -173,6 +176,11 @@ export function migrateUserPreferences(preferences: UserPreferences): {
     changed = true;
   }
 
+  if (typeof next.cloudRuntimeInputSyncEnabled !== "boolean") {
+    next.cloudRuntimeInputSyncEnabled = USER_PREFERENCE_DEFAULTS.cloudRuntimeInputSyncEnabled;
+    changed = true;
+  }
+
   const sanitizedDefaultSessionModeByAgentKind = sanitizeDefaultSessionModeByAgentKind(
     next.defaultSessionModeByAgentKind,
   );
@@ -206,6 +214,7 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
     turnEndSoundId: state.turnEndSoundId,
     transparentChromeEnabled: state.transparentChromeEnabled,
     powersInCodingSessionsEnabled: state.powersInCodingSessionsEnabled,
+    cloudRuntimeInputSyncEnabled: state.cloudRuntimeInputSyncEnabled,
     onboardingCompletedVersion: state.onboardingCompletedVersion,
     onboardingPrimaryGoalId: state.onboardingPrimaryGoalId,
   };

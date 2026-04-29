@@ -6,6 +6,7 @@ import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
+import { emitRuntimeInputSyncEvent } from "@/hooks/cloud/runtime-input-sync-events";
 import { refreshMcpConnectorsQuery } from "./use-connectors";
 
 export function useInstallConnector() {
@@ -29,6 +30,10 @@ export function useInstallConnector() {
           connector_id: variables.catalogEntryId,
         });
       }
+      emitRuntimeInputSyncEvent({
+        trigger: "mcp_mutation",
+        descriptors: [{ kind: "mcp_api_key_replica" }],
+      });
     },
     onError: (error, variables) => {
       trackProductEvent("connector_install_failed", {

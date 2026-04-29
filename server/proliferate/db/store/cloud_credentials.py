@@ -72,6 +72,30 @@ async def sync_cloud_credential(
     await db.commit()
 
 
+async def touch_active_cloud_credential_sync(
+    db: AsyncSession,
+    user_id: UUID,
+    provider: CloudAgentKind,
+) -> None:
+    now = utcnow()
+    records = list(
+        (
+            await db.execute(
+                select(CloudCredential).where(
+                    CloudCredential.user_id == user_id,
+                    CloudCredential.provider == provider,
+                    CloudCredential.revoked_at.is_(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for record in records:
+        record.last_synced_at = now
+    await db.commit()
+
+
 async def delete_cloud_credential(
     db: AsyncSession,
     user_id: UUID,
@@ -117,6 +141,14 @@ async def persist_cloud_credential_sync(
             auth_mode,
             payload_format,
         )
+
+
+async def persist_cloud_credential_touch(
+    user_id: UUID,
+    provider: CloudAgentKind,
+) -> None:
+    async with db_engine.async_session_factory() as db:
+        await touch_active_cloud_credential_sync(db, user_id, provider)
 
 
 async def persist_cloud_credential_delete(

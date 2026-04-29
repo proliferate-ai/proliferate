@@ -4,6 +4,9 @@ import type {
   ConnectorCatalogId,
   InstalledConnectorRecord,
 } from "@/lib/domain/mcp/types";
+import {
+  connectorSupportsCloudSecretSync,
+} from "@/lib/domain/mcp/catalog";
 import { trackConnectorConnectClicked } from "@/hooks/mcp/use-install-connector";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useConnectors } from "./use-connectors";
@@ -23,6 +26,7 @@ export type ConnectorCardStatusIntent =
   | "needs_token"
   | "needs_reconnect"
   | "sync_issue"
+  | "cloud_owned_sync_unsupported"
   | "off";
 
 export interface ConnectorCardStatus {
@@ -122,6 +126,22 @@ export function resolveConnectorStatus(record: InstalledConnectorRecord): Connec
     return {
       intent: "off",
       label: "Off",
+      actionable: false,
+      tone: "muted",
+    };
+  }
+  if (connectorSupportsCloudSecretSync(record.catalogEntry)) {
+    return {
+      intent: "connected",
+      label: "Synced to cloud",
+      actionable: false,
+      tone: "neutral",
+    };
+  }
+  if (isOAuth) {
+    return {
+      intent: "cloud_owned_sync_unsupported",
+      label: "Cloud-owned sync unsupported",
       actionable: false,
       tone: "muted",
     };
