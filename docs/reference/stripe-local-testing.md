@@ -10,7 +10,7 @@ and metered-usage flows without inventing IDs by hand.
 Create or refresh the Stripe test-mode resources:
 
 ```bash
-node scripts/stripe-setup-test-mode.mjs --write-env-local
+make stripe-setup-test
 ```
 
 The script is idempotent. It creates these test-mode resources if missing:
@@ -24,6 +24,10 @@ The script is idempotent. It creates these test-mode resources if missing:
 
 With `--write-env-local`, non-secret IDs are written to `server/.env.local`.
 The script never writes `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET`.
+
+`make dev` also runs this setup before sourcing `server/.env.local`, so a first
+local dev run gets the generated non-secret Stripe IDs in the backend process.
+It does not persist Stripe secrets locally.
 
 ## Send A Meter Hit
 
@@ -52,10 +56,16 @@ lag after a hit is accepted.
 
 ## Local Webhook Delivery
 
-Once a Stripe webhook endpoint exists in the server, run one of these listeners
-while the server is running locally.
+`make dev` starts a Stripe snapshot-event listener automatically when the Stripe
+CLI is installed and authenticated. If Stripe is unavailable, dev continues
+without the listener.
 
-Snapshot checkout/subscription/invoice events:
+When the listener starts, `make dev` exports `STRIPE_WEBHOOK_SECRET` into the
+backend process from `stripe listen --print-secret`. The secret is not written
+to `server/.env.local`.
+
+The listener forwards checkout/subscription/invoice events to the planned local
+Stripe webhook path:
 
 ```bash
 stripe listen \
@@ -63,16 +73,9 @@ stripe listen \
   --forward-to localhost:8000/api/v1/billing/webhooks/stripe
 ```
 
-Thin meter validation events:
-
-```bash
-stripe listen \
-  --thin-events v1.billing.meter.error_report_triggered,v1.billing.meter.no_meter_found \
-  --forward-thin-to localhost:8000/api/v1/billing/webhooks/stripe
-```
-
-Use the `whsec_...` printed by `stripe listen` as `STRIPE_WEBHOOK_SECRET` for
-that local listener session.
+Until the webhook endpoint is implemented, forwarded deliveries may return 404
+locally; the listener is present so the dev path is already wired for the
+external-billing milestone.
 
 ## Local Mental Model
 
