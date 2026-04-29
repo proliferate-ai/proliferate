@@ -204,9 +204,9 @@ async def test_alembic_upgrade_creates_current_schema() -> None:
                     "cloud_workspace",
                     "desktop_auth_code",
                     "oauth_account",
-                    "sandbox_event_receipt",
                     "usage_segment",
                     "user",
+                    "webhook_event_receipt",
                 }
 
                 columns = await conn.run_sync(
@@ -275,7 +275,7 @@ async def test_alembic_upgrade_from_legacy_initial_revision() -> None:
                 assert "billing_entitlement" in tables
                 assert "cloud_mcp_connection" in tables
                 assert "usage_segment" in tables
-                assert "sandbox_event_receipt" in tables
+                assert "webhook_event_receipt" in tables
         finally:
             await inspection_engine.dispose()
 

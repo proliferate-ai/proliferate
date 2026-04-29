@@ -106,6 +106,16 @@ Rate-limit thresholds (`SESSION_TITLE_RATE_LIMIT_REQUESTS`,
 | `CLOUD_FREE_SANDBOX_HOURS` | No | No | Free-tier usage limit |
 | `CLOUD_CONCURRENT_SANDBOX_LIMIT` | No | No | Concurrent sandbox limit |
 | `CLOUD_BILLING_MODE` | No | No | Billing mode (`off`, `observe`, `enforce`) |
+| `STRIPE_SECRET_KEY` | Yes | Future hosted billing only | Stripe API key for checkout, portal, and usage export |
+| `STRIPE_WEBHOOK_SECRET` | Yes | When receiving Stripe billing webhooks | Stripe webhook signature verification |
+| `STRIPE_CLOUD_MONTHLY_PRICE_ID` | No | Future hosted billing only | Stripe $200 Cloud monthly price ID |
+| `STRIPE_SANDBOX_METER_ID` | No | Future hosted billing only | Stripe billing meter ID for sandbox usage |
+| `STRIPE_SANDBOX_METER_EVENT_NAME` | No | Future hosted billing only | Stripe billing meter event name for sandbox usage |
+| `STRIPE_SANDBOX_OVERAGE_PRICE_ID` | No | Future hosted billing only | Stripe metered 10-hour overage block price ID |
+| `STRIPE_REFILL_10H_PRICE_ID` | No | Future hosted billing only | Stripe one-time 10-hour refill price ID |
+| `STRIPE_CHECKOUT_SUCCESS_URL` | No | Future hosted billing only | Checkout success redirect URL |
+| `STRIPE_CHECKOUT_CANCEL_URL` | No | Future hosted billing only | Checkout cancellation redirect URL |
+| `STRIPE_CUSTOMER_PORTAL_RETURN_URL` | No | Future hosted billing only | Customer portal return URL |
 
 The billing reconciler interval (`BILLING_RECONCILE_INTERVAL_SECONDS`) now
 lives in `server/proliferate/constants/billing.py`. It is not env-overridable.

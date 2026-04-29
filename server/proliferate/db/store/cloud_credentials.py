@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud import CloudCredential
 from proliferate.server.cloud.credentials.models import CloudAgentKind
+from proliferate.utils.crypto import decrypt_json
 from proliferate.utils.time import utcnow
 
 
@@ -54,6 +55,20 @@ async def sync_cloud_credential(
     )
 
     now = utcnow()
+    if len(existing) == 1:
+        active = existing[0]
+        active_payload = decrypt_json(active.payload_ciphertext)
+        incoming_payload = decrypt_json(payload_ciphertext)
+        if (
+            active.auth_mode == auth_mode
+            and active.payload_format == payload_format
+            and active_payload == incoming_payload
+        ):
+            active.last_synced_at = now
+            active.updated_at = now
+            await db.commit()
+            return
+
     for record in existing:
         record.revoked_at = now
 

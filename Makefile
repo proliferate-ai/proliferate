@@ -7,6 +7,8 @@ LOCAL_PGUSER ?= proliferate
 LOCAL_PGPASSWORD ?= localdev
 LOCAL_PGDATABASE ?= proliferate
 USE_EXISTING_POSTGRES ?= 0
+STRIPE_FORWARD_TO ?= http://127.0.0.1:8000/v1/billing/webhooks/stripe
+STRIPE_SNAPSHOT_EVENTS ?= checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed
 AWS_REGION ?= us-east-1
 PROD_CLUSTER ?= proliferate-prod
 PROD_SERVICE ?= proliferate-prod-server
@@ -24,6 +26,13 @@ LOCAL_CODEX_ACP_ENV = if [ -z "$${ANYHARNESS_CODEX_AGENT_PROGRAM:-}" ] && [ -x "
 	export ANYHARNESS_CODEX_AGENT_PROGRAM="$(LOCAL_CODEX_ACP)"; \
 	echo "Using local codex-acp: $$ANYHARNESS_CODEX_AGENT_PROGRAM"; \
 fi;
+STRIPE_LOCAL_SECRET_ENV = if [ -z "$${STRIPE_SECRET_KEY:-}" ] && command -v stripe >/dev/null 2>&1; then \
+	stripe_secret_key=$$(stripe config --list 2>/dev/null | grep '^test_mode_api_key' | cut -d "'" -f2); \
+	if [ -n "$$stripe_secret_key" ]; then \
+		export STRIPE_SECRET_KEY="$$stripe_secret_key"; \
+		echo "Using Stripe CLI test key for local billing API calls."; \
+	fi; \
+fi;
 
 .PHONY: dev dev-local dev-desktop dev-runtime dev-server server-db-up server-db-wait \
         server-db-down server-db-ready db db-local db-ah server-migrate serve install \
@@ -34,6 +43,7 @@ fi;
         cloud-runtime-build publish-cloud-template-env-local \
         test-cloud-e2b test-cloud-daytona test-cloud-all test-cloud-webhooks \
         cloud-openapi cloud-client-generate \
+        stripe-setup-test \
         stage-sidecar \
         prod-service prod-taskdef prod-tasks prod-task prod-logs prod-secret-keys \
         prod-db-url prod-sql prod-psql prod-rds \
@@ -43,11 +53,31 @@ fi;
 # --- Dev (builds SDK, starts runtime + desktop together) ---
 
 dev: export PROLIFERATE_DEV := 1
+dev: export DEBUG := true
 dev: sdk-build server-migrate
 	@echo "Starting runtime on :8457, backend on :8000, and desktop app..."
 	@trap 'kill 0' EXIT; \
+	stripe_listener_ready=0; \
+	if command -v stripe >/dev/null 2>&1; then \
+		echo "Preparing Stripe test resources..."; \
+		if node scripts/stripe-setup-test-mode.mjs --write-env-local >/dev/null; then \
+			stripe_listener_ready=1; \
+		else \
+			echo "Skipping Stripe listener. Run \`stripe login\` and retry if you need billing webhooks."; \
+		fi; \
+	else \
+		echo "Skipping Stripe listener. Install Stripe CLI if you need billing webhooks."; \
+	fi; \
 	$(SERVER_ENV_SOURCE) \
+	$(STRIPE_LOCAL_SECRET_ENV) \
 	$(LOCAL_CODEX_ACP_ENV) \
+	if [ "$$stripe_listener_ready" = "1" ]; then \
+		stripe_webhook_secret=$$(stripe listen --print-secret 2>/dev/null || true); \
+		if [ -n "$$stripe_webhook_secret" ]; then \
+			export STRIPE_WEBHOOK_SECRET="$$stripe_webhook_secret"; \
+		fi; \
+		stripe listen --events "$(STRIPE_SNAPSHOT_EVENTS)" --forward-to "$(STRIPE_FORWARD_TO)" & \
+	fi; \
 	RUST_LOG=info ANYHARNESS_DEV_CORS=1 $(CARGO) run --bin anyharness -- serve & \
 	cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port 8000 & \
 	sleep 2; \
@@ -237,7 +267,10 @@ db-migrate-down: server-db-ready
 	@$(SERVER_ENV_SOURCE) \
 	cd server && .venv/bin/alembic downgrade base
 
+dev-server: export DEBUG := true
 dev-server: server-migrate
+	@$(SERVER_ENV_SOURCE) \
+	$(STRIPE_LOCAL_SECRET_ENV) \
 	cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port 8000
 
 server-install:
@@ -293,6 +326,13 @@ test-cloud-webhooks: server-db-ready
 
 test-cloud-all: cloud-runtime-build server-db-ready
 	cd server && RUN_CLOUD_E2E=1 RUN_LIVE_E2B_WEBHOOK=1 uv run python -m pytest tests/e2e/cloud -xvs
+
+stripe-setup-test:
+	@command -v stripe >/dev/null 2>&1 || { \
+		echo "Stripe CLI is required. Install it and run \`stripe login\`."; \
+		exit 1; \
+	}
+	node scripts/stripe-setup-test-mode.mjs --write-env-local
 
 lint-server:
 	cd server && .venv/bin/ruff check proliferate/ tests/ && .venv/bin/ruff format --check proliferate/ tests/ && .venv/bin/mypy proliferate/

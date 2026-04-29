@@ -35,7 +35,10 @@ from proliferate.db.store.cloud_workspaces import (
 from proliferate.integrations.sandbox import ProviderSandboxState, get_configured_sandbox_provider
 from proliferate.integrations.sentry import capture_server_sentry_exception
 from proliferate.server.billing.models import BillingSnapshot
-from proliferate.server.billing.service import get_billing_snapshot_for_subject
+from proliferate.server.billing.service import (
+    get_billing_snapshot_for_subject,
+    run_billing_accounting_pass,
+)
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger("proliferate.billing.reconciler")
@@ -157,6 +160,8 @@ async def _enforce_or_reconcile_segment(
 
 async def run_billing_reconcile_pass() -> None:
     async def _run(_db: object) -> None:
+        await run_billing_accounting_pass()
+
         provider = get_configured_sandbox_provider()
         states = await provider.list_sandbox_states()
         states_by_external_id = {state.external_sandbox_id: state for state in states}

@@ -13,10 +13,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from proliferate.config import settings
+from proliferate.constants.billing import MONTHLY_CLOUD_GRANT_TYPE
 from proliferate.db.models.auth import OAuthAccount
-from proliferate.db.models.billing import BillingEntitlement, BillingGrant, UsageSegment
+from proliferate.db.models.billing import (
+    BillingEntitlement,
+    BillingGrant,
+    BillingSubscription,
+    UsageSegment,
+)
 from proliferate.db.models.cloud import CloudSandbox, CloudWorkspace
 from proliferate.db.store.billing import (
+    ensure_billing_grant,
     ensure_free_included_grant,
     ensure_personal_billing_subject,
 )
@@ -119,6 +126,7 @@ async def test_ensure_free_included_grant_is_concurrent_safe(
     assert len(grants) == 1
     assert grants[0].grant_type == "free_included"
     assert grants[0].hours_granted == 12.0
+    assert grants[0].remaining_seconds == 12.0 * 3600.0
 
 
 class TestBillingApi:
@@ -147,6 +155,10 @@ class TestBillingApi:
             "remainingHours": 20.0,
             "concurrentSandboxLimit": settings.cloud_concurrent_sandbox_limit,
             "activeSandboxCount": 0,
+            "isPaidCloud": False,
+            "paymentHealthy": False,
+            "overageEnabled": False,
+            "hostedInvoiceUrl": None,
             "startBlocked": False,
             "startBlockReason": None,
             "activeSpendHold": False,
@@ -172,11 +184,73 @@ class TestBillingApi:
             "remainingSandboxHours": 20.0,
             "concurrentSandboxLimit": settings.cloud_concurrent_sandbox_limit,
             "activeSandboxCount": 0,
+            "isPaidCloud": False,
+            "paymentHealthy": False,
+            "overageEnabled": False,
+            "hostedInvoiceUrl": None,
             "startBlocked": False,
             "startBlockReason": None,
             "activeSpendHold": False,
             "holdReason": None,
         }
+
+    @pytest.mark.asyncio
+    async def test_paid_cloud_plan_carries_free_hours_after_signup(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "cloud_free_sandbox_hours", 20.0)
+        monkeypatch.setattr(settings, "cloud_billing_mode", "off")
+        monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_cloud")
+
+        session = await _register_and_login(client, "billing-paid-carry@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        user_id = uuid.UUID(session["user_id"])
+        subject = await ensure_personal_billing_subject(db_session, user_id)
+        await ensure_free_included_grant(db_session, user_id)
+        now = datetime.now(UTC)
+        await ensure_billing_grant(
+            db_session,
+            user_id=user_id,
+            billing_subject_id=subject.id,
+            grant_type=MONTHLY_CLOUD_GRANT_TYPE,
+            hours_granted=100.0,
+            effective_at=now - timedelta(hours=1),
+            expires_at=now + timedelta(days=30),
+            source_ref=f"stripe:invoice:{uuid.uuid4()}:cloud_monthly",
+        )
+        db_session.add(
+            BillingSubscription(
+                billing_subject_id=subject.id,
+                stripe_subscription_id="sub_paid_carry",
+                stripe_customer_id="cus_paid_carry",
+                status="active",
+                cancel_at_period_end=False,
+                canceled_at=None,
+                current_period_start=now - timedelta(hours=1),
+                current_period_end=now + timedelta(days=30),
+                cloud_monthly_price_id="price_cloud",
+                overage_price_id="price_overage",
+                monthly_subscription_item_id="si_monthly",
+                metered_subscription_item_id="si_metered",
+                latest_invoice_id=None,
+                latest_invoice_status=None,
+                hosted_invoice_url=None,
+            )
+        )
+        await db_session.commit()
+
+        response = await client.get("/v1/billing/cloud-plan", headers=headers)
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["plan"] == "cloud"
+        assert payload["isPaidCloud"] is True
+        assert payload["freeSandboxHours"] == 120.0
+        assert payload["remainingSandboxHours"] == 120.0
+        assert payload["concurrentSandboxLimit"] is None
 
     @pytest.mark.asyncio
     async def test_cloud_plan_surfaces_unlimited_entitlement_with_nullable_hours(

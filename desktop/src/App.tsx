@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect } from "react"
-import { Route } from "react-router-dom"
+import { Navigate, Route, useLocation } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { AuthRequiredGate } from "@/components/auth/AuthRequiredGate"
 import { OnboardingGate, OnboardingRoute } from "@/components/onboarding/OnboardingGate"
@@ -39,6 +39,8 @@ import { bootstrapRepoPreferences } from "@/stores/preferences/repo-preferences-
 import { bootstrapWorkspaceUi } from "@/stores/preferences/workspace-ui-store"
 import { bootstrapLogicalWorkspaceSelection } from "@/stores/workspaces/logical-workspace-store"
 
+const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"])
+
 // Dev-only playground. Lazy-loaded with a DEV guard so neither this file
 // nor any of its fixtures / transitive deps land in production bundles.
 const ChatPlaygroundPage = import.meta.env.DEV
@@ -48,6 +50,66 @@ const ChatPlaygroundPage = import.meta.env.DEV
       })),
     )
   : null
+
+function isTauriDesktop(): boolean {
+  return typeof window !== "undefined"
+    && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>)
+}
+
+function desktopDeepLinkScheme(): "proliferate" | "proliferate-local" {
+  return LOCALHOST_NAMES.has(window.location.hostname)
+    ? "proliferate-local"
+    : "proliferate"
+}
+
+function cloudSettingsPath(search: string): string {
+  const nextParams = new URLSearchParams(search)
+  nextParams.set("section", "cloud")
+  return `/settings?${nextParams.toString()}`
+}
+
+function cloudSettingsDeepLink(search: string): string {
+  const url = new URL(`${desktopDeepLinkScheme()}://settings/cloud`)
+  const params = new URLSearchParams(search)
+  for (const [key, value] of params.entries()) {
+    url.searchParams.set(key, value)
+  }
+  return url.toString()
+}
+
+function StripeReturnHandoff({ deepLinkUrl }: { deepLinkUrl: string }) {
+  useEffect(() => {
+    window.location.replace(deepLinkUrl)
+  }, [deepLinkUrl])
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background p-8 text-foreground">
+      <main className="w-full max-w-sm space-y-4">
+        <div className="space-y-2">
+          <p className="text-base font-medium">Opening Proliferate...</p>
+          <p className="text-sm text-muted-foreground">
+            Stripe is done. Return to the desktop app to continue in Cloud settings.
+          </p>
+        </div>
+        <a
+          className="inline-flex w-full items-center justify-center rounded-md bg-foreground px-3 py-2 text-sm font-medium text-background"
+          href={deepLinkUrl}
+        >
+          Open Proliferate
+        </a>
+      </main>
+    </div>
+  )
+}
+
+function SettingsCloudRedirect() {
+  const location = useLocation()
+  if (!isTauriDesktop()) {
+    return <StripeReturnHandoff deepLinkUrl={cloudSettingsDeepLink(location.search)} />
+  }
+
+  return <Navigate to={cloudSettingsPath(location.search)} replace />
+}
 
 function App() {
   return (
@@ -127,6 +189,7 @@ function AppRuntime() {
       <UpdateRestartDialog />
       <RuntimeInputSyncGate />
       <InstrumentedRoutes>
+        <Route path="/settings/cloud" element={<SettingsCloudRedirect />} />
         <Route element={<PublicOnlyRoute />}>
           <Route path="/login" element={<LoginPage />} />
         </Route>

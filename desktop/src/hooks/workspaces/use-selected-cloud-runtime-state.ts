@@ -1,6 +1,9 @@
-import type { CloudConnectionInfo, CloudWorkspaceStatus } from "@/lib/integrations/cloud/client";
-import { useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type {
+  CloudConnectionInfo,
+  CloudWorkspaceStatus,
+} from "@/lib/integrations/cloud/client";
+import { useMemo } from "react";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
@@ -115,7 +118,10 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
           && selectedCloudWorkspace?.id
           && !startMutation.isPending
         ) {
-          void startMutation.mutateAsync(selectedCloudWorkspace.id).catch(() => undefined);
+          void startMutation
+            .mutateAsync(selectedCloudWorkspace.id)
+            .then(() => connectionQuery.refetch())
+            .catch(() => undefined);
           return;
         }
         void connectionQuery.refetch();

@@ -16,16 +16,20 @@ class BillingSnapshot:
     billing_mode: str
     is_unlimited: bool
     over_quota: bool
+    is_paid_cloud: bool
+    payment_healthy: bool
+    overage_enabled: bool
     included_hours: float | None
     used_hours: float
     remaining_hours: float | None
-    concurrent_sandbox_limit: int
+    concurrent_sandbox_limit: int | None
     active_sandbox_count: int
     start_blocked: bool
     start_block_reason: str | None
     active_spend_hold: bool
     hold_reason: str | None
     remaining_seconds: float | None
+    hosted_invoice_url: str | None
 
 
 @dataclass(frozen=True)
@@ -93,8 +97,12 @@ class CloudPlanInfo(BillingBaseModel):
     free_sandbox_hours: float | None = Field(alias="freeSandboxHours")
     used_sandbox_hours: float = Field(alias="usedSandboxHours")
     remaining_sandbox_hours: float | None = Field(alias="remainingSandboxHours")
-    concurrent_sandbox_limit: int = Field(alias="concurrentSandboxLimit")
+    concurrent_sandbox_limit: int | None = Field(alias="concurrentSandboxLimit")
     active_sandbox_count: int = Field(alias="activeSandboxCount")
+    is_paid_cloud: bool = Field(alias="isPaidCloud")
+    payment_healthy: bool = Field(alias="paymentHealthy")
+    overage_enabled: bool = Field(alias="overageEnabled")
+    hosted_invoice_url: str | None = Field(default=None, alias="hostedInvoiceUrl")
     start_blocked: bool = Field(alias="startBlocked")
     start_block_reason: str | None = Field(default=None, alias="startBlockReason")
     active_spend_hold: bool = Field(alias="activeSpendHold")
@@ -109,9 +117,32 @@ class BillingOverview(BillingBaseModel):
     included_hours: float | None = Field(alias="includedHours")
     used_hours: float = Field(alias="usedHours")
     remaining_hours: float | None = Field(alias="remainingHours")
-    concurrent_sandbox_limit: int = Field(alias="concurrentSandboxLimit")
+    concurrent_sandbox_limit: int | None = Field(alias="concurrentSandboxLimit")
     active_sandbox_count: int = Field(alias="activeSandboxCount")
+    is_paid_cloud: bool = Field(alias="isPaidCloud")
+    payment_healthy: bool = Field(alias="paymentHealthy")
+    overage_enabled: bool = Field(alias="overageEnabled")
+    hosted_invoice_url: str | None = Field(default=None, alias="hostedInvoiceUrl")
     start_blocked: bool = Field(alias="startBlocked")
     start_block_reason: str | None = Field(default=None, alias="startBlockReason")
     active_spend_hold: bool = Field(alias="activeSpendHold")
     hold_reason: str | None = Field(default=None, alias="holdReason")
+
+
+class StripeWebhookAck(BillingBaseModel):
+    ok: bool = True
+    event_id: str = Field(alias="eventId")
+    event_type: str = Field(alias="eventType")
+    livemode: bool | None = None
+
+
+class BillingUrlResponse(BillingBaseModel):
+    url: str
+
+
+class OverageSettingsRequest(BillingBaseModel):
+    enabled: bool
+
+
+class OverageSettingsResponse(BillingBaseModel):
+    overage_enabled: bool = Field(alias="overageEnabled")

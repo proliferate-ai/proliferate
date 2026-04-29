@@ -9,6 +9,6 @@ export function useAppCapabilities() {
   return useMemo(() => ({
     cloudEnabled: reachable,
     supportEnabled: reachable && isOfficialHosted,
-    billingEnabled: reachable && isOfficialHosted,
+    billingEnabled: reachable,
   }), [isOfficialHosted, reachable]);
 }
