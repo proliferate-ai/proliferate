@@ -1,0 +1,305 @@
+#!/usr/bin/env node
+
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "..");
+const envLocalPath = path.join(repoRoot, "server", ".env.local");
+
+const WRITE_ENV_FLAG = "--write-env-local";
+const writeEnvLocal = process.argv.includes(WRITE_ENV_FLAG);
+
+const PRODUCT_KEY = "proliferate_cloud_local_test";
+const METER_EVENT_NAME = "proliferate_sandbox_seconds";
+const CLOUD_MONTHLY_LOOKUP_KEY = "proliferate_cloud_monthly_test";
+const SANDBOX_OVERAGE_LOOKUP_KEY = "proliferate_cloud_sandbox_10h_overage_test";
+const REFILL_10H_LOOKUP_KEY = "proliferate_cloud_refill_10h_20usd_test";
+const CLOUD_MONTHLY_UNIT_AMOUNT = 20000;
+const SANDBOX_OVERAGE_UNIT_AMOUNT = 2000;
+const REFILL_10H_UNIT_AMOUNT = 2000;
+const TEN_SANDBOX_HOURS_SECONDS = 36000;
+
+function runStripe(args) {
+  const out = execFileSync("stripe", args, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  return JSON.parse(out);
+}
+
+function listAll(resourceArgs) {
+  return runStripe([...resourceArgs, "--limit", "100"]).data ?? [];
+}
+
+function ensureProduct() {
+  const existing = listAll(["products", "list"]).find(
+    (product) => product.metadata?.proliferate_key === PRODUCT_KEY,
+  );
+  if (existing) {
+    return existing;
+  }
+  return runStripe([
+    "products",
+    "create",
+    "--name",
+    "Proliferate Cloud (Local Test)",
+    "--description",
+    "Test-mode billing resources for local Proliferate development.",
+    "-d",
+    `metadata[proliferate_key]=${PRODUCT_KEY}`,
+    "-d",
+    "metadata[environment]=local_test",
+  ]);
+}
+
+function ensureMeter() {
+  const existing = listAll(["billing", "meters", "list"]).find(
+    (meter) => meter.event_name === METER_EVENT_NAME,
+  );
+  if (existing) {
+    return existing;
+  }
+  return runStripe([
+    "billing",
+    "meters",
+    "create",
+    "--display-name",
+    "Proliferate Sandbox Seconds (Local Test)",
+    "--event-name",
+    METER_EVENT_NAME,
+    "--default-aggregation.formula",
+    "sum",
+    "--customer-mapping.type",
+    "by_id",
+    "--customer-mapping.event-payload-key",
+    "stripe_customer_id",
+    "--value-settings.event-payload-key",
+    "value",
+  ]);
+}
+
+function findPriceByLookupKey(lookupKey) {
+  const result = runStripe([
+    "prices",
+    "list",
+    "-d",
+    `lookup_keys[]=${lookupKey}`,
+    "--limit",
+    "1",
+  ]);
+  return result.data?.[0] ?? null;
+}
+
+function assertPriceShape(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function validateMonthlyCloudPrice(price) {
+  assertPriceShape(
+    price.unit_amount === CLOUD_MONTHLY_UNIT_AMOUNT,
+    `Cloud monthly price ${price.id} must be $200/month.`,
+  );
+  assertPriceShape(
+    price.recurring?.interval === "month",
+    `Cloud monthly price ${price.id} must recur monthly.`,
+  );
+  assertPriceShape(
+    price.metadata?.included_sandbox_hours === "100",
+    `Cloud monthly price ${price.id} must include 100 sandbox hours.`,
+  );
+}
+
+function validateSandboxOveragePrice(price, meterId) {
+  assertPriceShape(
+    price.unit_amount === SANDBOX_OVERAGE_UNIT_AMOUNT,
+    `Sandbox overage price ${price.id} must be $20 per transformed unit.`,
+  );
+  assertPriceShape(
+    price.recurring?.usage_type === "metered",
+    `Sandbox overage price ${price.id} must be metered.`,
+  );
+  assertPriceShape(
+    price.recurring?.interval === "month",
+    `Sandbox overage price ${price.id} must recur monthly.`,
+  );
+  assertPriceShape(
+    !price.recurring?.meter || price.recurring.meter === meterId,
+    `Sandbox overage price ${price.id} must point at meter ${meterId}.`,
+  );
+  assertPriceShape(
+    price.transform_quantity?.divide_by === TEN_SANDBOX_HOURS_SECONDS,
+    `Sandbox overage price ${price.id} must divide usage by ${TEN_SANDBOX_HOURS_SECONDS}.`,
+  );
+  assertPriceShape(
+    price.transform_quantity?.round === "up",
+    `Sandbox overage price ${price.id} must round transformed usage up.`,
+  );
+}
+
+function validateRefillPrice(price) {
+  assertPriceShape(
+    price.unit_amount === REFILL_10H_UNIT_AMOUNT,
+    `Refill price ${price.id} must be $20.`,
+  );
+  assertPriceShape(
+    price.metadata?.proliferate_credit_seconds === `${TEN_SANDBOX_HOURS_SECONDS}`,
+    `Refill price ${price.id} must grant ${TEN_SANDBOX_HOURS_SECONDS} seconds.`,
+  );
+}
+
+function ensureCloudMonthlyPrice(productId) {
+  const existing = findPriceByLookupKey(CLOUD_MONTHLY_LOOKUP_KEY);
+  if (existing) {
+    validateMonthlyCloudPrice(existing);
+    return existing;
+  }
+  const price = runStripe([
+    "prices",
+    "create",
+    "--product",
+    productId,
+    "--currency",
+    "usd",
+    "--unit-amount",
+    `${CLOUD_MONTHLY_UNIT_AMOUNT}`,
+    "--recurring.interval",
+    "month",
+    "--lookup-key",
+    CLOUD_MONTHLY_LOOKUP_KEY,
+    "--nickname",
+    "Cloud monthly (local test)",
+    "-d",
+    "metadata[environment]=local_test",
+    "-d",
+    "metadata[proliferate_plan]=cloud",
+    "-d",
+    "metadata[included_sandbox_hours]=100",
+  ]);
+  validateMonthlyCloudPrice(price);
+  return price;
+}
+
+function ensureSandboxOveragePrice(productId, meterId) {
+  const existing = findPriceByLookupKey(SANDBOX_OVERAGE_LOOKUP_KEY);
+  if (existing) {
+    validateSandboxOveragePrice(existing, meterId);
+    return existing;
+  }
+  const price = runStripe([
+    "prices",
+    "create",
+    "--product",
+    productId,
+    "--currency",
+    "usd",
+    "--unit-amount",
+    `${SANDBOX_OVERAGE_UNIT_AMOUNT}`,
+    "--recurring.interval",
+    "month",
+    "--recurring.usage-type",
+    "metered",
+    "--recurring.meter",
+    meterId,
+    "--transform-quantity.divide-by",
+    `${TEN_SANDBOX_HOURS_SECONDS}`,
+    "--transform-quantity.round",
+    "up",
+    "--lookup-key",
+    SANDBOX_OVERAGE_LOOKUP_KEY,
+    "--nickname",
+    "10 sandbox-hour overage block (local test)",
+    "-d",
+    "metadata[environment]=local_test",
+    "-d",
+    "metadata[proliferate_usage_unit]=sandbox_10h_block",
+  ]);
+  validateSandboxOveragePrice(price, meterId);
+  return price;
+}
+
+function ensureRefillPrice(productId) {
+  const existing = findPriceByLookupKey(REFILL_10H_LOOKUP_KEY);
+  if (existing) {
+    validateRefillPrice(existing);
+    return existing;
+  }
+  const price = runStripe([
+    "prices",
+    "create",
+    "--product",
+    productId,
+    "--currency",
+    "usd",
+    "--unit-amount",
+    `${REFILL_10H_UNIT_AMOUNT}`,
+    "--lookup-key",
+    REFILL_10H_LOOKUP_KEY,
+    "--nickname",
+    "10 sandbox-hour refill (local test)",
+    "-d",
+    "metadata[environment]=local_test",
+    "-d",
+    `metadata[proliferate_credit_seconds]=${TEN_SANDBOX_HOURS_SECONDS}`,
+  ]);
+  validateRefillPrice(price);
+  return price;
+}
+
+function updateEnvLocal(values) {
+  const existing = existsSync(envLocalPath) ? readFileSync(envLocalPath, "utf8") : "";
+  const lines = existing.split("\n").filter((line) => line.length > 0);
+  const managedKeys = new Set(Object.keys(values));
+  const preserved = lines.filter((line) => {
+    const key = line.split("=", 1)[0];
+    return !managedKeys.has(key);
+  });
+  const managed = Object.entries(values).map(([key, value]) => {
+    const quotedValue = `'${String(value).replaceAll("'", "'\\''")}'`;
+    return `${key}=${quotedValue}`;
+  });
+  writeFileSync(
+    envLocalPath,
+    `${preserved.concat(managed).join("\n")}\n`,
+    { encoding: "utf8" },
+  );
+}
+
+const product = ensureProduct();
+const meter = ensureMeter();
+const cloudMonthly = ensureCloudMonthlyPrice(product.id);
+const overage = ensureSandboxOveragePrice(product.id, meter.id);
+const refill = ensureRefillPrice(product.id);
+
+const envValues = {
+  STRIPE_CLOUD_MONTHLY_PRICE_ID: cloudMonthly.id,
+  STRIPE_SANDBOX_METER_ID: meter.id,
+  STRIPE_SANDBOX_METER_EVENT_NAME: meter.event_name,
+  STRIPE_SANDBOX_OVERAGE_PRICE_ID: overage.id,
+  STRIPE_REFILL_10H_PRICE_ID: refill.id,
+  STRIPE_CHECKOUT_SUCCESS_URL: "http://localhost:1420/settings/cloud?checkout=success",
+  STRIPE_CHECKOUT_CANCEL_URL: "http://localhost:1420/settings/cloud?checkout=cancel",
+  STRIPE_CUSTOMER_PORTAL_RETURN_URL: "http://localhost:1420/settings/cloud",
+};
+
+if (writeEnvLocal) {
+  updateEnvLocal(envValues);
+}
+
+console.log(JSON.stringify({
+  mode: "test",
+  product: { id: product.id, name: product.name },
+  meter: { id: meter.id, eventName: meter.event_name },
+  prices: {
+    cloudMonthly: cloudMonthly.id,
+    sandbox10hOverageBlock: overage.id,
+    refill10h: refill.id,
+  },
+  wroteEnvLocal: writeEnvLocal,
+  envLocalPath: writeEnvLocal ? envLocalPath : null,
+}, null, 2));

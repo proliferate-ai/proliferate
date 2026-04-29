@@ -21,6 +21,9 @@ import {
 } from "@/lib/domain/workspaces/sidebar";
 import { buildConfiguredCloudRepoKeys } from "@/lib/domain/workspaces/cloud-workspace-creation";
 import {
+  titleForStartBlockReason,
+} from "@/lib/domain/workspaces/cloud-workspace-status";
+import {
   Archive,
   Check,
   CollapseAll,
@@ -210,11 +213,11 @@ export function MainSidebar() {
     }
   }, [allRepoGroupsCollapsed, allRepoKeys, setCollapsedRepoGroups]);
 
-  const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.blocked;
+  const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.startBlocked;
   const cloudWorkspaceTooltip = cloudUnavailable
     ? CAPABILITY_COPY.cloudDisabledTooltip
     : cloudWorkspaceBlocked
-      ? "Cloud usage is paused."
+      ? `${titleForStartBlockReason(billingPlan?.startBlockReason)}.`
       : CAPABILITY_COPY.cloudSignInTooltip;
   const filtersActive = showArchived || !isDefaultSidebarWorkspaceTypes(workspaceTypes);
 

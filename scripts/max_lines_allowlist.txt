@@ -17,8 +17,10 @@ anyharness/sdk/src/reducer/__tests__/transcript.test.ts
 desktop/src/components/ui/icons.tsx
 desktop/src/components/workspace/chat/transcript/MessageList.tsx
 server/tests/integration/test_cloud_api.py
+server/proliferate/db/store/billing.py
 server/proliferate/db/store/cloud_mobility.py
 server/tests/unit/test_cloud_runtime_provision.py
+server/proliferate/server/billing/service.py
 server/proliferate/db/store/cloud_workspaces.py
 server/proliferate/server/cloud/runtime/provision.py
 server/proliferate/server/cloud/workspaces/service.py

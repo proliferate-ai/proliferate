@@ -101,6 +101,12 @@
   description: E2B webhook verification
   tags: [production]
 
+- name: STRIPE_WEBHOOK_SECRET
+  secret: true
+  default: ""
+  description: Stripe webhook signing secret for billing event intake
+  tags: [local-dev, production]
+
 - name: DAYTONA_API_KEY
   secret: true
   default: ""
@@ -146,6 +152,66 @@
   default: "off"
   description: "Billing mode: off, observe, or enforce"
   tags: [production]
+
+- name: STRIPE_SECRET_KEY
+  secret: true
+  default: ""
+  description: Stripe API key for checkout, portal, and usage export
+  tags: [local-dev, production]
+
+- name: STRIPE_WEBHOOK_SECRET
+  secret: true
+  default: ""
+  description: Stripe webhook signature verification
+  tags: [local-dev, production]
+
+- name: STRIPE_CLOUD_MONTHLY_PRICE_ID
+  secret: false
+  default: ""
+  description: Stripe $200 Cloud monthly price ID
+  tags: [local-dev, production]
+
+- name: STRIPE_SANDBOX_METER_ID
+  secret: false
+  default: ""
+  description: Stripe billing meter ID for sandbox usage
+  tags: [local-dev, production]
+
+- name: STRIPE_SANDBOX_METER_EVENT_NAME
+  secret: false
+  default: "proliferate_sandbox_seconds"
+  description: Stripe billing meter event name for sandbox usage
+  tags: [local-dev, production]
+
+- name: STRIPE_SANDBOX_OVERAGE_PRICE_ID
+  secret: false
+  default: ""
+  description: Stripe metered 10-hour overage block price ID
+  tags: [local-dev, production]
+
+- name: STRIPE_REFILL_10H_PRICE_ID
+  secret: false
+  default: ""
+  description: Stripe one-time 10-hour refill price ID
+  tags: [local-dev, production]
+
+- name: STRIPE_CHECKOUT_SUCCESS_URL
+  secret: false
+  default: ""
+  description: Checkout success redirect URL
+  tags: [local-dev, production]
+
+- name: STRIPE_CHECKOUT_CANCEL_URL
+  secret: false
+  default: ""
+  description: Checkout cancellation redirect URL
+  tags: [local-dev, production]
+
+- name: STRIPE_CUSTOMER_PORTAL_RETURN_URL
+  secret: false
+  default: ""
+  description: Customer portal return URL
+  tags: [local-dev, production]
 
 # ═══════════════════════════════════════════════════════════════════════
 # Server: Cloud Runtime Injection (both E2B and Daytona)

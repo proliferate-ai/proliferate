@@ -1,10 +1,19 @@
-import { useQuery } from "@tanstack/react-query";
-import type { BillingPlanInfo } from "@/lib/integrations/cloud/client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { BillingPlanInfo, BillingUrlResponse } from "@/lib/integrations/cloud/client";
 import { ProliferateClientError } from "@/lib/integrations/cloud/client";
-import { getCloudBillingPlan } from "@/lib/integrations/cloud/billing";
+import {
+  createBillingPortalSession,
+  createCloudCheckoutSession,
+  createRefillCheckoutSession,
+  getCloudBillingPlan,
+  updateOverageSettings,
+} from "@/lib/integrations/cloud/billing";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import { useAppCapabilities } from "@/hooks/capabilities/use-app-capabilities";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
+import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
+import { openExternal } from "@/platform/tauri/shell";
+import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { cloudBillingKey } from "./query-keys";
 
 function hasUsableBillingPlan(
@@ -16,9 +25,18 @@ function hasUsableBillingPlan(
     typeof billingPlan.billingMode === "string"
     && typeof billingPlan.isUnlimited === "boolean"
     && typeof billingPlan.overQuota === "boolean"
+    && typeof billingPlan.startBlocked === "boolean"
+    && typeof billingPlan.activeSpendHold === "boolean"
+    && typeof billingPlan.isPaidCloud === "boolean"
+    && typeof billingPlan.paymentHealthy === "boolean"
+    && typeof billingPlan.overageEnabled === "boolean"
     && Number.isFinite(billingPlan.usedSandboxHours)
-    && Number.isFinite(billingPlan.concurrentSandboxLimit)
+    && (billingPlan.concurrentSandboxLimit === null
+      || Number.isFinite(billingPlan.concurrentSandboxLimit))
     && Number.isFinite(billingPlan.activeSandboxCount)
+    && (billingPlan.hostedInvoiceUrl === null
+      || billingPlan.hostedInvoiceUrl === undefined
+      || typeof billingPlan.hostedInvoiceUrl === "string")
     && (billingPlan.remainingSandboxHours === null
       || Number.isFinite(billingPlan.remainingSandboxHours))
     && (billingPlan.freeSandboxHours === null
@@ -38,6 +56,7 @@ export function useCloudBilling() {
     queryKey: cloudBillingKey(),
     enabled: billingAccessible,
     placeholderData: null,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       try {
         const billingPlan = await getCloudBillingPlan();
@@ -73,4 +92,90 @@ export function useCloudBilling() {
       }
     },
   });
+}
+
+export function useCloudBillingActions() {
+  const queryClient = useQueryClient();
+  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+
+  async function invalidateCloudBillingState() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: cloudBillingKey() }),
+      queryClient.invalidateQueries({
+        queryKey: workspaceCollectionsScopeKey(runtimeUrl),
+      }),
+    ]);
+  }
+
+  async function openBillingUrl(response: BillingUrlResponse) {
+    await openExternal(response.url);
+    await invalidateCloudBillingState();
+  }
+
+  const cloudCheckoutMutation = useMutation({
+    mutationFn: createCloudCheckoutSession,
+    onSuccess: openBillingUrl,
+    onError: (error) => {
+      captureTelemetryException(error, {
+        tags: {
+          action: "create_cloud_checkout",
+          domain: "cloud_billing",
+          route: "settings",
+        },
+      });
+    },
+  });
+
+  const portalMutation = useMutation({
+    mutationFn: createBillingPortalSession,
+    onSuccess: openBillingUrl,
+    onError: (error) => {
+      captureTelemetryException(error, {
+        tags: {
+          action: "create_billing_portal",
+          domain: "cloud_billing",
+          route: "settings",
+        },
+      });
+    },
+  });
+
+  const refillMutation = useMutation({
+    mutationFn: createRefillCheckoutSession,
+    onSuccess: openBillingUrl,
+    onError: (error) => {
+      captureTelemetryException(error, {
+        tags: {
+          action: "create_refill_checkout",
+          domain: "cloud_billing",
+          route: "settings",
+        },
+      });
+    },
+  });
+
+  const overageMutation = useMutation({
+    mutationFn: updateOverageSettings,
+    onSuccess: invalidateCloudBillingState,
+    onError: (error) => {
+      captureTelemetryException(error, {
+        tags: {
+          action: "update_overage_settings",
+          domain: "cloud_billing",
+          route: "settings",
+        },
+      });
+    },
+  });
+
+  return {
+    createCloudCheckout: cloudCheckoutMutation.mutateAsync,
+    createBillingPortal: portalMutation.mutateAsync,
+    createRefillCheckout: refillMutation.mutateAsync,
+    updateOverageEnabled: overageMutation.mutateAsync,
+    creatingCloudCheckout: cloudCheckoutMutation.isPending,
+    creatingBillingPortal: portalMutation.isPending,
+    creatingRefillCheckout: refillMutation.isPending,
+    updatingOverage: overageMutation.isPending,
+  };
 }

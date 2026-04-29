@@ -39,6 +39,7 @@ def _make_user(*, email: str, display_name: str | None = "Cloud Tester") -> User
 def _make_workspace(user_id: uuid.UUID) -> CloudWorkspace:
     return CloudWorkspace(
         user_id=user_id,
+        billing_subject_id=user_id,
         display_name="acme/rocket",
         git_provider="github",
         git_owner="acme",
@@ -779,7 +780,10 @@ class TestProvisionWorkspaceGitSetup:
         async def _create_and_connect_sandbox(*args, **kwargs):
             return connected
 
-        async def _create_and_attach_sandbox_for_workspace(*args, **kwargs):
+        async def _authorize_sandbox_start(*args, **kwargs):
+            return SimpleNamespace(allowed=True, message=None)
+
+        async def _reserve_and_attach_sandbox_for_workspace(*args, **kwargs):
             return sandbox_record
 
         async def _prepare_runtime_template(*args, **kwargs) -> None:
@@ -820,8 +824,13 @@ class TestProvisionWorkspaceGitSetup:
         )
         monkeypatch.setattr(
             runtime_provision,
-            "create_and_attach_sandbox_for_workspace",
-            _create_and_attach_sandbox_for_workspace,
+            "authorize_sandbox_start",
+            _authorize_sandbox_start,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "reserve_and_attach_sandbox_for_workspace",
+            _reserve_and_attach_sandbox_for_workspace,
         )
         monkeypatch.setattr(
             runtime_provision,
@@ -869,4 +878,60 @@ class TestProvisionWorkspaceGitSetup:
             "configure_git_identity",
             "launch_runtime",
             "finalize_workspace",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_provision_workspace_blocks_when_sandbox_reservation_limit_is_reached(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ctx = _make_provision_input(codex_enabled=True)
+        errors: list[str] = []
+
+        async def _load_provision_input(_workspace_id, *, requested_base_sha=None):
+            return ctx
+
+        async def _authorize_sandbox_start(*args, **kwargs):
+            return SimpleNamespace(allowed=True, message=None)
+
+        async def _reserve_and_attach_sandbox_for_workspace(*args, **kwargs):
+            return None
+
+        async def _set_workspace_status(*args, **kwargs) -> None:
+            return None
+
+        async def _mark_workspace_error_by_id(
+            _workspace_id,
+            message: str,
+            **_kwargs: object,
+        ) -> None:
+            errors.append(message)
+
+        monkeypatch.setattr(runtime_provision, "_load_provision_input", _load_provision_input)
+        monkeypatch.setattr(runtime_provision, "authorize_sandbox_start", _authorize_sandbox_start)
+        monkeypatch.setattr(
+            runtime_provision,
+            "reserve_and_attach_sandbox_for_workspace",
+            _reserve_and_attach_sandbox_for_workspace,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "mark_workspace_error_by_id",
+            _mark_workspace_error_by_id,
+        )
+        monkeypatch.setattr(runtime_provision, "_set_workspace_status", _set_workspace_status)
+        monkeypatch.setattr(runtime_provision, "log_cloud_event", lambda *args, **kwargs: None)
+        monkeypatch.setattr(
+            runtime_provision,
+            "_log_provision_summary",
+            lambda *args, **kwargs: None,
+        )
+
+        with pytest.raises(CloudApiError) as exc_info:
+            await runtime_provision.provision_workspace(ctx.workspace_id)
+
+        assert exc_info.value.code == "quota_exceeded"
+        assert "Sandbox limit reached" in exc_info.value.message
+        assert errors == [
+            "Sandbox limit reached. Stop another cloud workspace before starting a new one."
         ]

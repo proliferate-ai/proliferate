@@ -33,6 +33,8 @@ export function isCloudAgentKind(value: string): value is CloudAgentKind {
 export type RepoRef                   = components["schemas"]["RepoRef"];
 export type CloudCredentialStatus     = components["schemas"]["CredentialStatus"];
 export type BillingPlanInfo           = components["schemas"]["CloudPlanInfo"];
+export type BillingUrlResponse        = components["schemas"]["BillingUrlResponse"];
+export type OverageSettingsResponse   = components["schemas"]["OverageSettingsResponse"];
 export type CloudWorkspaceSummary     = components["schemas"]["WorkspaceSummary"];
 export type CloudWorkspaceDetail      = components["schemas"]["WorkspaceDetail"];
 export type CloudConnectionInfo       = components["schemas"]["WorkspaceConnection"];

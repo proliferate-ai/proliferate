@@ -8,7 +8,9 @@ import time
 from dataclasses import dataclass, field
 from uuid import UUID
 
+from proliferate.config import settings
 from proliferate.constants.billing import (
+    BILLING_MODE_ENFORCE,
     USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
     USAGE_SEGMENT_OPENED_BY_PROVISION,
 )
@@ -20,17 +22,18 @@ from proliferate.db.store.billing import (
 from proliferate.db.store.cloud_credentials import load_cloud_credentials_for_user
 from proliferate.db.store.cloud_workspaces import (
     bind_allocated_sandbox,
-    create_and_attach_sandbox_for_workspace,
     finalize_workspace_provision_for_ids,
     load_cloud_sandbox_by_id,
     load_cloud_workspace_by_id,
     mark_workspace_error_by_id,
+    reserve_and_attach_sandbox_for_workspace,
     save_workspace,
     update_sandbox_status,
     update_workspace_status_by_id,
 )
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.integrations.sandbox import SandboxProvider, get_configured_sandbox_provider
+from proliferate.server.billing.service import authorize_sandbox_start
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repos.service import get_linked_github_account
@@ -559,6 +562,16 @@ async def provision_workspace(
         )
         if ctx is None:
             return
+        authorization = await authorize_sandbox_start(
+            user_id=ctx.user_id,
+            workspace_id=ctx.workspace_id,
+        )
+        if not authorization.allowed:
+            raise CloudApiError(
+                "quota_exceeded",
+                authorization.message or "Cloud usage is currently unavailable.",
+                status_code=403,
+            )
         provider = get_configured_sandbox_provider()
 
         log_cloud_event(
@@ -575,14 +588,25 @@ async def provision_workspace(
             WorkspaceStatus.provisioning,
             detail="Allocating sandbox",
         )
-        sandbox_record = await create_and_attach_sandbox_for_workspace(
+        sandbox_record = await reserve_and_attach_sandbox_for_workspace(
             workspace_id,
             external_sandbox_id=None,
             provider=provider.kind.value,
             template_version=provider.template_version,
             status="allocating",
             started_at=None,
+            concurrent_sandbox_limit=(
+                settings.cloud_concurrent_sandbox_limit
+                if settings.cloud_billing_mode == BILLING_MODE_ENFORCE
+                else None
+            ),
         )
+        if sandbox_record is None:
+            raise CloudApiError(
+                "quota_exceeded",
+                "Sandbox limit reached. Stop another cloud workspace before starting a new one.",
+                status_code=403,
+            )
         sandbox_record_id = sandbox_record.id
         connected = await _create_and_connect_sandbox(
             tracker,

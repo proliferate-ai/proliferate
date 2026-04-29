@@ -200,6 +200,38 @@ function reportBackgroundAuthError(message: string): void {
   });
 }
 
+function desktopNavigationTarget(url: string): string | null {
+  let parsed: URL;
+
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol !== "proliferate:" && parsed.protocol !== "proliferate-local:") {
+    return null;
+  }
+
+  if (parsed.hostname !== "settings" || parsed.pathname !== "/cloud") {
+    return null;
+  }
+
+  const params = new URLSearchParams(parsed.search);
+  params.set("section", "cloud");
+  return `/settings?${params.toString()}`;
+}
+
+function handleDesktopNavigationUrl(url: string): boolean {
+  const target = desktopNavigationTarget(url);
+  if (!target) {
+    return false;
+  }
+
+  window.location.assign(target);
+  return true;
+}
+
 async function clearPendingGitHubAuth(
   state?: string,
   error?: Error,
@@ -453,6 +485,10 @@ export async function signOut(): Promise<{
 }
 
 export async function handleDesktopCallbackUrl(url: string): Promise<boolean> {
+  if (handleDesktopNavigationUrl(url)) {
+    return true;
+  }
+
   if (isDevAuthBypassed()) {
     return false;
   }

@@ -849,6 +849,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/billing/cloud-checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Cloud Checkout */
+        post: operations["create_cloud_checkout_v1_billing_cloud_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/customer-portal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Customer Portal */
+        post: operations["create_customer_portal_v1_billing_customer_portal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/refill-checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Refill Checkout */
+        post: operations["create_refill_checkout_v1_billing_refill_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/overage-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update Overage Settings Endpoint */
+        post: operations["update_overage_settings_endpoint_v1_billing_overage_settings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/webhooks/stripe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stripe Webhook Endpoint */
+        post: operations["stripe_webhook_endpoint_v1_billing_webhooks_stripe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -936,13 +1021,30 @@ export interface components {
             /** Remaininghours */
             remainingHours: number | null;
             /** Concurrentsandboxlimit */
-            concurrentSandboxLimit: number;
+            concurrentSandboxLimit: number | null;
             /** Activesandboxcount */
             activeSandboxCount: number;
-            /** Blocked */
-            blocked: boolean;
-            /** Blockedreason */
-            blockedReason?: string | null;
+            /** Ispaidcloud */
+            isPaidCloud: boolean;
+            /** Paymenthealthy */
+            paymentHealthy: boolean;
+            /** Overageenabled */
+            overageEnabled: boolean;
+            /** Hostedinvoiceurl */
+            hostedInvoiceUrl?: string | null;
+            /** Startblocked */
+            startBlocked: boolean;
+            /** Startblockreason */
+            startBlockReason?: string | null;
+            /** Activespendhold */
+            activeSpendHold: boolean;
+            /** Holdreason */
+            holdReason?: string | null;
+        };
+        /** BillingUrlResponse */
+        BillingUrlResponse: {
+            /** Url */
+            url: string;
         };
         /** CloudMcpConnectionSyncStatus */
         CloudMcpConnectionSyncStatus: {
@@ -972,13 +1074,25 @@ export interface components {
             /** Remainingsandboxhours */
             remainingSandboxHours: number | null;
             /** Concurrentsandboxlimit */
-            concurrentSandboxLimit: number;
+            concurrentSandboxLimit: number | null;
             /** Activesandboxcount */
             activeSandboxCount: number;
-            /** Blocked */
-            blocked: boolean;
-            /** Blockedreason */
-            blockedReason?: string | null;
+            /** Ispaidcloud */
+            isPaidCloud: boolean;
+            /** Paymenthealthy */
+            paymentHealthy: boolean;
+            /** Overageenabled */
+            overageEnabled: boolean;
+            /** Hostedinvoiceurl */
+            hostedInvoiceUrl?: string | null;
+            /** Startblocked */
+            startBlocked: boolean;
+            /** Startblockreason */
+            startBlockReason?: string | null;
+            /** Activespendhold */
+            activeSpendHold: boolean;
+            /** Holdreason */
+            holdReason?: string | null;
         };
         /** CloudRepoConfigResponse */
         CloudRepoConfigResponse: {
@@ -1286,6 +1400,16 @@ export interface components {
              */
             ok: boolean;
         };
+        /** OverageSettingsRequest */
+        OverageSettingsRequest: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** OverageSettingsResponse */
+        OverageSettingsResponse: {
+            /** Overageenabled */
+            overageEnabled: boolean;
+        };
         /**
          * PendingTokenRequest
          * @description Polling request the desktop app sends while waiting for browser auth.
@@ -1422,6 +1546,20 @@ export interface components {
             requestedBaseSha?: string | null;
             /** Excludepaths */
             excludePaths?: string[];
+        };
+        /** StripeWebhookAck */
+        StripeWebhookAck: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+            /** Eventid */
+            eventId: string;
+            /** Eventtype */
+            eventType: string;
+            /** Livemode */
+            livemode?: boolean | null;
         };
         /** SupportMessageContext */
         SupportMessageContext: {
@@ -3617,6 +3755,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BillingOverview"];
+                };
+            };
+        };
+    };
+    create_cloud_checkout_v1_billing_cloud_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingUrlResponse"];
+                };
+            };
+        };
+    };
+    create_customer_portal_v1_billing_customer_portal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingUrlResponse"];
+                };
+            };
+        };
+    };
+    create_refill_checkout_v1_billing_refill_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingUrlResponse"];
+                };
+            };
+        };
+    };
+    update_overage_settings_endpoint_v1_billing_overage_settings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverageSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverageSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stripe_webhook_endpoint_v1_billing_webhooks_stripe_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Stripe-Signature"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StripeWebhookAck"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

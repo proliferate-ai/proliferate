@@ -7,6 +7,7 @@ from uuid import UUID
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
+    BILLING_MODE_ENFORCE,
     PROVIDER_EVENT_KIND_CREATED,
     PROVIDER_EVENT_KIND_KILLED,
     PROVIDER_EVENT_KIND_PAUSED,
@@ -32,7 +33,7 @@ from proliferate.db.store.cloud_workspaces import (
     save_sandbox_provider_state,
 )
 from proliferate.integrations.sandbox import get_sandbox_provider
-from proliferate.server.billing.service import get_billing_snapshot
+from proliferate.server.billing.service import get_billing_snapshot_for_subject
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.webhooks.models import E2BWebhookEvent, E2BWebhookReceipt
 
@@ -148,8 +149,8 @@ async def handle_e2b_webhook(
     )
 
     if event_kind in {PROVIDER_EVENT_KIND_CREATED, PROVIDER_EVENT_KIND_RESUMED}:
-        billing = await get_billing_snapshot(workspace.user_id)
-        if billing.blocked:
+        billing = await get_billing_snapshot_for_subject(workspace.billing_subject_id)
+        if billing.billing_mode == BILLING_MODE_ENFORCE and billing.active_spend_hold:
             if event.sandbox_id:
                 provider = get_sandbox_provider(sandbox.provider)
                 await provider.pause_sandbox(event.sandbox_id)
@@ -157,6 +158,7 @@ async def handle_e2b_webhook(
                 sandbox_id=sandbox.id,
                 ended_at=event.timestamp,
                 closed_by=USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
+                event_id=event.id,
             )
             await save_sandbox_provider_state(
                 sandbox.id,
@@ -182,6 +184,7 @@ async def handle_e2b_webhook(
                 if event_kind == PROVIDER_EVENT_KIND_CREATED
                 else USAGE_SEGMENT_OPENED_BY_WEBHOOK_RESUMED
             ),
+            event_id=event.id,
         )
         await save_sandbox_provider_state(
             sandbox.id,
@@ -198,6 +201,7 @@ async def handle_e2b_webhook(
             sandbox_id=sandbox.id,
             ended_at=event.timestamp,
             closed_by=USAGE_SEGMENT_CLOSED_BY_WEBHOOK_PAUSED,
+            event_id=event.id,
         )
         await save_sandbox_provider_state(
             sandbox.id,
@@ -216,6 +220,7 @@ async def handle_e2b_webhook(
             sandbox_id=sandbox.id,
             ended_at=event.timestamp,
             closed_by=USAGE_SEGMENT_CLOSED_BY_WEBHOOK_KILLED,
+            event_id=event.id,
         )
         await save_sandbox_provider_state(
             sandbox.id,

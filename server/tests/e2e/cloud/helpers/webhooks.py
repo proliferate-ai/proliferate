@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.db.models.billing import SandboxEventReceipt, UsageSegment
 from proliferate.db.models.cloud import CloudSandbox, CloudWorkspace
+from proliferate.db.store.billing import ensure_personal_billing_subject
 from proliferate.server.billing.models import utcnow
 from tests.e2e.cloud.helpers.shared import (
     DEFAULT_GITHUB_BASE_BRANCH,
@@ -59,8 +60,11 @@ async def create_seeded_workspace_and_sandbox(
 
     from proliferate.utils.crypto import encrypt_text
 
+    user_uuid = uuid.UUID(user_id)
+    billing_subject = await ensure_personal_billing_subject(db_session, user_uuid)
     workspace = CloudWorkspace(
-        user_id=uuid.UUID(user_id),
+        user_id=user_uuid,
+        billing_subject_id=billing_subject.id,
         display_name="proliferate-ai/proliferate",
         git_provider="github",
         git_owner=DEFAULT_GITHUB_OWNER,

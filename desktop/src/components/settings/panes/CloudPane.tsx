@@ -15,12 +15,19 @@ import {
   buildSettingsHref,
 } from "@/lib/domain/settings/navigation";
 import {
+  descriptionForStartBlockReason,
+  titleForStartBlockReason,
+} from "@/lib/domain/workspaces/cloud-workspace-status";
+import {
   cloudRepositoryKey,
   isCloudRepository,
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
 import { useGitHubSignIn } from "@/hooks/auth/use-github-sign-in";
-import { useCloudBilling } from "@/hooks/cloud/use-cloud-billing";
+import {
+  useCloudBilling,
+  useCloudBillingActions,
+} from "@/hooks/cloud/use-cloud-billing";
 import { useCloudCredentialActions } from "@/hooks/cloud/use-cloud-credential-actions";
 import { useCloudCredentials } from "@/hooks/cloud/use-cloud-credentials";
 import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
@@ -34,6 +41,7 @@ import { isCloudAgentKind } from "@/lib/integrations/cloud/client";
 import type { RuntimeInputSyncStatus } from "@/lib/domain/cloud/runtime-input-sync";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { openExternal } from "@/platform/tauri/shell";
 
 const EMPTY_CLOUD_CREDENTIAL_STATUSES: CloudCredentialStatus[] = [];
 
@@ -57,6 +65,30 @@ const RUNTIME_INPUT_STATUS_CLASSES: Record<RuntimeInputSyncStatus, string> = {
   cloud_owned_sync_unsupported: "border-border/50 bg-muted/40 text-muted-foreground",
 };
 
+function formatSandboxHours(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "Unlimited";
+  }
+
+  const rounded = Math.round(Math.max(value, 0) * 100) / 100;
+  const formatted = rounded.toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: Number.isInteger(rounded) ? 0 : 2,
+  });
+  return `${formatted} ${rounded === 1 ? "hour" : "hours"}`;
+}
+
+function formatActiveSandboxes(
+  activeSandboxCount: number,
+  concurrentSandboxLimit: number | null,
+): string {
+  if (concurrentSandboxLimit === null) {
+    return `${activeSandboxCount.toLocaleString()} active`;
+  }
+
+  return `${activeSandboxCount.toLocaleString()} of ${concurrentSandboxLimit.toLocaleString()}`;
+}
+
 interface CloudPaneProps {
   repositories: SettingsRepositoryEntry[];
 }
@@ -65,6 +97,7 @@ export function CloudPane({ repositories }: CloudPaneProps) {
   const navigate = useNavigate();
   const { data: credentialStatuses = EMPTY_CLOUD_CREDENTIAL_STATUSES } = useCloudCredentials();
   const { data: billingPlan } = useCloudBilling();
+  const billingActions = useCloudBillingActions();
   const { data: repoConfigs } = useCloudRepoConfigs();
   const runtimeInputSync = useRuntimeInputSyncSummary(repositories);
   const { syncCloudCredential, deleteCloudCredential } = useCloudCredentialActions();
@@ -117,30 +150,159 @@ export function CloudPane({ repositories }: CloudPaneProps) {
       {billingPlan && (
         <SettingsCard>
           <div className="space-y-3 p-3 text-sm">
-            {billingPlan.isUnlimited ? (
-              <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-                <p className="font-medium text-foreground">Unlimited cloud enabled</p>
-                <p className="mt-1 text-muted-foreground">
-                  Usage is still tracked for visibility. {billingPlan.activeSandboxCount}/{billingPlan.concurrentSandboxLimit} cloud sandboxes are active right now.
-                </p>
+            <div className="rounded-lg border border-border bg-foreground/5 px-3 py-2">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium text-foreground">
+                    {billingPlan.isUnlimited
+                      ? "Unlimited cloud enabled"
+                      : billingPlan.isPaidCloud
+                        ? "$200/month Cloud"
+                        : "Free cloud credits"}
+                  </p>
+                  <p className="mt-1 text-muted-foreground">
+                    {billingPlan.isUnlimited
+                      ? "No sandbox-hour limit is enforced for this account."
+                      : billingPlan.isPaidCloud
+                      ? "Monthly credits and refills are consumed before overage."
+                      : "Running cloud sandboxes consume free credits."}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  {billingPlan.isPaidCloud ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        loading={billingActions.creatingBillingPortal}
+                        onClick={() => {
+                          void billingActions.createBillingPortal().catch(() => undefined);
+                        }}
+                      >
+                        Manage billing
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        loading={billingActions.creatingRefillCheckout}
+                        onClick={() => {
+                          void billingActions.createRefillCheckout().catch(() => undefined);
+                        }}
+                      >
+                        Refill 10h
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      loading={billingActions.creatingCloudCheckout}
+                      onClick={() => {
+                        void billingActions.createCloudCheckout().catch(() => undefined);
+                      }}
+                    >
+                      Upgrade
+                    </Button>
+                  )}
+                </div>
               </div>
-            ) : (
-              <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-                <p className="font-medium text-foreground">
-                  {(billingPlan.remainingSandboxHours ?? 0).toFixed(2)} free hours remaining
-                </p>
-                <p className="mt-1 text-muted-foreground">
-                  {billingPlan.usedSandboxHours.toFixed(2)} hours used so far.{" "}
-                  {billingPlan.activeSandboxCount}/{billingPlan.concurrentSandboxLimit} cloud sandboxes are active right now.
-                </p>
+
+              <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="min-w-0">
+                  <dt className="text-xs text-muted-foreground">
+                    {billingPlan.isUnlimited
+                      ? "Remaining"
+                      : billingPlan.isPaidCloud
+                        ? "Prepaid remaining"
+                        : "Free remaining"}
+                  </dt>
+                  <dd className="mt-1 font-medium text-foreground">
+                    {formatSandboxHours(billingPlan.remainingSandboxHours)}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-xs text-muted-foreground">
+                    Used
+                  </dt>
+                  <dd className="mt-1 font-medium text-foreground">
+                    {formatSandboxHours(billingPlan.usedSandboxHours)}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-xs text-muted-foreground">
+                    {billingPlan.isUnlimited
+                      ? "Included total"
+                      : billingPlan.isPaidCloud
+                        ? "Prepaid total"
+                        : "Free total"}
+                  </dt>
+                  <dd className="mt-1 font-medium text-foreground">
+                    {formatSandboxHours(billingPlan.freeSandboxHours)}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-xs text-muted-foreground">
+                    Active sandboxes
+                  </dt>
+                  <dd className="mt-1 font-medium text-foreground">
+                    {formatActiveSandboxes(
+                      billingPlan.activeSandboxCount,
+                      billingPlan.concurrentSandboxLimit,
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            {billingPlan.isPaidCloud && !billingPlan.isUnlimited && (
+              <div className="rounded-lg border border-border bg-background px-3 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground">
+                      {billingPlan.overageEnabled ? "Overage billing on" : "Overage billing off"}
+                    </p>
+                    <p className="mt-1 text-muted-foreground">
+                      {billingPlan.overageEnabled
+                        ? "Additional usage is billed at $2/hour in 10-hour blocks."
+                        : "Cloud pauses when included/refill hours run out."}
+                    </p>
+                  </div>
+                  <Switch
+                    aria-label="Toggle cloud overage billing"
+                    checked={billingPlan.overageEnabled}
+                    disabled={billingActions.updatingOverage}
+                    onChange={(enabled) => {
+                      void billingActions.updateOverageEnabled(enabled).catch(() => undefined);
+                    }}
+                  />
+                </div>
               </div>
             )}
 
-            {billingPlan.blocked && (
+            {billingPlan.hostedInvoiceUrl && (
               <div className="rounded-lg border border-border bg-background px-3 py-2">
-                <p className="font-medium text-foreground">Cloud usage is paused</p>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-muted-foreground">
+                    Cloud usage is paused because billing needs attention.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => { void openExternal(billingPlan.hostedInvoiceUrl!); }}
+                  >
+                    View invoice
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {billingPlan.billingMode === "enforce" && billingPlan.startBlocked && (
+              <div className="rounded-lg border border-border bg-background px-3 py-2">
+                <p className="font-medium text-foreground">
+                  {titleForStartBlockReason(billingPlan.startBlockReason)}
+                </p>
                 <p className="mt-1 text-muted-foreground">
-                  Cloud usage is unavailable right now.
+                  {descriptionForStartBlockReason(billingPlan.startBlockReason)}
                 </p>
               </div>
             )}

@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import logging
 
+from proliferate.constants.billing import BILLING_MODE_ENFORCE
 from proliferate.db.models.cloud import CloudWorkspace
 from proliferate.db.store.cloud_workspaces import (
     load_active_sandbox_for_workspace,
     load_cloud_workspace_by_id,
 )
 from proliferate.integrations.sandbox import get_sandbox_provider
-from proliferate.server.billing.service import get_billing_snapshot
+from proliferate.server.billing.service import get_billing_snapshot_for_subject
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.credentials.service import load_active_cloud_credential_payloads
 from proliferate.server.cloud.errors import CloudApiError
@@ -31,8 +32,8 @@ provision_workspace = _provision_workspace
 
 
 async def sync_workspace_credentials(workspace: CloudWorkspace) -> None:
-    billing = await get_billing_snapshot(workspace.user_id)
-    if billing.blocked:
+    billing = await get_billing_snapshot_for_subject(workspace.billing_subject_id)
+    if billing.billing_mode == BILLING_MODE_ENFORCE and billing.active_spend_hold:
         raise CloudApiError(
             "workspace_not_ready",
             (
@@ -112,8 +113,8 @@ async def sync_workspace_credentials(workspace: CloudWorkspace) -> None:
 
 
 async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnectionTarget:
-    billing = await get_billing_snapshot(workspace.user_id)
-    if billing.blocked:
+    billing = await get_billing_snapshot_for_subject(workspace.billing_subject_id)
+    if billing.billing_mode == BILLING_MODE_ENFORCE and billing.active_spend_hold:
         raise CloudApiError(
             "workspace_not_ready",
             (
