@@ -126,9 +126,7 @@ async def _list_mcp_connections(
     return (
         (
             await db_session.execute(
-                select(CloudMcpConnection).where(
-                    CloudMcpConnection.user_id == uuid.UUID(user_id)
-                )
+                select(CloudMcpConnection).where(CloudMcpConnection.user_id == uuid.UUID(user_id))
             )
         )
         .scalars()
