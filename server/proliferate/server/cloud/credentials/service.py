@@ -259,9 +259,7 @@ async def _persist_cloud_credential_if_changed(
     payload: dict[str, object],
     auth_mode: CloudCredentialAuthMode,
 ) -> None:
-    existing_payloads = _active_credential_payloads(
-        await load_cloud_credentials_for_user(user_id)
-    )
+    existing_payloads = _active_credential_payloads(await load_cloud_credentials_for_user(user_id))
     if existing_payloads.get(provider) == payload:
         await persist_cloud_credential_touch(user_id, provider)
         return

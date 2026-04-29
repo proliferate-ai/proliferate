@@ -61,10 +61,7 @@ async def sync_cloud_mcp_connection_for_user(
     }
     records = await load_cloud_mcp_connections_for_user(user_id)
     existing = next(
-        (
-            record for record in records
-            if record.connection_id == cleaned_connection_id
-        ),
+        (record for record in records if record.connection_id == cleaned_connection_id),
         None,
     )
     if existing is not None and decrypt_json(existing.payload_ciphertext) == payload:
