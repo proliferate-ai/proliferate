@@ -8,6 +8,7 @@ import {
   type SelectedCloudRuntimeViewModel,
 } from "@/lib/domain/workspaces/cloud-runtime-state";
 import { useCloudWorkspaceConnection } from "@/hooks/cloud/use-cloud-workspace-connection";
+import { useCloudWorkspaceActions } from "@/hooks/cloud/use-cloud-workspace-actions";
 import { hasWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
 
 export interface SelectedCloudRuntimeState {
@@ -23,6 +24,7 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
   const { data: workspaceCollections } = useWorkspaces();
 
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
+  const { isStartingCloudWorkspace, startCloudWorkspace } = useCloudWorkspaceActions();
   const selectedCloudWorkspace = workspaceCollections?.cloudWorkspaces.find(
     (workspace) => workspace.id === cloudWorkspaceId,
   ) ?? null;
@@ -71,6 +73,14 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
     connectionInfo: persistedStatus === "ready" ? connectionQuery.data ?? null : null,
     retry: persistedStatus === "ready"
       ? () => {
+        if (
+          connectionState === "failed"
+          && selectedCloudWorkspace?.id
+          && !isStartingCloudWorkspace
+        ) {
+          void startCloudWorkspace(selectedCloudWorkspace.id);
+          return;
+        }
         void connectionQuery.refetch();
       }
       : null,
