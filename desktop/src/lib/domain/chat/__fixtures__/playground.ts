@@ -76,7 +76,6 @@ function cloudWorkspaceFixture(
     displayName: "Cloud playground",
     actionBlockKind: null,
     actionBlockReason: null,
-    canResume: false,
     postReadyPhase: "idle",
     postReadyFilesApplied: 0,
     postReadyFilesTotal: 0,

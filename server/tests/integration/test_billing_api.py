@@ -16,10 +16,7 @@ from proliferate.config import settings
 from proliferate.db.models.auth import OAuthAccount
 from proliferate.db.models.billing import BillingEntitlement, BillingGrant, UsageSegment
 from proliferate.db.models.cloud import CloudSandbox, CloudWorkspace
-from proliferate.db.store.billing import (
-    ensure_free_included_grant,
-    ensure_personal_billing_subject,
-)
+from proliferate.db.store.billing import ensure_free_included_grant
 from proliferate.integrations.github import GitHubRepoBranches
 from proliferate.server.cloud.workspaces import service as cloud_service
 
@@ -147,10 +144,6 @@ class TestBillingApi:
             "remainingHours": 20.0,
             "concurrentSandboxLimit": settings.cloud_concurrent_sandbox_limit,
             "activeSandboxCount": 0,
-            "startBlocked": False,
-            "startBlockReason": None,
-            "activeSpendHold": False,
-            "holdReason": None,
             "blocked": False,
             "blockedReason": None,
         }
@@ -174,10 +167,6 @@ class TestBillingApi:
             "remainingSandboxHours": 20.0,
             "concurrentSandboxLimit": settings.cloud_concurrent_sandbox_limit,
             "activeSandboxCount": 0,
-            "startBlocked": False,
-            "startBlockReason": None,
-            "activeSpendHold": False,
-            "holdReason": None,
             "blocked": False,
             "blockedReason": None,
         }
@@ -194,12 +183,9 @@ class TestBillingApi:
         session = await _register_and_login(client, "billing-unlimited@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         user_id = uuid.UUID(session["user_id"])
-        billing_subject = await ensure_personal_billing_subject(db_session, user_id)
 
         workspace = CloudWorkspace(
             user_id=user_id,
-            billing_subject_id=billing_subject.id,
-            created_by_user_id=user_id,
             display_name="acme/rocket",
             git_provider="github",
             git_owner="acme",
@@ -230,7 +216,6 @@ class TestBillingApi:
         db_session.add(
             UsageSegment(
                 user_id=user_id,
-                billing_subject_id=billing_subject.id,
                 workspace_id=workspace.id,
                 sandbox_id=sandbox.id,
                 external_sandbox_id=sandbox.external_sandbox_id,
@@ -245,7 +230,6 @@ class TestBillingApi:
         db_session.add(
             BillingEntitlement(
                 user_id=user_id,
-                billing_subject_id=billing_subject.id,
                 kind="unlimited_cloud",
                 effective_at=now - timedelta(days=1),
                 expires_at=None,
@@ -280,12 +264,9 @@ class TestBillingApi:
         session = await _register_and_login(client, "billing-history@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         user_id = uuid.UUID(session["user_id"])
-        billing_subject = await ensure_personal_billing_subject(db_session, user_id)
 
         workspace = CloudWorkspace(
             user_id=user_id,
-            billing_subject_id=billing_subject.id,
-            created_by_user_id=user_id,
             display_name="acme/rocket",
             git_provider="github",
             git_owner="acme",
@@ -317,7 +298,6 @@ class TestBillingApi:
             [
                 UsageSegment(
                     user_id=user_id,
-                    billing_subject_id=billing_subject.id,
                     workspace_id=workspace.id,
                     sandbox_id=sandbox.id,
                     external_sandbox_id=sandbox.external_sandbox_id,
@@ -330,7 +310,6 @@ class TestBillingApi:
                 ),
                 UsageSegment(
                     user_id=user_id,
-                    billing_subject_id=billing_subject.id,
                     workspace_id=workspace.id,
                     sandbox_id=sandbox.id,
                     external_sandbox_id=sandbox.external_sandbox_id,
@@ -343,7 +322,6 @@ class TestBillingApi:
                 ),
                 UsageSegment(
                     user_id=user_id,
-                    billing_subject_id=billing_subject.id,
                     workspace_id=workspace.id,
                     sandbox_id=sandbox.id,
                     external_sandbox_id=sandbox.external_sandbox_id,
@@ -393,7 +371,6 @@ class TestBillingApi:
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         user_id = uuid.UUID(session["user_id"])
         await _link_github_account(db_session, session["user_id"])
-        billing_subject = await ensure_personal_billing_subject(db_session, user_id)
 
         credential_response = await client.put(
             "/v1/cloud/credentials/claude",
@@ -408,8 +385,6 @@ class TestBillingApi:
         now = datetime.now(UTC)
         workspace = CloudWorkspace(
             user_id=user_id,
-            billing_subject_id=billing_subject.id,
-            created_by_user_id=user_id,
             display_name="acme/rocket",
             git_provider="github",
             git_owner="acme",
@@ -442,7 +417,6 @@ class TestBillingApi:
         db_session.add(
             UsageSegment(
                 user_id=user_id,
-                billing_subject_id=billing_subject.id,
                 workspace_id=workspace.id,
                 sandbox_id=sandbox.id,
                 external_sandbox_id=sandbox.external_sandbox_id,

@@ -112,7 +112,6 @@ function makeCloudWorkspace(args: {
     templateVersion: null,
     runtimeGeneration: 0,
     actionBlockKind: null,
-    canResume: false,
     createdAt: updatedAt,
     updatedAt,
     postReadyPhase: "idle",

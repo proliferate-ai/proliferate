@@ -25,7 +25,7 @@ export function useWorkspaceRuntimeBlock() {
     const cloudWorkspace = workspaceCollections?.cloudWorkspaces.find(
       (workspace) => workspace.id === cloudWorkspaceId,
     );
-    if (cloudWorkspace?.actionBlockKind) {
+    if (cloudWorkspace?.actionBlockKind === "billing_quota") {
       return cloudWorkspace.actionBlockReason ?? "Cloud usage is currently paused.";
     }
 

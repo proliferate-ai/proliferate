@@ -8,15 +8,14 @@ from proliferate.constants.billing import (
     BILLING_MODE_ENFORCE,
     USAGE_SEGMENT_CLOSED_BY_DESTROY,
     USAGE_SEGMENT_CLOSED_BY_MANUAL_STOP,
-    USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
     USAGE_SEGMENT_OPENED_BY_RESUME,
+    WORKSPACE_ACTION_BLOCK_KIND_BILLING_QUOTA,
 )
 from proliferate.constants.cloud import SUPPORTED_GIT_PROVIDER, WorkspaceStatus
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud import CloudWorkspace
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
-    load_latest_usage_segment_for_sandbox,
     open_usage_segment_for_sandbox,
 )
 from proliferate.db.store.cloud_workspaces import (
@@ -39,12 +38,8 @@ from proliferate.db.store.cloud_workspaces import (
     list_cloud_workspaces_for_user as list_cloud_workspaces_store,
 )
 from proliferate.integrations.sandbox import get_configured_sandbox_provider, get_sandbox_provider
-from proliferate.server.billing.models import BillingSnapshot, SandboxStartAuthorization
-from proliferate.server.billing.service import (
-    authorize_sandbox_start,
-    get_billing_snapshot_for_subject,
-    sandbox_start_block_message,
-)
+from proliferate.server.billing.models import BillingSnapshot
+from proliferate.server.billing.service import get_billing_snapshot
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.credentials.models import allowed_agent_kinds
 from proliferate.server.cloud.credentials.service import load_cloud_credential_statuses
@@ -149,25 +144,15 @@ async def list_cloud_workspaces_for_user(
     user_id: UUID,
 ) -> list[WorkspaceSummary]:
     workspaces = await list_cloud_workspaces_store(user_id)
-    snapshots_by_subject: dict[UUID, BillingSnapshot] = {}
+    billing = await get_billing_snapshot(user_id)
     summaries: list[WorkspaceSummary] = []
     for workspace in workspaces:
-        billing = snapshots_by_subject.get(workspace.billing_subject_id)
-        if billing is None:
-            billing = await get_billing_snapshot_for_subject(workspace.billing_subject_id)
-            snapshots_by_subject[workspace.billing_subject_id] = billing
         action_block_kind, action_block_reason = _workspace_action_block(workspace, billing)
-        billing_suspension_state, can_resume = await _workspace_billing_recovery_state(
-            workspace,
-            billing,
-        )
         summaries.append(
             workspace_summary_payload(
                 workspace,
                 action_block_kind=action_block_kind,
                 action_block_reason=action_block_reason,
-                billing_suspension_state=billing_suspension_state,
-                can_resume=can_resume,
             )
         )
     return summaries
@@ -194,12 +179,20 @@ def _prefer_fresher_workspace_state(
     return workspace
 
 
-def _raise_if_cloud_workspace_start_denied(authorization: SandboxStartAuthorization) -> None:
-    if authorization.allowed:
+def _cloud_workspace_block_message(blocked_reason: str | None) -> str:
+    if blocked_reason == "concurrency_limit":
+        return (
+            "Cloud usage is currently blocked because you've reached the concurrent sandbox limit."
+        )
+    return "Cloud usage is currently blocked because your included sandbox hours are exhausted."
+
+
+def _raise_if_cloud_workspace_blocked(*, blocked: bool, blocked_reason: str | None) -> None:
+    if not blocked:
         return
     raise CloudApiError(
         "quota_exceeded",
-        authorization.message or sandbox_start_block_message(authorization.start_block_reason),
+        _cloud_workspace_block_message(blocked_reason),
         status_code=403,
     )
 
@@ -208,31 +201,14 @@ def _workspace_action_block(
     workspace: CloudWorkspace,
     billing: BillingSnapshot,
 ) -> tuple[str | None, str | None]:
-    if billing.billing_mode != BILLING_MODE_ENFORCE or not billing.start_blocked:
+    if billing.billing_mode != BILLING_MODE_ENFORCE or not billing.blocked:
         return None, None
     if workspace.status == WorkspaceStatus.ready:
         return None, None
     return (
-        billing.start_block_reason,
-        sandbox_start_block_message(billing.start_block_reason),
+        WORKSPACE_ACTION_BLOCK_KIND_BILLING_QUOTA,
+        _cloud_workspace_block_message(billing.blocked_reason),
     )
-
-
-async def _workspace_billing_recovery_state(
-    workspace: CloudWorkspace,
-    billing: BillingSnapshot,
-) -> tuple[str | None, bool]:
-    if workspace.status != WorkspaceStatus.stopped or workspace.active_sandbox_id is None:
-        return None, False
-    latest_segment = await load_latest_usage_segment_for_sandbox(workspace.active_sandbox_id)
-    if (
-        latest_segment is None
-        or latest_segment.closed_by != USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT
-    ):
-        return None, False
-    if billing.active_spend_hold:
-        return "paused", False
-    return "recoverable", True
 
 
 def _provider_state_is_running(state: str | None) -> bool:
@@ -244,26 +220,21 @@ async def get_cloud_workspace_detail(
     workspace_id: UUID,
 ) -> WorkspaceDetail:
     workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
-    return await _build_workspace_detail(workspace)
+    return await _build_workspace_detail(user_id, workspace)
 
 
 async def _build_workspace_detail(
+    user_id: UUID,
     workspace: CloudWorkspace,
 ) -> WorkspaceDetail:
     statuses = await load_cloud_credential_statuses(workspace.user_id)
-    billing = await get_billing_snapshot_for_subject(workspace.billing_subject_id)
+    billing = await get_billing_snapshot(user_id)
     action_block_kind, action_block_reason = _workspace_action_block(workspace, billing)
-    billing_suspension_state, can_resume = await _workspace_billing_recovery_state(
-        workspace,
-        billing,
-    )
     return workspace_detail_payload(
         workspace,
         statuses,
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
-        billing_suspension_state=billing_suspension_state,
-        can_resume=can_resume,
     )
 
 
@@ -384,11 +355,11 @@ async def create_cloud_workspace(
             status_code=400,
         )
 
-    authorization = await authorize_sandbox_start(
-        user_id=user.id,
-        workspace_id=None,
+    billing = await get_billing_snapshot(user.id)
+    _raise_if_cloud_workspace_blocked(
+        blocked=billing.blocked,
+        blocked_reason=billing.blocked_reason,
     )
-    _raise_if_cloud_workspace_start_denied(authorization)
 
     statuses = await load_cloud_credential_statuses(user.id)
     if not any(status.synced for status in statuses):
@@ -403,7 +374,8 @@ async def create_cloud_workspace(
         base_branch=resolved_base_branch,
         branch_name=cleaned_branch_name,
         synced_providers=",".join(status.provider for status in statuses if status.synced),
-        active_sandbox_count=authorization.active_sandbox_count,
+        used_sandbox_hours=round(billing.used_hours, 4),
+        active_sandbox_count=billing.active_sandbox_count,
     )
 
     workspace = await create_cloud_workspace_for_user(
@@ -425,7 +397,7 @@ async def create_cloud_workspace(
         branch_name=cleaned_branch_name,
     )
     schedule_workspace_provision(workspace.id)
-    return await _build_workspace_detail(workspace)
+    return await _build_workspace_detail(user.id, workspace)
 
 
 async def ensure_cloud_workspace_for_existing_branch(
@@ -537,7 +509,7 @@ async def start_cloud_workspace(
 ) -> WorkspaceDetail:
     workspace = await _require_cloud_workspace_for_user(user.id, workspace_id)
     if workspace.status in PROVISIONING_STATUSES and workspace.status != WorkspaceStatus.queued:
-        return await _build_workspace_detail(workspace)
+        return await _build_workspace_detail(user.id, workspace)
 
     repo_branches = await get_github_repo_branches(
         user,
@@ -556,11 +528,11 @@ async def start_cloud_workspace(
             status_code=400,
         )
 
-    authorization = await authorize_sandbox_start(
-        user_id=user.id,
-        workspace_id=workspace.id,
+    billing = await get_billing_snapshot(user.id)
+    _raise_if_cloud_workspace_blocked(
+        blocked=billing.blocked,
+        blocked_reason=billing.blocked_reason,
     )
-    _raise_if_cloud_workspace_start_denied(authorization)
 
     statuses = await load_cloud_credential_statuses(user.id)
     if not any(status.synced for status in statuses):
@@ -576,7 +548,8 @@ async def start_cloud_workspace(
         base_branch=base_branch,
         branch_name=workspace.git_branch,
         synced_providers=",".join(status.provider for status in statuses if status.synced),
-        active_sandbox_count=authorization.active_sandbox_count,
+        used_sandbox_hours=round(billing.used_hours, 4),
+        active_sandbox_count=billing.active_sandbox_count,
     )
 
     if workspace.ready_at is None:
@@ -597,7 +570,7 @@ async def start_cloud_workspace(
             workspace.id,
             requested_base_sha=requested_base_sha,
         )
-        return await _build_workspace_detail(workspace)
+        return await _build_workspace_detail(user.id, workspace)
 
     sandbox = await load_active_sandbox_for_workspace(workspace)
     if (
@@ -650,7 +623,7 @@ async def start_cloud_workspace(
                     workspace,
                     await load_cloud_workspace_by_id(workspace.id),
                 )
-            return await _build_workspace_detail(workspace)
+            return await _build_workspace_detail(user.id, workspace)
         except Exception as exc:
             reconnect_error = (
                 exc
@@ -687,7 +660,7 @@ async def start_cloud_workspace(
         workspace.id,
         requested_base_sha=requested_base_sha,
     )
-    return await _build_workspace_detail(workspace)
+    return await _build_workspace_detail(user.id, workspace)
 
 
 async def sync_cloud_workspace_branch(
@@ -711,7 +684,7 @@ async def sync_cloud_workspace_branch(
     )
     if workspace is None:
         raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
-    return await _build_workspace_detail(workspace)
+    return await _build_workspace_detail(user_id, workspace)
 
 
 async def sync_cloud_workspace_display_name(
@@ -748,7 +721,7 @@ async def sync_cloud_workspace_display_name(
     )
     if workspace is None:
         raise CloudApiError("workspace_not_found", "Cloud workspace not found.", status_code=404)
-    return await _build_workspace_detail(workspace)
+    return await _build_workspace_detail(user_id, workspace)
 
 
 async def sync_cloud_workspace_credentials(
@@ -758,7 +731,7 @@ async def sync_cloud_workspace_credentials(
     workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
     await sync_workspace_credentials(workspace)
     reloaded_workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
-    return await _build_workspace_detail(reloaded_workspace)
+    return await _build_workspace_detail(user_id, reloaded_workspace)
 
 
 async def stop_cloud_workspace(
@@ -768,7 +741,7 @@ async def stop_cloud_workspace(
     workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
     await _stop_workspace_runtime(workspace)
     workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
-    return await _build_workspace_detail(workspace)
+    return await _build_workspace_detail(user_id, workspace)
 
 
 async def delete_cloud_workspace(

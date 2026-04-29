@@ -14,7 +14,6 @@ function makeCloudWorkspace(
     displayName: null,
     actionBlockKind: null,
     actionBlockReason: null,
-    canResume: false,
     postReadyPhase: "idle",
     postReadyFilesApplied: 0,
     postReadyFilesTotal: 0,
@@ -41,16 +40,16 @@ function makeCloudWorkspace(
 describe("buildCloudWorkspaceStatusScreenModel", () => {
   it("returns a passive status footer for billing blocks", () => {
     const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
-      actionBlockKind: "credits_exhausted",
-      actionBlockReason: "Cloud usage is paused because your included sandbox hours are exhausted.",
+      actionBlockKind: "billing_quota",
+      actionBlockReason: "Cloud usage is paused.",
     }));
 
     expect(model.footer).toEqual({
       kind: "status",
-      message: "Cloud usage is paused because your included sandbox hours are exhausted.",
+      message: "Cloud usage is unavailable for this workspace right now.",
     });
     expect(model.description).toBe(
-      "Cloud usage is paused because your included sandbox hours are exhausted.",
+      "Cloud usage is unavailable for this workspace right now.",
     );
   });
 });

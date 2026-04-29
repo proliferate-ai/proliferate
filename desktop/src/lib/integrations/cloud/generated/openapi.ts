@@ -939,14 +939,6 @@ export interface components {
             concurrentSandboxLimit: number;
             /** Activesandboxcount */
             activeSandboxCount: number;
-            /** Startblocked */
-            startBlocked: boolean;
-            /** Startblockreason */
-            startBlockReason?: string | null;
-            /** Activespendhold */
-            activeSpendHold: boolean;
-            /** Holdreason */
-            holdReason?: string | null;
             /** Blocked */
             blocked: boolean;
             /** Blockedreason */
@@ -983,14 +975,6 @@ export interface components {
             concurrentSandboxLimit: number;
             /** Activesandboxcount */
             activeSandboxCount: number;
-            /** Startblocked */
-            startBlocked: boolean;
-            /** Startblockreason */
-            startBlockReason?: string | null;
-            /** Activespendhold */
-            activeSpendHold: boolean;
-            /** Holdreason */
-            holdReason?: string | null;
             /** Blocked */
             blocked: boolean;
             /** Blockedreason */
@@ -1729,13 +1713,6 @@ export interface components {
             actionBlockKind?: string | null;
             /** Actionblockreason */
             actionBlockReason?: string | null;
-            /** Billingsuspensionstate */
-            billingSuspensionState?: string | null;
-            /**
-             * Canresume
-             * @default false
-             */
-            canResume: boolean;
             /** Postreadyphase */
             postReadyPhase: string;
             /** Postreadyfilestotal */
@@ -1799,13 +1776,6 @@ export interface components {
             actionBlockKind?: string | null;
             /** Actionblockreason */
             actionBlockReason?: string | null;
-            /** Billingsuspensionstate */
-            billingSuspensionState?: string | null;
-            /**
-             * Canresume
-             * @default false
-             */
-            canResume: boolean;
             /** Postreadyphase */
             postReadyPhase: string;
             /** Postreadyfilestotal */

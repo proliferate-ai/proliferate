@@ -17,7 +17,6 @@ from proliferate.db.models.cloud import (
     CloudSandbox,
     CloudWorkspace,
 )
-from proliferate.db.store.billing import ensure_personal_billing_subject
 from proliferate.utils.time import utcnow
 
 _UNSET: Final = object()
@@ -102,11 +101,8 @@ async def create_cloud_workspace_record(
     repo_env_vars_ciphertext: str | None = None,
 ) -> CloudWorkspace:
     now = utcnow()
-    billing_subject = await ensure_personal_billing_subject(db, user_id)
     workspace = CloudWorkspace(
         user_id=user_id,
-        billing_subject_id=billing_subject.id,
-        created_by_user_id=user_id,
         display_name=display_name,
         git_provider=git_provider,
         git_owner=git_owner,

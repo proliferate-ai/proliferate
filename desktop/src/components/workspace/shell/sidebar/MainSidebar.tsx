@@ -210,13 +210,11 @@ export function MainSidebar() {
     }
   }, [allRepoGroupsCollapsed, allRepoKeys, setCollapsedRepoGroups]);
 
-  const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.startBlocked;
+  const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.blocked;
   const cloudWorkspaceTooltip = cloudUnavailable
     ? CAPABILITY_COPY.cloudDisabledTooltip
     : cloudWorkspaceBlocked
-      ? billingPlan?.startBlockReason === "concurrency_limit"
-        ? "Sandbox limit reached."
-        : "Cloud usage is paused."
+      ? "Cloud usage is paused."
       : CAPABILITY_COPY.cloudSignInTooltip;
   const filtersActive = showArchived || !isDefaultSidebarWorkspaceTypes(workspaceTypes);
 

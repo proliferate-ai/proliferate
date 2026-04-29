@@ -7,7 +7,6 @@ from proliferate.db.models.cloud import (
     CloudSandbox,
     CloudWorkspace,
 )
-from proliferate.db.store.billing import ensure_personal_billing_subject
 
 
 @pytest.mark.asyncio
@@ -21,12 +20,8 @@ async def test_app_startup_does_not_reconnect_cloud_sandboxes(
 
     async_session = async_sessionmaker(test_engine, expire_on_commit=False)
     async with async_session() as session:
-        user_id = uuid.uuid4()
-        billing_subject = await ensure_personal_billing_subject(session, user_id)
         workspace = CloudWorkspace(
-            user_id=user_id,
-            billing_subject_id=billing_subject.id,
-            created_by_user_id=user_id,
+            user_id=uuid.uuid4(),
             display_name="acme/rocket",
             git_provider="github",
             git_owner="acme",

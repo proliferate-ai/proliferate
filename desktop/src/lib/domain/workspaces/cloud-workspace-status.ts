@@ -22,7 +22,6 @@ const GENERIC_PREPARING_DESCRIPTION = "Preparing the cloud workspace.";
 const GENERIC_FAILURE_DESCRIPTION = "Provisioning hit an error before the workspace became ready.";
 const GENERIC_STOPPED_DESCRIPTION = "This cloud workspace is currently stopped. Start it to resume work.";
 const GENERIC_BLOCKED_DESCRIPTION = "Cloud usage is unavailable for this workspace right now.";
-const CONCURRENCY_BLOCK_DESCRIPTION = "Stop another cloud workspace before starting this one.";
 const AUTO_REFRESH_MESSAGE = "This view refreshes automatically and will switch into the workspace once the runtime is ready.";
 const READY_MESSAGE = "The workspace is ready.";
 const REPO_CONFIG_MESSAGE = "The runtime is ready. Applying repo files and cloud setup now.";
@@ -76,7 +75,7 @@ export function shouldShowCloudWorkspaceStatusScreen(
   workspace: CloudWorkspaceSummary,
 ): boolean {
   return (
-    !!workspace.actionBlockKind
+    workspace.actionBlockKind === "billing_quota"
     || isCloudWorkspacePending(workspace.status)
     || workspace.status === "error"
     || workspace.status === "stopped"
@@ -90,15 +89,12 @@ export function buildCloudWorkspaceStatusScreenModel(
   const repoLabel = `${workspace.repo.owner}/${workspace.repo.name}`;
   const branchLabel = `${workspace.repo.baseBranch} -> ${workspace.repo.branch}`;
 
-  if (workspace.actionBlockKind) {
-    const concurrencyLimited = workspace.actionBlockKind === "concurrency_limit";
-    const description = workspace.actionBlockReason
-      ?? (concurrencyLimited ? CONCURRENCY_BLOCK_DESCRIPTION : GENERIC_BLOCKED_DESCRIPTION);
+  if (workspace.actionBlockKind === "billing_quota") {
     return {
       mode: "blocked",
       eyebrowTone: "pending",
-      title: concurrencyLimited ? "Sandbox limit reached" : "Cloud usage is paused",
-      description,
+      title: "Cloud usage is paused",
+      description: GENERIC_BLOCKED_DESCRIPTION,
       repoLabel,
       branchLabel,
       stepCounter: null,
@@ -112,7 +108,7 @@ export function buildCloudWorkspaceStatusScreenModel(
       })),
       footer: {
         kind: "status",
-        message: description,
+        message: GENERIC_BLOCKED_DESCRIPTION,
       },
     };
   }

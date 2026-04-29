@@ -14,12 +14,9 @@ from proliferate.utils.crypto import encrypt_text
 
 
 def _make_workspace() -> CloudWorkspace:
-    user_id = uuid4()
     return CloudWorkspace(
         id=uuid4(),
-        user_id=user_id,
-        billing_subject_id=user_id,
-        created_by_user_id=user_id,
+        user_id=uuid4(),
         display_name="acme/rocket",
         git_provider="github",
         git_owner="acme",
@@ -61,8 +58,8 @@ class _FakeProvider:
         )
 
 
-async def _unblocked_billing_snapshot(_billing_subject_id) -> SimpleNamespace:
-    return SimpleNamespace(blocked=False, active_spend_hold=False)
+async def _unblocked_billing_snapshot(_user_id) -> SimpleNamespace:
+    return SimpleNamespace(blocked=False)
 
 
 @pytest.mark.asyncio
@@ -75,11 +72,7 @@ async def test_sync_workspace_credentials_requires_active_sandbox(
         return None
 
     monkeypatch.setattr(runtime_service, "load_active_sandbox_for_workspace", _no_sandbox)
-    monkeypatch.setattr(
-        runtime_service,
-        "get_billing_snapshot_for_subject",
-        _unblocked_billing_snapshot,
-    )
+    monkeypatch.setattr(runtime_service, "get_billing_snapshot", _unblocked_billing_snapshot)
 
     with pytest.raises(CloudApiError) as exc_info:
         await runtime_service.sync_workspace_credentials(workspace)
@@ -118,11 +111,7 @@ async def test_sync_workspace_credentials_swallows_reconcile_failure_after_file_
         }
 
     monkeypatch.setattr(runtime_service, "load_active_sandbox_for_workspace", _load_active_sandbox)
-    monkeypatch.setattr(
-        runtime_service,
-        "get_billing_snapshot_for_subject",
-        _unblocked_billing_snapshot,
-    )
+    monkeypatch.setattr(runtime_service, "get_billing_snapshot", _unblocked_billing_snapshot)
     monkeypatch.setattr(runtime_service, "get_sandbox_provider", lambda _kind: _FakeProvider())
     monkeypatch.setattr(runtime_service, "load_active_cloud_credential_payloads", _payloads)
     monkeypatch.setattr(runtime_service, "ensure_workspace_runtime_ready", _ensure_ready)
@@ -158,11 +147,7 @@ async def test_sync_workspace_credentials_still_fails_when_file_write_fails(
         return "https://runtime.invalid"
 
     monkeypatch.setattr(runtime_service, "load_active_sandbox_for_workspace", _load_active_sandbox)
-    monkeypatch.setattr(
-        runtime_service,
-        "get_billing_snapshot_for_subject",
-        _unblocked_billing_snapshot,
-    )
+    monkeypatch.setattr(runtime_service, "get_billing_snapshot", _unblocked_billing_snapshot)
     monkeypatch.setattr(runtime_service, "get_sandbox_provider", lambda _kind: _FakeProvider())
     monkeypatch.setattr(runtime_service, "load_active_cloud_credential_payloads", _payloads)
     monkeypatch.setattr(runtime_service, "ensure_workspace_runtime_ready", _ensure_ready)
