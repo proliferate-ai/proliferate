@@ -23,26 +23,26 @@ const GENERIC_FAILURE_DESCRIPTION = "Provisioning hit an error before the worksp
 const GENERIC_STOPPED_DESCRIPTION = "This cloud workspace is currently stopped. Start it to resume work.";
 const GENERIC_BLOCKED_DESCRIPTION = "Cloud usage is unavailable for this workspace right now.";
 const CONCURRENCY_BLOCK_DESCRIPTION = "Stop another cloud workspace before starting this one.";
+const CREDITS_EXHAUSTED_DESCRIPTION = "Cloud usage is paused because your included sandbox hours are exhausted.";
+const PAYMENT_HOLD_DESCRIPTION = "Cloud usage is paused because billing needs attention.";
+const ADMIN_HOLD_DESCRIPTION = "Cloud usage is paused for this account.";
 const AUTO_REFRESH_MESSAGE = "This view refreshes automatically and will switch into the workspace once the runtime is ready.";
 const READY_MESSAGE = "The workspace is ready.";
 const REPO_CONFIG_MESSAGE = "The runtime is ready. Applying repo files and cloud setup now.";
 const RETRY_HELPER_TEXT = "The workspace record is kept and we will retry setup from there.";
 const START_HELPER_TEXT = "The workspace record is kept and we will start the runtime again from there.";
 
-export type CloudStartBlockReason =
-  | "concurrency_limit"
-  | "credits_exhausted"
-  | "payment_failed"
-  | "admin_hold"
-  | "external_billing_hold";
-
-const START_BLOCK_REASONS = new Set<string>([
+const START_BLOCK_REASONS = [
   "concurrency_limit",
   "credits_exhausted",
   "payment_failed",
   "admin_hold",
   "external_billing_hold",
-]);
+] as const;
+
+export type CloudStartBlockReason = (typeof START_BLOCK_REASONS)[number];
+
+const START_BLOCK_REASON_SET: ReadonlySet<string> = new Set(START_BLOCK_REASONS);
 
 export type CloudWorkspaceStatusScreenMode = "pending" | "error" | "stopped" | "blocked";
 
@@ -76,17 +76,38 @@ export function isCloudWorkspacePending(status: string): boolean {
 export function isCloudStartBlockReason(
   reason: string | null | undefined,
 ): reason is CloudStartBlockReason {
-  return typeof reason === "string" && START_BLOCK_REASONS.has(reason);
+  return typeof reason === "string" && START_BLOCK_REASON_SET.has(reason);
 }
 
-export function titleForStartBlockReason(reason: string | null | undefined): string {
-  return reason === "concurrency_limit" ? "Sandbox limit reached" : "Cloud usage is paused";
+function normalizeStartBlockReason(
+  reason: CloudStartBlockReason | string | null | undefined,
+): CloudStartBlockReason | null {
+  return isCloudStartBlockReason(reason) ? reason : null;
 }
 
-export function descriptionForStartBlockReason(reason: string | null | undefined): string {
-  return reason === "concurrency_limit"
-    ? CONCURRENCY_BLOCK_DESCRIPTION
-    : GENERIC_BLOCKED_DESCRIPTION;
+export function titleForStartBlockReason(
+  reason: CloudStartBlockReason | string | null | undefined,
+): string {
+  const blockReason = normalizeStartBlockReason(reason);
+  return blockReason === "concurrency_limit" ? "Sandbox limit reached" : "Cloud usage is paused";
+}
+
+export function descriptionForStartBlockReason(
+  reason: CloudStartBlockReason | string | null | undefined,
+): string {
+  switch (normalizeStartBlockReason(reason)) {
+    case "concurrency_limit":
+      return CONCURRENCY_BLOCK_DESCRIPTION;
+    case "credits_exhausted":
+      return CREDITS_EXHAUSTED_DESCRIPTION;
+    case "payment_failed":
+    case "external_billing_hold":
+      return PAYMENT_HOLD_DESCRIPTION;
+    case "admin_hold":
+      return ADMIN_HOLD_DESCRIPTION;
+    default:
+      return GENERIC_BLOCKED_DESCRIPTION;
+  }
 }
 
 function isPostReadyPending(phase: string | null | undefined): boolean {

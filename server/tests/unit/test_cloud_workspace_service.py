@@ -6,6 +6,10 @@ from uuid import uuid4
 
 import pytest
 
+from proliferate.constants.billing import (
+    WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT,
+    WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
+)
 from proliferate.server.billing.models import SandboxStartAuthorization
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workspaces import service as workspace_service
@@ -17,14 +21,20 @@ def _denied_start_authorization(*, blocked_reason: str) -> SandboxStartAuthoriza
         billing_subject_id=uuid4(),
         start_blocked=True,
         start_block_reason=blocked_reason,
-        active_spend_hold=blocked_reason != "concurrency_limit",
-        hold_reason=None if blocked_reason == "concurrency_limit" else blocked_reason,
+        active_spend_hold=blocked_reason != WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT,
+        hold_reason=(
+            None
+            if blocked_reason == WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT
+            else blocked_reason
+        ),
         message=(
             "Sandbox limit reached. Stop another cloud workspace before starting a new one."
-            if blocked_reason == "concurrency_limit"
+            if blocked_reason == WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT
             else "Cloud usage is paused because your included sandbox hours are exhausted."
         ),
-        active_sandbox_count=2 if blocked_reason == "concurrency_limit" else 0,
+        active_sandbox_count=(
+            2 if blocked_reason == WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT else 0
+        ),
         remaining_seconds=0.0,
     )
 
@@ -56,7 +66,9 @@ async def test_create_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
         return None
 
     async def _authorization(**_kwargs) -> SandboxStartAuthorization:
-        return _denied_start_authorization(blocked_reason="credits_exhausted")
+        return _denied_start_authorization(
+            blocked_reason=WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED
+        )
 
     async def _unexpected(*_args, **_kwargs) -> None:
         raise AssertionError("downstream workspace creation should not run when billing blocks")
@@ -109,7 +121,9 @@ async def test_start_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
         return SimpleNamespace(branches=["main"])
 
     async def _authorization(**_kwargs) -> SandboxStartAuthorization:
-        return _denied_start_authorization(blocked_reason="concurrency_limit")
+        return _denied_start_authorization(
+            blocked_reason=WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT
+        )
 
     async def _unexpected(*_args, **_kwargs) -> None:
         raise AssertionError("workspace start should stop before credential/runtime work")

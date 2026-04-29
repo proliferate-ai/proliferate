@@ -94,11 +94,10 @@ async def _enforce_or_reconcile_segment(
     segment: UsageSegment,
     state: ProviderSandboxState | None,
     billing_snapshot: BillingSnapshot,
-    record_hold_decision: bool,
-) -> bool:
+) -> None:
     sandbox = await load_cloud_sandbox_by_id(segment.sandbox_id)
     if sandbox is None:
-        return False
+        return
 
     if state is None or state.state in {"paused", "stopped"}:
         await close_usage_segment_for_sandbox(
@@ -112,7 +111,7 @@ async def _enforce_or_reconcile_segment(
             stopped_at=(state.end_at or state.observed_at) if state is not None else utcnow(),
         )
         await _mark_workspace_stopped(sandbox.cloud_workspace_id, destroyed=False)
-        return False
+        return
 
     if state.state in {"killed", "destroyed", "terminated"}:
         await close_usage_segment_for_sandbox(
@@ -126,23 +125,8 @@ async def _enforce_or_reconcile_segment(
             stopped_at=state.end_at or state.observed_at,
         )
         await _mark_workspace_stopped(sandbox.cloud_workspace_id, destroyed=True)
-        return False
+        return
 
-    hold_decision_recorded = False
-    if record_hold_decision and billing_snapshot.active_spend_hold:
-        await record_billing_decision_event(
-            billing_subject_id=billing_snapshot.billing_subject_id,
-            actor_user_id=segment.user_id,
-            workspace_id=segment.workspace_id,
-            decision_type=BILLING_DECISION_ENFORCE_ACTIVE_SPEND,
-            mode=settings.cloud_billing_mode,
-            would_block_start=billing_snapshot.start_blocked,
-            would_pause_active=True,
-            reason=billing_snapshot.hold_reason,
-            active_sandbox_count=billing_snapshot.active_sandbox_count,
-            remaining_seconds=billing_snapshot.remaining_seconds,
-        )
-        hold_decision_recorded = True
     if settings.cloud_billing_mode == BILLING_MODE_ENFORCE and billing_snapshot.active_spend_hold:
         provider = get_configured_sandbox_provider()
         if sandbox.external_sandbox_id:
@@ -156,7 +140,7 @@ async def _enforce_or_reconcile_segment(
                         "external_sandbox_id": sandbox.external_sandbox_id,
                     },
                 )
-                return hold_decision_recorded
+                return
         ended_at = utcnow()
         await close_usage_segment_for_sandbox(
             sandbox_id=sandbox.id,
@@ -169,7 +153,6 @@ async def _enforce_or_reconcile_segment(
             stopped_at=ended_at,
         )
         await _mark_workspace_stopped(sandbox.cloud_workspace_id, destroyed=False)
-    return hold_decision_recorded
 
 
 async def run_billing_reconcile_pass() -> None:
@@ -195,7 +178,24 @@ async def run_billing_reconcile_pass() -> None:
                     segment.billing_subject_id
                 )
                 snapshots_by_subject[segment.billing_subject_id] = billing_snapshot
-            hold_decision_recorded = await _enforce_or_reconcile_segment(
+            if (
+                billing_snapshot.active_spend_hold
+                and segment.billing_subject_id not in recorded_hold_decision_subjects
+            ):
+                await record_billing_decision_event(
+                    billing_subject_id=billing_snapshot.billing_subject_id,
+                    actor_user_id=segment.user_id,
+                    workspace_id=segment.workspace_id,
+                    decision_type=BILLING_DECISION_ENFORCE_ACTIVE_SPEND,
+                    mode=settings.cloud_billing_mode,
+                    would_block_start=billing_snapshot.start_blocked,
+                    would_pause_active=True,
+                    reason=billing_snapshot.hold_reason,
+                    active_sandbox_count=billing_snapshot.active_sandbox_count,
+                    remaining_seconds=billing_snapshot.remaining_seconds,
+                )
+                recorded_hold_decision_subjects.add(segment.billing_subject_id)
+            await _enforce_or_reconcile_segment(
                 segment=segment,
                 state=(
                     states_by_external_id.get(segment.external_sandbox_id)
@@ -203,12 +203,7 @@ async def run_billing_reconcile_pass() -> None:
                     else None
                 ),
                 billing_snapshot=billing_snapshot,
-                record_hold_decision=(
-                    segment.billing_subject_id not in recorded_hold_decision_subjects
-                ),
             )
-            if hold_decision_recorded:
-                recorded_hold_decision_subjects.add(segment.billing_subject_id)
 
     acquired, _ = await with_billing_reconciler_lock(_run)
     if not acquired:

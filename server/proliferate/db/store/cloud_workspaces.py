@@ -8,9 +8,10 @@ from datetime import datetime
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.billing import ACTIVE_SANDBOX_STATUSES
 from proliferate.constants.cloud import WORKSPACE_REPO_APPLY_LOCK_SALT, WorkspaceStatus
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud import (
@@ -142,33 +143,6 @@ async def delete_cloud_workspace_records(
     await db.commit()
 
 
-async def create_sandbox_record(
-    db: AsyncSession,
-    *,
-    workspace_id: UUID,
-    external_sandbox_id: str | None,
-    provider: str,
-    template_version: str,
-    status: str = "provisioning",
-    started_at: datetime | None = None,
-) -> CloudSandbox:
-    now = utcnow()
-    sandbox = CloudSandbox(
-        cloud_workspace_id=workspace_id,
-        provider=provider,
-        external_sandbox_id=external_sandbox_id,
-        status=status,
-        template_version=template_version,
-        started_at=started_at or now,
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(sandbox)
-    await db.commit()
-    await db.refresh(sandbox)
-    return sandbox
-
-
 async def get_active_sandbox(
     db: AsyncSession,
     workspace: CloudWorkspace,
@@ -211,16 +185,58 @@ async def list_cloud_sandbox_placeholders(
     )
 
 
-async def attach_workspace_sandbox(
+async def reserve_sandbox_slot_for_workspace(
     db: AsyncSession,
-    workspace: CloudWorkspace,
-    sandbox: CloudSandbox,
-) -> CloudWorkspace:
+    *,
+    workspace_id: UUID,
+    external_sandbox_id: str | None,
+    provider: str,
+    template_version: str,
+    status: str,
+    started_at: datetime | None,
+    concurrent_sandbox_limit: int | None,
+) -> CloudSandbox | None:
+    workspace = await get_cloud_workspace_by_id(db, workspace_id)
+    if workspace is None:
+        raise RuntimeError("Workspace disappeared before sandbox attachment.")
+
+    if concurrent_sandbox_limit is not None:
+        await db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+            {"lock_key": f"billing-subject:{workspace.billing_subject_id}"},
+        )
+        active_sandbox_count = int(
+            await db.scalar(
+                select(func.count(CloudSandbox.id))
+                .join(CloudWorkspace, CloudSandbox.cloud_workspace_id == CloudWorkspace.id)
+                .where(
+                    CloudWorkspace.billing_subject_id == workspace.billing_subject_id,
+                    CloudSandbox.status.in_(ACTIVE_SANDBOX_STATUSES),
+                )
+            )
+            or 0
+        )
+        if active_sandbox_count >= concurrent_sandbox_limit:
+            return None
+
+    now = utcnow()
+    sandbox = CloudSandbox(
+        cloud_workspace_id=workspace_id,
+        provider=provider,
+        external_sandbox_id=external_sandbox_id,
+        status=status,
+        template_version=template_version,
+        started_at=started_at,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(sandbox)
+    await db.flush()
     workspace.active_sandbox_id = sandbox.id
-    workspace.updated_at = utcnow()
+    workspace.updated_at = now
     await db.commit()
-    await db.refresh(workspace)
-    return workspace
+    await db.refresh(sandbox)
+    return sandbox
 
 
 async def persist_sandbox_status(
@@ -681,7 +697,7 @@ async def save_workspace_display_name_for_user(
         return workspace
 
 
-async def create_and_attach_sandbox_for_workspace(
+async def reserve_and_attach_sandbox_for_workspace(
     workspace_id: UUID,
     *,
     external_sandbox_id: str | None,
@@ -689,9 +705,10 @@ async def create_and_attach_sandbox_for_workspace(
     template_version: str,
     status: str = "provisioning",
     started_at: datetime | None = None,
-) -> CloudSandbox:
+    concurrent_sandbox_limit: int | None,
+) -> CloudSandbox | None:
     async with db_engine.async_session_factory() as db:
-        sandbox = await create_sandbox_record(
+        return await reserve_sandbox_slot_for_workspace(
             db,
             workspace_id=workspace_id,
             external_sandbox_id=external_sandbox_id,
@@ -699,12 +716,8 @@ async def create_and_attach_sandbox_for_workspace(
             template_version=template_version,
             status=status,
             started_at=started_at,
+            concurrent_sandbox_limit=concurrent_sandbox_limit,
         )
-        workspace = await get_cloud_workspace_by_id(db, workspace_id)
-        if workspace is None:
-            raise RuntimeError("Workspace disappeared before sandbox attachment.")
-        await attach_workspace_sandbox(db, workspace, sandbox)
-        return sandbox
 
 
 async def bind_allocated_sandbox(
