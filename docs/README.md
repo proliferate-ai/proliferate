@@ -62,6 +62,8 @@ start of the task, not after implementation has already started.
   - canonical list of every env var across the stack, tagged by deployment mode
 - `docs/reference/env-secrets-matrix.md`
   - operator-facing server env var surface
+- `docs/reference/stripe-local-testing.md`
+  - Stripe test-mode resource setup and local webhook/meter testing
 - `docs/reference/self-hosted-deploy.md`
   - canonical Docker Compose self-hosted deployment
 - `docs/reference/self-hosted-aws.md`
