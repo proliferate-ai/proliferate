@@ -13,10 +13,15 @@ function isRetryableNetworkError(error: unknown): boolean {
 
 export function isRetryableCloudWorkspaceConnectionError(error: unknown): boolean {
   if (error instanceof ProliferateClientError) {
-    return error.code === "workspace_not_ready" || error.status >= 500;
+    return isCloudWorkspaceNotReadyError(error) || error.status >= 500;
   }
 
   return isRetryableNetworkError(error);
+}
+
+export function isCloudWorkspaceNotReadyError(error: unknown): boolean {
+  return error instanceof ProliferateClientError
+    && error.code === "workspace_not_ready";
 }
 
 export function cloudWorkspaceConnectionQueryOptions(workspaceId: string) {

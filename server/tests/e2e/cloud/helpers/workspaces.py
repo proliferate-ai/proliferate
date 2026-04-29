@@ -78,8 +78,9 @@ async def create_cloud_workspace(
     return response.json()
 
 
-def _is_daytona_cpu_limit_error(exc: CloudE2ETestError) -> bool:
-    return "Total CPU limit exceeded" in str(exc)
+def _is_daytona_resource_limit_error(exc: CloudE2ETestError) -> bool:
+    message = str(exc)
+    return "Total CPU limit exceeded" in message or "Total disk limit exceeded" in message
 
 
 async def cleanup_stale_daytona_test_sandboxes(
@@ -191,7 +192,7 @@ async def create_ready_cloud_workspace(
             return branch_name, workspace
         except CloudE2ETestError as exc:
             last_error = exc
-            if provider_kind != "daytona" or not _is_daytona_cpu_limit_error(exc):
+            if provider_kind != "daytona" or not _is_daytona_resource_limit_error(exc):
                 raise
             if workspace is not None:
                 await force_delete_cloud_workspace_records(db_session, str(workspace["id"]))

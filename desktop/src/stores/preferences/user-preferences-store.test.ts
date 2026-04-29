@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   migrateUserPreferences,
   USER_PREFERENCE_DEFAULTS,
+  type UserPreferences,
 } from "@/stores/preferences/user-preferences-store";
 
 describe("user preference migration", () => {
@@ -22,5 +23,21 @@ describe("user preference migration", () => {
     });
 
     expect(preferences.powersInCodingSessionsEnabled).toBe(true);
+  });
+
+  it("defaults runtime input sync off", () => {
+    expect(USER_PREFERENCE_DEFAULTS.cloudRuntimeInputSyncEnabled).toBe(false);
+  });
+
+  it("migrates missing runtime input sync preference to false", () => {
+    const legacy = {
+      ...USER_PREFERENCE_DEFAULTS,
+      cloudRuntimeInputSyncEnabled: undefined,
+    } as unknown as UserPreferences;
+
+    const result = migrateUserPreferences(legacy);
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.cloudRuntimeInputSyncEnabled).toBe(false);
   });
 });

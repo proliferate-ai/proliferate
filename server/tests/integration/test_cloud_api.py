@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.models.auth import OAuthAccount
 from proliferate.db.models.cloud import (
     CloudCredential,
+    CloudMcpConnection,
     CloudRepoConfig,
     CloudSandbox,
     CloudWorkspace,
@@ -111,6 +112,21 @@ async def _list_credentials(db_session: AsyncSession, user_id: str) -> list[Clou
         (
             await db_session.execute(
                 select(CloudCredential).where(CloudCredential.user_id == uuid.UUID(user_id))
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+async def _list_mcp_connections(
+    db_session: AsyncSession,
+    user_id: str,
+) -> list[CloudMcpConnection]:
+    return (
+        (
+            await db_session.execute(
+                select(CloudMcpConnection).where(CloudMcpConnection.user_id == uuid.UUID(user_id))
             )
         )
         .scalars()
@@ -224,6 +240,73 @@ class TestCloudCredentials:
         assert statuses_after_delete.json()[1]["synced"] is False
 
     @pytest.mark.asyncio
+    async def test_unchanged_credential_sync_touches_active_row(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        session = await _register_and_login(client, "cloud-creds-idempotent@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        payload = {
+            "authMode": "env",
+            "envVars": {"ANTHROPIC_API_KEY": "test-anthropic-key"},
+        }
+
+        response = await client.put("/v1/cloud/credentials/claude", headers=headers, json=payload)
+        assert response.status_code == 200
+        records = await _list_credentials(db_session, session["user_id"])
+        assert len(records) == 1
+        record = records[0]
+        assert record is not None
+        record_id = record.id
+        old_synced_at = datetime(2024, 1, 1, tzinfo=UTC)
+        record.last_synced_at = old_synced_at
+        await db_session.commit()
+
+        response = await client.put("/v1/cloud/credentials/claude", headers=headers, json=payload)
+        assert response.status_code == 200
+
+        db_session.expire_all()
+        records = await _list_credentials(db_session, session["user_id"])
+        assert len(records) == 1
+        assert records[0].id == record_id
+        assert records[0].revoked_at is None
+        assert records[0].last_synced_at > old_synced_at
+
+    @pytest.mark.asyncio
+    async def test_changed_credential_sync_versions_active_row(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        session = await _register_and_login(client, "cloud-creds-versioned@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        first = await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "env",
+                "envVars": {"ANTHROPIC_API_KEY": "first-key"},
+            },
+        )
+        assert first.status_code == 200
+        second = await client.put(
+            "/v1/cloud/credentials/claude",
+            headers=headers,
+            json={
+                "authMode": "env",
+                "envVars": {"ANTHROPIC_API_KEY": "second-key"},
+            },
+        )
+        assert second.status_code == 200
+
+        records = await _list_credentials(db_session, session["user_id"])
+        active_records = [record for record in records if record.revoked_at is None]
+        assert len(records) == 2
+        assert len(active_records) == 1
+
+    @pytest.mark.asyncio
     async def test_sync_claude_file_backed_credential(
         self,
         client: AsyncClient,
@@ -290,6 +373,86 @@ class TestCloudCredentials:
         )
         assert response.status_code == 400
         assert response.json()["detail"]["code"] == "invalid_payload"
+
+
+class TestCloudMcpConnections:
+    @pytest.mark.asyncio
+    async def test_unchanged_mcp_sync_touches_existing_row(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        session = await _register_and_login(client, "cloud-mcp-idempotent@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        payload = {
+            "catalogEntryId": "context7",
+            "secretFields": {"api_key": "ctx7sk-example"},
+        }
+
+        response = await client.put(
+            "/v1/cloud/mcp-connections/connection-1",
+            headers=headers,
+            json=payload,
+        )
+        assert response.status_code == 200
+        records = await _list_mcp_connections(db_session, session["user_id"])
+        assert len(records) == 1
+        record = records[0]
+        assert record is not None
+        record_id = record.id
+        old_synced_at = datetime(2024, 1, 1, tzinfo=UTC)
+        record.last_synced_at = old_synced_at
+        await db_session.commit()
+
+        response = await client.put(
+            "/v1/cloud/mcp-connections/connection-1",
+            headers=headers,
+            json=payload,
+        )
+        assert response.status_code == 200
+
+        db_session.expire_all()
+        records = await _list_mcp_connections(db_session, session["user_id"])
+        assert len(records) == 1
+        assert records[0].id == record_id
+        assert records[0].last_synced_at > old_synced_at
+
+    @pytest.mark.asyncio
+    async def test_changed_mcp_sync_rewrites_existing_row(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        session = await _register_and_login(client, "cloud-mcp-changed@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        first = await client.put(
+            "/v1/cloud/mcp-connections/connection-1",
+            headers=headers,
+            json={
+                "catalogEntryId": "context7",
+                "secretFields": {"api_key": "ctx7sk-example"},
+            },
+        )
+        assert first.status_code == 200
+        records = await _list_mcp_connections(db_session, session["user_id"])
+        assert len(records) == 1
+        old_ciphertext = records[0].payload_ciphertext
+
+        second = await client.put(
+            "/v1/cloud/mcp-connections/connection-1",
+            headers=headers,
+            json={
+                "catalogEntryId": "context7",
+                "secretFields": {"api_key": "ctx7sk-updated"},
+            },
+        )
+        assert second.status_code == 200
+
+        db_session.expire_all()
+        records = await _list_mcp_connections(db_session, session["user_id"])
+        assert len(records) == 1
+        assert records[0].payload_ciphertext != old_ciphertext
 
 
 class TestCloudRepoConfig:

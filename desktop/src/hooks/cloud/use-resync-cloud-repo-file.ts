@@ -13,6 +13,7 @@ import {
   cloudRepoConfigsKey,
   isCloudWorkspaceRepoConfigStatusQueryKey,
 } from "./query-keys";
+import { emitRuntimeInputSyncEvent } from "./runtime-input-sync-events";
 
 export function useResyncCloudRepoFile(repository: SettingsRepositoryEntry | null) {
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
@@ -43,7 +44,7 @@ export function useResyncCloudRepoFile(repository: SettingsRepositoryEntry | nul
         content,
       });
     },
-    onSuccess: async (response) => {
+    onSuccess: async (response, variables) => {
       if (!repository?.gitOwner || !repository.gitRepoName) {
         return;
       }
@@ -61,6 +62,18 @@ export function useResyncCloudRepoFile(repository: SettingsRepositoryEntry | nul
       trackProductEvent("cloud_repo_file_resynced", {
         tracked_file_count: response.trackedFiles.length,
       });
+      if (repository.localWorkspaceId) {
+        emitRuntimeInputSyncEvent({
+          trigger: "repo_config_mutation",
+          descriptors: [{
+            kind: "repo_tracked_file",
+            gitOwner: repository.gitOwner,
+            gitRepoName: repository.gitRepoName,
+            localWorkspaceId: repository.localWorkspaceId,
+            relativePath: variables.relativePath,
+          }],
+        });
+      }
     },
     onError: (error) => {
       captureTelemetryException(error, {

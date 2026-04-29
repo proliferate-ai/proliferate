@@ -3,11 +3,7 @@ import type { CloudAgentKind } from "@/lib/integrations/cloud/client";
 import { ProliferateClientError } from "@/lib/integrations/cloud/client";
 import {
   deleteCloudCredential,
-  syncCloudCredential,
 } from "@/lib/integrations/cloud/credentials";
-import {
-  exportSyncableCloudCredential,
-} from "@/platform/tauri/credentials";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { getProviderDisplayName } from "@/config/providers";
@@ -17,6 +13,7 @@ import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
+import { syncLocalCloudCredentialToCloud } from "./cloud-credential-sync";
 
 function describeCloudCredentialActionFailure(
   action: "sync" | "clear",
@@ -43,8 +40,7 @@ export function useCloudCredentialActions() {
       telemetryHandled: true,
     },
     mutationFn: async (provider) => {
-      const exported = await exportSyncableCloudCredential(provider);
-      await syncCloudCredential(provider, exported);
+      await syncLocalCloudCredentialToCloud(provider);
     },
     onSuccess: async (_result, provider) => {
       await Promise.all([

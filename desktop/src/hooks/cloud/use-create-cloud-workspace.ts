@@ -28,7 +28,7 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 import { workspaceCollectionsScopeKey, getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/query-keys";
 import { cloudBillingKey, cloudCredentialsKey } from "./query-keys";
 import { useCloudCredentialActions } from "./use-cloud-credential-actions";
-import { autoSyncDetectedCloudCredentialsIfNeeded } from "@/lib/integrations/cloud/credentials-auto-sync";
+import { autoSyncDetectedCloudCredentialsIfNeeded } from "./cloud-credential-recovery";
 import {
   captureTelemetryException,
   trackProductEvent,

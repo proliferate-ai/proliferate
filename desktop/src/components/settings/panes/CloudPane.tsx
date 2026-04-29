@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Switch } from "@/components/ui/Switch";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
@@ -23,15 +24,38 @@ import { useCloudBilling } from "@/hooks/cloud/use-cloud-billing";
 import { useCloudCredentialActions } from "@/hooks/cloud/use-cloud-credential-actions";
 import { useCloudCredentials } from "@/hooks/cloud/use-cloud-credentials";
 import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
+import { useRuntimeInputSyncSummary } from "@/hooks/cloud/use-runtime-input-sync-summary";
 import type {
   CloudAgentKind,
   CloudCredentialStatus,
   CloudRepoConfigSummary,
 } from "@/lib/integrations/cloud/client";
 import { isCloudAgentKind } from "@/lib/integrations/cloud/client";
+import type { RuntimeInputSyncStatus } from "@/lib/domain/cloud/runtime-input-sync";
+import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 const EMPTY_CLOUD_CREDENTIAL_STATUSES: CloudCredentialStatus[] = [];
+
+const RUNTIME_INPUT_STATUS_LABELS: Record<RuntimeInputSyncStatus, string> = {
+  not_configured: "Not configured",
+  local_only: "Available locally",
+  syncing: "Syncing",
+  synced_to_cloud: "Synced to cloud",
+  sync_failed: "Sync issue",
+  needs_reconnect: "Needs reconnect",
+  cloud_owned_sync_unsupported: "Cloud-owned sync unsupported",
+};
+
+const RUNTIME_INPUT_STATUS_CLASSES: Record<RuntimeInputSyncStatus, string> = {
+  not_configured: "border-border/50 bg-muted/40 text-muted-foreground",
+  local_only: "border-border/50 bg-muted/40 text-foreground",
+  syncing: "border-border/50 bg-muted/40 text-foreground",
+  synced_to_cloud: "border-border/50 bg-muted/40 text-foreground",
+  sync_failed: "border-border/60 bg-muted/40 text-foreground",
+  needs_reconnect: "border-destructive/40 bg-destructive/10 text-destructive",
+  cloud_owned_sync_unsupported: "border-border/50 bg-muted/40 text-muted-foreground",
+};
 
 interface CloudPaneProps {
   repositories: SettingsRepositoryEntry[];
@@ -42,6 +66,7 @@ export function CloudPane({ repositories }: CloudPaneProps) {
   const { data: credentialStatuses = EMPTY_CLOUD_CREDENTIAL_STATUSES } = useCloudCredentials();
   const { data: billingPlan } = useCloudBilling();
   const { data: repoConfigs } = useCloudRepoConfigs();
+  const runtimeInputSync = useRuntimeInputSyncSummary(repositories);
   const { syncCloudCredential, deleteCloudCredential } = useCloudCredentialActions();
   const {
     signIn: signInWithGitHub,
@@ -124,6 +149,33 @@ export function CloudPane({ repositories }: CloudPaneProps) {
       )}
 
       <SettingsCard>
+        <SettingsCardRow
+          label="Runtime input sync"
+          description="Keep agent credentials, API-key Powers, and configured repo files synced to cloud in the background."
+        >
+          <Switch
+            checked={runtimeInputSync.enabled}
+            onChange={(enabled) => {
+              runtimeInputSync.setEnabled(enabled);
+              trackProductEvent("runtime_input_sync_toggled", { enabled });
+            }}
+            aria-label="Start runtime input sync"
+          />
+        </SettingsCardRow>
+        {runtimeInputSync.rows.map((row) => (
+          <SettingsCardRow
+            key={row.id}
+            label={row.label}
+            description={row.description}
+          >
+            <Badge className={RUNTIME_INPUT_STATUS_CLASSES[row.status]}>
+              {RUNTIME_INPUT_STATUS_LABELS[row.status]}
+            </Badge>
+          </SettingsCardRow>
+        ))}
+      </SettingsCard>
+
+      <SettingsCard>
         {rows.map((row) => {
           const status = row.status;
           const syncing = syncingProvider === row.provider;
@@ -150,7 +202,7 @@ export function CloudPane({ repositories }: CloudPaneProps) {
             >
               <div className="flex items-center gap-2">
                 <span className={`text-xs ${status?.synced ? "text-foreground" : "text-muted-foreground"}`}>
-                  {status?.synced ? "Synced" : status?.localDetected ? "Available locally" : "Not detected"}
+                  {status?.synced ? "Synced to cloud" : status?.localDetected ? "Available locally" : "Not detected"}
                 </span>
                 <Button
                   type="button"

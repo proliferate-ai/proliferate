@@ -17,6 +17,7 @@ from proliferate.db.store.cloud_credentials import (
     load_cloud_credentials_for_user,
     persist_cloud_credential_delete,
     persist_cloud_credential_sync,
+    persist_cloud_credential_touch,
 )
 from proliferate.server.cloud.credentials.models import (
     CloudAgentKind,
@@ -223,34 +224,52 @@ async def sync_cloud_credential_for_user(
         if not isinstance(env_vars, Mapping):
             _invalid_payload(f"{spec.provider.capitalize()} cloud sync requires env vars.")
         normalized_env_vars = _normalize_env_payload(spec, env_vars)
-        await persist_cloud_credential_sync(
-            user_id,
-            provider,
-            encrypt_json(
-                {
-                    "provider": provider,
-                    "authMode": "env",
-                    "envVars": normalized_env_vars,
-                }
-            ),
-            "env",
+        payload = {
+            "provider": provider,
+            "authMode": "env",
+            "envVars": normalized_env_vars,
+        }
+        await _persist_cloud_credential_if_changed(
+            user_id=user_id,
+            provider=provider,
+            payload=payload,
+            auth_mode="env",
         )
         return "env"
 
     normalized_files = _normalize_file_payload(spec, body)
+    payload = {
+        "provider": provider,
+        "authMode": "file",
+        "files": normalized_files,
+    }
+    await _persist_cloud_credential_if_changed(
+        user_id=user_id,
+        provider=provider,
+        payload=payload,
+        auth_mode="file",
+    )
+    return "file"
+
+
+async def _persist_cloud_credential_if_changed(
+    *,
+    user_id: UUID,
+    provider: CloudAgentKind,
+    payload: dict[str, object],
+    auth_mode: CloudCredentialAuthMode,
+) -> None:
+    existing_payloads = _active_credential_payloads(await load_cloud_credentials_for_user(user_id))
+    if existing_payloads.get(provider) == payload:
+        await persist_cloud_credential_touch(user_id, provider)
+        return
+
     await persist_cloud_credential_sync(
         user_id,
         provider,
-        encrypt_json(
-            {
-                "provider": provider,
-                "authMode": "file",
-                "files": normalized_files,
-            }
-        ),
-        "file",
+        encrypt_json(payload),
+        auth_mode,
     )
-    return "file"
 
 
 async def delete_cloud_credential_for_user(

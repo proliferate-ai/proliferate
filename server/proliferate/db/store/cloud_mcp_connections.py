@@ -81,6 +81,21 @@ async def upsert_cloud_mcp_connection(
     return existing
 
 
+async def touch_cloud_mcp_connection_sync(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    connection_id: str,
+) -> CloudMcpConnection | None:
+    existing = await get_cloud_mcp_connection(db, user_id, connection_id)
+    if existing is None:
+        return None
+    existing.last_synced_at = utcnow()
+    await db.commit()
+    await db.refresh(existing)
+    return existing
+
+
 async def delete_cloud_mcp_connection(
     db: AsyncSession,
     user_id: UUID,
@@ -116,6 +131,19 @@ async def persist_cloud_mcp_connection_sync(
             catalog_entry_id=catalog_entry_id,
             payload_ciphertext=payload_ciphertext,
             payload_format=payload_format,
+        )
+
+
+async def persist_cloud_mcp_connection_touch(
+    *,
+    user_id: UUID,
+    connection_id: str,
+) -> CloudMcpConnection | None:
+    async with db_engine.async_session_factory() as db:
+        return await touch_cloud_mcp_connection_sync(
+            db,
+            user_id=user_id,
+            connection_id=connection_id,
         )
 
 

@@ -116,11 +116,9 @@ export function GitPanel() {
     });
   };
 
-  // Files with actual code changes default open; binary/no-diff default closed.
-  // Manual toggle overrides the default.
+  // Git diffs default collapsed. Manual toggle opens or recloses each file.
   const isFileExpanded = (file: { path: string; additions: number; deletions: number }) => {
-    const hasChanges = file.additions > 0 || file.deletions > 0;
-    const defaultOpen = hasChanges;
+    const defaultOpen = false;
     return manualToggled.has(file.path) ? !defaultOpen : defaultOpen;
   };
 

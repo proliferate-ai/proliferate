@@ -11,6 +11,7 @@ import { useExportRunningAgentCount } from "@/hooks/app/use-export-running-agent
 import { useAppShortcuts } from "@/hooks/app/use-app-shortcuts"
 import { useAuthBootstrap } from "@/hooks/auth/use-auth-bootstrap"
 import { useAgentAutoReconcile } from "@/hooks/agents/use-agent-auto-reconcile"
+import { useRuntimeInputSyncRuntime } from "@/hooks/cloud/use-runtime-input-sync-runtime"
 import { useConnectorSyncRetryDaemon } from "@/hooks/mcp/use-connector-sync-retry-daemon"
 import { useOnboardingFinalizer } from "@/hooks/onboarding/use-onboarding-finalizer"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/use-shortcut-dispatcher"
@@ -49,6 +50,14 @@ const ChatPlaygroundPage = import.meta.env.DEV
   : null
 
 function App() {
+  return (
+    <AppErrorBoundary>
+      <AppRuntime />
+    </AppErrorBoundary>
+  )
+}
+
+function AppRuntime() {
   const bootstrapAuth = useAuthBootstrap()
   const authStatus = useAuthStore((s) => s.status)
   useExportRunningAgentCount()
@@ -116,40 +125,57 @@ function App() {
   return (
     <>
       <UpdateRestartDialog />
-      <AppErrorBoundary>
-        <InstrumentedRoutes>
-          <Route element={<PublicOnlyRoute />}>
-            <Route path="/login" element={<LoginPage />} />
-          </Route>
-          <Route element={<BootstrappedRoute />}>
-            <Route element={<AuthRequiredGate />}>
-              <Route element={<OnboardingRoute />}>
-                <Route path="/setup" element={<OnboardingPage />} />
-              </Route>
-              <Route element={<OnboardingGate />}>
-                <Route path="/" element={<MainPage />} />
-                <Route path="/powers" element={<PowersPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-              </Route>
+      <RuntimeInputSyncGate />
+      <InstrumentedRoutes>
+        <Route element={<PublicOnlyRoute />}>
+          <Route path="/login" element={<LoginPage />} />
+        </Route>
+        <Route element={<BootstrappedRoute />}>
+          <Route element={<AuthRequiredGate />}>
+            <Route element={<OnboardingRoute />}>
+              <Route path="/setup" element={<OnboardingPage />} />
+            </Route>
+            <Route element={<OnboardingGate />}>
+              <Route path="/" element={<MainPage />} />
+              <Route path="/powers" element={<PowersPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Route>
-          {import.meta.env.DEV && ChatPlaygroundPage && (
-            <Route
-              path="/playground"
-              element={
-                <Suspense fallback={null}>
-                  <ChatPlaygroundPage />
-                </Suspense>
-              }
-            />
-          )}
-        </InstrumentedRoutes>
-        <RepoSetupModalHost />
-      </AppErrorBoundary>
+        </Route>
+        {import.meta.env.DEV && ChatPlaygroundPage && (
+          <Route
+            path="/playground"
+            element={
+              <Suspense fallback={null}>
+                <ChatPlaygroundPage />
+              </Suspense>
+            }
+          />
+        )}
+      </InstrumentedRoutes>
+      <RepoSetupModalHost />
       <ToastContainer />
       <TurnEndCelebration />
     </>
   )
+}
+
+function RuntimeInputSyncGate() {
+  const preferencesHydrated = useUserPreferencesStore((s) => s._hydrated)
+  const cloudRuntimeInputSyncEnabled = useUserPreferencesStore(
+    (s) => s.cloudRuntimeInputSyncEnabled,
+  )
+
+  if (!preferencesHydrated || !cloudRuntimeInputSyncEnabled) {
+    return null
+  }
+
+  return <RuntimeInputSyncRuntimeMount />
+}
+
+function RuntimeInputSyncRuntimeMount() {
+  useRuntimeInputSyncRuntime()
+  return null
 }
 
 export default App

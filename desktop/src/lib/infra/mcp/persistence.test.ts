@@ -79,6 +79,7 @@ import {
   installConnector,
   loadConnectorPaneData,
   reconnectOAuthConnector,
+  setConnectorEnabled,
 } from "@/lib/infra/mcp/persistence";
 import { retryConnectorSync, retryPendingConnectorSync } from "@/lib/infra/mcp/sync";
 
@@ -172,6 +173,17 @@ describe("mcp connector persistence", () => {
 
     const recoveredData = await loadConnectorPaneData();
     expect(recoveredData.installed[0]?.metadata.syncState).toBe("synced");
+  });
+
+  it("does not mark connector sync degraded when toggling enabled state", async () => {
+    await installConnector("context7", "ctx7sk-example");
+    const record = (await loadConnectorPaneData()).installed[0]!;
+
+    await setConnectorEnabled(record.metadata.connectionId, false);
+
+    const paneData = await loadConnectorPaneData();
+    expect(paneData.installed[0]?.metadata.enabled).toBe(false);
+    expect(paneData.installed[0]?.metadata.syncState).toBe("synced");
   });
 
   it("retries pending cloud deletes from tombstones", async () => {

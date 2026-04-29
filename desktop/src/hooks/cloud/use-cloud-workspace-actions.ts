@@ -9,7 +9,7 @@ import {
   stopCloudWorkspace,
   updateCloudWorkspaceBranch,
 } from "@/lib/integrations/cloud/workspaces";
-import { autoSyncDetectedCloudCredentialsIfNeeded } from "@/lib/integrations/cloud/credentials-auto-sync";
+import { autoSyncDetectedCloudCredentialsIfNeeded } from "./cloud-credential-recovery";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { clearCachedCloudConnections } from "@/lib/integrations/anyharness/runtime-target";
 import { useHarnessStore } from "@/stores/sessions/harness-store";

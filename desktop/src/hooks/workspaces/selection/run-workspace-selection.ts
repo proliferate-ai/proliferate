@@ -11,14 +11,71 @@ import {
   startLatencyTimer,
 } from "@/lib/infra/debug-latency";
 import { cancelLatencyFlow } from "@/lib/infra/latency-flow";
+import { cloudBillingKey } from "@/hooks/cloud/query-keys";
+import { isCloudWorkspaceNotReadyError } from "@/hooks/cloud/use-cloud-workspace-connection";
+import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
+import { startCloudWorkspace } from "@/lib/integrations/cloud/workspaces";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
 import { resolveSelectionConnection } from "./connection";
 import { isWorkspaceSelectionCurrent } from "./guards";
 import type {
+  ReadyCloudReadinessResult,
+  WorkspaceConnectionResult,
   WorkspaceSelectionContext,
   WorkspaceSelectionDeps,
   WorkspaceSelectionRequest,
 } from "./types";
+
+async function invalidateCloudWorkspaceStartState(
+  deps: WorkspaceSelectionDeps,
+  runtimeUrl: string,
+): Promise<void> {
+  await Promise.all([
+    deps.queryClient.invalidateQueries({
+      queryKey: workspaceCollectionsScopeKey(runtimeUrl),
+    }),
+    deps.queryClient.invalidateQueries({
+      queryKey: cloudBillingKey(),
+    }),
+  ]);
+}
+
+async function resolveCloudSelectionConnection(
+  deps: WorkspaceSelectionDeps,
+  context: WorkspaceSelectionContext,
+  cloudReadiness: ReadyCloudReadinessResult,
+  latencyFlowId: string | null | undefined,
+): Promise<WorkspaceConnectionResult | null> {
+  try {
+    return await resolveSelectionConnection(deps, context, cloudReadiness);
+  } catch (error) {
+    if (
+      cloudReadiness.kind !== "cloud-ready"
+      || !isCloudWorkspaceNotReadyError(error)
+    ) {
+      throw error;
+    }
+
+    const startedWorkspace = await startCloudWorkspace(cloudReadiness.cloudWorkspaceId);
+    await invalidateCloudWorkspaceStartState(
+      deps,
+      useHarnessStore.getState().runtimeUrl,
+    );
+    if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
+      cancelLatencyFlow(latencyFlowId, "workspace_selection_stale");
+      return null;
+    }
+    if (startedWorkspace.status !== "ready") {
+      cancelLatencyFlow(latencyFlowId, "cloud_workspace_start_pending", {
+        cloudWorkspaceId: cloudReadiness.cloudWorkspaceId,
+        status: startedWorkspace.status,
+      });
+      return null;
+    }
+
+    return await resolveSelectionConnection(deps, context, cloudReadiness);
+  }
+}
 
 export async function runWorkspaceSelection(
   deps: WorkspaceSelectionDeps,
@@ -163,7 +220,15 @@ export async function runWorkspaceSelection(
     return;
   }
 
-  const connectionResult = await resolveSelectionConnection(deps, context, cloudReadiness);
+  const connectionResult = await resolveCloudSelectionConnection(
+    deps,
+    context,
+    cloudReadiness,
+    request.options?.latencyFlowId,
+  );
+  if (connectionResult === null) {
+    return;
+  }
   if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
     cancelLatencyFlow(request.options?.latencyFlowId, "workspace_selection_stale");
     return;
