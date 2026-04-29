@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
+    BILLING_HOLD_KIND_PAYMENT_FAILED,
     BILLING_HOLD_STATUS_ACTIVE,
     BILLING_MODE_ENFORCE,
     BILLING_MODE_OBSERVE,
@@ -81,6 +82,13 @@ class ClaimedUsageExport:
     quantity_seconds: float
     idempotency_key: str
     accounted_until: datetime
+
+
+@dataclass(frozen=True)
+class BillingSubjectStripeState:
+    billing_subject_id: UUID
+    user_id: UUID | None
+    stripe_customer_id: str | None
 
 
 class _GrantKind(StrEnum):
@@ -271,6 +279,68 @@ async def set_billing_subject_overage_enabled(
     return subject
 
 
+def _billing_subject_stripe_state(subject: BillingSubject) -> BillingSubjectStripeState:
+    return BillingSubjectStripeState(
+        billing_subject_id=subject.id,
+        user_id=subject.user_id,
+        stripe_customer_id=subject.stripe_customer_id,
+    )
+
+
+async def get_or_create_stripe_customer_state_for_user(user_id: UUID) -> BillingSubjectStripeState:
+    async with db_engine.async_session_factory() as db:
+        subject = await ensure_personal_billing_subject(db, user_id)
+        state = _billing_subject_stripe_state(subject)
+        await db.commit()
+        return state
+
+
+async def bind_stripe_customer_to_billing_subject(
+    *,
+    billing_subject_id: UUID,
+    stripe_customer_id: str,
+) -> BillingSubjectStripeState:
+    async with db_engine.async_session_factory() as db:
+        subject = await set_billing_subject_stripe_customer(
+            db,
+            billing_subject_id=billing_subject_id,
+            stripe_customer_id=stripe_customer_id,
+        )
+        state = _billing_subject_stripe_state(subject)
+        await db.commit()
+        return state
+
+
+async def set_overage_enabled_for_user(
+    *,
+    user_id: UUID,
+    overage_enabled: bool,
+) -> BillingSubjectStripeState:
+    async with db_engine.async_session_factory() as db:
+        subject = await ensure_personal_billing_subject(db, user_id)
+        subject = await set_billing_subject_overage_enabled(
+            db,
+            billing_subject_id=subject.id,
+            overage_enabled=overage_enabled,
+        )
+        state = _billing_subject_stripe_state(subject)
+        await db.commit()
+        return state
+
+
+async def get_billing_subject_for_stripe_reference(
+    *,
+    billing_subject_id: UUID | None,
+    stripe_customer_id: str | None,
+) -> BillingSubject | None:
+    async with db_engine.async_session_factory() as db:
+        if billing_subject_id is not None:
+            return await db.get(BillingSubject, billing_subject_id)
+        if stripe_customer_id is not None:
+            return await get_billing_subject_by_stripe_customer(db, stripe_customer_id)
+    return None
+
+
 async def upsert_billing_subscription(
     db: AsyncSession,
     *,
@@ -373,6 +443,131 @@ async def ensure_billing_grant(
     if grant is None:
         raise RuntimeError("Billing grant disappeared after creation.")
     return grant
+
+
+async def upsert_stripe_subscription_record(
+    *,
+    billing_subject_id: UUID,
+    stripe_subscription_id: str,
+    stripe_customer_id: str,
+    status: str,
+    cancel_at_period_end: bool,
+    canceled_at: datetime | None,
+    current_period_start: datetime | None,
+    current_period_end: datetime | None,
+    cloud_monthly_price_id: str | None,
+    overage_price_id: str | None,
+    monthly_subscription_item_id: str | None,
+    metered_subscription_item_id: str | None,
+    latest_invoice_id: str | None,
+    latest_invoice_status: str | None,
+    hosted_invoice_url: str | None,
+) -> BillingSubscription:
+    async with db_engine.async_session_factory() as db:
+        subscription = await upsert_billing_subscription(
+            db,
+            billing_subject_id=billing_subject_id,
+            stripe_subscription_id=stripe_subscription_id,
+            stripe_customer_id=stripe_customer_id,
+            status=status,
+            cancel_at_period_end=cancel_at_period_end,
+            canceled_at=canceled_at,
+            current_period_start=current_period_start,
+            current_period_end=current_period_end,
+            cloud_monthly_price_id=cloud_monthly_price_id,
+            overage_price_id=overage_price_id,
+            monthly_subscription_item_id=monthly_subscription_item_id,
+            metered_subscription_item_id=metered_subscription_item_id,
+            latest_invoice_id=latest_invoice_id,
+            latest_invoice_status=latest_invoice_status,
+            hosted_invoice_url=hosted_invoice_url,
+        )
+        await db.commit()
+        return subscription
+
+
+async def ensure_billing_grant_record(
+    *,
+    user_id: UUID,
+    billing_subject_id: UUID,
+    grant_type: str,
+    hours_granted: float,
+    effective_at: datetime,
+    expires_at: datetime | None,
+    source_ref: str,
+) -> BillingGrant:
+    async with db_engine.async_session_factory() as db:
+        grant = await ensure_billing_grant(
+            db,
+            user_id=user_id,
+            billing_subject_id=billing_subject_id,
+            grant_type=grant_type,
+            hours_granted=hours_granted,
+            effective_at=effective_at,
+            expires_at=expires_at,
+            source_ref=source_ref,
+        )
+        await db.commit()
+        return grant
+
+
+async def apply_payment_failed_hold(
+    *,
+    billing_subject_id: UUID,
+    source: str,
+    source_ref: str | None,
+) -> None:
+    async with db_engine.async_session_factory() as db:
+        existing = (
+            await db.execute(
+                select(BillingHold).where(
+                    BillingHold.billing_subject_id == billing_subject_id,
+                    BillingHold.kind == BILLING_HOLD_KIND_PAYMENT_FAILED,
+                    BillingHold.status == BILLING_HOLD_STATUS_ACTIVE,
+                )
+            )
+        ).scalar_one_or_none()
+        now = utcnow()
+        if existing is not None:
+            existing.source_ref = source_ref or existing.source_ref
+            existing.updated_at = now
+        else:
+            db.add(
+                BillingHold(
+                    billing_subject_id=billing_subject_id,
+                    kind=BILLING_HOLD_KIND_PAYMENT_FAILED,
+                    status=BILLING_HOLD_STATUS_ACTIVE,
+                    source=source,
+                    source_ref=source_ref,
+                    created_at=now,
+                    resolved_at=None,
+                    updated_at=now,
+                )
+            )
+        await db.commit()
+
+
+async def clear_payment_failed_holds(*, billing_subject_id: UUID) -> None:
+    async with db_engine.async_session_factory() as db:
+        holds = list(
+            (
+                await db.execute(
+                    select(BillingHold).where(
+                        BillingHold.billing_subject_id == billing_subject_id,
+                        BillingHold.kind == BILLING_HOLD_KIND_PAYMENT_FAILED,
+                        BillingHold.status == BILLING_HOLD_STATUS_ACTIVE,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        now = utcnow()
+        for hold in holds:
+            hold.status = "resolved"
+            hold.resolved_at = now
+            hold.updated_at = now
+        await db.commit()
 
 
 async def list_usage_segments(
@@ -702,6 +897,43 @@ async def mark_webhook_event_failed(
     receipt.updated_at = utcnow()
     await db.flush()
     return receipt
+
+
+async def claim_webhook_event(
+    *,
+    provider: str,
+    event_id: str,
+    event_type: str,
+    external_sandbox_id: str | None = None,
+) -> WebhookEventReceipt | None:
+    async with db_engine.async_session_factory() as db:
+        receipt = await claim_webhook_event_receipt(
+            db,
+            provider=provider,
+            event_id=event_id,
+            event_type=event_type,
+            external_sandbox_id=external_sandbox_id,
+        )
+        await db.commit()
+        return receipt
+
+
+async def mark_webhook_event_processed_by_id(*, receipt_id: UUID) -> WebhookEventReceipt:
+    async with db_engine.async_session_factory() as db:
+        receipt = await mark_webhook_event_processed(db, receipt_id=receipt_id)
+        await db.commit()
+        return receipt
+
+
+async def mark_webhook_event_failed_by_id(
+    *,
+    receipt_id: UUID,
+    error: str,
+) -> WebhookEventReceipt:
+    async with db_engine.async_session_factory() as db:
+        receipt = await mark_webhook_event_failed(db, receipt_id=receipt_id, error=error)
+        await db.commit()
+        return receipt
 
 
 async def record_grant_consumption(

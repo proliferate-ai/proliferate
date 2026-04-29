@@ -30,7 +30,6 @@ from proliferate.constants.billing import (
     WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD,
     WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED,
 )
-from proliferate.db import engine as db_engine
 from proliferate.db.models.auth import User
 from proliferate.db.models.billing import (
     BillingEntitlement,
@@ -42,8 +41,9 @@ from proliferate.db.models.billing import (
 from proliferate.db.store.billing import (
     BillingSnapshotState,
     account_usage_for_billing_subject,
+    bind_stripe_customer_to_billing_subject,
     claim_usage_exports_for_sending,
-    ensure_personal_billing_subject,
+    get_or_create_stripe_customer_state_for_user,
     list_billing_subject_ids_for_usage_accounting,
     load_billing_snapshot_state,
     load_billing_snapshot_state_for_subject,
@@ -51,8 +51,7 @@ from proliferate.db.store.billing import (
     mark_usage_export_succeeded,
     record_billing_decision_event,
     resolve_billing_subject_id_for_workspace,
-    set_billing_subject_overage_enabled,
-    set_billing_subject_stripe_customer,
+    set_overage_enabled_for_user,
 )
 from proliferate.integrations.billing import stripe as stripe_billing
 from proliferate.server.billing.models import (
@@ -397,33 +396,29 @@ def _require_redirect_urls() -> tuple[str, str, str]:
 
 
 async def _ensure_stripe_customer_for_user(user: User) -> tuple[UUID, str]:
-    async with db_engine.async_session_factory() as db:
-        subject = await ensure_personal_billing_subject(db, user.id)
-        if subject.stripe_customer_id:
-            await db.commit()
-            return subject.id, subject.stripe_customer_id
-        try:
-            customer = await stripe_billing.create_customer(
-                email=user.email,
-                billing_subject_id=str(subject.id),
-                idempotency_key=f"customer:{subject.id}",
-            )
-        except stripe_billing.StripeBillingError as error:
-            raise _map_stripe_error(error) from error
-        customer_id = customer.get("id")
-        if not isinstance(customer_id, str):
-            raise BillingServiceError(
-                "stripe_invalid_response",
-                "Stripe did not return a customer id.",
-                status_code=502,
-            )
-        await set_billing_subject_stripe_customer(
-            db,
-            billing_subject_id=subject.id,
-            stripe_customer_id=customer_id,
+    state = await get_or_create_stripe_customer_state_for_user(user.id)
+    if state.stripe_customer_id:
+        return state.billing_subject_id, state.stripe_customer_id
+    try:
+        customer = await stripe_billing.create_customer(
+            email=user.email,
+            billing_subject_id=str(state.billing_subject_id),
+            idempotency_key=f"customer:{state.billing_subject_id}",
         )
-        await db.commit()
-        return subject.id, customer_id
+    except stripe_billing.StripeBillingError as error:
+        raise _map_stripe_error(error) from error
+    customer_id = customer.get("id")
+    if not isinstance(customer_id, str):
+        raise BillingServiceError(
+            "stripe_invalid_response",
+            "Stripe did not return a customer id.",
+            status_code=502,
+        )
+    state = await bind_stripe_customer_to_billing_subject(
+        billing_subject_id=state.billing_subject_id,
+        stripe_customer_id=customer_id,
+    )
+    return state.billing_subject_id, customer_id
 
 
 async def create_cloud_checkout_session(user: User) -> BillingUrlResponse:
@@ -499,14 +494,7 @@ async def create_customer_portal_session(user: User) -> BillingUrlResponse:
 
 
 async def update_overage_settings(user: User, *, enabled: bool) -> OverageSettingsResponse:
-    async with db_engine.async_session_factory() as db:
-        subject = await ensure_personal_billing_subject(db, user.id)
-        await set_billing_subject_overage_enabled(
-            db,
-            billing_subject_id=subject.id,
-            overage_enabled=enabled,
-        )
-        await db.commit()
+    await set_overage_enabled_for_user(user_id=user.id, overage_enabled=enabled)
     return OverageSettingsResponse(overage_enabled=enabled)
 
 

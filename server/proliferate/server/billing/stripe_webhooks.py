@@ -11,25 +11,21 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from proliferate.config import settings
 from proliferate.constants.billing import (
-    BILLING_HOLD_KIND_PAYMENT_FAILED,
-    BILLING_HOLD_STATUS_ACTIVE,
     MONTHLY_CLOUD_GRANT_TYPE,
     REFILL_10H_GRANT_TYPE,
 )
-from proliferate.db import engine as db_engine
-from proliferate.db.models.billing import BillingHold, BillingSubject
+from proliferate.db.models.billing import BillingSubject
 from proliferate.db.store.billing import (
-    claim_webhook_event_receipt,
-    ensure_billing_grant,
-    get_billing_subject_by_stripe_customer,
-    mark_webhook_event_failed,
-    mark_webhook_event_processed,
-    upsert_billing_subscription,
+    apply_payment_failed_hold,
+    claim_webhook_event,
+    clear_payment_failed_holds,
+    ensure_billing_grant_record,
+    get_billing_subject_for_stripe_reference,
+    mark_webhook_event_failed_by_id,
+    mark_webhook_event_processed_by_id,
+    upsert_stripe_subscription_record,
 )
 from proliferate.integrations.billing import stripe as stripe_billing
 from proliferate.server.billing.models import BillingServiceError, StripeWebhookAck
@@ -80,26 +76,19 @@ async def handle_stripe_webhook(
             status_code=400,
         )
 
-    async with db_engine.async_session_factory() as db:
-        receipt = await claim_webhook_event_receipt(
-            db,
-            provider=STRIPE_PROVIDER,
-            event_id=event_id,
-            event_type=event_type,
-        )
-        await db.commit()
+    receipt = await claim_webhook_event(
+        provider=STRIPE_PROVIDER,
+        event_id=event_id,
+        event_type=event_type,
+    )
 
     if receipt is not None:
         try:
             await _dispatch_stripe_event(event)
         except Exception as exc:
-            async with db_engine.async_session_factory() as db:
-                await mark_webhook_event_failed(db, receipt_id=receipt.id, error=str(exc))
-                await db.commit()
+            await mark_webhook_event_failed_by_id(receipt_id=receipt.id, error=str(exc))
             raise
-        async with db_engine.async_session_factory() as db:
-            await mark_webhook_event_processed(db, receipt_id=receipt.id)
-            await db.commit()
+        await mark_webhook_event_processed_by_id(receipt_id=receipt.id)
 
     livemode = event.get("livemode")
     return StripeWebhookAck(
@@ -240,13 +229,16 @@ async def _subject_from_object(stripe_object: dict[str, Any]) -> BillingSubject 
     subject_id = metadata.get("billing_subject_id")
     if subject_id is None:
         subject_id = _subscription_parent_metadata(stripe_object).get("billing_subject_id")
-    async with db_engine.async_session_factory() as db:
-        if subject_id:
-            return await db.get(BillingSubject, UUID(subject_id))
-        customer_id = _id_from_expandable(stripe_object.get("customer"))
-        if customer_id:
-            return await get_billing_subject_by_stripe_customer(db, customer_id)
-    return None
+    billing_subject_id: UUID | None = None
+    if subject_id:
+        try:
+            billing_subject_id = UUID(subject_id)
+        except ValueError:
+            return None
+    return await get_billing_subject_for_stripe_reference(
+        billing_subject_id=billing_subject_id,
+        stripe_customer_id=_id_from_expandable(stripe_object.get("customer")),
+    )
 
 
 async def _handle_checkout_session_completed(session: dict[str, Any]) -> None:
@@ -261,18 +253,15 @@ async def _handle_checkout_session_completed(session: dict[str, Any]) -> None:
     lines = await stripe_billing.list_checkout_session_line_items(session_id)
     if not stripe_billing.line_items_include_price(lines, settings.stripe_refill_10h_price_id):
         return
-    async with db_engine.async_session_factory() as db:
-        await ensure_billing_grant(
-            db,
-            user_id=subject.user_id,
-            billing_subject_id=subject.id,
-            grant_type=REFILL_10H_GRANT_TYPE,
-            hours_granted=10.0,
-            effective_at=datetime.now(UTC),
-            expires_at=None,
-            source_ref=f"stripe:checkout:{session_id}:refill_10h",
-        )
-        await db.commit()
+    await ensure_billing_grant_record(
+        user_id=subject.user_id,
+        billing_subject_id=subject.id,
+        grant_type=REFILL_10H_GRANT_TYPE,
+        hours_granted=10.0,
+        effective_at=datetime.now(UTC),
+        expires_at=None,
+        source_ref=f"stripe:checkout:{session_id}:refill_10h",
+    )
 
 
 async def _sync_subscription(subscription: dict[str, Any]) -> None:
@@ -294,30 +283,27 @@ async def _sync_subscription(subscription: dict[str, Any]) -> None:
         monthly_item_id=monthly_item_id,
         metered_item_id=metered_item_id,
     )
-    async with db_engine.async_session_factory() as db:
-        await upsert_billing_subscription(
-            db,
-            billing_subject_id=subject.id,
-            stripe_subscription_id=subscription_id,
-            stripe_customer_id=customer_id,
-            status=status,
-            cancel_at_period_end=bool(subscription.get("cancel_at_period_end")),
-            canceled_at=_datetime_from_timestamp(subscription.get("canceled_at")),
-            current_period_start=current_period_start,
-            current_period_end=current_period_end,
-            cloud_monthly_price_id=(
-                settings.stripe_cloud_monthly_price_id if monthly_item_id is not None else None
-            ),
-            overage_price_id=(
-                settings.stripe_sandbox_overage_price_id if metered_item_id is not None else None
-            ),
-            monthly_subscription_item_id=monthly_item_id,
-            metered_subscription_item_id=metered_item_id,
-            latest_invoice_id=_id_from_expandable(subscription.get("latest_invoice")),
-            latest_invoice_status=None,
-            hosted_invoice_url=None,
-        )
-        await db.commit()
+    await upsert_stripe_subscription_record(
+        billing_subject_id=subject.id,
+        stripe_subscription_id=subscription_id,
+        stripe_customer_id=customer_id,
+        status=status,
+        cancel_at_period_end=bool(subscription.get("cancel_at_period_end")),
+        canceled_at=_datetime_from_timestamp(subscription.get("canceled_at")),
+        current_period_start=current_period_start,
+        current_period_end=current_period_end,
+        cloud_monthly_price_id=(
+            settings.stripe_cloud_monthly_price_id if monthly_item_id is not None else None
+        ),
+        overage_price_id=(
+            settings.stripe_sandbox_overage_price_id if metered_item_id is not None else None
+        ),
+        monthly_subscription_item_id=monthly_item_id,
+        metered_subscription_item_id=metered_item_id,
+        latest_invoice_id=_id_from_expandable(subscription.get("latest_invoice")),
+        latest_invoice_status=None,
+        hosted_invoice_url=None,
+    )
 
 
 def _subscription_item_ids(subscription: dict[str, Any]) -> tuple[str | None, str | None]:
@@ -414,19 +400,16 @@ async def _handle_invoice_paid(invoice: dict[str, Any]) -> None:
         or datetime.now(UTC)
     )
     period_end = line_period_end or _datetime_from_timestamp(invoice.get("period_end"))
-    async with db_engine.async_session_factory() as db:
-        await ensure_billing_grant(
-            db,
-            user_id=subject.user_id,
-            billing_subject_id=subject.id,
-            grant_type=MONTHLY_CLOUD_GRANT_TYPE,
-            hours_granted=100.0,
-            effective_at=period_start,
-            expires_at=period_end,
-            source_ref=f"stripe:invoice:{invoice_id}:cloud_monthly",
-        )
-        await _clear_payment_hold(db, billing_subject_id=subject.id)
-        await db.commit()
+    await ensure_billing_grant_record(
+        user_id=subject.user_id,
+        billing_subject_id=subject.id,
+        grant_type=MONTHLY_CLOUD_GRANT_TYPE,
+        hours_granted=100.0,
+        effective_at=period_start,
+        expires_at=period_end,
+        source_ref=f"stripe:invoice:{invoice_id}:cloud_monthly",
+    )
+    await clear_payment_failed_holds(billing_subject_id=subject.id)
 
 
 async def _handle_invoice_payment_failed(invoice: dict[str, Any]) -> None:
@@ -443,79 +426,22 @@ async def _handle_invoice_payment_failed(invoice: dict[str, Any]) -> None:
             subject = await _subject_from_object(subscription)
     if subject is None:
         return
-    async with db_engine.async_session_factory() as db:
-        await _apply_payment_hold(
-            db,
-            billing_subject_id=subject.id,
-            source_ref=_id_from_expandable(invoice.get("id")),
-        )
-        await db.commit()
+    await apply_payment_failed_hold(
+        billing_subject_id=subject.id,
+        source=PAYMENT_HOLD_SOURCE,
+        source_ref=_id_from_expandable(invoice.get("id")),
+    )
 
 
 async def _apply_payment_hold_for_subscription(subscription: dict[str, Any]) -> None:
     subject = await _subject_from_object(subscription)
     if subject is None:
         return
-    async with db_engine.async_session_factory() as db:
-        await _apply_payment_hold(
-            db,
-            billing_subject_id=subject.id,
-            source_ref=_id_from_expandable(subscription.get("id")),
-        )
-        await db.commit()
-
-
-async def _apply_payment_hold(
-    db: AsyncSession,
-    *,
-    billing_subject_id: UUID,
-    source_ref: str | None,
-) -> None:
-    existing = (
-        await db.execute(
-            select(BillingHold).where(
-                BillingHold.billing_subject_id == billing_subject_id,
-                BillingHold.kind == BILLING_HOLD_KIND_PAYMENT_FAILED,
-                BillingHold.status == BILLING_HOLD_STATUS_ACTIVE,
-            )
-        )
-    ).scalar_one_or_none()
-    if existing is not None:
-        existing.source_ref = source_ref or existing.source_ref
-        existing.updated_at = datetime.now(UTC)
-        return
-    db.add(
-        BillingHold(
-            billing_subject_id=billing_subject_id,
-            kind=BILLING_HOLD_KIND_PAYMENT_FAILED,
-            status=BILLING_HOLD_STATUS_ACTIVE,
-            source=PAYMENT_HOLD_SOURCE,
-            source_ref=source_ref,
-            created_at=datetime.now(UTC),
-            resolved_at=None,
-            updated_at=datetime.now(UTC),
-        )
+    await apply_payment_failed_hold(
+        billing_subject_id=subject.id,
+        source=PAYMENT_HOLD_SOURCE,
+        source_ref=_id_from_expandable(subscription.get("id")),
     )
-
-
-async def _clear_payment_hold(db: AsyncSession, *, billing_subject_id: UUID) -> None:
-    holds = list(
-        (
-            await db.execute(
-                select(BillingHold).where(
-                    BillingHold.billing_subject_id == billing_subject_id,
-                    BillingHold.kind == BILLING_HOLD_KIND_PAYMENT_FAILED,
-                    BillingHold.status == BILLING_HOLD_STATUS_ACTIVE,
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-    for hold in holds:
-        hold.status = "resolved"
-        hold.resolved_at = datetime.now(UTC)
-        hold.updated_at = datetime.now(UTC)
 
 
 def _verify_stripe_signature(
