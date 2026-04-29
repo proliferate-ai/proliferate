@@ -6,42 +6,36 @@ from uuid import uuid4
 
 import pytest
 
-from proliferate.constants.billing import BILLING_MODE_ENFORCE
-from proliferate.server.billing.models import BillingSnapshot
+from proliferate.constants.billing import (
+    WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT,
+    WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
+)
+from proliferate.server.billing.models import SandboxStartAuthorization
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workspaces import service as workspace_service
 
 
-def _blocked_billing_snapshot(*, blocked_reason: str) -> BillingSnapshot:
-    return BillingSnapshot(
-        plan="free",
-        billing_mode=BILLING_MODE_ENFORCE,
-        is_unlimited=False,
-        over_quota=blocked_reason == "sandbox_hours_exhausted",
-        included_hours=20.0,
-        used_hours=20.0,
-        remaining_hours=0.0,
-        concurrent_sandbox_limit=2,
-        active_sandbox_count=2 if blocked_reason == "concurrency_limit" else 0,
-        blocked=True,
-        blocked_reason=blocked_reason,
+def _sandbox_start_authorization(
+    *,
+    start_block_reason: str | None = None,
+    active_spend_hold: bool = False,
+    active_sandbox_count: int = 0,
+) -> SandboxStartAuthorization:
+    return SandboxStartAuthorization(
+        allowed=start_block_reason is None,
+        billing_subject_id=uuid4(),
+        start_blocked=start_block_reason is not None,
+        start_block_reason=start_block_reason,
+        active_spend_hold=active_spend_hold,
+        hold_reason=start_block_reason if active_spend_hold else None,
+        message=None,
+        active_sandbox_count=active_sandbox_count,
+        remaining_seconds=0.0 if start_block_reason else 3600.0,
     )
 
 
-def _unblocked_billing_snapshot() -> BillingSnapshot:
-    return BillingSnapshot(
-        plan="free",
-        billing_mode=BILLING_MODE_ENFORCE,
-        is_unlimited=False,
-        over_quota=False,
-        included_hours=20.0,
-        used_hours=1.0,
-        remaining_hours=19.0,
-        concurrent_sandbox_limit=2,
-        active_sandbox_count=0,
-        blocked=False,
-        blocked_reason=None,
-    )
+def _allowed_authorization() -> SandboxStartAuthorization:
+    return _sandbox_start_authorization()
 
 
 @pytest.mark.asyncio
@@ -56,8 +50,11 @@ async def test_create_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     async def _existing_workspace(**_kwargs):
         return None
 
-    async def _billing_snapshot(_user_id) -> BillingSnapshot:
-        return _blocked_billing_snapshot(blocked_reason="sandbox_hours_exhausted")
+    async def _authorize_sandbox_start(**_kwargs) -> SandboxStartAuthorization:
+        return _sandbox_start_authorization(
+            start_block_reason=WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
+            active_spend_hold=True,
+        )
 
     async def _unexpected(*_args, **_kwargs) -> None:
         raise AssertionError("downstream workspace creation should not run when billing blocks")
@@ -69,7 +66,7 @@ async def test_create_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
     monkeypatch.setattr(workspace_service, "load_existing_cloud_workspace", _existing_workspace)
     monkeypatch.setattr(workspace_service, "load_repo_config_value", _repo_config_value)
-    monkeypatch.setattr(workspace_service, "get_billing_snapshot", _billing_snapshot)
+    monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorize_sandbox_start)
     monkeypatch.setattr(workspace_service, "load_cloud_credential_statuses", _unexpected)
     monkeypatch.setattr(workspace_service, "create_cloud_workspace_for_user", _unexpected)
 
@@ -109,15 +106,18 @@ async def test_start_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     async def _repo_branches(*_args, **_kwargs) -> SimpleNamespace:
         return SimpleNamespace(branches=["main"])
 
-    async def _billing_snapshot(_user_id) -> BillingSnapshot:
-        return _blocked_billing_snapshot(blocked_reason="concurrency_limit")
+    async def _authorize_sandbox_start(**_kwargs) -> SandboxStartAuthorization:
+        return _sandbox_start_authorization(
+            start_block_reason=WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT,
+            active_sandbox_count=2,
+        )
 
     async def _unexpected(*_args, **_kwargs) -> None:
         raise AssertionError("workspace start should stop before credential/runtime work")
 
     monkeypatch.setattr(workspace_service, "_require_cloud_workspace_for_user", _require_workspace)
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
-    monkeypatch.setattr(workspace_service, "get_billing_snapshot", _billing_snapshot)
+    monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorize_sandbox_start)
     monkeypatch.setattr(workspace_service, "load_cloud_credential_statuses", _unexpected)
     monkeypatch.setattr(workspace_service, "ensure_workspace_runtime_ready", _unexpected)
     monkeypatch.setattr(workspace_service, "save_workspace", _unexpected)
@@ -127,7 +127,7 @@ async def test_start_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
 
     assert exc_info.value.code == "quota_exceeded"
     assert exc_info.value.status_code == 403
-    assert "concurrent sandbox limit" in exc_info.value.message
+    assert "Sandbox limit reached" in exc_info.value.message
 
 
 @pytest.mark.asyncio
@@ -164,8 +164,8 @@ async def test_start_cloud_workspace_requeues_when_persisted_sandbox_lookup_fail
     async def _repo_branches(*_args, **_kwargs) -> SimpleNamespace:
         return SimpleNamespace(branches=["main"])
 
-    async def _billing_snapshot(_user_id) -> BillingSnapshot:
-        return _unblocked_billing_snapshot()
+    async def _authorize_sandbox_start(**_kwargs) -> SandboxStartAuthorization:
+        return _allowed_authorization()
 
     async def _credential_statuses(_user_id):
         return [SimpleNamespace(provider="claude", synced=True)]
@@ -187,7 +187,7 @@ async def test_start_cloud_workspace_requeues_when_persisted_sandbox_lookup_fail
     async def _save_workspace(_workspace):
         saved_statuses.append((_workspace.status, _workspace.last_error))
 
-    async def _build_workspace_detail(_user_id, _workspace):
+    async def _build_workspace_detail(_workspace):
         return SimpleNamespace(status=_workspace.status)
 
     monkeypatch.setattr(
@@ -196,7 +196,7 @@ async def test_start_cloud_workspace_requeues_when_persisted_sandbox_lookup_fail
         _require_workspace,
     )
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
-    monkeypatch.setattr(workspace_service, "get_billing_snapshot", _billing_snapshot)
+    monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorize_sandbox_start)
     monkeypatch.setattr(
         workspace_service,
         "load_cloud_credential_statuses",
@@ -257,8 +257,8 @@ async def test_start_cloud_workspace_requeues_queued_workspace_for_mobility(
     async def _repo_branches(*_args, **_kwargs) -> SimpleNamespace:
         return SimpleNamespace(branches=["main"])
 
-    async def _billing_snapshot(_user_id) -> BillingSnapshot:
-        return _unblocked_billing_snapshot()
+    async def _authorize_sandbox_start(**_kwargs) -> SandboxStartAuthorization:
+        return _allowed_authorization()
 
     async def _credential_statuses(_user_id):
         return [SimpleNamespace(provider="claude", synced=True)]
@@ -271,7 +271,7 @@ async def test_start_cloud_workspace_requeues_queued_workspace_for_mobility(
         saved_statuses.append((_workspace.status, _workspace.last_error))
         return _workspace
 
-    async def _build_workspace_detail(_user_id, _workspace):
+    async def _build_workspace_detail(_workspace):
         return SimpleNamespace(status=_workspace.status)
 
     monkeypatch.setattr(
@@ -280,7 +280,7 @@ async def test_start_cloud_workspace_requeues_queued_workspace_for_mobility(
         _require_workspace,
     )
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
-    monkeypatch.setattr(workspace_service, "get_billing_snapshot", _billing_snapshot)
+    monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorize_sandbox_start)
     monkeypatch.setattr(
         workspace_service,
         "load_cloud_credential_statuses",
@@ -347,8 +347,8 @@ async def test_start_cloud_workspace_marks_ready_when_reconnect_succeeds(
     async def _repo_branches(*_args, **_kwargs) -> SimpleNamespace:
         return SimpleNamespace(branches=["main"])
 
-    async def _billing_snapshot(_user_id) -> BillingSnapshot:
-        return _unblocked_billing_snapshot()
+    async def _authorize_sandbox_start(**_kwargs) -> SandboxStartAuthorization:
+        return _allowed_authorization()
 
     async def _credential_statuses(_user_id):
         return [SimpleNamespace(provider="claude", synced=True)]
@@ -366,7 +366,7 @@ async def test_start_cloud_workspace_marks_ready_when_reconnect_succeeds(
     async def _save_workspace(_workspace):
         saved_statuses.append((_workspace.status, _workspace.status_detail))
 
-    async def _build_workspace_detail(_user_id, _workspace):
+    async def _build_workspace_detail(_workspace):
         return SimpleNamespace(status=_workspace.status)
 
     async def _load_workspace_by_id(_workspace_id):
@@ -378,7 +378,7 @@ async def test_start_cloud_workspace_marks_ready_when_reconnect_succeeds(
         _require_workspace,
     )
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
-    monkeypatch.setattr(workspace_service, "get_billing_snapshot", _billing_snapshot)
+    monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorize_sandbox_start)
     monkeypatch.setattr(
         workspace_service,
         "load_cloud_credential_statuses",
