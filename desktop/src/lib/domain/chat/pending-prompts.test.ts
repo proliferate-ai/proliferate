@@ -52,6 +52,7 @@ describe("pending prompt visibility", () => {
           seq: 7,
           promptId: "prompt-1",
           text: "Authoritative text",
+          contentParts: [],
           queuedAt: "2026-04-13T12:00:01.000Z",
         },
       ],

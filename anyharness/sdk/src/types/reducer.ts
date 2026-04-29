@@ -41,6 +41,7 @@ export interface PendingPromptEntry {
   seq: number;
   promptId: string | null;
   text: string;
+  contentParts: ContentPart[];
   queuedAt: string;
 }
 

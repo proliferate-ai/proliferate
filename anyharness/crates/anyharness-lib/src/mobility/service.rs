@@ -441,6 +441,7 @@ impl MobilityService {
                 bundle.live_config_snapshot.as_ref(),
                 &bundle.pending_config_changes,
                 &bundle.pending_prompts,
+                &bundle.prompt_attachments,
                 &bundle.events,
                 &bundle.raw_notifications,
             )?;
@@ -543,6 +544,10 @@ impl MobilityService {
                 .session_service
                 .store()
                 .list_pending_prompts(&session.id)?;
+            let prompt_attachments = self
+                .session_service
+                .store()
+                .list_prompt_attachments(&session.id)?;
             let events = self.session_service.store().list_events(&session.id)?;
             let raw_notifications = self
                 .session_service
@@ -555,6 +560,7 @@ impl MobilityService {
                 live_config_snapshot,
                 pending_config_changes,
                 pending_prompts,
+                prompt_attachments,
                 events,
                 raw_notifications,
                 agent_artifacts,
@@ -787,7 +793,27 @@ fn session_bundle_size_bytes(bundle: &WorkspaceMobilitySessionBundleData) -> u64
                         + record.seq as u64
                         + option_string_size(&record.prompt_id)
                         + string_size(&record.text)
+                        + option_string_size(&record.blocks_json)
                         + string_size(&record.queued_at)
+                })
+                .sum::<u64>(),
+        )
+        .saturating_add(
+            bundle
+                .prompt_attachments
+                .iter()
+                .map(|record| {
+                    string_size(&record.attachment_id)
+                        + string_size(&record.session_id)
+                        + str_size(record.state.as_str())
+                        + str_size(record.kind.as_str())
+                        + option_string_size(&record.mime_type)
+                        + option_string_size(&record.display_name)
+                        + option_string_size(&record.source_uri)
+                        + record.size_bytes.max(0) as u64
+                        + string_size(&record.sha256)
+                        + string_size(&record.created_at)
+                        + string_size(&record.updated_at)
                 })
                 .sum::<u64>(),
         )
@@ -868,6 +894,10 @@ fn base64_size(byte_len: usize) -> u64 {
 }
 
 fn string_size(value: &String) -> u64 {
+    value.len() as u64
+}
+
+fn str_size(value: &str) -> u64 {
     value.len() as u64
 }
 

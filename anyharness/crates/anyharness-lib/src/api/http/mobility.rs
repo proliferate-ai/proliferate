@@ -2,7 +2,7 @@ use anyharness_contract::v1::{
     DestroyWorkspaceMobilitySourceRequest, DestroyWorkspaceMobilitySourceResponse,
     ExportWorkspaceMobilityArchiveRequest, InstallWorkspaceMobilityArchiveRequest,
     InstallWorkspaceMobilityArchiveResponse, MobilityPendingConfigChangeRecord,
-    MobilityPendingPromptRecord, MobilitySessionEventRecord,
+    MobilityPendingPromptRecord, MobilityPromptAttachmentRecord, MobilitySessionEventRecord,
     MobilitySessionLiveConfigSnapshotRecord, MobilitySessionRawNotificationRecord,
     MobilitySessionRecord, UpdateWorkspaceMobilityRuntimeStateRequest, WorkspaceMobilityArchive,
     WorkspaceMobilityBlocker, WorkspaceMobilityFileEntry, WorkspaceMobilityPreflightResponse,
@@ -29,8 +29,9 @@ use crate::mobility::model::{
 };
 use crate::mobility::service::MobilityError;
 use crate::sessions::model::{
-    PendingConfigChangeRecord, PendingPromptRecord, SessionEventRecord,
-    SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
+    PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentKind, PromptAttachmentRecord,
+    PromptAttachmentState, SessionEventRecord, SessionLiveConfigSnapshotRecord,
+    SessionRawNotificationRecord, SessionRecord,
 };
 use crate::workspaces::access_gate::WorkspaceAccessError;
 use crate::workspaces::access_model::WorkspaceAccessMode;
@@ -380,6 +381,11 @@ fn to_contract_session_bundle(
             .into_iter()
             .map(to_contract_pending_prompt)
             .collect(),
+        prompt_attachments: bundle
+            .prompt_attachments
+            .into_iter()
+            .map(to_contract_prompt_attachment)
+            .collect(),
         events: bundle.events.into_iter().map(to_contract_event).collect(),
         raw_notifications: bundle
             .raw_notifications
@@ -424,6 +430,7 @@ fn to_contract_live_config_snapshot(
         source_seq: record.source_seq,
         raw_config_options_json: record.raw_config_options_json,
         normalized_controls_json: record.normalized_controls_json,
+        prompt_capabilities_json: record.prompt_capabilities_json,
         updated_at: record.updated_at,
     }
 }
@@ -440,12 +447,32 @@ fn to_contract_pending_config_change(
 }
 
 fn to_contract_pending_prompt(record: PendingPromptRecord) -> MobilityPendingPromptRecord {
+    let content_parts = record.prompt_payload().content_parts();
     MobilityPendingPromptRecord {
         session_id: record.session_id,
         seq: record.seq,
         prompt_id: record.prompt_id,
         text: record.text,
+        content_parts,
+        blocks_json: record.blocks_json,
         queued_at: record.queued_at,
+    }
+}
+
+fn to_contract_prompt_attachment(record: PromptAttachmentRecord) -> MobilityPromptAttachmentRecord {
+    MobilityPromptAttachmentRecord {
+        attachment_id: record.attachment_id,
+        session_id: record.session_id,
+        state: record.state.as_str().to_string(),
+        kind: record.kind.as_str().to_string(),
+        mime_type: record.mime_type,
+        display_name: record.display_name,
+        source_uri: record.source_uri,
+        size_bytes: record.size_bytes.max(0) as u64,
+        sha256: record.sha256,
+        content_base64: STANDARD.encode(record.content),
+        created_at: record.created_at,
+        updated_at: record.updated_at,
     }
 }
 
@@ -541,6 +568,11 @@ fn from_contract_session_bundle(
             .into_iter()
             .map(from_contract_pending_prompt)
             .collect(),
+        prompt_attachments: bundle
+            .prompt_attachments
+            .into_iter()
+            .map(from_contract_prompt_attachment)
+            .collect::<Result<Vec<_>, _>>()?,
         events: bundle.events.into_iter().map(from_contract_event).collect(),
         raw_notifications: bundle
             .raw_notifications
@@ -592,6 +624,7 @@ fn from_contract_live_config_snapshot(
         source_seq: record.source_seq,
         raw_config_options_json: record.raw_config_options_json,
         normalized_controls_json: record.normalized_controls_json,
+        prompt_capabilities_json: record.prompt_capabilities_json,
         updated_at: record.updated_at,
     }
 }
@@ -613,8 +646,31 @@ fn from_contract_pending_prompt(record: MobilityPendingPromptRecord) -> PendingP
         seq: record.seq,
         prompt_id: record.prompt_id,
         text: record.text,
+        blocks_json: record.blocks_json,
         queued_at: record.queued_at,
     }
+}
+
+fn from_contract_prompt_attachment(
+    record: MobilityPromptAttachmentRecord,
+) -> Result<PromptAttachmentRecord, ApiError> {
+    let content = STANDARD.decode(record.content_base64).map_err(|_| {
+        ApiError::bad_request("Invalid prompt attachment content", "INVALID_ARCHIVE")
+    })?;
+    Ok(PromptAttachmentRecord {
+        attachment_id: record.attachment_id,
+        session_id: record.session_id,
+        state: PromptAttachmentState::parse(&record.state),
+        kind: PromptAttachmentKind::parse(&record.kind),
+        mime_type: record.mime_type,
+        display_name: record.display_name,
+        source_uri: record.source_uri,
+        size_bytes: record.size_bytes.try_into().unwrap_or(i64::MAX),
+        sha256: record.sha256,
+        content,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+    })
 }
 
 fn from_contract_event(record: MobilitySessionEventRecord) -> SessionEventRecord {

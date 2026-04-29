@@ -105,6 +105,7 @@ const EMPTY_PROPOSED_PLAN_TOOL_CALL_IDS = new Set<string>();
 const ProposedPlanToolCallIdsContext = createContext<Set<string>>(
   EMPTY_PROPOSED_PLAN_TOOL_CALL_IDS,
 );
+const TranscriptSessionIdContext = createContext<string | null>(null);
 
 type ProposedPlanTranscriptItem = Extract<TranscriptItem, { kind: "proposed_plan" }>;
 
@@ -254,8 +255,9 @@ export function MessageList({
   return (
     <div className="flex-1 min-h-0" data-telemetry-block>
       <ProposedPlanToolCallIdsContext.Provider value={toolCallIdsWithProposedPlan}>
-        <AutoHideScrollArea className="h-full" ref={scrollRef}>
-          <div ref={contentRef} className="max-w-3xl mx-auto pt-4 pb-10">
+        <TranscriptSessionIdContext.Provider value={activeSessionId}>
+          <AutoHideScrollArea className="h-full" ref={scrollRef}>
+            <div ref={contentRef} className="max-w-3xl mx-auto pt-4 pb-10">
             {visibleTurnIds.map((turnId, turnIdx) => {
               const turn = transcript.turnsById[turnId];
               if (!turn) return null;
@@ -336,15 +338,21 @@ export function MessageList({
             {visiblePendingPrompt && (
               <TurnShell key="pending-prompt" isFirst={visibleTurnIds.length === 0}>
                 <div className="flex flex-col gap-2">
-                  <UserMessage content={visiblePendingPrompt.text} showCopyButton />
+                  <UserMessage
+                    sessionId={activeSessionId}
+                    content={visiblePendingPrompt.text}
+                    contentParts={visiblePendingPrompt.contentParts}
+                    showCopyButton
+                  />
                   {pendingPromptTrailingStatus && (
                     <div className={TRAILING_STATUS_MIN_HEIGHT}>{pendingPromptTrailingStatus}</div>
                   )}
                 </div>
               </TurnShell>
             )}
-          </div>
-        </AutoHideScrollArea>
+            </div>
+          </AutoHideScrollArea>
+        </TranscriptSessionIdContext.Provider>
       </ProposedPlanToolCallIdsContext.Provider>
     </div>
   );
@@ -786,10 +794,18 @@ function TranscriptItemBlock({
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
 }) {
   const toolCallIdsWithProposedPlan = useContext(ProposedPlanToolCallIdsContext);
+  const sessionId = useContext(TranscriptSessionIdContext);
 
   switch (item.kind) {
     case "user_message":
-      return <UserMessage content={item.text} showCopyButton />;
+      return (
+        <UserMessage
+          sessionId={sessionId}
+          content={item.text}
+          contentParts={item.contentParts}
+          showCopyButton
+        />
+      );
 
     case "assistant_prose": {
       if (!item.text) return null;

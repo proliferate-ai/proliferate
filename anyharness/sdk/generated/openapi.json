@@ -1577,6 +1577,49 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/prompt-attachments/{attachment_id}": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "get_prompt_attachment",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "description": "Prompt attachment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Prompt attachment bytes"
+          },
+          "404": {
+            "description": "Session or attachment not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}/raw-notifications": {
       "get": {
         "tags": [
@@ -3676,6 +3719,146 @@
           {
             "type": "object",
             "required": [
+              "attachmentId",
+              "mimeType",
+              "type"
+            ],
+            "properties": {
+              "attachmentId": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "size": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "image"
+                ]
+              },
+              "uri": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "uri",
+              "type"
+            ],
+            "properties": {
+              "attachmentId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "mimeType": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "preview": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "size": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "resource"
+                ]
+              },
+              "uri": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "uri",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "mimeType": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "size": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "resource_link"
+                ]
+              },
+              "uri": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
               "text",
               "visibility",
               "type"
@@ -4619,12 +4802,21 @@
       },
       "EditPendingPromptRequest": {
         "type": "object",
-        "required": [
-          "text"
-        ],
         "properties": {
+          "blocks": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PromptInputBlock"
+            }
+          },
           "text": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -6156,6 +6348,18 @@
           "queuedAt"
         ],
         "properties": {
+          "blocksJson": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "contentParts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContentPart"
+            }
+          },
           "promptId": {
             "type": [
               "string",
@@ -6173,6 +6377,70 @@
             "type": "string"
           },
           "text": {
+            "type": "string"
+          }
+        }
+      },
+      "MobilityPromptAttachmentRecord": {
+        "type": "object",
+        "required": [
+          "attachmentId",
+          "sessionId",
+          "state",
+          "kind",
+          "sizeBytes",
+          "sha256",
+          "contentBase64",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "attachmentId": {
+            "type": "string"
+          },
+          "contentBase64": {
+            "type": "string",
+            "format": "binary"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "sourceUri": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "updatedAt": {
             "type": "string"
           }
         }
@@ -6229,6 +6497,12 @@
         "properties": {
           "normalizedControlsJson": {
             "type": "string"
+          },
+          "promptCapabilitiesJson": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "rawConfigOptionsJson": {
             "type": "string"
@@ -6752,6 +7026,12 @@
           "queuedAt"
         ],
         "properties": {
+          "contentParts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContentPart"
+            }
+          },
           "promptId": {
             "type": [
               "string",
@@ -6801,6 +7081,12 @@
           "queuedAt"
         ],
         "properties": {
+          "contentParts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContentPart"
+            }
+          },
           "promptId": {
             "type": [
               "string",
@@ -6826,6 +7112,12 @@
           "text"
         ],
         "properties": {
+          "contentParts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContentPart"
+            }
+          },
           "seq": {
             "type": "integer",
             "format": "int64"
@@ -7033,6 +7325,20 @@
           }
         }
       },
+      "PromptCapabilities": {
+        "type": "object",
+        "properties": {
+          "audio": {
+            "type": "boolean"
+          },
+          "embeddedContext": {
+            "type": "boolean"
+          },
+          "image": {
+            "type": "boolean"
+          }
+        }
+      },
       "PromptInputBlock": {
         "oneOf": [
           {
@@ -7050,6 +7356,146 @@
                 "enum": [
                   "text"
                 ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "mimeType",
+              "type"
+            ],
+            "properties": {
+              "attachmentId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "data": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "image"
+                ]
+              },
+              "uri": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "uri",
+              "type"
+            ],
+            "properties": {
+              "attachmentId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "mimeType": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "size": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "text": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "resource"
+                ]
+              },
+              "uri": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "uri",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "mimeType": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "size": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "resource_link"
+                ]
+              },
+              "uri": {
+                "type": "string"
               }
             }
           }
@@ -8521,6 +8967,10 @@
             "$ref": "#/components/schemas/NormalizedSessionControls",
             "description": "Product-normalized view of the current live controls."
           },
+          "promptCapabilities": {
+            "$ref": "#/components/schemas/PromptCapabilities",
+            "description": "Content block capabilities advertised by the active ACP agent."
+          },
           "rawConfigOptions": {
             "type": "array",
             "items": {
@@ -9694,6 +10144,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/MobilityPendingPromptRecord"
+            }
+          },
+          "promptAttachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MobilityPromptAttachmentRecord"
             }
           },
           "rawNotifications": {

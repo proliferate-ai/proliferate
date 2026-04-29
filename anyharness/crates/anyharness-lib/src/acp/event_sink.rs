@@ -295,7 +295,7 @@ impl SessionEventSink {
         );
     }
 
-    pub fn begin_turn(&mut self, prompt_text: String) {
+    pub fn begin_turn(&mut self, prompt_text: String, content_parts: Vec<ContentPart>) {
         self.close_open_items();
         self.close_plan_item();
         self.close_tool_items();
@@ -321,7 +321,11 @@ impl SessionEventSink {
             parent_tool_call_id: None,
             raw_input: None,
             raw_output: None,
-            content_parts: vec![ContentPart::Text { text: prompt_text }],
+            content_parts: if content_parts.is_empty() {
+                vec![ContentPart::Text { text: prompt_text }]
+            } else {
+                content_parts
+            },
         };
         self.emit_with_ids(
             SessionEvent::ItemStarted(ItemStartedEvent { item: item.clone() }),
@@ -1106,12 +1110,7 @@ pub(crate) fn publish_session_event(
     };
 
     let payload_json = serde_json::to_string(&envelope.event).unwrap_or_default();
-    tracing::debug!(
-        session_id = %session_id,
-        seq = seq,
-        payload = %payload_json,
-        "event_sink: event payload"
-    );
+    tracing::debug!(session_id = %session_id, seq = seq, "event_sink: event persisted");
     let record = SessionEventRecord {
         id: 0,
         session_id: session_id.to_string(),
@@ -2278,7 +2277,7 @@ mod tests {
             store.clone(),
         );
 
-        sink.begin_turn("hello".to_string());
+        sink.begin_turn("hello".to_string(), Vec::new());
         sink.agent_message_chunk(AcpChunkPayload {
             content: json!("Hel"),
             ..Default::default()
@@ -2333,7 +2332,7 @@ mod tests {
             store.clone(),
         );
 
-        sink.begin_turn("hello".to_string());
+        sink.begin_turn("hello".to_string(), Vec::new());
         sink.agent_message_chunk(AcpChunkPayload {
             content: json!("Hel"),
             message_id: Some("2d313586-97aa-436b-932c-7e0c0b286f87".to_string()),
@@ -2403,7 +2402,7 @@ mod tests {
             store,
         );
 
-        sink.begin_turn("hello".to_string());
+        sink.begin_turn("hello".to_string(), Vec::new());
         sink.agent_message_chunk(AcpChunkPayload {
             content: json!("Hello"),
             message_id: Some("2d313586-97aa-436b-932c-7e0c0b286f87".to_string()),
@@ -2442,7 +2441,7 @@ mod tests {
             store,
         );
 
-        sink.begin_turn("hello".to_string());
+        sink.begin_turn("hello".to_string(), Vec::new());
         sink.agent_thought_chunk(transient_status_chunk("Authenticating MCP server"));
         sink.agent_thought_chunk(transient_status_chunk("Waiting for browser auth"));
         sink.turn_ended(StopReason::EndTurn);
@@ -2498,7 +2497,7 @@ mod tests {
             store,
         );
 
-        sink.begin_turn("hello".to_string());
+        sink.begin_turn("hello".to_string(), Vec::new());
         sink.agent_thought_chunk(AcpChunkPayload {
             content: json!("Thinking"),
             message_id: Some("reasoning-1".to_string()),
@@ -2536,7 +2535,7 @@ mod tests {
             store.clone(),
         );
 
-        sink.begin_turn("plan this".to_string());
+        sink.begin_turn("plan this".to_string(), Vec::new());
         sink.plan(vec![json!({ "content": "Step 1", "status": "pending" })]);
         sink.plan(vec![json!({ "content": "Step 1", "status": "completed" })]);
         sink.turn_ended(StopReason::EndTurn);
@@ -2582,7 +2581,7 @@ mod tests {
             store.clone(),
         );
 
-        sink.begin_turn("delegate".to_string());
+        sink.begin_turn("delegate".to_string(), Vec::new());
         sink.tool_call(super::AcpToolPayload {
             tool_call_id: "tool-1".to_string(),
             title: Some("Launch investigator".to_string()),
@@ -2678,7 +2677,7 @@ mod tests {
             store,
         );
 
-        sink.begin_turn("delegate".to_string());
+        sink.begin_turn("delegate".to_string(), Vec::new());
         sink.tool_call(super::AcpToolPayload {
             tool_call_id: "tool-1".to_string(),
             title: Some("Task".to_string()),

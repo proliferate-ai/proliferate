@@ -229,6 +229,46 @@ pub enum ContentPart {
     Text {
         text: String,
     },
+    Image {
+        #[serde(rename = "attachmentId")]
+        attachment_id: String,
+        #[serde(rename = "mimeType")]
+        mime_type: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        uri: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        size: Option<u64>,
+    },
+    Resource {
+        #[serde(rename = "attachmentId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        attachment_id: Option<String>,
+        uri: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        #[serde(rename = "mimeType")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        mime_type: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        size: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        preview: Option<String>,
+    },
+    ResourceLink {
+        uri: String,
+        name: String,
+        #[serde(rename = "mimeType")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        mime_type: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        size: Option<u64>,
+    },
     Reasoning {
         text: String,
         visibility: ReasoningVisibility,
@@ -483,6 +523,8 @@ pub struct PendingPromptAddedPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt_id: Option<String>,
     pub text: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub content_parts: Vec<ContentPart>,
     pub queued_at: String,
 }
 
@@ -491,6 +533,8 @@ pub struct PendingPromptAddedPayload {
 pub struct PendingPromptUpdatedPayload {
     pub seq: i64,
     pub text: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub content_parts: Vec<ContentPart>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

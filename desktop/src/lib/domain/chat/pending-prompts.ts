@@ -1,4 +1,5 @@
 import type {
+  ContentPart,
   PendingPromptEntry,
   SessionEvent,
   TranscriptItem,
@@ -11,11 +12,13 @@ export function createOptimisticPendingPrompt(
   text: string,
   promptId: string | null = null,
   queuedAt = new Date().toISOString(),
+  contentParts: ContentPart[] = text ? [{ type: "text", text }] : [],
 ): PendingPromptEntry {
   return {
     seq: -Date.now(),
     promptId,
     text,
+    contentParts,
     queuedAt,
   };
 }

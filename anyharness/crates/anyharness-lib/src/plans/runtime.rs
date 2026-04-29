@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use anyharness_contract::v1::{
     HandoffPlanRequest, HandoffPlanResponse, PlanDecisionResponse, PlanHandoffPromptStatus,
-    ProposedPlanDecisionState, ProposedPlanDetail, ProposedPlanDocumentResponse,
+    PromptInputBlock, ProposedPlanDecisionState, ProposedPlanDetail, ProposedPlanDocumentResponse,
 };
 
 use super::document;
@@ -196,7 +196,11 @@ impl PlanRuntime {
         let handoff_id = uuid::Uuid::new_v4().to_string();
         let prompt_status = match self
             .session_runtime
-            .send_prompt(&target_session_id, prompt, None)
+            .send_prompt(
+                &target_session_id,
+                vec![PromptInputBlock::Text { text: prompt }],
+                None,
+            )
             .await
         {
             Ok(SendPromptOutcome::Running { .. }) => PlanHandoffPromptStatus::Sent,

@@ -60,6 +60,7 @@ export type SessionLiveConfigSnapshot = Omit<
 > & {
   normalizedControls: NormalizedSessionControls;
 };
+export type PromptCapabilities = components["schemas"]["PromptCapabilities"];
 export type GetSessionLiveConfigResponse = Omit<
   GeneratedGetSessionLiveConfigResponse,
   "liveConfig"
@@ -113,6 +114,11 @@ export function normalizeSessionLiveConfigSnapshot(
   return {
     ...liveConfig,
     normalizedControls: normalizeSessionControls(liveConfig.normalizedControls),
+    promptCapabilities: liveConfig.promptCapabilities ?? {
+      image: false,
+      audio: false,
+      embeddedContext: false,
+    },
   };
 }
 

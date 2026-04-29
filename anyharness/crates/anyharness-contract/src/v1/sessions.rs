@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::{
-    InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
+    ContentPart, InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
     PermissionInteractionOption, SessionLiveConfigSnapshot, SessionMcpBindingSummary,
     SessionMcpServer, UserInputQuestion,
 };
@@ -129,6 +129,8 @@ pub struct PendingPromptSummary {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt_id: Option<String>,
     pub text: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub content_parts: Vec<ContentPart>,
     pub queued_at: String,
 }
 
@@ -216,6 +218,50 @@ pub struct UpdateSessionTitleRequest {
 pub enum PromptInputBlock {
     #[serde(rename = "text")]
     Text { text: String },
+    #[serde(rename = "image")]
+    Image {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        data: Option<String>,
+        #[serde(rename = "attachmentId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        attachment_id: Option<String>,
+        #[serde(rename = "mimeType")]
+        mime_type: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        uri: Option<String>,
+    },
+    #[serde(rename = "resource")]
+    Resource {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        text: Option<String>,
+        #[serde(rename = "attachmentId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        attachment_id: Option<String>,
+        uri: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        #[serde(rename = "mimeType")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        mime_type: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        size: Option<u64>,
+    },
+    #[serde(rename = "resource_link")]
+    ResourceLink {
+        uri: String,
+        name: String,
+        #[serde(rename = "mimeType")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        mime_type: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        size: Option<u64>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -243,7 +289,10 @@ pub enum PromptSessionStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EditPendingPromptRequest {
-    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocks: Option<Vec<PromptInputBlock>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, ToSchema)]

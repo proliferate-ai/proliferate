@@ -28,6 +28,7 @@ use crate::sessions::live_config::{
 use crate::sessions::mcp::{to_acp_servers, SessionMcpServer};
 use crate::sessions::model::PendingConfigChangeRecord;
 use crate::sessions::model::SessionRecord;
+use crate::sessions::prompt::{capabilities_from_acp, PromptPayload};
 use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::{
     AvailableCommandsUpdatePayload, ConfigApplyState, ConfigOptionUpdatePayload,
@@ -136,7 +137,7 @@ pub enum ResolveInteractionCommandError {
 
 pub enum SessionCommand {
     Prompt {
-        text: String,
+        payload: PromptPayload,
         prompt_id: Option<String>,
         latency: Option<LatencyRequestContext>,
         /// Set by the actor's own startup-drain path when self-dispatching a
@@ -148,7 +149,7 @@ pub enum SessionCommand {
     },
     EditPendingPrompt {
         seq: i64,
-        text: String,
+        payload: PromptPayload,
         respond_to: oneshot::Sender<Result<(), QueueMutationError>>,
     },
     DeletePendingPrompt {
@@ -586,6 +587,7 @@ struct SessionStartupState {
     config_options: Vec<acp::SessionConfigOption>,
     current_model_id: Option<String>,
     available_model_ids: Vec<String>,
+    prompt_capabilities: anyharness_contract::v1::PromptCapabilities,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -640,6 +642,7 @@ impl SessionStartupState {
                         .collect()
                 })
                 .unwrap_or_default(),
+            prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
         }
     }
 
@@ -666,6 +669,7 @@ impl SessionStartupState {
                         .collect()
                 })
                 .unwrap_or_default(),
+            prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
         }
     }
 
@@ -1270,6 +1274,8 @@ async fn run_actor(
             }
         }
     };
+    startup_state.prompt_capabilities =
+        capabilities_from_acp(Some(&init_response.agent_capabilities.prompt_capabilities));
 
     tracing::info!(
         session_id = %session_id,
@@ -1447,7 +1453,7 @@ async fn run_actor(
             if let Err(error) = handle
                 .command_tx
                 .send(SessionCommand::Prompt {
-                    text: head.text,
+                    payload: head.prompt_payload(),
                     prompt_id: head.prompt_id,
                     latency: None,
                     from_queue_seq: Some(head.seq),
@@ -1483,12 +1489,12 @@ async fn run_actor(
         tokio::select! {
             cmd = command_rx.recv() => {
                 match cmd {
-                    Some(SessionCommand::Prompt { text, prompt_id, latency, from_queue_seq, respond_to }) => {
+                    Some(SessionCommand::Prompt { payload, prompt_id, latency, from_queue_seq, respond_to }) => {
                         // Invariant 2: the actor is the sole writer of `busy`.
                         busy.store(true, Ordering::Release);
                         let _ = respond_to.send(Ok(PromptAcceptance::Started));
 
-                        let mut current_text = text;
+                        let mut current_payload = payload;
                         let mut current_prompt_id = prompt_id;
                         let mut current_latency = latency;
                         let mut current_queue_seq: Option<i64> = from_queue_seq;
@@ -1502,19 +1508,43 @@ async fn run_actor(
                                 flow_id = latency_fields.flow_id,
                                 flow_kind = latency_fields.flow_kind,
                                 flow_source = latency_fields.flow_source,
-                                prompt_id = latency_fields.prompt_id,
-                                "[workspace-latency] session.actor.prompt.received"
-                            );
-                            {
-                                let mut sink = event_sink.lock().await;
-                                sink.begin_turn(current_text.clone());
-                                // Invariant 3: delete the queue row and emit Removed
-                                // AFTER begin_turn has durably persisted the replacement
-                                // turn events. `current_queue_seq` is only set on drained
-                                // iterations; initial iterations get None.
-                                if let Some(seq) = current_queue_seq.take() {
-                                    if let Err(error) = store.delete_pending_prompt(&session_id, seq) {
+                                    prompt_id = latency_fields.prompt_id,
+                                    "[workspace-latency] session.actor.prompt.received"
+                                );
+                                let acp_blocks = match current_payload.to_acp_blocks(&store, &session_id) {
+                                    Ok(blocks) => blocks,
+                                    Err(error) => {
                                         tracing::warn!(
+                                            session_id = %session_id,
+                                            code = error.code,
+                                            detail = %error.detail,
+                                            "failed to build ACP prompt blocks",
+                                        );
+                                        break 'drain;
+                                    }
+                                };
+                                {
+                                    let mut sink = event_sink.lock().await;
+                                    let content_parts = current_payload.content_parts();
+                                    sink.begin_turn(current_payload.text_summary.clone(), content_parts);
+                                    if let Err(error) = store.mark_prompt_attachments_state(
+                                        &session_id,
+                                        &current_payload.attachment_ids(),
+                                        crate::sessions::model::PromptAttachmentState::Transcript,
+                                    ) {
+                                        tracing::warn!(
+                                            session_id = %session_id,
+                                            error = %error,
+                                            "failed to mark prompt attachments as transcript",
+                                        );
+                                    }
+                                    // Invariant 3: delete the queue row and emit Removed
+                                // AFTER begin_turn has durably persisted the replacement
+                                    // turn events. `current_queue_seq` is only set on drained
+                                    // iterations; initial iterations get None.
+                                    if let Some(seq) = current_queue_seq.take() {
+                                        if let Err(error) = store.delete_pending_prompt(&session_id, seq) {
+                                            tracing::warn!(
                                             session_id = %session_id,
                                             seq,
                                             error = %error,
@@ -1541,10 +1571,7 @@ async fn run_actor(
                                 "[workspace-latency] session.actor.prompt.accepted"
                             );
 
-                            let req = acp::PromptRequest::new(
-                                native_session_id.clone(),
-                                vec![current_text.clone().into()],
-                            );
+                                let req = acp::PromptRequest::new(native_session_id.clone(), acp_blocks);
 
                             let mut prompt_result = None;
                             let mut prompt_diagnostics =
@@ -1726,16 +1753,17 @@ async fn run_actor(
                                                 let _ = respond_to.send(Ok(()));
                                                 exit_after_prompt = Some(ActorExitDisposition::Close);
                                             }
-                                            Some(SessionCommand::Prompt { text: queued_text, prompt_id: queued_prompt_id, latency: _, from_queue_seq: _, respond_to }) => {
+                                            Some(SessionCommand::Prompt { payload: queued_payload, prompt_id: queued_prompt_id, latency: _, from_queue_seq: _, respond_to }) => {
                                                 // Invariant 2/3: busy-path enqueue. Insert durably,
                                                 // emit PendingPromptAdded, respond Queued.
-                                                match store.insert_pending_prompt(&session_id, &queued_text, queued_prompt_id.as_deref()) {
+                                                match store.insert_pending_prompt_payload(&session_id, &queued_payload, queued_prompt_id.as_deref()) {
                                                     Ok(record) => {
                                                         let mut sink = event_sink.lock().await;
                                                         sink.pending_prompt_added(PendingPromptAddedPayload {
                                                             seq: record.seq,
                                                             prompt_id: record.prompt_id.clone(),
                                                             text: record.text.clone(),
+                                                            content_parts: record.prompt_payload().content_parts(),
                                                             queued_at: record.queued_at.clone(),
                                                         });
                                                         drop(sink);
@@ -1751,8 +1779,8 @@ async fn run_actor(
                                                     }
                                                 }
                                             }
-                                            Some(SessionCommand::EditPendingPrompt { seq, text, respond_to }) => {
-                                                let _ = respond_to.send(handle_edit_pending_prompt(&store, &event_sink, &session_id, seq, text).await);
+                                            Some(SessionCommand::EditPendingPrompt { seq, payload, respond_to }) => {
+                                                let _ = respond_to.send(handle_edit_pending_prompt(&store, &event_sink, &session_id, seq, payload).await);
                                             }
                                             Some(SessionCommand::DeletePendingPrompt { seq, respond_to }) => {
                                                 let _ = respond_to.send(handle_delete_pending_prompt(&store, &event_sink, &session_id, seq).await);
@@ -1911,12 +1939,12 @@ async fn run_actor(
                             }
 
                             // Invariant 2/3: peek the head of the queue BEFORE releasing
-                            // `busy`. If present, re-enter the prompt body with the new text;
+                            // `busy`. If present, re-enter the prompt body with the new payload;
                             // begin_turn's event emission is what durably hands off the queue
                             // row (see the delete_pending_prompt call above).
                             match store.peek_head_pending_prompt(&session_id) {
                                 Ok(Some(next)) => {
-                                    current_text = next.text;
+                                    current_payload = next.prompt_payload();
                                     current_prompt_id = next.prompt_id;
                                     current_latency = None;
                                     current_queue_seq = Some(next.seq);
@@ -1940,8 +1968,8 @@ async fn run_actor(
                             break;
                         }
                     }
-                    Some(SessionCommand::EditPendingPrompt { seq, text, respond_to }) => {
-                        let _ = respond_to.send(handle_edit_pending_prompt(&store, &event_sink, &session_id, seq, text).await);
+                    Some(SessionCommand::EditPendingPrompt { seq, payload, respond_to }) => {
+                        let _ = respond_to.send(handle_edit_pending_prompt(&store, &event_sink, &session_id, seq, payload).await);
                     }
                     Some(SessionCommand::DeletePendingPrompt { seq, respond_to }) => {
                         let _ = respond_to.send(handle_delete_pending_prompt(&store, &event_sink, &session_id, seq).await);
@@ -3726,6 +3754,7 @@ async fn emit_live_config_update(
         source_agent_kind,
         &startup_state.config_options,
         startup_state.legacy_mode_state.as_ref(),
+        startup_state.prompt_capabilities,
         next_seq,
         updated_at.clone(),
     );
@@ -3828,12 +3857,35 @@ async fn handle_edit_pending_prompt(
     event_sink: &Arc<Mutex<SessionEventSink>>,
     session_id: &str,
     seq: i64,
-    text: String,
+    payload: PromptPayload,
 ) -> Result<(), QueueMutationError> {
-    match store.update_pending_prompt_text(session_id, seq, &text) {
+    let old_attachment_ids = match store.find_pending_prompt(session_id, seq) {
+        Ok(Some(record)) => record.attachment_ids(),
+        _ => Vec::new(),
+    };
+    match store.update_pending_prompt_payload(session_id, seq, &payload) {
         Ok(true) => {
+            let new_attachment_ids = payload.attachment_ids();
+            let removed = old_attachment_ids
+                .iter()
+                .filter(|old_id| !new_attachment_ids.contains(old_id))
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+            if let Err(error) = store.delete_prompt_attachments(session_id, &removed) {
+                tracing::warn!(
+                    session_id = %session_id,
+                    seq,
+                    error = %error,
+                    "failed to delete removed pending prompt attachments",
+                );
+            }
             let mut sink = event_sink.lock().await;
-            sink.pending_prompt_updated(PendingPromptUpdatedPayload { seq, text });
+            let content_parts = payload.content_parts();
+            sink.pending_prompt_updated(PendingPromptUpdatedPayload {
+                seq,
+                text: payload.text_summary,
+                content_parts,
+            });
             Ok(())
         }
         Ok(false) => Err(QueueMutationError::NotFound),
@@ -3855,8 +3907,21 @@ async fn handle_delete_pending_prompt(
     session_id: &str,
     seq: i64,
 ) -> Result<(), QueueMutationError> {
-    match store.delete_pending_prompt(session_id, seq) {
-        Ok(true) => {
+    match store.delete_pending_prompt_record(session_id, seq) {
+        Ok(Some(record)) => {
+            let attachment_ids = record.attachment_ids();
+            let attachment_refs = attachment_ids
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+            if let Err(error) = store.delete_prompt_attachments(session_id, &attachment_refs) {
+                tracing::warn!(
+                    session_id = %session_id,
+                    seq,
+                    error = %error,
+                    "failed to delete pending prompt attachments",
+                );
+            }
             let mut sink = event_sink.lock().await;
             sink.pending_prompt_removed(PendingPromptRemovedPayload {
                 seq,
@@ -3864,7 +3929,7 @@ async fn handle_delete_pending_prompt(
             });
             Ok(())
         }
-        Ok(false) => Err(QueueMutationError::NotFound),
+        Ok(None) => Err(QueueMutationError::NotFound),
         Err(error) => {
             tracing::warn!(
                 session_id = %session_id,
@@ -4467,6 +4532,7 @@ mod tests {
             config_options: vec![],
             current_model_id: None,
             available_model_ids: vec![],
+            prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
         };
         let mut persisted_config_state = PersistedSessionConfigState {
             requested_model_id: None,
@@ -4628,6 +4694,7 @@ mod tests {
             config_options: vec![],
             current_model_id: None,
             available_model_ids: vec![],
+            prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
         };
         let mut persisted_config_state = PersistedSessionConfigState {
             requested_model_id: None,
@@ -4768,6 +4835,7 @@ mod tests {
                 fast_mode: None,
                 extras: vec![],
             },
+            prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
             source_seq: 1,
             updated_at: "2026-03-25T00:00:00Z".into(),
         };
@@ -4811,6 +4879,7 @@ mod tests {
                 fast_mode: None,
                 extras: vec![],
             },
+            prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
             source_seq: 2,
             updated_at: "2026-03-25T00:01:00Z".into(),
         };
@@ -5192,6 +5261,7 @@ mod tests {
             config_options: vec![collaboration_mode],
             current_model_id: None,
             available_model_ids: Vec::new(),
+            prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
         };
 
         assert_eq!(

@@ -1,4 +1,5 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
+import type { PromptInputBlock } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { createOptimisticPendingPrompt } from "@/lib/domain/chat/pending-prompts";
 import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
@@ -219,6 +220,7 @@ export function useSessionCreationActions({
 
   const createSessionWithResolvedConfig = useCallback(async (options: {
     text: string;
+    blocks?: PromptInputBlock[];
     agentKind: string;
     modelId: string;
     workspaceId?: string;
@@ -399,6 +401,7 @@ export function useSessionCreationActions({
           await promptSession({
             sessionId: session.id,
             text: options.text,
+            blocks: options.blocks,
             workspaceId,
             latencyFlowId: options.latencyFlowId,
           });

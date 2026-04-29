@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { anyHarnessWorkspaceSetupStatusKey } from "@anyharness/sdk-react";
+import type { PromptInputBlock } from "@anyharness/sdk";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import {
   captureTelemetryException,
@@ -67,7 +68,7 @@ export function useChatPromptActions() {
   const { isDisabled } = useChatAvailabilityState();
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(async (input?: { text: string; blocks: PromptInputBlock[] }) => {
     if (!selectedWorkspaceId) {
       return;
     }
@@ -76,8 +77,9 @@ export function useChatPromptActions() {
     const currentDraft = draftKey
       ? useChatInputStore.getState().draftByWorkspaceId[draftKey] ?? EMPTY_CHAT_DRAFT
       : EMPTY_CHAT_DRAFT;
-    const text = serializeChatDraftToPrompt(currentDraft).trim();
-    if (!text || isDisabled) {
+    const text = input?.text.trim() ?? serializeChatDraftToPrompt(currentDraft).trim();
+    const blocks = input?.blocks ?? [{ type: "text" as const, text }];
+    if ((!text && blocks.length === 0) || isDisabled) {
       return;
     }
 
@@ -106,9 +108,10 @@ export function useChatPromptActions() {
         await promptActiveSession(text, {
           latencyFlowId: latencyFlowId ?? undefined,
           promptId,
+          blocks,
         });
       } else if (launchSelection) {
-        await findOrCreateSession(launchSelection.kind, text, launchSelection.modelId);
+        await findOrCreateSession(launchSelection.kind, text, launchSelection.modelId, blocks);
       } else {
         showToast("Choose a ready model before sending a message.");
         return;

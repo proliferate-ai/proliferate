@@ -138,6 +138,7 @@ export type {
   NormalizedSessionControl,
   NormalizedSessionControls,
   SessionLiveConfigSnapshot,
+  PromptCapabilities,
   GetSessionLiveConfigResponse,
   SetSessionConfigOptionRequest,
   SetSessionConfigOptionResponse,

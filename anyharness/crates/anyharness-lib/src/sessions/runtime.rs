@@ -6,9 +6,9 @@ use std::time::Instant;
 
 use anyharness_contract::v1::{
     ConfigApplyState, InteractionKind, McpElicitationSubmittedField,
-    McpElicitationUrlRevealResponse, ProposedPlanDecisionState, ReplayRecordingSummary, Session,
-    SessionExecutionSummary, SessionLiveConfigSnapshot, SessionMcpBindingSummary,
-    UserInputSubmittedAnswer, WorkspaceExecutionSummary,
+    McpElicitationUrlRevealResponse, PromptInputBlock, ProposedPlanDecisionState,
+    ReplayRecordingSummary, Session, SessionExecutionSummary, SessionLiveConfigSnapshot,
+    SessionMcpBindingSummary, UserInputSubmittedAnswer, WorkspaceExecutionSummary,
 };
 
 use super::execution_summary::{
@@ -39,6 +39,10 @@ use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::cowork::runtime::CoworkSessionHooks;
 use crate::plans::model::PlanRecord;
 use crate::plans::service::{PlanDecisionError, PlanService};
+use crate::sessions::model::PromptAttachmentState;
+use crate::sessions::prompt::{
+    capabilities_from_live_config, prepare_prompt, PromptValidationError,
+};
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::runtime::WorkspaceRuntime;
 
@@ -89,6 +93,7 @@ pub enum SetSessionConfigOptionError {
 pub enum SendPromptError {
     SessionNotFound(String),
     EmptyPrompt,
+    InvalidPrompt(PromptValidationError),
     Internal(anyhow::Error),
 }
 
@@ -102,6 +107,7 @@ pub enum SendPromptOutcome {
 pub enum PendingPromptMutationError {
     SessionNotFound(String),
     NotFound,
+    InvalidPrompt(PromptValidationError),
     Internal(anyhow::Error),
 }
 
@@ -746,13 +752,13 @@ impl SessionRuntime {
     pub async fn send_prompt(
         &self,
         session_id: &str,
-        text: String,
+        blocks: Vec<PromptInputBlock>,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<SendPromptOutcome, SendPromptError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
             .map_err(|error| SendPromptError::Internal(anyhow::anyhow!(error.to_string())))?;
-        if text.is_empty() {
+        if blocks.is_empty() {
             return Err(SendPromptError::EmptyPrompt);
         }
         let started = Instant::now();
@@ -776,6 +782,20 @@ impl SessionRuntime {
             .ensure_live_session_handle(&record, None, latency)
             .await
             .map_err(map_start_error_to_prompt)?;
+        let live_config = self
+            .session_service
+            .get_live_config_snapshot(session_id)
+            .map_err(SendPromptError::Internal)?;
+        let prepared = prepare_prompt(
+            session_id,
+            blocks,
+            capabilities_from_live_config(live_config.as_ref()),
+            PromptAttachmentState::Pending,
+        )
+        .map_err(SendPromptError::InvalidPrompt)?;
+        prepared
+            .persist_attachments(self.session_service.store())
+            .map_err(SendPromptError::Internal)?;
         tracing::info!(
             session_id = %session_id,
             elapsed_ms = ensure_started.elapsed().as_millis(),
@@ -794,7 +814,7 @@ impl SessionRuntime {
         if handle
             .command_tx
             .send(SessionCommand::Prompt {
-                text,
+                payload: prepared.payload.clone(),
                 prompt_id,
                 latency: latency.cloned(),
                 from_queue_seq: None,
@@ -827,6 +847,7 @@ impl SessionRuntime {
                     SendPromptError::Internal(anyhow::anyhow!("session actor is not responding"))
                 }
                 PromptAcceptError::EnqueueFailed(detail) => {
+                    let _ = prepared.cleanup_attachments(self.session_service.store(), session_id);
                     SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
                 }
             })?;
@@ -900,7 +921,7 @@ impl SessionRuntime {
         &self,
         session_id: &str,
         seq: i64,
-        text: String,
+        blocks: Vec<PromptInputBlock>,
     ) -> Result<SessionRecord, PendingPromptMutationError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
@@ -925,18 +946,33 @@ impl SessionRuntime {
                     "failed to ensure live session handle: {error:?}"
                 ))
             })?;
+        let live_config = self
+            .session_service
+            .get_live_config_snapshot(session_id)
+            .map_err(PendingPromptMutationError::Internal)?;
+        let prepared = prepare_prompt(
+            session_id,
+            blocks,
+            capabilities_from_live_config(live_config.as_ref()),
+            PromptAttachmentState::Pending,
+        )
+        .map_err(PendingPromptMutationError::InvalidPrompt)?;
+        prepared
+            .persist_attachments(self.session_service.store())
+            .map_err(PendingPromptMutationError::Internal)?;
 
         let (tx, rx) = tokio::sync::oneshot::channel();
         if handle
             .command_tx
             .send(SessionCommand::EditPendingPrompt {
                 seq,
-                text,
+                payload: prepared.payload.clone(),
                 respond_to: tx,
             })
             .await
             .is_err()
         {
+            let _ = prepared.cleanup_attachments(self.session_service.store(), session_id);
             return Err(PendingPromptMutationError::Internal(anyhow::anyhow!(
                 "session actor channel closed"
             )));
@@ -948,7 +984,10 @@ impl SessionRuntime {
                 ))
             })?
             .map_err(|error| match error {
-                QueueMutationError::NotFound => PendingPromptMutationError::NotFound,
+                QueueMutationError::NotFound => {
+                    let _ = prepared.cleanup_attachments(self.session_service.store(), session_id);
+                    PendingPromptMutationError::NotFound
+                }
                 QueueMutationError::ActorDead => PendingPromptMutationError::Internal(
                     anyhow::anyhow!("session actor is not responding"),
                 ),

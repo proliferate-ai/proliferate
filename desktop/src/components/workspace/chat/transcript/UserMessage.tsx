@@ -1,15 +1,24 @@
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import type { ContentPart } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { FilePathLink } from "@/components/ui/content/FilePathLink";
 import { tokenizeSerializedFileLinks } from "@/lib/domain/chat/file-mention-links";
 import { CopyMessageButton } from "./CopyMessageButton";
+import { PromptContentRenderer } from "@/components/workspace/chat/content/PromptContentRenderer";
 
 export interface UserMessageProps {
+  sessionId: string | null;
   content: string;
+  contentParts?: ContentPart[];
   showCopyButton?: boolean;
 }
 
-export function UserMessage({ content, showCopyButton = false }: UserMessageProps) {
+export function UserMessage({
+  sessionId,
+  content,
+  contentParts = [],
+  showCopyButton = false,
+}: UserMessageProps) {
   const [expanded, setExpanded] = useState(false);
   const [needsToggle, setNeedsToggle] = useState(false);
   const textRef = useRef<HTMLDivElement>(null);
@@ -19,7 +28,7 @@ export function UserMessage({ content, showCopyButton = false }: UserMessageProp
     const el = textRef.current;
     if (!el) return;
     setNeedsToggle(el.scrollHeight > el.clientHeight);
-  }, [content]);
+  }, [content, contentParts]);
 
   return (
     <div
@@ -30,20 +39,28 @@ export function UserMessage({ content, showCopyButton = false }: UserMessageProp
         <div className="max-w-[77%] break-words rounded-2xl bg-foreground/5 px-3 py-2 text-foreground">
           <div
             ref={textRef}
-            className={`text-chat break-words whitespace-pre-wrap select-text${
+            className={`break-words select-text${
               !expanded ? " line-clamp-5" : ""
             }`}
           >
-            {tokens.map((token, index) => {
-              if (token.type === "text") {
-                return <Fragment key={`text-${index}`}>{token.text}</Fragment>;
-              }
-              return (
-                <FilePathLink key={`${token.path}-${index}`} rawPath={token.path}>
-                  {token.label}
-                </FilePathLink>
-              );
-            })}
+            {contentParts.length > 0 ? (
+              <PromptContentRenderer
+                sessionId={sessionId}
+                parts={contentParts}
+                fallbackText={content}
+              />
+            ) : (
+              tokens.map((token, index) => {
+                if (token.type === "text") {
+                  return <Fragment key={`text-${index}`}>{token.text}</Fragment>;
+                }
+                return (
+                  <FilePathLink key={`${token.path}-${index}`} rawPath={token.path}>
+                    {token.label}
+                  </FilePathLink>
+                );
+              })
+            )}
           </div>
           {needsToggle && (
             <div className="mt-1 flex justify-end">

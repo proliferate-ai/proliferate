@@ -1,17 +1,21 @@
 import { useCallback } from "react";
 import { Button } from "@/components/ui/Button";
 import { Pencil, X } from "@/components/ui/icons";
+import type { ContentPart } from "@anyharness/sdk";
 import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
 import { useQueuedPromptEditReader } from "@/hooks/chat/use-queued-prompt-edit";
 import { useDeletePendingPrompt } from "@/hooks/sessions/use-delete-pending-prompt";
+import { PromptContentRenderer } from "@/components/workspace/chat/content/PromptContentRenderer";
 
 export interface PendingPromptListEntry {
   seq: number;
   text: string;
+  contentParts: ContentPart[];
   isBeingEdited: boolean;
 }
 
 export interface PendingPromptListProps {
+  sessionId: string | null;
   entries: PendingPromptListEntry[];
   onBeginEdit: (args: { seq: number; text: string }) => void;
   onDelete: (seq: number) => void;
@@ -23,7 +27,12 @@ export interface PendingPromptListProps {
  * should use `ConnectedPendingPromptList` which wires it to the chat-input
  * store and the pending-prompt projection.
  */
-export function PendingPromptList({ entries, onBeginEdit, onDelete }: PendingPromptListProps) {
+export function PendingPromptList({
+  sessionId,
+  entries,
+  onBeginEdit,
+  onDelete,
+}: PendingPromptListProps) {
   if (entries.length === 0) {
     return null;
   }
@@ -37,6 +46,7 @@ export function PendingPromptList({ entries, onBeginEdit, onDelete }: PendingPro
       {entries.map((entry) => (
         <PendingPromptRow
           key={entry.seq}
+          sessionId={sessionId}
           entry={entry}
           onBeginEdit={onBeginEdit}
           onDelete={onDelete}
@@ -66,6 +76,7 @@ export function ConnectedPendingPromptList() {
   return (
     <PendingPromptList
       entries={visiblePendingPrompts}
+      sessionId={activeSessionId}
       onBeginEdit={beginEdit}
       onDelete={handleDelete}
     />
@@ -74,11 +85,12 @@ export function ConnectedPendingPromptList() {
 
 interface PendingPromptRowProps {
   entry: PendingPromptListEntry;
+  sessionId: string | null;
   onBeginEdit: (args: { seq: number; text: string }) => void;
   onDelete: (seq: number) => void;
 }
 
-function PendingPromptRow({ entry, onBeginEdit, onDelete }: PendingPromptRowProps) {
+function PendingPromptRow({ entry, sessionId, onBeginEdit, onDelete }: PendingPromptRowProps) {
   const { seq, text, isBeingEdited } = entry;
 
   const handleBeginEdit = useCallback(() => {
@@ -92,11 +104,16 @@ function PendingPromptRow({ entry, onBeginEdit, onDelete }: PendingPromptRowProp
   return (
     <div className="flex items-center gap-2 rounded-md px-2 py-1 text-sm text-foreground hover:bg-muted/40">
       <div
-        className={`min-w-0 flex-1 truncate text-sm leading-snug text-foreground/90 ${
+        className={`min-w-0 flex-1 text-sm leading-snug text-foreground/90 ${
           isBeingEdited ? "pointer-events-none opacity-60" : ""
         }`}
       >
-        {text}
+        <PromptContentRenderer
+          sessionId={sessionId}
+          parts={entry.contentParts}
+          fallbackText={text}
+          compact
+        />
       </div>
       {isBeingEdited ? (
         <div className="shrink-0 text-xs italic text-muted-foreground">

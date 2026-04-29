@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateSessionRequest,
   ListSessionEventsOptions,
+  PromptInputBlock,
   PromptSessionRequest,
   ResolveInteractionRequest,
   ResumeSessionRequest,
@@ -207,10 +208,13 @@ export function useEditPendingPromptMutation(options?: { workspaceId?: string | 
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
-    mutationFn: async (input: { sessionId: string; seq: number; text: string }) => {
+    mutationFn: async (
+      input: { sessionId: string; seq: number; text?: string; blocks?: PromptInputBlock[] },
+    ) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.sessions.editPendingPrompt(input.sessionId, input.seq, {
+        blocks: input.blocks,
         text: input.text,
       });
     },

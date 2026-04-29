@@ -1,7 +1,7 @@
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{
     NormalizedSessionControl, NormalizedSessionControlValue, NormalizedSessionControls,
-    RawSessionConfigOption, RawSessionConfigValue, SessionConfigOptionType,
+    PromptCapabilities, RawSessionConfigOption, RawSessionConfigValue, SessionConfigOptionType,
     SessionLiveConfigSnapshot,
 };
 
@@ -46,6 +46,7 @@ pub fn build_live_config_snapshot(
     _agent_kind: &str,
     config_options: &[acp::SessionConfigOption],
     legacy_mode_state: Option<&LegacyModeState>,
+    prompt_capabilities: PromptCapabilities,
     source_seq: i64,
     updated_at: String,
 ) -> SessionLiveConfigSnapshot {
@@ -58,6 +59,7 @@ pub fn build_live_config_snapshot(
     SessionLiveConfigSnapshot {
         raw_config_options,
         normalized_controls,
+        prompt_capabilities,
         source_seq,
         updated_at,
     }
@@ -79,6 +81,7 @@ pub fn snapshot_to_record(
         source_seq: snapshot.source_seq,
         raw_config_options_json: serde_json::to_string(&snapshot.raw_config_options)?,
         normalized_controls_json: serde_json::to_string(&snapshot.normalized_controls)?,
+        prompt_capabilities_json: Some(serde_json::to_string(&snapshot.prompt_capabilities)?),
         updated_at: snapshot.updated_at.clone(),
     })
 }
@@ -89,6 +92,12 @@ pub fn snapshot_from_record(
     Ok(SessionLiveConfigSnapshot {
         raw_config_options: serde_json::from_str(&record.raw_config_options_json)?,
         normalized_controls: serde_json::from_str(&record.normalized_controls_json)?,
+        prompt_capabilities: record
+            .prompt_capabilities_json
+            .as_deref()
+            .map(serde_json::from_str)
+            .transpose()?
+            .unwrap_or_default(),
         source_seq: record.source_seq,
         updated_at: record.updated_at.clone(),
     })
@@ -519,6 +528,7 @@ mod tests {
                 ("default", "Default"),
                 ("auto_edit", "Auto Edit"),
             ])),
+            PromptCapabilities::default(),
             1,
             "2026-04-01T00:00:00Z".into(),
         );

@@ -532,6 +532,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/prompt-attachments/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_prompt_attachment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{session_id}/raw-notifications": {
         parameters: {
             query?: never;
@@ -1183,6 +1199,35 @@ export interface components {
             /** @enum {string} */
             type: "text";
         } | {
+            attachmentId: string;
+            mimeType: string;
+            name?: string | null;
+            /** Format: int64 */
+            size?: number | null;
+            /** @enum {string} */
+            type: "image";
+            uri?: string | null;
+        } | {
+            attachmentId?: string | null;
+            mimeType?: string | null;
+            name?: string | null;
+            preview?: string | null;
+            /** Format: int64 */
+            size?: number | null;
+            /** @enum {string} */
+            type: "resource";
+            uri: string;
+        } | {
+            description?: string | null;
+            mimeType?: string | null;
+            name: string;
+            /** Format: int64 */
+            size?: number | null;
+            title?: string | null;
+            /** @enum {string} */
+            type: "resource_link";
+            uri: string;
+        } | {
             text: string;
             /** @enum {string} */
             type: "reasoning";
@@ -1390,7 +1435,8 @@ export interface components {
             hints: components["schemas"]["SetupHint"][];
         };
         EditPendingPromptRequest: {
-            text: string;
+            blocks?: components["schemas"]["PromptInputBlock"][] | null;
+            text?: string | null;
         };
         ErrorEvent: {
             code?: string | null;
@@ -1731,12 +1777,30 @@ export interface components {
             value: string;
         };
         MobilityPendingPromptRecord: {
+            blocksJson?: string | null;
+            contentParts?: components["schemas"]["ContentPart"][];
             promptId?: string | null;
             queuedAt: string;
             /** Format: int64 */
             seq: number;
             sessionId: string;
             text: string;
+        };
+        MobilityPromptAttachmentRecord: {
+            attachmentId: string;
+            /** Format: binary */
+            contentBase64: string;
+            createdAt: string;
+            displayName?: string | null;
+            kind: string;
+            mimeType?: string | null;
+            sessionId: string;
+            sha256: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            sourceUri?: string | null;
+            state: string;
+            updatedAt: string;
         };
         MobilitySessionEventRecord: {
             eventType: string;
@@ -1750,6 +1814,7 @@ export interface components {
         };
         MobilitySessionLiveConfigSnapshotRecord: {
             normalizedControlsJson: string;
+            promptCapabilitiesJson?: string | null;
             rawConfigOptionsJson: string;
             sessionId: string;
             /** Format: int64 */
@@ -1896,6 +1961,7 @@ export interface components {
             title: string;
         };
         PendingPromptAddedPayload: {
+            contentParts?: components["schemas"]["ContentPart"][];
             promptId?: string | null;
             queuedAt: string;
             /** Format: int64 */
@@ -1910,6 +1976,7 @@ export interface components {
             seq: number;
         };
         PendingPromptSummary: {
+            contentParts?: components["schemas"]["ContentPart"][];
             promptId?: string | null;
             queuedAt: string;
             /** Format: int64 */
@@ -1917,6 +1984,7 @@ export interface components {
             text: string;
         };
         PendingPromptUpdatedPayload: {
+            contentParts?: components["schemas"]["ContentPart"][];
             /** Format: int64 */
             seq: number;
             text: string;
@@ -1970,10 +2038,43 @@ export interface components {
             title: string;
             type: string;
         };
+        PromptCapabilities: {
+            audio?: boolean;
+            embeddedContext?: boolean;
+            image?: boolean;
+        };
         PromptInputBlock: {
             text: string;
             /** @enum {string} */
             type: "text";
+        } | {
+            attachmentId?: string | null;
+            data?: string | null;
+            mimeType: string;
+            name?: string | null;
+            /** @enum {string} */
+            type: "image";
+            uri?: string | null;
+        } | {
+            attachmentId?: string | null;
+            mimeType?: string | null;
+            name?: string | null;
+            /** Format: int64 */
+            size?: number | null;
+            text?: string | null;
+            /** @enum {string} */
+            type: "resource";
+            uri: string;
+        } | {
+            description?: string | null;
+            mimeType?: string | null;
+            name: string;
+            /** Format: int64 */
+            size?: number | null;
+            title?: string | null;
+            /** @enum {string} */
+            type: "resource_link";
+            uri: string;
         };
         PromptSessionRequest: {
             blocks: components["schemas"]["PromptInputBlock"][];
@@ -2301,6 +2402,8 @@ export interface components {
         SessionLiveConfigSnapshot: {
             /** @description Product-normalized view of the current live controls. */
             normalizedControls: components["schemas"]["NormalizedSessionControls"];
+            /** @description Content block capabilities advertised by the active ACP agent. */
+            promptCapabilities?: components["schemas"]["PromptCapabilities"];
             /** @description Exact raw ACP config options currently exposed by the active session. */
             rawConfigOptions: components["schemas"]["RawSessionConfigOption"][];
             /**
@@ -2583,6 +2686,7 @@ export interface components {
             liveConfigSnapshot?: null | components["schemas"]["MobilitySessionLiveConfigSnapshotRecord"];
             pendingConfigChanges?: components["schemas"]["MobilityPendingConfigChangeRecord"][];
             pendingPrompts?: components["schemas"]["MobilityPendingPromptRecord"][];
+            promptAttachments?: components["schemas"]["MobilityPromptAttachmentRecord"][];
             rawNotifications?: components["schemas"]["MobilitySessionRawNotificationRecord"][];
             session: components["schemas"]["MobilitySessionRecord"];
         };
@@ -3838,6 +3942,38 @@ export interface operations {
                 };
             };
             /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_prompt_attachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+                /** @description Prompt attachment ID */
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Prompt attachment bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session or attachment not found */
             404: {
                 headers: {
                     [name: string]: unknown;
