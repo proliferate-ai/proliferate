@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Literal
 from uuid import UUID
 
@@ -13,6 +14,8 @@ from proliferate.db.models.cloud import CloudCredential
 from proliferate.server.cloud.credentials.models import CloudAgentKind
 from proliferate.utils.crypto import decrypt_json
 from proliferate.utils.time import utcnow
+
+CloudCredentialPayloadMatches = Callable[[str], bool]
 
 
 async def get_user_cloud_credentials(
@@ -32,22 +35,25 @@ async def get_user_cloud_credentials(
     )
 
 
-async def sync_cloud_credential(
+async def sync_cloud_credential_if_changed(
     db: AsyncSession,
     user_id: UUID,
     provider: CloudAgentKind,
     payload_ciphertext: str,
     auth_mode: Literal["env", "file"],
+    payload_matches: CloudCredentialPayloadMatches,
     payload_format: str = "json-v1",
 ) -> None:
     existing = list(
         (
             await db.execute(
-                select(CloudCredential).where(
+                select(CloudCredential)
+                .where(
                     CloudCredential.user_id == user_id,
                     CloudCredential.provider == provider,
                     CloudCredential.revoked_at.is_(None),
                 )
+                .with_for_update()
             )
         )
         .scalars()
@@ -70,6 +76,15 @@ async def sync_cloud_credential(
             return
 
     for record in existing:
+        if (
+            record.payload_format == payload_format
+            and payload_matches(record.payload_ciphertext)
+        ):
+            record.last_synced_at = now
+            await db.commit()
+            return
+
+    for record in existing:
         record.revoked_at = now
 
     db.add(
@@ -84,30 +99,6 @@ async def sync_cloud_credential(
             last_synced_at=now,
         )
     )
-    await db.commit()
-
-
-async def touch_active_cloud_credential_sync(
-    db: AsyncSession,
-    user_id: UUID,
-    provider: CloudAgentKind,
-) -> None:
-    now = utcnow()
-    records = list(
-        (
-            await db.execute(
-                select(CloudCredential).where(
-                    CloudCredential.user_id == user_id,
-                    CloudCredential.provider == provider,
-                    CloudCredential.revoked_at.is_(None),
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-    for record in records:
-        record.last_synced_at = now
     await db.commit()
 
 
@@ -140,30 +131,24 @@ async def load_cloud_credentials_for_user(user_id: UUID) -> list[CloudCredential
         return await get_user_cloud_credentials(db, user_id)
 
 
-async def persist_cloud_credential_sync(
+async def persist_cloud_credential_if_changed(
     user_id: UUID,
     provider: CloudAgentKind,
     payload_ciphertext: str,
     auth_mode: Literal["env", "file"],
+    payload_matches: CloudCredentialPayloadMatches,
     payload_format: str = "json-v1",
 ) -> None:
     async with db_engine.async_session_factory() as db:
-        await sync_cloud_credential(
+        await sync_cloud_credential_if_changed(
             db,
             user_id,
             provider,
             payload_ciphertext,
             auth_mode,
+            payload_matches,
             payload_format,
         )
-
-
-async def persist_cloud_credential_touch(
-    user_id: UUID,
-    provider: CloudAgentKind,
-) -> None:
-    async with db_engine.async_session_factory() as db:
-        await touch_active_cloud_credential_sync(db, user_id, provider)
 
 
 async def persist_cloud_credential_delete(

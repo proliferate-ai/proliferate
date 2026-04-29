@@ -15,6 +15,10 @@ import { useActiveChatSessionState } from "./use-active-chat-session-state";
 import { useChatAvailabilityState } from "./use-chat-availability-state";
 import { useConfiguredLaunchReadiness } from "./use-configured-launch-readiness";
 import {
+  EMPTY_CHAT_DRAFT,
+  serializeChatDraftToPrompt,
+} from "@/lib/domain/chat/file-mentions";
+import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
@@ -70,9 +74,9 @@ export function useChatPromptActions() {
 
     const draftKey = selectedLogicalWorkspaceId ?? selectedWorkspaceId;
     const currentDraft = draftKey
-      ? useChatInputStore.getState().draftByWorkspaceId[draftKey] ?? ""
-      : "";
-    const text = currentDraft.trim();
+      ? useChatInputStore.getState().draftByWorkspaceId[draftKey] ?? EMPTY_CHAT_DRAFT
+      : EMPTY_CHAT_DRAFT;
+    const text = serializeChatDraftToPrompt(currentDraft).trim();
     if (!text || isDisabled) {
       return;
     }

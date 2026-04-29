@@ -22,9 +22,11 @@ export function focusChatInput(): boolean {
   const chatZone = document.querySelector(`[${FOCUS_ZONE_ATTR}="chat"]`);
   if (!chatZone) return false;
 
-  const textarea = chatZone.querySelector("textarea");
-  if (textarea) {
-    textarea.focus({ preventScroll: false });
+  const editor = chatZone.querySelector("[data-chat-composer-editor], textarea") as
+    | { focus?: (options?: FocusOptions) => void }
+    | null;
+  if (typeof editor?.focus === "function") {
+    editor.focus({ preventScroll: false });
     return true;
   }
   return false;

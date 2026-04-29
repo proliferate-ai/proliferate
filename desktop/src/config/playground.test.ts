@@ -5,6 +5,8 @@ import {
   renderMobilityOverlayPreview,
   renderTopSlot,
 } from "@/components/playground/PlaygroundComposer";
+import { FILE_MENTION_SEARCH_RESULTS } from "@/lib/domain/chat/__fixtures__/playground";
+import { isValidWorkspaceRelativePath } from "@/lib/domain/chat/file-mention-links";
 
 const USER_INPUT_SCENARIOS: ScenarioKey[] = [
   "user-input-single-option",
@@ -55,5 +57,13 @@ describe("playground scenarios", () => {
   it("renders mobility overlay playground scenarios through the production view", () => {
     expect(isValidElement(renderMobilityOverlayPreview("mobility-in-flight"))).toBe(true);
     expect(isValidElement(renderMobilityOverlayPreview("mobility-failed"))).toBe(true);
+  });
+
+  it("includes a file mention search scenario with workspace-relative fixture paths", () => {
+    expect(Object.keys(SCENARIOS)).toContain("file-mention-search");
+    expect(FILE_MENTION_SEARCH_RESULTS.length).toBeGreaterThan(0);
+    expect(FILE_MENTION_SEARCH_RESULTS.every((result) =>
+      isValidWorkspaceRelativePath(result.path)
+    )).toBe(true);
   });
 });

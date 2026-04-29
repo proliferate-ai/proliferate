@@ -10,6 +10,10 @@ import { useToastStore } from "@/stores/toast/toast-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { useActiveChatSessionState } from "./use-active-chat-session-state";
 import {
+  EMPTY_CHAT_DRAFT,
+  serializeChatDraftToPrompt,
+} from "@/lib/domain/chat/file-mentions";
+import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
@@ -22,9 +26,11 @@ export function useChatLaunchActions() {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
   const currentDraft = useChatInputStore((state) =>
-    (selectedLogicalWorkspaceId ?? selectedWorkspaceId)
-      ? state.draftByWorkspaceId[selectedLogicalWorkspaceId ?? selectedWorkspaceId!] ?? ""
-      : "",
+    serializeChatDraftToPrompt(
+      (selectedLogicalWorkspaceId ?? selectedWorkspaceId)
+        ? state.draftByWorkspaceId[selectedLogicalWorkspaceId ?? selectedWorkspaceId!] ?? EMPTY_CHAT_DRAFT
+        : EMPTY_CHAT_DRAFT,
+    ),
   );
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
@@ -110,7 +116,6 @@ export function useChatLaunchActions() {
     currentModelConfigId,
     openWorkspaceSessionWithResolvedConfig,
     selectedWorkspace?.surface,
-    selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     setActiveSessionConfigOption,
     setWorkspaceArrivalEvent,

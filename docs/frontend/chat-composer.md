@@ -27,7 +27,7 @@ ChatView
     │     └── CloudRuntimeAttachedPanel     (cloud runtime connecting/resuming/error)
     ├── ChatInput
     │   └── ChatComposerSurface
-    │       └── form: Textarea + ModelSelector + SessionConfigControls + ChatComposerActions
+    │       └── form: ComposerMentionEditor + ModelSelector + SessionConfigControls + ChatComposerActions
     └── footerSlot
         └── WorkspaceMobilityFooterRow
 ```
@@ -38,6 +38,7 @@ Non-negotiable:
 - **`ChatInput` is the composer surface only.** It does not own any of the outer wrapping. It takes no `topSlot` prop. Everything above and below the composer surface is the dock's responsibility, and the workspace footer row is rendered via the dock's dedicated footer slot rather than ad hoc workspace logic in `ChatInput.tsx`.
 - **Powers status is in-composer status chrome.** `SessionPowersSummary` is the only approved read-only strip inside `ChatInput`. It summarizes MCP/Powers bindings applied at session launch or resume; it is not a gating top-slot inhabitant and must not compete with approvals, todo tracker, workspace arrival, or runtime status precedence.
 - **The composer surface stays unchanged and paints the seam.** There is no `flatTop` mode. Top-slot panels are narrower attached trays that sit directly above the composer: rounded top corners, side/top borders, no bottom border, and no gap. The composer surface paints after the top slot so its own top outline remains visible at the seam.
+- **File mention search is composer-local, not a top-slot inhabitant.** The `@` file search tray renders from `ChatInput` in a small host directly above `ChatComposerSurface` while a trigger is active. It is transient editor UI and does not participate in `useComposerTopSlot` precedence.
 
 ## 2. Top-slot precedence
 

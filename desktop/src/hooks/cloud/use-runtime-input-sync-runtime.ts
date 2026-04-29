@@ -48,6 +48,13 @@ function emptyCounts(): RuntimeInputSyncCycleCounts {
   };
 }
 
+function hasRuntimeInputSyncCounts(counts: RuntimeInputSyncCycleCounts): boolean {
+  return counts.credential > 0
+    || counts.mcp_api_key_replica > 0
+    || counts.repo_tracked_file > 0
+    || counts.failures > 0;
+}
+
 function isOnline(): boolean {
   return typeof navigator === "undefined" ? true : navigator.onLine;
 }
@@ -196,7 +203,11 @@ export function useRuntimeInputSyncRuntime() {
   }, [syncRepoFile]);
 
   const runQueuedDescriptors = useCallback(async (trigger: RuntimeInputSyncTrigger) => {
-    if (inFlightRef.current) {
+    if (
+      inFlightRef.current
+      || !keepFreshActiveRef.current
+      || queueRef.current.items.length === 0
+    ) {
       return;
     }
     inFlightRef.current = true;
@@ -209,9 +220,6 @@ export function useRuntimeInputSyncRuntime() {
         const descriptor = next.descriptor;
         if (!descriptor) {
           break;
-        }
-        if (!keepFreshActiveRef.current) {
-          continue;
         }
 
         counts[descriptor.kind] += 1;
@@ -227,13 +235,15 @@ export function useRuntimeInputSyncRuntime() {
       }
     } finally {
       inFlightRef.current = false;
-      trackProductEvent("runtime_input_sync_cycle_completed", {
-        trigger,
-        credential_count: counts.credential,
-        mcp_count: counts.mcp_api_key_replica,
-        repo_file_count: counts.repo_tracked_file,
-        failure_count: counts.failures,
-      });
+      if (hasRuntimeInputSyncCounts(counts)) {
+        trackProductEvent("runtime_input_sync_cycle_completed", {
+          trigger,
+          credential_count: counts.credential,
+          mcp_count: counts.mcp_api_key_replica,
+          repo_file_count: counts.repo_tracked_file,
+          failure_count: counts.failures,
+        });
+      }
     }
   }, [processDescriptor]);
 
@@ -271,10 +281,7 @@ export function useRuntimeInputSyncRuntime() {
 
   useEffect(() => {
     const unsubscribe = subscribeRuntimeInputSyncEvents((event) => {
-      const descriptors = event.descriptors.filter((descriptor) => (
-        descriptor.kind !== "mcp_api_key_replica" || keepFreshActiveRef.current
-      ));
-      enqueue(descriptors);
+      enqueue(event.descriptors);
       void runQueuedDescriptors(event.trigger);
     });
     return unsubscribe;

@@ -1,4 +1,7 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/Button";
+import { FilePathLink } from "@/components/ui/content/FilePathLink";
+import { tokenizeSerializedFileLinks } from "@/lib/domain/chat/file-mention-links";
 import { CopyMessageButton } from "./CopyMessageButton";
 
 export interface UserMessageProps {
@@ -10,6 +13,7 @@ export function UserMessage({ content, showCopyButton = false }: UserMessageProp
   const [expanded, setExpanded] = useState(false);
   const [needsToggle, setNeedsToggle] = useState(false);
   const textRef = useRef<HTMLDivElement>(null);
+  const tokens = tokenizeSerializedFileLinks(content);
 
   useLayoutEffect(() => {
     const el = textRef.current;
@@ -30,17 +34,28 @@ export function UserMessage({ content, showCopyButton = false }: UserMessageProp
               !expanded ? " line-clamp-5" : ""
             }`}
           >
-            {content}
+            {tokens.map((token, index) => {
+              if (token.type === "text") {
+                return <Fragment key={`text-${index}`}>{token.text}</Fragment>;
+              }
+              return (
+                <FilePathLink key={`${token.path}-${index}`} rawPath={token.path}>
+                  {token.label}
+                </FilePathLink>
+              );
+            })}
           </div>
           {needsToggle && (
             <div className="mt-1 flex justify-end">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => setExpanded((v) => !v)}
-                className="text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                className="h-auto px-1 py-0 text-[11px] text-muted-foreground hover:bg-transparent hover:text-foreground"
               >
                 {expanded ? "Show less" : "Show more"}
-              </button>
+              </Button>
             </div>
           )}
         </div>

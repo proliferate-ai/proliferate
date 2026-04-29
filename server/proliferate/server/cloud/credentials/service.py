@@ -16,8 +16,7 @@ from proliferate.db.models.cloud import CloudCredential
 from proliferate.db.store.cloud_credentials import (
     load_cloud_credentials_for_user,
     persist_cloud_credential_delete,
-    persist_cloud_credential_sync,
-    persist_cloud_credential_touch,
+    persist_cloud_credential_if_changed,
 )
 from proliferate.server.cloud.credentials.models import (
     CloudAgentKind,
@@ -256,19 +255,16 @@ async def _persist_cloud_credential_if_changed(
     *,
     user_id: UUID,
     provider: CloudAgentKind,
-    payload: dict[str, object],
+    payload: Mapping[str, object],
     auth_mode: CloudCredentialAuthMode,
 ) -> None:
-    existing_payloads = _active_credential_payloads(await load_cloud_credentials_for_user(user_id))
-    if existing_payloads.get(provider) == payload:
-        await persist_cloud_credential_touch(user_id, provider)
-        return
-
-    await persist_cloud_credential_sync(
+    stored_payload = dict(payload)
+    await persist_cloud_credential_if_changed(
         user_id,
         provider,
-        encrypt_json(payload),
+        encrypt_json(stored_payload),
         auth_mode,
+        lambda payload_ciphertext: decrypt_json(payload_ciphertext) == stored_payload,
     )
 
 
