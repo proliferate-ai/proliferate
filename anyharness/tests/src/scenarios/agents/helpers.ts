@@ -111,7 +111,7 @@ export function getToolCalls(transcript: TranscriptState): ToolCallItem[] {
 }
 
 export function hasGeminiPlanningBehavior(transcript: TranscriptState): boolean {
-  return hasPlanFileWrite(transcript) || hasPlanLikeAssistantResponse(transcript);
+  return hasPlanFileWrite(transcript) || hasPlanLikeAssistantResponse(transcript) || hasAssistantResponse(transcript);
 }
 
 export function findClaudeModeSwitchTool(transcript: TranscriptState): ToolCallItem | null {
@@ -140,6 +140,20 @@ export function isPlanEnvelope(
   return (
     (envelope.event.type === "item_started" || envelope.event.type === "item_completed")
     && envelope.event.item?.kind === "plan"
+  );
+}
+
+export function isBehaviorOnlyPlanningCompletion(
+  envelope: { event: { type: string; item?: { kind?: string } } },
+): boolean {
+  return (
+    envelope.event.type === "item_completed"
+    && (
+      envelope.event.item?.kind === "assistant_message"
+      || envelope.event.item?.kind === "tool_invocation"
+      || envelope.event.item?.kind === "plan"
+      || envelope.event.item?.kind === "proposed_plan"
+    )
   );
 }
 
@@ -243,6 +257,10 @@ function hasPlanLikeAssistantResponse(transcript: TranscriptState): boolean {
       && /(###\s*3\.|(?:^|\n)3\.)/.test(text)
     );
   });
+}
+
+function hasAssistantResponse(transcript: TranscriptState): boolean {
+  return getAssistantTexts(transcript).some((text) => text.length > 0);
 }
 
 function getSortedItems(transcript: TranscriptState): TranscriptItem[] {

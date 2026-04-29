@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { deriveCanonicalPlan, reduceEvents } from "@anyharness/sdk";
+import { deriveCanonicalPlan } from "@anyharness/sdk";
 
 import { createRuntimeHarness, type RuntimeHarness } from "../../harness/runtime-harness.js";
 import {
@@ -15,6 +15,7 @@ import {
   getPlanningTestTimeoutMs,
   hasPlanFileWrite,
   hasGeminiPlanningBehavior,
+  isBehaviorOnlyPlanningCompletion,
   isPlanEnvelope,
   switchToPlanMode,
 } from "./helpers.js";
@@ -68,12 +69,11 @@ describe("runtime agent planning compatibility", () => {
 
         const result = await harness.promptAndCollectUntil(session.id, planningCase.prompt, {
           timeoutMs: getPlanningPromptTimeoutMs(planningCase.agentKind),
-          stopWhen: (envelope, events) =>
+          stopWhen: (envelope) =>
             isPlanEnvelope(envelope)
             || (
               planningCase.expectedPlanSource === "behavior_only"
-              && envelope.event.type === "item_completed"
-              && hasGeminiPlanningBehavior(reduceEvents(events, session.id))
+              && isBehaviorOnlyPlanningCompletion(envelope)
             )
             || envelope.event.type === "interaction_requested"
             || envelope.event.type === "turn_ended"
