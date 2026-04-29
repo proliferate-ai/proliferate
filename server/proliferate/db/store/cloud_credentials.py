@@ -76,10 +76,7 @@ async def sync_cloud_credential_if_changed(
             return
 
     for record in existing:
-        if (
-            record.payload_format == payload_format
-            and payload_matches(record.payload_ciphertext)
-        ):
+        if record.payload_format == payload_format and payload_matches(record.payload_ciphertext):
             record.last_synced_at = now
             await db.commit()
             return
