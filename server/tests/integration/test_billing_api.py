@@ -151,8 +151,6 @@ class TestBillingApi:
             "startBlockReason": None,
             "activeSpendHold": False,
             "holdReason": None,
-            "blocked": False,
-            "blockedReason": None,
         }
 
         compat_response = await client.get("/v1/billing/plan", headers=headers)
@@ -178,8 +176,6 @@ class TestBillingApi:
             "startBlockReason": None,
             "activeSpendHold": False,
             "holdReason": None,
-            "blocked": False,
-            "blockedReason": None,
         }
 
     @pytest.mark.asyncio
@@ -199,7 +195,6 @@ class TestBillingApi:
         workspace = CloudWorkspace(
             user_id=user_id,
             billing_subject_id=billing_subject.id,
-            created_by_user_id=user_id,
             display_name="acme/rocket",
             git_provider="github",
             git_owner="acme",
@@ -265,7 +260,7 @@ class TestBillingApi:
         assert payload["remainingSandboxHours"] is None
         assert payload["usedSandboxHours"] == 2.0
         assert payload["activeSandboxCount"] == 1
-        assert payload["blocked"] is False
+        assert payload["startBlocked"] is False
 
     @pytest.mark.asyncio
     async def test_cloud_plan_counts_historical_billable_usage_without_loading_non_billable_rows(
@@ -285,7 +280,6 @@ class TestBillingApi:
         workspace = CloudWorkspace(
             user_id=user_id,
             billing_subject_id=billing_subject.id,
-            created_by_user_id=user_id,
             display_name="acme/rocket",
             git_provider="github",
             git_owner="acme",
@@ -364,7 +358,7 @@ class TestBillingApi:
         assert payload["usedSandboxHours"] == 3.0
         assert payload["freeSandboxHours"] == 10.0
         assert payload["remainingSandboxHours"] == 7.0
-        assert payload["blocked"] is False
+        assert payload["startBlocked"] is False
 
     @pytest.mark.asyncio
     async def test_cloud_workspace_create_blocks_after_free_hours_exhausted(
@@ -409,7 +403,6 @@ class TestBillingApi:
         workspace = CloudWorkspace(
             user_id=user_id,
             billing_subject_id=billing_subject.id,
-            created_by_user_id=user_id,
             display_name="acme/rocket",
             git_provider="github",
             git_owner="acme",

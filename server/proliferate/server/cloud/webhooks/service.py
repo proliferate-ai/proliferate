@@ -7,6 +7,7 @@ from uuid import UUID
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
+    BILLING_MODE_ENFORCE,
     PROVIDER_EVENT_KIND_CREATED,
     PROVIDER_EVENT_KIND_KILLED,
     PROVIDER_EVENT_KIND_PAUSED,
@@ -149,7 +150,7 @@ async def handle_e2b_webhook(
 
     if event_kind in {PROVIDER_EVENT_KIND_CREATED, PROVIDER_EVENT_KIND_RESUMED}:
         billing = await get_billing_snapshot_for_subject(workspace.billing_subject_id)
-        if billing.active_spend_hold:
+        if billing.billing_mode == BILLING_MODE_ENFORCE and billing.active_spend_hold:
             if event.sandbox_id:
                 provider = get_sandbox_provider(sandbox.provider)
                 await provider.pause_sandbox(event.sandbox_id)

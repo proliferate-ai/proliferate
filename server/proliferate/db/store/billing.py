@@ -14,7 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
+    BILLING_HOLD_STATUS_ACTIVE,
     BILLING_RECONCILER_LOCK_KEY,
+    BILLING_SUBJECT_KIND_PERSONAL,
     FREE_INCLUDED_GRANT_TYPE,
     USAGE_SEGMENT_RECENT_LOOKBACK_DAYS,
 )
@@ -50,7 +52,7 @@ async def ensure_personal_billing_subject(db: AsyncSession, user_id: UUID) -> Bi
     result = await db.execute(
         pg_insert(BillingSubject)
         .values(
-            kind="personal",
+            kind=BILLING_SUBJECT_KIND_PERSONAL,
             user_id=user_id,
             organization_id=None,
             created_at=now,
@@ -64,7 +66,7 @@ async def ensure_personal_billing_subject(db: AsyncSession, user_id: UUID) -> Bi
         subject = (
             await db.execute(
                 select(BillingSubject).where(
-                    BillingSubject.kind == "personal",
+                    BillingSubject.kind == BILLING_SUBJECT_KIND_PERSONAL,
                     BillingSubject.user_id == user_id,
                 )
             )
@@ -155,7 +157,7 @@ async def list_active_holds(db: AsyncSession, billing_subject_id: UUID) -> list[
                 select(BillingHold)
                 .where(
                     BillingHold.billing_subject_id == billing_subject_id,
-                    BillingHold.status == "active",
+                    BillingHold.status == BILLING_HOLD_STATUS_ACTIVE,
                 )
                 .order_by(BillingHold.created_at.asc())
             )
@@ -233,25 +235,6 @@ async def get_open_usage_segment(
             )
         )
     ).scalar_one_or_none()
-
-
-async def get_latest_usage_segment(
-    db: AsyncSession,
-    sandbox_id: UUID,
-) -> UsageSegment | None:
-    return (
-        await db.execute(
-            select(UsageSegment)
-            .where(UsageSegment.sandbox_id == sandbox_id)
-            .order_by(UsageSegment.started_at.desc(), UsageSegment.created_at.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-
-
-async def load_latest_usage_segment_for_sandbox(sandbox_id: UUID) -> UsageSegment | None:
-    async with db_engine.async_session_factory() as db:
-        return await get_latest_usage_segment(db, sandbox_id)
 
 
 async def _get_workspace_billing_subject(
@@ -503,17 +486,10 @@ async def load_billing_snapshot_state_for_subject(
         subject = await db.get(BillingSubject, billing_subject_id)
         if subject is None:
             raise RuntimeError("Billing subject not found.")
-        if subject.kind == "personal" and subject.user_id is not None:
+        if subject.kind == BILLING_SUBJECT_KIND_PERSONAL and subject.user_id is not None:
             await ensure_free_included_grant(db, subject.user_id)
             await db.commit()
         return await _build_billing_snapshot_state_for_subject(db, billing_subject_id)
-
-
-async def resolve_billing_subject_id_for_user(user_id: UUID) -> UUID:
-    async with db_engine.async_session_factory() as db:
-        subject = await ensure_personal_billing_subject(db, user_id)
-        await db.commit()
-        return subject.id
 
 
 async def open_usage_segment_for_sandbox(

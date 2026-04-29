@@ -947,10 +947,6 @@ export interface components {
             activeSpendHold: boolean;
             /** Holdreason */
             holdReason?: string | null;
-            /** Blocked */
-            blocked: boolean;
-            /** Blockedreason */
-            blockedReason?: string | null;
         };
         /** CloudMcpConnectionSyncStatus */
         CloudMcpConnectionSyncStatus: {
@@ -991,10 +987,6 @@ export interface components {
             activeSpendHold: boolean;
             /** Holdreason */
             holdReason?: string | null;
-            /** Blocked */
-            blocked: boolean;
-            /** Blockedreason */
-            blockedReason?: string | null;
         };
         /** CloudRepoConfigResponse */
         CloudRepoConfigResponse: {
@@ -1729,13 +1721,6 @@ export interface components {
             actionBlockKind?: string | null;
             /** Actionblockreason */
             actionBlockReason?: string | null;
-            /** Billingsuspensionstate */
-            billingSuspensionState?: string | null;
-            /**
-             * Canresume
-             * @default false
-             */
-            canResume: boolean;
             /** Postreadyphase */
             postReadyPhase: string;
             /** Postreadyfilestotal */
@@ -1799,13 +1784,6 @@ export interface components {
             actionBlockKind?: string | null;
             /** Actionblockreason */
             actionBlockReason?: string | null;
-            /** Billingsuspensionstate */
-            billingSuspensionState?: string | null;
-            /**
-             * Canresume
-             * @default false
-             */
-            canResume: boolean;
             /** Postreadyphase */
             postReadyPhase: string;
             /** Postreadyfilestotal */

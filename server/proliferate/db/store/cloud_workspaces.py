@@ -106,7 +106,6 @@ async def create_cloud_workspace_record(
     workspace = CloudWorkspace(
         user_id=user_id,
         billing_subject_id=billing_subject.id,
-        created_by_user_id=user_id,
         display_name=display_name,
         git_provider=git_provider,
         git_owner=git_owner,

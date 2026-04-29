@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 
+from proliferate.constants.billing import BILLING_MODE_ENFORCE
 from proliferate.db.models.cloud import CloudWorkspace
 from proliferate.integrations.sandbox.base import ProviderSandboxState
 from proliferate.server.cloud.errors import CloudApiError
@@ -19,7 +20,6 @@ def _make_workspace() -> CloudWorkspace:
         id=uuid4(),
         user_id=user_id,
         billing_subject_id=user_id,
-        created_by_user_id=user_id,
         display_name="acme/rocket",
         git_provider="github",
         git_owner="acme",
@@ -62,7 +62,7 @@ class _FakeProvider:
 
 
 async def _unblocked_billing_snapshot(_billing_subject_id) -> SimpleNamespace:
-    return SimpleNamespace(blocked=False, active_spend_hold=False)
+    return SimpleNamespace(billing_mode=BILLING_MODE_ENFORCE, active_spend_hold=False)
 
 
 @pytest.mark.asyncio

@@ -29,6 +29,21 @@ const REPO_CONFIG_MESSAGE = "The runtime is ready. Applying repo files and cloud
 const RETRY_HELPER_TEXT = "The workspace record is kept and we will retry setup from there.";
 const START_HELPER_TEXT = "The workspace record is kept and we will start the runtime again from there.";
 
+export type CloudStartBlockReason =
+  | "concurrency_limit"
+  | "credits_exhausted"
+  | "payment_failed"
+  | "admin_hold"
+  | "external_billing_hold";
+
+const START_BLOCK_REASONS = new Set<string>([
+  "concurrency_limit",
+  "credits_exhausted",
+  "payment_failed",
+  "admin_hold",
+  "external_billing_hold",
+]);
+
 export type CloudWorkspaceStatusScreenMode = "pending" | "error" | "stopped" | "blocked";
 
 export interface CloudWorkspaceStatusScreenModel {
@@ -58,6 +73,22 @@ export function isCloudWorkspacePending(status: string): boolean {
   return PENDING_STATUSES.has(status as CloudWorkspaceStatus);
 }
 
+export function isCloudStartBlockReason(
+  reason: string | null | undefined,
+): reason is CloudStartBlockReason {
+  return typeof reason === "string" && START_BLOCK_REASONS.has(reason);
+}
+
+export function titleForStartBlockReason(reason: string | null | undefined): string {
+  return reason === "concurrency_limit" ? "Sandbox limit reached" : "Cloud usage is paused";
+}
+
+export function descriptionForStartBlockReason(reason: string | null | undefined): string {
+  return reason === "concurrency_limit"
+    ? CONCURRENCY_BLOCK_DESCRIPTION
+    : GENERIC_BLOCKED_DESCRIPTION;
+}
+
 function isPostReadyPending(phase: string | null | undefined): boolean {
   return phase === "applying_files" || phase === "starting_setup";
 }
@@ -66,7 +97,7 @@ export function shouldShowCloudWorkspaceStatusScreen(
   workspace: CloudWorkspaceSummary,
 ): boolean {
   return (
-    workspace.actionBlockKind !== null
+    workspace.actionBlockKind != null
     || isCloudWorkspacePending(workspace.status)
     || workspace.status === "error"
     || workspace.status === "stopped"
@@ -81,14 +112,13 @@ export function buildCloudWorkspaceStatusScreenModel(
   const branchLabel = `${workspace.repo.baseBranch} -> ${workspace.repo.branch}`;
 
   if (workspace.actionBlockKind) {
-    const concurrencyLimited = workspace.actionBlockKind === "concurrency_limit";
     const description = workspace.actionBlockReason
-      ?? (concurrencyLimited ? CONCURRENCY_BLOCK_DESCRIPTION : GENERIC_BLOCKED_DESCRIPTION);
+      ?? descriptionForStartBlockReason(workspace.actionBlockKind);
     return {
       mode: "blocked",
       pendingStage: null,
       eyebrowTone: "pending",
-      title: concurrencyLimited ? "Sandbox limit reached" : "Cloud usage is paused",
+      title: titleForStartBlockReason(workspace.actionBlockKind),
       description,
       repoLabel,
       branchLabel,

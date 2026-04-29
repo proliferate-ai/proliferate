@@ -26,8 +26,6 @@ class BillingSnapshot:
     active_spend_hold: bool
     hold_reason: str | None
     remaining_seconds: float | None
-    blocked: bool
-    blocked_reason: str | None
 
 
 @dataclass(frozen=True)
@@ -101,8 +99,6 @@ class CloudPlanInfo(BillingBaseModel):
     start_block_reason: str | None = Field(default=None, alias="startBlockReason")
     active_spend_hold: bool = Field(alias="activeSpendHold")
     hold_reason: str | None = Field(default=None, alias="holdReason")
-    blocked: bool
-    blocked_reason: str | None = Field(default=None, alias="blockedReason")
 
 
 class BillingOverview(BillingBaseModel):
@@ -119,5 +115,3 @@ class BillingOverview(BillingBaseModel):
     start_block_reason: str | None = Field(default=None, alias="startBlockReason")
     active_spend_hold: bool = Field(alias="activeSpendHold")
     hold_reason: str | None = Field(default=None, alias="holdReason")
-    blocked: bool
-    blocked_reason: str | None = Field(default=None, alias="blockedReason")

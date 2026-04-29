@@ -26,7 +26,6 @@ async def test_app_startup_does_not_reconnect_cloud_sandboxes(
         workspace = CloudWorkspace(
             user_id=user_id,
             billing_subject_id=billing_subject.id,
-            created_by_user_id=user_id,
             display_name="acme/rocket",
             git_provider="github",
             git_owner="acme",

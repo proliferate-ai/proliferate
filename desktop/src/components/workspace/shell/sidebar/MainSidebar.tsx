@@ -21,6 +21,9 @@ import {
 } from "@/lib/domain/workspaces/sidebar";
 import { buildConfiguredCloudRepoKeys } from "@/lib/domain/workspaces/cloud-workspace-creation";
 import {
+  titleForStartBlockReason,
+} from "@/lib/domain/workspaces/cloud-workspace-status";
+import {
   Archive,
   Check,
   CollapseAll,
@@ -214,9 +217,7 @@ export function MainSidebar() {
   const cloudWorkspaceTooltip = cloudUnavailable
     ? CAPABILITY_COPY.cloudDisabledTooltip
     : cloudWorkspaceBlocked
-      ? billingPlan?.startBlockReason === "concurrency_limit"
-        ? "Sandbox limit reached."
-        : "Cloud usage is paused."
+      ? `${titleForStartBlockReason(billingPlan?.startBlockReason)}.`
       : CAPABILITY_COPY.cloudSignInTooltip;
   const filtersActive = showArchived || !isDefaultSidebarWorkspaceTypes(workspaceTypes);
 

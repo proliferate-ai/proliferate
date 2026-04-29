@@ -60,7 +60,6 @@ function makeCloudWorkspace(): CloudWorkspaceSummary {
     templateVersion: null,
     runtimeGeneration: 0,
     actionBlockKind: null,
-    canResume: false,
     createdAt: "2026-04-06T09:00:00.000Z",
     updatedAt: "2026-04-06T09:00:00.000Z",
     postReadyPhase: "idle",

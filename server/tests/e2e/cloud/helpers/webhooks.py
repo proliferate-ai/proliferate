@@ -65,7 +65,6 @@ async def create_seeded_workspace_and_sandbox(
     workspace = CloudWorkspace(
         user_id=user_uuid,
         billing_subject_id=billing_subject.id,
-        created_by_user_id=user_uuid,
         display_name="proliferate-ai/proliferate",
         git_provider="github",
         git_owner=DEFAULT_GITHUB_OWNER,

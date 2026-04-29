@@ -9,6 +9,9 @@ from proliferate.config import settings
 from proliferate.constants.billing import (
     ACTIVE_SANDBOX_STATUSES,
     BILLING_DECISION_AUTHORIZE_START,
+    BILLING_HOLD_KIND_ADMIN_HOLD,
+    BILLING_HOLD_KIND_EXTERNAL_BILLING_HOLD,
+    BILLING_HOLD_KIND_PAYMENT_FAILED,
     BILLING_MODE_ENFORCE,
     FREE_INCLUDED_GRANT_TYPE,
     UNLIMITED_CLOUD_ENTITLEMENT,
@@ -29,7 +32,6 @@ from proliferate.db.store.billing import (
     load_billing_snapshot_state,
     load_billing_snapshot_state_for_subject,
     record_billing_decision_event,
-    resolve_billing_subject_id_for_user,
     resolve_billing_subject_id_for_workspace,
 )
 from proliferate.server.billing.models import (
@@ -45,9 +47,9 @@ from proliferate.server.billing.models import (
 )
 
 _ACTIVE_HOLD_REASONS: dict[str, str] = {
-    "payment_failed": WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED,
-    "admin_hold": WORKSPACE_ACTION_BLOCK_KIND_ADMIN_HOLD,
-    "external_billing_hold": WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD,
+    BILLING_HOLD_KIND_PAYMENT_FAILED: WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED,
+    BILLING_HOLD_KIND_ADMIN_HOLD: WORKSPACE_ACTION_BLOCK_KIND_ADMIN_HOLD,
+    BILLING_HOLD_KIND_EXTERNAL_BILLING_HOLD: WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD,
 }
 
 
@@ -115,10 +117,6 @@ async def get_billing_snapshot_for_subject(billing_subject_id: UUID) -> BillingS
     return _build_billing_snapshot(state)
 
 
-async def resolve_billing_subject_for_user(user_id: UUID) -> UUID:
-    return await resolve_billing_subject_id_for_user(user_id)
-
-
 def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
     now = utcnow()
     used_seconds = state.historical_billable_seconds + sum(
@@ -152,9 +150,6 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
     active_spend_hold_reason = hold_reason or credit_reason
     start_blocked = start_block_reason is not None
     active_spend_hold = active_spend_hold_reason is not None
-    blocked_reason = (
-        start_block_reason if settings.cloud_billing_mode == BILLING_MODE_ENFORCE else None
-    )
 
     return BillingSnapshot(
         billing_subject_id=state.billing_subject_id,
@@ -172,8 +167,6 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
         active_spend_hold=active_spend_hold,
         hold_reason=active_spend_hold_reason,
         remaining_seconds=remaining_seconds_value,
-        blocked=blocked_reason is not None,
-        blocked_reason=blocked_reason,
     )
 
 
@@ -249,8 +242,6 @@ async def get_billing_overview(user_id: UUID) -> BillingOverview:
         start_block_reason=snapshot.start_block_reason,
         active_spend_hold=snapshot.active_spend_hold,
         hold_reason=snapshot.hold_reason,
-        blocked=snapshot.blocked,
-        blocked_reason=snapshot.blocked_reason,
     )
 
 
@@ -282,8 +273,6 @@ async def get_cloud_plan(user_id: UUID) -> CloudPlanInfo:
         start_block_reason=snapshot.start_block_reason,
         active_spend_hold=snapshot.active_spend_hold,
         hold_reason=snapshot.hold_reason,
-        blocked=snapshot.blocked,
-        blocked_reason=snapshot.blocked_reason,
     )
 
 

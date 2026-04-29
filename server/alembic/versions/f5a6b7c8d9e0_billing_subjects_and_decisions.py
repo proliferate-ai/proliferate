@@ -20,6 +20,8 @@ down_revision: str | Sequence[str] | None = "e3f4a5b6c7d8"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+BILLING_SUBJECT_KIND_PERSONAL = "personal"
+
 
 def _user_ids(bind: sa.Connection) -> list[uuid.UUID]:
     rows = bind.execute(
@@ -46,9 +48,10 @@ def _subject_ids_by_user(bind: sa.Connection) -> dict[uuid.UUID, uuid.UUID]:
             """
             SELECT user_id, id
             FROM billing_subject
-            WHERE kind = 'personal' AND user_id IS NOT NULL
+            WHERE kind = :kind AND user_id IS NOT NULL
             """
-        )
+        ),
+        {"kind": BILLING_SUBJECT_KIND_PERSONAL},
     )
     return {row[0]: row[1] for row in rows}
 
@@ -114,7 +117,6 @@ def upgrade() -> None:
             sa.Column("source_ref", sa.String(length=255), nullable=True),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
-            sa.Column("last_enforced_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
             sa.PrimaryKeyConstraint("id"),
         )
@@ -176,8 +178,6 @@ def upgrade() -> None:
         op.add_column("usage_segment", sa.Column("billing_subject_id", sa.Uuid(), nullable=True))
     if not _has_column("cloud_workspace", "billing_subject_id"):
         op.add_column("cloud_workspace", sa.Column("billing_subject_id", sa.Uuid(), nullable=True))
-    if not _has_column("cloud_workspace", "created_by_user_id"):
-        op.add_column("cloud_workspace", sa.Column("created_by_user_id", sa.Uuid(), nullable=True))
 
     bind = op.get_bind()
     now = datetime.now(UTC)
@@ -186,12 +186,13 @@ def upgrade() -> None:
             sa.text(
                 """
                 INSERT INTO billing_subject (id, kind, user_id, organization_id, created_at, updated_at)
-                VALUES (:id, 'personal', :user_id, NULL, :created_at, :updated_at)
+                VALUES (:id, :kind, :user_id, NULL, :created_at, :updated_at)
                 ON CONFLICT (user_id) DO NOTHING
                 """
             ),
             {
                 "id": uuid.uuid4(),
+                "kind": BILLING_SUBJECT_KIND_PERSONAL,
                 "user_id": user_id,
                 "created_at": now,
                 "updated_at": now,
@@ -218,8 +219,7 @@ def upgrade() -> None:
             sa.text(
                 """
                 UPDATE cloud_workspace
-                SET billing_subject_id = :subject_id,
-                    created_by_user_id = user_id
+                SET billing_subject_id = :subject_id
                 WHERE user_id = :user_id
                 """
             ),
@@ -230,7 +230,6 @@ def upgrade() -> None:
     op.alter_column("billing_entitlement", "billing_subject_id", nullable=False)
     op.alter_column("usage_segment", "billing_subject_id", nullable=False)
     op.alter_column("cloud_workspace", "billing_subject_id", nullable=False)
-    op.alter_column("cloud_workspace", "created_by_user_id", nullable=False)
 
     _create_index_once(
         "ix_billing_grant_billing_subject_id",
@@ -252,16 +251,9 @@ def upgrade() -> None:
         "cloud_workspace",
         ["billing_subject_id"],
     )
-    _create_index_once(
-        "ix_cloud_workspace_created_by_user_id",
-        "cloud_workspace",
-        ["created_by_user_id"],
-    )
-
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_index("ix_cloud_workspace_created_by_user_id", table_name="cloud_workspace")
     op.drop_index("ix_cloud_workspace_billing_subject_id", table_name="cloud_workspace")
     op.drop_index("ix_usage_segment_billing_subject_id", table_name="usage_segment")
     op.drop_index(
@@ -270,7 +262,6 @@ def downgrade() -> None:
     )
     op.drop_index("ix_billing_grant_billing_subject_id", table_name="billing_grant")
 
-    op.drop_column("cloud_workspace", "created_by_user_id")
     op.drop_column("cloud_workspace", "billing_subject_id")
     op.drop_column("usage_segment", "billing_subject_id")
     op.drop_column("billing_entitlement", "billing_subject_id")

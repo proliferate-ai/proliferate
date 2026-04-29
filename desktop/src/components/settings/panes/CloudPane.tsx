@@ -15,6 +15,10 @@ import {
   buildSettingsHref,
 } from "@/lib/domain/settings/navigation";
 import {
+  descriptionForStartBlockReason,
+  titleForStartBlockReason,
+} from "@/lib/domain/workspaces/cloud-workspace-status";
+import {
   cloudRepositoryKey,
   isCloudRepository,
   type SettingsRepositoryEntry,
@@ -136,17 +140,13 @@ export function CloudPane({ repositories }: CloudPaneProps) {
               </div>
             )}
 
-            {billingPlan.startBlocked && (
+            {billingPlan.billingMode === "enforce" && billingPlan.startBlocked && (
               <div className="rounded-lg border border-border bg-background px-3 py-2">
                 <p className="font-medium text-foreground">
-                  {billingPlan.startBlockReason === "concurrency_limit"
-                    ? "Sandbox limit reached"
-                    : "Cloud usage is paused"}
+                  {titleForStartBlockReason(billingPlan.startBlockReason)}
                 </p>
                 <p className="mt-1 text-muted-foreground">
-                  {billingPlan.startBlockReason === "concurrency_limit"
-                    ? "Stop another cloud workspace before starting a new one."
-                    : "Cloud usage is unavailable right now."}
+                  {descriptionForStartBlockReason(billingPlan.startBlockReason)}
                 </p>
               </div>
             )}
