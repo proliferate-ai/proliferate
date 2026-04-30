@@ -964,6 +964,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/git/diff/branch-files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_git_branch_diff_files"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/git/push": {
         parameters: {
             query?: never;
@@ -1839,6 +1855,13 @@ export interface components {
             pushLabel: string;
             reasonIfBlocked?: string | null;
         };
+        GitBranchDiffFilesResponse: {
+            baseRef: string;
+            files: components["schemas"]["GitDiffFile"][];
+            headOid: string;
+            mergeBaseOid: string;
+            resolvedBaseOid: string;
+        };
         GitBranchRef: {
             isDefault: boolean;
             isHead: boolean;
@@ -1857,16 +1880,33 @@ export interface components {
             path: string;
             status: components["schemas"]["GitFileStatus"];
         };
-        GitDiffResponse: {
+        GitDiffFile: {
             /** Format: int32 */
             additions: number;
             binary: boolean;
             /** Format: int32 */
             deletions: number;
+            oldPath?: string | null;
+            path: string;
+            status: components["schemas"]["GitFileStatus"];
+        };
+        GitDiffResponse: {
+            /** Format: int32 */
+            additions: number;
+            baseRef?: string | null;
+            binary: boolean;
+            /** Format: int32 */
+            deletions: number;
+            headOid?: string | null;
+            mergeBaseOid?: string | null;
             patch?: string | null;
             path: string;
+            resolvedBaseOid?: string | null;
+            scope: components["schemas"]["GitDiffScope"];
             truncated: boolean;
         };
+        /** @enum {string} */
+        GitDiffScope: "working_tree" | "unstaged" | "staged" | "branch";
         /** @enum {string} */
         GitFileStatus: "modified" | "added" | "deleted" | "renamed" | "copied" | "untracked" | "conflicted";
         /** @enum {string} */
@@ -5731,6 +5771,12 @@ export interface operations {
             query: {
                 /** @description File path relative to repo root */
                 path: string;
+                /** @description Diff scope. Defaults to working_tree. */
+                scope?: components["schemas"]["GitDiffScope"];
+                /** @description Branch base ref. Only valid for scope=branch. */
+                baseRef?: string;
+                /** @description Old path for branch rename/copy rows. Only valid for scope=branch. */
+                oldPath?: string;
             };
             header?: never;
             path: {
@@ -5748,6 +5794,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GitDiffResponse"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_git_branch_diff_files: {
+        parameters: {
+            query?: {
+                /** @description Branch base ref. Defaults to runtime default branch resolution. */
+                baseRef?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Branch diff file list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitBranchDiffFilesResponse"];
                 };
             };
             /** @description Workspace not found */

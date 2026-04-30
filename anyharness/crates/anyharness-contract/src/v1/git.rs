@@ -108,6 +108,15 @@ pub enum GitIncludedState {
 // Diff
 // ---------------------------------------------------------------------------
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum GitDiffScope {
+    WorkingTree,
+    Unstaged,
+    Staged,
+    Branch,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GitDiffRequest {
@@ -118,12 +127,43 @@ pub struct GitDiffRequest {
 #[serde(rename_all = "camelCase")]
 pub struct GitDiffResponse {
     pub path: String,
+    pub scope: GitDiffScope,
     pub binary: bool,
     pub truncated: bool,
     pub additions: u32,
     pub deletions: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_ref: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolved_base_oid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub merge_base_oid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub head_oid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub patch: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GitDiffFile {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub old_path: Option<String>,
+    pub status: GitFileStatus,
+    pub additions: u32,
+    pub deletions: u32,
+    pub binary: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBranchDiffFilesResponse {
+    pub base_ref: String,
+    pub resolved_base_oid: String,
+    pub merge_base_oid: String,
+    pub head_oid: String,
+    pub files: Vec<GitDiffFile>,
 }
 
 // ---------------------------------------------------------------------------

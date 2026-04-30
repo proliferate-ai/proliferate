@@ -1,9 +1,12 @@
 import type {
   CommitRequest,
   CommitResponse,
+  GitBranchDiffFilesResponse,
   GitBranchRef,
+  GitDiffOptions,
   GitDiffResponse,
   GitStatusSnapshot,
+  ListBranchDiffFilesOptions,
   PushRequest,
   PushResponse,
   RenameBranchRequest,
@@ -22,9 +25,44 @@ export class GitClient {
     );
   }
 
-  async getDiff(workspaceId: string, path: string): Promise<GitDiffResponse> {
+  async getDiff(
+    workspaceId: string,
+    path: string,
+    options: GitDiffOptions = {},
+  ): Promise<GitDiffResponse> {
+    const params: Array<[string, string]> = [["path", path]];
+    const scope = options.scope ?? null;
+    if (scope && scope !== "working_tree") {
+      params.push(["scope", scope]);
+    }
+    if (scope === "branch") {
+      const baseRef = options.baseRef?.trim();
+      const oldPath = options.oldPath?.trim();
+      if (baseRef) {
+        params.push(["baseRef", baseRef]);
+      }
+      if (oldPath) {
+        params.push(["oldPath", oldPath]);
+      }
+    }
+
     return this.transport.get<GitDiffResponse>(
-      `/v1/workspaces/${encodeURIComponent(workspaceId)}/git/diff?path=${encodeURIComponent(path)}`,
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/git/diff?${encodeQueryParams(params)}`,
+    );
+  }
+
+  async listBranchDiffFiles(
+    workspaceId: string,
+    options: ListBranchDiffFilesOptions = {},
+  ): Promise<GitBranchDiffFilesResponse> {
+    const params: Array<[string, string]> = [];
+    const baseRef = options.baseRef?.trim();
+    if (baseRef) {
+      params.push(["baseRef", baseRef]);
+    }
+    const query = encodeQueryParams(params);
+    return this.transport.get<GitBranchDiffFilesResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/git/diff/branch-files${query ? `?${query}` : ""}`,
     );
   }
 
@@ -68,4 +106,10 @@ export class GitClient {
       input,
     );
   }
+}
+
+function encodeQueryParams(params: Array<[string, string]>): string {
+  return params
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join("&");
 }

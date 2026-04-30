@@ -1,6 +1,7 @@
 use anyharness_contract::v1::{
     CommitRequest, CommitResponse, GitActionAvailability as ContractGitActionAvailability,
-    GitBranchRef, GitChangedFile as ContractGitChangedFile, GitDiffResponse,
+    GitBranchDiffFilesResponse, GitBranchRef, GitChangedFile as ContractGitChangedFile,
+    GitDiffFile as ContractGitDiffFile, GitDiffResponse, GitDiffScope as ContractGitDiffScope,
     GitFileStatus as ContractGitFileStatus, GitIncludedState as ContractGitIncludedState,
     GitOperation as ContractGitOperation, GitStatusSnapshot,
     GitStatusSummary as ContractGitStatusSummary, PushRequest, PushResponse, RenameBranchRequest,
@@ -17,11 +18,12 @@ use super::error::ApiError;
 use crate::app::AppState;
 use crate::git::types::{
     CommitError, GitActionAvailability as InternalGitActionAvailability,
-    GitBranch as InternalGitBranch, GitChangedFile as InternalGitChangedFile,
-    GitDiffResult as InternalGitDiffResult, GitFileStatus as InternalGitFileStatus,
-    GitIncludedState as InternalGitIncludedState, GitOperation as InternalGitOperation,
-    GitStatusSnapshot as InternalGitStatusSnapshot, GitStatusSummary as InternalGitStatusSummary,
-    PushError,
+    GitBranch as InternalGitBranch, GitBranchDiffFilesResult as InternalGitBranchDiffFilesResult,
+    GitChangedFile as InternalGitChangedFile, GitDiffError, GitDiffFile as InternalGitDiffFile,
+    GitDiffResult as InternalGitDiffResult, GitDiffScope as InternalGitDiffScope,
+    GitFileStatus as InternalGitFileStatus, GitIncludedState as InternalGitIncludedState,
+    GitOperation as InternalGitOperation, GitStatusSnapshot as InternalGitStatusSnapshot,
+    GitStatusSummary as InternalGitStatusSummary, PushError,
 };
 use crate::git::GitService;
 
@@ -94,8 +96,18 @@ pub async fn get_git_status(
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DiffQuery {
     pub path: String,
+    pub scope: Option<ContractGitDiffScope>,
+    pub base_ref: Option<String>,
+    pub old_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchDiffFilesQuery {
+    pub base_ref: Option<String>,
 }
 
 #[utoipa::path(
@@ -104,6 +116,9 @@ pub struct DiffQuery {
     params(
         ("workspace_id" = String, Path, description = "Workspace ID"),
         ("path" = String, Query, description = "File path relative to repo root"),
+        ("scope" = Option<ContractGitDiffScope>, Query, description = "Diff scope. Defaults to working_tree."),
+        ("baseRef" = Option<String>, Query, description = "Branch base ref. Only valid for scope=branch."),
+        ("oldPath" = Option<String>, Query, description = "Old path for branch rename/copy rows. Only valid for scope=branch."),
     ),
     responses(
         (status = 200, description = "File diff", body = GitDiffResponse),
@@ -117,14 +132,60 @@ pub async fn get_git_diff(
     Query(query): Query<DiffQuery>,
 ) -> Result<Json<GitDiffResponse>, ApiError> {
     let diff_path = query.path;
+    let scope = query
+        .scope
+        .map(git_diff_scope_to_internal)
+        .unwrap_or(InternalGitDiffScope::WorkingTree);
+    let base_ref = normalize_query_string(query.base_ref);
+    let old_path = normalize_query_string(query.old_path);
     let diff = run_git_task(&state, workspace_id, "git diff", move |_, ws_path| {
-        GitService::diff_for_path(&ws_path, &diff_path)
-            .map(git_diff_to_contract)
-            .map_err(|e| ApiError::bad_request(e.to_string(), "GIT_DIFF_FAILED"))
+        GitService::diff_for_path_with_scope(
+            &ws_path,
+            &diff_path,
+            scope,
+            base_ref.as_deref(),
+            old_path.as_deref(),
+        )
+        .map(git_diff_to_contract)
+        .map_err(git_diff_error_to_api)
     })
     .await?;
 
     Ok(Json(diff))
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/workspaces/{workspace_id}/git/diff/branch-files",
+    params(
+        ("workspace_id" = String, Path, description = "Workspace ID"),
+        ("baseRef" = Option<String>, Query, description = "Branch base ref. Defaults to runtime default branch resolution."),
+    ),
+    responses(
+        (status = 200, description = "Branch diff file list", body = GitBranchDiffFilesResponse),
+        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "git"
+)]
+pub async fn list_git_branch_diff_files(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+    Query(query): Query<BranchDiffFilesQuery>,
+) -> Result<Json<GitBranchDiffFilesResponse>, ApiError> {
+    let base_ref = normalize_query_string(query.base_ref);
+    let response = run_git_task(
+        &state,
+        workspace_id,
+        "git branch diff files",
+        move |_, ws_path| {
+            GitService::branch_diff_files(&ws_path, base_ref.as_deref())
+                .map(git_branch_diff_files_to_contract)
+                .map_err(git_diff_error_to_api)
+        },
+    )
+    .await?;
+
+    Ok(Json(response))
 }
 
 // ---------------------------------------------------------------------------
@@ -413,11 +474,43 @@ fn git_changed_file_to_contract(file: InternalGitChangedFile) -> ContractGitChan
 fn git_diff_to_contract(diff: InternalGitDiffResult) -> GitDiffResponse {
     GitDiffResponse {
         path: diff.path,
+        scope: git_diff_scope_to_contract(diff.scope),
         binary: diff.binary,
         truncated: diff.truncated,
         additions: diff.additions,
         deletions: diff.deletions,
+        base_ref: diff.base_ref,
+        resolved_base_oid: diff.resolved_base_oid,
+        merge_base_oid: diff.merge_base_oid,
+        head_oid: diff.head_oid,
         patch: diff.patch,
+    }
+}
+
+fn git_branch_diff_files_to_contract(
+    response: InternalGitBranchDiffFilesResult,
+) -> GitBranchDiffFilesResponse {
+    GitBranchDiffFilesResponse {
+        base_ref: response.base_ref,
+        resolved_base_oid: response.resolved_base_oid,
+        merge_base_oid: response.merge_base_oid,
+        head_oid: response.head_oid,
+        files: response
+            .files
+            .into_iter()
+            .map(git_diff_file_to_contract)
+            .collect(),
+    }
+}
+
+fn git_diff_file_to_contract(file: InternalGitDiffFile) -> ContractGitDiffFile {
+    ContractGitDiffFile {
+        path: file.path,
+        old_path: file.old_path,
+        status: git_file_status_to_contract(file.status),
+        additions: file.additions,
+        deletions: file.deletions,
+        binary: file.binary,
     }
 }
 
@@ -451,6 +544,50 @@ fn git_file_status_to_contract(status: InternalGitFileStatus) -> ContractGitFile
         InternalGitFileStatus::Untracked => ContractGitFileStatus::Untracked,
         InternalGitFileStatus::Conflicted => ContractGitFileStatus::Conflicted,
     }
+}
+
+fn git_diff_scope_to_internal(scope: ContractGitDiffScope) -> InternalGitDiffScope {
+    match scope {
+        ContractGitDiffScope::WorkingTree => InternalGitDiffScope::WorkingTree,
+        ContractGitDiffScope::Unstaged => InternalGitDiffScope::Unstaged,
+        ContractGitDiffScope::Staged => InternalGitDiffScope::Staged,
+        ContractGitDiffScope::Branch => InternalGitDiffScope::Branch,
+    }
+}
+
+fn git_diff_scope_to_contract(scope: InternalGitDiffScope) -> ContractGitDiffScope {
+    match scope {
+        InternalGitDiffScope::WorkingTree => ContractGitDiffScope::WorkingTree,
+        InternalGitDiffScope::Unstaged => ContractGitDiffScope::Unstaged,
+        InternalGitDiffScope::Staged => ContractGitDiffScope::Staged,
+        InternalGitDiffScope::Branch => ContractGitDiffScope::Branch,
+    }
+}
+
+fn git_diff_error_to_api(error: GitDiffError) -> ApiError {
+    match error {
+        GitDiffError::InvalidBaseRef => {
+            ApiError::bad_request("invalid git diff base ref", "GIT_DIFF_INVALID_BASE_REF")
+        }
+        GitDiffError::BaseRefNotFound | GitDiffError::MergeBaseNotFound => {
+            ApiError::bad_request("git diff base ref not found", "GIT_DIFF_BASE_NOT_FOUND")
+        }
+        GitDiffError::GitFailed { message } => ApiError::bad_request(message, "GIT_DIFF_FAILED"),
+        GitDiffError::Internal(error) => {
+            ApiError::bad_request(error.to_string(), "GIT_DIFF_FAILED")
+        }
+    }
+}
+
+fn normalize_query_string(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
 }
 
 fn git_included_state_to_contract(state: InternalGitIncludedState) -> ContractGitIncludedState {

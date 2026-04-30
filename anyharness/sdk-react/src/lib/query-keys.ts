@@ -229,8 +229,17 @@ export function anyHarnessGitDiffKey(
   runtimeUrl: string | null | undefined,
   workspaceId: string | null | undefined,
   path: string | null | undefined,
+  scope: string | null | undefined = "working_tree",
+  baseRef: string | null | undefined = null,
+  oldPath: string | null | undefined = null,
 ) {
-  return [...anyHarnessRuntimeKey(runtimeUrl), "git-diff", workspaceId ?? null, path ?? null] as const;
+  return [
+    ...anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
+    normalizeGitDiffScope(scope),
+    normalizeNullableGitArg(baseRef),
+    normalizeNullableGitArg(oldPath),
+    path ?? null,
+  ] as const;
 }
 
 export function anyHarnessGitDiffScopeKey(
@@ -238,6 +247,27 @@ export function anyHarnessGitDiffScopeKey(
   workspaceId: string | null | undefined,
 ) {
   return [...anyHarnessRuntimeKey(runtimeUrl), "git-diff", workspaceId ?? null] as const;
+}
+
+export function anyHarnessGitBranchDiffFilesKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+  baseRef: string | null | undefined = null,
+) {
+  return [
+    ...anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
+    "branch-files",
+    normalizeNullableGitArg(baseRef),
+  ] as const;
+}
+
+function normalizeGitDiffScope(scope: string | null | undefined) {
+  return scope?.trim() || "working_tree";
+}
+
+function normalizeNullableGitArg(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }
 
 export function anyHarnessGitBranchesKey(

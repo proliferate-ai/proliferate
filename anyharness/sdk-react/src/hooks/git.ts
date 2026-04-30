@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CommitRequest, PushRequest } from "@anyharness/sdk";
+import type {
+  CommitRequest,
+  GitDiffOptions,
+  ListBranchDiffFilesOptions,
+  PushRequest,
+} from "@anyharness/sdk";
 import {
   useAnyHarnessWorkspaceContext,
   resolveWorkspaceConnectionFromContext,
@@ -8,7 +13,9 @@ import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import {
   anyHarnessGitBranchesKey,
+  anyHarnessGitBranchDiffFilesKey,
   anyHarnessGitDiffKey,
+  anyHarnessGitDiffScopeKey,
   anyHarnessGitStatusKey,
   anyHarnessPullRequestKey,
 } from "../lib/query-keys.js";
@@ -38,6 +45,9 @@ async function invalidateWorkspaceGit(
       queryKey: anyHarnessGitBranchesKey(runtimeUrl, workspaceId),
     }),
     queryClient.invalidateQueries({
+      queryKey: anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
+    }),
+    queryClient.invalidateQueries({
       queryKey: anyHarnessPullRequestKey(runtimeUrl, workspaceId),
     }),
   ]);
@@ -64,6 +74,9 @@ export function useGitStatusQuery(options?: WorkspaceQueryOptions) {
 export function useGitDiffQuery(options: {
   workspaceId?: string | null;
   path: string | null;
+  scope?: GitDiffOptions["scope"];
+  baseRef?: string | null;
+  oldPath?: string | null;
   enabled?: boolean;
 }) {
   const workspace = useAnyHarnessWorkspaceContext();
@@ -71,12 +84,45 @@ export function useGitDiffQuery(options: {
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
-    queryKey: anyHarnessGitDiffKey(runtimeUrl, workspaceId, options.path),
+    queryKey: anyHarnessGitDiffKey(
+      runtimeUrl,
+      workspaceId,
+      options.path,
+      options.scope,
+      options.baseRef,
+      options.oldPath,
+    ),
     enabled: (options.enabled ?? true) && !!workspaceId && !!options.path,
     queryFn: async () => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.git.getDiff(resolved.connection.anyharnessWorkspaceId, options.path!);
+      return client.git.getDiff(resolved.connection.anyharnessWorkspaceId, options.path!, {
+        scope: options.scope,
+        baseRef: options.baseRef,
+        oldPath: options.oldPath,
+      });
+    },
+  });
+}
+
+export function useGitBranchDiffFilesQuery(
+  options?: WorkspaceQueryOptions & ListBranchDiffFilesOptions,
+) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useQuery({
+    queryKey: anyHarnessGitBranchDiffFilesKey(runtimeUrl, workspaceId, options?.baseRef),
+    enabled: (options?.enabled ?? true) && !!workspaceId,
+    refetchInterval: options?.refetchInterval,
+    refetchIntervalInBackground: options?.refetchIntervalInBackground,
+    queryFn: async () => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.git.listBranchDiffFiles(resolved.connection.anyharnessWorkspaceId, {
+        baseRef: options?.baseRef,
+      });
     },
   });
 }
