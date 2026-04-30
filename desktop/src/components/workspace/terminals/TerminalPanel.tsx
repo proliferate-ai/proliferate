@@ -104,7 +104,7 @@ function TerminalCommandFloatingAction({
   const label = isSetup ? "Rerun setup command" : "Rerun run command";
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-end px-3 pb-3">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-end px-3 pt-3">
       <Button
         type="button"
         size="sm"
