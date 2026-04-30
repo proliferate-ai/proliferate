@@ -66,8 +66,12 @@ def upgrade() -> None:
             sa.Column("root_anyharness_workspace_id", sa.String(length=255), nullable=True),
             sa.Column("root_anyharness_repo_root_id", sa.String(length=255), nullable=True),
             sa.Column("runtime_generation", sa.Integer(), nullable=False, server_default="0"),
-            sa.Column("credential_snapshot_version", sa.Integer(), nullable=False, server_default="0"),
-            sa.Column("repo_env_applied_version", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column(
+                "credential_snapshot_version", sa.Integer(), nullable=False, server_default="0"
+            ),
+            sa.Column(
+                "repo_env_applied_version", sa.Integer(), nullable=False, server_default="0"
+            ),
             sa.Column("last_error", sa.Text(), nullable=True),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
@@ -131,7 +135,9 @@ def upgrade() -> None:
         )
 
     if not _has_column("cloud_sandbox", "runtime_environment_id"):
-        op.add_column("cloud_sandbox", sa.Column("runtime_environment_id", sa.Uuid(), nullable=True))
+        op.add_column(
+            "cloud_sandbox", sa.Column("runtime_environment_id", sa.Uuid(), nullable=True)
+        )
     if not _has_index("cloud_sandbox", "ix_cloud_sandbox_runtime_environment_id"):
         op.create_index(
             "ix_cloud_sandbox_runtime_environment_id",

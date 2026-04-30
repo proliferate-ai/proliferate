@@ -40,6 +40,16 @@ import {
 } from "@/lib/infra/mcp/persistence";
 
 function secretCatalogEntry(id = "context7") {
+  const secretFields = [
+    {
+      id: "api_key",
+      label: "API key",
+      placeholder: "key",
+      helperText: "key",
+      getTokenInstructions: "key",
+      prefixHint: null,
+    },
+  ];
   return {
     id,
     name: "Context7",
@@ -53,20 +63,60 @@ function secretCatalogEntry(id = "context7") {
     authStyle: { kind: "bearer" },
     authFieldId: "api_key",
     url: "https://mcp.example.com/mcp",
+    displayUrl: "https://mcp.example.com/mcp",
     serverNameBase: id,
     iconId: "context7",
-    requiredFields: [
-      {
-        id: "api_key",
-        label: "API key",
-        placeholder: "key",
-        helperText: "key",
-        getTokenInstructions: "key",
-        prefixHint: null,
-      },
-    ],
+    secretFields,
+    requiredFields: secretFields,
+    settingsSchema: [],
     capabilities: ["Read docs"],
     version: 1,
+  };
+}
+
+function posthogCatalogEntry() {
+  return {
+    ...secretCatalogEntry("posthog"),
+    name: "PostHog",
+    serverNameBase: "posthog",
+    iconId: "posthog",
+    authFieldId: "apiKey",
+    secretFields: [
+      {
+        id: "apiKey",
+        label: "Project API key",
+        placeholder: "phx_...",
+        helperText: "key",
+        getTokenInstructions: "key",
+        prefixHint: "phx_",
+      },
+    ],
+    requiredFields: [
+      {
+        id: "apiKey",
+        label: "Project API key",
+        placeholder: "phx_...",
+        helperText: "key",
+        getTokenInstructions: "key",
+        prefixHint: "phx_",
+      },
+    ],
+    settingsSchema: [
+      {
+        id: "region",
+        kind: "select",
+        label: "Region",
+        placeholder: "",
+        helperText: "Region",
+        required: true,
+        defaultValue: "us",
+        options: [
+          { value: "us", label: "US" },
+          { value: "eu", label: "EU" },
+        ],
+        affectsUrl: true,
+      },
+    ],
   };
 }
 
@@ -85,7 +135,10 @@ function stdioCatalogEntry() {
     env: [],
     serverNameBase: "filesystem",
     iconId: "folder",
+    displayUrl: "",
+    secretFields: [],
     requiredFields: [],
+    settingsSchema: [],
     capabilities: ["Read files"],
     version: 1,
   };
@@ -118,7 +171,7 @@ describe("cloud MCP connector persistence", () => {
     mocks.deleteCloudMcpConnectionV2Mock.mockReset();
     mocks.getCloudMcpCatalogMock.mockResolvedValue({
       catalogVersion: "test",
-      entries: [secretCatalogEntry(), stdioCatalogEntry()],
+      entries: [secretCatalogEntry(), posthogCatalogEntry(), stdioCatalogEntry()],
     });
     mocks.listCloudMcpConnectionsMock.mockResolvedValue({
       connections: [cloudConnection()],
@@ -133,14 +186,15 @@ describe("cloud MCP connector persistence", () => {
     expect(mocks.listCloudMcpConnectionsMock).toHaveBeenCalledTimes(1);
     expect(paneData.installed).toHaveLength(1);
     expect(paneData.installed[0]?.catalogEntry.id).toBe("context7");
-    expect(paneData.available.map((entry) => entry.id)).toEqual(["filesystem"]);
+    expect(paneData.available.map((entry) => entry.id)).toEqual(["posthog", "filesystem"]);
   });
 
   it("installs API-key connectors by creating cloud connection auth", async () => {
-    await installConnector("context7", "ctx7sk-example");
+    await installConnector("context7", { api_key: "ctx7sk-example" });
 
     expect(mocks.createCloudMcpConnectionMock).toHaveBeenCalledWith({
       catalogEntryId: "context7",
+      settings: undefined,
       enabled: true,
     });
     expect(mocks.putCloudMcpSecretAuthMock).toHaveBeenCalledWith("conn_1", {
@@ -148,8 +202,24 @@ describe("cloud MCP connector persistence", () => {
     });
   });
 
+  it("creates settings-backed API-key connections before writing secrets", async () => {
+    await installConnector("posthog", { apiKey: "phx_example" }, { region: "eu" });
+
+    expect(mocks.createCloudMcpConnectionMock).toHaveBeenCalledWith({
+      catalogEntryId: "posthog",
+      settings: { region: "eu" },
+      enabled: true,
+    });
+    expect(mocks.putCloudMcpSecretAuthMock).toHaveBeenCalledWith("conn_1", {
+      secretFields: { apiKey: "phx_example" },
+    });
+    expect(
+      mocks.createCloudMcpConnectionMock.mock.invocationCallOrder[0],
+    ).toBeLessThan(mocks.putCloudMcpSecretAuthMock.mock.invocationCallOrder[0] ?? 0);
+  });
+
   it("updates connector secret in cloud", async () => {
-    await updateConnectorSecret("conn_1", "ctx7sk-updated");
+    await updateConnectorSecret("conn_1", { api_key: "ctx7sk-updated" });
 
     expect(mocks.putCloudMcpSecretAuthMock).toHaveBeenCalledWith("conn_1", {
       secretFields: { api_key: "ctx7sk-updated" },

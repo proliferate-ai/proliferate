@@ -4,6 +4,7 @@ import type {
   ConnectorCatalogId,
   InstalledConnectorRecord,
 } from "@/lib/domain/mcp/types";
+import { getConnectorSecretFields } from "@/lib/domain/mcp/catalog";
 import { trackConnectorConnectClicked } from "@/hooks/mcp/use-install-connector";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useConnectors } from "./use-connectors";
@@ -80,9 +81,9 @@ export type ResolvedConnectorModal =
 
 export function resolveConnectorVariant(entry: ConnectorCatalogEntry): ConnectorSetupVariant {
   if (entry.transport === "http" && entry.authKind === "oauth") {
-    return entry.id === "supabase" ? "oauth_structured" : "oauth";
+    return entry.settingsSchema.length > 0 ? "oauth_structured" : "oauth";
   }
-  if (entry.requiredFields.length > 0) {
+  if (getConnectorSecretFields(entry).length > 0) {
     return "api_key";
   }
   return "no_setup";

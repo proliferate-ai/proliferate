@@ -6,13 +6,13 @@ import type {
 } from "@/hooks/mcp/use-connectors-catalog-state";
 import type {
   ConnectorCatalogEntry,
-  SupabaseConnectorSettings,
+  ConnectorSettings,
 } from "@/lib/domain/mcp/types";
 import { openExternal } from "@/platform/tauri/shell";
 import { Button } from "@/components/ui/Button";
 import { ExternalLink } from "@/components/ui/icons";
-import { ConnectorCredentialField } from "./ConnectorCredentialField";
-import { SupabaseSettingsFields } from "./SupabaseSettingsFields";
+import { ConnectorSecretFields } from "./ConnectorSecretFields";
+import { ConnectorSettingsFields } from "./ConnectorSettingsFields";
 
 export function ConnectorConfigureTab({
   disabled,
@@ -21,11 +21,11 @@ export function ConnectorConfigureTab({
   focus,
   isConnected,
   onSecretChange,
-  onSupabaseSettingsChange,
+  onSettingsChange,
   primaryAction,
-  secretValue,
+  secretValues,
+  settings,
   status,
-  supabaseSettings,
   variant,
 }: {
   disabled: boolean;
@@ -33,12 +33,12 @@ export function ConnectorConfigureTab({
   error: string | null;
   focus: ConnectorConfigureFocus;
   isConnected: boolean;
-  onSecretChange: (value: string) => void;
-  onSupabaseSettingsChange: (value: SupabaseConnectorSettings) => void;
+  onSecretChange: (fieldId: string, value: string) => void;
+  onSettingsChange: (value: ConnectorSettings) => void;
   primaryAction?: ReactNode;
-  secretValue: string;
+  secretValues: Record<string, string>;
+  settings: ConnectorSettings;
   status: ConnectorCardStatus | null;
-  supabaseSettings: SupabaseConnectorSettings;
   variant: ConnectorSetupVariant;
 }) {
   const showReconnectBanner = focus === "reconnect" || status?.intent === "needs_reconnect";
@@ -52,21 +52,35 @@ export function ConnectorConfigureTab({
       )}
 
       {variant === "api_key" && (
-        <ConnectorCredentialField
-          autoFocus
-          disabled={disabled}
-          entry={entry}
-          error={error}
-          helperOverride={
-            isConnected
-              ? focus === "token"
-                ? "Add a token to use this connector."
-                : "Leave blank to keep the current token."
-              : undefined
-          }
-          onChange={onSecretChange}
-          value={secretValue}
-        />
+        <div className="space-y-4">
+          {entry.settingsSchema.length > 0 && (
+            <ConnectorSettingsFields
+              disabled={disabled}
+              entry={entry}
+              error={null}
+              helperText={
+                isConnected
+                  ? "Changing these settings updates future launches for this connector."
+                  : "Choose these settings before saving credentials."
+              }
+              onChange={onSettingsChange}
+              settings={settings}
+            />
+          )}
+          <ConnectorSecretFields
+            autoFocus={entry.settingsSchema.length === 0}
+            disabled={disabled}
+            entry={entry}
+            error={error}
+            onChange={onSecretChange}
+            values={secretValues}
+          />
+          {isConnected && focus === "token" && (
+            <p className="text-xs text-muted-foreground">
+              Add a token to use this connector.
+            </p>
+          )}
+        </div>
       )}
 
       {variant === "oauth" && (
@@ -91,9 +105,10 @@ export function ConnectorConfigureTab({
       {variant === "oauth_structured" && (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">{entry.description}</p>
-          <SupabaseSettingsFields
-            settings={supabaseSettings}
-            onChange={onSupabaseSettingsChange}
+          <ConnectorSettingsFields
+            settings={settings}
+            onChange={onSettingsChange}
+            entry={entry}
             error={error}
             disabled={disabled}
             helperText={

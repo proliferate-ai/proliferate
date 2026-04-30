@@ -1,88 +1,63 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
-from urllib.parse import urlencode
+from proliferate.server.cloud.mcp_catalog.builders import (
+    _bearer,
+    _secret_field,
+    _secret_query,
+    _setting_option,
+)
+from proliferate.server.cloud.mcp_catalog.renderer import (
+    connector_supports_target,
+    normalize_settings,
+    parse_settings,
+    render_http_launch,
+    render_oauth_resource_url,
+    validate_secret_fields,
+    validate_settings,
+)
+from proliferate.server.cloud.mcp_catalog.types import (
+    ArgTemplate,
+    CatalogConfigurationError,
+    CatalogEntry,
+    CatalogSecretField,
+    CatalogSettingField,
+    CatalogSettingOption,
+    EnvTemplate,
+    HeaderTemplate,
+    HttpLaunchTemplate,
+    QueryTemplate,
+    StaticUrl,
+    UrlBySetting,
+    UrlVariant,
+)
 
-ConnectorAvailability = Literal["universal", "local_only", "cloud_only"]
-ConnectorTransport = Literal["http", "stdio"]
-ConnectorAuthKind = Literal["secret", "oauth", "none"]
-ConnectorAuthStyleKind = Literal["bearer", "header", "query"]
+CATALOG_VERSION = "2026-04-20.2"
 
-CATALOG_VERSION = "2026-04-20.1"
-
-
-@dataclass(frozen=True)
-class CatalogField:
-    id: str
-    label: str
-    placeholder: str
-    helper_text: str
-    get_token_instructions: str
-    prefix_hint: str | None = None
-
-
-@dataclass(frozen=True)
-class HttpAuthStyle:
-    kind: ConnectorAuthStyleKind
-    header_name: str | None = None
-    parameter_name: str | None = None
-
-
-@dataclass(frozen=True)
-class ArgTemplate:
-    kind: Literal["static", "workspace_path"]
-    value: str | None = None
-
-
-@dataclass(frozen=True)
-class EnvTemplate:
-    name: str
-    kind: Literal["static", "field"]
-    value: str | None = None
-    field_id: str | None = None
-
-
-@dataclass(frozen=True)
-class CatalogEntry:
-    id: str
-    version: int
-    name: str
-    one_liner: str
-    description: str
-    docs_url: str
-    availability: ConnectorAvailability
-    transport: ConnectorTransport
-    auth_kind: ConnectorAuthKind
-    server_name_base: str
-    icon_id: str
-    required_fields: tuple[CatalogField, ...]
-    capabilities: tuple[str, ...]
-    cloud_secret_sync: bool = False
-    url: str = ""
-    auth_style: HttpAuthStyle | None = None
-    auth_field_id: str | None = None
-    command: str = ""
-    args: tuple[ArgTemplate, ...] = ()
-    env: tuple[EnvTemplate, ...] = ()
-
-
-def _field(
-    id: str,
-    label: str,
-    placeholder: str,
-    helper_text: str,
-    get_token_instructions: str,
-    prefix_hint: str | None = None,
-) -> CatalogField:
-    return CatalogField(
-        id=id,
-        label=label,
-        placeholder=placeholder,
-        helper_text=helper_text,
-        get_token_instructions=get_token_instructions,
-        prefix_hint=prefix_hint,
-    )
+__all__ = [
+    "ArgTemplate",
+    "CATALOG_VERSION",
+    "CONNECTOR_CATALOG",
+    "CatalogConfigurationError",
+    "CatalogEntry",
+    "CatalogSecretField",
+    "CatalogSettingField",
+    "CatalogSettingOption",
+    "EnvTemplate",
+    "HeaderTemplate",
+    "HttpLaunchTemplate",
+    "QueryTemplate",
+    "StaticUrl",
+    "UrlBySetting",
+    "UrlVariant",
+    "get_catalog_entry",
+    "connector_supports_target",
+    "normalize_settings",
+    "parse_settings",
+    "render_http_launch",
+    "render_oauth_resource_url",
+    "validate_secret_fields",
+    "validate_settings",
+]
 
 
 CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
@@ -103,13 +78,15 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         cloud_secret_sync=True,
         transport="http",
         auth_kind="secret",
-        auth_style=HttpAuthStyle(kind="bearer"),
-        auth_field_id="personal_access_token",
-        url="https://api.githubcopilot.com/mcp/",
+        http=HttpLaunchTemplate(
+            url=StaticUrl("https://api.githubcopilot.com/mcp/"),
+            display_url="https://api.githubcopilot.com/mcp/",
+            headers=(_bearer("personal_access_token"),),
+        ),
         server_name_base="github",
         icon_id="github",
-        required_fields=(
-            _field(
+        secret_fields=(
+            _secret_field(
                 "personal_access_token",
                 "Personal access token",
                 "github_pat_...",
@@ -144,10 +121,12 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         availability="universal",
         transport="http",
         auth_kind="oauth",
-        url="https://gmail.mcp.claude.com/mcp",
+        http=HttpLaunchTemplate(
+            url=StaticUrl("https://gmail.mcp.claude.com/mcp"),
+            display_url="https://gmail.mcp.claude.com/mcp",
+        ),
         server_name_base="gmail",
         icon_id="gmail",
-        required_fields=(),
         capabilities=(
             "Search authorized Gmail messages",
             "Read matching email threads",
@@ -170,10 +149,12 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         availability="universal",
         transport="http",
         auth_kind="oauth",
-        url="https://gcal.mcp.claude.com/mcp",
+        http=HttpLaunchTemplate(
+            url=StaticUrl("https://gcal.mcp.claude.com/mcp"),
+            display_url="https://gcal.mcp.claude.com/mcp",
+        ),
         server_name_base="google_calendar",
         icon_id="calendar",
-        required_fields=(),
         capabilities=(
             "Search authorized calendar events",
             "Read meeting details and attendees",
@@ -194,13 +175,15 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         cloud_secret_sync=True,
         transport="http",
         auth_kind="secret",
-        auth_style=HttpAuthStyle(kind="bearer"),
-        auth_field_id="api_key",
-        url="https://mcp.context7.com/mcp",
+        http=HttpLaunchTemplate(
+            url=StaticUrl("https://mcp.context7.com/mcp"),
+            display_url="https://mcp.context7.com/mcp",
+            headers=(_bearer("api_key"),),
+        ),
         server_name_base="context7",
         icon_id="context7",
-        required_fields=(
-            _field(
+        secret_fields=(
+            _secret_field(
                 "api_key",
                 "API key",
                 "ctx7sk-...",
@@ -229,13 +212,15 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         cloud_secret_sync=True,
         transport="http",
         auth_kind="secret",
-        auth_style=HttpAuthStyle(kind="query", parameter_name="exaApiKey"),
-        auth_field_id="api_key",
-        url="https://mcp.exa.ai/mcp",
+        http=HttpLaunchTemplate(
+            url=StaticUrl("https://mcp.exa.ai/mcp"),
+            display_url="https://mcp.exa.ai/mcp",
+            query=(_secret_query("exaApiKey", "api_key"),),
+        ),
         server_name_base="exa",
         icon_id="search",
-        required_fields=(
-            _field(
+        secret_fields=(
+            _secret_field(
                 "api_key",
                 "API key",
                 "Paste your Exa API key",
@@ -260,13 +245,15 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         cloud_secret_sync=True,
         transport="http",
         auth_kind="secret",
-        auth_style=HttpAuthStyle(kind="header", header_name="X-Subscription-Token"),
-        auth_field_id="api_key",
-        url="",
+        http=HttpLaunchTemplate(
+            url=StaticUrl(""),
+            display_url="",
+            headers=(HeaderTemplate("X-Subscription-Token", "{secret.api_key}"),),
+        ),
         server_name_base="brave_search",
         icon_id="brave",
-        required_fields=(
-            _field(
+        secret_fields=(
+            _secret_field(
                 "api_key",
                 "API key",
                 "Paste your Brave Search API key",
@@ -294,13 +281,15 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         cloud_secret_sync=True,
         transport="http",
         auth_kind="secret",
-        auth_style=HttpAuthStyle(kind="bearer"),
-        auth_field_id="api_key",
-        url="https://mcp.tavily.com/mcp",
+        http=HttpLaunchTemplate(
+            url=StaticUrl("https://mcp.tavily.com/mcp"),
+            display_url="https://mcp.tavily.com/mcp",
+            headers=(_bearer("api_key"),),
+        ),
         server_name_base="tavily",
         icon_id="tavily",
-        required_fields=(
-            _field(
+        secret_fields=(
+            _secret_field(
                 "api_key",
                 "API key",
                 "tvly-...",
@@ -326,13 +315,15 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         cloud_secret_sync=True,
         transport="http",
         auth_kind="secret",
-        auth_style=HttpAuthStyle(kind="query", parameter_name="appid"),
-        auth_field_id="api_key",
-        url="",
+        http=HttpLaunchTemplate(
+            url=StaticUrl(""),
+            display_url="",
+            query=(_secret_query("appid", "api_key"),),
+        ),
         server_name_base="openweather",
         icon_id="openweather",
-        required_fields=(
-            _field(
+        secret_fields=(
+            _secret_field(
                 "api_key",
                 "API key",
                 "Paste your OpenWeather API key",
@@ -347,6 +338,103 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         ),
     ),
     CatalogEntry(
+        id="posthog",
+        version=1,
+        name="PostHog",
+        one_liner="Inspect PostHog product analytics, flags, and event context.",
+        description=(
+            "Use PostHog to query product analytics, feature flags, events, and "
+            "observability context through a selected PostHog region."
+        ),
+        docs_url="https://posthog.com/docs/model-context-protocol",
+        availability="universal",
+        transport="http",
+        auth_kind="secret",
+        http=HttpLaunchTemplate(
+            url=UrlBySetting(
+                setting_id="region",
+                variants=(
+                    UrlVariant("us", "https://mcp.posthog.com/mcp"),
+                    UrlVariant("eu", "https://mcp-eu.posthog.com/mcp"),
+                ),
+            ),
+            display_url="https://mcp.posthog.com/mcp",
+            headers=(
+                _bearer("apiKey"),
+                HeaderTemplate(
+                    "x-posthog-organization-id",
+                    "{settings.organizationId}",
+                    optional=True,
+                ),
+                HeaderTemplate("x-posthog-project-id", "{settings.projectId}", optional=True),
+            ),
+            query=(
+                QueryTemplate("features", "{settings.features}", optional=True),
+                QueryTemplate("tools", "{settings.tools}", optional=True),
+            ),
+        ),
+        server_name_base="posthog",
+        icon_id="posthog",
+        secret_fields=(
+            _secret_field(
+                "apiKey",
+                "Project API key",
+                "phx_...",
+                "Create or copy a project API key from your PostHog settings.",
+                "Open PostHog project settings, copy a project API key, and paste it here.",
+                "phx_",
+            ),
+        ),
+        settings_fields=(
+            CatalogSettingField(
+                id="region",
+                label="Region",
+                kind="select",
+                required=True,
+                helper_text="Choose the PostHog region that hosts your project.",
+                default_value="us",
+                options=(
+                    _setting_option("us", "US"),
+                    _setting_option("eu", "EU"),
+                ),
+                affects_url=True,
+            ),
+            CatalogSettingField(
+                id="organizationId",
+                label="Organization ID",
+                kind="string",
+                placeholder="Optional PostHog organization ID",
+                helper_text="Optional. Pins the MCP server to one PostHog organization.",
+            ),
+            CatalogSettingField(
+                id="projectId",
+                label="Project ID",
+                kind="string",
+                placeholder="Optional PostHog project ID",
+                helper_text="Optional. Pins the MCP server to one PostHog project.",
+            ),
+            CatalogSettingField(
+                id="features",
+                label="Features",
+                kind="string",
+                placeholder="Optional comma-separated feature set",
+                helper_text="Optional. Limits PostHog MCP features exposed to the session.",
+            ),
+            CatalogSettingField(
+                id="tools",
+                label="Tools",
+                kind="string",
+                placeholder="Optional comma-separated tool names",
+                helper_text="Optional. Limits PostHog MCP tools exposed to the session.",
+            ),
+        ),
+        capabilities=(
+            "Query product analytics and event context",
+            "Inspect feature flags and experiments",
+            "Bring PostHog observability into debugging sessions",
+        ),
+    ),
+    CatalogEntry(
         id="linear",
         version=1,
         name="Linear",
@@ -356,10 +444,12 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         availability="universal",
         transport="http",
         auth_kind="oauth",
-        url="https://mcp.linear.app/mcp",
+        http=HttpLaunchTemplate(
+            url=StaticUrl("https://mcp.linear.app/mcp"),
+            display_url="https://mcp.linear.app/mcp",
+        ),
         server_name_base="linear",
         icon_id="linear",
-        required_fields=(),
         capabilities=(
             "Search issues, projects, and cycles",
             "Inspect team workloads and states",
@@ -379,10 +469,36 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         availability="universal",
         transport="http",
         auth_kind="oauth",
-        url="https://mcp.supabase.com/mcp",
+        http=HttpLaunchTemplate(
+            url=StaticUrl("https://mcp.supabase.com/mcp"),
+            display_url="https://mcp.supabase.com/mcp",
+            query=(
+                QueryTemplate("project_ref", "{settings.projectRef}"),
+                QueryTemplate("read_only", "{settings.readOnly}"),
+            ),
+        ),
         server_name_base="supabase",
         icon_id="supabase",
-        required_fields=(),
+        settings_fields=(
+            CatalogSettingField(
+                id="projectRef",
+                label="Project ref",
+                kind="string",
+                required=True,
+                placeholder="abcd1234",
+                helper_text="Choose the Supabase project to expose to this session.",
+                affects_url=True,
+            ),
+            CatalogSettingField(
+                id="readOnly",
+                label="Read-only mode",
+                kind="boolean",
+                required=True,
+                helper_text="Start in read-only mode unless you explicitly need write access.",
+                default_value=True,
+                affects_url=True,
+            ),
+        ),
         capabilities=(
             "Inspect schema, tables, and views",
             "Run SQL against a selected project",
@@ -403,10 +519,12 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         availability="universal",
         transport="http",
         auth_kind="oauth",
-        url="https://mcp.notion.com/mcp",
+        http=HttpLaunchTemplate(
+            url=StaticUrl("https://mcp.notion.com/mcp"),
+            display_url="https://mcp.notion.com/mcp",
+        ),
         server_name_base="notion",
         icon_id="notion",
-        required_fields=(),
         capabilities=(
             "Search authorized pages and databases",
             "Read and update selected records",
@@ -430,7 +548,6 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         args=(ArgTemplate(kind="workspace_path"),),
         server_name_base="filesystem",
         icon_id="filesystem",
-        required_fields=(),
         capabilities=(
             "Read files inside the active workspace",
             "Create new files in the workspace",
@@ -453,7 +570,6 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         command="playwright-mcp",
         server_name_base="playwright",
         icon_id="playwright",
-        required_fields=(),
         capabilities=(
             "Launch a headless browser session",
             "Click, type, and navigate pages",
@@ -467,23 +583,3 @@ CATALOG_BY_ID = {entry.id: entry for entry in CONNECTOR_CATALOG}
 
 def get_catalog_entry(catalog_entry_id: str) -> CatalogEntry | None:
     return CATALOG_BY_ID.get(catalog_entry_id)
-
-
-def connector_supports_target(entry: CatalogEntry, target_location: str) -> bool:
-    if entry.availability == "universal":
-        return target_location in {"local", "cloud"}
-    if entry.availability == "local_only":
-        return target_location == "local"
-    return target_location == "cloud"
-
-
-def build_oauth_server_url(entry: CatalogEntry, settings: dict[str, object]) -> str:
-    if entry.id != "supabase":
-        return entry.url
-    if settings.get("kind") != "supabase":
-        return entry.url
-    project_ref = str(settings.get("projectRef") or "")
-    read_only = "true" if settings.get("readOnly") is not False else "false"
-    if not project_ref:
-        return entry.url
-    return f"{entry.url}?{urlencode({'project_ref': project_ref, 'read_only': read_only})}"

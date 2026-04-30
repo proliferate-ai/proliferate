@@ -4,7 +4,6 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Literal
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from uuid import UUID
 
 from proliferate.config import settings
@@ -14,17 +13,21 @@ from proliferate.db.store.cloud_mcp.auth import (
     update_connection_auth_if_version,
 )
 from proliferate.db.store.cloud_mcp.connections import list_user_connections
+from proliferate.db.store.cloud_mcp.oauth_clients import get_oauth_client
 from proliferate.db.store.cloud_mcp.types import CloudMcpAuthRecord, CloudMcpConnectionRecord
 from proliferate.integrations.mcp_oauth import McpOAuthProviderError, refresh_token
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mcp_catalog.catalog import (
     CATALOG_VERSION,
+    CatalogConfigurationError,
     CatalogEntry,
-    build_oauth_server_url,
     connector_supports_target,
     get_catalog_entry,
+    parse_settings,
+    render_http_launch,
+    validate_secret_fields,
+    validate_settings,
 )
-from proliferate.server.cloud.mcp_connections.service import _parse_settings
 from proliferate.server.cloud.mcp_materialization.models import (
     CloudMcpMaterializationWarningModel,
     LocalStdioCandidateModel,
@@ -38,13 +41,20 @@ from proliferate.server.cloud.mcp_materialization.models import (
     arg_template_payload,
     env_template_payload,
 )
-from proliferate.utils.crypto import decrypt_json, encrypt_json
+from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_json
 
 _OAUTH_REFRESH_SKEW = timedelta(seconds=60)
 _MATERIALIZATION_CONCURRENCY = 5
 _MATERIALIZATION_TIMEOUT_SECONDS = 20.0
 _oauth_refresh_locks: dict[UUID, asyncio.Lock] = {}
 _oauth_refresh_locks_guard = asyncio.Lock()
+
+
+def _oauth_redirect_uri() -> str:
+    base = settings.cloud_mcp_oauth_callback_base_url.strip() or settings.api_base_url.strip()
+    if not base:
+        base = "http://localhost:8000"
+    return f"{base.rstrip('/')}/v1/cloud/mcp/oauth/callback"
 
 
 @dataclass
@@ -258,33 +268,31 @@ def _materialize_secret_http(
     secret_fields = payload.get("secretFields")
     if not isinstance(secret_fields, dict):
         return None
-    secret_value = str(secret_fields.get(entry.auth_field_id or "") or "")
-    if not secret_value:
+    try:
+        cleaned_secrets = validate_secret_fields(
+            entry,
+            {str(key): str(value) for key, value in secret_fields.items()},
+        )
+    except CatalogConfigurationError:
         return None
-    url = entry.url
-    headers: list[SessionMcpHeaderModel] = []
-    if entry.auth_style is not None:
-        if entry.auth_style.kind == "bearer":
-            headers.append(
-                SessionMcpHeaderModel(name="Authorization", value=f"Bearer {secret_value}")
-            )
-        elif entry.auth_style.kind == "header" and entry.auth_style.header_name:
-            headers.append(
-                SessionMcpHeaderModel(
-                    name=entry.auth_style.header_name,
-                    value=secret_value,
-                )
-            )
-        elif entry.auth_style.kind == "query" and entry.auth_style.parameter_name:
-            url = _with_query_secret(url, entry.auth_style.parameter_name, secret_value)
-    if not url:
+    try:
+        launch = render_http_launch(
+            entry,
+            _settings_for_record(record, entry),
+            secrets=cleaned_secrets,
+            allow_insecure_launch_urls=settings.cloud_mcp_allow_insecure_launch_urls,
+        )
+    except CatalogConfigurationError:
         return None
     return SessionMcpHttpServerModel(
         connection_id=record.connection_id,
         catalog_entry_id=entry.id,
         server_name=record.server_name,
-        url=url,
-        headers=headers,
+        url=launch.url,
+        headers=[
+            SessionMcpHeaderModel(name=header.name, value=header.value)
+            for header in launch.headers
+        ],
     )
 
 
@@ -295,13 +303,34 @@ async def _materialize_oauth_http(
     token = await _ready_oauth_access_token(record)
     if token is None:
         return None
+    try:
+        launch = render_http_launch(
+            entry,
+            _settings_for_record(record, entry),
+            allow_insecure_launch_urls=settings.cloud_mcp_allow_insecure_launch_urls,
+        )
+    except CatalogConfigurationError:
+        return None
     return SessionMcpHttpServerModel(
         connection_id=record.connection_id,
         catalog_entry_id=entry.id,
         server_name=record.server_name,
-        url=build_oauth_server_url(entry, _parse_settings(record.settings_json)),
-        headers=[SessionMcpHeaderModel(name="Authorization", value=f"Bearer {token}")],
+        url=launch.url,
+        headers=[
+            SessionMcpHeaderModel(name="Authorization", value=f"Bearer {token}"),
+            *[
+                SessionMcpHeaderModel(name=header.name, value=header.value)
+                for header in launch.headers
+            ],
+        ],
     )
+
+
+def _settings_for_record(
+    record: CloudMcpConnectionRecord,
+    entry: CatalogEntry,
+) -> dict[str, object]:
+    return validate_settings(entry, parse_settings(record.settings_json))
 
 
 async def _ready_oauth_access_token(
@@ -353,12 +382,32 @@ async def _ready_oauth_access_token_locked(
         if marked is None:
             return await _latest_ready_oauth_access_token(record)
         return None
+    issuer = payload.get("issuer")
+    redirect_uri = payload.get("redirectUri") or _oauth_redirect_uri()
+    oauth_client = (
+        await get_oauth_client(
+            issuer=issuer,
+            redirect_uri=redirect_uri,
+            catalog_entry_id=record.catalog_entry_id,
+        )
+        if isinstance(issuer, str) and isinstance(redirect_uri, str)
+        else None
+    )
+    client_secret = (
+        decrypt_text(oauth_client.client_secret_ciphertext)
+        if oauth_client and oauth_client.client_secret_ciphertext
+        else None
+    )
     try:
         refreshed = await refresh_token(
             token_endpoint=token_endpoint,
             client_id=client_id,
             refresh_token_value=refresh_token_value,
             resource=resource,
+            client_secret=client_secret,
+            token_endpoint_auth_method=(
+                oauth_client.token_endpoint_auth_method if oauth_client else None
+            ),
         )
     except McpOAuthProviderError as exc:
         marked = await mark_connection_auth_status_if_version(
@@ -422,19 +471,3 @@ def _parse_expires_at(value: object) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=UTC)
     return parsed.astimezone(UTC)
-
-
-def _with_query_secret(url: str, parameter_name: str, secret_value: str) -> str:
-    parsed = urlparse(url)
-    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-    query[parameter_name] = secret_value
-    return urlunparse(
-        (
-            parsed.scheme,
-            parsed.netloc,
-            parsed.path,
-            parsed.params,
-            urlencode(query),
-            parsed.fragment,
-        )
-    )

@@ -1,8 +1,6 @@
 import type {
   ConnectorAvailability,
   ConnectorCatalogEntry,
-  ConnectorSettings,
-  SupabaseConnectorSettings,
 } from "@/lib/domain/mcp/types";
 
 export function isConnectorCatalogEntryActive(entry: ConnectorCatalogEntry): boolean {
@@ -15,15 +13,12 @@ export function isConnectorCatalogEntryActive(entry: ConnectorCatalogEntry): boo
 export function isConnectorCatalogEntryAvailable(
   entry: ConnectorCatalogEntry,
 ): boolean {
-  if (!isConnectorCatalogEntryActive(entry)) {
-    return false;
-  }
-  return entry.id !== "supabase";
+  return isConnectorCatalogEntryActive(entry);
 }
 
 export function getConnectorAuthStyleLabel(entry: ConnectorCatalogEntry): string {
   if (entry.transport === "http") {
-    return entry.authKind === "oauth" ? "oauth" : entry.authStyle?.kind ?? "none";
+    return entry.authKind === "oauth" ? "oauth" : entry.authStyle?.kind ?? "secret";
   }
   return "none";
 }
@@ -32,7 +27,15 @@ export function getPrimarySecretField(catalogEntry: ConnectorCatalogEntry) {
   if (catalogEntry.transport === "http" && catalogEntry.authKind === "oauth") {
     return null;
   }
-  return catalogEntry.requiredFields[0] ?? null;
+  return (catalogEntry.secretFields[0] ?? catalogEntry.requiredFields[0]) ?? null;
+}
+
+export function getConnectorSecretFields(
+  catalogEntry: ConnectorCatalogEntry,
+) {
+  return catalogEntry.secretFields.length > 0
+    ? catalogEntry.secretFields
+    : catalogEntry.requiredFields;
 }
 
 export function connectorSupportsCloudSecretSync(catalogEntry: ConnectorCatalogEntry): boolean {
@@ -46,7 +49,7 @@ export function connectorHasMissingSecrets(
   if (catalogEntry.transport === "http" && catalogEntry.authKind === "oauth") {
     return false;
   }
-  return catalogEntry.requiredFields.some((field) => !secretValues[field.id]);
+  return getConnectorSecretFields(catalogEntry).some((field) => !secretValues[field.id]);
 }
 
 export function connectorSupportsTarget(
@@ -76,10 +79,4 @@ export function isSecretHttpConnectorCatalogEntry(
   entry: ConnectorCatalogEntry,
 ): entry is Extract<ConnectorCatalogEntry, { transport: "http"; authKind: "secret" }> {
   return entry.transport === "http" && entry.authKind === "secret";
-}
-
-export function isSupabaseConnectorSettings(
-  value: ConnectorSettings | undefined,
-): value is SupabaseConnectorSettings {
-  return value?.kind === "supabase";
 }

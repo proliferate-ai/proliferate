@@ -442,9 +442,7 @@ async def _relaunch_runtime_with_credentials(
     )
     if result_exit_code(start_result) != 0:
         stderr = result_stderr(start_result) or result_stdout(start_result)
-        raise CloudRuntimeReconnectError(
-            f"Cloud runtime relaunch failed: {stderr.strip()[:200]}"
-        )
+        raise CloudRuntimeReconnectError(f"Cloud runtime relaunch failed: {stderr.strip()[:200]}")
     await wait_for_runtime_health(
         runtime_url,
         workspace_id=workspace_id,
@@ -479,9 +477,7 @@ async def ensure_runtime_environment_credentials_current(
         revisions = build_credential_revision_state(records)
         snapshot = build_credential_freshness_snapshot(environment, revisions)
         if snapshot.status == "current" or (
-            revisions.missing_credentials
-            and snapshot.files_current
-            and snapshot.process_current
+            revisions.missing_credentials and snapshot.files_current and snapshot.process_current
         ):
             return snapshot
 
@@ -525,9 +521,11 @@ async def ensure_runtime_environment_credentials_current(
             if not allow_process_restart:
                 return snapshot
 
-            access_token, anyharness_data_key, repo_env_vars = (
-                await _load_runtime_credentials_context(environment)
-            )
+            (
+                access_token,
+                anyharness_data_key,
+                repo_env_vars,
+            ) = await _load_runtime_credentials_context(environment)
             runtime_url = environment.runtime_url
             if not runtime_url:
                 raise CloudRuntimeReconnectError("Cloud runtime URL is not available.")

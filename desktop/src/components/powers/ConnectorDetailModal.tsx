@@ -1,14 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   ConnectorModalTab,
   ResolvedConnectorModal,
 } from "@/hooks/mcp/use-connectors-catalog-state";
 import { validateOAuthConnectorSettings } from "@/lib/domain/mcp/oauth";
+import { getConnectorSecretFields } from "@/lib/domain/mcp/catalog";
+import {
+  createDefaultConnectorSettings,
+  normalizeConnectorSettings,
+  validateConnectorSettings,
+} from "@/lib/domain/mcp/settings-schema";
 import type {
   ConnectorCatalogEntry,
   ConnectorSettings,
   ConnectOAuthConnectorResult,
-  SupabaseConnectorSettings,
 } from "@/lib/domain/mcp/types";
 import { validateConnectorSecretValue } from "@/lib/domain/mcp/validation";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -19,12 +24,6 @@ import { ConnectorConfigureTab } from "./ConnectorConfigureTab";
 import { ConnectorIcon } from "./ConnectorIcon";
 import { ConnectorToolsTab } from "./ConnectorToolsTab";
 
-const DEFAULT_SUPABASE_SETTINGS: SupabaseConnectorSettings = {
-  kind: "supabase",
-  projectRef: "",
-  readOnly: true,
-};
-
 type DetailCallbacks = {
   onCancelOAuth: () => Promise<void>;
   onConnectOAuth: (
@@ -34,7 +33,8 @@ type DetailCallbacks = {
   onDelete: (connectionId: string, catalogEntryId: ConnectorCatalogEntry["id"]) => Promise<void>;
   onInstallSecret: (
     catalogEntryId: ConnectorCatalogEntry["id"],
-    secretValue: string,
+    secretFields: Record<string, string>,
+    settings?: ConnectorSettings,
   ) => Promise<void>;
   onReconnect: (
     connectionId: string,
@@ -44,7 +44,8 @@ type DetailCallbacks = {
   onUpdateSecret: (
     connectionId: string,
     catalogEntryId: ConnectorCatalogEntry["id"],
-    secretValue: string,
+    secretFields: Record<string, string>,
+    settings?: ConnectorSettings,
   ) => Promise<void>;
 };
 
@@ -72,21 +73,24 @@ export function ConnectorDetailModal({
   const isConnected = modal.kind === "manage";
   const connectionId =
     modal.kind === "manage" ? modal.record.metadata.connectionId : null;
-  const existingSettings =
-    modal.kind === "manage" && modal.record.metadata.settings?.kind === "supabase"
-      ? modal.record.metadata.settings
-      : DEFAULT_SUPABASE_SETTINGS;
+  const existingSettings = useMemo(() => {
+    if (modal.kind === "manage") {
+      return normalizeConnectorSettings(entry, modal.record.metadata.settings);
+    }
+    return createDefaultConnectorSettings(entry) ?? {};
+  }, [entry, modal]);
 
-  const [secretValue, setSecretValue] = useState("");
-  const [supabaseSettings, setSupabaseSettings] =
-    useState<SupabaseConnectorSettings>(existingSettings);
+  const [secretValues, setSecretValues] = useState<Record<string, string>>(
+    () => initialSecretValues(entry),
+  );
+  const [settings, setSettings] = useState<ConnectorSettings>(existingSettings);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
 
   useEffect(() => {
-    setSecretValue("");
-    setSupabaseSettings(existingSettings);
+    setSecretValues(initialSecretValues(entry));
+    setSettings(existingSettings);
     setError(null);
   }, [entry.id, connectionId, existingSettings]);
 
@@ -96,14 +100,17 @@ export function ConnectorDetailModal({
   const oauthValidationError = oauthEntry
     ? validateOAuthConnectorSettings(
         oauthEntry,
-        variant === "oauth_structured" ? supabaseSettings : undefined,
+        entry.settingsSchema.length > 0 ? settings : undefined,
       )
     : null;
-  const trimmedSecret = secretValue.trim();
+  const settingsValidationError = entry.settingsSchema.length > 0
+    ? validateConnectorSettings(entry, settings)
+    : null;
   const secretValidationError =
-    variant === "api_key" && trimmedSecret.length > 0
-      ? validateConnectorSecretValue(secretValue)
+    variant === "api_key" && hasAnySecretValue(secretValues)
+      ? validateSecretValues(entry, secretValues)
       : null;
+  const hasRequiredSecrets = variant !== "api_key" || hasAllSecretValues(entry, secretValues);
 
   function handleClose() {
     if (reconnecting) {
@@ -143,7 +150,7 @@ export function ConnectorDetailModal({
   async function handlePrimaryAction() {
     if (modal.kind === "connect") {
       if (variant === "api_key") {
-        const validation = validateConnectorSecretValue(secretValue);
+        const validation = settingsValidationError ?? validateSecretValues(entry, secretValues);
         if (validation) {
           setError(validation);
           return;
@@ -151,7 +158,7 @@ export function ConnectorDetailModal({
         setSubmitting(true);
         setError(null);
         try {
-          await callbacks.onInstallSecret(entry.id, secretValue);
+          await callbacks.onInstallSecret(entry.id, secretValues, settings);
           showToast(`${entry.name} connected.`, "info");
           onClose();
         } catch (opError) {
@@ -169,7 +176,7 @@ export function ConnectorDetailModal({
         setSubmitting(true);
         setError(null);
         try {
-          await callbacks.onInstallSecret(entry.id, "");
+          await callbacks.onInstallSecret(entry.id, {}, settings);
           showToast(`${entry.name} connected.`, "info");
           onClose();
         } catch (opError) {
@@ -187,7 +194,7 @@ export function ConnectorDetailModal({
         () =>
           callbacks.onConnectOAuth(
             entry.id,
-            variant === "oauth_structured" ? supabaseSettings : undefined,
+            entry.settingsSchema.length > 0 ? settings : undefined,
           ),
         "connected",
       );
@@ -196,7 +203,7 @@ export function ConnectorDetailModal({
 
     if (!connectionId) return;
     if (variant === "api_key") {
-      const validation = validateConnectorSecretValue(secretValue);
+      const validation = settingsValidationError ?? validateSecretValues(entry, secretValues);
       if (validation) {
         setError(validation);
         return;
@@ -204,7 +211,7 @@ export function ConnectorDetailModal({
       setSubmitting(true);
       setError(null);
       try {
-        await callbacks.onUpdateSecret(connectionId, entry.id, secretValue);
+        await callbacks.onUpdateSecret(connectionId, entry.id, secretValues, settings);
         showToast(`${entry.name} updated.`, "info");
         onClose();
       } catch (opError) {
@@ -227,7 +234,7 @@ export function ConnectorDetailModal({
         callbacks.onReconnect(
           connectionId,
           entry.id,
-          variant === "oauth_structured" ? supabaseSettings : undefined,
+          entry.settingsSchema.length > 0 ? settings : undefined,
         ),
       "connected",
     );
@@ -244,9 +251,9 @@ export function ConnectorDetailModal({
   const primary = resolvePrimaryButton({
     isConnected,
     variant,
-    trimmedSecret,
+    hasRequiredSecrets,
     secretValidationError,
-    oauthValidationError,
+    oauthValidationError: oauthValidationError ?? settingsValidationError,
   });
 
   const status = modal.kind === "manage" ? modal.status : null;
@@ -337,18 +344,18 @@ export function ConnectorDetailModal({
             error={error}
             focus={focus}
             isConnected={isConnected}
-            onSecretChange={(value) => {
-              setSecretValue(value);
+            onSecretChange={(fieldId, value) => {
+              setSecretValues((current) => ({ ...current, [fieldId]: value }));
               if (error) setError(null);
             }}
-            onSupabaseSettingsChange={(value) => {
-              setSupabaseSettings(value);
+            onSettingsChange={(value) => {
+              setSettings(value);
               if (error) setError(null);
             }}
             primaryAction={primaryButton}
-            secretValue={secretValue}
+            secretValues={secretValues}
+            settings={settings}
             status={status}
-            supabaseSettings={supabaseSettings}
             variant={variant}
           />
         )}
@@ -359,6 +366,36 @@ export function ConnectorDetailModal({
   );
 }
 
+function initialSecretValues(entry: ConnectorCatalogEntry): Record<string, string> {
+  return Object.fromEntries(getConnectorSecretFields(entry).map((field) => [field.id, ""]));
+}
+
+function hasAnySecretValue(values: Record<string, string>): boolean {
+  return Object.values(values).some((value) => value.trim().length > 0);
+}
+
+function hasAllSecretValues(
+  entry: ConnectorCatalogEntry,
+  values: Record<string, string>,
+): boolean {
+  return getConnectorSecretFields(entry).every(
+    (field) => (values[field.id] ?? "").trim().length > 0,
+  );
+}
+
+function validateSecretValues(
+  entry: ConnectorCatalogEntry,
+  values: Record<string, string>,
+): string | null {
+  for (const field of getConnectorSecretFields(entry)) {
+    const validation = validateConnectorSecretValue(values[field.id] ?? "");
+    if (validation) {
+      return `${field.label}: ${validation}`;
+    }
+  }
+  return null;
+}
+
 interface PrimaryButtonSpec {
   label: string;
   disabled: boolean;
@@ -367,13 +404,13 @@ interface PrimaryButtonSpec {
 function resolvePrimaryButton({
   isConnected,
   variant,
-  trimmedSecret,
+  hasRequiredSecrets,
   secretValidationError,
   oauthValidationError,
 }: {
   isConnected: boolean;
   variant: "no_setup" | "api_key" | "oauth" | "oauth_structured";
-  trimmedSecret: string;
+  hasRequiredSecrets: boolean;
   secretValidationError: string | null;
   oauthValidationError: string | null;
 }): PrimaryButtonSpec | null {
@@ -384,7 +421,7 @@ function resolvePrimaryButton({
     if (variant === "api_key") {
       return {
         label: "Connect",
-        disabled: trimmedSecret.length === 0 || Boolean(secretValidationError),
+        disabled: !hasRequiredSecrets || Boolean(secretValidationError) || Boolean(oauthValidationError),
       };
     }
     return {
@@ -396,7 +433,7 @@ function resolvePrimaryButton({
   if (variant === "api_key") {
     return {
       label: "Save",
-      disabled: trimmedSecret.length === 0 || Boolean(secretValidationError),
+      disabled: !hasRequiredSecrets || Boolean(secretValidationError) || Boolean(oauthValidationError),
     };
   }
   if (variant === "oauth_structured") {

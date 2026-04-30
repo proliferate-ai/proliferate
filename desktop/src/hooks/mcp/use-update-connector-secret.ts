@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ConnectorSettings } from "@/lib/domain/mcp/types";
 import { updateConnectorSecret } from "@/lib/infra/mcp/persistence";
 import {
   captureTelemetryException,
@@ -16,8 +17,9 @@ export function useUpdateConnectorSecret() {
     mutationFn: async (input: {
       connectionId: string;
       catalogEntryId: string;
-      secretValue: string;
-    }) => updateConnectorSecret(input.connectionId, input.secretValue),
+      secretFields: Record<string, string>;
+      settings?: ConnectorSettings;
+    }) => updateConnectorSecret(input.connectionId, input.secretFields, input.settings),
     onSuccess: async (_result, variables) => {
       await refreshMcpConnectorsQuery(queryClient);
       trackProductEvent("connector_updated", {

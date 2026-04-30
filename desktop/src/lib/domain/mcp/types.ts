@@ -1,17 +1,4 @@
-export type ConnectorCatalogId =
-  | "github"
-  | "gmail"
-  | "google_calendar"
-  | "context7"
-  | "exa"
-  | "brave_search"
-  | "tavily"
-  | "openweather"
-  | "linear"
-  | "supabase"
-  | "notion"
-  | "filesystem"
-  | "playwright";
+export type ConnectorCatalogId = string;
 
 export type ConnectorAvailability = "universal" | "local_only" | "cloud_only";
 
@@ -22,6 +9,23 @@ export interface ConnectorCatalogField {
   helperText: string;
   getTokenInstructions: string;
   prefixHint?: string;
+}
+
+export interface ConnectorSettingsOption {
+  value: string;
+  label: string;
+}
+
+export interface ConnectorSettingsField {
+  id: string;
+  kind: "string" | "boolean" | "select" | "url";
+  label: string;
+  placeholder: string;
+  helperText: string;
+  required: boolean;
+  defaultValue?: string | boolean | null;
+  options: readonly ConnectorSettingsOption[];
+  affectsUrl: boolean;
 }
 
 export type ConnectorHttpAuthStyle =
@@ -37,32 +41,11 @@ export type ConnectorEnvTemplate =
   | { name: string; source: { kind: "static"; value: string } }
   | { name: string; source: { kind: "field"; fieldId: string } };
 
-export type ConnectorIconId =
-  | "brave"
-  | "calendar"
-  | "context7"
-  | "filesystem"
-  | "gmail"
-  | "github"
-  | "globe"
-  | "linear"
-  | "notion"
-  | "openweather"
-  | "playwright"
-  | "search"
-  | "supabase"
-  | "sun"
-  | "tavily"
-  | "folder"
-  | "terminal";
+export type ConnectorIconId = string;
 
-export interface SupabaseConnectorSettings {
-  kind: "supabase";
-  projectRef: string;
-  readOnly: boolean;
-}
+export type ConnectorSettingValue = string | boolean;
 
-export type ConnectorSettings = SupabaseConnectorSettings;
+export type ConnectorSettings = Record<string, ConnectorSettingValue>;
 
 export type ConnectOAuthConnectorResult =
   | { kind: "completed" }
@@ -78,15 +61,18 @@ interface ConnectorCatalogEntryBase {
   cloudSecretSync: boolean;
   serverNameBase: string;
   iconId: ConnectorIconId;
+  displayUrl: string;
+  secretFields: readonly ConnectorCatalogField[];
   requiredFields: readonly ConnectorCatalogField[];
+  settingsSchema: readonly ConnectorSettingsField[];
   capabilities: readonly string[];
 }
 
 export interface SecretHttpConnectorCatalogEntry extends ConnectorCatalogEntryBase {
   transport: "http";
   authKind: "secret";
-  authStyle: ConnectorHttpAuthStyle;
-  authFieldId: string;
+  authStyle?: ConnectorHttpAuthStyle;
+  authFieldId?: string;
   url: string;
 }
 

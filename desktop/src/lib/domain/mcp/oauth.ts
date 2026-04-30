@@ -2,6 +2,7 @@ import type {
   ConnectorCatalogEntry,
   ConnectorSettings,
 } from "@/lib/domain/mcp/types";
+import { validateConnectorSettings } from "@/lib/domain/mcp/settings-schema";
 import type { TelemetryFailureKind } from "@/lib/domain/telemetry/failures";
 
 export type OAuthCommandErrorKind =
@@ -30,32 +31,7 @@ export function validateOAuthConnectorSettings(
   catalogEntry: Extract<ConnectorCatalogEntry, { transport: "http"; authKind: "oauth" }>,
   settings?: ConnectorSettings,
 ): string | null {
-  if (catalogEntry.id !== "supabase") {
-    return null;
-  }
-  if (settings?.kind !== "supabase") {
-    return "Choose a Supabase project before connecting.";
-  }
-  if (settings.projectRef.trim().length === 0) {
-    return "Choose a Supabase project before connecting.";
-  }
-  return null;
-}
-
-export function connectorSettingsEqual(
-  left: ConnectorSettings | undefined,
-  right: ConnectorSettings | undefined,
-): boolean {
-  if (!left && !right) {
-    return true;
-  }
-  if (!left || !right || left.kind !== right.kind) {
-    return false;
-  }
-  if (left.kind === "supabase" && right.kind === "supabase") {
-    return left.projectRef === right.projectRef && left.readOnly === right.readOnly;
-  }
-  return false;
+  return validateConnectorSettings(catalogEntry, settings);
 }
 
 export function classifyOAuthCommandTelemetryFailure(

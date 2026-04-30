@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import re
+from contextlib import suppress
 from typing import NoReturn
 from uuid import UUID
 
+from proliferate.config import settings as app_settings
 from proliferate.db.store.cloud_mcp.auth import upsert_connection_auth
 from proliferate.db.store.cloud_mcp.compat import (
     legacy_delete_connection,
@@ -20,7 +22,19 @@ from proliferate.db.store.cloud_mcp.connections import (
 )
 from proliferate.db.store.cloud_mcp.types import CloudMcpConnectionRecord
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.mcp_catalog.catalog import CatalogEntry, get_catalog_entry
+from proliferate.server.cloud.mcp_catalog.catalog import (
+    CatalogConfigurationError,
+    CatalogEntry,
+    get_catalog_entry,
+    render_oauth_resource_url,
+    validate_secret_fields,
+)
+from proliferate.server.cloud.mcp_catalog.catalog import (
+    parse_settings as catalog_parse_settings,
+)
+from proliferate.server.cloud.mcp_catalog.catalog import (
+    validate_settings as catalog_validate_settings,
+)
 from proliferate.server.cloud.mcp_connections.models import (
     CloudMcpAuthKind,
     CloudMcpAuthStatus,
@@ -78,54 +92,24 @@ def _settings_json(settings: dict[str, object]) -> str:
 
 
 def _parse_settings(raw: str) -> dict[str, object]:
-    try:
-        value = json.loads(raw or "{}")
-    except Exception:
-        return {}
-    return value if isinstance(value, dict) else {}
+    return catalog_parse_settings(raw)
 
 
 def _validate_settings(
     entry: CatalogEntry,
     settings: dict[str, object] | None,
 ) -> dict[str, object]:
-    cleaned = dict(settings or {})
-    if entry.id != "supabase":
-        if cleaned:
-            _invalid_payload(f"{entry.name} does not accept connector settings.")
-        return {}
-    if cleaned.get("kind") != "supabase":
-        _invalid_payload("Supabase requires project settings before connecting.")
-    project_ref = cleaned.get("projectRef")
-    read_only = cleaned.get("readOnly")
-    if not isinstance(project_ref, str) or not project_ref.strip():
-        _invalid_payload("Supabase requires a project ref before connecting.")
-    if not isinstance(read_only, bool):
-        _invalid_payload("Supabase requires a read-only setting.")
-    return {
-        "kind": "supabase",
-        "projectRef": project_ref.strip(),
-        "readOnly": read_only,
-    }
+    try:
+        return catalog_validate_settings(entry, settings)
+    except CatalogConfigurationError as exc:
+        _invalid_payload(str(exc))
 
 
 def _clean_secret_fields(entry: CatalogEntry, secret_fields: dict[str, str]) -> dict[str, str]:
-    if entry.auth_kind != "secret":
-        _invalid_payload(f"{entry.name} does not use API-key authentication.")
-    required = {field.id for field in entry.required_fields}
-    cleaned: dict[str, str] = {}
-    for raw_field_id, raw_value in secret_fields.items():
-        field_id = raw_field_id.strip()
-        value = raw_value.strip()
-        if field_id not in required:
-            _invalid_payload(f"'{field_id}' is not a secret field for {entry.name}.")
-        if not value:
-            _invalid_payload(f"Cloud connector sync requires a value for '{field_id}'.")
-        cleaned[field_id] = value
-    missing = sorted(required - set(cleaned))
-    if missing:
-        _invalid_payload(f"Cloud connector sync requires values for: {', '.join(missing)}.")
-    return cleaned
+    try:
+        return validate_secret_fields(entry, secret_fields)
+    except CatalogConfigurationError as exc:
+        _invalid_payload(str(exc))
 
 
 def _auth_state(
@@ -142,9 +126,14 @@ def _auth_state(
 
 def _connection_payload(record: CloudMcpConnectionRecord) -> CloudMcpConnectionResponse:
     auth_kind, auth_status = _auth_state(record)
+    entry = get_catalog_entry(record.catalog_entry_id)
+    parsed_settings = _parse_settings(record.settings_json)
+    if entry is not None:
+        with suppress(CatalogConfigurationError):
+            parsed_settings = catalog_validate_settings(entry, parsed_settings)
     return cloud_mcp_connection_payload(
         record,
-        _parse_settings(record.settings_json),
+        parsed_settings,
         auth_kind,
         auth_status,
     )
@@ -225,7 +214,13 @@ async def patch_cloud_mcp_connection(
         _invalid_payload("Connector catalog entry was not found.")
     settings_json = None
     if body.settings is not None:
-        settings_json = _settings_json(_validate_settings(entry, body.settings))
+        new_settings = _validate_settings(entry, body.settings)
+        if entry.auth_kind == "oauth" and existing.auth and existing.auth.auth_status == "ready":
+            old_resource = _oauth_resource_url(entry, _parse_settings(existing.settings_json))
+            new_resource = _oauth_resource_url(entry, new_settings)
+            if old_resource != new_resource:
+                _invalid_payload("Reconnect this MCP before changing URL-affecting settings.")
+        settings_json = _settings_json(new_settings)
     record = await patch_user_connection(
         user_id=user_id,
         connection_id=cleaned_connection_id,
@@ -289,6 +284,8 @@ async def sync_cloud_mcp_connection_for_user(
     entry = get_catalog_entry(body.catalog_entry_id.strip())
     if entry is None:
         _invalid_payload("Connector catalog entry was not found.")
+    if not entry.cloud_secret_sync:
+        _invalid_payload(f"{entry.name} does not support legacy cloud secret sync.")
     cleaned = _clean_secret_fields(entry, body.secret_fields)
     existing = await list_user_connections(user_id)
     server_name = _generate_server_name(
@@ -308,6 +305,17 @@ async def sync_cloud_mcp_connection_for_user(
         settings_json="{}",
         payload_ciphertext=encrypt_json({"secretFields": cleaned}),
     )
+
+
+def _oauth_resource_url(entry: CatalogEntry, settings: dict[str, object]) -> str:
+    try:
+        return render_oauth_resource_url(
+            entry,
+            settings,
+            allow_insecure_launch_urls=app_settings.cloud_mcp_allow_insecure_launch_urls,
+        )
+    except CatalogConfigurationError as exc:
+        _invalid_payload(str(exc))
 
 
 async def delete_legacy_cloud_mcp_connection_for_user(

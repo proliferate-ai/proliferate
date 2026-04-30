@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ConnectorSettings } from "@/lib/domain/mcp/types";
 import { classifyTelemetryFailure } from "@/lib/domain/telemetry/failures";
 import { installConnector } from "@/lib/infra/mcp/persistence";
 import {
@@ -14,8 +15,12 @@ export function useInstallConnector() {
     meta: {
       telemetryHandled: true,
     },
-    mutationFn: async (input: { catalogEntryId: string; secretValue: string }) => {
-      return installConnector(input.catalogEntryId, input.secretValue);
+    mutationFn: async (input: {
+      catalogEntryId: string;
+      secretFields: Record<string, string>;
+      settings?: ConnectorSettings;
+    }) => {
+      return installConnector(input.catalogEntryId, input.secretFields, input.settings);
     },
     onSuccess: async (_result, variables) => {
       await refreshMcpConnectorsQuery(queryClient);

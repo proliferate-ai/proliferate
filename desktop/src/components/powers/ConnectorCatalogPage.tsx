@@ -6,7 +6,7 @@ import { useInstallConnector } from "@/hooks/mcp/use-install-connector";
 import { useInstalledConnectorActions } from "@/hooks/mcp/use-installed-connector-actions";
 import { useReconnectOAuthConnector } from "@/hooks/mcp/use-reconnect-oauth-connector";
 import { useUpdateConnectorSecret } from "@/hooks/mcp/use-update-connector-secret";
-import type { InstalledConnectorRecord } from "@/lib/domain/mcp/types";
+import type { ConnectorSettings, InstalledConnectorRecord } from "@/lib/domain/mcp/types";
 import { Input } from "@/components/ui/Input";
 import { Search } from "@/components/ui/icons";
 import {
@@ -43,9 +43,10 @@ export function ConnectorCatalogPage() {
     },
     onInstallSecret: async (
       catalogEntryId: InstalledConnectorRecord["catalogEntry"]["id"],
-      secretValue: string,
+      secretFields: Record<string, string>,
+      settings?: ConnectorSettings,
     ) => {
-      await installMutation.mutateAsync({ catalogEntryId, secretValue });
+      await installMutation.mutateAsync({ catalogEntryId, secretFields, settings });
     },
     onReconnect: (
       connectionId: string,
@@ -60,12 +61,14 @@ export function ConnectorCatalogPage() {
     onUpdateSecret: async (
       connectionId: string,
       catalogEntryId: InstalledConnectorRecord["catalogEntry"]["id"],
-      secretValue: string,
+      secretFields: Record<string, string>,
+      settings?: ConnectorSettings,
     ) => {
       await updateSecretMutation.mutateAsync({
         connectionId,
         catalogEntryId,
-        secretValue,
+        secretFields,
+        settings,
       });
     },
   };

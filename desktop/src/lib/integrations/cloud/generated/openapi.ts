@@ -1439,6 +1439,8 @@ export interface components {
             authFieldId?: string | null;
             /** Url */
             url: string;
+            /** Displayurl */
+            displayUrl: string;
             /** Command */
             command?: string | null;
             /** Args */
@@ -1449,6 +1451,8 @@ export interface components {
             serverNameBase: string;
             /** Iconid */
             iconId: string;
+            /** Secretfields */
+            secretFields: components["schemas"]["ConnectorCatalogFieldModel"][];
             /** Requiredfields */
             requiredFields: components["schemas"]["ConnectorCatalogFieldModel"][];
             /** Settingsschema */
@@ -1507,11 +1511,34 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "string" | "boolean";
+            kind: "string" | "boolean" | "select" | "url";
+            /** Label */
+            label: string;
+            /**
+             * Placeholder
+             * @default
+             */
+            placeholder: string;
+            /**
+             * Helpertext
+             * @default
+             */
+            helperText: string;
             /** Required */
             required: boolean;
+            /** Defaultvalue */
+            defaultValue?: string | boolean | null;
+            /** Options */
+            options?: components["schemas"]["ConnectorSettingsOptionModel"][];
             /** Affectsurl */
             affectsUrl: boolean;
+        };
+        /** ConnectorSettingsOptionModel */
+        ConnectorSettingsOptionModel: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
         };
         /** CreateCloudMcpConnectionRequest */
         CreateCloudMcpConnectionRequest: {

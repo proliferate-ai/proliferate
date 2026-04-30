@@ -1,52 +1,77 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import type { ConnectorCatalogEntry } from "@/lib/domain/mcp/types";
-import { describeConnectorSecretHint } from "@/lib/domain/mcp/validation";
+import { useEffect, useId, useRef, useState } from "react";
+import { getConnectorSecretFields } from "@/lib/domain/mcp/catalog";
+import type { ConnectorCatalogEntry, ConnectorCatalogField } from "@/lib/domain/mcp/types";
 import { openExternal } from "@/platform/tauri/shell";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { ExternalLink } from "@/components/ui/icons";
 
-export function ConnectorCredentialField({
-  actionLabel = "Get token",
+export function ConnectorSecretFields({
   autoFocus = true,
   disabled = false,
   entry,
   error,
-  helperOverride,
   onChange,
-  showValue = false,
-  value,
+  values,
 }: {
-  actionLabel?: string;
   autoFocus?: boolean;
   disabled?: boolean;
   entry: ConnectorCatalogEntry;
   error: string | null;
-  helperOverride?: string;
+  onChange: (fieldId: string, value: string) => void;
+  values: Record<string, string>;
+}) {
+  const fields = getConnectorSecretFields(entry);
+  if (fields.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-4">
+      {fields.map((field, index) => (
+        <ConnectorSecretFieldInput
+          key={field.id}
+          autoFocus={autoFocus && index === 0}
+          disabled={disabled}
+          docsUrl={entry.docsUrl}
+          error={index === fields.length - 1 ? error : null}
+          field={field}
+          onChange={(value) => onChange(field.id, value)}
+          value={values[field.id] ?? ""}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ConnectorSecretFieldInput({
+  autoFocus,
+  disabled,
+  docsUrl,
+  error,
+  field,
+  onChange,
+  value,
+}: {
+  autoFocus: boolean;
+  disabled: boolean;
+  docsUrl: string;
+  error: string | null;
+  field: ConnectorCatalogField;
   onChange: (value: string) => void;
-  showValue?: boolean;
   value: string;
 }) {
-  const field = entry.requiredFields[0];
   const inputId = useId();
-  const [visible, setVisible] = useState(showValue);
+  const [visible, setVisible] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const prefixHint = useMemo(() => describeConnectorSecretHint(entry, value), [entry, value]);
-
-  useEffect(() => {
-    setVisible(showValue);
-  }, [showValue]);
+  const hint = describeFieldPrefixHint(field, value);
 
   useEffect(() => {
     if (autoFocus) {
       inputRef.current?.focus();
     }
   }, [autoFocus]);
-
-  if (!field) {
-    return null;
-  }
 
   return (
     <div className="space-y-2">
@@ -78,21 +103,29 @@ export function ConnectorCredentialField({
         </div>
       </div>
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span>{helperOverride ?? field.helperText}</span>
+        <span>{field.helperText}</span>
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          onClick={() => { void openExternal(entry.docsUrl); }}
+          onClick={() => { void openExternal(docsUrl); }}
           disabled={disabled}
         >
-          {actionLabel}
+          Get token
           <ExternalLink className="size-3" />
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">{field.getTokenInstructions}</p>
-      {prefixHint && <p className="text-xs text-muted-foreground">{prefixHint}</p>}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
+}
+
+function describeFieldPrefixHint(field: ConnectorCatalogField, value: string): string | null {
+  const normalized = value.trim();
+  if (!field.prefixHint || !normalized || normalized.startsWith(field.prefixHint)) {
+    return null;
+  }
+  return `Usually starts with ${field.prefixHint}`;
 }

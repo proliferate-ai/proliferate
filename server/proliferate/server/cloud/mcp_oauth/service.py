@@ -37,10 +37,12 @@ from proliferate.integrations.mcp_oauth import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mcp_catalog.catalog import (
-    build_oauth_server_url,
+    CatalogConfigurationError,
     get_catalog_entry,
+    parse_settings,
+    render_oauth_resource_url,
+    validate_settings,
 )
-from proliferate.server.cloud.mcp_connections.service import _parse_settings
 from proliferate.server.cloud.mcp_oauth.models import (
     CloudMcpOAuthCallbackResponse,
     CloudMcpOAuthFlowStatusResponse,
@@ -126,7 +128,18 @@ async def start_cloud_mcp_oauth_flow(
             "MCP connection does not use OAuth.",
             status_code=400,
         )
-    server_url = build_oauth_server_url(entry, _parse_settings(connection.settings_json))
+    try:
+        server_url = render_oauth_resource_url(
+            entry,
+            validate_settings(entry, parse_settings(connection.settings_json)),
+            allow_insecure_launch_urls=settings.cloud_mcp_allow_insecure_launch_urls,
+        )
+    except CatalogConfigurationError as exc:
+        raise CloudApiError(
+            "invalid_payload",
+            str(exc),
+            status_code=400,
+        ) from exc
     try:
         protected = await discover_protected_resource_metadata(server_url)
         issuer = protected.authorization_servers[0]
@@ -217,6 +230,20 @@ async def complete_cloud_mcp_oauth_callback(
     if not flow.token_endpoint or not flow.resource:
         await fail_oauth_flow(flow_id=flow.id, failure_code="invalid_flow")
         return CloudMcpOAuthCallbackResponse(ok=False, status="failed")
+    connection = await get_user_connection_by_db_id(flow.user_id, flow.connection_db_id)
+    if connection is None:
+        await fail_oauth_flow(flow_id=flow.id, failure_code="invalid_flow")
+        return CloudMcpOAuthCallbackResponse(ok=False, status="failed")
+    oauth_client = await get_oauth_client(
+        issuer=flow.issuer or "",
+        redirect_uri=flow.redirect_uri,
+        catalog_entry_id=connection.catalog_entry_id,
+    )
+    client_secret = (
+        decrypt_text(oauth_client.client_secret_ciphertext)
+        if oauth_client and oauth_client.client_secret_ciphertext
+        else None
+    )
 
     try:
         token = await exchange_token(
@@ -226,10 +253,13 @@ async def complete_cloud_mcp_oauth_callback(
             code_verifier=decrypt_text(flow.code_verifier_ciphertext),
             redirect_uri=flow.redirect_uri,
             resource=flow.resource,
+            client_secret=client_secret,
+            token_endpoint_auth_method=(
+                oauth_client.token_endpoint_auth_method if oauth_client else None
+            ),
         )
     except McpOAuthProviderError as exc:
         if exc.code == "invalid_client" and flow.issuer:
-            connection = await get_user_connection_by_db_id(flow.user_id, flow.connection_db_id)
             await delete_oauth_client(
                 issuer=flow.issuer,
                 redirect_uri=flow.redirect_uri,
@@ -252,6 +282,7 @@ async def complete_cloud_mcp_oauth_callback(
                 "expiresAt": token.expires_at.isoformat() if token.expires_at else None,
                 "scopes": list(token.scopes),
                 "tokenEndpoint": flow.token_endpoint,
+                "redirectUri": flow.redirect_uri,
             }
         ),
         payload_format="oauth-bundle-v1",

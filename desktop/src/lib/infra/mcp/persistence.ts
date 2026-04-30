@@ -1,11 +1,15 @@
 import {
   isConnectorCatalogEntryAvailable,
-  getPrimarySecretField,
+  getConnectorSecretFields,
   isOAuthConnectorCatalogEntry,
 } from "@/lib/domain/mcp/catalog";
 import {
   validateOAuthConnectorSettings,
 } from "@/lib/domain/mcp/oauth";
+import {
+  connectorSettingsToCloud as domainConnectorSettingsToCloud,
+  normalizeConnectorSettings,
+} from "@/lib/domain/mcp/settings-schema";
 import { normalizeConnectorSecretValue, validateConnectorSecretValue } from "@/lib/domain/mcp/validation";
 import type {
   ConnectorCatalogEntry,
@@ -81,13 +85,36 @@ function cloudCatalogEntryToLocal(entry: CloudMcpCatalogEntry): ConnectorCatalog
     cloudSecretSync: entry.cloudSecretSync,
     serverNameBase: entry.serverNameBase,
     iconId: entry.iconId as ConnectorCatalogEntry["iconId"],
-    requiredFields: entry.requiredFields.map((field) => ({
+    displayUrl: entry.displayUrl ?? entry.url,
+    secretFields: (entry.secretFields ?? entry.requiredFields).map((field) => ({
       id: field.id,
       label: field.label,
       placeholder: field.placeholder,
       helperText: field.helperText,
       getTokenInstructions: field.getTokenInstructions,
       prefixHint: field.prefixHint ?? undefined,
+    })),
+    requiredFields: (entry.requiredFields ?? []).map((field) => ({
+      id: field.id,
+      label: field.label,
+      placeholder: field.placeholder,
+      helperText: field.helperText,
+      getTokenInstructions: field.getTokenInstructions,
+      prefixHint: field.prefixHint ?? undefined,
+    })),
+    settingsSchema: (entry.settingsSchema ?? []).map((field) => ({
+      id: field.id,
+      kind: field.kind,
+      label: field.label,
+      placeholder: field.placeholder ?? "",
+      helperText: field.helperText ?? "",
+      required: field.required,
+      defaultValue: field.defaultValue ?? undefined,
+      options: (field.options ?? []).map((option) => ({
+        value: option.value,
+        label: option.label,
+      })),
+      affectsUrl: field.affectsUrl,
     })),
     capabilities: entry.capabilities,
   };
@@ -138,7 +165,7 @@ function cloudConnectionToInstalledRecord(
   if (!catalogEntry) {
     return null;
   }
-  const settings = sanitizeCloudConnectorSettings(connection.settings);
+  const settings = sanitizeCloudConnectorSettings(catalogEntry, connection.settings);
   return {
     catalogEntry,
     broken: connection.authStatus !== "ready",
@@ -156,41 +183,19 @@ function cloudConnectionToInstalledRecord(
 }
 
 function sanitizeCloudConnectorSettings(
+  catalogEntry: ConnectorCatalogEntry,
   settings: Record<string, unknown>,
 ): ConnectorSettings | undefined {
-  if (
-    settings.kind === "supabase"
-    && typeof settings.projectRef === "string"
-    && typeof settings.readOnly === "boolean"
-  ) {
-    return {
-      kind: "supabase",
-      projectRef: settings.projectRef,
-      readOnly: settings.readOnly,
-    };
-  }
-  return undefined;
-}
-
-function connectorSettingsToCloud(
-  settings: ConnectorSettings | undefined,
-): Record<string, unknown> | undefined {
-  if (!settings) {
+  if (catalogEntry.settingsSchema.length === 0) {
     return undefined;
   }
-  if (settings.kind === "supabase") {
-    return {
-      kind: "supabase",
-      projectRef: settings.projectRef,
-      readOnly: settings.readOnly,
-    };
-  }
-  return undefined;
+  return normalizeConnectorSettings(catalogEntry, settings);
 }
 
 export async function installConnector(
   catalogEntryId: string,
-  secretValue: string,
+  secretValues: Record<string, string>,
+  settings?: ConnectorSettings,
 ): Promise<void> {
   const catalogEntry = await loadCloudCatalogEntry(catalogEntryId);
   if (!isConnectorCatalogEntryAvailable(catalogEntry)) {
@@ -200,22 +205,17 @@ export async function installConnector(
     throw new Error(`${catalogEntry.name} uses browser auth.`);
   }
 
-  const field = getPrimarySecretField(catalogEntry);
-  const normalizedSecret = field ? normalizeConnectorSecretValue(secretValue) : "";
-  if (field) {
-    const validationError = validateConnectorSecretValue(normalizedSecret);
-    if (validationError) {
-      throw new Error(validationError);
-    }
-  }
+  const normalizedSecrets = normalizeConnectorSecretValues(catalogEntry, secretValues);
+  validateConnectorSecretValues(catalogEntry, normalizedSecrets);
 
   const connection = await createCloudMcpConnection({
     catalogEntryId: catalogEntry.id,
+    settings: domainConnectorSettingsToCloud(catalogEntry, settings),
     enabled: true,
   });
-  if (field) {
+  if (getConnectorSecretFields(catalogEntry).length > 0) {
     await putCloudMcpSecretAuth(connection.connectionId, {
-      secretFields: { [field.id]: normalizedSecret },
+      secretFields: normalizedSecrets,
     });
   }
 }
@@ -240,7 +240,7 @@ export async function connectOAuthConnector(
 
   const connection = await createCloudMcpConnection({
     catalogEntryId: catalogEntry.id,
-    settings: connectorSettingsToCloud(settings),
+    settings: domainConnectorSettingsToCloud(catalogEntry, settings),
     enabled: true,
   });
   const result = await runCloudOAuthFlow(connection.connectionId, pendingAliasConnectionId);
@@ -327,14 +327,14 @@ export async function reconnectOAuthConnector(
   if (!isOAuthConnectorCatalogEntry(catalogEntry)) {
     throw new Error("Connector doesn't use browser auth.");
   }
-  const nextSettings = settings ?? sanitizeCloudConnectorSettings(connection.settings);
+  const nextSettings = settings ?? sanitizeCloudConnectorSettings(catalogEntry, connection.settings);
   const settingsError = validateOAuthConnectorSettings(catalogEntry, nextSettings);
   if (settingsError) {
     throw new Error(settingsError);
   }
   if (nextSettings) {
     await patchCloudMcpConnection(connectionId, {
-      settings: connectorSettingsToCloud(nextSettings),
+      settings: domainConnectorSettingsToCloud(catalogEntry, nextSettings),
     });
   }
   return runCloudOAuthFlow(connectionId);
@@ -342,7 +342,8 @@ export async function reconnectOAuthConnector(
 
 export async function updateConnectorSecret(
   connectionId: string,
-  secretValue: string,
+  secretValues: Record<string, string>,
+  settings?: ConnectorSettings,
 ): Promise<void> {
   const connection = (await listCloudMcpConnections()).connections
     .find((item) => item.connectionId === connectionId);
@@ -350,18 +351,43 @@ export async function updateConnectorSecret(
     throw new Error("Connector was not found.");
   }
   const catalogEntry = await loadCloudCatalogEntry(connection.catalogEntryId);
-  const field = getPrimarySecretField(catalogEntry);
-  if (!field) {
+  const fields = getConnectorSecretFields(catalogEntry);
+  if (fields.length === 0) {
     throw new Error(`${catalogEntry.name} doesn't store a token.`);
   }
-  const normalizedSecret = normalizeConnectorSecretValue(secretValue);
-  const validationError = validateConnectorSecretValue(normalizedSecret);
-  if (validationError) {
-    throw new Error(validationError);
+  const normalizedSecrets = normalizeConnectorSecretValues(catalogEntry, secretValues);
+  validateConnectorSecretValues(catalogEntry, normalizedSecrets);
+  if (settings) {
+    await patchCloudMcpConnection(connectionId, {
+      settings: domainConnectorSettingsToCloud(catalogEntry, settings),
+    });
   }
   await putCloudMcpSecretAuth(connectionId, {
-    secretFields: { [field.id]: normalizedSecret },
+    secretFields: normalizedSecrets,
   });
+}
+
+function normalizeConnectorSecretValues(
+  catalogEntry: ConnectorCatalogEntry,
+  values: Record<string, string>,
+): Record<string, string> {
+  const normalized: Record<string, string> = {};
+  for (const field of getConnectorSecretFields(catalogEntry)) {
+    normalized[field.id] = normalizeConnectorSecretValue(values[field.id] ?? "");
+  }
+  return normalized;
+}
+
+function validateConnectorSecretValues(
+  catalogEntry: ConnectorCatalogEntry,
+  values: Record<string, string>,
+): void {
+  for (const field of getConnectorSecretFields(catalogEntry)) {
+    const validationError = validateConnectorSecretValue(values[field.id] ?? "");
+    if (validationError) {
+      throw new Error(`${field.label}: ${validationError}`);
+    }
+  }
 }
 
 export async function setConnectorEnabled(

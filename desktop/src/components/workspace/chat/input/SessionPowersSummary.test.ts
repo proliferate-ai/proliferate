@@ -17,9 +17,12 @@ const TEST_CATALOG: Record<string, ConnectorCatalogEntry> = {
     authStyle: { kind: "bearer" },
     authFieldId: "api_key",
     url: "https://mcp.example.com/mcp",
+    displayUrl: "https://mcp.example.com/mcp",
     serverNameBase: "context7",
     iconId: "context7",
+    secretFields: [],
     requiredFields: [],
+    settingsSchema: [],
     capabilities: [],
   },
   filesystem: {
@@ -36,7 +39,10 @@ const TEST_CATALOG: Record<string, ConnectorCatalogEntry> = {
     env: [],
     serverNameBase: "filesystem",
     iconId: "folder",
+    displayUrl: "",
+    secretFields: [],
     requiredFields: [],
+    settingsSchema: [],
     capabilities: [],
   },
 };

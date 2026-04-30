@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -19,37 +20,34 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _has_column(table_name: str, column_name: str) -> bool:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return column_name in {column["name"] for column in inspector.get_columns(table_name)}
+
+
 def upgrade() -> None:
-    op.add_column(
-        "cloud_runtime_environment",
+    columns: list[sa.Column] = [
         sa.Column("credential_files_applied_revision", sa.Text(), nullable=True),
-    )
-    op.add_column(
-        "cloud_runtime_environment",
         sa.Column("credential_files_applied_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    op.add_column(
-        "cloud_runtime_environment",
         sa.Column("credential_process_applied_revision", sa.Text(), nullable=True),
-    )
-    op.add_column(
-        "cloud_runtime_environment",
         sa.Column("credential_process_applied_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    op.add_column(
-        "cloud_runtime_environment",
         sa.Column("credential_last_error", sa.Text(), nullable=True),
-    )
-    op.add_column(
-        "cloud_runtime_environment",
         sa.Column("credential_last_error_at", sa.DateTime(timezone=True), nullable=True),
-    )
+    ]
+    for column in columns:
+        if not _has_column("cloud_runtime_environment", column.name):
+            op.add_column("cloud_runtime_environment", column)
 
 
 def downgrade() -> None:
-    op.drop_column("cloud_runtime_environment", "credential_last_error_at")
-    op.drop_column("cloud_runtime_environment", "credential_last_error")
-    op.drop_column("cloud_runtime_environment", "credential_process_applied_at")
-    op.drop_column("cloud_runtime_environment", "credential_process_applied_revision")
-    op.drop_column("cloud_runtime_environment", "credential_files_applied_at")
-    op.drop_column("cloud_runtime_environment", "credential_files_applied_revision")
+    for column_name in (
+        "credential_last_error_at",
+        "credential_last_error",
+        "credential_process_applied_at",
+        "credential_process_applied_revision",
+        "credential_files_applied_at",
+        "credential_files_applied_revision",
+    ):
+        if _has_column("cloud_runtime_environment", column_name):
+            op.drop_column("cloud_runtime_environment", column_name)

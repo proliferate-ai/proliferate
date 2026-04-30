@@ -109,7 +109,7 @@ export function ConnectorIcon({
     );
   }
 
-  const Icon = CONNECTOR_ICONS[entry.iconId as keyof typeof CONNECTOR_ICONS];
+  const Icon = CONNECTOR_ICONS[entry.iconId as keyof typeof CONNECTOR_ICONS] ?? Globe;
   return (
     <div
       className={`flex shrink-0 items-center justify-center bg-muted/40 text-foreground ${tileClass}`}

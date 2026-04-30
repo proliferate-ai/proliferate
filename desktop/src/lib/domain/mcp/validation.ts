@@ -1,3 +1,4 @@
+import { getConnectorSecretFields } from "@/lib/domain/mcp/catalog";
 import type { ConnectorCatalogEntry } from "@/lib/domain/mcp/types";
 
 export const CONNECTOR_SECRET_MAX_LENGTH = 512;
@@ -25,7 +26,7 @@ export function describeConnectorSecretHint(
   value: string,
 ): string | null {
   const normalized = normalizeConnectorSecretValue(value);
-  const prefixHint = catalogEntry.requiredFields[0]?.prefixHint;
+  const prefixHint = getConnectorSecretFields(catalogEntry)[0]?.prefixHint;
   if (!prefixHint || !normalized || normalized.startsWith(prefixHint)) {
     return null;
   }

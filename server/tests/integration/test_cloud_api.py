@@ -16,6 +16,7 @@ from proliferate.db.models.cloud import (
     CloudMcpConnection,
     CloudMcpConnectionAuth,
     CloudRepoConfig,
+    CloudRuntimeEnvironment,
     CloudSandbox,
     CloudWorkspace,
 )
@@ -27,14 +28,18 @@ from proliferate.db.store.cloud_mcp.oauth_flows import (
     claim_active_oauth_flow_by_state_hash,
     create_oauth_flow_canceling_existing,
 )
+from proliferate.db.store.cloud_mcp.oauth_clients import upsert_oauth_client
 from proliferate.db.store.billing import ensure_personal_billing_subject
 from proliferate.integrations.github import GitHubRepoBranches
+from proliferate.integrations.mcp_oauth import TokenResponse
 from proliferate.integrations.sandbox.base import ProviderSandboxState
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config import service as repo_config_service
 from proliferate.server.cloud.repos import service as repos_service
 from proliferate.server.cloud.runtime import service as runtime_service
+from proliferate.server.cloud.runtime import credential_freshness as credential_freshness_service
 from proliferate.server.cloud.runtime.anyharness_api import CloudRuntimeReconnectError
+from proliferate.server.cloud.runtime.credential_freshness import CredentialFreshnessSnapshot
 from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.workspaces import service as cloud_service
 from proliferate.utils.crypto import decrypt_json, encrypt_json, encrypt_text
@@ -42,6 +47,19 @@ from proliferate.utils.crypto import decrypt_json, encrypt_json, encrypt_text
 
 async def _billing_subject_for_user(db_session: AsyncSession, user_id: uuid.UUID):
     return await ensure_personal_billing_subject(db_session, user_id)
+
+
+def _current_credential_freshness() -> CredentialFreshnessSnapshot:
+    return CredentialFreshnessSnapshot(
+        status="current",
+        files_current=True,
+        process_current=True,
+        requires_restart=False,
+        last_error=None,
+        last_error_at=None,
+        files_applied_at=None,
+        process_applied_at=None,
+    )
 
 
 async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]:
@@ -406,7 +424,16 @@ class TestCloudMcpConnections:
         catalog = await client.get("/v1/cloud/mcp/catalog", headers=headers)
         assert catalog.status_code == 200
         assert catalog.json()["catalogVersion"]
-        assert any(entry["id"] == "context7" for entry in catalog.json()["entries"])
+        context7_entry = next(
+            entry for entry in catalog.json()["entries"] if entry["id"] == "context7"
+        )
+        assert context7_entry["secretFields"] == context7_entry["requiredFields"]
+        assert context7_entry["displayUrl"] == "https://mcp.context7.com/mcp"
+        posthog_entry = next(
+            entry for entry in catalog.json()["entries"] if entry["id"] == "posthog"
+        )
+        assert posthog_entry["settingsSchema"][0]["id"] == "region"
+        assert posthog_entry["settingsSchema"][0]["defaultValue"] == "us"
 
         created = await client.post(
             "/v1/cloud/mcp/connections",
@@ -437,6 +464,89 @@ class TestCloudMcpConnections:
         assert body["mcpServers"][0]["headers"][0]["name"] == "Authorization"
         assert "ctx7sk-example" not in json.dumps(body["mcpBindingSummaries"])
         assert "ctx7sk-example" not in json.dumps(body["warnings"])
+
+    @pytest.mark.asyncio
+    async def test_posthog_settings_and_secret_materialization(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        session = await _register_and_login(client, "cloud-mcp-posthog@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        created = await client.post(
+            "/v1/cloud/mcp/connections",
+            headers=headers,
+            json={
+                "catalogEntryId": "posthog",
+                "enabled": True,
+                "settings": {
+                    "region": "eu",
+                    "organizationId": "org_123",
+                    "features": "flags",
+                },
+            },
+        )
+        assert created.status_code == 200
+        assert created.json()["settings"] == {
+            "features": "flags",
+            "organizationId": "org_123",
+            "region": "eu",
+        }
+
+        authed = await client.put(
+            f"/v1/cloud/mcp/connections/{created.json()['connectionId']}/auth/secret",
+            headers=headers,
+            json={"secretFields": {"apiKey": "phx-example"}},
+        )
+        assert authed.status_code == 200
+
+        materialized = await client.post(
+            "/v1/cloud/mcp/materialize",
+            headers=headers,
+            json={"targetLocation": "cloud"},
+        )
+        assert materialized.status_code == 200
+        server = materialized.json()["mcpServers"][0]
+        assert server["url"] == "https://mcp-eu.posthog.com/mcp?features=flags"
+        headers_by_name = {header["name"]: header["value"] for header in server["headers"]}
+        assert headers_by_name["Authorization"] == "Bearer phx-example"
+        assert headers_by_name["x-posthog-organization-id"] == "org_123"
+        assert "phx-example" not in json.dumps(materialized.json()["mcpBindingSummaries"])
+
+    @pytest.mark.asyncio
+    async def test_schema_settings_defaults_and_legacy_supabase_kind(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        session = await _register_and_login(client, "cloud-mcp-settings@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        posthog = await client.post(
+            "/v1/cloud/mcp/connections",
+            headers=headers,
+            json={"catalogEntryId": "posthog", "enabled": True},
+        )
+        assert posthog.status_code == 200
+        assert posthog.json()["settings"] == {"region": "us"}
+
+        supabase = await client.post(
+            "/v1/cloud/mcp/connections",
+            headers=headers,
+            json={
+                "catalogEntryId": "supabase",
+                "enabled": True,
+                "settings": {
+                    "kind": "supabase",
+                    "projectRef": "abcd1234",
+                    "readOnly": False,
+                },
+            },
+        )
+        assert supabase.status_code == 200
+        assert supabase.json()["settings"] == {
+            "projectRef": "abcd1234",
+            "readOnly": False,
+        }
 
     @pytest.mark.asyncio
     async def test_local_stdio_materializes_as_candidate_without_workspace_path(
@@ -686,7 +796,7 @@ class TestCloudMcpConnections:
             requested_scopes="[]",
             redirect_uri="https://api.example.com/v1/cloud/mcp/oauth/callback",
             authorization_url="https://accounts.example.com/authorize",
-            expires_at=datetime(2026, 4, 20, tzinfo=UTC),
+            expires_at=datetime(2099, 1, 1, tzinfo=UTC),
         )
 
         claimed = await claim_active_oauth_flow_by_state_hash(state_hash)
@@ -694,6 +804,91 @@ class TestCloudMcpConnections:
         assert claimed.id == flow.id
         assert claimed.status == "exchanging"
         assert await claim_active_oauth_flow_by_state_hash(state_hash) is None
+
+    @pytest.mark.asyncio
+    async def test_oauth_callback_uses_cached_dcr_client_secret(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        session = await _register_and_login(client, "cloud-mcp-oauth-secret@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        created = await client.post(
+            "/v1/cloud/mcp/connections",
+            headers=headers,
+            json={
+                "catalogEntryId": "supabase",
+                "enabled": True,
+                "settings": {"projectRef": "abc"},
+            },
+        )
+        assert created.status_code == 200
+        records = await _list_mcp_connections(db_session, session["user_id"])
+        assert len(records) == 1
+
+        redirect_uri = "https://api.example.com/v1/cloud/mcp/oauth/callback"
+        await upsert_oauth_client(
+            issuer="https://api.supabase.com",
+            redirect_uri=redirect_uri,
+            catalog_entry_id="supabase",
+            resource="https://mcp.supabase.com/mcp?project_ref=abc&read_only=true",
+            client_id="client-id",
+            client_secret_ciphertext=encrypt_text("client-secret"),
+            client_secret_expires_at=None,
+            token_endpoint_auth_method=None,
+            registration_client_uri=None,
+            registration_access_token_ciphertext=None,
+        )
+        state = "oauth-state-with-secret"
+        flow = await create_oauth_flow_canceling_existing(
+            connection_db_id=records[0].id,
+            user_id=uuid.UUID(session["user_id"]),
+            state_hash=hashlib.sha256(state.encode("utf-8")).hexdigest(),
+            code_verifier_ciphertext=encrypt_text("verifier"),
+            issuer="https://api.supabase.com",
+            resource="https://mcp.supabase.com/mcp?project_ref=abc&read_only=true",
+            client_id="client-id",
+            token_endpoint="https://api.supabase.com/v1/oauth/token",
+            requested_scopes="[]",
+            redirect_uri=redirect_uri,
+            authorization_url="https://api.supabase.com/v1/oauth/authorize",
+            expires_at=datetime(2099, 1, 1, tzinfo=UTC),
+        )
+        captured: dict[str, object] = {}
+
+        async def _exchange_token(**kwargs: object) -> TokenResponse:
+            captured.update(kwargs)
+            return TokenResponse(
+                access_token="access-token",
+                refresh_token="refresh-token",
+                expires_at=datetime(2099, 1, 1, tzinfo=UTC),
+                scopes=(),
+            )
+
+        monkeypatch.setattr(
+            "proliferate.server.cloud.mcp_oauth.service.exchange_token",
+            _exchange_token,
+        )
+
+        response = await client.get(
+            "/v1/cloud/mcp/oauth/callback",
+            params={"state": state, "code": "auth-code"},
+        )
+
+        assert response.status_code == 200
+        assert "Authorization complete" in response.text
+        assert captured["client_secret"] == "client-secret"
+        assert captured["token_endpoint_auth_method"] is None
+
+        db_session.expire_all()
+        stored = await claim_active_oauth_flow_by_state_hash(flow.state_hash)
+        assert stored is None
+        auths = await _list_mcp_connection_auths(db_session)
+        assert len(auths) == 1
+        assert auths[0].payload_ciphertext is not None
+        payload = decrypt_json(auths[0].payload_ciphertext)
+        assert payload["redirectUri"] == redirect_uri
 
     @pytest.mark.asyncio
     async def test_changed_mcp_sync_rewrites_existing_row(
@@ -1565,6 +1760,7 @@ class TestCloudWorkspaces:
                 anyharness_workspace_id="workspace-123",
                 runtime_generation=2,
                 ready_agent_kinds=["codex"],
+                credential_freshness=_current_credential_freshness(),
             )
 
         monkeypatch.setattr(cloud_service, "get_workspace_connection", _workspace_connection)
@@ -1699,17 +1895,6 @@ class TestCloudWorkspaces:
             async def resolve_runtime_context(self, _sandbox: object) -> object:
                 return object()
 
-        async def _ensure_ready(*_args, **_kwargs) -> str:
-            return "https://example-runtime.invalid"
-
-        async def _payloads(_user_id: uuid.UUID) -> dict[str, object]:
-            return {
-                "codex": {
-                    "authMode": "file",
-                    "files": {".codex/auth.json": '{"access_token":"opaque"}'},
-                }
-            }
-
         async def _write_files(*_args, **_kwargs) -> None:
             return None
 
@@ -1721,20 +1906,59 @@ class TestCloudWorkspaces:
             "sync_workspace_credentials",
             runtime_service.sync_workspace_credentials,
         )
-        monkeypatch.setattr(runtime_service, "ensure_workspace_runtime_ready", _ensure_ready)
-        monkeypatch.setattr(runtime_service, "load_active_cloud_credential_payloads", _payloads)
-        monkeypatch.setattr(runtime_service, "get_sandbox_provider", lambda _kind: _FakeProvider())
-        monkeypatch.setattr(runtime_service, "write_credential_files", _write_files)
-        monkeypatch.setattr(runtime_service, "reconcile_remote_agents", _boom)
+        monkeypatch.setattr(
+            credential_freshness_service,
+            "get_sandbox_provider",
+            lambda _kind: _FakeProvider(),
+        )
+        monkeypatch.setattr(credential_freshness_service, "write_credential_files", _write_files)
+        monkeypatch.setattr(credential_freshness_service, "reconcile_remote_agents", _boom)
 
         session = await _register_and_login(client, "cloud-sync-credentials@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
         user_id = uuid.UUID(session["user_id"])
         billing_subject = await _billing_subject_for_user(db_session, user_id)
+        environment = CloudRuntimeEnvironment(
+            user_id=user_id,
+            organization_id=None,
+            created_by_user_id=user_id,
+            billing_subject_id=billing_subject.id,
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            git_owner_norm="acme",
+            git_repo_name_norm="rocket",
+            isolation_policy="repo_shared",
+            status="running",
+            runtime_url="https://example-runtime.invalid",
+            runtime_token_ciphertext=encrypt_text("runtime-token"),
+            anyharness_data_key_ciphertext=encrypt_text("runtime-data-key"),
+            runtime_generation=2,
+            credential_process_applied_revision="credential-process:v1:empty",
+        )
+        db_session.add(environment)
+        await db_session.commit()
+        await db_session.refresh(environment)
+
+        credential = CloudCredential(
+            user_id=user_id,
+            provider="codex",
+            auth_mode="file",
+            payload_ciphertext=encrypt_json(
+                {
+                    "authMode": "file",
+                    "files": {".codex/auth.json": '{"access_token":"opaque"}'},
+                }
+            ),
+            payload_format="json-v1",
+        )
+        db_session.add(credential)
+        await db_session.commit()
 
         workspace = CloudWorkspace(
             user_id=user_id,
             billing_subject_id=billing_subject.id,
+            runtime_environment_id=environment.id,
             display_name="acme/rocket",
             git_provider="github",
             git_owner="acme",
@@ -1755,6 +1979,7 @@ class TestCloudWorkspaces:
         await db_session.refresh(workspace)
 
         sandbox = CloudSandbox(
+            runtime_environment_id=environment.id,
             cloud_workspace_id=workspace.id,
             provider="e2b",
             external_sandbox_id=f"sandbox-{uuid.uuid4()}",
@@ -1763,6 +1988,7 @@ class TestCloudWorkspaces:
         )
         db_session.add(sandbox)
         await db_session.commit()
+        environment.active_sandbox_id = sandbox.id
         workspace.active_sandbox_id = sandbox.id
         await db_session.commit()
 
