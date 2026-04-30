@@ -223,6 +223,12 @@ export function ChatInput() {
               <SessionPowersSummary summaries={activeSlot?.mcpBindingSummaries ?? null} />
             </div>
           </div>
+          {!isEditingQueuedPrompt && (
+            <DraftAttachmentPreviewList
+              attachments={attachments.attachments}
+              onRemove={attachments.removeAttachment}
+            />
+          )}
           {isEditingQueuedPrompt ? (
             <div
               className="mb-2 flex-grow select-text overflow-y-auto px-3"
@@ -262,12 +268,6 @@ export function ChatInput() {
               minHeightRem={CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM}
               maxHeightRem={CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}
               searchHostElement={mentionSearchHost}
-            />
-          )}
-          {!isEditingQueuedPrompt && (
-            <DraftAttachmentPreviewList
-              attachments={attachments.attachments}
-              onRemove={attachments.removeAttachment}
             />
           )}
 

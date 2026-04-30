@@ -23,6 +23,9 @@ export interface PromptContentRendererProps {
   fallbackText?: string;
   compact?: boolean;
   variant?: PromptContentRendererVariant;
+  includeText?: boolean;
+  includeAttachments?: boolean;
+  layout?: "stack" | "wrap";
 }
 
 export function PromptContentRenderer({
@@ -31,17 +34,23 @@ export function PromptContentRenderer({
   fallbackText = "",
   compact = false,
   variant,
+  includeText = true,
+  includeAttachments = true,
+  layout = "stack",
 }: PromptContentRendererProps) {
   const displayParts = normalizeContentParts(parts, fallbackText);
+  const visibleParts = displayParts.filter((part) => (
+    part.type === "text" ? includeText : includeAttachments
+  ));
   const resolvedVariant = variant ?? (compact ? "compact" : "transcript");
 
-  if (displayParts.length === 0) {
+  if (visibleParts.length === 0) {
     return null;
   }
 
   return (
-    <div className={resolvedVariant === "compact" ? "flex min-w-0 flex-col gap-1" : "flex min-w-0 flex-col gap-2"}>
-      {displayParts.map((part) => (
+    <div className={promptContentContainerClassName(resolvedVariant, layout)}>
+      {visibleParts.map((part) => (
         <PromptDisplayPartView
           key={part.id}
           sessionId={sessionId}
@@ -69,7 +78,7 @@ export function DraftAttachmentPreviewList({
   }
 
   return (
-    <div className="flex flex-wrap gap-2 px-3 pb-2" data-telemetry-mask>
+    <div className="flex w-full flex-wrap items-center justify-start gap-1 px-2 py-1.5" data-telemetry-mask>
       {displayParts.map((part) => (
         <PromptAttachmentCard
           key={part.id}
@@ -146,38 +155,26 @@ function PromptAttachmentCard({
   const metadata = [attachmentKindLabel(part), part.mimeType, part.sizeLabel]
     .filter(Boolean)
     .join(" - ");
+  const title = [part.name, metadata, part.type === "link" ? part.uri : null]
+    .filter(Boolean)
+    .join("\n");
   const className = isDraft
-    ? "group flex max-w-full items-center gap-2 rounded-md border border-border/70 bg-muted/35 px-2 py-1 text-xs text-foreground"
+    ? "group relative inline-flex max-w-[240px] items-center gap-1 rounded-full border border-border bg-card px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent"
     : isCompact
-      ? "flex min-w-0 items-center gap-2 rounded-md border border-border/60 bg-muted/45 px-2 py-1.5 text-xs text-foreground"
-      : "flex min-w-0 items-start gap-2 rounded-lg border border-border/60 bg-muted/45 px-2.5 py-2 text-xs text-foreground shadow-sm";
+      ? "inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-border/70 bg-card px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-accent"
+      : "inline-flex min-w-0 max-w-[240px] items-center gap-1 rounded-full border border-border bg-card px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent";
 
   return (
-    <div className={className} data-telemetry-mask>
+    <div className={className} data-telemetry-mask title={title}>
       <PromptAttachmentPreview
         sessionId={sessionId}
         part={part}
         variant={variant}
       />
-      <div className={isDraft ? "min-w-0 max-w-44" : "min-w-0 flex-1"}>
-        <div className="truncate font-medium text-foreground" title={part.name}>
+      <div className={isDraft ? "relative min-w-0 flex-1 truncate pr-5 font-medium" : "relative min-w-0 flex-1 truncate pr-1 font-medium"}>
+        <div className="truncate text-foreground">
           {part.name}
         </div>
-        {metadata && (
-          <div className="truncate text-muted-foreground">
-            {metadata}
-          </div>
-        )}
-        {part.type === "link" && !isDraft && (
-          <div className="truncate text-muted-foreground" title={part.uri}>
-            {part.uri}
-          </div>
-        )}
-        {part.preview && !isCompact && !isDraft && (
-          <div className="mt-1 line-clamp-3 whitespace-pre-wrap text-muted-foreground">
-            {part.preview}
-          </div>
-        )}
       </div>
       {isDraft && onRemove && (
         <Button
@@ -185,7 +182,7 @@ function PromptAttachmentCard({
           variant="ghost"
           size="icon-sm"
           onClick={() => onRemove(part.id)}
-          className="size-6 shrink-0 opacity-65 group-hover:opacity-100"
+          className="pointer-events-none absolute inset-y-0 right-0 h-full w-7 rounded-full bg-card/95 px-0 opacity-0 transition-opacity hover:bg-accent group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
           aria-label={`Remove ${part.name}`}
         >
           <X className="size-3" />
@@ -219,13 +216,13 @@ function PromptAttachmentPreview({
   return (
     <div className={previewFrameClassName(variant)}>
       {part.type === "link" ? (
-        <Link2 className="size-4 text-muted-foreground" />
+        <Link2 className="size-3.5 text-muted-foreground" />
       ) : (
         <FileTreeEntryIcon
           name={part.name}
           path={part.uri ?? part.name}
           kind="file"
-          className="size-4 text-muted-foreground"
+          className="size-3.5 text-muted-foreground"
         />
       )}
     </div>
@@ -273,20 +270,16 @@ function PromptImagePreview({
 }
 
 function previewFrameClassName(variant: PromptAttachmentCardVariant): string {
-  if (variant === "draft") {
-    return "flex size-8 shrink-0 items-center justify-center rounded bg-foreground/5";
-  }
   if (variant === "compact") {
-    return "flex size-8 shrink-0 items-center justify-center rounded bg-foreground/5";
+    return "flex size-4 shrink-0 items-center justify-center";
   }
-  return "flex size-10 shrink-0 items-center justify-center rounded-md bg-foreground/5";
+  return "flex size-4 shrink-0 items-center justify-center";
 }
 
 function imageClassName(variant: PromptAttachmentCardVariant): string {
-  if (variant === "draft" || variant === "compact") {
-    return "size-8 shrink-0 rounded object-cover";
-  }
-  return "size-10 shrink-0 rounded-md object-cover";
+  return variant === "compact"
+    ? "size-4 shrink-0 rounded object-cover"
+    : "size-4 shrink-0 rounded object-cover";
 }
 
 function attachmentKindLabel(part: PromptDisplayAttachmentPart): string {
@@ -298,4 +291,17 @@ function attachmentKindLabel(part: PromptDisplayAttachmentPart): string {
     case "link":
       return "Link";
   }
+}
+
+function promptContentContainerClassName(
+  variant: PromptContentRendererVariant,
+  layout: "stack" | "wrap",
+): string {
+  if (layout === "wrap") {
+    return "flex min-w-0 flex-wrap items-end justify-end gap-2";
+  }
+
+  return variant === "compact"
+    ? "flex min-w-0 flex-col gap-1"
+    : "flex min-w-0 flex-col gap-2";
 }
