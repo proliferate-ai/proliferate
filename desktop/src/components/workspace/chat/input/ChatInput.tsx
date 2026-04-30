@@ -69,9 +69,13 @@ export function ChatInput() {
   } = useQueuedPromptEdit();
   const promptCapabilities = activeSlot?.liveConfig?.promptCapabilities ?? null;
   const attachments = usePromptAttachments(promptCapabilities);
-  const canAttach = !isEditingQueuedPrompt
-    && !isDisabled
-    && canAttachPromptContent(promptCapabilities);
+  const supportsAttachments = canAttachPromptContent(promptCapabilities);
+  const canAttach = !isEditingQueuedPrompt && !isDisabled && supportsAttachments;
+  const attachControlTitle = supportsAttachments
+    ? "Attach file"
+    : activeSessionId
+      ? "Attachments are not supported by this agent"
+      : "Attachments are available after a session starts";
   const promptText = serializeChatDraftToPrompt(draft);
   const effectiveIsEmpty = isEditingQueuedPrompt
     ? editDraft.trim().length === 0
@@ -273,11 +277,13 @@ export function ChatInput() {
                 areRuntimeControlsDisabled ? "pointer-events-none opacity-55" : ""
               }`}
             >
-              {canAttach && (
+              {!isEditingQueuedPrompt && (
                 <ComposerControlButton
                   iconOnly
+                  disabled={!canAttach}
                   icon={<FilePlus className="size-3.5" />}
                   label="Attach file"
+                  title={attachControlTitle}
                   onClick={() => fileInputRef.current?.click()}
                   aria-label="Attach file"
                 />
