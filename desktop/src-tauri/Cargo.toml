@@ -40,3 +40,6 @@ getrandom = "0.2"
 which = "7"
 window-vibrancy = "0.6"
 uuid.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = "0.3.2"

@@ -100,9 +100,9 @@ export function HeaderTabs() {
     <div
       role="tablist"
       aria-label="Workspace tabs"
-      className="flex h-full min-w-0 items-end gap-1 overflow-hidden px-1 pt-1"
+      className="flex h-full min-w-0 items-center gap-1 overflow-hidden px-1"
     >
-      <div className="scrollbar-none flex min-w-0 flex-1 items-end gap-1 overflow-x-auto overflow-y-hidden">
+      <div className="scrollbar-none flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden">
         {chatTabs.map((tab) => (
           <span
             key={tab.id}
@@ -136,7 +136,7 @@ export function HeaderTabs() {
       </div>
 
       {openTabs.length > 0 && (
-        <div className="flex min-w-0 max-w-[45%] flex-1 items-end gap-1 overflow-x-auto overflow-y-hidden">
+        <div className="flex min-w-0 max-w-[45%] flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden">
           {openTabs.map((path) => {
             const isActive = activeMainTab.kind === "file" && activeMainTab.path === path;
             const buf = buffersByPath[path];

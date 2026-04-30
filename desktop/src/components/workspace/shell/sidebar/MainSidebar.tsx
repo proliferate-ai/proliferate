@@ -222,7 +222,7 @@ export function MainSidebar() {
   const filtersActive = showArchived || !isDefaultSidebarWorkspaceTypes(workspaceTypes);
 
   return (
-    <div className="h-full bg-sidebar select-none flex flex-col gap-2 pb-2 pt-2">
+    <div className="h-full bg-sidebar select-none flex flex-col gap-2 pb-2">
       <SupportDialog
         open={supportOpen}
         onClose={() => setSupportOpen(false)}

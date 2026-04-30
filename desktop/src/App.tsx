@@ -6,6 +6,7 @@ import { OnboardingGate, OnboardingRoute } from "@/components/onboarding/Onboard
 import { ToastContainer } from "@/components/feedback/Toast"
 import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
+import { MacWindowControlsSafeArea } from "@/components/ui/MacWindowControlsSafeArea"
 import { applyThemePreference, initializeTheme } from "@/config/theme"
 import { useExportRunningAgentCount } from "@/hooks/app/use-export-running-agent-count"
 import { useAppShortcuts } from "@/hooks/app/use-app-shortcuts"
@@ -186,6 +187,7 @@ function AppRuntime() {
 
   return (
     <>
+      <MacWindowControlsSafeArea />
       <UpdateRestartDialog />
       <RuntimeInputSyncGate />
       <InstrumentedRoutes>

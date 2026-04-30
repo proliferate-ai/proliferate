@@ -85,12 +85,12 @@ export function GlobalHeader({
   return (
     <div className="flex h-full min-w-0 flex-1 items-stretch gap-2 px-2">
       {/* Tabs */}
-      <div className="flex min-w-0 flex-1 items-end overflow-hidden">
+      <div className="flex min-w-0 flex-1 items-center overflow-hidden">
         <HeaderTabs />
       </div>
 
       {/* Right side - branch + open-in + git + panel toggle */}
-      <div className="flex shrink-0 items-center gap-2 pb-px">
+      <div className="flex shrink-0 items-center gap-2">
         {branchName && (
           <BranchBadge branchName={branchName} />
         )}

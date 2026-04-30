@@ -29,7 +29,7 @@ import { focusChatInput } from "@/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "@/lib/domain/chat/file-mentions";
 import { canAttachPromptContent } from "@/lib/domain/chat/prompt-content";
 import { Button } from "@/components/ui/Button";
-import { FilePlus } from "@/components/ui/icons";
+import { AddMessage } from "@/components/ui/icons";
 import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerMentionEditor } from "./ComposerMentionEditor";
 import { ModelSelector } from "./ModelSelector";
@@ -299,12 +299,21 @@ export function ChatInput() {
                 areRuntimeControlsDisabled ? "pointer-events-none opacity-55" : ""
               }`}
             >
+              <ModelSelector {...modelSelectorProps} />
+              <SessionConfigControls agentKind={agentKind} controls={sessionConfigControls} />
+            </div>
+
+            <div className="flex items-center gap-[5px]">
               {!isEditingQueuedPrompt && (
-                <>
+                <div
+                  className={`flex items-center gap-[5px] ${
+                    areRuntimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+                  }`}
+                >
                   <ComposerControlButton
                     iconOnly
                     disabled={!canAttach}
-                    icon={<FilePlus className="size-3.5" />}
+                    icon={<AddMessage className="size-4" />}
                     label="Attach file"
                     title={attachControlTitle}
                     onClick={() => fileInputRef.current?.click()}
@@ -314,13 +323,8 @@ export function ChatInput() {
                     draftWorkspaceId={selectedWorkspaceId}
                     disabled={!canAttachPlan}
                   />
-                </>
+                </div>
               )}
-              <ModelSelector {...modelSelectorProps} />
-              <SessionConfigControls agentKind={agentKind} controls={sessionConfigControls} />
-            </div>
-
-            <div className="flex items-center">
               <ChatComposerActions
                 isRunning={isRunning}
                 isEmpty={effectiveIsEmpty}

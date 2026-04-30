@@ -9,7 +9,10 @@ mod state;
 mod telemetry;
 mod telemetry_file_logging;
 
-use commands::{anonymous_telemetry, config, diagnostics as diagnostics_commands, keychain, mcp_oauth, process, runtime, shell};
+use commands::{
+    anonymous_telemetry, config, diagnostics as diagnostics_commands, keychain, mcp_oauth, process,
+    runtime, shell, window_chrome,
+};
 use quit_flow::QuitFlowState;
 use tauri::Manager;
 #[cfg(target_os = "macos")]
@@ -135,6 +138,7 @@ pub fn run() {
             shell::reveal_in_finder,
             shell::open_in_terminal,
             shell::open_external,
+            window_chrome::apply_macos_window_chrome,
             process::command_exists,
             keychain::list_configured_env_var_names,
             keychain::list_syncable_cloud_credentials,

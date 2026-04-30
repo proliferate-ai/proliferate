@@ -21,9 +21,9 @@ export function HeaderTab({
   onClose,
   badge,
 }: HeaderTabProps) {
-  const shapeClassName = transparentChromeEnabled ? "-mb-px rounded-t-md" : "rounded-md";
+  const shapeClassName = "rounded-md";
   const activeClassName = transparentChromeEnabled
-    ? "border-foreground/10 border-b-background bg-background/85 text-foreground shadow-subtle backdrop-blur-xl"
+    ? "border-foreground/10 bg-background/85 text-foreground shadow-subtle backdrop-blur-xl"
     : "border-border bg-background text-foreground shadow-subtle";
 
   return (

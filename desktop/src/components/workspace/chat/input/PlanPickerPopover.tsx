@@ -1,7 +1,7 @@
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { ClipboardList, LoaderCircle } from "@/components/ui/icons";
+import { AddPlan, ClipboardList, LoaderCircle } from "@/components/ui/icons";
 import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
 import { ComposerPopoverSurface } from "@/components/workspace/chat/input/ComposerPopoverSurface";
 import { usePlanPicker } from "@/hooks/plans/use-plan-picker";
@@ -26,13 +26,13 @@ export function PlanPickerPopover({
         <ComposerControlButton
           iconOnly
           disabled={disabled}
-          icon={<ClipboardList className="size-3.5" />}
+          icon={<AddPlan className="size-4" />}
           label="Attach plan"
           title={disabled ? "Select a workspace before attaching a plan" : "Attach plan"}
           aria-label="Attach plan"
         />
       )}
-      align="start"
+      align="end"
       side="top"
       offset={8}
       className="w-auto border-0 bg-transparent p-0 shadow-none"

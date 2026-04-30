@@ -11,3 +11,12 @@ export async function setRunningAgentCount(count: number): Promise<void> {
   const { invoke } = await import("@tauri-apps/api/core");
   await invoke("set_running_agent_count", { count });
 }
+
+export async function applyMacWindowChrome(): Promise<void> {
+  if (!isTauriWindowApiAvailable()) {
+    return;
+  }
+
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("apply_macos_window_chrome");
+}
