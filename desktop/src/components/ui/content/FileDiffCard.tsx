@@ -224,7 +224,7 @@ export function FileDiffCard({
         className={`select-none bg-[var(--color-diff-surface)] ${canExpand ? "cursor-pointer" : ""}`}
       >
         <div className="bg-[var(--color-diff-header-surface)]">
-          <div className="group @container/diff-header relative flex items-center gap-2 pt-1 pr-1 pb-1 pl-3 text-chat">
+          <div className="group @container/diff-header relative flex items-center gap-2 pt-1 pr-1 pb-1 pl-3 text-chat leading-[var(--text-chat--line-height)]">
             <div className="flex min-w-0 items-center gap-2 pb-0.5 text-foreground">
               {onOpenFile ? (
                 <button

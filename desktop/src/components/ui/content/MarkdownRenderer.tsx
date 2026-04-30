@@ -128,8 +128,8 @@ export function MarkdownRenderer({
             </div>
           ),
           th: (props) =>
-            mdHtmlElement("th", "border border-border px-3 py-1 text-[11px] leading-relaxed font-medium text-left", props),
-          td: (props) => mdHtmlElement("td", "border border-border px-3 py-1 text-[11px] leading-relaxed", props),
+            mdHtmlElement("th", "border border-border px-3 py-1 text-left text-chat leading-[var(--text-chat--line-height)] font-medium", props),
+          td: (props) => mdHtmlElement("td", "border border-border px-3 py-1 text-chat leading-[var(--text-chat--line-height)]", props),
           code: ({
             className: codeClassName,
             children,

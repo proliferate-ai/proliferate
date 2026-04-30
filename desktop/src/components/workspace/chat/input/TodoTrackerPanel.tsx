@@ -12,7 +12,7 @@ export function TodoTrackerPanel({ entries }: TodoTrackerPanelProps) {
   const completedCount = entries.filter((e) => e.status === "completed").length;
 
   const header = (
-    <div className="text-chat flex min-w-0 items-center gap-1.5 text-muted-foreground">
+    <div className="text-chat flex min-w-0 items-center gap-1.5 leading-[var(--text-chat--line-height)] text-muted-foreground">
       <ClipboardList className="size-3.5 shrink-0" />
       <span className="min-w-0 truncate">
         {completedCount} out of {entries.length} tasks completed

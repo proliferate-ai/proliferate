@@ -73,7 +73,7 @@ export function ReviewFeedbackSummary({
               }}
             />
           )) : (
-            <div className="text-chat text-muted-foreground">
+            <div className="text-chat leading-[var(--text-chat--line-height)] text-muted-foreground">
               Loading reviewer results...
             </div>
           )}
@@ -108,7 +108,7 @@ function ReviewFeedbackAssignmentRow({
         : "text-muted-foreground";
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-chat">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-chat leading-[var(--text-chat--line-height)]">
       <div className="flex min-w-0 items-center gap-1.5">
         {canOpenSession ? (
           <Button

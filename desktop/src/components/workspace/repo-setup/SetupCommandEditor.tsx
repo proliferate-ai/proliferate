@@ -122,11 +122,11 @@ export function SetupCommandEditor({
       <div>
         <p className="mb-1 text-xs font-medium text-muted-foreground">Preview</p>
         <Textarea
+          variant="code"
           value={currentScript}
           onChange={(e) => onChange(e.target.value)}
           placeholder="One command per line..."
           rows={4}
-          className="resize-y font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)]"
         />
       </div>
     </div>

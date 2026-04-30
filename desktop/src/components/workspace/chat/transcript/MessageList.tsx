@@ -1423,7 +1423,7 @@ function AgentGroupBlock({
       {/* Agent header — clickable to collapse/expand */}
       <div
         onClick={() => headerExpandable && setExpanded(!expanded)}
-        className={`group/tool-action-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-base leading-5 transition-colors ${
+        className={`group/tool-action-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-chat leading-[var(--text-chat--line-height)] transition-colors ${
           headerExpandable
             ? "cursor-pointer text-muted-foreground hover:bg-muted/40 hover:text-foreground"
             : "cursor-default text-muted-foreground"

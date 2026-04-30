@@ -40,7 +40,7 @@ export function CollapsedActions({
   );
 
   return (
-    <div className="min-w-0 text-chat">
+    <div className="min-w-0 text-chat leading-[var(--text-chat--line-height)]">
       <Button
         type="button"
         variant="ghost"
@@ -73,7 +73,7 @@ export function CollapsedActions({
 
 export function InlineToolAction({ item }: { item: ToolCallItem }) {
   return (
-    <div className="min-w-0 text-chat">
+    <div className="min-w-0 text-chat leading-[var(--text-chat--line-height)]">
       <CollapsedActionRows item={item} />
     </div>
   );

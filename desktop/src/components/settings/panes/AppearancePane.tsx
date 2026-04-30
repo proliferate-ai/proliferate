@@ -20,11 +20,7 @@ import {
   type ThemePreset,
 } from "@/config/theme";
 import { useColorMode, useThemePreset } from "@/hooks/theme/use-theme";
-import { emitTurnEnd } from "@/lib/integrations/anyharness/turn-end-events";
-import {
-  type TurnEndSoundId,
-  useUserPreferencesStore,
-} from "@/stores/preferences/user-preferences-store";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 const PRESET_LABELS: Record<ThemePreset, string> = {
   ship: "Dominic",
@@ -45,24 +41,12 @@ const MODE_ICONS: Record<ColorMode, FC<{ className?: string }>> = {
   system: Monitor,
 };
 
-const SOUND_LABELS: Record<TurnEndSoundId, string> = {
-  ding: "Ding",
-  gong: "Gong",
-};
-
-const TURN_END_SOUND_OPTIONS: { id: TurnEndSoundId; label: string }[] = [
-  { id: "ding", label: "Ding" },
-  { id: "gong", label: "Gong" },
-];
-
 export function AppearancePane() {
   const [preset, setPreset] = useThemePreset();
   const [mode, setMode] = useColorMode();
   const transparentChromeEnabled = useUserPreferencesStore((state) => state.transparentChromeEnabled);
   const uiFontSizeId = useUserPreferencesStore((state) => state.uiFontSizeId);
   const readableCodeFontSizeId = useUserPreferencesStore((state) => state.readableCodeFontSizeId);
-  const turnEndSoundEnabled = useUserPreferencesStore((state) => state.turnEndSoundEnabled);
-  const turnEndSoundId = useUserPreferencesStore((state) => state.turnEndSoundId);
   const setPreference = useUserPreferencesStore((state) => state.set);
   const modeLocked = isModeLockedPreset(preset);
   const displayedMode: ColorMode = modeLocked ? "dark" : mode;
@@ -71,7 +55,7 @@ export function AppearancePane() {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Appearance"
-        description="Visual preferences and local feedback cues."
+        description="Visual preferences, typography, and workspace chrome."
       />
 
       <SettingsCard>
@@ -180,50 +164,6 @@ export function AppearancePane() {
               })),
             }]}
           />
-        </SettingsCardRow>
-      </SettingsCard>
-
-      <SettingsCard>
-        <SettingsCardRow
-          label="Turn end sound"
-          description="Play a sound when an agent finishes its turn"
-        >
-          <div className="flex items-center gap-2">
-            {turnEndSoundEnabled && (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="px-2.5 text-xs"
-                  onClick={() => emitTurnEnd()}
-                >
-                  Test
-                </Button>
-                <SettingsMenu
-                  label={SOUND_LABELS[turnEndSoundId]}
-                  className="w-32"
-                  menuClassName="w-48"
-                  groups={[{
-                    id: "turn-end-sounds",
-                    options: TURN_END_SOUND_OPTIONS
-                      // Gong is intentionally tied to the TBPN preset's notification style.
-                      .filter((option) => option.id !== "gong" || preset === "tbpn")
-                      .map((option) => ({
-                        id: option.id,
-                        label: option.label,
-                        selected: option.id === turnEndSoundId,
-                        onSelect: () => setPreference("turnEndSoundId", option.id),
-                      })),
-                  }]}
-                />
-              </>
-            )}
-            <Switch
-              checked={turnEndSoundEnabled}
-              onChange={(value) => setPreference("turnEndSoundEnabled", value)}
-            />
-          </div>
         </SettingsCardRow>
       </SettingsCard>
     </section>
