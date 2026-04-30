@@ -80,14 +80,8 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
-  reviewDefaultsByKind: {
-    plan: null,
-    code: null,
-  },
-  reviewPersonalitiesByKind: {
-    plan: [],
-    code: [],
-  },
+  reviewDefaultsByKind: { plan: null, code: null },
+  reviewPersonalitiesByKind: { plan: [], code: [] },
   onboardingCompletedVersion: 0,
   onboardingPrimaryGoalId: "",
 };
@@ -111,14 +105,8 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
-  reviewDefaultsByKind: {
-    plan: null,
-    code: null,
-  },
-  reviewPersonalitiesByKind: {
-    plan: [],
-    code: [],
-  },
+  reviewDefaultsByKind: { plan: null, code: null },
+  reviewPersonalitiesByKind: { plan: [], code: [] },
   onboardingCompletedVersion: 0,
   onboardingPrimaryGoalId: "",
 };
