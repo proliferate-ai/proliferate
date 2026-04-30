@@ -5,6 +5,7 @@ import {
   mergeTerminalOrder,
   reconcileRightPanelWorkspaceState,
   removeTerminalFromRightPanelState,
+  reorderHeaderEntryInRightPanelState,
   reorderTerminalInRightPanelState,
   reorderToolInRightPanelState,
 } from "./right-panel";
@@ -67,6 +68,7 @@ describe("right panel domain", () => {
     const state = reconcileRightPanelWorkspaceState(
       {
         terminalOrder: ["stale", "t2"],
+        headerOrder: ["terminal:stale", "tool:git", "terminal:t2"],
         activeTerminalId: "stale",
       },
       {
@@ -76,7 +78,32 @@ describe("right panel domain", () => {
     );
 
     expect(state.terminalOrder).toEqual(["t2", "t1"]);
+    expect(state.headerOrder).toEqual(["tool:git", "terminal:t2", "tool:files", "terminal:t1"]);
     expect(state.activeTerminalId).toBe("t2");
+  });
+
+  it("reconciles one mixed header order for tools and terminal tabs", () => {
+    const state = reconcileRightPanelWorkspaceState(
+      {
+        toolOrder: ["files", "git"],
+        terminalOrder: ["t1", "t2", "t3"],
+        headerOrder: ["terminal:t2", "tool:git", "terminal:t1", "tool:files"],
+      },
+      {
+        isCloudWorkspaceSelected: false,
+        liveTerminalIds: ["t1", "t2", "t3"],
+      },
+    );
+
+    expect(state.headerOrder).toEqual([
+      "terminal:t2",
+      "tool:git",
+      "terminal:t1",
+      "tool:files",
+      "terminal:t3",
+    ]);
+    expect(state.toolOrder).toEqual(["git", "files"]);
+    expect(state.terminalOrder).toEqual(["t2", "t1", "t3"]);
   });
 
   it("removes a closed terminal and falls back to the nearest remaining terminal", () => {
@@ -106,6 +133,29 @@ describe("right panel domain", () => {
 
     expect(state.terminalOrder).toEqual(["t3", "t1", "t2"]);
     expect(state.activeTerminalId).toBe("t1");
+  });
+
+  it("reorders tools and terminals across the same header", () => {
+    const state = reorderHeaderEntryInRightPanelState(
+      {
+        toolOrder: ["files", "git"],
+        terminalOrder: ["t1", "t2"],
+        headerOrder: ["tool:files", "terminal:t1", "tool:git", "terminal:t2"],
+        activeTool: "git",
+      },
+      "terminal:t2",
+      "tool:files",
+      false,
+    );
+
+    expect(state.headerOrder).toEqual([
+      "terminal:t2",
+      "tool:files",
+      "terminal:t1",
+      "tool:git",
+    ]);
+    expect(state.toolOrder).toEqual(["files", "git"]);
+    expect(state.terminalOrder).toEqual(["t2", "t1"]);
   });
 
   it("reorders right panel tools immediately", () => {

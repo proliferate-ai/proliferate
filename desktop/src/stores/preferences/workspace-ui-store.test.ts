@@ -7,10 +7,10 @@ import {
 import { createManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
 
 describe("workspace ui tab persistence", () => {
-  it("preserves archived workspaces for current v4 preference blobs", () => {
+  it("preserves archived workspaces for current v5 preference blobs", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 4,
+      migrationVersion: 5,
       archivedWorkspaceIds: ["workspace-a"],
     });
 
@@ -21,7 +21,7 @@ describe("workspace ui tab persistence", () => {
   it("defaults missing visible tab fields without bumping migration", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 4,
+      migrationVersion: 5,
       visibleChatSessionIdsByWorkspace: undefined as unknown as Record<string, string[]>,
       recentlyHiddenChatSessionIdsByWorkspace: undefined as unknown as Record<string, string[]>,
       collapsedChatGroupsByWorkspace: undefined as unknown as Record<string, string[]>,
@@ -29,7 +29,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(4);
+    expect(state.migrationVersion).toBe(5);
     expect(state.visibleChatSessionIdsByWorkspace).toEqual({});
     expect(state.recentlyHiddenChatSessionIdsByWorkspace).toEqual({});
     expect(state.collapsedChatGroupsByWorkspace).toEqual({});
@@ -39,7 +39,7 @@ describe("workspace ui tab persistence", () => {
   it("defaults missing session error views without bumping migration", () => {
     const legacyState = {
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 4,
+      migrationVersion: 5,
     } as Partial<typeof WORKSPACE_UI_DEFAULTS> & { migrationVersion: number };
     delete legacyState.lastViewedSessionErrorAtBySession;
 
@@ -48,14 +48,14 @@ describe("workspace ui tab persistence", () => {
     );
 
     expect(didMigrate).toBe(false);
-    expect(state.migrationVersion).toBe(4);
+    expect(state.migrationVersion).toBe(5);
     expect(state.lastViewedSessionErrorAtBySession).toEqual({});
   });
 
   it("sanitizes malformed manual chat groups without bumping migration", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 4,
+      migrationVersion: 5,
       manualChatGroupsByWorkspace: {
         w1: [
           {
@@ -75,7 +75,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(4);
+    expect(state.migrationVersion).toBe(5);
     expect(state.manualChatGroupsByWorkspace).toEqual({
       w1: [
         {
@@ -97,7 +97,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(4);
+    expect(state.migrationVersion).toBe(5);
     expect(state.rightPanelByWorkspace).toEqual({});
     expect(state.rightPanelWidthByWorkspace).toEqual({});
   });
@@ -105,7 +105,7 @@ describe("workspace ui tab persistence", () => {
   it("sanitizes persisted right panel preferences and clamps widths", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 4,
+      migrationVersion: 5,
       rightPanelByWorkspace: {
         w1: {
           activeTool: "git",
@@ -125,8 +125,9 @@ describe("workspace ui tab persistence", () => {
     expect(state.rightPanelByWorkspace).toEqual({
       w1: {
         activeTool: "git",
-        toolOrder: ["files"],
+        toolOrder: ["files", "git", "settings"],
         terminalOrder: ["t1", "t2"],
+        headerOrder: ["tool:files", "tool:git", "tool:settings", "terminal:t1", "terminal:t2"],
         activeTerminalId: "t2",
       },
     });
@@ -160,6 +161,7 @@ describe("workspace ui tab persistence", () => {
       activeTool: "terminal",
       toolOrder: ["files", "git"],
       terminalOrder: ["t1"],
+      headerOrder: ["tool:files", "tool:git", "terminal:t1"],
       activeTerminalId: "t1",
     });
     store.setRightPanelWidthForWorkspace("w1", 900);

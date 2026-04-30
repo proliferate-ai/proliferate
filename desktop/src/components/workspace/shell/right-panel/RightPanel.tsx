@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type DragEvent,
+  type ReactNode,
   type ComponentType,
   type Dispatch,
   type SetStateAction,
@@ -35,10 +36,13 @@ import {
 import { useTerminalActions } from "@/hooks/terminals/use-terminal-actions";
 import {
   availableRightPanelTools,
+  parseRightPanelHeaderEntryKey,
   reconcileRightPanelWorkspaceState,
   removeTerminalFromRightPanelState,
-  reorderTerminalInRightPanelState,
-  reorderToolInRightPanelState,
+  reorderHeaderEntryInRightPanelState,
+  rightPanelTerminalHeaderKey,
+  rightPanelToolHeaderKey,
+  type RightPanelHeaderEntryKey,
   type RightPanelTool,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/right-panel";
@@ -67,8 +71,8 @@ const HEADER_TAB_EDIT_CLASS =
 const HEADER_TAB_ACTION_CLASS = "ui-icon-button right-panel-terminal-edit-action";
 
 type HeaderEntry =
-  | { kind: "tool"; tool: RightPanelTool }
-  | { kind: "terminal"; terminalId: string };
+  | { kind: "tool"; key: RightPanelHeaderEntryKey; tool: RightPanelTool }
+  | { kind: "terminal"; key: RightPanelHeaderEntryKey; terminal: TerminalRecord };
 
 interface RightPanelProps {
   workspaceId: string | null;
@@ -96,8 +100,7 @@ export function RightPanel({
   const unreadByTerminal = useTerminalStore((store) => store.unreadByTerminal);
   const showToast = useToastStore((store) => store.show);
   const [terminalFocusNonce, setTerminalFocusNonce] = useState(0);
-  const [draggedTool, setDraggedTool] = useState<RightPanelTool | null>(null);
-  const [draggedTerminalId, setDraggedTerminalId] = useState<string | null>(null);
+  const [draggedHeaderKey, setDraggedHeaderKey] = useState<RightPanelHeaderEntryKey | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const handledActivationTokenRef = useRef(0);
   const shouldRenderContent = isWorkspaceReady || shouldKeepContentVisible;
@@ -122,6 +125,10 @@ export function RightPanel({
     () => orderTerminals(terminals, state.terminalOrder),
     [state.terminalOrder, terminals],
   );
+  const terminalById = useMemo(
+    () => new Map(orderedTerminals.map((terminal) => [terminal.id, terminal])),
+    [orderedTerminals],
+  );
   const selectedTerminal = useMemo(
     () => orderedTerminals.find((terminal) => terminal.id === state.activeTerminalId) ?? null,
     [orderedTerminals, state.activeTerminalId],
@@ -131,21 +138,63 @@ export function RightPanel({
     : orderedTools.includes(state.activeTool)
       ? state.activeTool
       : "git";
-  const headerEntries = useMemo<HeaderEntry[]>(() => [
-    ...orderedTools.map((tool) => ({ kind: "tool" as const, tool })),
-    ...orderedTerminals.map((terminal) => ({ kind: "terminal" as const, terminalId: terminal.id })),
-  ], [orderedTerminals, orderedTools]);
+  const headerEntries = useMemo<HeaderEntry[]>(() => {
+    const entries: HeaderEntry[] = [];
+    const seenKeys = new Set<RightPanelHeaderEntryKey>();
+    const availableToolSet = new Set(orderedTools);
 
-  const updateState = useCallback((
-    value: SetStateAction<RightPanelWorkspaceState>,
-  ) => {
-    onStateChange((previous) => {
-      const next = typeof value === "function"
-        ? (value as (previousValue: RightPanelWorkspaceState) => RightPanelWorkspaceState)(previous)
-        : value;
-      return rightPanelStateEqual(previous, next) ? previous : next;
-    });
-  }, [onStateChange]);
+    for (const key of state.headerOrder) {
+      const entry = parseRightPanelHeaderEntryKey(key);
+      if (!entry || seenKeys.has(key)) {
+        continue;
+      }
+      if (entry.kind === "tool" && availableToolSet.has(entry.tool)) {
+        entries.push({ kind: "tool", key, tool: entry.tool });
+        seenKeys.add(key);
+      }
+      if (entry.kind === "terminal") {
+        const terminal = terminalById.get(entry.terminalId);
+        if (terminal) {
+          entries.push({ kind: "terminal", key, terminal });
+          seenKeys.add(key);
+        }
+      }
+    }
+
+    for (const tool of orderedTools) {
+      const key = rightPanelToolHeaderKey(tool);
+      if (!seenKeys.has(key)) {
+        entries.push({ kind: "tool", key, tool });
+        seenKeys.add(key);
+      }
+    }
+    for (const terminal of orderedTerminals) {
+      const key = rightPanelTerminalHeaderKey(terminal.id);
+      if (!seenKeys.has(key)) {
+        entries.push({ kind: "terminal", key, terminal });
+        seenKeys.add(key);
+      }
+    }
+
+    return entries;
+  }, [orderedTerminals, orderedTools, state.headerOrder, terminalById]);
+
+  const updateState = useCallback(
+    (value: SetStateAction<RightPanelWorkspaceState>) => {
+      onStateChange((previous) => {
+        const current = reconcileRightPanelWorkspaceState(previous, {
+          isCloudWorkspaceSelected,
+        });
+        const next = typeof value === "function"
+          ? (value as (previousValue: RightPanelWorkspaceState) => RightPanelWorkspaceState)(
+              current,
+            )
+          : value;
+        return rightPanelStateEqual(current, next) ? current : next;
+      });
+    },
+    [isCloudWorkspaceSelected, onStateChange],
+  );
 
   useEffect(() => {
     updateState((previous) => reconcileRightPanelWorkspaceState(previous, {
@@ -192,12 +241,16 @@ export function RightPanel({
     }
     try {
       const terminalId = await createTab(workspaceId, 120, 40);
+      const terminalKey = rightPanelTerminalHeaderKey(terminalId);
       updateState((previous) => ({
         ...previous,
         activeTool: "terminal",
         terminalOrder: previous.terminalOrder.includes(terminalId)
           ? previous.terminalOrder
           : [...previous.terminalOrder, terminalId],
+        headerOrder: previous.headerOrder.includes(terminalKey)
+          ? previous.headerOrder
+          : [...previous.headerOrder, terminalKey],
         activeTerminalId: terminalId,
       }));
       setTerminalFocusNonce((nonce) => nonce + 1);
@@ -268,21 +321,27 @@ export function RightPanel({
     void activateTerminalTool();
   }, [activateTerminalTool, terminalActivationRequestToken]);
 
-  const activateTool = useCallback((tool: RightPanelTool) => {
-    if (tool === "terminal") {
-      void activateTerminalTool();
-      return;
-    }
-    updateState((previous) => ({ ...previous, activeTool: tool }));
-  }, [activateTerminalTool, updateState]);
+  const activateTool = useCallback(
+    (tool: RightPanelTool) => {
+      if (tool === "terminal") {
+        void activateTerminalTool();
+        return;
+      }
+      updateState((previous) => ({ ...previous, activeTool: tool }));
+    },
+    [activateTerminalTool, updateState],
+  );
 
-  const activateHeaderEntry = useCallback((entry: HeaderEntry) => {
-    if (entry.kind === "tool") {
-      activateTool(entry.tool);
-      return;
-    }
-    selectTerminal(entry.terminalId);
-  }, [activateTool, selectTerminal]);
+  const activateHeaderEntry = useCallback(
+    (entry: HeaderEntry) => {
+      if (entry.kind === "tool") {
+        activateTool(entry.tool);
+        return;
+      }
+      selectTerminal(entry.terminal.id);
+    },
+    [activateTool, selectTerminal],
+  );
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -320,22 +379,27 @@ export function RightPanel({
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [activateHeaderEntry, headerEntries]);
 
-  const handleCloseTerminal = useCallback((terminalId: string) => {
-    if (!workspaceId) {
-      return;
-    }
-
-    void closeTab(terminalId, workspaceId).then((result) => {
-      if (result !== "closed" && result !== "missing") {
+  const handleCloseTerminal = useCallback(
+    (terminalId: string) => {
+      if (!workspaceId) {
         return;
       }
-      updateState((previous) => removeTerminalFromRightPanelState(
-        previous,
-        terminalId,
-        isCloudWorkspaceSelected,
-      ));
-    });
-  }, [closeTab, isCloudWorkspaceSelected, updateState, workspaceId]);
+
+      void closeTab(terminalId, workspaceId).then((result) => {
+        if (result !== "closed" && result !== "missing") {
+          return;
+        }
+        updateState((previous) =>
+          removeTerminalFromRightPanelState(
+            previous,
+            terminalId,
+            isCloudWorkspaceSelected,
+          ),
+        );
+      });
+    },
+    [closeTab, isCloudWorkspaceSelected, updateState, workspaceId],
+  );
 
   const handleRenameTerminal = useCallback(async (terminalId: string, title: string) => {
     if (!workspaceId) {
@@ -350,29 +414,22 @@ export function RightPanel({
     }
   }, [renameTab, showToast, workspaceId]);
 
-  const handleReorderTerminal = useCallback((
-    terminalId: string,
-    beforeTerminalId: string | null,
-  ) => {
-    updateState((previous) => reorderTerminalInRightPanelState(
-      previous,
-      terminalId,
-      beforeTerminalId,
-      isCloudWorkspaceSelected,
-    ));
-  }, [isCloudWorkspaceSelected, updateState]);
-
-  const handleReorderTool = useCallback((
-    tool: RightPanelTool,
-    beforeTool: RightPanelTool | null,
-  ) => {
-    updateState((previous) => reorderToolInRightPanelState(
-      previous,
-      tool,
-      beforeTool,
-      isCloudWorkspaceSelected,
-    ));
-  }, [isCloudWorkspaceSelected, updateState]);
+  const handleReorderHeaderEntry = useCallback(
+    (
+      entryKey: RightPanelHeaderEntryKey,
+      beforeEntryKey: RightPanelHeaderEntryKey | null,
+    ) => {
+      updateState((previous) =>
+        reorderHeaderEntryInRightPanelState(
+          previous,
+          entryKey,
+          beforeEntryKey,
+          isCloudWorkspaceSelected,
+        ),
+      );
+    },
+    [isCloudWorkspaceSelected, updateState],
+  );
 
   const shouldMountTerminalPanel = shouldRenderContent
     && (activeTool === "terminal" || orderedTerminals.length > 0);
@@ -387,73 +444,6 @@ export function RightPanel({
       <div className="right-panel-tab-system ui-tab-system editor-panel-tab-root editor-panel-tab-root--simple-tabs border-b border-sidebar-border/70">
         <div className="ui-tab-system-bar">
           <div className="editor-panel-tab-bar-tab-cluster">
-            {orderedTools.map((tool) => {
-              const panelTool = PANEL_TOOLS[tool];
-              const Icon = panelTool.icon;
-              const isActive = activeTool === tool;
-              return (
-                <Tooltip
-                  key={tool}
-                  content={panelTool.label}
-                  className="right-panel-tab-tooltip"
-                >
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    role="tab"
-                    aria-selected={isActive}
-                    aria-controls={`tabpanel-workspace-right-panel-${tool}`}
-                    tabIndex={isActive ? 0 : -1}
-                    draggable
-                    data-stable="true"
-                    data-active={isActive ? true : undefined}
-                    data-app-active={isActive ? true : undefined}
-                    aria-grabbed={draggedTool === tool}
-                    onDragStart={(event) => {
-                      event.dataTransfer.effectAllowed = "move";
-                      event.dataTransfer.setData("text/plain", `tool:${tool}`);
-                      setDraggedTool(tool);
-                    }}
-                    onDragEnd={() => setDraggedTool(null)}
-                    onDragOver={(event) => {
-                      if (draggedTool) {
-                        event.preventDefault();
-                      }
-                    }}
-                    onDrop={() => {
-                      if (draggedTool && draggedTool !== tool) {
-                        handleReorderTool(draggedTool, tool);
-                      }
-                      setDraggedTool(null);
-                    }}
-                    aria-label={panelTool.label}
-                    onClick={() => activateTool(tool)}
-                    className={HEADER_STABLE_TAB_CLASS}
-                  >
-                    <span className="ui-tab-system-tab__content">
-                      <Icon className="ui-tab-system-tab__icon" />
-                      <span className="ui-tab-system-tab__dirty-indicator" aria-hidden="true" />
-                    </span>
-                  </Button>
-                </Tooltip>
-              );
-            })}
-            <div
-              className="right-panel-tab-drop-target right-panel-tool-drop-target"
-              onDragOver={(event) => {
-                if (draggedTool) {
-                  event.preventDefault();
-                }
-              }}
-              onDrop={() => {
-                if (draggedTool) {
-                  handleReorderTool(draggedTool, null);
-                }
-                setDraggedTool(null);
-              }}
-            />
-
             <output
               className="ui-tab-system-live-region"
               aria-live="polite"
@@ -471,46 +461,118 @@ export function RightPanel({
                 aria-orientation="horizontal"
               >
                 <div className="ui-tab-system-tabs__section" data-tab-section="workspace">
-                  {orderedTerminals.map((terminal, index) => {
-                    const isActive = activeTool === "terminal" && terminal.id === selectedTerminal?.id;
-                    const fallbackTitle = `Terminal ${index + 1}`;
-                    const displayTitle = terminal.title === "Terminal" ? fallbackTitle : terminal.title;
+                  {headerEntries.map((entry) => {
+                    if (entry.kind === "tool") {
+                      const panelTool = PANEL_TOOLS[entry.tool];
+                      const Icon = panelTool.icon;
+                      const isActive = activeTool === entry.tool;
+                      return (
+                        <RightPanelHeaderEntryDropZone
+                          key={entry.key}
+                          entryKey={entry.key}
+                          draggedHeaderKey={draggedHeaderKey}
+                          onDropBefore={(beforeEntryKey) => {
+                            if (draggedHeaderKey && draggedHeaderKey !== beforeEntryKey) {
+                              handleReorderHeaderEntry(draggedHeaderKey, beforeEntryKey);
+                            }
+                            setDraggedHeaderKey(null);
+                          }}
+                          onClearDrag={() => setDraggedHeaderKey(null)}
+                        >
+                          <Tooltip
+                            content={panelTool.label}
+                            className="right-panel-tab-tooltip"
+                          >
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              role="tab"
+                              aria-selected={isActive}
+                              aria-controls={`tabpanel-workspace-right-panel-${entry.tool}`}
+                              tabIndex={isActive ? 0 : -1}
+                              draggable
+                              data-stable="true"
+                              data-active={isActive ? true : undefined}
+                              data-app-active={isActive ? true : undefined}
+                              aria-grabbed={draggedHeaderKey === entry.key}
+                              onDragStart={(event) => {
+                                event.dataTransfer.effectAllowed = "move";
+                                event.dataTransfer.setData("text/plain", entry.key);
+                                setDraggedHeaderKey(entry.key);
+                              }}
+                              onDragEnd={() => setDraggedHeaderKey(null)}
+                              aria-label={panelTool.label}
+                              onClick={() => activateTool(entry.tool)}
+                              className={HEADER_STABLE_TAB_CLASS}
+                            >
+                              <span className="ui-tab-system-tab__content">
+                                <Icon className="ui-tab-system-tab__icon" />
+                                <span
+                                  className="ui-tab-system-tab__dirty-indicator"
+                                  aria-hidden="true"
+                                />
+                              </span>
+                            </Button>
+                          </Tooltip>
+                        </RightPanelHeaderEntryDropZone>
+                      );
+                    }
+
+                    const terminal = entry.terminal;
+                    const terminalIndex = orderedTerminals.findIndex(
+                      (item) => item.id === terminal.id,
+                    );
+                    const isActive = activeTool === "terminal"
+                      && terminal.id === selectedTerminal?.id;
+                    const fallbackTitle = `Terminal ${Math.max(terminalIndex, 0) + 1}`;
+                    const displayTitle = terminal.title === "Terminal"
+                      ? fallbackTitle
+                      : terminal.title;
                     return (
-                      <TerminalHeaderIcon
-                        key={terminal.id}
-                        terminal={terminal}
-                        displayTitle={displayTitle}
-                        isActive={isActive}
-                        unread={unreadByTerminal[terminal.id] === true}
-                        isRuntimeReady={isWorkspaceReady}
-                        isDragging={draggedTerminalId === terminal.id}
-                        onSelect={() => selectTerminal(terminal.id)}
-                        onClose={() => handleCloseTerminal(terminal.id)}
-                        onRename={(title) => handleRenameTerminal(terminal.id, title)}
-                        onDragStart={() => setDraggedTerminalId(terminal.id)}
-                        onDragEnd={() => setDraggedTerminalId(null)}
-                        onDropBefore={() => {
-                          if (draggedTerminalId && draggedTerminalId !== terminal.id) {
-                            handleReorderTerminal(draggedTerminalId, terminal.id);
+                      <RightPanelHeaderEntryDropZone
+                        key={entry.key}
+                        entryKey={entry.key}
+                        draggedHeaderKey={draggedHeaderKey}
+                        onDropBefore={(beforeEntryKey) => {
+                          if (draggedHeaderKey && draggedHeaderKey !== beforeEntryKey) {
+                            handleReorderHeaderEntry(draggedHeaderKey, beforeEntryKey);
                           }
-                          setDraggedTerminalId(null);
+                          setDraggedHeaderKey(null);
                         }}
-                      />
+                        onClearDrag={() => setDraggedHeaderKey(null)}
+                      >
+                        <TerminalHeaderIcon
+                          terminal={terminal}
+                          displayTitle={displayTitle}
+                          isActive={isActive}
+                          unread={unreadByTerminal[terminal.id] === true}
+                          isRuntimeReady={isWorkspaceReady}
+                          isDragging={draggedHeaderKey === entry.key}
+                          dragKey={entry.key}
+                          onSelect={() => selectTerminal(terminal.id)}
+                          onClose={() => handleCloseTerminal(terminal.id)}
+                          onRename={(title) => handleRenameTerminal(terminal.id, title)}
+                          onDragStart={() => setDraggedHeaderKey(entry.key)}
+                          onDragEnd={() => setDraggedHeaderKey(null)}
+                        />
+                      </RightPanelHeaderEntryDropZone>
                     );
                   })}
 
                   <div
                     className="right-panel-tab-drop-target"
                     onDragOver={(event) => {
-                      if (draggedTerminalId) {
+                      if (draggedHeaderKey) {
                         event.preventDefault();
                       }
                     }}
-                    onDrop={() => {
-                      if (draggedTerminalId) {
-                        handleReorderTerminal(draggedTerminalId, null);
+                    onDrop={(event) => {
+                      if (draggedHeaderKey) {
+                        event.preventDefault();
+                        handleReorderHeaderEntry(draggedHeaderKey, null);
                       }
-                      setDraggedTerminalId(null);
+                      setDraggedHeaderKey(null);
                     }}
                   />
                 </div>
@@ -640,12 +702,50 @@ interface TerminalHeaderIconProps {
   unread: boolean;
   isRuntimeReady: boolean;
   isDragging: boolean;
+  dragKey: RightPanelHeaderEntryKey;
   onSelect: () => void;
   onClose: () => void;
   onRename: (title: string) => Promise<void>;
   onDragStart: () => void;
   onDragEnd: () => void;
-  onDropBefore: () => void;
+}
+
+interface RightPanelHeaderEntryDropZoneProps {
+  entryKey: RightPanelHeaderEntryKey;
+  draggedHeaderKey: RightPanelHeaderEntryKey | null;
+  onDropBefore: (beforeEntryKey: RightPanelHeaderEntryKey) => void;
+  onClearDrag: () => void;
+  children: ReactNode;
+}
+
+function RightPanelHeaderEntryDropZone({
+  entryKey,
+  draggedHeaderKey,
+  onDropBefore,
+  onClearDrag,
+  children,
+}: RightPanelHeaderEntryDropZoneProps) {
+  const canDrop = Boolean(draggedHeaderKey && draggedHeaderKey !== entryKey);
+  return (
+    <div
+      className="right-panel-header-entry-shell"
+      data-drop-target={canDrop ? true : undefined}
+      onDragOver={(event) => {
+        if (canDrop) {
+          event.preventDefault();
+        }
+      }}
+      onDrop={(event) => {
+        if (canDrop) {
+          event.preventDefault();
+          onDropBefore(entryKey);
+        }
+        onClearDrag();
+      }}
+    >
+      {children}
+    </div>
+  );
 }
 
 function TerminalHeaderIcon({
@@ -655,12 +755,12 @@ function TerminalHeaderIcon({
   unread,
   isRuntimeReady,
   isDragging,
+  dragKey,
   onSelect,
   onClose,
   onRename,
   onDragStart,
   onDragEnd,
-  onDropBefore,
 }: TerminalHeaderIconProps) {
   const [renameDraft, setRenameDraft] = useState(displayTitle);
   const [renaming, setRenaming] = useState(false);
@@ -678,7 +778,7 @@ function TerminalHeaderIcon({
       return;
     }
     event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", `terminal:${terminal.id}`);
+    event.dataTransfer.setData("text/plain", dragKey);
     onDragStart();
   };
 
@@ -699,11 +799,7 @@ function TerminalHeaderIcon({
 
   if (isActive && isEditingHeaderTitle) {
     return (
-      <div
-        className="right-panel-terminal-tab-shell"
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={onDropBefore}
-      >
+      <div className="right-panel-terminal-tab-shell">
         <form
           className={HEADER_TAB_EDIT_CLASS}
           onSubmit={(event) => {
@@ -791,11 +887,7 @@ function TerminalHeaderIcon({
 
   return (
     <Tooltip content={displayTitle} className="right-panel-terminal-tooltip">
-      <div
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={onDropBefore}
-        className="right-panel-terminal-tab-shell"
-      >
+      <div className="right-panel-terminal-tab-shell">
         <PopoverButton
           triggerMode="contextMenu"
           side="bottom"
@@ -892,7 +984,8 @@ function rightPanelStateEqual(
   return left.activeTool === right.activeTool
     && left.activeTerminalId === right.activeTerminalId
     && arraysEqual(left.toolOrder, right.toolOrder)
-    && arraysEqual(left.terminalOrder, right.terminalOrder);
+    && arraysEqual(left.terminalOrder, right.terminalOrder)
+    && arraysEqual(left.headerOrder, right.headerOrder);
 }
 
 function arraysEqual(left: readonly string[], right: readonly string[]): boolean {

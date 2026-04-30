@@ -23,7 +23,12 @@ import {
   clampRightPanelWidth,
   DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
   isRightPanelTool,
+  parseRightPanelHeaderEntryKey,
   RIGHT_PANEL_DEFAULT_WIDTH,
+  reconcileRightPanelWorkspaceState,
+  rightPanelTerminalHeaderKey,
+  rightPanelToolHeaderKey,
+  type RightPanelHeaderEntryKey,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/right-panel";
 import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persistence";
@@ -105,8 +110,9 @@ export interface WorkspaceUiState {
  * v3: reset archived workspace ids after removing repositories stopped
  * polluting the archive model.
  * v4: add workspace-scoped right-panel preferences.
+ * v5: add unified right-panel header order hints.
  */
-const WORKSPACE_UI_MIGRATION_VERSION = 4;
+const WORKSPACE_UI_MIGRATION_VERSION = 5;
 export const WORKSPACE_SIDEBAR_DEFAULT_WIDTH = 280;
 export const WORKSPACE_SIDEBAR_MIN_WIDTH = 220;
 export const WORKSPACE_SIDEBAR_MAX_WIDTH = 420;
@@ -367,25 +373,38 @@ function sanitizeRightPanelByWorkspace(
     }
 
     const record = rawState as Partial<Record<keyof RightPanelWorkspaceState, unknown>>;
+    const headerToolHints = Array.isArray(record.headerOrder)
+      ? toolsFromRightPanelHeaderEntries(record.headerOrder)
+      : [];
     const toolOrder = Array.isArray(record.toolOrder)
-      ? uniqueRightPanelTools(record.toolOrder)
-      : DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.toolOrder;
+      ? uniqueRightPanelTools([...headerToolHints, ...record.toolOrder])
+      : uniqueRightPanelTools(headerToolHints);
     const activeTool = isRightPanelTool(record.activeTool)
       ? record.activeTool
       : DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.activeTool;
-    const terminalOrder = Array.isArray(record.terminalOrder)
-      ? uniqueStringList(record.terminalOrder)
+    const headerTerminalHints = Array.isArray(record.headerOrder)
+      ? terminalIdsFromRightPanelHeaderEntries(record.headerOrder)
       : [];
+    const terminalOrder = Array.isArray(record.terminalOrder)
+      ? uniqueStringList([...headerTerminalHints, ...record.terminalOrder])
+      : uniqueStringList(headerTerminalHints);
     const activeTerminalId = typeof record.activeTerminalId === "string"
       ? record.activeTerminalId
       : null;
+    const headerOrder = Array.isArray(record.headerOrder)
+      ? uniqueRightPanelHeaderEntries(record.headerOrder, toolOrder, terminalOrder)
+      : undefined;
 
-    next[workspaceId] = {
-      activeTool,
-      toolOrder,
-      terminalOrder,
-      activeTerminalId,
-    };
+    next[workspaceId] = reconcileRightPanelWorkspaceState(
+      {
+        activeTool,
+        toolOrder,
+        terminalOrder,
+        headerOrder,
+        activeTerminalId,
+      },
+      { isCloudWorkspaceSelected: true },
+    );
   }
 
   return next;
@@ -413,6 +432,73 @@ function uniqueRightPanelTools(value: readonly unknown[]): RightPanelWorkspaceSt
     }
   }
   return next.length > 0 ? next : DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.toolOrder;
+}
+
+function uniqueRightPanelHeaderEntries(
+  value: readonly unknown[],
+  toolOrder: readonly RightPanelWorkspaceState["toolOrder"][number][],
+  terminalOrder: readonly string[],
+): RightPanelHeaderEntryKey[] {
+  const toolKeys = new Set(
+    toolOrder
+      .filter((tool) => tool !== "terminal")
+      .map((tool) => rightPanelToolHeaderKey(tool)),
+  );
+  const terminalKeys = new Set(
+    terminalOrder.map((terminalId) => rightPanelTerminalHeaderKey(terminalId)),
+  );
+  const next: RightPanelHeaderEntryKey[] = [];
+
+  for (const item of value) {
+    const entry = parseRightPanelHeaderEntryKey(item);
+    if (!entry) {
+      continue;
+    }
+    const key = entry.kind === "tool"
+      ? rightPanelToolHeaderKey(entry.tool)
+      : rightPanelTerminalHeaderKey(entry.terminalId);
+    if (
+      !next.includes(key)
+      && (
+        (entry.kind === "tool" && toolKeys.has(key))
+        || (entry.kind === "terminal" && terminalKeys.has(key))
+      )
+    ) {
+      next.push(key);
+    }
+  }
+
+  for (const key of [...toolKeys, ...terminalKeys]) {
+    if (!next.includes(key)) {
+      next.push(key);
+    }
+  }
+
+  return next;
+}
+
+function toolsFromRightPanelHeaderEntries(
+  value: readonly unknown[],
+): RightPanelWorkspaceState["toolOrder"] {
+  const next: RightPanelWorkspaceState["toolOrder"] = [];
+  for (const item of value) {
+    const entry = parseRightPanelHeaderEntryKey(item);
+    if (entry?.kind === "tool" && !next.includes(entry.tool)) {
+      next.push(entry.tool);
+    }
+  }
+  return next;
+}
+
+function terminalIdsFromRightPanelHeaderEntries(value: readonly unknown[]): string[] {
+  const next: string[] = [];
+  for (const item of value) {
+    const entry = parseRightPanelHeaderEntryKey(item);
+    if (entry?.kind === "terminal" && !next.includes(entry.terminalId)) {
+      next.push(entry.terminalId);
+    }
+  }
+  return next;
 }
 
 function uniqueStringList(value: readonly unknown[]): string[] {

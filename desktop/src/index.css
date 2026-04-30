@@ -1813,6 +1813,14 @@ body {
   height: 100%;
 }
 
+.right-panel-tab-system .right-panel-header-entry-shell {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  height: 100%;
+}
+
 .right-panel-tab-system .ui-tab-system-tab {
   appearance: none;
   background: none;
@@ -1854,9 +1862,7 @@ body {
   opacity: 0.72;
 }
 
-.right-panel-tab-system .editor-panel-tab-bar-tab-cluster > .right-panel-tab-tooltip:first-child .ui-tab-system-tab[data-stable],
-.right-panel-tab-system .editor-panel-tab-bar-tab-cluster > .ui-tab-system-tab[data-stable]:first-child,
-.right-panel-tab-system .ui-tab-system-tabs__scrollable:not([data-has-stable]) .ui-tab-system-tabs__section > .right-panel-terminal-tab-shell:first-child {
+.right-panel-tab-system .ui-tab-system-tabs__section > .right-panel-header-entry-shell:first-child .ui-tab-system-tab {
   margin-left: var(--tab-container-padding);
 }
 
