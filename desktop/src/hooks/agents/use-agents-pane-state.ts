@@ -9,6 +9,10 @@ import type {
 import { useShallow } from "zustand/react/shallow";
 import { AGENTS_PAGE_COPY } from "@/config/agents";
 import {
+  classifyAgent,
+  type AgentGroup,
+} from "@/lib/domain/agents/groups";
+import {
   getAgentDetailText,
   getAgentStatusDisplay,
   isReadyAgent,
@@ -22,24 +26,32 @@ import { useAgentInstallationActions } from "./use-agent-installation-actions";
 export interface AgentsPaneRowState {
   agent: AgentSummary;
   status: AgentStatusDisplay;
+  group: AgentGroup;
   detailText: string;
   actionLabel: string;
-  actionVariant: "outline" | "primary";
   actionDisabled: boolean;
   reconcileResult?: ReconcileAgentResult;
 }
 
+export interface AgentsPaneRuntimeStatus {
+  label: string;
+  description: string;
+  tone: "neutral" | "destructive";
+}
+
 interface AgentsPaneState {
   connectionState: "connecting" | "healthy" | "failed";
-  runtimeError: string | null;
+  runtimeStatus: AgentsPaneRuntimeStatus;
   runtimeHome: string | null;
   anyHarnessLogPath: string | null;
-  runtimeVersion: string | null;
   agentsLoading: boolean;
   agentError: string | null;
   reconcileError: string | null;
-  rows: AgentsPaneRowState[];
+  needsSetupRows: AgentsPaneRowState[];
+  configuredRows: AgentsPaneRowState[];
+  unavailableRows: AgentsPaneRowState[];
   selectedAgent: AgentSummary | null;
+  selectedAgentReconcileResult?: ReconcileAgentResult;
   reconcileState: AgentReconcileState;
   isReconciling: boolean;
   isAgentSeedHydrating: boolean;
@@ -88,29 +100,67 @@ export function useAgentsPaneState(): AgentsPaneState {
     ? reconcileSnapshot?.message ?? AGENTS_PAGE_COPY.reconcileError
     : null;
 
-  const rows = useMemo(() => {
-    return agents.map((agent): AgentsPaneRowState => {
+  const runtimeStatus: AgentsPaneRuntimeStatus = connectionState === "healthy"
+    ? {
+        label: AGENTS_PAGE_COPY.runtimeConnectedLabel,
+        description: health?.version
+          ? `${AGENTS_PAGE_COPY.runtimeVersionPrefix}${health.version}`
+          : AGENTS_PAGE_COPY.runtimeConnectedDescription,
+        tone: "neutral",
+      }
+    : connectionState === "connecting"
+      ? {
+          label: AGENTS_PAGE_COPY.runtimeConnectingLabel,
+          description: AGENTS_PAGE_COPY.reconnectLoadingSubtext,
+          tone: "neutral",
+        }
+      : {
+          label: AGENTS_PAGE_COPY.runtimeUnavailableLabel,
+          description: runtimeError ?? AGENTS_PAGE_COPY.reconnectTitle,
+          tone: "destructive",
+        };
+
+  const groupedRows = useMemo(() => {
+    const needsSetupRows: AgentsPaneRowState[] = [];
+    const configuredRows: AgentsPaneRowState[] = [];
+    const unavailableRows: AgentsPaneRowState[] = [];
+    const rowsByKind = new Map<string, AgentsPaneRowState>();
+
+    for (const agent of agents) {
       const isReconcilingInstall = agent.installState === "installing";
       const reconcileResult = reconcileResultsByKind.get(agent.kind);
-
-      return {
+      const group = classifyAgent(agent, reconcileResult);
+      const row: AgentsPaneRowState = {
         agent,
         status: getAgentStatusDisplay(agent, {
           reconcileResult,
           isReconciling: isReconcilingInstall,
         }),
+        group,
         detailText: getAgentDetailText(agent, reconcileResult),
-        actionLabel: isReconcilingInstall
-          ? AGENTS_PAGE_COPY.reconcileLoadingAction
-          : isReadyAgent(agent)
-            ? "Manage"
-            : "Setup",
-        actionVariant: isReadyAgent(agent) ? "outline" : "primary",
+        actionLabel: getAgentRowActionLabel(agent, isReconcilingInstall),
         actionDisabled: isReconcilingInstall,
         reconcileResult,
       };
-    });
-  }, [agents, reconcileResultsByKind, reconcileState]);
+
+      rowsByKind.set(agent.kind, row);
+
+      if (group === "needs_setup") {
+        needsSetupRows.push(row);
+      } else if (group === "configured") {
+        configuredRows.push(row);
+      } else {
+        unavailableRows.push(row);
+      }
+    }
+
+    return {
+      needsSetupRows,
+      configuredRows,
+      unavailableRows,
+      rowsByKind,
+    };
+  }, [agents, reconcileResultsByKind]);
 
   const agentError =
     agentsError instanceof Error ? agentsError.message : null;
@@ -133,23 +183,46 @@ export function useAgentsPaneState(): AgentsPaneState {
 
   return {
     connectionState,
-    runtimeError,
+    runtimeStatus,
     runtimeHome: health?.runtimeHome ?? null,
     anyHarnessLogPath: health?.runtimeHome
       ? `${health.runtimeHome}/logs/anyharness.log`
       : null,
-    runtimeVersion: health?.version ?? null,
     agentsLoading,
     agentError,
     reconcileError,
-    rows,
+    needsSetupRows: groupedRows.needsSetupRows,
+    configuredRows: groupedRows.configuredRows,
+    unavailableRows: groupedRows.unavailableRows,
     selectedAgent,
+    selectedAgentReconcileResult: selectedAgentKind
+      ? groupedRows.rowsByKind.get(selectedAgentKind)?.reconcileResult
+      : undefined,
     reconcileState,
     isReconciling: reconcileState === "reconciling",
     isAgentSeedHydrating,
-    isEmpty: rows.length === 0,
+    isEmpty:
+      groupedRows.needsSetupRows.length === 0
+      && groupedRows.configuredRows.length === 0
+      && groupedRows.unavailableRows.length === 0,
     openAgent,
     closeAgent,
     handleReconcile,
   };
+}
+
+function getAgentRowActionLabel(
+  agent: AgentSummary,
+  isReconcilingInstall: boolean,
+): string {
+  if (isReconcilingInstall) {
+    return AGENTS_PAGE_COPY.reconcileLoadingAction;
+  }
+  if (isReadyAgent(agent)) {
+    return AGENTS_PAGE_COPY.manageAction;
+  }
+  if (agent.readiness === "error" || agent.readiness === "unsupported") {
+    return AGENTS_PAGE_COPY.detailsAction;
+  }
+  return AGENTS_PAGE_COPY.setupAction;
 }

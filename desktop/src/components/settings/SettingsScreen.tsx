@@ -4,9 +4,9 @@ import {
   type SettingsSection,
   type SettingsStaticSection,
 } from "@/config/settings";
-import { AgentsPane } from "./AgentsPane";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "./panes/AccountPane";
+import { AgentsPane } from "./panes/AgentsPane";
 import { AppearancePane } from "./panes/AppearancePane";
 import { GeneralPane } from "./panes/GeneralPane";
 import { KeyboardShortcutsPane } from "./panes/KeyboardShortcutsPane";

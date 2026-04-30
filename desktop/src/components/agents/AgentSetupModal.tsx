@@ -163,7 +163,7 @@ export function AgentSetupModal({
                   {field.isConfigured && !field.isEditing ? (
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className="h-2 w-2 rounded-full bg-success/70" />
+                        <span className="h-2 w-2 rounded-full bg-muted-foreground/60" />
                         {AGENT_SETUP_COPY.savedInKeychain}
                       </div>
                       <Button
@@ -251,7 +251,7 @@ export function AgentSetupModal({
         )}
 
         {state.shouldRestartRuntime && (
-          <div className="rounded-md border border-link/40 bg-link/10 px-3 py-2 text-xs text-link-foreground">
+          <div className="rounded-md border border-foreground/15 bg-foreground/5 px-3 py-2 text-xs text-foreground">
             {AGENT_SETUP_COPY.savedChangesNotice}
           </div>
         )}

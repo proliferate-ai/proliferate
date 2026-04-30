@@ -3,6 +3,7 @@ anyharness/crates/anyharness-lib/src/acp/event_sink.rs
 anyharness/crates/anyharness-lib/src/acp/manager.rs
 anyharness/crates/anyharness-lib/src/acp/session_actor.rs
 anyharness/crates/anyharness-lib/src/agents/installer.rs
+anyharness/crates/anyharness-lib/src/agents/catalog.rs
 anyharness/crates/anyharness-lib/src/agents/resolver.rs
 anyharness/crates/anyharness-lib/src/api/openapi.rs
 anyharness/crates/anyharness-lib/src/api/router_tests.rs

@@ -3,6 +3,13 @@ import type { AgentReadinessState } from "@anyharness/sdk";
 export const AGENTS_PAGE_COPY = {
   title: "Agents",
   description: "Install and manage agent runtimes and authentication.",
+  runtimeSectionTitle: "Runtime",
+  runtimeSectionDescription: "Local AnyHarness connection and agent reconciliation.",
+  runtimeStatusLabel: "AnyHarness runtime",
+  runtimeConnectedLabel: "Connected",
+  runtimeConnectedDescription: "Connected to the local AnyHarness runtime.",
+  runtimeConnectingLabel: "Connecting",
+  runtimeUnavailableLabel: "Unavailable",
   runtimeVersionPrefix: "Runtime v",
   reconnectTitle: "Could not connect to the AnyHarness runtime.",
   reconnectLoadingMessage: "Starting runtime",
@@ -11,10 +18,21 @@ export const AGENTS_PAGE_COPY = {
   loadingSubtext: "Fetching available agent runtimes...",
   loadErrorTitle: "Could not load agent state.",
   empty: "No agents available",
+  needsSetupSectionTitle: "Needs setup",
+  needsSetupSectionDescription: "Agents that need installation, credentials, or login before they can run.",
+  configuredSectionTitle: "Configured",
+  configuredSectionDescription: "Agents ready to use in new sessions.",
+  unavailableSectionTitle: "Unavailable",
+  unavailableSectionDescription: "Agents blocked by runtime compatibility or setup failures.",
+  reconcileLabel: "Agent reconciliation",
+  reconcileDescription: "Reinstall the available runtimes and refresh their setup state.",
   reconcileAction: "Reinstall All",
   reconcileLoadingAction: "Installing...",
   reconcileSeedHydratingAction: "Finishing setup...",
   reconcileError: "Could not reinstall the available agents.",
+  setupAction: "Setup",
+  manageAction: "Manage",
+  detailsAction: "Details",
 } as const;
 
 export const AGENT_SETUP_COPY = {
@@ -56,10 +74,3 @@ export const AGENT_READINESS_LABELS: Record<AgentReadinessState, string> = {
   unsupported: "Unsupported",
   error: "Unavailable",
 };
-
-export const AGENT_STATUS_TONE_BADGE_CLASSNAMES = {
-  muted: "border-border/60 bg-muted/35 text-muted-foreground",
-  success: "border-success/20 bg-success/10 text-success/90",
-  warning: "border-warning-border bg-warning text-warning-foreground",
-  destructive: "border-destructive/20 bg-destructive/10 text-destructive",
-} as const satisfies Record<"muted" | "success" | "warning" | "destructive", string>;

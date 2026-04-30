@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { AgentSummary, ReconcileAgentResult } from "@anyharness/sdk";
-import { getAgentDetailText } from "@/lib/domain/agents/status";
+import {
+  getAgentDetailText,
+  getAgentStatusDisplay,
+} from "@/lib/domain/agents/status";
 
 function buildAgent(overrides: Partial<AgentSummary> = {}): AgentSummary {
   return {
@@ -67,5 +70,40 @@ describe("getAgentDetailText", () => {
     );
 
     expect(detail).toBe("No additional credentials are required.");
+  });
+});
+
+describe("getAgentStatusDisplay", () => {
+  it("keeps just-installed as a success semantic status", () => {
+    const status = getAgentStatusDisplay(
+      buildAgent({ readiness: "ready" }),
+      { reconcileResult: buildReconcileResult({ outcome: "installed" }) },
+    );
+
+    expect(status).toEqual({
+      label: "Just installed",
+      tone: "success",
+    });
+  });
+
+  it("keeps ready agents as a success semantic status", () => {
+    const status = getAgentStatusDisplay(buildAgent({ readiness: "ready" }));
+
+    expect(status).toEqual({
+      label: "Configured",
+      tone: "success",
+    });
+  });
+
+  it("keeps failed reconciliation as a destructive semantic status", () => {
+    const status = getAgentStatusDisplay(
+      buildAgent({ readiness: "install_required" }),
+      { reconcileResult: buildReconcileResult({ outcome: "failed" }) },
+    );
+
+    expect(status).toEqual({
+      label: "Install failed",
+      tone: "destructive",
+    });
   });
 });
