@@ -4514,7 +4514,7 @@ fn should_try_direct_claude_model_setter(
 fn is_curated_claude_model_id(model_id: &str) -> bool {
     matches!(
         model_id,
-        "default" | "sonnet" | "sonnet[1m]" | "haiku" | "opus"
+        "default" | "sonnet" | "sonnet[1m]" | "haiku" | "opus" | "claude-opus-4-6"
     )
 }
 
@@ -5568,6 +5568,11 @@ mod tests {
 
         assert!(should_try_direct_claude_model_setter(
             "claude", "opus", &available
+        ));
+        assert!(should_try_direct_claude_model_setter(
+            "claude",
+            "claude-opus-4-6",
+            &available
         ));
         assert!(!should_try_direct_claude_model_setter(
             "claude", "sonnet", &available

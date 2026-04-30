@@ -21,6 +21,15 @@ describe("resolveModelDisplayName", () => {
     ).toBe("Sonnet 4.6");
   });
 
+  it("uses a concise display label for pinned Claude Opus 4.6", () => {
+    expect(
+      resolveModelDisplayName({
+        agentKind: "claude",
+        modelId: "claude-opus-4-6",
+      }),
+    ).toBe("Opus 4.6");
+  });
+
   it("has a fallback label for the next Codex candidate", () => {
     expect(
       resolveModelDisplayName({

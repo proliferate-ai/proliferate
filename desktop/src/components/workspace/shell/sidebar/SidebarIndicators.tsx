@@ -2,6 +2,8 @@ import type { MouseEvent, ReactNode } from "react";
 import {
   ArrowRight,
   CircleAlert,
+  CircleQuestion,
+  ClipboardList,
   Clock,
   MessageSquare,
   Spinner,
@@ -37,7 +39,9 @@ export function SidebarStatusGlyph({
     case "error":
       return <CircleAlert className="size-3 text-destructive" />;
     case "waiting_input":
+      return <CircleQuestion className="size-3 text-info" />;
     case "waiting_plan":
+      return <ClipboardList className="size-3 text-info" />;
     case "iterating":
       return <Spinner className="size-3 text-sidebar-muted-foreground opacity-60" />;
     case "queued_prompt":
