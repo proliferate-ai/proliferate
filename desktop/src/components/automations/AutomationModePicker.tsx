@@ -1,4 +1,3 @@
-import { type ComponentType } from "react";
 import type { ConfiguredSessionControlValue } from "@/config/session-control-presentations";
 import type { AutomationModeResolution } from "@/lib/domain/automations/mode-selection";
 import type { SessionModeIconKey } from "@/lib/domain/chat/session-mode-control";
@@ -6,14 +5,8 @@ import { PickerEmptyRow, PickerPopoverContent } from "@/components/ui/PickerPopo
 import { PillControlButton } from "@/components/ui/PillControlButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import {
-  Check,
-  CircleQuestion,
-  Pencil,
-  PlanningIcon,
-  Shield,
-  Zap,
-} from "@/components/ui/icons";
+import { Check } from "@/components/ui/icons";
+import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
 
 interface AutomationModePickerProps {
   options: ConfiguredSessionControlValue[];
@@ -22,14 +15,6 @@ interface AutomationModePickerProps {
   onSelect: (modeId: string) => void;
   onDefaultSelect: () => void;
 }
-
-const MODE_ICONS: Record<SessionModeIconKey, ComponentType<{ className?: string }>> = {
-  circleQuestion: CircleQuestion,
-  pencil: Pencil,
-  planning: PlanningIcon,
-  shield: Shield,
-  zap: Zap,
-};
 
 const POPOVER_CLASS = "w-64 rounded-xl border border-border bg-popover p-1 shadow-floating";
 
@@ -48,7 +33,6 @@ export function AutomationModePicker({
       && resolution.source !== "overrideNull"
       ? resolution.value?.value ?? null
       : null;
-  const Icon = MODE_ICONS[trigger.icon];
 
   return (
     <PopoverButton
@@ -56,7 +40,12 @@ export function AutomationModePicker({
         <PillControlButton
           aria-label="Mode"
           disabled={disabled || options.length === 0}
-          icon={<Icon className="size-3.5 shrink-0 text-muted-foreground" />}
+          icon={(
+            <SessionControlIcon
+              icon={trigger.icon}
+              className="size-3.5 shrink-0 text-muted-foreground"
+            />
+          )}
           label={trigger.label}
           disclosure
           className="max-w-[12rem]"
@@ -73,7 +62,12 @@ export function AutomationModePicker({
             <>
               <PopoverMenuItem
                 label="Default mode"
-                icon={<CircleQuestion className="size-3.5 text-muted-foreground" />}
+                icon={(
+                  <SessionControlIcon
+                    icon="unknown"
+                    className="size-3.5 text-muted-foreground"
+                  />
+                )}
                 onClick={() => {
                   onDefaultSelect();
                   close();
@@ -88,12 +82,16 @@ export function AutomationModePicker({
                 </span>
               </PopoverMenuItem>
               {options.map((option) => {
-                const OptionIcon = MODE_ICONS[option.icon];
                 return (
                   <PopoverMenuItem
                     key={option.value}
                     label={option.shortLabel ?? option.label}
-                    icon={<OptionIcon className="size-3.5 text-muted-foreground" />}
+                    icon={(
+                      <SessionControlIcon
+                        icon={option.icon}
+                        className="size-3.5 text-muted-foreground"
+                      />
+                    )}
                     onClick={() => {
                       onSelect(option.value);
                       close();
@@ -132,11 +130,11 @@ function resolveTrigger(
       label: resolution.source === "savedNull" || resolution.source === "overrideNull"
         ? "Default mode"
         : resolution.value?.shortLabel ?? resolution.value?.label ?? "Default mode",
-      icon: resolution.value?.icon ?? "circleQuestion",
+      icon: resolution.value?.icon ?? "unknown",
     };
   }
   if (resolution.state === "savedUnavailable") {
-    return { label: "Saved mode unavailable", icon: "circleQuestion" };
+    return { label: "Saved mode unavailable", icon: "unknown" };
   }
-  return { label: "Mode", icon: "circleQuestion" };
+  return { label: "Mode", icon: "unknown" };
 }

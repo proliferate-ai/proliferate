@@ -2,38 +2,14 @@ import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
 import { PillControlButton } from "@/components/ui/PillControlButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import {
-  Check,
-  CircleAlert,
-  Pencil,
-  Shield,
-  Sparkles,
-  Zap,
-} from "@/components/ui/icons";
-import type {
-  ConfiguredSessionControlValue,
-  SessionControlIconKey,
-} from "@/config/session-control-presentations";
+import { Check } from "@/components/ui/icons";
+import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
+import type { ConfiguredSessionControlValue } from "@/config/session-control-presentations";
 
 interface HomeModePickerProps {
   modes: ConfiguredSessionControlValue[];
   selectedMode: ConfiguredSessionControlValue | null;
   onSelect: (modeId: string) => void;
-}
-
-function iconForMode(icon: SessionControlIconKey, className = "size-3.5") {
-  switch (icon) {
-    case "pencil":
-      return <Pencil className={className} />;
-    case "shield":
-      return <Shield className={className} />;
-    case "zap":
-      return <Zap className={className} />;
-    case "planning":
-      return <Sparkles className={className} />;
-    case "circleQuestion":
-      return <CircleAlert className={className} />;
-  }
 }
 
 export function HomeModePicker({
@@ -49,7 +25,7 @@ export function HomeModePicker({
     <PopoverButton
       trigger={(
         <PillControlButton
-          icon={iconForMode(selectedMode.icon)}
+          icon={<SessionControlIcon icon={selectedMode.icon} className="size-3.5" />}
           label={selectedMode.shortLabel ?? selectedMode.label}
           disclosure
           className="max-w-[12rem]"
@@ -63,7 +39,7 @@ export function HomeModePicker({
           {modes.map((mode) => (
             <PopoverMenuItem
               key={mode.value}
-              icon={iconForMode(mode.icon)}
+              icon={<SessionControlIcon icon={mode.icon} className="size-3.5" />}
               label={mode.label}
               trailing={selectedMode.value === mode.value ? <Check className="size-3.5" /> : null}
               onClick={() => {

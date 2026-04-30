@@ -124,7 +124,7 @@ No server PostHog env vars exist in the current implementation.
   - `email`
   - `display_name`
 - Replay protection currently wired:
-  - blocked surfaces include workspace shells, settings, powers, terminals,
+  - blocked surfaces include workspace shells, settings, plugins, terminals,
     right-panel content, cloud workspace settings, chat view, and transcript
     list
   - masked surfaces include the chat composer and pending-prompt editing UI

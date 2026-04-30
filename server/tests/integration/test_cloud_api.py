@@ -880,9 +880,11 @@ class TestCloudMcpConnections:
 
         assert response.status_code == 200
         assert "Authorization complete" in response.text
+        assert "finish using this plugin" in response.text
+        assert "Plugins list" in response.text
         assert "Open Proliferate" in response.text
         assert (
-            "proliferate://powers?source=mcp_oauth_callback&amp;status=completed" in response.text
+            "proliferate://plugins?source=mcp_oauth_callback&amp;status=completed" in response.text
         )
         assert "access-token" not in response.text
         assert "refresh-token" not in response.text
@@ -910,9 +912,10 @@ class TestCloudMcpConnections:
 
         assert response.status_code == 200
         assert "Authorization failed" in response.text
+        assert "connecting this plugin again" in response.text
         assert "Open Proliferate" in response.text
         assert "access_denied" not in response.text
-        assert "proliferate://powers?source=mcp_oauth_callback&amp;status=failed" in response.text
+        assert "proliferate://plugins?source=mcp_oauth_callback&amp;status=failed" in response.text
 
     @pytest.mark.asyncio
     async def test_changed_mcp_sync_rewrites_existing_row(

@@ -195,23 +195,58 @@ describe("user preference migration", () => {
     expect(PERSISTED_RECORD_BACKFILL.transparentChromeEnabled).toBe(true);
   });
 
-  it("defaults coding-session Powers to disabled for older preference blobs", () => {
+  it("defaults coding-session Plugins to disabled for older preference blobs", () => {
     const { preferences, changed } = migrateUserPreferences({
       ...USER_PREFERENCE_DEFAULTS,
-      powersInCodingSessionsEnabled: undefined as unknown as boolean,
+      pluginsInCodingSessionsEnabled: undefined as unknown as boolean,
     });
 
     expect(changed).toBe(true);
-    expect(preferences.powersInCodingSessionsEnabled).toBe(false);
+    expect(preferences.pluginsInCodingSessionsEnabled).toBe(false);
   });
 
-  it("preserves an explicit coding-session Powers preference", () => {
+  it("preserves an explicit coding-session Plugins preference", () => {
     const { preferences } = migrateUserPreferences({
       ...USER_PREFERENCE_DEFAULTS,
+      pluginsInCodingSessionsEnabled: true,
+    });
+
+    expect(preferences.pluginsInCodingSessionsEnabled).toBe(true);
+  });
+
+  it("migrates the legacy coding-session Powers key to Plugins", () => {
+    const { preferences, changed } = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      pluginsInCodingSessionsEnabled: undefined as unknown as boolean,
       powersInCodingSessionsEnabled: true,
     });
 
-    expect(preferences.powersInCodingSessionsEnabled).toBe(true);
+    expect(changed).toBe(true);
+    expect(preferences.pluginsInCodingSessionsEnabled).toBe(true);
+    expect(preferences).not.toHaveProperty("powersInCodingSessionsEnabled");
+  });
+
+  it("preserves legacy coding-session Powers preferences during bootstrap", async () => {
+    storeMocks.values.set("user_preferences", {
+      themePreset: "ship",
+      powersInCodingSessionsEnabled: true,
+    });
+
+    await bootstrapUserPreferences();
+
+    const preferences = useUserPreferencesStore.getState();
+    expect(preferences.pluginsInCodingSessionsEnabled).toBe(true);
+    expect(preferences).not.toHaveProperty("powersInCodingSessionsEnabled");
+    expect(storeMocks.set).toHaveBeenCalledWith(
+      "user_preferences",
+      expect.objectContaining({
+        pluginsInCodingSessionsEnabled: true,
+      }),
+    );
+    const lastPersistedValue = storeMocks.set.mock.calls[storeMocks.set.mock.calls.length - 1]?.[1];
+    expect(lastPersistedValue).not.toHaveProperty(
+      "powersInCodingSessionsEnabled",
+    );
   });
 
   it("defaults runtime input sync off", () => {

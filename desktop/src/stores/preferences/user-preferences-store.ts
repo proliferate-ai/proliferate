@@ -42,7 +42,7 @@ export interface UserPreferences {
   turnEndSoundEnabled: boolean;
   turnEndSoundId: TurnEndSoundId;
   transparentChromeEnabled: boolean;
-  powersInCodingSessionsEnabled: boolean;
+  pluginsInCodingSessionsEnabled: boolean;
   subagentsEnabled: boolean;
   coworkWorkspaceDelegationEnabled: boolean;
   cloudRuntimeInputSyncEnabled: boolean;
@@ -67,7 +67,7 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   turnEndSoundEnabled: false,
   turnEndSoundId: "ding",
   transparentChromeEnabled: false,
-  powersInCodingSessionsEnabled: false,
+  pluginsInCodingSessionsEnabled: false,
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
@@ -96,7 +96,7 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   // Existing persisted records keep the legacy transparent chrome default;
   // only fresh installs use the opaque NEW_USER_DEFAULTS value.
   transparentChromeEnabled: true,
-  powersInCodingSessionsEnabled: false,
+  pluginsInCodingSessionsEnabled: false,
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
@@ -135,6 +135,7 @@ type LegacyThemeRecord = {
 type LegacyUserPreferencesInput = Omit<Partial<UserPreferences>, "defaultChatModelIdByAgentKind"> & {
   defaultChatModelId?: unknown;
   defaultChatModelIdByAgentKind?: unknown;
+  powersInCodingSessionsEnabled?: unknown;
 };
 
 function readLegacyThemeRecord(): LegacyThemeRecord {
@@ -193,7 +194,7 @@ async function readLegacyUserPreferences(): Promise<LegacyUserPreferencesInput> 
     turnEndSoundEnabled: defaults.turnEndSoundEnabled,
     turnEndSoundId: defaults.turnEndSoundId,
     transparentChromeEnabled: defaults.transparentChromeEnabled,
-    powersInCodingSessionsEnabled: defaults.powersInCodingSessionsEnabled,
+    pluginsInCodingSessionsEnabled: defaults.pluginsInCodingSessionsEnabled,
     subagentsEnabled: defaults.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: defaults.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: defaults.cloudRuntimeInputSyncEnabled,
@@ -368,19 +369,7 @@ function dedupeReviewPersonalityPreferences(
 async function readAll(): Promise<LegacyUserPreferencesInput> {
   const persisted = await readPersistedValue<LegacyUserPreferencesInput>(USER_PREFERENCES_KEY);
   if (persisted) {
-    const {
-      defaultChatModelIdByAgentKind: persistedDefaultChatModelIdByAgentKind,
-      ...persistedWithoutModelMap
-    } = persisted;
-    const backfillWithoutModelMap: LegacyUserPreferencesInput = {
-      ...PERSISTED_RECORD_BACKFILL,
-    };
-    delete backfillWithoutModelMap.defaultChatModelIdByAgentKind;
-    return {
-      ...backfillWithoutModelMap,
-      ...persistedWithoutModelMap,
-      defaultChatModelIdByAgentKind: persistedDefaultChatModelIdByAgentKind,
-    };
+    return persisted;
   }
 
   return readLegacyUserPreferences();
@@ -390,16 +379,22 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
   preferences: UserPreferences;
   changed: boolean;
 } {
+  const rawPreferences = preferences;
+  const legacyPowersPreference = rawPreferences.powersInCodingSessionsEnabled;
+  const hasCurrentPluginsPreference =
+    typeof rawPreferences.pluginsInCodingSessionsEnabled === "boolean";
+  const hasLegacyPowersPreference =
+    typeof legacyPowersPreference === "boolean";
   const {
     defaultChatModelId,
     defaultChatModelIdByAgentKind,
     ...preferencesWithoutLegacyModel
   } = preferences;
-  const next: UserPreferences = {
+  const next = {
     ...PERSISTED_RECORD_BACKFILL,
     ...preferencesWithoutLegacyModel,
     defaultChatModelIdByAgentKind: {},
-  };
+  } as UserPreferences & { powersInCodingSessionsEnabled?: unknown };
   let changed = false;
 
   const sanitizedDefaultChatAgentKind = typeof next.defaultChatAgentKind === "string"
@@ -456,8 +451,17 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
     changed = true;
   }
 
-  if (typeof next.powersInCodingSessionsEnabled !== "boolean") {
-    next.powersInCodingSessionsEnabled = PERSISTED_RECORD_BACKFILL.powersInCodingSessionsEnabled;
+  if (!hasCurrentPluginsPreference) {
+    // "Powers" was the old product name. Read the legacy persisted key once,
+    // then write future records with the current "plugins" store field.
+    next.pluginsInCodingSessionsEnabled =
+      hasLegacyPowersPreference
+        ? legacyPowersPreference
+        : PERSISTED_RECORD_BACKFILL.pluginsInCodingSessionsEnabled;
+    changed = true;
+  }
+  if ("powersInCodingSessionsEnabled" in rawPreferences) {
+    delete next.powersInCodingSessionsEnabled;
     changed = true;
   }
 
@@ -525,7 +529,7 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
     turnEndSoundEnabled: state.turnEndSoundEnabled,
     turnEndSoundId: state.turnEndSoundId,
     transparentChromeEnabled: state.transparentChromeEnabled,
-    powersInCodingSessionsEnabled: state.powersInCodingSessionsEnabled,
+    pluginsInCodingSessionsEnabled: state.pluginsInCodingSessionsEnabled,
     subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: state.cloudRuntimeInputSyncEnabled,

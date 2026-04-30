@@ -10,11 +10,13 @@ export type SessionControlTone =
   | "info";
 
 export type SessionControlIconKey =
-  | "circleQuestion"
-  | "pencil"
-  | "planning"
-  | "shield"
-  | "zap";
+  | "ask"
+  | "edit"
+  | "inspect"
+  | "plan"
+  | "permission"
+  | "unknown"
+  | "unrestricted";
 
 export interface ConfiguredSessionControlValue {
   value: string;
@@ -39,7 +41,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Default",
         description: "Ask before each action.",
         tone: "info",
-        icon: "circleQuestion",
+        icon: "ask",
         isDefault: true,
       },
       {
@@ -48,7 +50,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Accept Edits",
         description: "Auto-approve file edits.",
         tone: "success",
-        icon: "pencil",
+        icon: "edit",
       },
       {
         value: "plan",
@@ -56,7 +58,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Plan",
         description: "Plan without execution.",
         tone: "accent",
-        icon: "planning",
+        icon: "plan",
       },
       {
         value: "dontAsk",
@@ -64,7 +66,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Don't Ask",
         description: "Auto-approve most actions.",
         tone: "warning",
-        icon: "shield",
+        icon: "permission",
       },
       {
         value: "bypassPermissions",
@@ -72,7 +74,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Bypass",
         description: "Skip permission checks.",
         tone: "destructive",
-        icon: "zap",
+        icon: "unrestricted",
       },
     ],
   },
@@ -84,7 +86,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Read Only",
         description: "Inspect and plan without editing.",
         tone: "info",
-        icon: "circleQuestion",
+        icon: "inspect",
         isDefault: true,
       },
       {
@@ -93,7 +95,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Auto",
         description: "Auto-approve standard edits.",
         tone: "success",
-        icon: "pencil",
+        icon: "edit",
       },
       {
         value: "full-access",
@@ -101,7 +103,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Full Access",
         description: "Allow unrestricted changes.",
         tone: "destructive",
-        icon: "zap",
+        icon: "unrestricted",
       },
     ],
     collaboration_mode: [
@@ -111,7 +113,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Default",
         description: "Standard collaboration behavior.",
         tone: "info",
-        icon: "circleQuestion",
+        icon: "ask",
         isDefault: true,
       },
       {
@@ -120,7 +122,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Plan",
         description: "Plan before applying changes.",
         tone: "accent",
-        icon: "planning",
+        icon: "plan",
       },
     ],
   },
@@ -132,7 +134,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Default",
         description: "Ask before each action.",
         tone: "info",
-        icon: "circleQuestion",
+        icon: "ask",
         isDefault: true,
       },
       {
@@ -141,7 +143,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Auto Edit",
         description: "Auto-approve edits.",
         tone: "success",
-        icon: "pencil",
+        icon: "edit",
       },
       {
         value: "yolo",
@@ -149,7 +151,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "YOLO",
         description: "Skip permission checks.",
         tone: "destructive",
-        icon: "zap",
+        icon: "unrestricted",
       },
       {
         value: "plan",
@@ -157,7 +159,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Plan",
         description: "Plan without execution.",
         tone: "accent",
-        icon: "planning",
+        icon: "plan",
       },
     ],
   },
