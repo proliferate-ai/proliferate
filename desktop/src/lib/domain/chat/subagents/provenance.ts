@@ -1,4 +1,6 @@
-import type { PromptProvenance } from "@anyharness/sdk";
+import type { PromptProvenance, TranscriptState } from "@anyharness/sdk";
+
+type LinkCompletionMetadata = TranscriptState["linkCompletionsByCompletionId"][string];
 
 export type WakePromptProvenance =
   | Extract<PromptProvenance, { type: "subagentWake" }>
@@ -36,6 +38,21 @@ export function formatWakePromptQueueText(
   return "Subagent finished";
 }
 
+export function formatWakePromptTranscriptText(
+  provenance: WakePromptProvenance,
+  completion: LinkCompletionMetadata | null | undefined,
+): string {
+  const title = provenance.label?.trim()
+    || completion?.label?.trim()
+    || (
+      provenance.type === "linkWake"
+      && provenance.relation === "cowork_coding_session"
+        ? "Coding session"
+        : "Subagent"
+    );
+  return `"${title}" ${formatWakeStatus(completion?.outcome ?? null)}`;
+}
+
 export function isReviewFeedbackProvenance(
   provenance: PromptProvenance | null | undefined,
 ): provenance is ReviewFeedbackPromptProvenance {
@@ -67,6 +84,19 @@ export function resolveReviewFeedbackPromptReference(
       label: null,
     }
     : null;
+}
+
+export function formatReviewFeedbackTranscriptText(
+  reference: ReviewFeedbackPromptReference,
+  state: "queued" | "completed",
+): string {
+  const label = reference.label?.trim();
+  if (label) {
+    return label;
+  }
+  return state === "queued"
+    ? "Agents critique the plan"
+    : "Agents critiqued the plan";
 }
 
 export function isAgentSessionProvenance(
@@ -103,4 +133,11 @@ function parseLegacyReviewFeedbackPrompt(
     reviewRunId,
     roundNumber: Number.isFinite(roundNumber) ? roundNumber : null,
   };
+}
+
+function formatWakeStatus(outcome: string | null | undefined): string {
+  if (!outcome || outcome === "completed") {
+    return "Turn Completed";
+  }
+  return `Turn ${outcome.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase())}`;
 }

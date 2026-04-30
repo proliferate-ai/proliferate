@@ -77,6 +77,7 @@ export function ToolFileChip({
       type="button"
       variant="ghost"
       size="sm"
+      data-chat-transcript-ignore
       title={pathLabel}
       onContextMenuCapture={onContextMenuCapture}
       onClick={(event) => {
@@ -99,6 +100,7 @@ export function ToolFileChip({
       {(close) => (
         <div className="flex flex-col gap-px">
           <PopoverMenuItem
+            data-chat-transcript-ignore
             icon={<ExternalLink className="size-3.5 shrink-0" />}
             label="Open file"
             disabled={!absolute}
@@ -108,6 +110,7 @@ export function ToolFileChip({
             }}
           />
           <PopoverMenuItem
+            data-chat-transcript-ignore
             icon={<Copy className="size-3.5 shrink-0" />}
             label="Copy path"
             onClick={() => {

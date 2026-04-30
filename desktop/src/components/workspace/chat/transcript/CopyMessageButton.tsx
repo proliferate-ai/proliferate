@@ -26,6 +26,7 @@ export function CopyMessageButton({
         <span className="tabular-nums">{timestampLabel}</span>
       )}
       <IconButton
+        data-chat-transcript-ignore
         onClick={handleCopy}
         title={copied ? "Copied" : "Copy message"}
         className="rounded-md text-muted-foreground hover:text-foreground"

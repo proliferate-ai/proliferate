@@ -42,6 +42,7 @@ export function SubagentWakeBadge({
         type="button"
         variant="ghost"
         size="md"
+        data-chat-transcript-ignore
         title={`Open ${title}`}
         aria-label={`Open ${title}`}
         onClick={() => onOpenChild(childSessionId)}

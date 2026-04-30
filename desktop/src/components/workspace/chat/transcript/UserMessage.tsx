@@ -45,7 +45,6 @@ export function UserMessage({
 
   return (
     <div
-      data-chat-selection-unit
       className={showCopyButton ? "group/msg flex justify-end" : "flex justify-end"}
     >
       <div className="flex w-full flex-col items-end justify-end gap-1">
@@ -82,6 +81,7 @@ export function UserMessage({
                   type="button"
                   variant="ghost"
                   size="sm"
+                  data-chat-transcript-ignore
                   onClick={() => setExpanded((v) => !v)}
                   className="h-auto px-1 py-0 text-[11px] text-muted-foreground hover:bg-transparent hover:text-foreground"
                 >

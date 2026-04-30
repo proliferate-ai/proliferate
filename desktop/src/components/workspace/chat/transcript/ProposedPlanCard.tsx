@@ -83,7 +83,10 @@ export function ProposedPlanCard({
       collapseLabel="Collapse plan summary"
       expandLabel="Expand plan summary"
       footer={hasFooterActions ? (
-        <div className="flex flex-wrap items-center gap-2 border-t border-border/40 px-3 py-2">
+        <div
+          data-chat-transcript-ignore
+          className="flex flex-wrap items-center gap-2 border-t border-border/40 px-3 py-2"
+        >
           {canDecide && decisionState && (
             <>
               <Button
