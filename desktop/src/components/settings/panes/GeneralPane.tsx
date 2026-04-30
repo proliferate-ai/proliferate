@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useModelRegistriesQuery } from "@anyharness/sdk-react";
 import type { ModelRegistry } from "@anyharness/sdk";
@@ -159,63 +159,29 @@ export function GeneralPane() {
               </SettingsCardRow>
 
               {chatDefaultRows.map((row) => (
-                <SettingsCardRow
-                  key={`${row.kind}-model`}
-                  label={`${row.displayName} model`}
-                  description={row.isPrimary ? "Model default for the primary harness" : "Model default for this harness"}
-                >
-                  <SettingsMenu
-                    label={row.selectedModel.displayName}
-                    className="w-60"
-                    menuClassName="w-72"
-                    groups={[{
-                      id: `${row.kind}-models`,
-                      options: row.models.map((model) => ({
-                        id: model.id,
-                        label: model.displayName,
-                        icon: <ProviderIcon kind={row.kind} className="size-3.5" />,
-                        selected: model.id === row.selectedModel.id,
-                        onSelect: () => {
-                          preferences.set(
-                            "defaultChatModelIdByAgentKind",
-                            withUpdatedDefaultModelIdByAgentKind(
-                              preferences.defaultChatModelIdByAgentKind,
-                              row.kind,
-                              model.id,
-                            ),
-                          );
-                        },
-                      })),
-                    }]}
-                  />
-                </SettingsCardRow>
-              ))}
-
-              {chatDefaultRows.map((row) => (
-                row.modeOptions.length > 0 && row.selectedMode ? (
+                <Fragment key={row.kind}>
                   <SettingsCardRow
-                    key={`${row.kind}-permissions`}
-                    label={`${row.displayName} permissions`}
-                    description={row.isPrimary ? "Permission mode for the primary harness" : "Permission mode for this harness"}
+                    label={`${row.displayName} model`}
+                    description={row.isPrimary ? "Model default for the primary harness" : "Model default for this harness"}
                   >
                     <SettingsMenu
-                      label={row.selectedMode.shortLabel ?? row.selectedMode.label}
-                      className="w-48"
-                      menuClassName="w-64"
+                      label={row.selectedModel.displayName}
+                      className="w-60"
+                      menuClassName="w-72"
                       groups={[{
-                        id: `${row.kind}-permissions`,
-                        options: row.modeOptions.map((option) => ({
-                          id: option.value,
-                          label: option.shortLabel ?? option.label,
-                          detail: option.description,
-                          selected: option.value === row.selectedMode?.value,
+                        id: `${row.kind}-models`,
+                        options: row.models.map((model) => ({
+                          id: model.id,
+                          label: model.displayName,
+                          icon: <ProviderIcon kind={row.kind} className="size-3.5" />,
+                          selected: model.id === row.selectedModel.id,
                           onSelect: () => {
                             preferences.set(
-                              "defaultSessionModeByAgentKind",
-                              withUpdatedDefaultSessionModeByAgentKind(
-                                preferences.defaultSessionModeByAgentKind,
+                              "defaultChatModelIdByAgentKind",
+                              withUpdatedDefaultModelIdByAgentKind(
+                                preferences.defaultChatModelIdByAgentKind,
                                 row.kind,
-                                option.value,
+                                model.id,
                               ),
                             );
                           },
@@ -223,7 +189,39 @@ export function GeneralPane() {
                       }]}
                     />
                   </SettingsCardRow>
-                ) : null
+
+                  {row.modeOptions.length > 0 && row.selectedMode ? (
+                    <SettingsCardRow
+                      label={`${row.displayName} permissions`}
+                      description={row.isPrimary ? "Permission mode for the primary harness" : "Permission mode for this harness"}
+                    >
+                      <SettingsMenu
+                        label={row.selectedMode.shortLabel ?? row.selectedMode.label}
+                        className="w-48"
+                        menuClassName="w-64"
+                        groups={[{
+                          id: `${row.kind}-permissions`,
+                          options: row.modeOptions.map((option) => ({
+                            id: option.value,
+                            label: option.shortLabel ?? option.label,
+                            detail: option.description,
+                            selected: option.value === row.selectedMode?.value,
+                            onSelect: () => {
+                              preferences.set(
+                                "defaultSessionModeByAgentKind",
+                                withUpdatedDefaultSessionModeByAgentKind(
+                                  preferences.defaultSessionModeByAgentKind,
+                                  row.kind,
+                                  option.value,
+                                ),
+                              );
+                            },
+                          })),
+                        }]}
+                      />
+                    </SettingsCardRow>
+                  ) : null}
+                </Fragment>
               ))}
             </>
           )}
