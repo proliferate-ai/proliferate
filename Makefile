@@ -12,7 +12,9 @@ STRIPE_SNAPSHOT_EVENTS ?= checkout.session.completed,customer.subscription.creat
 AWS_REGION ?= us-east-1
 PROD_CLUSTER ?= proliferate-prod
 PROD_SERVICE ?= proliferate-prod-server
-PROD_LOG_GROUP ?= /ecs/proliferate-server
+PROD_LOG_GROUP ?=
+PROD_LOG_SINCE ?= 30m
+PROD_LOG_CONTAINER ?= server
 PROD_APP_SECRET ?= proliferate/prod/server-app
 PROD_DB_SECRET ?= proliferate/prod/database
 PROD_DB_INSTANCE ?= proliferate-prod
@@ -278,9 +280,28 @@ prod-task:
 		--output json
 
 prod-logs:
-	@aws logs tail "$(PROD_LOG_GROUP)" \
+	@task_definition=$$(aws ecs describe-services \
 		--region "$(AWS_REGION)" \
-		--since 30m \
+		--cluster "$(PROD_CLUSTER)" \
+		--services "$(PROD_SERVICE)" \
+		--query 'services[0].taskDefinition' \
+		--output text); \
+	log_group="$(PROD_LOG_GROUP)"; \
+	if [ -z "$$log_group" ]; then \
+		log_group=$$(aws ecs describe-task-definition \
+			--region "$(AWS_REGION)" \
+			--task-definition "$$task_definition" \
+			--query 'taskDefinition.containerDefinitions[?name==`$(PROD_LOG_CONTAINER)`].logConfiguration.options."awslogs-group"' \
+			--output text); \
+	fi; \
+	if [ -z "$$log_group" ] || [ "$$log_group" = "None" ]; then \
+		echo "Could not resolve CloudWatch log group for service $(PROD_SERVICE) container $(PROD_LOG_CONTAINER)." >&2; \
+		exit 1; \
+	fi; \
+	echo "Tailing $$log_group (since $(PROD_LOG_SINCE))"; \
+	aws logs tail "$$log_group" \
+		--region "$(AWS_REGION)" \
+		--since "$(PROD_LOG_SINCE)" \
 		--follow
 
 prod-secret-keys:

@@ -7,6 +7,8 @@ import { useInstalledConnectorActions } from "@/hooks/mcp/use-installed-connecto
 import { useReconnectOAuthConnector } from "@/hooks/mcp/use-reconnect-oauth-connector";
 import { useUpdateConnectorSecret } from "@/hooks/mcp/use-update-connector-secret";
 import type { ConnectorSettings, InstalledConnectorRecord } from "@/lib/domain/mcp/types";
+import { LoadingState } from "@/components/feedback/LoadingIllustration";
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Search } from "@/components/ui/icons";
 import {
@@ -81,6 +83,16 @@ export function ConnectorCatalogPage() {
     setDeleteTarget(null);
   };
 
+  const showLoadingState = state.isLoading
+    && state.connected.length === 0
+    && state.availableCards.length === 0;
+  const showLoadError = !!state.loadError
+    && state.connected.length === 0
+    && state.availableCards.length === 0;
+  const showAllConnected = state.connected.length > 0 && state.availableCards.length === 0;
+  const showNoAvailableIntegrations =
+    state.connected.length === 0 && state.availableCards.length === 0;
+
   return (
     <>
       <section className="space-y-6">
@@ -99,7 +111,30 @@ export function ConnectorCatalogPage() {
           </div>
         </div>
 
-        {state.searchEmpty ? (
+        {showLoadingState ? (
+          <LoadingState
+            message="Loading integrations"
+            subtext="Fetching the latest Powers catalog and connection state."
+          />
+        ) : showLoadError ? (
+          <div className="rounded-lg border border-border bg-card/50 px-4 py-8 text-center">
+            <div className="text-sm font-medium text-foreground">
+              Couldn&apos;t load integrations
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {state.loadError}
+            </p>
+            <div className="mt-4 flex justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => state.retryLoad()}
+              >
+                Retry
+              </Button>
+            </div>
+          </div>
+        ) : state.searchEmpty ? (
           <div className="rounded-lg border border-border bg-card/50 px-4 py-8 text-center">
             <div className="text-sm font-medium text-foreground">
               No integrations match "{state.searchQuery}"
@@ -158,7 +193,11 @@ export function ConnectorCatalogPage() {
               ) : (
                 !state.isSearching && (
                   <p className="text-sm text-muted-foreground">
-                    All available integrations are connected.
+                    {showAllConnected
+                      ? "All available integrations are connected."
+                      : showNoAvailableIntegrations
+                        ? "No integrations are available right now."
+                        : null}
                   </p>
                 )
               )}
