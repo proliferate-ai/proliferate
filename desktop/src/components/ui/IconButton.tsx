@@ -1,7 +1,7 @@
 import { forwardRef, type MouseEventHandler, type ReactNode } from "react";
 
 type IconButtonTone = "default" | "sidebar";
-type IconButtonSize = "sm" | "md";
+type IconButtonSize = "xs" | "sm" | "md";
 
 interface IconButtonProps {
   children: ReactNode;
@@ -20,8 +20,9 @@ const toneClasses: Record<IconButtonTone, string> = {
 };
 
 const sizeClasses: Record<IconButtonSize, string> = {
-  sm: "size-6",
-  md: "size-7",
+  xs: "size-5 p-0",
+  sm: "size-6 px-2",
+  md: "size-7 px-2",
 };
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
@@ -38,7 +39,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
     ref,
   ) {
     const base =
-      "inline-flex cursor-pointer px-2 items-center gap-2 whitespace-nowrap font-[450] text-xs justify-center rounded-md border border-transparent ring-offset-background focus-visible:outline-none focus-visible:ring-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 transition-colors";
+      "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap font-[450] text-xs justify-center rounded-md border border-transparent ring-offset-background focus-visible:outline-none focus-visible:ring-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 transition-colors";
 
     return (
       <button

@@ -6,14 +6,17 @@ use crate::api::http::access::{assert_terminal_mutable, assert_workspace_mutable
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
 use crate::terminals::model::{
-    CreateTerminalOptions, ResizeTerminalOptions, TerminalRecord as InternalTerminalRecord,
-    TerminalStatus as InternalTerminalStatus,
+    CreateTerminalOptions, ResizeTerminalOptions, TerminalPurpose as InternalTerminalPurpose,
+    TerminalRecord as InternalTerminalRecord, TerminalStatus as InternalTerminalStatus,
 };
 use crate::workspaces::model::WorkspaceRecord;
 use anyharness_contract::v1::terminals::{
-    CreateTerminalRequest, ResizeTerminalRequest, TerminalRecord as ContractTerminalRecord,
-    TerminalStatus as ContractTerminalStatus,
+    CreateTerminalRequest, ResizeTerminalRequest, TerminalPurpose as ContractTerminalPurpose,
+    TerminalRecord as ContractTerminalRecord, TerminalStatus as ContractTerminalStatus,
+    UpdateTerminalTitleRequest,
 };
+
+const MAX_TERMINAL_TITLE_CHARS: usize = 160;
 
 fn resolve_workspace(state: &AppState, workspace_id: &str) -> Result<WorkspaceRecord, ApiError> {
     let ws = state
@@ -106,6 +109,10 @@ pub async fn create_terminal(
                 cwd: request.cwd,
                 shell: request.shell,
                 title: request.title,
+                purpose: request
+                    .purpose
+                    .map(terminal_purpose_to_internal)
+                    .unwrap_or(InternalTerminalPurpose::General),
                 env: env_vars,
                 cols: request.cols,
                 rows: request.rows,
@@ -135,6 +142,33 @@ pub async fn get_terminal(
         .get_terminal(&terminal_id)
         .await
         .ok_or_else(|| ApiError::not_found("terminal not found", "TERMINAL_NOT_FOUND"))?;
+    Ok(Json(terminal_record_to_contract(record)))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/v1/terminals/{terminal_id}/title",
+    params(("terminal_id" = String, Path, description = "Terminal ID")),
+    request_body = UpdateTerminalTitleRequest,
+    responses(
+        (status = 200, description = "Terminal title updated", body = ContractTerminalRecord),
+        (status = 400, description = "Invalid title", body = anyharness_contract::v1::ProblemDetails),
+        (status = 404, description = "Terminal not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "terminals"
+)]
+pub async fn update_terminal_title(
+    State(state): State<AppState>,
+    Path(terminal_id): Path<String>,
+    Json(request): Json<UpdateTerminalTitleRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    assert_terminal_mutable(&state, &terminal_id).await?;
+    let title = validate_terminal_title(request.title)?;
+    let record = state
+        .terminal_service
+        .update_terminal_title(&terminal_id, title)
+        .await
+        .map_err(|e| ApiError::not_found(e.to_string(), "TERMINAL_NOT_FOUND"))?;
     Ok(Json(terminal_record_to_contract(record)))
 }
 
@@ -197,6 +231,7 @@ fn terminal_record_to_contract(record: InternalTerminalRecord) -> ContractTermin
         id: record.id,
         workspace_id: record.workspace_id,
         title: record.title,
+        purpose: terminal_purpose_to_contract(record.purpose),
         cwd: record.cwd,
         status: terminal_status_to_contract(record.status),
         exit_code: record.exit_code,
@@ -212,4 +247,35 @@ fn terminal_status_to_contract(status: InternalTerminalStatus) -> ContractTermin
         InternalTerminalStatus::Exited => ContractTerminalStatus::Exited,
         InternalTerminalStatus::Failed => ContractTerminalStatus::Failed,
     }
+}
+
+fn terminal_purpose_to_contract(purpose: InternalTerminalPurpose) -> ContractTerminalPurpose {
+    match purpose {
+        InternalTerminalPurpose::General => ContractTerminalPurpose::General,
+        InternalTerminalPurpose::Run => ContractTerminalPurpose::Run,
+    }
+}
+
+fn terminal_purpose_to_internal(purpose: ContractTerminalPurpose) -> InternalTerminalPurpose {
+    match purpose {
+        ContractTerminalPurpose::General => InternalTerminalPurpose::General,
+        ContractTerminalPurpose::Run => InternalTerminalPurpose::Run,
+    }
+}
+
+fn validate_terminal_title(title: String) -> Result<String, ApiError> {
+    let trimmed = title.trim().to_string();
+    if trimmed.is_empty() {
+        return Err(ApiError::bad_request(
+            "terminal title cannot be empty",
+            "INVALID_TERMINAL_TITLE",
+        ));
+    }
+    if trimmed.chars().count() > MAX_TERMINAL_TITLE_CHARS {
+        return Err(ApiError::bad_request(
+            format!("terminal title cannot exceed {MAX_TERMINAL_TITLE_CHARS} characters"),
+            "INVALID_TERMINAL_TITLE",
+        ));
+    }
+    Ok(trimmed)
 }

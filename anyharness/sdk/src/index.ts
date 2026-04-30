@@ -379,10 +379,12 @@ export type {
 } from "./types/hosting.js";
 
 export type {
+  TerminalPurpose,
   TerminalStatus,
   TerminalRecord,
   CreateTerminalRequest,
   ResizeTerminalRequest,
+  UpdateTerminalTitleRequest,
 } from "./types/terminals.js";
 
 export type {

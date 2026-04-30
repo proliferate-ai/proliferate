@@ -256,6 +256,10 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/terminals/{terminal_id}", get(terminals::get_terminal))
         .route(
+            "/terminals/{terminal_id}/title",
+            patch(terminals::update_terminal_title),
+        )
+        .route(
             "/terminals/{terminal_id}/resize",
             post(terminals::resize_terminal),
         )

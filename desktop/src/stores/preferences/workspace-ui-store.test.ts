@@ -7,10 +7,10 @@ import {
 import { createManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
 
 describe("workspace ui tab persistence", () => {
-  it("preserves archived workspaces for current v3 preference blobs", () => {
+  it("preserves archived workspaces for current v4 preference blobs", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 3,
+      migrationVersion: 4,
       archivedWorkspaceIds: ["workspace-a"],
     });
 
@@ -21,7 +21,7 @@ describe("workspace ui tab persistence", () => {
   it("defaults missing visible tab fields without bumping migration", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 3,
+      migrationVersion: 4,
       visibleChatSessionIdsByWorkspace: undefined as unknown as Record<string, string[]>,
       recentlyHiddenChatSessionIdsByWorkspace: undefined as unknown as Record<string, string[]>,
       collapsedChatGroupsByWorkspace: undefined as unknown as Record<string, string[]>,
@@ -29,7 +29,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(3);
+    expect(state.migrationVersion).toBe(4);
     expect(state.visibleChatSessionIdsByWorkspace).toEqual({});
     expect(state.recentlyHiddenChatSessionIdsByWorkspace).toEqual({});
     expect(state.collapsedChatGroupsByWorkspace).toEqual({});
@@ -39,7 +39,7 @@ describe("workspace ui tab persistence", () => {
   it("defaults missing session error views without bumping migration", () => {
     const legacyState = {
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 3,
+      migrationVersion: 4,
     } as Partial<typeof WORKSPACE_UI_DEFAULTS> & { migrationVersion: number };
     delete legacyState.lastViewedSessionErrorAtBySession;
 
@@ -48,14 +48,14 @@ describe("workspace ui tab persistence", () => {
     );
 
     expect(didMigrate).toBe(false);
-    expect(state.migrationVersion).toBe(3);
+    expect(state.migrationVersion).toBe(4);
     expect(state.lastViewedSessionErrorAtBySession).toEqual({});
   });
 
   it("sanitizes malformed manual chat groups without bumping migration", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 3,
+      migrationVersion: 4,
       manualChatGroupsByWorkspace: {
         w1: [
           {
@@ -75,7 +75,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(3);
+    expect(state.migrationVersion).toBe(4);
     expect(state.manualChatGroupsByWorkspace).toEqual({
       w1: [
         {
@@ -86,6 +86,51 @@ describe("workspace ui tab persistence", () => {
         },
       ],
     });
+  });
+
+  it("migrates missing right panel preferences from v3 state", () => {
+    const { state, didMigrate } = migrateWorkspaceUiState({
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: 3,
+      rightPanelByWorkspace: undefined as unknown as typeof WORKSPACE_UI_DEFAULTS.rightPanelByWorkspace,
+      rightPanelWidthByWorkspace: undefined as unknown as typeof WORKSPACE_UI_DEFAULTS.rightPanelWidthByWorkspace,
+    });
+
+    expect(didMigrate).toBe(true);
+    expect(state.migrationVersion).toBe(4);
+    expect(state.rightPanelByWorkspace).toEqual({});
+    expect(state.rightPanelWidthByWorkspace).toEqual({});
+  });
+
+  it("sanitizes persisted right panel preferences and clamps widths", () => {
+    const { state, didMigrate } = migrateWorkspaceUiState({
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: 4,
+      rightPanelByWorkspace: {
+        w1: {
+          activeTool: "git",
+          toolOrder: ["terminal", "bad", "terminal", "files"],
+          terminalOrder: ["t1", "t1", "t2"],
+          activeTerminalId: "t2",
+        },
+        w2: "bad",
+      } as never,
+      rightPanelWidthByWorkspace: {
+        w1: 900,
+        w2: Number.NaN,
+      },
+    });
+
+    expect(didMigrate).toBe(true);
+    expect(state.rightPanelByWorkspace).toEqual({
+      w1: {
+        activeTool: "git",
+        toolOrder: ["files"],
+        terminalOrder: ["t1", "t2"],
+        activeTerminalId: "t2",
+      },
+    });
+    expect(state.rightPanelWidthByWorkspace).toEqual({ w1: 700 });
   });
 
   it("stores visible and hidden chat ids per workspace", () => {
@@ -102,6 +147,25 @@ describe("workspace ui tab persistence", () => {
 
     expect(useWorkspaceUiStore.getState().visibleChatSessionIdsByWorkspace.w1).toEqual(["a", "b"]);
     expect(useWorkspaceUiStore.getState().recentlyHiddenChatSessionIdsByWorkspace.w1).toEqual(["b"]);
+  });
+
+  it("stores right panel preferences per workspace", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.setRightPanelForWorkspace("w1", {
+      activeTool: "terminal",
+      toolOrder: ["files", "git"],
+      terminalOrder: ["t1"],
+      activeTerminalId: "t1",
+    });
+    store.setRightPanelWidthForWorkspace("w1", 900);
+
+    expect(useWorkspaceUiStore.getState().rightPanelByWorkspace.w1?.activeTool).toBe("terminal");
+    expect(useWorkspaceUiStore.getState().rightPanelWidthByWorkspace.w1).toBe(700);
   });
 
   it("stores and clears viewed session error keys without eviction", () => {

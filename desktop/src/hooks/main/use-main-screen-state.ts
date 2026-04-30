@@ -8,6 +8,7 @@ import {
   useGitStatusQuery,
 } from "@anyharness/sdk-react";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -25,26 +26,31 @@ import {
   WORKSPACE_SIDEBAR_MAX_WIDTH,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
 } from "@/stores/preferences/workspace-ui-store";
+import {
+  DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+  RIGHT_PANEL_DEFAULT_WIDTH,
+  RIGHT_PANEL_MAX_WIDTH,
+  RIGHT_PANEL_MIN_WIDTH,
+  reconcileRightPanelWorkspaceState,
+  type RightPanelWorkspaceState,
+} from "@/lib/domain/workspaces/right-panel";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
-import type { RightPanelMode } from "@/components/workspace/shell/right-panel/RightPanel";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
 export interface MainScreenLayoutState {
-  rightPanelMode: RightPanelMode;
-  setRightPanelMode: Dispatch<SetStateAction<RightPanelMode>>;
+  rightPanelState: RightPanelWorkspaceState;
+  setRightPanelState: Dispatch<SetStateAction<RightPanelWorkspaceState>>;
   sidebarOpen: boolean;
   setSidebarOpen: Dispatch<SetStateAction<boolean>>;
   sidebarWidth: number;
   setSidebarWidth: Dispatch<SetStateAction<number>>;
   rightPanelOpen: boolean;
   setRightPanelOpen: Dispatch<SetStateAction<boolean>>;
-  terminalCollapsed: boolean;
-  setTerminalCollapsed: Dispatch<SetStateAction<boolean>>;
-  terminalFocusRequestToken: number;
-  setTerminalFocusRequestToken: Dispatch<SetStateAction<number>>;
+  terminalActivationRequestToken: number;
+  setTerminalActivationRequestToken: Dispatch<SetStateAction<number>>;
   commitOpen: boolean;
   setCommitOpen: Dispatch<SetStateAction<boolean>>;
   pushOpen: boolean;
@@ -77,19 +83,60 @@ export interface MainScreenState {
 }
 
 export function useMainScreenState(): MainScreenState {
-  const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>("files");
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
-  const [terminalCollapsed, setTerminalCollapsed] = useState(false);
-  const [terminalFocusRequestToken, setTerminalFocusRequestToken] = useState(0);
+  const [terminalActivationRequestToken, setTerminalActivationRequestToken] = useState(0);
   const [commitOpen, setCommitOpen] = useState(false);
   const [pushOpen, setPushOpen] = useState(false);
   const [prOpen, setPrOpen] = useState(false);
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
-  const [rightPanelWidth, setRightPanelWidth] = useState(420);
+  const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
+  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const workspaceArrivalEvent = useHarnessStore((state) => state.workspaceArrivalEvent);
+  const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
+  const isCloudWorkspaceSelected = selectedCloudWorkspaceId !== null;
   const sidebarOpen = useWorkspaceUiStore((state) => state.sidebarOpen);
   const setSidebarOpen = useWorkspaceUiStore((state) => state.setSidebarOpen);
   const sidebarWidth = useWorkspaceUiStore((state) => state.sidebarWidth);
   const setSidebarWidth = useWorkspaceUiStore((state) => state.setSidebarWidth);
+  const persistedRightPanelState = useWorkspaceUiStore((state) =>
+    selectedWorkspaceId ? state.rightPanelByWorkspace[selectedWorkspaceId] : undefined
+  );
+  const setRightPanelForWorkspace = useWorkspaceUiStore(
+    (state) => state.setRightPanelForWorkspace,
+  );
+  const rightPanelWidth = useWorkspaceUiStore((state) =>
+    selectedWorkspaceId
+      ? state.rightPanelWidthByWorkspace[selectedWorkspaceId] ?? RIGHT_PANEL_DEFAULT_WIDTH
+      : RIGHT_PANEL_DEFAULT_WIDTH
+  );
+  const setRightPanelWidthForWorkspace = useWorkspaceUiStore(
+    (state) => state.setRightPanelWidthForWorkspace,
+  );
+  const rightPanelState = useMemo(
+    () => reconcileRightPanelWorkspaceState(
+      persistedRightPanelState ?? DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+      { isCloudWorkspaceSelected },
+    ),
+    [isCloudWorkspaceSelected, persistedRightPanelState],
+  );
+  const setRightPanelState = useCallback<Dispatch<SetStateAction<RightPanelWorkspaceState>>>(
+    (value) => {
+      if (!selectedWorkspaceId) {
+        return;
+      }
+      setRightPanelForWorkspace(selectedWorkspaceId, value);
+    },
+    [selectedWorkspaceId, setRightPanelForWorkspace],
+  );
+  const setRightPanelWidth = useCallback<Dispatch<SetStateAction<number>>>(
+    (value) => {
+      if (!selectedWorkspaceId) {
+        return;
+      }
+      setRightPanelWidthForWorkspace(selectedWorkspaceId, value);
+    },
+    [selectedWorkspaceId, setRightPanelWidthForWorkspace],
+  );
 
   const onLeftSeparatorDown = useResize({
     direction: "horizontal",
@@ -104,18 +151,14 @@ export function useMainScreenState(): MainScreenState {
     size: rightPanelWidth,
     onResize: setRightPanelWidth,
     reverse: true,
-    min: 260,
-    max: 700,
+    min: RIGHT_PANEL_MIN_WIDTH,
+    max: RIGHT_PANEL_MAX_WIDTH,
   });
 
-  const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const workspaceArrivalEvent = useHarnessStore((state) => state.workspaceArrivalEvent);
   const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
-  const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
   const hasWorkspaceShell = shouldMountWorkspaceShell({
     selectedWorkspaceId,
     hasPendingWorkspaceEntry: pendingWorkspaceEntry !== null,
@@ -169,18 +212,16 @@ export function useMainScreenState(): MainScreenState {
 
   return {
     layout: {
-      rightPanelMode,
-      setRightPanelMode,
+      rightPanelState,
+      setRightPanelState,
       sidebarOpen,
       setSidebarOpen,
       sidebarWidth,
       setSidebarWidth,
       rightPanelOpen,
       setRightPanelOpen,
-      terminalCollapsed,
-      setTerminalCollapsed,
-      terminalFocusRequestToken,
-      setTerminalFocusRequestToken,
+      terminalActivationRequestToken,
+      setTerminalActivationRequestToken,
       commitOpen,
       setCommitOpen,
       pushOpen,

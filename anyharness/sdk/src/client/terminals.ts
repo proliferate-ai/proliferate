@@ -2,6 +2,7 @@ import type {
   CreateTerminalRequest,
   ResizeTerminalRequest,
   TerminalRecord,
+  UpdateTerminalTitleRequest,
 } from "../types/terminals.js";
 import type { AnyHarnessTransport } from "./core.js";
 
@@ -36,6 +37,16 @@ export class TerminalsClient {
   ): Promise<TerminalRecord> {
     return this.transport.post<TerminalRecord>(
       `/v1/terminals/${encodeURIComponent(terminalId)}/resize`,
+      input,
+    );
+  }
+
+  async updateTitle(
+    terminalId: string,
+    input: UpdateTerminalTitleRequest,
+  ): Promise<TerminalRecord> {
+    return this.transport.patch<TerminalRecord>(
+      `/v1/terminals/${encodeURIComponent(terminalId)}/title`,
       input,
     );
   }

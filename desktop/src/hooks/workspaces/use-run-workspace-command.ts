@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Workspace } from "@anyharness/sdk";
+import { useTerminalsQuery } from "@anyharness/sdk-react";
 import { useCloudRepoConfig } from "@/hooks/cloud/use-cloud-repo-config";
 import { useTerminalActions } from "@/hooks/terminals/use-terminal-actions";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
@@ -12,7 +13,6 @@ import {
   buildSettingsHref,
 } from "@/lib/domain/settings/navigation";
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
-import { useTerminalStore } from "@/stores/terminal/terminal-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 interface UseRunWorkspaceCommandArgs {
@@ -20,7 +20,7 @@ interface UseRunWorkspaceCommandArgs {
   selectedWorkspace: Workspace | undefined;
   selectedCloudWorkspace: CloudWorkspaceSummary | undefined;
   isRuntimeReady: boolean;
-  openTerminalPanel: () => boolean;
+  openTerminalPanel: (terminalId?: string) => boolean;
 }
 
 export function useRunWorkspaceCommand({
@@ -46,15 +46,20 @@ export function useRunWorkspaceCommand({
   const gitRepoName = isCloudWorkspace
     ? selectedCloudWorkspace?.repo?.name.trim() ?? ""
     : selectedWorkspace?.gitRepoName?.trim() ?? "";
-  const activeRunTerminalId = useTerminalStore((state) => {
+  const terminalsQuery = useTerminalsQuery({
+    workspaceId,
+    enabled: Boolean(workspaceId && isRuntimeReady),
+  });
+  const activeRunTerminalId = useMemo(() => {
     if (!workspaceId) {
       return null;
     }
-    const tabs = (state.workspaceTabs[workspaceId] ?? [])
-      .map((terminalId) => state.tabsById[terminalId])
-      .filter((tab) => tab !== undefined);
-    return findReusableRunTerminalId(tabs, workspaceId);
-  });
+    const records = terminalsQuery.data ?? [];
+    return findReusableRunTerminalId(
+      records.map((record) => ({ ...record, workspaceId })),
+      workspaceId,
+    );
+  }, [terminalsQuery.data, workspaceId]);
   const localSourceRoot = selectedWorkspace?.sourceRepoRootPath?.trim()
     || selectedWorkspace?.path?.trim()
     || "";
@@ -125,8 +130,8 @@ export function useRunWorkspaceCommand({
     isLaunchingRef.current = true;
     setIsLaunching(true);
     try {
-      await createRunTab(workspaceId, runCommand);
-      openTerminalPanel();
+      const terminalId = await createRunTab(workspaceId, runCommand);
+      openTerminalPanel(terminalId);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       showToast(`Failed to start Run command: ${message}`);

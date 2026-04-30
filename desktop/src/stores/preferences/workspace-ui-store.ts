@@ -19,6 +19,13 @@ import {
   toggleSidebarWorkspaceTypeSelection,
   type SidebarWorkspaceVariant,
 } from "@/lib/domain/workspaces/sidebar";
+import {
+  clampRightPanelWidth,
+  DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+  isRightPanelTool,
+  RIGHT_PANEL_DEFAULT_WIDTH,
+  type RightPanelWorkspaceState,
+} from "@/lib/domain/workspaces/right-panel";
 import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persistence";
 
 export interface WorkspaceUiState {
@@ -29,6 +36,8 @@ export interface WorkspaceUiState {
   threadsCollapsed: boolean;
   sidebarOpen: boolean;
   sidebarWidth: number;
+  rightPanelByWorkspace: Record<string, RightPanelWorkspaceState>;
+  rightPanelWidthByWorkspace: Record<string, number>;
   workspaceTypes: SidebarWorkspaceVariant[];
   lastViewedAt: Record<string, string>;
   lastViewedSessionByWorkspace: Record<string, string>;
@@ -51,6 +60,14 @@ export interface WorkspaceUiState {
   setThreadsCollapsed: (value: boolean) => void;
   setSidebarOpen: (value: SetStateAction<boolean>) => void;
   setSidebarWidth: (value: SetStateAction<number>) => void;
+  setRightPanelForWorkspace: (
+    workspaceId: string,
+    value: SetStateAction<RightPanelWorkspaceState>,
+  ) => void;
+  setRightPanelWidthForWorkspace: (
+    workspaceId: string,
+    value: SetStateAction<number>,
+  ) => void;
   toggleSidebarWorkspaceType: (type: SidebarWorkspaceVariant) => void;
   markWorkspaceViewed: (workspaceId: string) => void;
   setLastViewedSessionForWorkspace: (workspaceId: string, sessionId: string) => void;
@@ -87,8 +104,9 @@ export interface WorkspaceUiState {
  * v2: reset user-facing workspace-keyed state for logical-workspace cutover.
  * v3: reset archived workspace ids after removing repositories stopped
  * polluting the archive model.
+ * v4: add workspace-scoped right-panel preferences.
  */
-const WORKSPACE_UI_MIGRATION_VERSION = 3;
+const WORKSPACE_UI_MIGRATION_VERSION = 4;
 export const WORKSPACE_SIDEBAR_DEFAULT_WIDTH = 280;
 export const WORKSPACE_SIDEBAR_MIN_WIDTH = 220;
 export const WORKSPACE_SIDEBAR_MAX_WIDTH = 420;
@@ -101,6 +119,8 @@ export interface PersistedWorkspaceUiState {
   threadsCollapsed: boolean;
   sidebarOpen: boolean;
   sidebarWidth: number;
+  rightPanelByWorkspace: Record<string, RightPanelWorkspaceState>;
+  rightPanelWidthByWorkspace: Record<string, number>;
   workspaceTypes: SidebarWorkspaceVariant[];
   lastViewedAt: Record<string, string>;
   lastViewedSessionByWorkspace: Record<string, string>;
@@ -121,6 +141,8 @@ export const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
   threadsCollapsed: false,
   sidebarOpen: false,
   sidebarWidth: WORKSPACE_SIDEBAR_DEFAULT_WIDTH,
+  rightPanelByWorkspace: {},
+  rightPanelWidthByWorkspace: {},
   workspaceTypes: DEFAULT_SIDEBAR_WORKSPACE_TYPES,
   lastViewedAt: {},
   lastViewedSessionByWorkspace: {},
@@ -160,6 +182,8 @@ async function readAll(): Promise<{ state: PersistedWorkspaceUiState; didMigrate
       hiddenRepoRootIds: WORKSPACE_UI_DEFAULTS.hiddenRepoRootIds,
       sidebarOpen: WORKSPACE_UI_DEFAULTS.sidebarOpen,
       sidebarWidth: WORKSPACE_UI_DEFAULTS.sidebarWidth,
+      rightPanelByWorkspace: WORKSPACE_UI_DEFAULTS.rightPanelByWorkspace,
+      rightPanelWidthByWorkspace: WORKSPACE_UI_DEFAULTS.rightPanelWidthByWorkspace,
       workspaceTypes: WORKSPACE_UI_DEFAULTS.workspaceTypes,
       lastViewedAt:
         (await readPersistedValue<Record<string, string>>("lastViewedAt"))
@@ -227,6 +251,22 @@ export function migrateWorkspaceUiState(
     didMigrate = true;
   }
 
+  const sanitizedRightPanelByWorkspace = sanitizeRightPanelByWorkspace(
+    state.rightPanelByWorkspace,
+  );
+  if (JSON.stringify(sanitizedRightPanelByWorkspace) !== JSON.stringify(state.rightPanelByWorkspace)) {
+    state.rightPanelByWorkspace = sanitizedRightPanelByWorkspace;
+    didMigrate = true;
+  }
+
+  const sanitizedRightPanelWidths = sanitizeRightPanelWidths(
+    state.rightPanelWidthByWorkspace,
+  );
+  if (JSON.stringify(sanitizedRightPanelWidths) !== JSON.stringify(state.rightPanelWidthByWorkspace)) {
+    state.rightPanelWidthByWorkspace = sanitizedRightPanelWidths;
+    didMigrate = true;
+  }
+
   if (!isStringArrayRecord(state.visibleChatSessionIdsByWorkspace)) {
     state.visibleChatSessionIdsByWorkspace = WORKSPACE_UI_DEFAULTS.visibleChatSessionIdsByWorkspace;
     didMigrate = true;
@@ -284,6 +324,8 @@ function selectPersistedSlice(state: WorkspaceUiState): PersistedWorkspaceUiStat
     threadsCollapsed: state.threadsCollapsed,
     sidebarOpen: state.sidebarOpen,
     sidebarWidth: state.sidebarWidth,
+    rightPanelByWorkspace: state.rightPanelByWorkspace,
+    rightPanelWidthByWorkspace: state.rightPanelWidthByWorkspace,
     workspaceTypes: state.workspaceTypes,
     lastViewedAt: state.lastViewedAt,
     lastViewedSessionByWorkspace: state.lastViewedSessionByWorkspace,
@@ -309,6 +351,78 @@ function isStringRecord(value: unknown): value is Record<string, string> {
   return typeof value === "object"
     && value !== null
     && Object.values(value).every((entry) => typeof entry === "string");
+}
+
+function sanitizeRightPanelByWorkspace(
+  value: unknown,
+): Record<string, RightPanelWorkspaceState> {
+  if (typeof value !== "object" || value === null) {
+    return {};
+  }
+
+  const next: Record<string, RightPanelWorkspaceState> = {};
+  for (const [workspaceId, rawState] of Object.entries(value)) {
+    if (typeof rawState !== "object" || rawState === null) {
+      continue;
+    }
+
+    const record = rawState as Partial<Record<keyof RightPanelWorkspaceState, unknown>>;
+    const toolOrder = Array.isArray(record.toolOrder)
+      ? uniqueRightPanelTools(record.toolOrder)
+      : DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.toolOrder;
+    const activeTool = isRightPanelTool(record.activeTool)
+      ? record.activeTool
+      : DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.activeTool;
+    const terminalOrder = Array.isArray(record.terminalOrder)
+      ? uniqueStringList(record.terminalOrder)
+      : [];
+    const activeTerminalId = typeof record.activeTerminalId === "string"
+      ? record.activeTerminalId
+      : null;
+
+    next[workspaceId] = {
+      activeTool,
+      toolOrder,
+      terminalOrder,
+      activeTerminalId,
+    };
+  }
+
+  return next;
+}
+
+function sanitizeRightPanelWidths(value: unknown): Record<string, number> {
+  if (typeof value !== "object" || value === null) {
+    return {};
+  }
+
+  const next: Record<string, number> = {};
+  for (const [workspaceId, width] of Object.entries(value)) {
+    if (typeof width === "number" && Number.isFinite(width)) {
+      next[workspaceId] = clampRightPanelWidth(width);
+    }
+  }
+  return next;
+}
+
+function uniqueRightPanelTools(value: readonly unknown[]): RightPanelWorkspaceState["toolOrder"] {
+  const next: RightPanelWorkspaceState["toolOrder"] = [];
+  for (const item of value) {
+    if (isRightPanelTool(item) && item !== "terminal" && !next.includes(item)) {
+      next.push(item);
+    }
+  }
+  return next.length > 0 ? next : DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.toolOrder;
+}
+
+function uniqueStringList(value: readonly unknown[]): string[] {
+  const next: string[] = [];
+  for (const item of value) {
+    if (typeof item === "string" && item && !next.includes(item)) {
+      next.push(item);
+    }
+  }
+  return next;
 }
 
 export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
@@ -373,6 +487,32 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
   setSidebarWidth: (value) => {
     set((state) => ({
       sidebarWidth: clampSidebarWidth(resolveStateValue(value, state.sidebarWidth)),
+    }));
+  },
+
+  setRightPanelForWorkspace: (workspaceId, value) => {
+    set((state) => ({
+      rightPanelByWorkspace: {
+        ...state.rightPanelByWorkspace,
+        [workspaceId]: resolveStateValue(
+          value,
+          state.rightPanelByWorkspace[workspaceId] ?? DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+        ),
+      },
+    }));
+  },
+
+  setRightPanelWidthForWorkspace: (workspaceId, value) => {
+    set((state) => ({
+      rightPanelWidthByWorkspace: {
+        ...state.rightPanelWidthByWorkspace,
+        [workspaceId]: clampRightPanelWidth(
+          resolveStateValue(
+            value,
+            state.rightPanelWidthByWorkspace[workspaceId] ?? RIGHT_PANEL_DEFAULT_WIDTH,
+          ),
+        ),
+      },
     }));
   },
 

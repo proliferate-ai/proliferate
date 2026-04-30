@@ -144,6 +144,7 @@ impl TerminalService {
                 .filter(|value| !value.is_empty())
                 .unwrap_or("Terminal")
                 .to_string(),
+            purpose: request.purpose,
             cwd: cwd.clone(),
             status: TerminalStatus::Running,
             exit_code: None,
@@ -208,6 +209,21 @@ impl TerminalService {
         });
 
         Ok(record)
+    }
+
+    pub async fn update_terminal_title(
+        &self,
+        terminal_id: &str,
+        title: String,
+    ) -> anyhow::Result<TerminalRecord> {
+        let map = self.terminals.read().await;
+        let handle = map
+            .get(terminal_id)
+            .ok_or_else(|| anyhow::anyhow!("terminal not found"))?;
+        let mut h = handle.lock().await;
+        h.record.title = title;
+        h.record.updated_at = chrono::Utc::now().to_rfc3339();
+        Ok(h.record.clone())
     }
 
     pub async fn write_input(&self, terminal_id: &str, data: &[u8]) -> anyhow::Result<()> {
@@ -437,6 +453,7 @@ mod tests {
     use tokio::time::{timeout, Duration};
 
     use super::{CreateTerminalOptions, TerminalOutputEvent, TerminalService};
+    use crate::terminals::model::TerminalPurpose;
 
     async fn read_until_contains(
         rx: &mut tokio::sync::broadcast::Receiver<TerminalOutputEvent>,
@@ -475,6 +492,7 @@ mod tests {
                     cwd: Some("".to_string()),
                     shell: Some("/bin/sh".to_string()),
                     title: None,
+                    purpose: TerminalPurpose::General,
                     env: Vec::new(),
                 },
             )
@@ -522,6 +540,7 @@ mod tests {
                     cwd: Some("".to_string()),
                     shell: Some("/bin/sh".to_string()),
                     title: Some("Run".to_string()),
+                    purpose: TerminalPurpose::Run,
                     env: vec![(
                         "PROLIFERATE_TERMINAL_TEST".to_string(),
                         "env-pass".to_string(),
@@ -531,6 +550,7 @@ mod tests {
             .await?;
 
         assert_eq!(record.title, "Run");
+        assert_eq!(record.purpose, TerminalPurpose::Run);
 
         let mut rx = service
             .subscribe_output(&record.id)
@@ -544,6 +564,42 @@ mod tests {
             .await?;
         let output = read_until_contains(&mut rx, "env-pass").await?;
         assert!(output.contains("env-pass"));
+
+        service.close_terminal(&record.id).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn terminal_title_can_be_updated() -> anyhow::Result<()> {
+        let service = TerminalService::new();
+        let workspace_path = std::env::current_dir()
+            .map(|path| path.to_string_lossy().to_string())
+            .unwrap_or_else(|_| ".".to_string());
+
+        let record = service
+            .create_terminal(
+                "workspace-1",
+                &workspace_path,
+                CreateTerminalOptions {
+                    cols: 80,
+                    rows: 24,
+                    cwd: Some("".to_string()),
+                    shell: Some("/bin/sh".to_string()),
+                    title: None,
+                    purpose: TerminalPurpose::General,
+                    env: Vec::new(),
+                },
+            )
+            .await?;
+        let original_updated_at = record.updated_at.clone();
+
+        let renamed = service
+            .update_terminal_title(&record.id, "Dev server".to_string())
+            .await?;
+
+        assert_eq!(renamed.title, "Dev server");
+        assert_eq!(renamed.purpose, TerminalPurpose::General);
+        assert_ne!(renamed.updated_at, original_updated_at);
 
         service.close_terminal(&record.id).await?;
         Ok(())

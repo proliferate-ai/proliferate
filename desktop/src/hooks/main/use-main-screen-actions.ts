@@ -8,7 +8,7 @@ import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-id
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import type { RightPanelMode } from "@/components/workspace/shell/right-panel/RightPanel";
+import type { RightPanelTool } from "@/lib/domain/workspaces/right-panel";
 import type {
   MainScreenDataState,
   MainScreenLayoutState,
@@ -31,45 +31,47 @@ export function useMainScreenActions({
   const showToast = useToastStore((state) => state.show);
   const {
     rightPanelOpen,
-    setRightPanelMode,
+    rightPanelState,
+    setRightPanelState,
     setSidebarOpen,
     setRightPanelOpen,
-    setTerminalCollapsed,
-    setTerminalFocusRequestToken,
+    setTerminalActivationRequestToken,
     setCommitOpen,
     setFilePaletteOpen,
     setPushOpen,
     setPrOpen,
   } = layout;
 
-  const openRightPanelMode = useCallback((mode: RightPanelMode) => {
-    setRightPanelMode(mode);
+  const openRightPanelTool = useCallback((tool: RightPanelTool, terminalId?: string) => {
+    setRightPanelState((previous) => ({
+      ...previous,
+      activeTool: tool,
+      activeTerminalId: terminalId ?? previous.activeTerminalId,
+    }));
     setRightPanelOpen(true);
-  }, [setRightPanelMode, setRightPanelOpen]);
+  }, [setRightPanelOpen, setRightPanelState]);
 
-  const openTerminalPanel = useCallback(() => {
+  const openTerminalPanel = useCallback((terminalId?: string) => {
     if (!selectedWorkspaceId) {
       return false;
     }
 
-    setRightPanelOpen(true);
-    setTerminalCollapsed(false);
-    setTerminalFocusRequestToken((token) => token + 1);
+    openRightPanelTool("terminal", terminalId);
+    setTerminalActivationRequestToken((token) => token + 1);
     return true;
   }, [
+    openRightPanelTool,
     selectedWorkspaceId,
-    setRightPanelOpen,
-    setTerminalCollapsed,
-    setTerminalFocusRequestToken,
+    setTerminalActivationRequestToken,
   ]);
 
   const toggleRightPanel = useCallback(() => {
     if (rightPanelOpen) {
       setRightPanelOpen(false);
     } else {
-      openRightPanelMode("changes");
+      openRightPanelTool(rightPanelState.activeTool ?? "git");
     }
-  }, [openRightPanelMode, rightPanelOpen, setRightPanelOpen]);
+  }, [openRightPanelTool, rightPanelOpen, rightPanelState.activeTool, setRightPanelOpen]);
 
   const openPrInBrowser = useCallback(() => {
     if (existingPr?.url) {
@@ -78,28 +80,28 @@ export function useMainScreenActions({
   }, [existingPr]);
 
   const handleCommitOpen = useCallback(() => {
-    openRightPanelMode("changes");
+    openRightPanelTool("git");
     setCommitOpen(true);
-  }, [openRightPanelMode, setCommitOpen]);
+  }, [openRightPanelTool, setCommitOpen]);
 
   const handlePushOpen = useCallback(() => {
-    openRightPanelMode("changes");
+    openRightPanelTool("git");
     setPushOpen(true);
-  }, [openRightPanelMode, setPushOpen]);
+  }, [openRightPanelTool, setPushOpen]);
 
   const handlePrOpen = useCallback(() => {
-    openRightPanelMode("changes");
+    openRightPanelTool("git");
     setPrOpen(true);
-  }, [openRightPanelMode, setPrOpen]);
+  }, [openRightPanelTool, setPrOpen]);
 
   const handleFilePaletteOpen = useCallback(() => {
     setFilePaletteOpen(true);
   }, [setFilePaletteOpen]);
 
   const handleViewPr = useCallback(() => {
-    openRightPanelMode("changes");
+    openRightPanelTool("git");
     openPrInBrowser();
-  }, [openPrInBrowser, openRightPanelMode]);
+  }, [openPrInBrowser, openRightPanelTool]);
 
   const openPrDialog = useCallback(() => {
     setPrOpen(true);
@@ -133,7 +135,7 @@ export function useMainScreenActions({
     onToggleSidebar: () => setSidebarOpen((value) => !value),
     toggleRightPanel,
     openTerminalPanel,
-    onSetRightPanelMode: setRightPanelMode,
+    onSetRightPanelTool: openRightPanelTool,
     handleCommitOpen,
     handlePushOpen,
     handlePrOpen,
