@@ -1050,10 +1050,11 @@ fn git_command_message(stderr: &str, fallback: &str) -> String {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::io::ErrorKind;
     use std::process::Command;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::*;
+    use uuid::Uuid;
 
     struct TempDirGuard {
         path: PathBuf,
@@ -1061,16 +1062,15 @@ mod tests {
 
     impl TempDirGuard {
         fn new(prefix: &str) -> Self {
-            let nonce = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos();
-            let path = std::env::temp_dir().join(format!(
-                "anyharness-git-{prefix}-{}-{nonce}",
-                std::process::id()
-            ));
-            fs::create_dir_all(&path).expect("create temp dir");
-            Self { path }
+            loop {
+                let path = std::env::temp_dir()
+                    .join(format!("anyharness-git-{prefix}-{}", Uuid::new_v4()));
+                match fs::create_dir(&path) {
+                    Ok(()) => return Self { path },
+                    Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+                    Err(error) => panic!("create temp dir: {error}"),
+                }
+            }
         }
 
         fn path(&self) -> &Path {
