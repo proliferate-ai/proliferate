@@ -1,10 +1,12 @@
 import { forwardRef, type HTMLAttributes, type ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_DOCK_LOWER_BACKDROP_FADE_HEIGHT_PX,
   CHAT_SURFACE_GUTTER_CLASSNAME,
 } from "@/config/chat-layout";
+import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 
 interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
   backdrop?: boolean;
@@ -44,6 +46,7 @@ export const ChatComposerDock = forwardRef<HTMLDivElement, ChatComposerDockProps
     className = "",
     ...rest
   }, ref) {
+    useDebugRenderCount("chat-composer-dock");
     const baseShellClassName = shellClassName
       ? "z-10 shrink-0"
       : "relative z-10 mt-auto shrink-0";
@@ -52,13 +55,14 @@ export const ChatComposerDock = forwardRef<HTMLDivElement, ChatComposerDockProps
       : Math.max(0, lowerBackdropTopPx - CHAT_DOCK_LOWER_BACKDROP_FADE_HEIGHT_PX);
 
     return (
-      <div
-        ref={ref}
-        className={twMerge(
-          baseShellClassName,
-          shellClassName,
-        )}
-      >
+      <DebugProfiler id="chat-composer-dock">
+        <div
+          ref={ref}
+          className={twMerge(
+            baseShellClassName,
+            shellClassName,
+          )}
+        >
         {backdrop && (
           <>
             {lowerBackdropFadeTopPx == null ? (
@@ -98,7 +102,8 @@ export const ChatComposerDock = forwardRef<HTMLDivElement, ChatComposerDockProps
             ) : null}
           </div>
         </div>
-      </div>
+        </div>
+      </DebugProfiler>
     );
   },
 );

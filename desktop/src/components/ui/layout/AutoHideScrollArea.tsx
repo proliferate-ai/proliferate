@@ -14,6 +14,7 @@ interface AutoHideScrollAreaProps {
   viewportClassName?: string;
   contentClassName?: string;
   allowHorizontal?: boolean;
+  onViewportScroll?: (viewport: HTMLDivElement) => void;
 }
 
 const HIDE_DELAY_MS = 700;
@@ -27,6 +28,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       viewportClassName = "",
       contentClassName = "",
       allowHorizontal = false,
+      onViewportScroll,
     },
     ref,
   ) {
@@ -98,6 +100,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
 
       const handleScroll = () => {
         updateThumb(true);
+        onViewportScroll?.(viewport);
         scheduleHide();
       };
       viewport.addEventListener("scroll", handleScroll, { passive: true });
@@ -111,7 +114,7 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
         viewport.removeEventListener("scroll", handleScroll);
         observer.disconnect();
       };
-    }, []);
+    }, [onViewportScroll]);
 
     useEffect(() => {
       const handlePointerMove = (event: PointerEvent) => {

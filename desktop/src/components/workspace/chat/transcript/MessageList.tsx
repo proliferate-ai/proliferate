@@ -16,6 +16,7 @@ import { SystemMessage } from "./SystemMessage";
 import { UserMessage } from "./UserMessage";
 import { StreamingIndicator } from "./StreamingIndicator";
 import { TurnSeparator } from "./TurnSeparator";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
 import { Button } from "@/components/ui/Button";
 import { ReasoningBlock } from "@/components/workspace/chat/tool-calls/ReasoningBlock";
@@ -49,6 +50,7 @@ import {
 } from "@/config/chat-layout";
 import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
 import { useMessageListScroll } from "@/hooks/chat/use-message-list-scroll";
+import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useOpenCoworkArtifact } from "@/hooks/cowork/use-open-cowork-artifact";
 import { useOpenCoworkCodingSession } from "@/hooks/cowork/use-open-cowork-coding-session";
 import { useChatTranscriptSelection } from "@/hooks/chat/use-chat-transcript-selection";
@@ -85,6 +87,12 @@ import {
   isSubagentWorkComplete,
   type SubagentExecutionState,
 } from "@/lib/domain/chat/subagent-launch";
+import {
+  finishOrCancelMeasurementOperation,
+  markOperationForNextCommit,
+  startMeasurementOperation,
+  type MeasurementOperationId,
+} from "@/lib/infra/debug-measurement";
 import {
   buildSubagentBrailleColorMap,
   resolveSubagentColor,
@@ -174,6 +182,8 @@ export function MessageList({
   onHandOffPlanToNewSession,
   onOpenSession,
 }: MessageListProps) {
+  useDebugRenderCount("transcript-list");
+  const scrollSampleOperationRef = useRef<MeasurementOperationId | null>(null);
   const latestTurnId = transcript.turnOrder[transcript.turnOrder.length - 1] ?? null;
   const latestTurn = latestTurnId ? transcript.turnsById[latestTurnId] ?? null : null;
   const { openFileDiff } = useWorkspaceFileActions();
@@ -320,13 +330,41 @@ export function MessageList({
     rootRef: selectionRootRef,
     getCopyText: getTranscriptCopyText,
   });
+  const handleTranscriptScroll = useCallback(() => {
+    const operationId = startMeasurementOperation({
+      kind: "transcript_scroll",
+      sampleKey: "transcript",
+      surfaces: ["transcript-list", "session-transcript-pane", "chat-surface"],
+      idleTimeoutMs: 750,
+      maxDurationMs: 8000,
+      cooldownMs: 1500,
+    });
+    if (operationId) {
+      scrollSampleOperationRef.current = operationId;
+      markOperationForNextCommit(operationId, [
+        "transcript-list",
+        "session-transcript-pane",
+        "chat-surface",
+      ]);
+    }
+  }, []);
+
+  useEffect(() => () => {
+    finishOrCancelMeasurementOperation(scrollSampleOperationRef.current, "unmount");
+    scrollSampleOperationRef.current = null;
+  }, []);
 
   return (
-    <div className="flex-1 min-h-0" data-telemetry-block>
+    <DebugProfiler id="transcript-list">
+      <div className="flex-1 min-h-0" data-telemetry-block>
       <ProposedPlanToolCallIdsContext.Provider value={toolCallIdsWithProposedPlan}>
         <TranscriptSessionIdContext.Provider value={activeSessionId}>
           <TranscriptOpenSessionContext.Provider value={onOpenSession ?? null}>
-            <AutoHideScrollArea className="h-full" ref={scrollRef}>
+            <AutoHideScrollArea
+              className="h-full"
+              ref={scrollRef}
+              onViewportScroll={handleTranscriptScroll}
+            >
               <div
                 ref={contentRef}
                 className={`${CHAT_SURFACE_GUTTER_CLASSNAME} pt-4`}
@@ -474,7 +512,8 @@ export function MessageList({
           </TranscriptOpenSessionContext.Provider>
         </TranscriptSessionIdContext.Provider>
       </ProposedPlanToolCallIdsContext.Provider>
-    </div>
+      </div>
+    </DebugProfiler>
   );
 }
 

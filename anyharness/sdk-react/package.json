@@ -16,7 +16,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "license": "AGPL-3.0",
   "repository": {
@@ -36,6 +37,7 @@
   },
   "devDependencies": {
     "@types/react": "^19.1.11",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4"
   }
 }

@@ -33,23 +33,40 @@ import {
   cancelLatencyFlow,
   getLatencyFlowRequestHeaders,
 } from "@/lib/infra/latency-flow";
+import {
+  finishMeasurementOperation,
+  getMeasurementRequestOptions,
+  markOperationForNextCommit,
+  recordMeasurementMetric,
+  recordMeasurementWorkflowStep,
+  startMeasurementOperation,
+  type MeasurementOperationId,
+} from "@/lib/infra/debug-measurement";
 
 export type WorkspaceSession = Session & { workspaceId: string };
 
 interface SessionLatencyFlowOptions {
   latencyFlowId?: string | null;
   allowColdIdleNoStream?: boolean;
+  measurementOperationId?: MeasurementOperationId | null;
 }
 
 export async function fetchWorkspaceSessions(
   runtimeUrl: string,
   workspaceId: string,
-  options?: { requestHeaders?: HeadersInit },
+  options?: {
+    requestHeaders?: HeadersInit;
+    measurementOperationId?: MeasurementOperationId | null;
+  },
 ): Promise<WorkspaceSession[]> {
   const connection = await resolveWorkspaceConnection(runtimeUrl, workspaceId);
   const sessions = await getAnyHarnessClient(connection).sessions.list(
     connection.anyharnessWorkspaceId,
-    options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
+    getMeasurementRequestOptions({
+      operationId: options?.measurementOperationId,
+      category: "session.list",
+      headers: options?.requestHeaders,
+    }),
   );
   return sessions.map((session) => ({
     ...session,
@@ -101,12 +118,30 @@ export function useSessionSelectionActions() {
 
     const runtimeUrl = await ensureRuntimeReadyForSessions();
     const requestHeaders = getLatencyFlowRequestHeaders(options?.latencyFlowId);
+    const queryKey = anyHarnessSessionsKey(runtimeUrl, workspaceId);
+    if (options?.measurementOperationId) {
+      const cacheState = queryClient.getQueryState(queryKey);
+      recordMeasurementMetric({
+        type: "cache",
+        category: "session.list",
+        operationId: options.measurementOperationId,
+        decision: cacheState?.dataUpdatedAt
+          ? cacheState.isInvalidated ? "stale" : "hit"
+          : "miss",
+        source: "react_query",
+      });
+    }
     return queryClient.ensureQueryData({
-      queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId),
+      queryKey,
       queryFn: () => fetchWorkspaceSessions(
         runtimeUrl,
         workspaceId,
-        requestHeaders ? { requestHeaders } : undefined,
+        requestHeaders || options?.measurementOperationId
+          ? {
+            requestHeaders,
+            measurementOperationId: options?.measurementOperationId,
+          }
+          : undefined,
       ),
     });
   }, [getWorkspaceRuntimeBlockReason, queryClient]);
@@ -116,6 +151,18 @@ export function useSessionSelectionActions() {
     options?: SessionLatencyFlowOptions,
   ) => {
     const startedAt = startLatencyTimer();
+    const measurementOperationId = startMeasurementOperation({
+      kind: "session_switch",
+      surfaces: [
+        "chat-surface",
+        "session-transcript-pane",
+        "transcript-list",
+        "header-tabs",
+        "workspace-sidebar",
+      ],
+      linkedLatencyFlowId: options?.latencyFlowId ?? undefined,
+      maxDurationMs: 30_000,
+    });
     const current = useHarnessStore.getState();
     const existingSlot = current.sessionSlots[sessionId] ?? null;
     const requestHeaders = getLatencyFlowRequestHeaders(options?.latencyFlowId);
@@ -131,7 +178,14 @@ export function useSessionSelectionActions() {
         targetSessionId: sessionId,
         targetWorkspaceId: existingSlot.workspaceId,
       });
+      const activateStartedAt = performance.now();
       activateSession(sessionId);
+      recordMeasurementWorkflowStep({
+        operationId: measurementOperationId,
+        step: "session.select.hot_slot_activate",
+        startedAt: activateStartedAt,
+        outcome: existingSlot.transcriptHydrated ? "cache_hit" : "cache_miss",
+      });
       if (
         existingSlot.streamConnectionState === "connecting"
         || existingSlot.streamConnectionState === "open"
@@ -143,6 +197,9 @@ export function useSessionSelectionActions() {
           flowId: options?.latencyFlowId ?? null,
           totalElapsedMs: elapsedMs(startedAt),
         });
+        if (measurementOperationId) {
+          finishMeasurementOperation(measurementOperationId, "completed");
+        }
         return;
       }
     }
@@ -159,6 +216,9 @@ export function useSessionSelectionActions() {
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
     if (blockedReason && existingSlot) {
       activateSession(sessionId);
+      if (measurementOperationId) {
+        finishMeasurementOperation(measurementOperationId, "completed");
+      }
       return;
     }
     if (blockedReason) {
@@ -166,7 +226,16 @@ export function useSessionSelectionActions() {
     }
 
     const sessionsLoadStartedAt = startLatencyTimer();
-    const sessions = await ensureWorkspaceSessions(workspaceId, options);
+    const sessions = await ensureWorkspaceSessions(workspaceId, {
+      ...options,
+      measurementOperationId,
+    });
+    recordMeasurementWorkflowStep({
+      operationId: measurementOperationId,
+      step: "session.select.ensure_sessions",
+      startedAt: sessionsLoadStartedAt,
+      count: sessions.length,
+    });
     logLatency("session.select.sessions_loaded", {
       sessionId,
       workspaceId,
@@ -179,6 +248,7 @@ export function useSessionSelectionActions() {
     const agentKind = existingSlot?.agentKind ?? sessionMeta?.agentKind ?? "unknown";
 
     if (!existingSlot) {
+      const storeStartedAt = performance.now();
       useHarnessStore.getState().putSessionSlot(sessionId, {
         ...createEmptySessionSlot(sessionId, agentKind, {
           workspaceId,
@@ -195,8 +265,23 @@ export function useSessionSelectionActions() {
           sessionMeta?.status ?? "idle",
         ),
       });
+      if (measurementOperationId) {
+        recordMeasurementMetric({
+          type: "store",
+          category: "session.list",
+          operationId: measurementOperationId,
+          durationMs: performance.now() - storeStartedAt,
+        });
+      }
+      recordMeasurementWorkflowStep({
+        operationId: measurementOperationId,
+        step: "session.select.slot_store",
+        startedAt: storeStartedAt,
+        outcome: "cache_miss",
+      });
       activateSession(sessionId);
     } else {
+      const storeStartedAt = performance.now();
       useHarnessStore.getState().patchSessionSlot(sessionId, {
         workspaceId,
         agentKind,
@@ -212,13 +297,36 @@ export function useSessionSelectionActions() {
         ),
         lastPromptAt: sessionMeta?.lastPromptAt ?? existingSlot.lastPromptAt ?? null,
       });
+      if (measurementOperationId) {
+        recordMeasurementMetric({
+          type: "store",
+          category: "session.list",
+          operationId: measurementOperationId,
+          durationMs: performance.now() - storeStartedAt,
+        });
+      }
+      recordMeasurementWorkflowStep({
+        operationId: measurementOperationId,
+        step: "session.select.slot_store",
+        startedAt: storeStartedAt,
+        outcome: "cache_hit",
+      });
     }
 
     const currentSlot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
     if (!currentSlot?.transcriptHydrated) {
       const hydrateStartedAt = startLatencyTimer();
-      const hydrated = await rehydrateSessionSlotFromHistory(sessionId, { requestHeaders });
+      const hydrated = await rehydrateSessionSlotFromHistory(sessionId, {
+        requestHeaders,
+        measurementOperationId,
+      });
       useHarnessStore.getState().patchSessionSlot(sessionId, { transcriptHydrated: true });
+      recordMeasurementWorkflowStep({
+        operationId: measurementOperationId,
+        step: "session.select.history_hydrate",
+        startedAt: hydrateStartedAt,
+        outcome: hydrated ? "completed" : "error_sanitized",
+      });
       logLatency("session.select.history_hydrated", {
         sessionId,
         workspaceId,
@@ -234,6 +342,12 @@ export function useSessionSelectionActions() {
       allowColdIdleNoStream: options?.allowColdIdleNoStream,
       resumeIfActive: true,
       requestHeaders,
+      measurementOperationId,
+    });
+    recordMeasurementWorkflowStep({
+      operationId: measurementOperationId,
+      step: "session.select.stream_connect",
+      startedAt: streamStartedAt,
     });
     logLatency("session.select.stream_connected", {
       sessionId,
@@ -248,6 +362,16 @@ export function useSessionSelectionActions() {
       flowId: options?.latencyFlowId ?? null,
       totalElapsedMs: elapsedMs(startedAt),
     });
+    if (measurementOperationId) {
+      markOperationForNextCommit(measurementOperationId, [
+        "chat-surface",
+        "session-transcript-pane",
+        "transcript-list",
+        "header-tabs",
+        "workspace-sidebar",
+      ]);
+      finishMeasurementOperation(measurementOperationId, "completed");
+    }
   }, [
     activateSession,
     ensureSessionStreamConnected,

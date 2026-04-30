@@ -1,5 +1,17 @@
-export { AnyHarnessClient, AnyHarnessError } from "./client/core.js";
-export type { AnyHarnessClientOptions, AnyHarnessRequestOptions } from "./client/core.js";
+export {
+  AnyHarnessClient,
+  AnyHarnessError,
+  hashTimingScope,
+  setAnyHarnessTimingObserver,
+} from "./client/core.js";
+export type {
+  AnyHarnessClientOptions,
+  AnyHarnessRequestOptions,
+  AnyHarnessTimingCategory,
+  AnyHarnessTimingEvent,
+  AnyHarnessTimingObserver,
+  AnyHarnessTimingScope,
+} from "./client/core.js";
 
 export type {
   HealthResponse,

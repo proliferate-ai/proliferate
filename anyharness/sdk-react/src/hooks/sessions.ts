@@ -16,6 +16,10 @@ import {
 import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import {
+  type AnyHarnessQueryTimingOptions,
+  useReportAnyHarnessCacheDecision,
+} from "../lib/timing-options.js";
+import {
   anyHarnessSessionEventsKey,
   anyHarnessSessionKey,
   anyHarnessSessionLiveConfigKey,
@@ -28,23 +32,36 @@ interface WorkspaceQueryOptions {
   enabled?: boolean;
 }
 
+type TimedWorkspaceQueryOptions = WorkspaceQueryOptions & AnyHarnessQueryTimingOptions;
+
 function useWorkspaceRuntimeUrl() {
   const runtime = useAnyHarnessRuntimeContext();
   return runtime.runtimeUrl?.trim() ?? "";
 }
 
-export function useWorkspaceSessionsQuery(options?: WorkspaceQueryOptions) {
+export function useWorkspaceSessionsQuery(options?: TimedWorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+  const enabled = (options?.enabled ?? true) && !!workspaceId;
+  const queryKey = anyHarnessSessionsKey(runtimeUrl, workspaceId);
+  useReportAnyHarnessCacheDecision({
+    category: "session.list",
+    enabled,
+    queryKey,
+    onCacheDecision: options?.onCacheDecision,
+  });
 
   return useQuery({
-    queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId),
-    enabled: (options?.enabled ?? true) && !!workspaceId,
+    queryKey,
+    enabled,
     queryFn: async () => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.sessions.list(resolved.connection.anyharnessWorkspaceId);
+      return client.sessions.list(
+        resolved.connection.anyharnessWorkspaceId,
+        options?.requestOptions,
+      );
     },
   });
 }
@@ -89,20 +106,36 @@ export function useSessionLiveConfigQuery(
 
 export function useSessionEventsQuery(
   sessionId: string | null | undefined,
-  options?: WorkspaceQueryOptions & { request?: ListSessionEventsOptions },
+  options?: TimedWorkspaceQueryOptions & { request?: ListSessionEventsOptions },
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const afterSeq = options?.request?.afterSeq;
+  const enabled = (options?.enabled ?? true) && !!workspaceId && !!sessionId;
+  const queryKey = anyHarnessSessionEventsKey(runtimeUrl, workspaceId, sessionId, afterSeq);
+  useReportAnyHarnessCacheDecision({
+    category: "session.events.list",
+    enabled,
+    queryKey,
+    onCacheDecision: options?.onCacheDecision,
+  });
 
   return useQuery({
-    queryKey: anyHarnessSessionEventsKey(runtimeUrl, workspaceId, sessionId, afterSeq),
-    enabled: (options?.enabled ?? true) && !!workspaceId && !!sessionId,
+    queryKey,
+    enabled,
     queryFn: async () => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.sessions.listEvents(sessionId!, options?.request);
+      return client.sessions.listEvents(
+        sessionId!,
+        options?.request || options?.requestOptions
+          ? {
+            ...options?.request,
+            request: options?.requestOptions,
+          }
+          : undefined,
+      );
     },
   });
 }

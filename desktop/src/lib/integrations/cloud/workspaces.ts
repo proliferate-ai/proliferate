@@ -1,4 +1,8 @@
 import { getProliferateClient } from "./client";
+import {
+  measureCloudRequest,
+  type CloudMeasurementOptions,
+} from "./timing";
 import type {
   CloudConnectionInfo,
   CloudWorkspaceDetail,
@@ -53,8 +57,15 @@ function normalizeCloudWorkspace<T extends CloudWorkspaceTransport>(
   };
 }
 
-export async function listCloudWorkspaces(): Promise<CloudWorkspaceSummary[]> {
-  const data = (await getProliferateClient().GET("/v1/cloud/workspaces")).data!;
+export async function listCloudWorkspaces(
+  options?: CloudMeasurementOptions,
+): Promise<CloudWorkspaceSummary[]> {
+  const data = await measureCloudRequest({
+    operationId: options?.measurementOperationId,
+    category: "cloud.workspace.list",
+    method: "GET",
+    run: async () => (await getProliferateClient().GET("/v1/cloud/workspaces")).data!,
+  });
   return data.map((workspace) => normalizeCloudWorkspace(workspace) as CloudWorkspaceSummary);
 }
 
@@ -112,13 +123,19 @@ export async function updateCloudWorkspaceBranch(
 export async function updateCloudWorkspaceDisplayName(
   workspaceId: string,
   displayName: string | null,
+  options?: CloudMeasurementOptions,
 ): Promise<CloudWorkspaceDetail> {
-  const data = (
-    await getProliferateClient().PATCH("/v1/cloud/workspaces/{workspace_id}/display-name", {
-      params: { path: { workspace_id: workspaceId } },
-      body: { displayName },
-    })
-  ).data!;
+  const data = await measureCloudRequest({
+    operationId: options?.measurementOperationId,
+    category: "cloud.workspace.display_name.update",
+    method: "PATCH",
+    run: async () => (
+      await getProliferateClient().PATCH("/v1/cloud/workspaces/{workspace_id}/display-name", {
+        params: { path: { workspace_id: workspaceId } },
+        body: { displayName },
+      })
+    ).data!,
+  });
   return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
 }
 

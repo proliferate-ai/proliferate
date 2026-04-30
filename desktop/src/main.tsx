@@ -11,6 +11,7 @@ import {
   initializeDesktopTelemetry,
 } from "./lib/integrations/telemetry/client";
 import { elapsedStartupMs, startStartupTimer } from "./lib/infra/debug-startup";
+import { installDebugMeasurement } from "./lib/infra/debug-measurement-install";
 import { logRendererEvent } from "./platform/tauri/diagnostics";
 import { AppProviders } from "./providers/AppProviders";
 import "./index.css";
@@ -20,6 +21,7 @@ const IS_TAURI_DESKTOP =
   && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>);
 
 const rendererStartupStartedAt = startStartupTimer();
+installDebugMeasurement();
 
 function recordRendererStartupEvent(message: string): void {
   void logRendererEvent({

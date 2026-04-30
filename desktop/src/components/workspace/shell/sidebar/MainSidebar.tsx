@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { SupportDialog } from "@/components/support/SupportDialog";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { SidebarFooter } from "./SidebarFooter";
 import { SidebarRowSurface } from "./SidebarRowSurface";
 import { SidebarActionButton } from "./SidebarActionButton";
@@ -40,6 +41,7 @@ import { APP_ROUTES } from "@/config/app-routes";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
+import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useSidebarSupportContext } from "@/hooks/support/use-sidebar-support-context";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -52,6 +54,7 @@ import { RepoSetupModal } from "@/components/workspace/repo-setup/RepoSetupModal
 import {
   buildCloudRepoSettingsHref,
 } from "@/lib/domain/settings/navigation";
+import { startMeasurementOperation } from "@/lib/infra/debug-measurement";
 
 const SIDEBAR_WORKSPACE_TYPE_OPTIONS: Array<{
   label: string;
@@ -79,6 +82,7 @@ function removeRepoKeys(current: Set<string>, keys: Iterable<string>): Set<strin
 }
 
 export function MainSidebar() {
+  useDebugRenderCount("workspace-sidebar");
   useSessionActivityReconciler();
   const actions = useWorkspaceSidebarActions();
   const supportContext = useSidebarSupportContext();
@@ -128,6 +132,15 @@ export function MainSidebar() {
       updateWorkspaceDisplayName({ workspaceId, displayName }),
     [updateWorkspaceDisplayName],
   );
+  const handleWorkspaceHover = useCallback(() => {
+    startMeasurementOperation({
+      kind: "hover_sample",
+      sampleKey: "sidebar_workspace_row",
+      surfaces: ["sidebar-workspace-row", "workspace-sidebar"],
+      maxDurationMs: 750,
+      cooldownMs: 2000,
+    });
+  }, []);
   const repoSetupModal = useRepoSetupModalStore((s) => s.modal);
   const closeRepoSetupModal = useRepoSetupModalStore((s) => s.close);
   const configuredCloudRepoKeys = useMemo(
@@ -227,7 +240,8 @@ export function MainSidebar() {
   const filtersActive = showArchived || !isDefaultSidebarWorkspaceTypes(workspaceTypes);
 
   return (
-    <div className="h-full bg-sidebar select-none flex flex-col gap-2 pb-2">
+    <DebugProfiler id="workspace-sidebar">
+      <div className="h-full bg-sidebar select-none flex flex-col gap-2 pb-2">
       <SupportDialog
         open={supportOpen}
         onClose={() => setSupportOpen(false)}
@@ -388,6 +402,7 @@ export function MainSidebar() {
               onOpenCloudRepoSettings={handleOpenCloudRepoSettings}
               onSelectWorkspace={actions.handleSelectWorkspace}
               onIndicatorAction={actions.handleSidebarIndicatorAction}
+              onWorkspaceHover={handleWorkspaceHover}
               onArchiveWorkspace={archiveWorkspace}
               onUnarchiveWorkspace={unarchiveWorkspace}
               onRenameWorkspace={handleRenameWorkspace}
@@ -408,6 +423,7 @@ export function MainSidebar() {
           onClose={closeRepoSetupModal}
         />
       )}
-    </div>
+      </div>
+    </DebugProfiler>
   );
 }

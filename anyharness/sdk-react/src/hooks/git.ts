@@ -12,6 +12,10 @@ import {
 import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import {
+  type AnyHarnessQueryTimingOptions,
+  useReportAnyHarnessCacheDecision,
+} from "../lib/timing-options.js";
+import {
   anyHarnessGitBranchesKey,
   anyHarnessGitBranchDiffFilesKey,
   anyHarnessGitDiffKey,
@@ -26,6 +30,8 @@ interface WorkspaceQueryOptions {
   refetchInterval?: number | false;
   refetchIntervalInBackground?: boolean;
 }
+
+type TimedWorkspaceQueryOptions = WorkspaceQueryOptions & AnyHarnessQueryTimingOptions;
 
 function useWorkspaceRuntimeUrl() {
   const runtime = useAnyHarnessRuntimeContext();
@@ -53,20 +59,31 @@ async function invalidateWorkspaceGit(
   ]);
 }
 
-export function useGitStatusQuery(options?: WorkspaceQueryOptions) {
+export function useGitStatusQuery(options?: TimedWorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+  const enabled = (options?.enabled ?? true) && !!workspaceId;
+  const queryKey = anyHarnessGitStatusKey(runtimeUrl, workspaceId);
+  useReportAnyHarnessCacheDecision({
+    category: "git.status",
+    enabled,
+    queryKey,
+    onCacheDecision: options?.onCacheDecision,
+  });
 
   return useQuery({
-    queryKey: anyHarnessGitStatusKey(runtimeUrl, workspaceId),
-    enabled: (options?.enabled ?? true) && !!workspaceId,
+    queryKey,
+    enabled,
     refetchInterval: options?.refetchInterval,
     refetchIntervalInBackground: options?.refetchIntervalInBackground,
     queryFn: async () => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.git.getStatus(resolved.connection.anyharnessWorkspaceId);
+      return client.git.getStatus(
+        resolved.connection.anyharnessWorkspaceId,
+        options?.requestOptions,
+      );
     },
   });
 }

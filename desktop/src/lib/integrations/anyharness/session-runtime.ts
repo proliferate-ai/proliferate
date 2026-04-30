@@ -24,6 +24,12 @@ import {
   logLatency,
 } from "@/lib/infra/debug-latency";
 import {
+  getMeasurementRequestOptions,
+  recordMeasurementWorkflowStep,
+  type MeasurementOperationId,
+  type MeasurementWorkflowStep,
+} from "@/lib/infra/debug-measurement";
+import {
   resolveRuntimeTargetForWorkspace,
   type RuntimeTarget,
 } from "@/lib/integrations/anyharness/runtime-target";
@@ -44,10 +50,37 @@ interface SessionStreamCallbacks {
   onEvent: (envelope: SessionEventEnvelope) => void;
   onError: () => void;
   onClose: () => void;
+  measurementOperationId?: MeasurementOperationId | null;
 }
 
 function buildConnection(baseUrl: string, authToken?: string): AnyHarnessClientConnection {
   return { runtimeUrl: baseUrl, authToken };
+}
+
+async function measureSessionWorkflowStep<T>(
+  operationId: MeasurementOperationId | null | undefined,
+  step: MeasurementWorkflowStep,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const startedAt = performance.now();
+  try {
+    const result = await fn();
+    recordMeasurementWorkflowStep({
+      operationId,
+      step,
+      startedAt,
+      outcome: "completed",
+    });
+    return result;
+  } catch (error) {
+    recordMeasurementWorkflowStep({
+      operationId,
+      step,
+      startedAt,
+      outcome: "error_sanitized",
+    });
+    throw error;
+  }
 }
 
 export function logDevSSEEvent(
@@ -261,19 +294,27 @@ export async function fetchSessionHistory(
   options?: {
     afterSeq?: number;
     requestHeaders?: HeadersInit;
+    measurementOperationId?: MeasurementOperationId | null;
   },
 ) {
-  const { connection } = await getSessionClientAndWorkspace(sessionId);
+  const { connection } = await measureSessionWorkflowStep(
+    options?.measurementOperationId,
+    "session.history.resolve_target",
+    () => getSessionClientAndWorkspace(sessionId),
+  );
   const client = getAnyHarnessClient(connection);
+  const request = getMeasurementRequestOptions({
+    operationId: options?.measurementOperationId,
+    category: "session.events.list",
+    headers: options?.requestHeaders,
+  });
 
   return client.sessions.listEvents(
     sessionId,
-    options?.afterSeq != null || options?.requestHeaders
+    options?.afterSeq != null || request
       ? {
         ...(options?.afterSeq != null ? { afterSeq: options.afterSeq } : {}),
-        ...(options?.requestHeaders
-          ? { request: { headers: options.requestHeaders } }
-          : {}),
+        ...(request ? { request } : {}),
       }
       : undefined,
   );
@@ -281,12 +322,23 @@ export async function fetchSessionHistory(
 
 export async function fetchSessionSummary(
   sessionId: string,
-  options?: { requestHeaders?: HeadersInit },
+  options?: {
+    requestHeaders?: HeadersInit;
+    measurementOperationId?: MeasurementOperationId | null;
+  },
 ) {
-  const { connection } = await getSessionClientAndWorkspace(sessionId);
+  const { connection } = await measureSessionWorkflowStep(
+    options?.measurementOperationId,
+    "session.summary.resolve_target",
+    () => getSessionClientAndWorkspace(sessionId),
+  );
   return getAnyHarnessClient(connection).sessions.get(
     sessionId,
-    options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
+    getMeasurementRequestOptions({
+      operationId: options?.measurementOperationId,
+      category: "session.get",
+      headers: options?.requestHeaders,
+    }),
   );
 }
 
@@ -295,27 +347,53 @@ export async function resumeSession(
   options?: {
     pluginsInCodingSessionsEnabled: boolean;
     requestHeaders?: HeadersInit;
+    measurementOperationId?: MeasurementOperationId | null;
   },
 ) {
-  const { connection, target } = await getSessionClientAndWorkspace(sessionId);
+  const measurementOperationId = options?.measurementOperationId;
+  const { connection, target } = await measureSessionWorkflowStep(
+    measurementOperationId,
+    "session.resume.resolve_target",
+    () => getSessionClientAndWorkspace(sessionId),
+  );
   const client = getAnyHarnessClient(connection);
-  const workspace = await client.workspaces.get(
-    target.anyharnessWorkspaceId,
-    options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
+  const workspace = await measureSessionWorkflowStep(
+    measurementOperationId,
+    "session.resume.workspace_get",
+    () => client.workspaces.get(
+      target.anyharnessWorkspaceId,
+      getMeasurementRequestOptions({
+        operationId: measurementOperationId,
+        category: "workspace.get",
+        headers: options?.requestHeaders,
+      }),
+    ),
   );
   const isCowork = workspace.surface === "cowork";
   const shouldResolveLaunchMcp = isCowork || options?.pluginsInCodingSessionsEnabled === true;
   const { mcpServers, mcpBindingSummaries } = shouldResolveLaunchMcp
-    ? await resolveSessionMcpServersForLaunch({
-      targetLocation: target.location,
-      workspacePath: workspace.path ?? null,
-      policy: {
-        workspaceSurface: isCowork ? "cowork" : "coding",
-        lifecycle: "resume",
-        enabled: shouldResolveLaunchMcp,
-      },
-    })
+    ? await measureSessionWorkflowStep(
+      measurementOperationId,
+      "session.resume.resolve_mcp",
+      () => resolveSessionMcpServersForLaunch({
+        targetLocation: target.location,
+        workspacePath: workspace.path ?? null,
+        policy: {
+          workspaceSurface: isCowork ? "cowork" : "coding",
+          lifecycle: "resume",
+          enabled: shouldResolveLaunchMcp,
+        },
+      }),
+    )
     : { mcpServers: [], mcpBindingSummaries: [] };
+  if (!shouldResolveLaunchMcp) {
+    recordMeasurementWorkflowStep({
+      operationId: measurementOperationId,
+      step: "session.resume.resolve_mcp",
+      startedAt: performance.now(),
+      outcome: "skipped",
+    });
+  }
   return client.sessions.resume(
     sessionId,
     {
@@ -324,7 +402,11 @@ export async function resumeSession(
         ? mcpBindingSummaries
         : undefined,
     },
-    options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
+    getMeasurementRequestOptions({
+      operationId: measurementOperationId,
+      category: "session.resume",
+      headers: options?.requestHeaders,
+    }),
   );
 }
 
@@ -399,7 +481,11 @@ export async function openSessionStream(
     requestHeaders?: HeadersInit;
   } & SessionStreamCallbacks,
 ): Promise<SessionStreamHandle> {
-  const { connection } = await getSessionClientAndWorkspace(sessionId);
+  const { connection } = await measureSessionWorkflowStep(
+    options.measurementOperationId,
+    "session.stream.resolve_target",
+    () => getSessionClientAndWorkspace(sessionId),
+  );
 
   const handle = streamSession({
     baseUrl: connection.runtimeUrl,
@@ -407,6 +493,12 @@ export async function openSessionStream(
     headers: options.requestHeaders,
     sessionId,
     afterSeq: options.afterSeq ?? 0,
+    timing: options.measurementOperationId
+      ? {
+        category: "session.stream",
+        measurementOperationId: options.measurementOperationId,
+      }
+      : undefined,
     onOpen: options.onOpen,
     onEvent: options.onEvent,
     onError: options.onError,

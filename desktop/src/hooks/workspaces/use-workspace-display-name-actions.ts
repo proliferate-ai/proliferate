@@ -10,6 +10,12 @@ import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces"
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import { workspaceCollectionsScopeKey } from "./query-keys";
+import {
+  finishMeasurementOperation,
+  getMeasurementRequestOptions,
+  recordMeasurementMetric,
+  startMeasurementOperation,
+} from "@/lib/infra/debug-measurement";
 
 interface UpdateWorkspaceDisplayNameInput {
   /** Logical workspace id. */
@@ -26,6 +32,11 @@ export function useWorkspaceDisplayNameActions() {
       telemetryHandled: true,
     },
     mutationFn: async ({ workspaceId, displayName }) => {
+      const operationId = startMeasurementOperation({
+        kind: "workspace_rename",
+        surfaces: ["workspace-sidebar", "global-header", "header-tabs"],
+        maxDurationMs: 10_000,
+      });
       const logicalWorkspace = findLogicalWorkspace(logicalWorkspaces, workspaceId);
       if (!logicalWorkspace) {
         throw new Error("Workspace not found.");
@@ -36,7 +47,14 @@ export function useWorkspaceDisplayNameActions() {
         // refetch below picks up the new display name from the next list
         // call. We don't optimistically prime because the cloud collection
         // is a separate slice with its own shape.
-        await updateCloudWorkspaceDisplayName(logicalWorkspace.cloudWorkspace.id, displayName);
+        await updateCloudWorkspaceDisplayName(
+          logicalWorkspace.cloudWorkspace.id,
+          displayName,
+          operationId ? { measurementOperationId: operationId } : undefined,
+        );
+        if (operationId) {
+          finishMeasurementOperation(operationId, "completed");
+        }
         return;
       }
 
@@ -50,11 +68,25 @@ export function useWorkspaceDisplayNameActions() {
       const workspace = await getAnyHarnessClient({ runtimeUrl }).workspaces.updateDisplayName(
         logicalWorkspace.localWorkspace.id,
         { displayName },
+        getMeasurementRequestOptions({
+          operationId,
+          category: "workspace.display_name.update",
+        }),
       );
+      const storeStartedAt = performance.now();
       queryClient.setQueriesData<WorkspaceCollections | undefined>(
         { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
         (collections) => upsertLocalWorkspaceCollections(collections, workspace),
       );
+      if (operationId) {
+        recordMeasurementMetric({
+          type: "store",
+          category: "workspace.display_name.update",
+          operationId,
+          durationMs: performance.now() - storeStartedAt,
+        });
+        finishMeasurementOperation(operationId, "completed");
+      }
     },
     onSuccess: () => {
       const runtimeUrl = useHarnessStore.getState().runtimeUrl;

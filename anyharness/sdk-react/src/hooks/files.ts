@@ -12,6 +12,10 @@ import {
 import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import {
+  type AnyHarnessQueryTimingOptions,
+  useReportAnyHarnessCacheDecision,
+} from "../lib/timing-options.js";
+import {
   anyHarnessWorkspaceFileKey,
   anyHarnessWorkspaceFileSearchKey,
   anyHarnessWorkspaceFileSearchScopeKey,
@@ -28,19 +32,31 @@ export function useWorkspaceFilesQuery(options: {
   workspaceId?: string | null;
   path?: string;
   enabled?: boolean;
-}) {
+} & AnyHarnessQueryTimingOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
   const path = options.path ?? "";
+  const enabled = (options.enabled ?? true) && !!workspaceId;
+  const queryKey = anyHarnessWorkspaceFileTreeKey(runtimeUrl, workspaceId, path);
+  useReportAnyHarnessCacheDecision({
+    category: "file.list",
+    enabled,
+    queryKey,
+    onCacheDecision: options.onCacheDecision,
+  });
 
   return useQuery({
-    queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, workspaceId, path),
-    enabled: (options.enabled ?? true) && !!workspaceId,
+    queryKey,
+    enabled,
     queryFn: async () => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.files.list(resolved.connection.anyharnessWorkspaceId, path);
+      return client.files.list(
+        resolved.connection.anyharnessWorkspaceId,
+        path,
+        options.requestOptions,
+      );
     },
   });
 }
@@ -49,18 +65,30 @@ export function useReadWorkspaceFileQuery(options: {
   workspaceId?: string | null;
   path: string | null;
   enabled?: boolean;
-}) {
+} & AnyHarnessQueryTimingOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
+  const enabled = (options.enabled ?? true) && !!workspaceId && !!options.path;
+  const queryKey = anyHarnessWorkspaceFileKey(runtimeUrl, workspaceId, options.path);
+  useReportAnyHarnessCacheDecision({
+    category: "file.read",
+    enabled,
+    queryKey,
+    onCacheDecision: options.onCacheDecision,
+  });
 
   return useQuery({
-    queryKey: anyHarnessWorkspaceFileKey(runtimeUrl, workspaceId, options.path),
-    enabled: (options.enabled ?? true) && !!workspaceId && !!options.path,
+    queryKey,
+    enabled,
     queryFn: async () => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.files.read(resolved.connection.anyharnessWorkspaceId, options.path!);
+      return client.files.read(
+        resolved.connection.anyharnessWorkspaceId,
+        options.path!,
+        options.requestOptions,
+      );
     },
   });
 }
@@ -70,22 +98,35 @@ export function useSearchWorkspaceFilesQuery(options: {
   query?: string;
   limit?: number;
   enabled?: boolean;
-}) {
+} & AnyHarnessQueryTimingOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
   const query = options.query ?? "";
   const limit = options.limit ?? 50;
+  const enabled = (options.enabled ?? true) && !!workspaceId;
+  const queryKey = anyHarnessWorkspaceFileSearchKey(runtimeUrl, workspaceId, query, limit);
+  useReportAnyHarnessCacheDecision({
+    category: "file.search",
+    enabled,
+    queryKey,
+    onCacheDecision: options.onCacheDecision,
+  });
 
   return useQuery({
-    queryKey: anyHarnessWorkspaceFileSearchKey(runtimeUrl, workspaceId, query, limit),
+    queryKey,
     placeholderData: keepPreviousData,
     staleTime: 30_000,
-    enabled: (options.enabled ?? true) && !!workspaceId,
+    enabled,
     queryFn: async () => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.files.search(resolved.connection.anyharnessWorkspaceId, query, limit);
+      return client.files.search(
+        resolved.connection.anyharnessWorkspaceId,
+        query,
+        limit,
+        options.requestOptions,
+      );
     },
   });
 }
@@ -94,18 +135,30 @@ export function useStatWorkspaceFileQuery(options: {
   workspaceId?: string | null;
   path: string | null;
   enabled?: boolean;
-}) {
+} & AnyHarnessQueryTimingOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
+  const enabled = (options.enabled ?? true) && !!workspaceId && !!options.path;
+  const queryKey = anyHarnessWorkspaceFileStatKey(runtimeUrl, workspaceId, options.path);
+  useReportAnyHarnessCacheDecision({
+    category: "file.stat",
+    enabled,
+    queryKey,
+    onCacheDecision: options.onCacheDecision,
+  });
 
   return useQuery({
-    queryKey: anyHarnessWorkspaceFileStatKey(runtimeUrl, workspaceId, options.path),
-    enabled: (options.enabled ?? true) && !!workspaceId && !!options.path,
+    queryKey,
+    enabled,
     queryFn: async () => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
-      return client.files.stat(resolved.connection.anyharnessWorkspaceId, options.path!);
+      return client.files.stat(
+        resolved.connection.anyharnessWorkspaceId,
+        options.path!,
+        options.requestOptions,
+      );
     },
   });
 }

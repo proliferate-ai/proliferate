@@ -1,5 +1,7 @@
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
+import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { MessageList } from "@/components/workspace/chat/transcript/MessageList";
 import { ConnectedPlanHandoffDialog } from "@/components/workspace/chat/plans/ConnectedPlanHandoffDialog";
 import { usePlanHandoffDialogState } from "@/hooks/plans/use-plan-handoff-dialog-state";
@@ -10,6 +12,7 @@ interface SessionTranscriptPaneProps {
 }
 
 export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPaneProps) {
+  useDebugRenderCount("session-transcript-pane");
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const handoff = usePlanHandoffDialogState();
   const { selectSession } = useSessionSelectionActions();
@@ -25,7 +28,7 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
   }
 
   return (
-    <>
+    <DebugProfiler id="session-transcript-pane">
       <MessageList
         activeSessionId={activeSessionId}
         selectedWorkspaceId={selectedWorkspaceId}
@@ -42,6 +45,6 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
           onClose={handoff.close}
         />
       )}
-    </>
+    </DebugProfiler>
   );
 }
