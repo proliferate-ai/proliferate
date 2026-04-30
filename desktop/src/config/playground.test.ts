@@ -52,6 +52,14 @@ const CLOUD_COMPOSER_SCENARIOS: ScenarioKey[] = [
   "cloud-reconnect-error",
 ];
 
+const QUEUE_COMPOSER_SCENARIOS: ScenarioKey[] = [
+  "pending-prompts-single",
+  "pending-prompts-multi",
+  "pending-prompts-editing",
+  "pending-prompts-with-approval",
+  "subagents-queued-wake",
+];
+
 describe("playground scenarios", () => {
   it("includes user-input card scenarios for visual iteration", () => {
     expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(USER_INPUT_SCENARIOS));
@@ -74,6 +82,14 @@ describe("playground scenarios", () => {
     for (const scenario of CLOUD_COMPOSER_SCENARIOS) {
       expect(isValidElement(renderTopSlot(scenario))).toBe(true);
     }
+  });
+
+  it("renders queued prompt scenarios through the queue slot", () => {
+    for (const scenario of QUEUE_COMPOSER_SCENARIOS) {
+      expect(isValidElement(renderQueueSlot(scenario))).toBe(true);
+    }
+    expect(renderTopSlot("pending-prompts-single")).toBeNull();
+    expect(isValidElement(renderTopSlot("pending-prompts-with-approval"))).toBe(true);
   });
 
   it("renders mobility overlay playground scenarios through the production view", () => {

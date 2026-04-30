@@ -88,7 +88,7 @@ import { SubagentLaunchLedger } from "@/components/workspace/chat/transcript/Sub
 import { UserMessageProvenanceChrome } from "@/components/workspace/chat/transcript/UserMessageProvenanceChrome";
 import {
   turnHasAssistantRenderableTranscriptContent,
-  resolveVisibleTranscriptPendingPrompt,
+  resolveVisibleOptimisticPrompt,
   shouldShowPendingPromptActivity,
 } from "@/lib/domain/chat/pending-prompts";
 import {
@@ -168,18 +168,20 @@ export function MessageList({
     latestTurn,
     transcript,
   );
-  const visiblePendingPrompt = resolveVisibleTranscriptPendingPrompt({
-    pendingPrompts: transcript.pendingPrompts,
+  const visibleOptimisticPrompt = resolveVisibleOptimisticPrompt({
     optimisticPrompt,
     latestTurnStartedAt: latestTurn?.startedAt ?? null,
     latestTurnHasAssistantRenderableContent,
   });
-  const pendingPromptTrailingStatus = visiblePendingPrompt
-    && shouldShowPendingPromptActivity({ optimisticPrompt, sessionViewState })
-    ? resolvePendingPromptTrailingStatus(
-      visiblePendingPrompt.queuedAt,
+  const optimisticPromptTrailingStatus = visibleOptimisticPrompt
+    && shouldShowPendingPromptActivity({
+      optimisticPrompt: visibleOptimisticPrompt,
       sessionViewState,
-      optimisticPrompt !== null,
+    })
+    ? resolvePendingPromptTrailingStatus(
+      visibleOptimisticPrompt.queuedAt,
+      sessionViewState,
+      true,
     )
     : null;
   const visibleTurnIds = transcript.turnOrder.filter((turnId) => {
@@ -189,7 +191,7 @@ export function MessageList({
     const isLatestTurn = turnId === latestTurnId;
     const isLatestTurnInProgress = isLatestTurn && !turn.completedAt;
     return !(
-      visiblePendingPrompt !== null
+      visibleOptimisticPrompt !== null
       && isLatestTurnInProgress
       && !latestTurnHasAssistantRenderableContent
     );
@@ -262,7 +264,7 @@ export function MessageList({
       : null;
   const { scrollRef, contentRef } = useMessageListScroll({
     totalItems,
-    pendingPromptText: visiblePendingPrompt?.text ?? null,
+    pendingPromptText: visibleOptimisticPrompt?.text ?? null,
     isSessionBusy: sessionViewState === "working" || sessionViewState === "needs_input",
     selectedWorkspaceId,
     activeSessionId,
@@ -352,26 +354,26 @@ export function MessageList({
                   </TurnShell>
                 );
               })}
-              {visiblePendingPrompt && (
+              {visibleOptimisticPrompt && (
                 <TurnShell key="pending-prompt" isFirst={visibleTurnIds.length === 0}>
                   <div className="flex flex-col gap-2">
-                    {isSubagentWakeProvenance(visiblePendingPrompt.promptProvenance) ? (
+                    {isSubagentWakeProvenance(visibleOptimisticPrompt.promptProvenance) ? (
                       <div className="flex justify-end">
                         <SubagentWakeBadge
-                          label={visiblePendingPrompt.promptProvenance.label ?? null}
-                          color={resolveSubagentColor(visiblePendingPrompt.promptProvenance.sessionLinkId)}
+                          label={visibleOptimisticPrompt.promptProvenance.label ?? null}
+                          color={resolveSubagentColor(visibleOptimisticPrompt.promptProvenance.sessionLinkId)}
                         />
                       </div>
                     ) : (
                       <UserMessage
                         sessionId={activeSessionId}
-                        content={visiblePendingPrompt.text}
-                        contentParts={visiblePendingPrompt.contentParts}
+                        content={visibleOptimisticPrompt.text}
+                        contentParts={visibleOptimisticPrompt.contentParts}
                         showCopyButton
                       />
                     )}
-                    {pendingPromptTrailingStatus && (
-                      <div className={TRAILING_STATUS_MIN_HEIGHT}>{pendingPromptTrailingStatus}</div>
+                    {optimisticPromptTrailingStatus && (
+                      <div className={TRAILING_STATUS_MIN_HEIGHT}>{optimisticPromptTrailingStatus}</div>
                     )}
                   </div>
                 </TurnShell>

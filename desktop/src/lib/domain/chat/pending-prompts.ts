@@ -1,6 +1,7 @@
 import type {
   ContentPart,
   PendingPromptEntry,
+  PromptSessionStatus,
   SessionEvent,
   TranscriptItem,
   TranscriptState,
@@ -26,34 +27,19 @@ export function createOptimisticPendingPrompt(
 
 export function hasVisibleTranscriptContent(args: {
   transcript: TranscriptState;
-  pendingPrompts: readonly PendingPromptEntry[];
   optimisticPrompt: PendingPromptEntry | null;
 }): boolean {
   return args.transcript.turnOrder.some((turnId) =>
     turnHasRenderableTranscriptContent(args.transcript.turnsById[turnId], args.transcript)
   )
-    || args.pendingPrompts.length > 0
     || args.optimisticPrompt !== null;
 }
 
-export function resolveVisibleTranscriptPendingPrompt(args: {
-  pendingPrompts: readonly PendingPromptEntry[];
+export function resolveVisibleOptimisticPrompt(args: {
   optimisticPrompt: PendingPromptEntry | null;
   latestTurnStartedAt: string | null;
   latestTurnHasAssistantRenderableContent: boolean;
 }): PendingPromptEntry | null {
-  const latestPendingPrompt = args.pendingPrompts[args.pendingPrompts.length - 1] ?? null;
-  if (
-    latestPendingPrompt
-    && !isPromptSupersededByTurn(
-      latestPendingPrompt,
-      args.latestTurnStartedAt,
-      args.latestTurnHasAssistantRenderableContent,
-    )
-  ) {
-    return latestPendingPrompt;
-  }
-
   if (
     args.optimisticPrompt
     && !isPromptSupersededByTurn(
@@ -66,6 +52,12 @@ export function resolveVisibleTranscriptPendingPrompt(args: {
   }
 
   return null;
+}
+
+export function shouldClearOptimisticPromptAfterPromptResponse(
+  status: PromptSessionStatus,
+): boolean {
+  return status === "queued";
 }
 
 export function shouldShowPendingPromptActivity(args: {

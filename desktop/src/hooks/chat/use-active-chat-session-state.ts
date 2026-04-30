@@ -74,7 +74,6 @@ export function useActiveChatSessionState() {
   ), [transcript]);
   const hasContent = hasVisibleTranscriptContent({
     transcript,
-    pendingPrompts,
     optimisticPrompt,
   });
   const sessionViewState = resolveSessionViewState(activeSlot);

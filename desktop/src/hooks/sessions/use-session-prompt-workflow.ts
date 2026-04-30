@@ -1,7 +1,10 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { createOptimisticPendingPrompt } from "@/lib/domain/chat/pending-prompts";
+import {
+  createOptimisticPendingPrompt,
+  shouldClearOptimisticPromptAfterPromptResponse,
+} from "@/lib/domain/chat/pending-prompts";
 import { getSessionClientAndWorkspace, isPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
 import {
   finishLatencyFlow,
@@ -82,6 +85,11 @@ export function useSessionPromptWorkflow() {
 
       applySessionSummary(sessionId, response.session, promptWorkspaceId);
       upsertWorkspaceSessionRecord(promptWorkspaceId, response.session);
+      if (shouldClearOptimisticPromptAfterPromptResponse(response.status)) {
+        useHarnessStore.getState().patchSessionSlot(sessionId, {
+          optimisticPrompt: null,
+        });
+      }
 
       if (shouldGenerateTitle) {
         void maybeGenerateSessionTitle({

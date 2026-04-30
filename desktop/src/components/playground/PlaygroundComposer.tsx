@@ -152,53 +152,19 @@ export function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
       );
     case "claude-plan-short":
     case "claude-plan-long":
-      return null;
     case "pending-prompts-single":
-      return (
-        <PendingPromptList
-          sessionId={null}
-          entries={PENDING_PROMPTS_SINGLE}
-          onBeginEdit={noop}
-          onDelete={noop}
-        />
-      );
     case "pending-prompts-multi":
-      return (
-        <PendingPromptList
-          sessionId={null}
-          entries={PENDING_PROMPTS_MULTI}
-          onBeginEdit={noop}
-          onDelete={noop}
-        />
-      );
     case "pending-prompts-editing":
-      return (
-        <PendingPromptList
-          sessionId={null}
-          entries={PENDING_PROMPTS_WITH_EDITING}
-          onBeginEdit={noop}
-          onDelete={noop}
-        />
-      );
+      return null;
     case "pending-prompts-with-approval":
       return (
-        <>
-          <div className="mx-8 flex flex-col">
-            <ApprovalCard
-              title="wc -l /Users/pablo/proliferate/server/proliferate/**/*.py | tail -1"
-              actions={EXECUTE_OPTIONS}
-              onSelectOption={noop}
-              onAllow={noop}
-              onDeny={noop}
-            />
-          </div>
-          <PendingPromptList
-            sessionId={null}
-            entries={PENDING_PROMPTS_SINGLE}
-            onBeginEdit={noop}
-            onDelete={noop}
-          />
-        </>
+        <ApprovalCard
+          title="wc -l /Users/pablo/proliferate/server/proliferate/**/*.py | tail -1"
+          actions={EXECUTE_OPTIONS}
+          onSelectOption={noop}
+          onAllow={noop}
+          onDeny={noop}
+        />
       );
     case "workspace-arrival-created":
       return (
@@ -443,18 +409,47 @@ function buildPlaygroundSubagentSummary(
 }
 
 export function renderQueueSlot(scenario: ScenarioKey): ReactNode | null {
-  if (scenario !== "subagents-queued-wake") {
-    return null;
+  switch (scenario) {
+    case "pending-prompts-single":
+    case "pending-prompts-with-approval":
+      return (
+        <PendingPromptList
+          sessionId={null}
+          entries={PENDING_PROMPTS_SINGLE}
+          onBeginEdit={noop}
+          onDelete={noop}
+        />
+      );
+    case "pending-prompts-multi":
+      return (
+        <PendingPromptList
+          sessionId={null}
+          entries={PENDING_PROMPTS_MULTI}
+          onBeginEdit={noop}
+          onDelete={noop}
+        />
+      );
+    case "pending-prompts-editing":
+      return (
+        <PendingPromptList
+          sessionId={null}
+          entries={PENDING_PROMPTS_WITH_EDITING}
+          onBeginEdit={noop}
+          onDelete={noop}
+        />
+      );
+    case "subagents-queued-wake":
+      return (
+        <PendingPromptList
+          sessionId={null}
+          entries={PLAYGROUND_SUBAGENT_WAKE_QUEUE}
+          onBeginEdit={noop}
+          onDelete={noop}
+        />
+      );
+    default:
+      return null;
   }
-
-  return (
-    <PendingPromptList
-      sessionId={null}
-      entries={PLAYGROUND_SUBAGENT_WAKE_QUEUE}
-      onBeginEdit={noop}
-      onDelete={noop}
-    />
-  );
 }
 
 function PlaygroundComposerSurface() {

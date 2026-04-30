@@ -2,21 +2,42 @@ import { describe, expect, it } from "vitest";
 import {
   createOptimisticPendingPrompt,
   hasVisibleTranscriptContent,
-  resolveVisibleTranscriptPendingPrompt,
+  resolveVisibleOptimisticPrompt,
+  shouldClearOptimisticPromptAfterPromptResponse,
   shouldClearOptimisticPendingPrompt,
   shouldShowPendingPromptActivity,
   turnHasAssistantRenderableTranscriptContent,
   turnHasRenderableTranscriptContent,
 } from "./pending-prompts";
-import { createTranscriptState } from "@anyharness/sdk";
+import { createTranscriptState, type PendingPromptEntry } from "@anyharness/sdk";
+
+function durablePendingPrompt(text = "Queued text"): PendingPromptEntry {
+  return {
+    seq: 7,
+    promptId: "prompt-1",
+    text,
+    contentParts: [],
+    queuedAt: "2026-04-13T12:00:01.000Z",
+    promptProvenance: null,
+  };
+}
 
 describe("pending prompt visibility", () => {
   it("treats an optimistic prompt as visible transcript content", () => {
     expect(hasVisibleTranscriptContent({
       transcript: createTranscriptState("session-1"),
-      pendingPrompts: [],
       optimisticPrompt: createOptimisticPendingPrompt("Ship it", "prompt-1", "2026-04-13T12:00:00.000Z"),
     })).toBe(true);
+  });
+
+  it("does not treat durable queued prompts as visible transcript content", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.pendingPrompts = [durablePendingPrompt()];
+
+    expect(hasVisibleTranscriptContent({
+      transcript,
+      optimisticPrompt: null,
+    })).toBe(false);
   });
 
   it("does not treat an empty turn as visible transcript content", () => {
@@ -33,59 +54,45 @@ describe("pending prompt visibility", () => {
 
     expect(hasVisibleTranscriptContent({
       transcript,
-      pendingPrompts: [],
       optimisticPrompt: null,
     })).toBe(false);
   });
 
-  it("prefers the latest authoritative pending prompt once it exists", () => {
-    const optimisticPrompt = createOptimisticPendingPrompt(
-      "Initial text",
-      "prompt-1",
-      "2026-04-13T12:00:00.000Z",
-    );
-
-    expect(resolveVisibleTranscriptPendingPrompt({
-      optimisticPrompt,
-      pendingPrompts: [
-        {
-          seq: 7,
-          promptId: "prompt-1",
-          text: "Authoritative text",
-          contentParts: [],
-          queuedAt: "2026-04-13T12:00:01.000Z",
-          promptProvenance: null,
-        },
-      ],
+  it("does not render durable queued prompts in the transcript selector", () => {
+    expect(resolveVisibleOptimisticPrompt({
+      optimisticPrompt: null,
       latestTurnStartedAt: null,
       latestTurnHasAssistantRenderableContent: false,
-    })?.text).toBe("Authoritative text");
+    })).toBeNull();
   });
 
-  it("keeps a pending prompt visible until the newer turn has assistant content", () => {
-    expect(resolveVisibleTranscriptPendingPrompt({
+  it("keeps an optimistic prompt visible until the newer turn has assistant content", () => {
+    expect(resolveVisibleOptimisticPrompt({
       optimisticPrompt: createOptimisticPendingPrompt(
         "Ship it",
         "prompt-1",
         "2026-04-13T12:00:00.000Z",
       ),
-      pendingPrompts: [],
       latestTurnStartedAt: "2026-04-13T12:00:01.000Z",
       latestTurnHasAssistantRenderableContent: false,
     })?.text).toBe("Ship it");
   });
 
-  it("hides a pending prompt once a newer turn has assistant transcript content", () => {
-    expect(resolveVisibleTranscriptPendingPrompt({
+  it("hides an optimistic prompt once a newer turn has assistant transcript content", () => {
+    expect(resolveVisibleOptimisticPrompt({
       optimisticPrompt: createOptimisticPendingPrompt(
         "Ship it",
         "prompt-1",
         "2026-04-13T12:00:00.000Z",
       ),
-      pendingPrompts: [],
       latestTurnStartedAt: "2026-04-13T12:00:01.000Z",
       latestTurnHasAssistantRenderableContent: true,
     })).toBeNull();
+  });
+
+  it("clears optimistic prompt after the runtime confirms a queued response", () => {
+    expect(shouldClearOptimisticPromptAfterPromptResponse("queued")).toBe(true);
+    expect(shouldClearOptimisticPromptAfterPromptResponse("running")).toBe(false);
   });
 
   it("keeps the activity indicator visible during the optimistic handoff", () => {
@@ -192,7 +199,6 @@ describe("pending prompt visibility", () => {
     )).toBe(false);
     expect(hasVisibleTranscriptContent({
       transcript,
-      pendingPrompts: [],
       optimisticPrompt: null,
     })).toBe(true);
   });
