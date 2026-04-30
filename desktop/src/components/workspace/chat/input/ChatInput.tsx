@@ -37,6 +37,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { ChatComposerSurface } from "./ChatComposerSurface";
 import { SessionPowersSummary } from "./SessionPowersSummary";
 import { DraftAttachmentPreviewList } from "@/components/workspace/chat/content/PromptContentRenderer";
+import { ComposerControlButton } from "./ComposerControlButton";
 
 /**
  * The composer surface: mention-aware editor + model / session controls +
@@ -273,16 +274,13 @@ export function ChatInput() {
               }`}
             >
               {canAttach && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
+                <ComposerControlButton
+                  iconOnly
+                  icon={<FilePlus className="size-3.5" />}
+                  label="Attach file"
                   onClick={() => fileInputRef.current?.click()}
                   aria-label="Attach file"
-                  className="shrink-0"
-                >
-                  <FilePlus className="size-4" />
-                </Button>
+                />
               )}
               <ModelSelector {...modelSelectorProps} />
               <SessionConfigControls agentKind={agentKind} controls={sessionConfigControls} />
