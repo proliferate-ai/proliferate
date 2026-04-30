@@ -1,6 +1,7 @@
 import {
   anyHarnessCoworkManagedWorkspacesKey,
   anyHarnessGitStatusKey,
+  anyHarnessSessionReviewsKey,
   anyHarnessSessionSubagentsKey,
 } from "@anyharness/sdk-react";
 import {
@@ -27,6 +28,7 @@ import {
 import { logLatency } from "@/lib/infra/debug-latency";
 import { markLatencyFlowLiveAttached } from "@/lib/infra/latency-flow";
 import {
+  resolveSessionViewState,
   resolveSessionStatus,
   shouldSkipColdIdleSessionStream,
 } from "@/lib/domain/sessions/activity";
@@ -46,7 +48,6 @@ import {
 } from "@/lib/integrations/anyharness/session-reconnect-state";
 import { notifyTurnEnd } from "@/lib/integrations/anyharness/turn-end-events";
 import {
-  markWorkspaceViewed,
   rememberLastViewedSession,
   trackWorkspaceInteraction,
 } from "@/stores/preferences/workspace-ui-store";
@@ -70,6 +71,8 @@ import {
 } from "@/lib/domain/chat/subagent-launch";
 import { useLinkedSessionMounting } from "@/hooks/chat/subagents/use-linked-session-mounting";
 
+const ACTIVE_SUMMARY_REFRESH_DELAY_MS = 8_000;
+
 export function useSessionRuntimeActions() {
   const queryClient = useQueryClient();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
@@ -78,8 +81,8 @@ export function useSessionRuntimeActions() {
     mountSubagentChildSession,
     mountSubagentChildrenFromEvents,
   } = useLinkedSessionMounting();
-  const powersInCodingSessionsEnabled = useUserPreferencesStore(
-    (state) => state.powersInCodingSessionsEnabled,
+  const pluginsInCodingSessionsEnabled = useUserPreferencesStore(
+    (state) => state.pluginsInCodingSessionsEnabled,
   );
 
   const persistReconciledModePreferences = useCallback((
@@ -149,6 +152,7 @@ export function useSessionRuntimeActions() {
       existing.pendingConfigChanges,
     );
 
+    const resolvedWorkspaceId = existing.workspaceId ?? workspaceId;
     state.patchSessionSlot(sessionId, {
       ...patch,
       liveConfig: effectiveLiveConfig,
@@ -167,8 +171,17 @@ export function useSessionRuntimeActions() {
       }),
     });
 
+    const interactionTimestamp =
+      patch.executionSummary?.updatedAt
+      ?? session.updatedAt
+      ?? session.lastPromptAt
+      ?? null;
+    if (resolvedWorkspaceId && interactionTimestamp) {
+      trackWorkspaceInteraction(resolvedWorkspaceId, interactionTimestamp);
+    }
+
     persistReconciledModePreferences(
-      existing.workspaceId ?? workspaceId,
+      resolvedWorkspaceId,
       patch.agentKind,
       effectiveLiveConfig?.normalizedControls.mode?.rawConfigId ?? null,
       reconcileResult.reconciledChanges,
@@ -300,7 +313,7 @@ export function useSessionRuntimeActions() {
         }) === "running"
       ) {
         session = await resumeSession(sessionId, {
-          powersInCodingSessionsEnabled,
+          pluginsInCodingSessionsEnabled,
           requestHeaders: options?.requestHeaders,
         });
         applySessionSummary(sessionId, session, workspaceId);
@@ -308,7 +321,7 @@ export function useSessionRuntimeActions() {
     } catch {
       // Session fetch failed.
     }
-  }, [applySessionSummary, powersInCodingSessionsEnabled]);
+  }, [applySessionSummary, pluginsInCodingSessionsEnabled]);
 
   const closeSessionSlotStream = useCallback((sessionId: string) => {
     clearSessionReconnectTimer(sessionId);
@@ -393,6 +406,7 @@ export function useSessionRuntimeActions() {
     let openResolved = false;
     let resolveOpen: (() => void) | null = null;
     let startupReadyRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let activeSummaryRefreshTimer: ReturnType<typeof setTimeout> | null = null;
     let startupReadyRefreshStarted = false;
     const openPromise = new Promise<void>((resolve) => {
       resolveOpen = () => {
@@ -445,6 +459,53 @@ export function useSessionRuntimeActions() {
       }
       clearTimeout(startupReadyRefreshTimer);
       startupReadyRefreshTimer = null;
+    };
+    const clearActiveSummaryRefreshTimer = () => {
+      if (!activeSummaryRefreshTimer) {
+        return;
+      }
+      clearTimeout(activeSummaryRefreshTimer);
+      activeSummaryRefreshTimer = null;
+    };
+    const shouldRefreshActiveSummary = () => {
+      const latestSlot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
+      return resolveSessionViewState(latestSlot) === "working";
+    };
+    const scheduleActiveSummaryRefresh = () => {
+      clearActiveSummaryRefreshTimer();
+      if (!shouldRefreshActiveSummary()) {
+        return;
+      }
+
+      activeSummaryRefreshTimer = setTimeout(() => {
+        activeSummaryRefreshTimer = null;
+        if (!handle || !isCurrentStreamHandle(sessionId, handle)) {
+          return;
+        }
+        if (!shouldRefreshActiveSummary()) {
+          return;
+        }
+
+        const refreshStartedAt = performance.now();
+        void refreshSessionSlotMeta(sessionId, {
+          resumeIfActive: false,
+          requestHeaders: options?.requestHeaders,
+        }).then(() => {
+          logLatency("session.stream.active_meta_refreshed", {
+            sessionId,
+            elapsedMs: Math.round(performance.now() - refreshStartedAt),
+          });
+        }).catch(() => {
+          logLatency("session.stream.active_meta_refresh_failed", {
+            sessionId,
+            elapsedMs: Math.round(performance.now() - refreshStartedAt),
+          });
+        }).finally(() => {
+          if (handle && isCurrentStreamHandle(sessionId, handle) && shouldRefreshActiveSummary()) {
+            scheduleActiveSummaryRefresh();
+          }
+        });
+      }, ACTIVE_SUMMARY_REFRESH_DELAY_MS);
     };
 
     const scheduleReconnect = (delayMs = 350) => {
@@ -516,6 +577,7 @@ export function useSessionRuntimeActions() {
 
         if (result.status === "gap") {
           logDevSSEEvent(sessionId, envelope, "gap");
+          clearActiveSummaryRefreshTimer();
           useHarnessStore.getState().patchSessionSlot(sessionId, {
             sseHandle: null,
             streamConnectionState: "disconnected",
@@ -558,6 +620,17 @@ export function useSessionRuntimeActions() {
           pendingConfigChanges: reconcileResult.pendingConfigChanges,
         });
 
+        if (shouldScheduleActiveSummaryRefresh(event.type)) {
+          scheduleActiveSummaryRefresh();
+        }
+        if (
+          event.type === "turn_ended"
+          || event.type === "error"
+          || event.type === "session_ended"
+        ) {
+          clearActiveSummaryRefreshTimer();
+        }
+
         if (event.type === "subagent_turn_completed") {
           void mountSubagentChildSession({
             childSessionId: event.childSessionId,
@@ -582,6 +655,16 @@ export function useSessionRuntimeActions() {
             queryKey: anyHarnessCoworkManagedWorkspacesKey(
               currentState.runtimeUrl,
               sessionId,
+            ),
+          });
+        }
+
+        if (event.type === "review_run_updated") {
+          void queryClient.invalidateQueries({
+            queryKey: anyHarnessSessionReviewsKey(
+              currentState.runtimeUrl,
+              slotState.workspaceId,
+              event.parentSessionId,
             ),
           });
         }
@@ -674,9 +757,6 @@ export function useSessionRuntimeActions() {
               ),
             });
             trackWorkspaceInteraction(slotState.workspaceId, envelope.timestamp);
-            if (slotState.workspaceId === currentState.selectedWorkspaceId) {
-              markWorkspaceViewed(slotState.workspaceId);
-            }
           }
 
           notifyTurnEnd(sessionId, event.type);
@@ -685,6 +765,7 @@ export function useSessionRuntimeActions() {
       onError: () => {
         resolveOpen?.();
         clearStartupReadyRefreshTimer();
+        clearActiveSummaryRefreshTimer();
         if (!handle || !isCurrentStreamHandle(sessionId, handle)) {
           return;
         }
@@ -697,6 +778,7 @@ export function useSessionRuntimeActions() {
       onClose: () => {
         resolveOpen?.();
         clearStartupReadyRefreshTimer();
+        clearActiveSummaryRefreshTimer();
         if (!handle || !isCurrentStreamHandle(sessionId, handle)) {
           return;
         }
@@ -754,4 +836,18 @@ function isCoworkCodingCreateMcpMutation(item: ToolCallItem): boolean {
     || nativeToolName === "mcp__cowork__create_coding_session"
     || nativeToolName === "mcp__cowork__send_coding_message"
     || nativeToolName === "mcp__cowork__schedule_coding_wake";
+}
+
+function shouldScheduleActiveSummaryRefresh(eventType: string): boolean {
+  switch (eventType) {
+    case "turn_started":
+    case "item_started":
+    case "item_delta":
+    case "item_completed":
+    case "usage_update":
+    case "interaction_resolved":
+      return true;
+    default:
+      return false;
+  }
 }

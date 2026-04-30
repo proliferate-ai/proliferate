@@ -427,7 +427,9 @@ function summaryForRun(run: ReviewRunDetail): ReviewComposerSummary {
   switch (run.status) {
     case "reviewing":
       return {
-        label: `${reviewerLabel} reviewing ${targetLabel}`,
+        label: run.currentRoundNumber > 1
+          ? "Reviewing revision"
+          : `${reviewerLabel} reviewing ${targetLabel}`,
         detail: progressLabel ? `${reviewKindLabel(run.kind)} · ${progressLabel}` : reviewKindLabel(run.kind),
       };
     case "feedback_ready":
@@ -437,12 +439,12 @@ function summaryForRun(run: ReviewRunDetail): ReviewComposerSummary {
       };
     case "parent_revising":
       return {
-        label: "Review feedback sent",
-        detail: `${reviewKindLabel(run.kind)} · parent revising`,
+        label: "Parent revising",
+        detail: reviewKindLabel(run.kind),
       };
     case "waiting_for_revision":
       return {
-        label: "Review feedback sent",
+        label: reviewRunHasNextRound(run) ? "Waiting for revision" : "Ready to finish",
         detail: reviewRunHasNextRound(run) ? "Waiting for revision" : "Ready to finish",
       };
     case "passed":

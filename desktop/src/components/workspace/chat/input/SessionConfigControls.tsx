@@ -4,9 +4,11 @@ import {
   resolveSessionToggleControlStateIndicator,
 } from "@/lib/domain/chat/session-toggle-control";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls";
+import type { ConfiguredSessionControlKey } from "@/config/session-control-presentations";
 import { Brain, Check, ChevronDown, Zap } from "@/components/ui/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { ComposerControlButton } from "./ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 import { SessionModeControl } from "./SessionModeControl";
@@ -17,14 +19,11 @@ interface SessionConfigControlsProps {
   controls: LiveSessionControlDescriptor[];
 }
 
-const POPOVER_ROW =
-  "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-accent";
-
 export function SessionConfigControls({ agentKind, controls }: SessionConfigControlsProps) {
   return (
     <>
       {controls.map((control) => (
-        control.key === "collaboration_mode" ? (
+        isConfiguredModeControl(control) ? (
           <SessionModeControl key={control.key} agentKind={agentKind} control={control} />
         ) : control.key === "effort" ? (
           <SessionReasoningEffortControl key={control.key} control={control} />
@@ -36,6 +35,12 @@ export function SessionConfigControls({ agentKind, controls }: SessionConfigCont
       ))}
     </>
   );
+}
+
+function isConfiguredModeControl(
+  control: LiveSessionControlDescriptor,
+): control is LiveSessionControlDescriptor & { key: ConfiguredSessionControlKey } {
+  return control.key === "collaboration_mode" || control.key === "mode";
 }
 
 function ToggleControl({ control }: { control: LiveSessionControlDescriptor }) {
@@ -124,18 +129,15 @@ function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
       {(close) => (
         <>
           {control.options.map((option) => (
-            <button
+            <PopoverMenuItem
               key={option.value}
-              type="button"
+              label={option.label}
+              trailing={option.selected ? <Check className="size-3.5 shrink-0 text-foreground/60" /> : null}
               onClick={() => {
                 control.onSelect(option.value);
                 close();
               }}
-              className={POPOVER_ROW}
-            >
-              <span className="flex-1 truncate text-left">{option.label}</span>
-              {option.selected && <Check className="size-3.5 shrink-0 text-foreground/60" />}
-            </button>
+            />
           ))}
         </>
       )}

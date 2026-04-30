@@ -45,7 +45,7 @@ function model(id: string, displayName: string, isDefault: boolean): ModelRegist
 
 const EMPTY_PREFERENCES = {
   defaultChatAgentKind: "",
-  defaultChatModelId: "",
+  defaultChatModelIdByAgentKind: {},
 };
 
 describe("buildAutomationModelGroups", () => {
@@ -103,7 +103,9 @@ describe("resolveAutomationModelSelection", () => {
       override: null,
       preferences: {
         defaultChatAgentKind: "codex",
-        defaultChatModelId: "codex-fast",
+        defaultChatModelIdByAgentKind: {
+          codex: "codex-fast",
+        },
       },
       isEditing: false,
     });
@@ -123,7 +125,9 @@ describe("resolveAutomationModelSelection", () => {
       override: null,
       preferences: {
         defaultChatAgentKind: "missing",
-        defaultChatModelId: "missing",
+        defaultChatModelIdByAgentKind: {
+          missing: "missing",
+        },
       },
       isEditing: false,
     });
@@ -160,6 +164,29 @@ describe("resolveAutomationModelSelection", () => {
     expect(firstModel.submission).toMatchObject({
       agentKind: "codex",
       modelId: "first",
+      canSubmit: true,
+    });
+  });
+
+  it("falls back within automation-supported groups when the primary harness is unsupported", () => {
+    const resolution = resolveAutomationModelSelection({
+      groups,
+      saved: { agentKind: null, modelId: null },
+      override: null,
+      preferences: {
+        defaultChatAgentKind: "cursor",
+        defaultChatModelIdByAgentKind: {
+          cursor: "cursor-model",
+          codex: "codex-fast",
+        },
+      },
+      isEditing: false,
+    });
+
+    expect(resolution.state).toBe("default");
+    expect(resolution.submission).toMatchObject({
+      agentKind: "claude",
+      modelId: "claude-default",
       canSubmit: true,
     });
   });

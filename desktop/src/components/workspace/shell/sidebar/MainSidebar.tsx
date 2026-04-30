@@ -36,6 +36,7 @@ import {
   CircleQuestion,
 } from "@/components/ui/icons";
 import { CAPABILITY_COPY } from "@/config/capabilities";
+import { APP_ROUTES } from "@/config/app-routes";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
@@ -45,6 +46,7 @@ import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/use-workspace-display-name-actions";
 import { useWorkspaceSidebarActions } from "@/hooks/workspaces/use-workspace-sidebar-actions";
 import { useWorkspaceSidebarState } from "@/hooks/workspaces/use-workspace-sidebar-state";
+import { useSessionActivityReconciler } from "@/hooks/sessions/use-session-activity-reconciler";
 import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";
 import { RepoSetupModal } from "@/components/workspace/repo-setup/RepoSetupModal";
 import {
@@ -77,6 +79,7 @@ function removeRepoKeys(current: Set<string>, keys: Iterable<string>): Set<strin
 }
 
 export function MainSidebar() {
+  useSessionActivityReconciler();
   const actions = useWorkspaceSidebarActions();
   const supportContext = useSidebarSupportContext();
   const {
@@ -101,9 +104,9 @@ export function MainSidebar() {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const isOnPowers = location.pathname === "/powers";
-  const isOnAutomations = location.pathname.startsWith("/automations");
-  const isOnHome = location.pathname === "/";
+  const isOnPlugins = location.pathname === APP_ROUTES.plugins;
+  const isOnAutomations = location.pathname.startsWith(APP_ROUTES.automations);
+  const isOnHome = location.pathname === APP_ROUTES.home;
   const archiveWorkspace = useWorkspaceUiStore((s) => s.archiveWorkspace);
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
   const unarchiveWorkspace = useWorkspaceUiStore((s) => s.unarchiveWorkspace);
@@ -247,15 +250,15 @@ export function MainSidebar() {
               </div>
             </SidebarRowSurface>
             <SidebarRowSurface
-              active={isOnPowers}
-              onPress={actions.handleGoPowers}
+              active={isOnPlugins}
+              onPress={actions.handleGoPlugins}
               className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
             >
               <div className="flex w-4 shrink-0 items-center justify-center">
                 <Grid className="size-4" />
               </div>
               <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-foreground">
-                <span className="truncate">Powers</span>
+                <span className="truncate">Plugins</span>
               </div>
             </SidebarRowSurface>
             <SidebarRowSurface

@@ -45,7 +45,7 @@ export type SidebarStatusIndicator =
     tooltip: string;
   }
   | {
-    kind: "unread";
+    kind: "needs_review";
     tooltip: string;
   };
 
@@ -108,13 +108,13 @@ export function sidebarWorkspaceVariantForLogicalWorkspace(
 
 export function sidebarStatusIndicatorFromActivity(args: {
   activity: SidebarSessionActivityState;
-  unread?: boolean;
+  needsReview?: boolean;
   pendingPromptCount?: number;
   errorAction?: SidebarIndicatorAction | null;
 }): SidebarStatusIndicator | null {
   const {
     activity,
-    unread = false,
+    needsReview = false,
     pendingPromptCount = 0,
     errorAction = null,
   } = args;
@@ -155,10 +155,10 @@ export function sidebarStatusIndicatorFromActivity(args: {
     };
   }
 
-  return unread
+  return needsReview
     ? {
-      kind: "unread",
-      tooltip: "Unread",
+      kind: "needs_review",
+      tooltip: "Needs review",
     }
     : null;
 }

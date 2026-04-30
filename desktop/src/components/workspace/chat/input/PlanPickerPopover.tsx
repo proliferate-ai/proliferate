@@ -38,7 +38,7 @@ export function PlanPickerPopover({
       className="w-auto border-0 bg-transparent p-0 shadow-none"
     >
       {(close) => (
-        <PlanPickerPopoverContent
+        <PlanPickerPopoverSurface
           draftWorkspaceId={draftWorkspaceId}
           onClose={close}
         />
@@ -47,7 +47,21 @@ export function PlanPickerPopover({
   );
 }
 
-function PlanPickerPopoverContent({
+export function PlanPickerPopoverSurface({
+  draftWorkspaceId,
+  onClose,
+}: {
+  draftWorkspaceId: string | null;
+  onClose: () => void;
+}) {
+  return (
+    <ComposerPopoverSurface className="w-[min(24rem,calc(100vw-2rem))] p-0" data-telemetry-mask>
+      <PlanPickerContentBody draftWorkspaceId={draftWorkspaceId} onClose={onClose} />
+    </ComposerPopoverSurface>
+  );
+}
+
+export function PlanPickerContentBody({
   draftWorkspaceId,
   onClose,
 }: {
@@ -57,7 +71,7 @@ function PlanPickerPopoverContent({
   const picker = usePlanPicker({ draftWorkspaceId, open: true, onAttached: onClose });
 
   return (
-    <ComposerPopoverSurface className="w-[min(24rem,calc(100vw-2rem))] p-0" data-telemetry-mask>
+    <div data-telemetry-mask>
       <div className="border-b border-border px-2 pb-2 pt-2">
         <Input
           value={picker.search}
@@ -110,6 +124,6 @@ function PlanPickerPopoverContent({
           </Button>
         ))}
       </div>
-    </ComposerPopoverSurface>
+    </div>
   );
 }

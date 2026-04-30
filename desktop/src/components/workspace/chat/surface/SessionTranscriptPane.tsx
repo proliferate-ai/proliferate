@@ -5,7 +5,11 @@ import { ConnectedPlanHandoffDialog } from "@/components/workspace/chat/plans/Co
 import { usePlanHandoffDialogState } from "@/hooks/plans/use-plan-handoff-dialog-state";
 import { useSessionSelectionActions } from "@/hooks/sessions/use-session-selection-actions";
 
-export function SessionTranscriptPane() {
+interface SessionTranscriptPaneProps {
+  bottomInsetPx: number;
+}
+
+export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPaneProps) {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const handoff = usePlanHandoffDialogState();
   const { selectSession } = useSessionSelectionActions();
@@ -28,6 +32,7 @@ export function SessionTranscriptPane() {
         optimisticPrompt={optimisticPrompt}
         transcript={transcript}
         sessionViewState={sessionViewState}
+        bottomInsetPx={bottomInsetPx}
         onHandOffPlanToNewSession={handoff.open}
         onOpenSession={(sessionId) => void selectSession(sessionId)}
       />

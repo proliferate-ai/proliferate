@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "@/config/chat-layout";
 
 interface ChatSurfaceCardProps {
   badge?: string;
+  bottomInsetPx: number;
   title: string;
   description: string;
   icon?: ReactNode;
@@ -10,13 +12,17 @@ interface ChatSurfaceCardProps {
 
 export function ChatSurfaceCard({
   badge,
+  bottomInsetPx,
   title,
   description,
   icon,
 }: ChatSurfaceCardProps) {
   return (
-    <div className="flex flex-1 min-h-0">
-      <div className="mx-auto flex min-h-full w-full max-w-3xl items-center px-6 py-10">
+    <div
+      className={`flex flex-1 min-h-0 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}
+      style={{ paddingBottom: bottomInsetPx }}
+    >
+      <div className={`${CHAT_COLUMN_CLASSNAME} flex min-h-full items-center py-10`}>
         <div className="w-full rounded-[26px] border border-border/70 bg-card/95 px-8 py-10 text-center shadow-lg">
           {badge && (
             <Badge className="rounded-full px-2.5 py-0.5">

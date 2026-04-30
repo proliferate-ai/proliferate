@@ -297,8 +297,8 @@ export function useSessionCreationActions({
         target.anyharnessWorkspaceId,
         requestOptions,
       ).catch(() => null);
-      const powersInCodingSessionsEnabled = useUserPreferencesStore.getState()
-        .powersInCodingSessionsEnabled;
+      const pluginsInCodingSessionsEnabled = useUserPreferencesStore.getState()
+        .pluginsInCodingSessionsEnabled;
       const subagentsEnabled = useUserPreferencesStore.getState().subagentsEnabled;
       const {
         mcpServers,
@@ -310,7 +310,7 @@ export function useSessionCreationActions({
         policy: {
           workspaceSurface: "coding",
           lifecycle: "create",
-          enabled: powersInCodingSessionsEnabled,
+          enabled: pluginsInCodingSessionsEnabled,
         },
       });
       const localWorkspace = cloudWorkspaceId ? null : targetWorkspace;

@@ -122,7 +122,7 @@ export function useReviewSetupDialogState() {
       parentSessionId,
       kind: draft.kind,
       maxRounds: draft.maxRounds,
-      autoSendFeedback: draft.autoSendFeedback,
+      autoIterate: draft.autoIterate,
       reviewers: request.reviewers.map((reviewer) => ({
         id: reviewer.personaId,
         label: reviewer.label,

@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useRef, type ReactNode, type Ref } from "react";
 import { ApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
 import { CoworkComposerControl } from "@/components/workspace/chat/input/CoworkComposerStrip";
@@ -78,6 +78,8 @@ import {
 } from "@/lib/domain/chat/__fixtures__/playground";
 
 interface PlaygroundComposerProps {
+  dockRef: Ref<HTMLDivElement>;
+  lowerBackdropTopPx: number | null;
   selection: PlaygroundScenarioSelection;
   replay: PlaygroundReplayState;
 }
@@ -128,7 +130,12 @@ const PLAYGROUND_COWORK_SUMMARY: CoworkComposerStripSummary = {
   active: true,
 };
 
-export function PlaygroundComposer({ selection, replay }: PlaygroundComposerProps) {
+export function PlaygroundComposer({
+  dockRef,
+  lowerBackdropTopPx,
+  selection,
+  replay,
+}: PlaygroundComposerProps) {
   const replaySlots = useComposerDockSlots();
   const scenario = selection.kind === "fixture" ? selection.key : null;
   const contextSlot = scenario ? renderContextSlot(scenario) : replaySlots.contextSlot;
@@ -136,13 +143,16 @@ export function PlaygroundComposer({ selection, replay }: PlaygroundComposerProp
   const interactionSlot = scenario ? renderInteractionSlot(scenario) : replaySlots.interactionSlot;
   const delegationSlot = scenario ? renderDelegationSlot(scenario) : replaySlots.delegationSlot;
   return (
-    <div className="relative">
+    <div className="pointer-events-none absolute inset-0 z-10">
       <ChatComposerDock
+        ref={dockRef}
         contextSlot={contextSlot ?? undefined}
         queueSlot={queueSlot ?? undefined}
         interactionSlot={interactionSlot ?? undefined}
         delegationSlot={delegationSlot ?? undefined}
         footerSlot={scenario ? <PlaygroundMobilityFooterRow scenario={scenario} /> : undefined}
+        lowerBackdropTopPx={lowerBackdropTopPx}
+        shellClassName="pointer-events-none absolute inset-x-0 bottom-0"
       >
         {selection.kind === "recording"
           ? <ReplayComposerSurface replay={replay} />

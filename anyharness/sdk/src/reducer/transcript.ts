@@ -215,6 +215,9 @@ export function reduceEvent(
       break;
     }
 
+    case "review_run_updated":
+      break;
+
     case "usage_update":
       s.usageState = {
         used: evt.used,

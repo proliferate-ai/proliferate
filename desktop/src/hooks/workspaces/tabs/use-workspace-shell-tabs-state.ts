@@ -14,8 +14,11 @@ import {
   parseWorkspaceShellTabKey,
   resolveWorkspaceShellTabFromKey,
   type WorkspaceShellTab,
+  type WorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceTabsStore } from "@/stores/workspaces/workspace-tabs-store";
+
+const EMPTY_SHELL_TAB_ORDER_KEYS: readonly WorkspaceShellTabKey[] = [];
 
 export function useWorkspaceActiveChatTabId({
   selectedWorkspaceId,
@@ -71,8 +74,8 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   );
   const persistedShellOrderKeys = useWorkspaceTabsStore((state) =>
     selectedWorkspaceId
-      ? state.shellTabOrderByWorkspace[selectedWorkspaceId] ?? []
-      : []
+      ? state.shellTabOrderByWorkspace[selectedWorkspaceId] ?? EMPTY_SHELL_TAB_ORDER_KEYS
+      : EMPTY_SHELL_TAB_ORDER_KEYS
   );
   const setActiveShellTabKey = useWorkspaceTabsStore((state) => state.setActiveShellTabKey);
   const setShellTabOrder = useWorkspaceTabsStore((state) => state.setShellTabOrder);

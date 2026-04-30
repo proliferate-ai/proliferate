@@ -145,6 +145,11 @@ interface WorkspaceSessionSidebarAttentionSnapshot
   errorAttentionKey: string | null;
 }
 
+interface SessionActivityReconciliationSnapshot
+  extends SessionActivitySnapshot {
+  sessionId: string;
+}
+
 export function resolveSessionExecutionPhase(
   slot: SessionActivitySnapshot | null | undefined,
 ): SessionExecutionPhase | null {
@@ -440,6 +445,25 @@ export function collectWorkspaceSidebarActivityStatesWithErrorAttention(
   }
 
   return states;
+}
+
+export function collectSessionActivityReconciliationIds(
+  sessionSlots: Record<string, SessionActivityReconciliationSnapshot>,
+): string[] {
+  const ids: string[] = [];
+
+  for (const slot of Object.values(sessionSlots)) {
+    const sidebarState = resolveSessionSidebarActivityState(slot);
+    if (
+      sidebarState === "iterating"
+      || sidebarState === "waiting_input"
+      || sidebarState === "waiting_plan"
+    ) {
+      ids.push(slot.sessionId);
+    }
+  }
+
+  return ids.sort();
 }
 
 function sessionViewStatePriority(state: SessionViewState): number {

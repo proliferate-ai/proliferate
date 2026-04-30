@@ -173,6 +173,36 @@ describe("transcript reducer", () => {
     expect(state.latestLinkCompletionBySessionLinkId["link-1"]).toBe("completion-1");
   });
 
+  it("treats review run updates as metadata, not transcript content", () => {
+    const state = reduceEvents(
+      [
+        {
+          sessionId: "session-1",
+          seq: 1,
+          timestamp: "2026-04-28T00:00:01Z",
+          event: {
+            type: "review_run_updated",
+            reviewRunId: "review-1",
+            parentSessionId: "session-1",
+            kind: "plan",
+            status: "parent_revising",
+            currentRoundNumber: 1,
+            maxRounds: 2,
+            autoIterate: true,
+            activeRoundId: "round-1",
+            updatedAt: "2026-04-28T00:00:00Z",
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    expect(Object.keys(state.itemsById)).toEqual([]);
+    expect(state.turnOrder).toEqual([]);
+    expect(state.unknownEvents).toEqual([]);
+    expect(state.lastSeq).toBe(1);
+  });
+
   it("closes orphaned assistant and reasoning streams when a turn ends", () => {
     const state = reduceEvents(
       [

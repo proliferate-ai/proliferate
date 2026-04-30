@@ -102,8 +102,69 @@ describe("resolveEffectiveAgentModelSelection", () => {
 
     expect(resolveEffectiveAgentModelSelection(groups, null, {
       defaultAgentKind: "codex",
-      defaultModelId: "gpt-5.4-mini",
+      defaultModelIdByAgentKind: {
+        codex: "gpt-5.4-mini",
+      },
     })).toEqual({ kind: "codex", modelId: "gpt-5.4-mini" });
+  });
+
+  it("keeps the primary harness when its preferred model is unavailable", () => {
+    const groups = buildAgentModelGroups({
+      agents: [agent({ kind: "codex" }), agent({ kind: "claude" })],
+      modelRegistries: [
+        registry({
+          kind: "codex",
+          defaultModelId: "gpt-5.4",
+          models: [
+            model("gpt-5.4", "GPT-5.4", true),
+          ],
+        }),
+        registry({
+          kind: "claude",
+          defaultModelId: "sonnet",
+          models: [
+            model("sonnet", "Sonnet", true),
+          ],
+        }),
+      ],
+      selected: null,
+    });
+
+    expect(resolveEffectiveAgentModelSelection(groups, null, {
+      defaultAgentKind: "codex",
+      defaultModelIdByAgentKind: {
+        codex: "stale-model",
+        claude: "sonnet",
+      },
+    })).toEqual({ kind: "codex", modelId: "gpt-5.4" });
+  });
+
+  it("uses an explicit override before primary preferences", () => {
+    const groups = buildAgentModelGroups({
+      agents: [agent({ kind: "codex" }), agent({ kind: "claude" })],
+      modelRegistries: [
+        registry({
+          kind: "codex",
+          models: [model("gpt-5.4", "GPT-5.4", true)],
+        }),
+        registry({
+          kind: "claude",
+          models: [model("sonnet", "Sonnet", true)],
+        }),
+      ],
+      selected: null,
+    });
+
+    expect(resolveEffectiveAgentModelSelection(
+      groups,
+      { kind: "claude", modelId: "sonnet" },
+      {
+        defaultAgentKind: "codex",
+        defaultModelIdByAgentKind: {
+          codex: "gpt-5.4",
+        },
+      },
+    )).toEqual({ kind: "claude", modelId: "sonnet" });
   });
 
   it("falls back to provider default, then first model", () => {
@@ -124,7 +185,7 @@ describe("resolveEffectiveAgentModelSelection", () => {
 
     expect(resolveEffectiveAgentModelSelection(defaultGroups, null, {
       defaultAgentKind: "missing",
-      defaultModelId: "missing",
+      defaultModelIdByAgentKind: {},
     })).toEqual({ kind: "codex", modelId: "second" });
 
     const firstGroups = buildAgentModelGroups({
@@ -144,7 +205,7 @@ describe("resolveEffectiveAgentModelSelection", () => {
 
     expect(resolveEffectiveAgentModelSelection(firstGroups, null, {
       defaultAgentKind: "missing",
-      defaultModelId: "missing",
+      defaultModelIdByAgentKind: {},
     })).toEqual({ kind: "codex", modelId: "first" });
   });
 });

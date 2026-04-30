@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 
 interface UseMessageListScrollArgs {
+  bottomInsetPx: number;
   totalItems: number;
   pendingPromptText: string | null;
   isSessionBusy: boolean;
@@ -9,6 +10,7 @@ interface UseMessageListScrollArgs {
 }
 
 export function useMessageListScroll({
+  bottomInsetPx,
   totalItems,
   pendingPromptText,
   isSessionBusy,
@@ -55,7 +57,7 @@ export function useMessageListScroll({
     return () => {
       observer.disconnect();
     };
-  }, [isSessionBusy, pendingPromptText, totalItems]);
+  }, [bottomInsetPx, isSessionBusy, pendingPromptText, totalItems]);
 
   useEffect(() => {
     const el = scrollRef.current;

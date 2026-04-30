@@ -215,6 +215,9 @@
   /* -- App switcher -- */
   --color-app-switcher-bg: hsl(24 7% 81%);
 
+  /* -- Brand assets -- */
+  --color-brand-logo-tile: hsl(0 0% 100%);
+
   /* -- Git -- */
   --color-git-green: hsl(142 69% 58%);
   --color-git-red: hsl(0 91% 71%);

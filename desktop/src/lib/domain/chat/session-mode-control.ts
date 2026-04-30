@@ -10,13 +10,13 @@ export type SessionModeTone = SessionControlTone;
 export type SessionModeIconKey = SessionControlIconKey;
 
 export interface SessionModePresentation {
-  icon: SessionModeIconKey;
+  icon: SessionModeIconKey | null;
   tone: SessionModeTone;
   shortLabel?: string | null;
 }
 
 const FALLBACK_PRESENTATION: SessionModePresentation = {
-  icon: "circleQuestion",
+  icon: null,
   tone: "neutral",
   shortLabel: null,
 };

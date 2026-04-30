@@ -8,11 +8,18 @@ import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-id
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import type { RightPanelTool } from "@/lib/domain/workspaces/right-panel";
 import type {
   MainScreenDataState,
   MainScreenLayoutState,
 } from "./use-main-screen-state";
+import {
+  CLOSED_PUBLISH_DIALOG_STATE,
+  openPublishDialogState,
+  reviewDiffsFromPublishState,
+} from "./publish-dialog-state";
+import type { PublishIntent } from "@/lib/domain/workspaces/publish-workflow";
 
 interface UseMainScreenActionsArgs {
   layout: MainScreenLayoutState;
@@ -27,6 +34,7 @@ export function useMainScreenActions({
   const renameBranchMutation = useRenameGitBranchMutation();
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
   const {
@@ -36,10 +44,8 @@ export function useMainScreenActions({
     setSidebarOpen,
     setRightPanelOpen,
     setTerminalActivationRequestToken,
-    setCommitOpen,
     setFilePaletteOpen,
-    setPushOpen,
-    setPrOpen,
+    setPublishDialog,
   } = layout;
 
   const openRightPanelTool = useCallback((tool: RightPanelTool, terminalId?: string) => {
@@ -73,39 +79,44 @@ export function useMainScreenActions({
     }
   }, [openRightPanelTool, rightPanelOpen, rightPanelState.activeTool, setRightPanelOpen]);
 
-  const openPrInBrowser = useCallback(() => {
-    if (existingPr?.url) {
-      void openExternal(existingPr.url);
+  const openPrInBrowser = useCallback((pullRequest?: MainScreenDataState["existingPr"]) => {
+    const url = pullRequest?.url ?? existingPr?.url;
+    if (url) {
+      void openExternal(url);
     }
   }, [existingPr]);
-
-  const handleCommitOpen = useCallback(() => {
-    openRightPanelTool("git");
-    setCommitOpen(true);
-  }, [openRightPanelTool, setCommitOpen]);
-
-  const handlePushOpen = useCallback(() => {
-    openRightPanelTool("git");
-    setPushOpen(true);
-  }, [openRightPanelTool, setPushOpen]);
-
-  const handlePrOpen = useCallback(() => {
-    openRightPanelTool("git");
-    setPrOpen(true);
-  }, [openRightPanelTool, setPrOpen]);
 
   const handleFilePaletteOpen = useCallback(() => {
     setFilePaletteOpen(true);
   }, [setFilePaletteOpen]);
 
-  const handleViewPr = useCallback(() => {
+  const handleViewPr = useCallback((pullRequest?: MainScreenDataState["existingPr"]) => {
     openRightPanelTool("git");
-    openPrInBrowser();
+    openPrInBrowser(pullRequest);
   }, [openPrInBrowser, openRightPanelTool]);
 
-  const openPrDialog = useCallback(() => {
-    setPrOpen(true);
-  }, [setPrOpen]);
+  const openPublishDialog = useCallback((intent: PublishIntent) => {
+    openRightPanelTool("git");
+    setPublishDialog(openPublishDialogState(
+      selectedLogicalWorkspaceId ?? selectedWorkspaceId,
+      intent,
+    ));
+  }, [
+    openRightPanelTool,
+    selectedLogicalWorkspaceId,
+    selectedWorkspaceId,
+    setPublishDialog,
+  ]);
+
+  const closePublishDialog = useCallback(() => {
+    setPublishDialog(CLOSED_PUBLISH_DIALOG_STATE);
+  }, [setPublishDialog]);
+
+  const reviewDiffsFromPublish = useCallback(() => {
+    const next = reviewDiffsFromPublishState();
+    setPublishDialog(next.publishDialog);
+    openRightPanelTool(next.rightPanelTool);
+  }, [openRightPanelTool, setPublishDialog]);
 
   const renameBranch = useCallback(async (newName: string) => {
     const blockedReason = getWorkspaceRuntimeBlockReason(selectedWorkspaceId);
@@ -136,15 +147,13 @@ export function useMainScreenActions({
     toggleRightPanel,
     openTerminalPanel,
     onSetRightPanelTool: openRightPanelTool,
-    handleCommitOpen,
-    handlePushOpen,
-    handlePrOpen,
+    handleCommitOpen: () => openPublishDialog("commit"),
+    handlePushOpen: () => openPublishDialog("publish"),
+    handlePrOpen: () => openPublishDialog("pull_request"),
     handleFilePaletteOpen,
     handleViewPr,
-    openPrDialog,
-    onCommitClose: () => setCommitOpen(false),
+    closePublishDialog,
+    reviewDiffsFromPublish,
     onFilePaletteClose: () => setFilePaletteOpen(false),
-    onPushClose: () => setPushOpen(false),
-    onPrClose: () => setPrOpen(false),
   };
 }

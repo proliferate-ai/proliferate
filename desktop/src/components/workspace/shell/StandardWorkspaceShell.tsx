@@ -1,7 +1,6 @@
 import { HomeNextScreen } from "@/components/home/HomeNextScreen";
-import { CommitDialog } from "@/components/workspace/git/CommitDialog";
-import { PullRequestDialog } from "@/components/workspace/git/PullRequestDialog";
-import { PushDialog } from "@/components/workspace/git/PushDialog";
+import { useEffect } from "react";
+import { PublishDialog } from "@/components/workspace/git/PublishDialog";
 import { ConnectedReviewCritiqueDialog } from "@/components/workspace/reviews/ConnectedReviewCritiqueDialog";
 import { ConnectedReviewSetupDialog } from "@/components/workspace/reviews/ConnectedReviewSetupDialog";
 import { WorkspaceFilePalette } from "@/components/workspace/files/palette/WorkspaceFilePalette";
@@ -18,7 +17,9 @@ import { useMainScreenState } from "@/hooks/main/use-main-screen-state";
 import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
 import { useUpdater } from "@/hooks/updater/use-updater";
 import { useRunWorkspaceCommand } from "@/hooks/workspaces/use-run-workspace-command";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 
 const GLASS_HEADER_CLASS =
   "flex h-10 shrink-0 items-center border-b border-foreground/10 bg-card/30 backdrop-blur-xl supports-[backdrop-filter]:bg-card/20";
@@ -48,14 +49,14 @@ export function StandardWorkspaceShell() {
     rightPanelState,
     rightPanelWidth,
     terminalActivationRequestToken,
-    commitOpen,
-    pushOpen,
-    prOpen,
+    publishDialog,
     filePaletteOpen,
     onLeftSeparatorDown,
     onRightSeparatorDown,
   } = layout;
   const transparentChromeEnabled = useTransparentChromeEnabled();
+  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
+  const activePublishWorkspaceId = selectedLogicalWorkspaceId ?? selectedWorkspaceId;
   const {
     phase: updaterPhase,
     downloadProgress,
@@ -69,11 +70,32 @@ export function StandardWorkspaceShell() {
     isRuntimeReady: hasRuntimeReadyWorkspace,
     openTerminalPanel: actions.openTerminalPanel,
   });
+  const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
+  const runtimeBlockedReason = getWorkspaceRuntimeBlockReason(selectedWorkspaceId);
 
   useMainScreenShortcuts({
     onOpenFilePalette: actions.handleFilePaletteOpen,
     onOpenTerminal: actions.openTerminalPanel,
   });
+
+  useEffect(() => {
+    if (!publishDialog.open) {
+      return;
+    }
+    if (
+      !hasRuntimeReadyWorkspace
+      || !activePublishWorkspaceId
+      || publishDialog.workspaceId !== activePublishWorkspaceId
+    ) {
+      actions.closePublishDialog();
+    }
+  }, [
+    actions,
+    activePublishWorkspaceId,
+    hasRuntimeReadyWorkspace,
+    publishDialog.open,
+    publishDialog.workspaceId,
+  ]);
 
   return (
     <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? null}>
@@ -211,18 +233,15 @@ export function StandardWorkspaceShell() {
 
                 {hasRuntimeReadyWorkspace && (
                   <>
-                    <CommitDialog
-                      open={commitOpen}
-                      onClose={actions.onCommitClose}
-                      onOpenPrDialog={actions.openPrDialog}
-                    />
-                    <PushDialog
-                      open={pushOpen}
-                      onClose={actions.onPushClose}
-                    />
-                    <PullRequestDialog
-                      open={prOpen}
-                      onClose={actions.onPrClose}
+                    <PublishDialog
+                      open={publishDialog.open}
+                      workspaceId={publishDialog.workspaceId}
+                      initialIntent={publishDialog.initialIntent}
+                      selectedWorkspace={selectedWorkspace}
+                      runtimeBlockedReason={runtimeBlockedReason}
+                      onClose={actions.closePublishDialog}
+                      onReviewDiffs={actions.reviewDiffsFromPublish}
+                      onViewPr={actions.handleViewPr}
                     />
                     <ConnectedReviewSetupDialog />
                     <ConnectedReviewCritiqueDialog />

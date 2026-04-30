@@ -126,7 +126,7 @@ export function CloudPane({ repositories }: CloudPaneProps) {
       <SettingsCard>
         <SettingsCardRow
           label="Runtime input sync"
-          description="Keep agent credentials and API-key Powers synced to cloud in the background. Repo tracked files can be manually resynced from repo settings."
+          description="Keep agent credentials and plugin API keys synced to cloud in the background. Repo tracked files can be manually resynced from repo settings."
         >
           <Switch
             checked={runtimeInputSync.enabled}

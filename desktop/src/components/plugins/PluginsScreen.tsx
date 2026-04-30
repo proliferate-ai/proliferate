@@ -3,18 +3,19 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { MainSidebarPageShell } from "@/components/workspace/shell/MainSidebarPageShell";
 import { ConnectorCatalogPage } from "./ConnectorCatalogPage";
 
-export function PowersScreen() {
+export function PluginsScreen() {
   return (
     <MainSidebarPageShell>
       <PageContentFrame
-        stickyTitle="Powers"
+        stickyTitle="Plugins"
         header={(
           <PageHeader
-            title="Powers"
+            title="Plugins"
             description="Integrations Proliferate can use inside every session."
           />
         )}
       >
+        {/* Plugins is the product surface; Connector names are the internal catalog model. */}
         <ConnectorCatalogPage />
       </PageContentFrame>
     </MainSidebarPageShell>

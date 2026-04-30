@@ -42,10 +42,10 @@ export function ReviewSetupLoopControls({
 
           <div className="flex shrink-0 items-center gap-2 py-1 text-xs text-muted-foreground">
             <Switch
-              checked={draft.autoSendFeedback}
+              checked={draft.autoIterate}
               aria-label="Auto iterate"
-              onChange={(autoSendFeedback) => {
-                onDraftChange({ ...draft, autoSendFeedback });
+              onChange={(autoIterate) => {
+                onDraftChange({ ...draft, autoIterate });
               }}
             />
             <span className="whitespace-nowrap">Auto iterate</span>

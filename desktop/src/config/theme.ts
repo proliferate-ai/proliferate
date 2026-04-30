@@ -107,6 +107,10 @@ export function onThemeChange(callback: () => void): () => void {
 // ---------------------------------------------------------------------------
 
 export function getResolvedMode(): "dark" | "light" {
+  if (typeof document === "undefined") {
+    // Theme-aware consumers can be imported in non-DOM test contexts.
+    return "dark";
+  }
   const mode = document.documentElement.dataset.mode;
   return isValidMode(mode)
     ? (mode === "system" ? "dark" : mode)

@@ -7,6 +7,7 @@ import {
   workspaceFileTreeStateKey,
   upsertCloudWorkspaceCollections,
   upsertLocalWorkspaceCollections,
+  workspaceCollectionsNeedActivityRefresh,
 } from "./collections";
 
 function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
@@ -189,6 +190,44 @@ describe("upsertCloudWorkspaceCollections", () => {
     expect(
       upsertCloudWorkspaceCollections(undefined, makeCloudWorkspace()),
     ).toBeUndefined();
+  });
+});
+
+describe("workspaceCollectionsNeedActivityRefresh", () => {
+  it("requests refresh while a local workspace execution summary is active", () => {
+    const collections = buildWorkspaceCollections([
+      makeWorkspace({
+        executionSummary: {
+          phase: "running",
+          totalSessionCount: 1,
+          liveSessionCount: 1,
+          runningCount: 1,
+          awaitingInteractionCount: 0,
+          idleCount: 0,
+          erroredCount: 0,
+        },
+      }),
+    ]);
+
+    expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(true);
+  });
+
+  it("stops refreshing once all local workspace summaries are idle", () => {
+    const collections = buildWorkspaceCollections([
+      makeWorkspace({
+        executionSummary: {
+          phase: "idle",
+          totalSessionCount: 1,
+          liveSessionCount: 1,
+          runningCount: 0,
+          awaitingInteractionCount: 0,
+          idleCount: 1,
+          erroredCount: 0,
+        },
+      }),
+    ]);
+
+    expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(false);
   });
 });
 

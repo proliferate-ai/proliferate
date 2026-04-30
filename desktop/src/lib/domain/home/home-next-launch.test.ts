@@ -283,11 +283,15 @@ describe("home-next model helpers", () => {
 
     expect(resolveEffectiveHomeModelSelection(groups, null, {
       defaultChatAgentKind: "claude",
-      defaultChatModelId: "sonnet",
+      defaultChatModelIdByAgentKind: {
+        claude: "sonnet",
+      },
     })).toEqual({ kind: "claude", modelId: "sonnet" });
     expect(resolveEffectiveHomeModelSelection(groups, null, {
       defaultChatAgentKind: "missing",
-      defaultChatModelId: "missing",
+      defaultChatModelIdByAgentKind: {
+        missing: "missing",
+      },
     })).toEqual({ kind: "claude", modelId: "sonnet" });
   });
 });

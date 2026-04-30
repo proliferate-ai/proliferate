@@ -1,3 +1,4 @@
+mod custom_migrations;
 pub mod migrations;
 pub mod sqlite;
 

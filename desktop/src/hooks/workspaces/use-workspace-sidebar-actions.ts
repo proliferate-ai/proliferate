@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { APP_ROUTES } from "@/config/app-routes";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
@@ -14,6 +15,7 @@ import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
+import { markWorkspaceViewed } from "@/stores/preferences/workspace-ui-store";
 
 export function useWorkspaceSidebarActions() {
   const location = useLocation();
@@ -69,15 +71,15 @@ export function useWorkspaceSidebarActions() {
   ]);
 
   const handleGoHome = useCallback(() => {
-    goToTopLevelRoute("/");
+    goToTopLevelRoute(APP_ROUTES.home);
   }, [goToTopLevelRoute]);
 
-  const handleGoPowers = useCallback(() => {
-    goToTopLevelRoute("/powers");
+  const handleGoPlugins = useCallback(() => {
+    goToTopLevelRoute(APP_ROUTES.plugins);
   }, [goToTopLevelRoute]);
 
   const handleGoAutomations = useCallback(() => {
-    goToTopLevelRoute("/automations");
+    goToTopLevelRoute(APP_ROUTES.automations);
   }, [goToTopLevelRoute]);
 
   const handleSelectWorkspace = useCallback((workspaceId: string) => {
@@ -87,6 +89,9 @@ export function useWorkspaceSidebarActions() {
     }
 
     navigateToWorkspaceShell();
+    if (workspaceId === mobility.selectedLogicalWorkspaceId) {
+      markWorkspaceViewed(workspaceId);
+    }
     const latencyFlowId = startLatencyFlow({
       flowKind: "workspace_switch",
       source: "sidebar",
@@ -223,7 +228,7 @@ export function useWorkspaceSidebarActions() {
   return {
     handleAddRepo,
     handleGoHome,
-    handleGoPowers,
+    handleGoPlugins,
     handleGoAutomations,
     handleSidebarIndicatorAction,
     handleSelectWorkspace,

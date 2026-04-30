@@ -7,6 +7,7 @@ import {
   type OnboardingGoalId,
   type OnboardingStepKind,
 } from "@/config/onboarding";
+import { buildAcceptedOnboardingDefaultsUpdate } from "@/lib/domain/onboarding/defaults";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import type { OnboardingHomeLandingState } from "@/lib/domain/onboarding/home-landing";
@@ -31,6 +32,7 @@ export function useOnboardingFlow(): OnboardingFlowState {
   const preferences = useUserPreferencesStore(
     useShallow((state) => ({
       onboardingPrimaryGoalId: state.onboardingPrimaryGoalId,
+      defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
       defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
       setMultiple: state.setMultiple,
     })),
@@ -64,22 +66,17 @@ export function useOnboardingFlow(): OnboardingFlowState {
 
   const completeOnboarding = useCallback<OnboardingFlowState["completeOnboarding"]>(
     ({ agentKind, modelId, modeId }) => {
-      const nextDefaultModes = modeId && agentKind
-        ? {
-          ...preferences.defaultSessionModeByAgentKind,
-          [agentKind]: modeId,
-        }
-        : preferences.defaultSessionModeByAgentKind;
-
       preferences.setMultiple({
         onboardingCompletedVersion: CURRENT_ONBOARDING_VERSION,
         onboardingPrimaryGoalId: goalId || "",
         // Only write defaults if we actually have a recommendation. Empty
         // agentKind/modelId means the finalizer will fill them in later
         // once registries become available.
-        ...(agentKind ? { defaultChatAgentKind: agentKind } : {}),
-        ...(modelId ? { defaultChatModelId: modelId } : {}),
-        defaultSessionModeByAgentKind: nextDefaultModes,
+        ...buildAcceptedOnboardingDefaultsUpdate(preferences, {
+          agentKind,
+          modelId,
+          modeId,
+        }),
       });
 
       trackProductEvent("onboarding_completed", {

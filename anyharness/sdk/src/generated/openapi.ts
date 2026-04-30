@@ -2833,7 +2833,7 @@ export interface components {
         ReviewRoundStatus: "reviewing" | "completing" | "passed" | "feedback_pending" | "feedback_sent" | "completed_with_drift" | "cancelled" | "system_failed";
         ReviewRunDetail: {
             activeRoundId?: string | null;
-            autoSendFeedback: boolean;
+            autoIterate: boolean;
             childSessionIds: string[];
             createdAt: string;
             /** Format: int32 */
@@ -2859,6 +2859,19 @@ export interface components {
         };
         /** @enum {string} */
         ReviewRunStatus: "reviewing" | "feedback_ready" | "parent_revising" | "waiting_for_revision" | "passed" | "stopped" | "system_failed";
+        ReviewRunUpdatedPayload: {
+            activeRoundId?: string | null;
+            autoIterate: boolean;
+            /** Format: int32 */
+            currentRoundNumber: number;
+            kind: components["schemas"]["ReviewKind"];
+            /** Format: int32 */
+            maxRounds: number;
+            parentSessionId: string;
+            reviewRunId: string;
+            status: components["schemas"]["ReviewRunStatus"];
+            updatedAt: string;
+        };
         RunCommandRequest: {
             command: string[];
             cwd?: string | null;
@@ -2949,6 +2962,9 @@ export interface components {
         }) | (components["schemas"]["SessionLinkTurnCompletedPayload"] & {
             /** @enum {string} */
             type: "session_link_turn_completed";
+        }) | (components["schemas"]["ReviewRunUpdatedPayload"] & {
+            /** @enum {string} */
+            type: "review_run_updated";
         }) | (components["schemas"]["UsageUpdatePayload"] & {
             /** @enum {string} */
             type: "usage_update";
@@ -3145,14 +3161,14 @@ export interface components {
             reusesUserState: boolean;
         };
         StartCodeReviewRequest: {
-            autoSendFeedback?: boolean;
+            autoIterate?: boolean;
             /** Format: int32 */
             maxRounds?: number;
             parentSessionId: string;
             reviewers: components["schemas"]["ReviewPersonaRequest"][];
         };
         StartPlanReviewRequest: {
-            autoSendFeedback?: boolean;
+            autoIterate?: boolean;
             /** Format: int32 */
             maxRounds?: number;
             parentSessionId: string;

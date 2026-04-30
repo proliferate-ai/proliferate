@@ -37,6 +37,10 @@ import {
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
+import {
+  CLOSED_PUBLISH_DIALOG_STATE,
+  type PublishDialogState,
+} from "./publish-dialog-state";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
@@ -51,12 +55,8 @@ export interface MainScreenLayoutState {
   setRightPanelOpen: Dispatch<SetStateAction<boolean>>;
   terminalActivationRequestToken: number;
   setTerminalActivationRequestToken: Dispatch<SetStateAction<number>>;
-  commitOpen: boolean;
-  setCommitOpen: Dispatch<SetStateAction<boolean>>;
-  pushOpen: boolean;
-  setPushOpen: Dispatch<SetStateAction<boolean>>;
-  prOpen: boolean;
-  setPrOpen: Dispatch<SetStateAction<boolean>>;
+  publishDialog: PublishDialogState;
+  setPublishDialog: Dispatch<SetStateAction<PublishDialogState>>;
   filePaletteOpen: boolean;
   setFilePaletteOpen: Dispatch<SetStateAction<boolean>>;
   rightPanelWidth: number;
@@ -85,9 +85,9 @@ export interface MainScreenState {
 export function useMainScreenState(): MainScreenState {
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [terminalActivationRequestToken, setTerminalActivationRequestToken] = useState(0);
-  const [commitOpen, setCommitOpen] = useState(false);
-  const [pushOpen, setPushOpen] = useState(false);
-  const [prOpen, setPrOpen] = useState(false);
+  const [publishDialog, setPublishDialog] = useState<PublishDialogState>(
+    CLOSED_PUBLISH_DIALOG_STATE,
+  );
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
@@ -222,12 +222,8 @@ export function useMainScreenState(): MainScreenState {
       setRightPanelOpen,
       terminalActivationRequestToken,
       setTerminalActivationRequestToken,
-      commitOpen,
-      setCommitOpen,
-      pushOpen,
-      setPushOpen,
-      prOpen,
-      setPrOpen,
+      publishDialog,
+      setPublishDialog,
       filePaletteOpen,
       setFilePaletteOpen,
       rightPanelWidth,
