@@ -10,6 +10,7 @@ import {
   type StoredPendingAuthSession,
 } from "@/platform/tauri/auth";
 import { closeSessionSlotHandles } from "@/lib/domain/sessions/activity";
+import { desktopNavigationTarget } from "@/lib/domain/auth/desktop-navigation";
 import { markTelemetryHandled } from "@/lib/domain/telemetry/errors";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useAuthStore } from "@/stores/auth/auth-store";
@@ -198,28 +199,6 @@ function reportBackgroundAuthError(message: string): void {
       provider: "github",
     },
   });
-}
-
-function desktopNavigationTarget(url: string): string | null {
-  let parsed: URL;
-
-  try {
-    parsed = new URL(url);
-  } catch {
-    return null;
-  }
-
-  if (parsed.protocol !== "proliferate:" && parsed.protocol !== "proliferate-local:") {
-    return null;
-  }
-
-  if (parsed.hostname !== "settings" || parsed.pathname !== "/cloud") {
-    return null;
-  }
-
-  const params = new URLSearchParams(parsed.search);
-  params.set("section", "cloud");
-  return `/settings?${params.toString()}`;
 }
 
 function handleDesktopNavigationUrl(url: string): boolean {

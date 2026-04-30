@@ -8,7 +8,7 @@ use super::mcp_protocol::{
 use super::runtime::ReviewRuntime;
 
 enum ReviewMcpRole {
-    Parent,
+    Parent { can_signal_revision: bool },
     Reviewer,
     None,
 }
@@ -46,7 +46,7 @@ pub async fn handle_json_rpc(
                         "name": "proliferate-reviews",
                         "version": env!("CARGO_PKG_VERSION"),
                     },
-                    "instructions": "Review tools are role-scoped by AnyHarness. Reviewers must submit submit_review_result. Parent sessions may signal mark_review_revision_ready when a revised target is ready and another review round is expected."
+                    "instructions": "Review tools are role-scoped by AnyHarness. Reviewers must submit submit_review_result. Parent sessions may use get_review_status. mark_review_revision_ready is only available for manual fallback states when a revised target is ready and another review round is expected."
                 }),
             )))
         }
@@ -87,18 +87,22 @@ fn resolve_role(
         .service()
         .store()
         .find_active_run_for_parent(session_id)?;
-    if active
+    if let Some(run) = active
         .as_ref()
-        .is_some_and(|run| run.workspace_id == workspace_id && run.status.is_active())
+        .filter(|run| run.workspace_id == workspace_id && run.status.is_active())
     {
-        return Ok(ReviewMcpRole::Parent);
+        return Ok(ReviewMcpRole::Parent {
+            can_signal_revision: runtime.service().run_can_signal_revision_via_mcp(run),
+        });
     }
     Ok(ReviewMcpRole::None)
 }
 
 fn tools_for_role(role: &ReviewMcpRole) -> Vec<Value> {
     match role {
-        ReviewMcpRole::Parent => parent_tool_list(),
+        ReviewMcpRole::Parent {
+            can_signal_revision,
+        } => parent_tool_list(*can_signal_revision),
         ReviewMcpRole::Reviewer => reviewer_tool_list(),
         ReviewMcpRole::None => Vec::new(),
     }
@@ -128,12 +132,14 @@ async fn handle_tool_call(
                 Err(error) => Err(anyhow::anyhow!(error.to_string())),
             }
         }
-        (ReviewMcpRole::Parent, "mark_review_revision_ready") => {
+        (ReviewMcpRole::Parent { .. }, "mark_review_revision_ready")
+        | (ReviewMcpRole::None, "mark_review_revision_ready") => {
             let args: anyhow::Result<MarkReviewRevisionReadyArgs> =
                 deserialize_args(params.arguments);
             match args {
                 Ok(args) => runtime
-                    .mark_revision_ready(
+                    .mark_revision_ready_from_parent_tool(
+                        session_id,
                         &args.review_run_id,
                         anyharness_contract::v1::MarkReviewRevisionReadyRequest {
                             revised_plan_id: args.revised_plan_id,
@@ -145,7 +151,7 @@ async fn handle_tool_call(
                 Err(error) => Err(anyhow::anyhow!(error.to_string())),
             }
         }
-        (ReviewMcpRole::Parent, "get_review_status") => runtime
+        (ReviewMcpRole::Parent { .. }, "get_review_status") => runtime
             .service()
             .list_session_reviews(session_id)
             .map(|reviews| json!({ "reviews": reviews }))

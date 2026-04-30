@@ -10,6 +10,7 @@ import {
   buildHomeActionCards,
   buildHomeStatusMessage,
 } from "@/lib/domain/home/home-screen";
+import { latestLogicalWorkspaceTimestamp } from "@/lib/domain/workspaces/logical-workspaces";
 import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
@@ -44,8 +45,12 @@ export function useHomeScreen() {
         )
       )
       .sort((a, b) => {
-        const aTime = new Date(workspaceLastInteracted[a.id] ?? a.updatedAt).getTime();
-        const bTime = new Date(workspaceLastInteracted[b.id] ?? b.updatedAt).getTime();
+        const aTime = new Date(
+          latestLogicalWorkspaceTimestamp(workspaceLastInteracted, a) ?? a.updatedAt,
+        ).getTime();
+        const bTime = new Date(
+          latestLogicalWorkspaceTimestamp(workspaceLastInteracted, b) ?? b.updatedAt,
+        ).getTime();
         return bTime - aTime;
       })
       .slice(0, 4);

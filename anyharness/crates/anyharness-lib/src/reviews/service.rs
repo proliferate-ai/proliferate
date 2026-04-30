@@ -43,7 +43,7 @@ pub struct StartReviewInput {
     pub target_plan: Option<PlanRecord>,
     pub target_code_manifest: Option<ReviewCodeTargetManifest>,
     pub max_rounds: u32,
-    pub auto_send_feedback: bool,
+    pub auto_iterate: bool,
     pub reviewers: Vec<ReviewPersonaInput>,
 }
 
@@ -118,6 +118,18 @@ impl ReviewService {
         self.plan_service.get(plan_id)
     }
 
+    pub fn run_accepts_manual_revision_signal(&self, run: &ReviewRunRecord) -> bool {
+        if run.current_round_number >= run.max_rounds {
+            return false;
+        }
+        matches!(run.status, ReviewRunStatus::WaitingForRevision)
+            || (run.status == ReviewRunStatus::ParentRevising && !run.auto_iterate)
+    }
+
+    pub fn run_can_signal_revision_via_mcp(&self, run: &ReviewRunRecord) -> bool {
+        run.parent_can_signal_revision_via_mcp && self.run_accepts_manual_revision_signal(run)
+    }
+
     pub fn start_review(&self, input: StartReviewInput) -> Result<ReviewRunRecord, ReviewError> {
         validate_rounds(input.max_rounds)?;
         validate_reviewers(&input.reviewers)?;
@@ -168,7 +180,7 @@ impl ReviewService {
             target_code_manifest_json: target_code_manifest_json.clone(),
             title: input.title,
             max_rounds: input.max_rounds,
-            auto_send_feedback: input.auto_send_feedback,
+            auto_iterate: input.auto_iterate,
             active_round_id: Some(round_id.clone()),
             current_round_number: 1,
             parent_can_signal_revision_via_mcp,
@@ -423,18 +435,23 @@ impl ReviewService {
         self.store.stop_run(run_id).map_err(ReviewError::Internal)
     }
 
-    pub fn mark_parent_feedback_turn_finished(&self, parent_session_id: &str, turn_id: &str) {
-        if let Err(error) = self
+    pub fn mark_parent_feedback_turn_finished(
+        &self,
+        parent_session_id: &str,
+        turn_id: &str,
+    ) -> Result<Option<ReviewRunRecord>, ReviewError> {
+        let run_id = self
             .store
-            .mark_parent_waiting_for_revision_for_turn(parent_session_id, turn_id)
-        {
-            tracing::warn!(
-                parent_session_id,
-                turn_id,
-                error = %error,
-                "failed to mark review parent waiting for revision"
-            );
-        }
+            .mark_parent_feedback_turn_finished(parent_session_id, turn_id)
+            .map_err(ReviewError::Internal)?;
+        run_id
+            .map(|run_id| {
+                self.store
+                    .find_run(&run_id)
+                    .map_err(ReviewError::Internal)?
+                    .ok_or_else(|| ReviewError::RunNotFound(run_id))
+            })
+            .transpose()
     }
 
     pub fn record_candidate_plan(&self, plan: &PlanRecord) {
@@ -464,6 +481,32 @@ impl ReviewService {
         revised_plan_id: Option<&str>,
         target_manifest: Option<ReviewCodeTargetManifest>,
     ) -> Result<ReviewRunRecord, ReviewError> {
+        self.start_next_round_records_with_claim(run_id, revised_plan_id, target_manifest, None)
+            .map(|(run, _started)| run)
+    }
+
+    pub fn start_next_round_records_after_feedback_turn(
+        &self,
+        run_id: &str,
+        feedback_turn_id: &str,
+        revised_plan_id: Option<&str>,
+        target_manifest: Option<ReviewCodeTargetManifest>,
+    ) -> Result<(ReviewRunRecord, bool), ReviewError> {
+        self.start_next_round_records_with_claim(
+            run_id,
+            revised_plan_id,
+            target_manifest,
+            Some(feedback_turn_id),
+        )
+    }
+
+    fn start_next_round_records_with_claim(
+        &self,
+        run_id: &str,
+        revised_plan_id: Option<&str>,
+        target_manifest: Option<ReviewCodeTargetManifest>,
+        feedback_turn_id: Option<&str>,
+    ) -> Result<(ReviewRunRecord, bool), ReviewError> {
         let run = self
             .store
             .find_run(run_id)
@@ -475,6 +518,9 @@ impl ReviewService {
                 | ReviewRunStatus::ParentRevising
                 | ReviewRunStatus::WaitingForRevision
         ) {
+            if feedback_turn_id.is_some() {
+                return Ok((run, false));
+            }
             return Err(ReviewError::NotWaitingForRevision);
         }
         if run.current_round_number >= run.max_rounds {
@@ -489,7 +535,8 @@ impl ReviewService {
                     .store
                     .find_run(&run.id)
                     .map_err(ReviewError::Internal)?
-                    .ok_or_else(|| ReviewError::RunNotFound(run.id));
+                    .ok_or_else(|| ReviewError::RunNotFound(run.id))
+                    .map(|run| (run, false));
             }
             return Err(ReviewError::MaxRoundsReached);
         }
@@ -502,7 +549,7 @@ impl ReviewService {
                     None => {
                         inferred_plan_id = self
                             .store
-                            .find_single_candidate_plan_id(&run.id)
+                            .find_single_candidate_plan_id(&run.id, feedback_turn_id)
                             .map_err(|error| {
                                 if error.to_string()
                                     == "multiple revised plan candidates are available"
@@ -557,7 +604,8 @@ impl ReviewService {
             updated_at: now.clone(),
         };
         let assignments = build_assignments(&run, &round, &personas, &now);
-        self.store
+        let started = self
+            .store
             .start_next_round(
                 &run.id,
                 &round,
@@ -565,12 +613,23 @@ impl ReviewService {
                 round.target_plan_id.as_deref(),
                 round.target_plan_snapshot_hash.as_deref(),
                 round.target_code_manifest_json.as_deref(),
+                run.current_round_number,
+                feedback_turn_id,
             )
             .map_err(ReviewError::Internal)?;
+        if !started {
+            return self
+                .store
+                .find_run(&run.id)
+                .map_err(ReviewError::Internal)?
+                .ok_or_else(|| ReviewError::RunNotFound(run.id))
+                .map(|run| (run, false));
+        }
         self.store
             .find_run(&run.id)
             .map_err(ReviewError::Internal)?
             .ok_or_else(|| ReviewError::RunNotFound(run.id))
+            .map(|run| (run, true))
     }
 }
 
@@ -669,7 +728,7 @@ mod tests {
                 target_plan: None,
                 target_code_manifest: None,
                 max_rounds: 2,
-                auto_send_feedback: true,
+                auto_iterate: true,
                 reviewers: vec![reviewer()],
             })
             .expect("start review");
@@ -732,7 +791,7 @@ mod tests {
                 target_plan: None,
                 target_code_manifest: None,
                 max_rounds: 1,
-                auto_send_feedback: true,
+                auto_iterate: true,
                 reviewers: vec![reviewer()],
             })
             .expect("start review");
@@ -752,7 +811,7 @@ mod tests {
                 target_plan: None,
                 target_code_manifest: None,
                 max_rounds: 2,
-                auto_send_feedback: true,
+                auto_iterate: false,
                 reviewers: vec![reviewer()],
             })
             .expect("start review");
@@ -794,6 +853,43 @@ mod tests {
         assert_eq!(run.active_round_id, None);
         assert!(job.prompt_text.contains("All reviewers approved."));
         assert!(job.prompt_text.contains("continue the implementation"));
+        let due = service
+            .store()
+            .pending_feedback_jobs("9999-01-01T00:00:00Z")
+            .expect("list pending feedback");
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].id, job.id);
+
+        service
+            .store()
+            .mark_feedback_job_sending(&job.id)
+            .expect("mark sending")
+            .expect("claim approval feedback");
+        service
+            .store()
+            .mark_feedback_job_failed(&job.id, "prompt_send_failed", Some("network unavailable"))
+            .expect("mark feedback failed");
+        let run_after_failure = service
+            .store()
+            .find_run(&run.id)
+            .expect("find run")
+            .expect("run");
+        let round_after_failure = service
+            .store()
+            .find_round(&job.review_round_id)
+            .expect("find round")
+            .expect("round");
+        let job_after_failure = service
+            .store()
+            .find_feedback_job(&job.id)
+            .expect("find feedback job")
+            .expect("feedback job");
+        assert_eq!(run_after_failure.status, ReviewRunStatus::Passed);
+        assert_eq!(
+            round_after_failure.status,
+            ReviewRoundStatus::FeedbackPending
+        );
+        assert_eq!(job_after_failure.state, ReviewFeedbackJobState::Failed);
     }
 
     #[test]
@@ -808,7 +904,7 @@ mod tests {
                 target_plan: None,
                 target_code_manifest: None,
                 max_rounds: 1,
-                auto_send_feedback: true,
+                auto_iterate: true,
                 reviewers: vec![reviewer()],
             })
             .expect("start review");
@@ -841,7 +937,7 @@ mod tests {
             .expect("feedback job");
         service
             .store()
-            .mark_feedback_job_sent(&job.id, None, Some("feedback-turn-1"))
+            .mark_feedback_job_sent(&job.id, None, Some("feedback-turn-1"), None)
             .expect("mark feedback sent");
 
         let run = service
@@ -851,6 +947,154 @@ mod tests {
         assert_eq!(run.status, ReviewRunStatus::Stopped);
         assert_eq!(run.active_round_id, None);
         assert_eq!(run.failure_reason.as_deref(), Some("max_rounds_reached"));
+    }
+
+    #[test]
+    fn requested_changes_stay_feedback_ready_until_feedback_turn_is_recorded() {
+        let (service, _session_store) = service_fixture();
+        let run = service
+            .start_review(StartReviewInput {
+                workspace_id: "workspace-1".to_string(),
+                parent_session_id: "parent-1".to_string(),
+                kind: ReviewKind::Code,
+                title: "Review current changes".to_string(),
+                target_plan: None,
+                target_code_manifest: None,
+                max_rounds: 2,
+                auto_iterate: true,
+                reviewers: vec![reviewer()],
+            })
+            .expect("start review");
+        let assignment = service
+            .store()
+            .list_assignments_for_run(&run.id)
+            .expect("list assignments")
+            .pop()
+            .expect("assignment");
+        service
+            .link_reviewer_session(
+                &run.id,
+                &assignment.id,
+                "parent-1",
+                "child-1",
+                Some("Plan skeptic".to_string()),
+                None,
+                ReviewModeVerificationStatus::Pending,
+            )
+            .expect("link reviewer");
+        let job = service
+            .submit_assignment_result(
+                "child-1",
+                false,
+                "Needs changes.",
+                "## Findings\n\nMissing concrete checks.",
+                "/tmp/review.md",
+            )
+            .expect("submit review")
+            .expect("feedback job");
+
+        let run_before_delivery = service
+            .store()
+            .find_run(&run.id)
+            .expect("find run")
+            .expect("run");
+        assert_eq!(run_before_delivery.status, ReviewRunStatus::FeedbackReady);
+
+        service
+            .store()
+            .mark_feedback_job_sending(&job.id)
+            .expect("mark sending")
+            .expect("claimed sending job");
+        let run_while_sending = service
+            .store()
+            .find_run(&run.id)
+            .expect("find run")
+            .expect("run");
+        assert_eq!(run_while_sending.status, ReviewRunStatus::FeedbackReady);
+
+        service
+            .store()
+            .mark_feedback_job_sent(&job.id, None, Some("feedback-turn-1"), None)
+            .expect("mark sent");
+        let run_after_delivery = service
+            .store()
+            .find_run(&run.id)
+            .expect("find run")
+            .expect("run");
+        assert_eq!(run_after_delivery.status, ReviewRunStatus::ParentRevising);
+    }
+
+    #[test]
+    fn manual_feedback_jobs_are_not_due_until_delivery_has_been_attempted() {
+        let (service, _session_store) = service_fixture();
+        let run = service
+            .start_review(StartReviewInput {
+                workspace_id: "workspace-1".to_string(),
+                parent_session_id: "parent-1".to_string(),
+                kind: ReviewKind::Code,
+                title: "Review current changes".to_string(),
+                target_plan: None,
+                target_code_manifest: None,
+                max_rounds: 2,
+                auto_iterate: false,
+                reviewers: vec![reviewer()],
+            })
+            .expect("start review");
+        let assignment = service
+            .store()
+            .list_assignments_for_run(&run.id)
+            .expect("list assignments")
+            .pop()
+            .expect("assignment");
+        service
+            .link_reviewer_session(
+                &run.id,
+                &assignment.id,
+                "parent-1",
+                "child-1",
+                Some("Plan skeptic".to_string()),
+                None,
+                ReviewModeVerificationStatus::Pending,
+            )
+            .expect("link reviewer");
+        let job = service
+            .submit_assignment_result(
+                "child-1",
+                false,
+                "Needs changes.",
+                "## Findings\n\nMissing concrete checks.",
+                "/tmp/review.md",
+            )
+            .expect("submit review")
+            .expect("feedback job");
+
+        let due_before_manual_send = service
+            .store()
+            .pending_feedback_jobs("9999-01-01T00:00:00Z")
+            .expect("list pending feedback");
+        assert!(due_before_manual_send.is_empty());
+
+        service
+            .store()
+            .mark_feedback_job_sending(&job.id)
+            .expect("mark sending")
+            .expect("claimed sending job");
+        service
+            .store()
+            .mark_feedback_job_retry(
+                &job.id,
+                "send_failed",
+                Some("temporary failure"),
+                "2000-01-01T00:00:00Z",
+            )
+            .expect("mark retry");
+
+        let due_after_manual_attempt = service
+            .store()
+            .pending_feedback_jobs("9999-01-01T00:00:00Z")
+            .expect("list pending feedback");
+        assert_eq!(due_after_manual_attempt.len(), 1);
+        assert_eq!(due_after_manual_attempt[0].id, job.id);
     }
 
     #[test]
@@ -865,7 +1109,7 @@ mod tests {
                 target_plan: None,
                 target_code_manifest: None,
                 max_rounds: 2,
-                auto_send_feedback: true,
+                auto_iterate: true,
                 reviewers: vec![reviewer()],
             })
             .expect("start review");
@@ -898,9 +1142,11 @@ mod tests {
             .expect("feedback job");
         service
             .store()
-            .mark_feedback_job_sent(&job.id, None, Some("feedback-turn-1"))
+            .mark_feedback_job_sent(&job.id, None, Some("feedback-turn-1"), None)
             .expect("mark feedback sent");
-        service.mark_parent_feedback_turn_finished("parent-1", "feedback-turn-1");
+        service
+            .mark_parent_feedback_turn_finished("parent-1", "feedback-turn-1")
+            .expect("mark parent turn finished");
 
         let run = service
             .start_next_round_records(&run.id, None, None)
@@ -933,7 +1179,7 @@ mod tests {
     }
 
     #[test]
-    fn final_feedback_turn_stops_run_when_max_rounds_reached() {
+    fn auto_feedback_turn_claim_starts_next_round_once() {
         let (service, _session_store) = service_fixture();
         let run = service
             .start_review(StartReviewInput {
@@ -943,8 +1189,8 @@ mod tests {
                 title: "Review current changes".to_string(),
                 target_plan: None,
                 target_code_manifest: None,
-                max_rounds: 1,
-                auto_send_feedback: true,
+                max_rounds: 2,
+                auto_iterate: true,
                 reviewers: vec![reviewer()],
             })
             .expect("start review");
@@ -977,10 +1223,81 @@ mod tests {
             .expect("feedback job");
         service
             .store()
-            .mark_feedback_job_sent(&job.id, None, Some("feedback-turn-1"))
+            .mark_feedback_job_sent(&job.id, None, Some("feedback-turn-1"), None)
+            .expect("mark feedback sent");
+        service
+            .mark_parent_feedback_turn_finished("parent-1", "feedback-turn-1")
+            .expect("mark parent turn finished");
+
+        let (first, first_started) = service
+            .start_next_round_records_after_feedback_turn(&run.id, "feedback-turn-1", None, None)
+            .expect("first auto start");
+        let (second, second_started) = service
+            .start_next_round_records_after_feedback_turn(&run.id, "feedback-turn-1", None, None)
+            .expect("second auto start");
+        let rounds = service
+            .store()
+            .list_rounds_for_run(&run.id)
+            .expect("list rounds");
+
+        assert!(first_started);
+        assert!(!second_started);
+        assert_eq!(first.current_round_number, 2);
+        assert_eq!(second.current_round_number, 2);
+        assert_eq!(rounds.len(), 2);
+    }
+
+    #[test]
+    fn final_feedback_turn_stops_run_when_max_rounds_reached() {
+        let (service, _session_store) = service_fixture();
+        let run = service
+            .start_review(StartReviewInput {
+                workspace_id: "workspace-1".to_string(),
+                parent_session_id: "parent-1".to_string(),
+                kind: ReviewKind::Code,
+                title: "Review current changes".to_string(),
+                target_plan: None,
+                target_code_manifest: None,
+                max_rounds: 1,
+                auto_iterate: true,
+                reviewers: vec![reviewer()],
+            })
+            .expect("start review");
+        let assignment = service
+            .store()
+            .list_assignments_for_run(&run.id)
+            .expect("list assignments")
+            .pop()
+            .expect("assignment");
+        service
+            .link_reviewer_session(
+                &run.id,
+                &assignment.id,
+                "parent-1",
+                "child-1",
+                Some("Plan skeptic".to_string()),
+                None,
+                ReviewModeVerificationStatus::Pending,
+            )
+            .expect("link reviewer");
+        let job = service
+            .submit_assignment_result(
+                "child-1",
+                false,
+                "Needs changes.",
+                "## Findings\n\nMissing concrete checks.",
+                "/tmp/review.md",
+            )
+            .expect("submit review")
+            .expect("feedback job");
+        service
+            .store()
+            .mark_feedback_job_sent(&job.id, None, Some("feedback-turn-1"), None)
             .expect("mark feedback sent");
 
-        service.mark_parent_feedback_turn_finished("parent-1", "feedback-turn-1");
+        service
+            .mark_parent_feedback_turn_finished("parent-1", "feedback-turn-1")
+            .expect("mark parent turn finished");
         let run = service
             .store()
             .find_run(&run.id)

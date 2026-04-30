@@ -1,20 +1,26 @@
 import type { ReactNode } from "react";
+import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "@/config/chat-layout";
 
 interface ChatPreMessageCanvasProps {
+  bottomInsetPx: number;
   children: ReactNode;
 }
 
 /**
- * Shared parent for the loading and ready heroes. Owns the column geometry
- * (max-w-3xl, px-7) so the two children swap inside one stable layout — the
- * loading → ready transition becomes a content fade rather than a position
- * jump. Matches the transcript column shape (see MessageList.tsx) so when the
- * first turn finally lands, the content alignment doesn't shift either.
+ * Shared parent for the loading and ready heroes. Owns the same gutter +
+ * column geometry as the transcript so the first turn can land without a
+ * horizontal position jump.
  */
-export function ChatPreMessageCanvas({ children }: ChatPreMessageCanvasProps) {
+export function ChatPreMessageCanvas({
+  bottomInsetPx,
+  children,
+}: ChatPreMessageCanvasProps) {
   return (
-    <div className="flex flex-1 min-h-0">
-      <div className="mx-auto flex w-full max-w-3xl flex-col items-center justify-center px-7 py-8">
+    <div
+      className={`flex flex-1 min-h-0 ${CHAT_SURFACE_GUTTER_CLASSNAME}`}
+      style={{ paddingBottom: bottomInsetPx }}
+    >
+      <div className={`${CHAT_COLUMN_CLASSNAME} flex flex-col items-center justify-center py-8`}>
         {children}
       </div>
     </div>

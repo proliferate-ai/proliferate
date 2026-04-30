@@ -23,13 +23,13 @@ export interface ReviewSetupReviewerDraft {
 export interface ReviewSetupDraft {
   kind: ReviewKind;
   maxRounds: number;
-  autoSendFeedback: boolean;
+  autoIterate: boolean;
   reviewers: ReviewSetupReviewerDraft[];
 }
 
 export interface StoredReviewKindDefaults {
   maxRounds: number;
-  autoSendFeedback: boolean;
+  autoIterate: boolean;
   reviewers: ReviewSetupReviewerDraft[];
 }
 
@@ -198,7 +198,7 @@ export function createReviewSetupDraft(args: {
   return {
     kind: args.kind,
     maxRounds: clampRounds(stored?.maxRounds ?? DEFAULT_REVIEW_MAX_ROUNDS),
-    autoSendFeedback: stored?.autoSendFeedback ?? true,
+    autoIterate: stored?.autoIterate ?? true,
     reviewers: sourceReviewers
       .slice(0, MAX_REVIEWERS_PER_RUN)
       .map((reviewer) => {
@@ -278,7 +278,7 @@ export function buildReviewRequest(
     request: {
       parentSessionId,
       maxRounds: clampRounds(draft.maxRounds),
-      autoSendFeedback: draft.autoSendFeedback,
+      autoIterate: draft.autoIterate,
       reviewers,
     },
     error: null,
@@ -291,7 +291,7 @@ export function draftToStoredReviewDefaults(
 ): StoredReviewKindDefaults {
   return {
     maxRounds: clampRounds(draft.maxRounds),
-    autoSendFeedback: draft.autoSendFeedback,
+    autoIterate: draft.autoIterate,
     reviewers: draft.reviewers.slice(0, MAX_REVIEWERS_PER_RUN).map((reviewer) => {
       const template = findReviewPersonaTemplateForReviewer(personalityTemplates, reviewer.id);
       return {

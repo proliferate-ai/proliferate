@@ -10,7 +10,7 @@ function sortWorkspacesByUpdatedAtDesc<T extends Pick<Workspace, "updatedAt">>(w
 }
 
 export function cloudWorkspaceGroupKey(
-  workspace: Pick<CloudWorkspaceSummary, "repo">,
+  workspace: { repo: Pick<CloudWorkspaceSummary["repo"], "provider" | "owner" | "name"> },
 ): string {
   return `${workspace.repo.provider}:${workspace.repo.owner}:${workspace.repo.name}`;
 }
@@ -122,6 +122,19 @@ export function buildWorkspaceCollections(
     cloudWorkspaces,
     workspaces: enrichedLocalWorkspaces,
   };
+}
+
+export function workspaceCollectionsNeedActivityRefresh(
+  collections: WorkspaceCollections | undefined,
+): boolean {
+  if (!collections) {
+    return false;
+  }
+
+  return collections.localWorkspaces.some((workspace) => {
+    const phase = workspace.executionSummary?.phase;
+    return phase === "running" || phase === "awaiting_interaction";
+  });
 }
 
 export function upsertLocalWorkspaceCollections(

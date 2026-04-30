@@ -20,7 +20,7 @@ CREATE TABLE review_runs (
     target_code_manifest_json TEXT,
     title TEXT NOT NULL,
     max_rounds INTEGER NOT NULL,
-    auto_send_feedback INTEGER NOT NULL DEFAULT 1,
+    auto_iterate INTEGER NOT NULL DEFAULT 1,
     active_round_id TEXT,
     current_round_number INTEGER NOT NULL DEFAULT 1,
     parent_can_signal_revision_via_mcp INTEGER NOT NULL DEFAULT 0,

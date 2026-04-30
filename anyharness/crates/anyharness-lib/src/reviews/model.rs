@@ -300,7 +300,7 @@ pub struct ReviewRunRecord {
     pub target_code_manifest_json: Option<String>,
     pub title: String,
     pub max_rounds: u32,
-    pub auto_send_feedback: bool,
+    pub auto_iterate: bool,
     pub active_round_id: Option<String>,
     pub current_round_number: u32,
     pub parent_can_signal_revision_via_mcp: bool,

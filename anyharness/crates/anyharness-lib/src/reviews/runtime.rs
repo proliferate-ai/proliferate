@@ -3,14 +3,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyharness_contract::v1::{
-    MarkReviewRevisionReadyRequest, PromptInputBlock, ReviewRunDetail, StartCodeReviewRequest,
-    StartPlanReviewRequest,
+    MarkReviewRevisionReadyRequest, PromptInputBlock, ReviewRunDetail, ReviewRunUpdatedPayload,
+    StartCodeReviewRequest, StartPlanReviewRequest,
 };
 
 use super::hooks::ReviewHookEvent;
 use super::model::{
     ReviewFeedbackJobRecord, ReviewFeedbackJobState, ReviewKind, ReviewModeVerificationStatus,
-    ReviewRunRecord,
+    ReviewRunRecord, ReviewRunStatus,
 };
 use super::runtime_helpers::{
     build_reviewer_prompt, map_create_session_error, reviewer_system_prompt_append,
@@ -22,6 +22,7 @@ use crate::sessions::extensions::SessionTurnOutcome;
 use crate::sessions::model::SessionMcpBindingPolicy;
 use crate::sessions::prompt::PromptProvenance;
 use crate::sessions::runtime::{SendPromptOutcome, SessionRuntime};
+use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
 use crate::workspaces::runtime::WorkspaceRuntime;
 
 const REVIEW_RECONCILE_INTERVAL_SECS: u64 = 15;
@@ -97,7 +98,7 @@ impl ReviewRuntime {
             target_plan: Some(target_plan),
             target_code_manifest: None,
             max_rounds: req.max_rounds,
-            auto_send_feedback: req.auto_send_feedback,
+            auto_iterate: req.auto_iterate,
             reviewers: reviewers_from_contract(req.reviewers),
         })?;
         self.spawn_launch_active_round(run.clone());
@@ -118,7 +119,7 @@ impl ReviewRuntime {
             target_plan: None,
             target_code_manifest: Some(manifest),
             max_rounds: req.max_rounds,
-            auto_send_feedback: req.auto_send_feedback,
+            auto_iterate: req.auto_iterate,
             reviewers: reviewers_from_contract(req.reviewers),
         })?;
         self.spawn_launch_active_round(run.clone());
@@ -147,13 +148,14 @@ impl ReviewRuntime {
             &artifact_path,
         )?;
         if let Some(job) = job.as_ref() {
+            self.emit_review_run_updated_for_job(job).await;
             let run = self
                 .service
                 .store()
                 .find_run(&job.review_run_id)
                 .map_err(ReviewError::Internal)?
                 .ok_or_else(|| ReviewError::RunNotFound(job.review_run_id.clone()))?;
-            if run.auto_send_feedback {
+            if run.auto_iterate || run.status == ReviewRunStatus::Passed {
                 self.send_feedback_job(job).await?;
             }
         }
@@ -194,15 +196,22 @@ impl ReviewRuntime {
         run_id: &str,
         req: MarkReviewRevisionReadyRequest,
     ) -> Result<ReviewRunDetail, ReviewError> {
+        let existing = self
+            .service
+            .store()
+            .find_run(run_id)
+            .map_err(ReviewError::Internal)?
+            .ok_or_else(|| ReviewError::RunNotFound(run_id.to_string()))?;
+        if !matches!(
+            existing.status,
+            ReviewRunStatus::ParentRevising | ReviewRunStatus::WaitingForRevision
+        ) || (existing.status == ReviewRunStatus::ParentRevising && existing.auto_iterate)
+        {
+            return Err(ReviewError::NotWaitingForRevision);
+        }
         let manifest = {
-            let run = self
-                .service
-                .store()
-                .find_run(run_id)
-                .map_err(ReviewError::Internal)?
-                .ok_or_else(|| ReviewError::RunNotFound(run_id.to_string()))?;
-            if run.kind == ReviewKind::Code {
-                Some(self.capture_code_manifest(&run.workspace_id).await?)
+            if existing.kind == ReviewKind::Code {
+                Some(self.capture_code_manifest(&existing.workspace_id).await?)
             } else {
                 None
             }
@@ -212,8 +221,33 @@ impl ReviewRuntime {
             req.revised_plan_id.as_deref(),
             manifest,
         )?;
-        self.spawn_launch_active_round(run.clone());
+        if run.status == ReviewRunStatus::Reviewing {
+            self.spawn_launch_active_round(run.clone());
+        }
+        self.emit_review_run_updated(&run.parent_session_id, run_id)
+            .await;
         self.service.get_run_detail(run_id)
+    }
+
+    pub async fn mark_revision_ready_from_parent_tool(
+        &self,
+        parent_session_id: &str,
+        run_id: &str,
+        req: MarkReviewRevisionReadyRequest,
+    ) -> Result<ReviewRunDetail, ReviewError> {
+        let run = self
+            .service
+            .store()
+            .find_run(run_id)
+            .map_err(ReviewError::Internal)?
+            .ok_or_else(|| ReviewError::RunNotFound(run_id.to_string()))?;
+        if run.parent_session_id != parent_session_id {
+            return Err(ReviewError::RunNotFound(run_id.to_string()));
+        }
+        if !self.service.run_accepts_manual_revision_signal(&run) {
+            return self.service.get_run_detail(run_id);
+        }
+        self.mark_revision_ready(run_id, req).await
     }
 
     pub async fn stop_run(&self, run_id: &str) -> Result<ReviewRunDetail, ReviewError> {
@@ -221,7 +255,107 @@ impl ReviewRuntime {
         for session_id in reviewer_session_ids {
             let _ = self.session_runtime.cancel_live_session(&session_id).await;
         }
+        if let Some(run) = self
+            .service
+            .store()
+            .find_run(run_id)
+            .map_err(ReviewError::Internal)?
+        {
+            self.emit_review_run_updated(&run.parent_session_id, run_id)
+                .await;
+        }
         self.service.get_run_detail(run_id)
+    }
+
+    async fn try_auto_iterate_run(
+        &self,
+        run_id: &str,
+        feedback_turn_id: &str,
+    ) -> Result<ReviewRunDetail, ReviewError> {
+        let run = self
+            .service
+            .store()
+            .find_run(run_id)
+            .map_err(ReviewError::Internal)?
+            .ok_or_else(|| ReviewError::RunNotFound(run_id.to_string()))?;
+        if run.status != ReviewRunStatus::ParentRevising
+            || !run.auto_iterate
+            || run.current_round_number >= run.max_rounds
+        {
+            return self.service.get_run_detail(run_id);
+        }
+
+        let manifest = if run.kind == ReviewKind::Code {
+            Some(self.capture_code_manifest(&run.workspace_id).await?)
+        } else {
+            None
+        };
+        let result = self.service.start_next_round_records_after_feedback_turn(
+            run_id,
+            feedback_turn_id,
+            None,
+            manifest,
+        );
+        let (run, started) = match result {
+            Ok(value) => value,
+            Err(ReviewError::RevisedPlanRequired | ReviewError::AmbiguousRevisedPlan) => {
+                if self
+                    .service
+                    .store()
+                    .mark_run_waiting_for_revision(run_id)
+                    .map_err(ReviewError::Internal)?
+                {
+                    self.emit_review_run_updated(&run.parent_session_id, run_id)
+                        .await;
+                }
+                return self.service.get_run_detail(run_id);
+            }
+            Err(error) => return Err(error),
+        };
+        if started {
+            self.spawn_launch_active_round(run.clone());
+            self.emit_review_run_updated(&run.parent_session_id, run_id)
+                .await;
+        }
+        self.service.get_run_detail(run_id)
+    }
+
+    async fn emit_review_run_updated_for_job(&self, job: &ReviewFeedbackJobRecord) {
+        self.emit_review_run_updated(&job.parent_session_id, &job.review_run_id)
+            .await;
+    }
+
+    async fn emit_review_run_updated(&self, parent_session_id: &str, run_id: &str) {
+        let Ok(Some(run)) = self.service.store().find_run(run_id) else {
+            return;
+        };
+        let payload = ReviewRunUpdatedPayload {
+            review_run_id: run.id.clone(),
+            parent_session_id: run.parent_session_id.clone(),
+            kind: run.kind.into(),
+            status: run.status.into(),
+            current_round_number: run.current_round_number,
+            max_rounds: run.max_rounds,
+            auto_iterate: run.auto_iterate,
+            active_round_id: run.active_round_id.clone(),
+            updated_at: run.updated_at.clone(),
+        };
+        if let Err(error) = self
+            .session_runtime
+            .emit_runtime_event(
+                &run.parent_session_id,
+                RuntimeInjectedSessionEvent::ReviewRunUpdated(payload),
+            )
+            .await
+        {
+            tracing::warn!(
+                review_run_id = %run.id,
+                parent_session_id = %run.parent_session_id,
+                requested_parent_session_id = %parent_session_id,
+                error = %error,
+                "failed to emit review run update event"
+            );
+        }
     }
 
     fn spawn_launch_active_round(&self, run: ReviewRunRecord) {
@@ -248,6 +382,9 @@ impl ReviewRuntime {
                         "failed to mark review run failed after launch error"
                     );
                 }
+                runtime
+                    .emit_review_run_updated(&run.parent_session_id, &run_id)
+                    .await;
             }
         });
     }
@@ -424,6 +561,7 @@ impl ReviewRuntime {
         else {
             return Ok(());
         };
+        self.emit_review_run_updated_for_job(&job).await;
         let outcome = self
             .session_runtime
             .send_text_prompt_with_provenance(
@@ -443,12 +581,14 @@ impl ReviewRuntime {
                     .store()
                     .mark_feedback_job_queued(&job.id, Some(seq))
                     .map_err(ReviewError::Internal)?;
+                self.emit_review_run_updated_for_job(&job).await;
             }
             Ok(SendPromptOutcome::Running { turn_id, .. }) => {
                 self.service
                     .store()
-                    .mark_feedback_job_sent(&job.id, None, Some(&turn_id))
+                    .mark_feedback_job_sent(&job.id, None, Some(&turn_id), None)
                     .map_err(ReviewError::Internal)?;
+                self.emit_review_run_updated_for_job(&job).await;
             }
             Err(error) => {
                 let detail = format!("{error:?}");
@@ -460,6 +600,7 @@ impl ReviewRuntime {
                         .store()
                         .mark_feedback_job_failed(&job.id, "prompt_send_failed", Some(&detail))
                         .map_err(ReviewError::Internal)?;
+                    self.emit_review_run_updated_for_job(&job).await;
                     return Err(ReviewError::Internal(anyhow::anyhow!(detail)));
                 } else {
                     self.service
@@ -471,6 +612,7 @@ impl ReviewRuntime {
                             &next_attempt_at,
                         )
                         .map_err(ReviewError::Internal)?;
+                    self.emit_review_run_updated_for_job(&job).await;
                 }
             }
         }
@@ -481,8 +623,35 @@ impl ReviewRuntime {
         match event {
             ReviewHookEvent::TurnFinished(ctx) => {
                 if ctx.outcome == SessionTurnOutcome::Completed {
-                    self.service
-                        .mark_parent_feedback_turn_finished(&ctx.session_id, &ctx.turn_id);
+                    match self
+                        .service
+                        .mark_parent_feedback_turn_finished(&ctx.session_id, &ctx.turn_id)
+                    {
+                        Ok(Some(run)) => {
+                            self.emit_review_run_updated(&run.parent_session_id, &run.id)
+                                .await;
+                            if run.status == ReviewRunStatus::ParentRevising && run.auto_iterate {
+                                if let Err(error) =
+                                    self.try_auto_iterate_run(&run.id, &ctx.turn_id).await
+                                {
+                                    tracing::warn!(
+                                        review_run_id = %run.id,
+                                        error = %error,
+                                        "failed to auto-iterate review run after parent turn finished"
+                                    );
+                                }
+                            }
+                        }
+                        Ok(None) => {}
+                        Err(error) => {
+                            tracing::warn!(
+                                parent_session_id = %ctx.session_id,
+                                turn_id = %ctx.turn_id,
+                                error = %error,
+                                "failed to process review parent turn-finished hook"
+                            );
+                        }
+                    }
                 }
                 if let Err(error) = self.handle_reviewer_turn_finished(&ctx.session_id).await {
                     tracing::warn!(
@@ -536,15 +705,25 @@ impl ReviewRuntime {
             .service
             .try_complete_round(&assignment.review_round_id)?
         {
+            self.emit_review_run_updated_for_job(&job).await;
             let run = self
                 .service
                 .store()
                 .find_run(&job.review_run_id)
                 .map_err(ReviewError::Internal)?
                 .ok_or_else(|| ReviewError::RunNotFound(job.review_run_id.clone()))?;
-            if run.auto_send_feedback {
+            if run.auto_iterate {
                 self.send_feedback_job(&job).await?;
             }
+        } else if let Some(run) = self
+            .service
+            .store()
+            .find_run(&assignment.review_run_id)
+            .map_err(ReviewError::Internal)?
+            .filter(|run| run.status == ReviewRunStatus::SystemFailed)
+        {
+            self.emit_review_run_updated(&run.parent_session_id, &run.id)
+                .await;
         }
         Ok(())
     }
@@ -574,18 +753,19 @@ impl ReviewRuntime {
             let Some(seq) = job.sent_prompt_seq else {
                 continue;
             };
-            let Some(turn_id) = self
+            let Some((turn_id, executed_at)) = self
                 .service
                 .store()
-                .find_turn_id_for_pending_prompt_execution(&job.parent_session_id, seq)
+                .find_pending_prompt_execution(&job.parent_session_id, seq)
                 .map_err(ReviewError::Internal)?
             else {
                 continue;
             };
             self.service
                 .store()
-                .mark_feedback_job_sent(&job.id, Some(seq), Some(&turn_id))
+                .mark_feedback_job_sent(&job.id, Some(seq), Some(&turn_id), Some(&executed_at))
                 .map_err(ReviewError::Internal)?;
+            self.emit_review_run_updated_for_job(&job).await;
         }
         Ok(())
     }
@@ -608,8 +788,17 @@ impl ReviewRuntime {
             {
                 continue;
             }
-            self.service
-                .mark_parent_feedback_turn_finished(&job.parent_session_id, turn_id);
+            let Some(run) = self
+                .service
+                .mark_parent_feedback_turn_finished(&job.parent_session_id, turn_id)?
+            else {
+                continue;
+            };
+            self.emit_review_run_updated(&run.parent_session_id, &run.id)
+                .await;
+            if run.status == ReviewRunStatus::ParentRevising && run.auto_iterate {
+                self.try_auto_iterate_run(&run.id, turn_id).await?;
+            }
         }
         Ok(())
     }
@@ -660,15 +849,25 @@ impl ReviewRuntime {
                 .service
                 .try_complete_round(&assignment.review_round_id)?
             {
+                self.emit_review_run_updated_for_job(&job).await;
                 let run = self
                     .service
                     .store()
                     .find_run(&job.review_run_id)
                     .map_err(ReviewError::Internal)?
                     .ok_or_else(|| ReviewError::RunNotFound(job.review_run_id.clone()))?;
-                if run.auto_send_feedback {
+                if run.auto_iterate {
                     self.send_feedback_job(&job).await?;
                 }
+            } else if let Some(run) = self
+                .service
+                .store()
+                .find_run(&assignment.review_run_id)
+                .map_err(ReviewError::Internal)?
+                .filter(|run| run.status == ReviewRunStatus::SystemFailed)
+            {
+                self.emit_review_run_updated(&run.parent_session_id, &run.id)
+                    .await;
             }
         }
         Ok(())

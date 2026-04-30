@@ -103,7 +103,7 @@ impl SessionExtension for ReviewSessionHooks {
 }
 
 fn review_system_prompt_append() -> Vec<String> {
-    vec![r#"AnyHarness may run structured review loops for plans and code. If you receive review feedback, address the feedback you agree with and explicitly justify feedback you ignore. If that feedback asks for another review round, call mark_review_revision_ready when the revised target is ready and the tool is available. If the feedback says all reviewers approved or it is the final configured round, do not call mark_review_revision_ready; follow the feedback instructions instead. For plan review, that means presenting the final plan. Reviewer sessions must submit their verdict with submit_review_result instead of only writing prose."#.to_string()]
+    vec![r#"AnyHarness may run structured review loops for plans and code. If you receive review feedback, address the feedback you agree with and explicitly justify feedback you ignore. Only call mark_review_revision_ready when the feedback prompt explicitly asks for manual revision signaling and the tool is available. If the feedback says auto iterate is enabled, all reviewers approved, or it is the final configured round, do not call mark_review_revision_ready; follow the feedback instructions instead. For plan review, that can mean presenting the final plan. Reviewer sessions must submit their verdict with submit_review_result instead of only writing prose."#.to_string()]
 }
 
 fn review_binding_summary() -> SessionMcpBindingSummary {

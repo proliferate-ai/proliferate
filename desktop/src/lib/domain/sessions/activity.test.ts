@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   collectWorkspaceSidebarActivityStatesWithErrorAttention,
   collectWorkspaceSidebarActivityStates,
+  collectSessionActivityReconciliationIds,
   collectWorkspaceSessionViewStates,
   resolveSessionErrorAttentionKey,
   resolveSessionSidebarActivityState,
@@ -356,6 +357,81 @@ describe("session activity", () => {
     });
 
     expect(states["workspace-1"]).toBe("idle");
+  });
+
+  it("collects active sessions for runtime summary reconciliation", () => {
+    const ids = collectSessionActivityReconciliationIds({
+      "session-idle": sidebarSlot({
+        sessionId: "session-idle",
+        status: "idle",
+        phase: "idle",
+        errorAttentionKey: null,
+      }),
+      "session-working": sidebarSlot({
+        sessionId: "session-working",
+        status: "running",
+        phase: "running",
+        errorAttentionKey: null,
+        isStreaming: true,
+      }),
+      "session-input": {
+        ...sidebarSlot({
+          sessionId: "session-input",
+          status: "running",
+          phase: "awaiting_interaction",
+          errorAttentionKey: null,
+        }),
+        executionSummary: {
+          phase: "awaiting_interaction",
+          hasLiveHandle: true,
+          pendingInteractions: [{
+            requestId: "request-1",
+            kind: "permission",
+            title: "Approve",
+            description: null,
+            source: { toolCallId: "tool-1", toolKind: "exec", toolStatus: null },
+            payload: { type: "permission", options: [] },
+          }],
+          updatedAt: "2026-04-06T00:00:01Z",
+        },
+        transcript: {
+          isStreaming: false,
+          pendingInteractions: [{ requestId: "request-1" }],
+        },
+      },
+      "session-plan": {
+        ...sidebarSlot({
+          sessionId: "session-plan",
+          status: "running",
+          phase: "awaiting_interaction",
+          errorAttentionKey: null,
+        }),
+        executionSummary: {
+          phase: "awaiting_interaction",
+          hasLiveHandle: true,
+          pendingInteractions: [{
+            requestId: "request-2",
+            kind: "permission",
+            title: "Ready to code?",
+            description: null,
+            source: {
+              toolCallId: "tool-2",
+              toolKind: "switch_mode",
+              toolStatus: null,
+              linkedPlanId: "plan-1",
+            },
+            payload: { type: "permission", options: [] },
+          }],
+          updatedAt: "2026-04-06T00:00:02Z",
+        },
+        transcript: {
+          isStreaming: false,
+          pendingInteractions: [{ requestId: "request-2", linkedPlanId: "plan-1" }],
+        },
+      },
+    });
+
+    expect(ids).toEqual(["session-input", "session-plan", "session-working"]);
   });
 
   it("maps workspace summaries to execution view states", () => {

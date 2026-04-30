@@ -56,8 +56,8 @@ impl ReviewService {
             title: run.title.clone(),
             max_rounds: run.max_rounds,
             current_round_number: run.current_round_number,
-            auto_send_feedback: run.auto_send_feedback,
-            parent_can_signal_revision_via_mcp: run.parent_can_signal_revision_via_mcp,
+            auto_iterate: run.auto_iterate,
+            parent_can_signal_revision_via_mcp: self.run_can_signal_revision_via_mcp(run),
             active_round_id: run.active_round_id.clone(),
             target_plan_id: run.target_plan_id.clone(),
             target_plan_snapshot_hash: run.target_plan_snapshot_hash.clone(),
@@ -193,6 +193,8 @@ pub(super) fn build_feedback_prompt(
                 text.push_str("This is the final configured review round. Address the feedback you agree with, ignore feedback you can justify ignoring, and continue the implementation. No further automated review round will start.\n\n");
             }
         }
+    } else if run.auto_iterate {
+        text.push_str("Address the feedback you agree with, ignore feedback you can justify ignoring, and finish the revised target normally. Auto iterate is enabled, so AnyHarness will detect the completed revision and start the next review round when it is safe.\n\n");
     } else {
         text.push_str("Address the feedback you agree with, ignore feedback you can justify ignoring, then signal the revised target with `mark_review_revision_ready` if that tool is available. If the tool is not available, present the revised plan or implementation and wait for the user to start the next review round from the review card.\n\n");
     }

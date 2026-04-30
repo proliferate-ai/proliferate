@@ -14,7 +14,7 @@ pub(super) fn insert_run(
         "INSERT INTO review_runs (
             id, workspace_id, parent_session_id, kind, status, target_plan_id,
             target_plan_snapshot_hash, target_code_manifest_json, title, max_rounds,
-            auto_send_feedback, active_round_id, current_round_number,
+            auto_iterate, active_round_id, current_round_number,
             parent_can_signal_revision_via_mcp, failure_reason, failure_detail,
             stopped_at, created_at, updated_at
          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
@@ -29,7 +29,7 @@ pub(super) fn insert_run(
             run.target_code_manifest_json,
             run.title,
             run.max_rounds,
-            if run.auto_send_feedback { 1 } else { 0 },
+            if run.auto_iterate { 1 } else { 0 },
             run.active_round_id,
             run.current_round_number,
             if run.parent_can_signal_revision_via_mcp { 1 } else { 0 },
@@ -161,7 +161,7 @@ pub(super) fn map_run(row: &rusqlite::Row) -> rusqlite::Result<ReviewRunRecord> 
         target_code_manifest_json: row.get("target_code_manifest_json")?,
         title: row.get("title")?,
         max_rounds: row.get::<_, i64>("max_rounds")?.try_into().unwrap_or(0),
-        auto_send_feedback: row.get::<_, i64>("auto_send_feedback")? != 0,
+        auto_iterate: row.get::<_, i64>("auto_iterate")? != 0,
         active_round_id: row.get("active_round_id")?,
         current_round_number: row
             .get::<_, i64>("current_round_number")?

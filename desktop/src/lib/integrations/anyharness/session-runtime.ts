@@ -293,7 +293,7 @@ export async function fetchSessionSummary(
 export async function resumeSession(
   sessionId: string,
   options?: {
-    powersInCodingSessionsEnabled: boolean;
+    pluginsInCodingSessionsEnabled: boolean;
     requestHeaders?: HeadersInit;
   },
 ) {
@@ -304,7 +304,7 @@ export async function resumeSession(
     options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
   );
   const isCowork = workspace.surface === "cowork";
-  const shouldResolveLaunchMcp = isCowork || options?.powersInCodingSessionsEnabled === true;
+  const shouldResolveLaunchMcp = isCowork || options?.pluginsInCodingSessionsEnabled === true;
   const { mcpServers, mcpBindingSummaries } = shouldResolveLaunchMcp
     ? await resolveSessionMcpServersForLaunch({
       targetLocation: target.location,

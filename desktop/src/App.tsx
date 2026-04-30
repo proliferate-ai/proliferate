@@ -9,6 +9,7 @@ import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { MacWindowControlsSafeArea } from "@/components/ui/MacWindowControlsSafeArea"
 import { SessionModelAvailabilityDialog } from "@/components/workspace/chat/launch/SessionModelAvailabilityDialog"
 import { applyAppearancePreference, initializeTheme } from "@/config/theme"
+import { APP_ROUTES, LEGACY_APP_ROUTES } from "@/config/app-routes"
 import { useExportRunningAgentCount } from "@/hooks/app/use-export-running-agent-count"
 import { useAppShortcuts } from "@/hooks/app/use-app-shortcuts"
 import { useAuthBootstrap } from "@/hooks/auth/use-auth-bootstrap"
@@ -34,7 +35,7 @@ import { AutomationsPage } from "@/pages/AutomationsPage"
 import { LoginPage } from "@/pages/LoginPage"
 import { MainPage } from "@/pages/MainPage"
 import { OnboardingPage } from "@/pages/OnboardingPage"
-import { PowersPage } from "@/pages/PowersPage"
+import { PluginsPage } from "@/pages/PluginsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { useAuthStore } from "@/stores/auth/auth-store"
 import {
@@ -253,11 +254,15 @@ function AppRuntime() {
               <Route path="/setup" element={<OnboardingPage />} />
             </Route>
             <Route element={<OnboardingGate />}>
-              <Route path="/" element={<MainPage />} />
-              <Route path="/powers" element={<PowersPage />} />
-              <Route path="/automations" element={<AutomationsPage />} />
+              <Route path={APP_ROUTES.home} element={<MainPage />} />
+              <Route
+                path={LEGACY_APP_ROUTES.powers}
+                element={<Navigate to={APP_ROUTES.plugins} replace />}
+              />
+              <Route path={APP_ROUTES.plugins} element={<PluginsPage />} />
+              <Route path={APP_ROUTES.automations} element={<AutomationsPage />} />
               <Route path="/automations/:automationId" element={<AutomationDetailPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+              <Route path={APP_ROUTES.settings} element={<SettingsPage />} />
             </Route>
           </Route>
         </Route>

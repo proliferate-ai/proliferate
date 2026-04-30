@@ -27,11 +27,16 @@ import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 
 interface PlaygroundTranscriptProps {
+  stickyBottomInsetPx: number;
   selection: PlaygroundScenarioSelection;
   replay: PlaygroundReplayState;
 }
 
-export function PlaygroundTranscript({ selection, replay }: PlaygroundTranscriptProps) {
+export function PlaygroundTranscript({
+  stickyBottomInsetPx,
+  selection,
+  replay,
+}: PlaygroundTranscriptProps) {
   const replaySlot = useHarnessStore((state) =>
     replay.sessionId ? state.sessionSlots[replay.sessionId] ?? null : null
   );
@@ -67,6 +72,7 @@ export function PlaygroundTranscript({ selection, replay }: PlaygroundTranscript
           optimisticPrompt={replaySlot.optimisticPrompt}
           transcript={replaySlot.transcript}
           sessionViewState={resolveSessionViewState(replaySlot)}
+          bottomInsetPx={stickyBottomInsetPx}
         />
       </div>
     );
@@ -355,6 +361,7 @@ export function PlaygroundTranscript({ selection, replay }: PlaygroundTranscript
           optimisticPrompt={null}
           transcript={PLAYGROUND_SUBAGENT_TRANSCRIPT}
           sessionViewState="idle"
+          bottomInsetPx={stickyBottomInsetPx}
         />
       </div>
     );
@@ -368,6 +375,7 @@ export function PlaygroundTranscript({ selection, replay }: PlaygroundTranscript
           optimisticPrompt={null}
           transcript={PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT}
           sessionViewState="idle"
+          bottomInsetPx={stickyBottomInsetPx}
         />
       </div>
     );

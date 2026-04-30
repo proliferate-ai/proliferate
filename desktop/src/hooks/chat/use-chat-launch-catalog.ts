@@ -31,7 +31,7 @@ export function useChatLaunchCatalog({
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
-    defaultChatModelId: state.defaultChatModelId,
+    defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
   })));
 
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);

@@ -12,6 +12,7 @@ export function ChatComposerSurface({
   return (
     <div
       {...props}
+      data-chat-composer-surface="true"
       className={`chat-composer-surface relative flex flex-col overflow-y-auto rounded-[var(--radius-composer)] ${className}`}
     >
       {children}

@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type { WorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 
+const EMPTY_SHELL_TAB_ORDER_KEYS: readonly WorkspaceShellTabKey[] = [];
+
 interface WorkspaceTabsState {
   activeShellTabKeyByWorkspace: Record<string, WorkspaceShellTabKey | null>;
   shellTabOrderByWorkspace: Record<string, WorkspaceShellTabKey[]>;
@@ -21,6 +23,10 @@ export const useWorkspaceTabsStore = create<WorkspaceTabsState>((set, get) => ({
   shellTabOrderByWorkspace: {},
 
   setActiveShellTabKey: (workspaceId, key) => {
+    const current = get().activeShellTabKeyByWorkspace[workspaceId] ?? null;
+    if (current === key) {
+      return;
+    }
     set({
       activeShellTabKeyByWorkspace: {
         ...get().activeShellTabKeyByWorkspace,
@@ -30,6 +36,10 @@ export const useWorkspaceTabsStore = create<WorkspaceTabsState>((set, get) => ({
   },
 
   setShellTabOrder: (workspaceId, order) => {
+    const current = get().shellTabOrderByWorkspace[workspaceId] ?? EMPTY_SHELL_TAB_ORDER_KEYS;
+    if (sameStringArray(current, order)) {
+      return;
+    }
     set({
       shellTabOrderByWorkspace: {
         ...get().shellTabOrderByWorkspace,
@@ -56,3 +66,7 @@ export const useWorkspaceTabsStore = create<WorkspaceTabsState>((set, get) => ({
     });
   },
 }));
+
+function sameStringArray(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}

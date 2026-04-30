@@ -83,8 +83,8 @@ pub struct StartPlanReviewRequest {
     pub parent_session_id: String,
     #[serde(default = "default_review_max_rounds")]
     pub max_rounds: u32,
-    #[serde(default = "default_auto_send_feedback")]
-    pub auto_send_feedback: bool,
+    #[serde(default = "default_auto_iterate")]
+    pub auto_iterate: bool,
     pub reviewers: Vec<ReviewPersonaRequest>,
 }
 
@@ -94,8 +94,8 @@ pub struct StartCodeReviewRequest {
     pub parent_session_id: String,
     #[serde(default = "default_review_max_rounds")]
     pub max_rounds: u32,
-    #[serde(default = "default_auto_send_feedback")]
-    pub auto_send_feedback: bool,
+    #[serde(default = "default_auto_iterate")]
+    pub auto_iterate: bool,
     pub reviewers: Vec<ReviewPersonaRequest>,
 }
 
@@ -153,7 +153,7 @@ pub struct ReviewRunDetail {
     pub title: String,
     pub max_rounds: u32,
     pub current_round_number: u32,
-    pub auto_send_feedback: bool,
+    pub auto_iterate: bool,
     pub parent_can_signal_revision_via_mcp: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub active_round_id: Option<String>,
@@ -251,6 +251,6 @@ const fn default_review_max_rounds() -> u32 {
     2
 }
 
-const fn default_auto_send_feedback() -> bool {
+const fn default_auto_iterate() -> bool {
     true
 }

@@ -81,7 +81,7 @@ export function useWorkspaceBootstrapActions() {
   const workspaceCollections = useWorkspaces().data;
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
-    defaultChatModelId: state.defaultChatModelId,
+    defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
   })));
   const lastViewedSessionByWorkspace = useWorkspaceUiStore(
     (state) => state.lastViewedSessionByWorkspace,

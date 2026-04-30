@@ -315,7 +315,77 @@ describe("sidebar indicators", () => {
     expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("waiting_input");
   });
 
-  it("prioritizes queued prompts over unread when no active status exists", () => {
+  it("shows needs review for completed materialized work that is newer than the logical workspace view", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "review-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+        }),
+      ],
+      workspaceLastInteracted: {
+        "review-local-materialization": "2026-04-13T10:10:00.000Z",
+      },
+      lastViewedAt: {
+        "review-local": "2026-04-13T10:00:00.000Z",
+      },
+    });
+
+    expect(groups[0]?.items[0]?.needsReview).toBe(true);
+    expect(groups[0]?.items[0]?.lastInteracted).toBe("2026-04-13T10:10:00.000Z");
+    expect(groups[0]?.items[0]?.statusIndicator).toMatchObject({
+      kind: "needs_review",
+      tooltip: "Needs review",
+    });
+  });
+
+  it("keeps the needs-review marker for the selected workspace after work completes", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "review-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+        }),
+      ],
+      selectedLogicalWorkspaceId: "review-local",
+      workspaceLastInteracted: {
+        "review-local-materialization": "2026-04-13T10:10:00.000Z",
+      },
+      lastViewedAt: {
+        "review-local": "2026-04-13T10:00:00.000Z",
+      },
+    });
+
+    expect(groups[0]?.items[0]?.active).toBe(true);
+    expect(groups[0]?.items[0]?.needsReview).toBe(true);
+    expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("needs_review");
+  });
+
+  it("uses materialization view timestamps to avoid stale needs-review markers", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "review-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+        }),
+      ],
+      workspaceLastInteracted: {
+        "review-local-materialization": "2026-04-13T10:10:00.000Z",
+      },
+      lastViewedAt: {
+        "review-local": "2026-04-13T10:00:00.000Z",
+        "review-local-materialization": "2026-04-13T10:12:00.000Z",
+      },
+    });
+
+    expect(groups[0]?.items[0]?.needsReview).toBe(false);
+    expect(groups[0]?.items[0]?.statusIndicator).toBeNull();
+  });
+
+  it("prioritizes queued prompts over needs review when no active status exists", () => {
     const groups = buildGroups({
       logicalWorkspaces: [
         makeLocalLogicalWorkspace({
@@ -329,7 +399,7 @@ describe("sidebar indicators", () => {
       lastViewedAt: { "queued-local": "2026-04-13T10:00:00.000Z" },
     });
 
-    expect(groups[0]?.items[0]?.unread).toBe(true);
+    expect(groups[0]?.items[0]?.needsReview).toBe(true);
     expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("queued_prompt");
   });
 });

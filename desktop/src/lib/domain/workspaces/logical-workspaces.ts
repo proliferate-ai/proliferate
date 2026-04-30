@@ -190,6 +190,17 @@ function cloudDefaultDisplayName(workspace: CloudWorkspaceSummary): string {
     : workspace.repo.name;
 }
 
+function mobilityDefaultDisplayName(workspace: CloudMobilityWorkspaceSummary): string {
+  const override = workspace.displayName?.trim();
+  if (override) {
+    return override;
+  }
+
+  return workspace.repo.branch?.trim()
+    ? humanizeBranchName(workspace.repo.branch)
+    : workspace.repo.name;
+}
+
 function preferredMaterializationId(
   localWorkspace: Workspace | null,
   cloudWorkspace: CloudWorkspaceSummary | null,
@@ -377,7 +388,9 @@ export function buildLogicalWorkspaces(args: {
         ? localWorkspaceGroupKey(entry.localWorkspace)
         : entry.cloudWorkspace
           ? cloudWorkspaceGroupKey(entry.cloudWorkspace)
-          : id;
+          : entry.mobilityWorkspace
+            ? cloudWorkspaceGroupKey(entry.mobilityWorkspace)
+            : id;
       const repoRoot = entry.localWorkspace?.repoRootId
         ? repoRootsById.get(entry.localWorkspace.repoRootId) ?? null
         : entry.localWorkspace?.gitProvider && entry.localWorkspace.gitOwner && entry.localWorkspace.gitRepoName
@@ -402,23 +415,37 @@ export function buildLogicalWorkspaces(args: {
         ? localDefaultDisplayName(entry.localWorkspace)
         : entry.cloudWorkspace
           ? cloudDefaultDisplayName(entry.cloudWorkspace)
-          : entry.mobilityWorkspace?.displayName?.trim()
-            ? entry.mobilityWorkspace.displayName.trim()
-          : id;
+          : entry.mobilityWorkspace
+            ? mobilityDefaultDisplayName(entry.mobilityWorkspace)
+            : id;
 
       return {
         id,
         repoKey,
         sourceRoot,
         repoRoot,
-        provider: entry.localWorkspace?.gitProvider ?? entry.cloudWorkspace?.repo.provider ?? null,
-        owner: entry.localWorkspace?.gitOwner ?? entry.cloudWorkspace?.repo.owner ?? null,
-        repoName: entry.localWorkspace?.gitRepoName ?? entry.cloudWorkspace?.repo.name ?? null,
+        provider:
+          entry.localWorkspace?.gitProvider
+          ?? entry.cloudWorkspace?.repo.provider
+          ?? entry.mobilityWorkspace?.repo.provider
+          ?? null,
+        owner:
+          entry.localWorkspace?.gitOwner
+          ?? entry.cloudWorkspace?.repo.owner
+          ?? entry.mobilityWorkspace?.repo.owner
+          ?? null,
+        repoName:
+          entry.localWorkspace?.gitRepoName
+          ?? entry.cloudWorkspace?.repo.name
+          ?? entry.mobilityWorkspace?.repo.name
+          ?? null,
         branchKey: entry.localWorkspace
           ? workspaceBranchKey(entry.localWorkspace)
           : entry.cloudWorkspace
             ? cloudBranchKey(entry.cloudWorkspace)
-            : "HEAD",
+            : entry.mobilityWorkspace
+              ? normalizeBranchKey(entry.mobilityWorkspace.repo.branch)
+              : "HEAD",
         displayName,
         localWorkspace: entry.localWorkspace,
         cloudWorkspace: entry.cloudWorkspace,
@@ -452,6 +479,46 @@ export function logicalWorkspaceMatchesId(
   return candidateId === workspace.id
     || candidateId === workspace.localWorkspace?.id
     || candidateId === logicalWorkspaceCloudMaterializationId(workspace);
+}
+
+export function logicalWorkspaceRelatedIds(
+  workspace: Pick<
+    LogicalWorkspace,
+    "id" | "localWorkspace" | "cloudWorkspace" | "mobilityWorkspace" | "preferredMaterializationId"
+  >,
+): string[] {
+  const ids: string[] = [];
+  const pushId = (id: string | null | undefined) => {
+    if (id && !ids.includes(id)) {
+      ids.push(id);
+    }
+  };
+
+  pushId(workspace.id);
+  pushId(workspace.localWorkspace?.id);
+  pushId(logicalWorkspaceCloudMaterializationId(workspace));
+  pushId(workspace.preferredMaterializationId);
+  return ids;
+}
+
+export function latestLogicalWorkspaceTimestamp(
+  timestamps: Record<string, string>,
+  workspace: Pick<
+    LogicalWorkspace,
+    "id" | "localWorkspace" | "cloudWorkspace" | "mobilityWorkspace" | "preferredMaterializationId"
+  >,
+): string | null {
+  let latestTimestamp: string | null = null;
+  for (const id of logicalWorkspaceRelatedIds(workspace)) {
+    const timestamp = timestamps[id];
+    if (!timestamp) {
+      continue;
+    }
+    if (!latestTimestamp || new Date(timestamp).getTime() > new Date(latestTimestamp).getTime()) {
+      latestTimestamp = timestamp;
+    }
+  }
+  return latestTimestamp;
 }
 
 export function findLogicalWorkspace(

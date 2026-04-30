@@ -29,7 +29,7 @@ export interface ReviewPersonaPreference {
 
 export interface ReviewKindPreference {
   maxRounds: number;
-  autoSendFeedback: boolean;
+  autoIterate: boolean;
   reviewers: ReviewPersonaPreference[];
 }
 
@@ -42,14 +42,14 @@ export interface UserPreferences {
   uiFontSizeId: UiFontSizeId;
   readableCodeFontSizeId: ReadableCodeFontSizeId;
   defaultChatAgentKind: string;
-  defaultChatModelId: string;
+  defaultChatModelIdByAgentKind: Record<string, string>;
   defaultSessionModeByAgentKind: Record<string, string>;
   defaultOpenInTargetId: string;
   branchPrefixType: BranchPrefixType;
   turnEndSoundEnabled: boolean;
   turnEndSoundId: TurnEndSoundId;
   transparentChromeEnabled: boolean;
-  powersInCodingSessionsEnabled: boolean;
+  pluginsInCodingSessionsEnabled: boolean;
   subagentsEnabled: boolean;
   coworkWorkspaceDelegationEnabled: boolean;
   cloudRuntimeInputSyncEnabled: boolean;
@@ -69,14 +69,14 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   uiFontSizeId: "default",
   readableCodeFontSizeId: "default",
   defaultChatAgentKind: "",
-  defaultChatModelId: "",
+  defaultChatModelIdByAgentKind: {},
   defaultSessionModeByAgentKind: {},
   defaultOpenInTargetId: "",
   branchPrefixType: "none",
   turnEndSoundEnabled: false,
   turnEndSoundId: "ding",
   transparentChromeEnabled: false,
-  powersInCodingSessionsEnabled: false,
+  pluginsInCodingSessionsEnabled: false,
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
@@ -98,7 +98,7 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   uiFontSizeId: "default",
   readableCodeFontSizeId: "default",
   defaultChatAgentKind: "",
-  defaultChatModelId: "",
+  defaultChatModelIdByAgentKind: {},
   defaultSessionModeByAgentKind: {},
   defaultOpenInTargetId: "",
   branchPrefixType: "none",
@@ -107,7 +107,7 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   // Existing persisted records keep the legacy transparent chrome default;
   // only fresh installs use the opaque NEW_USER_DEFAULTS value.
   transparentChromeEnabled: true,
-  powersInCodingSessionsEnabled: false,
+  pluginsInCodingSessionsEnabled: false,
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
@@ -143,6 +143,12 @@ type LegacyThemeRecord = {
   colorMode?: ColorMode;
 };
 
+type LegacyUserPreferencesInput = Omit<Partial<UserPreferences>, "defaultChatModelIdByAgentKind"> & {
+  defaultChatModelId?: unknown;
+  defaultChatModelIdByAgentKind?: unknown;
+  powersInCodingSessionsEnabled?: unknown;
+};
+
 function readLegacyThemeRecord(): LegacyThemeRecord {
   if (typeof window === "undefined") {
     return {};
@@ -166,10 +172,12 @@ function readLegacyThemeRecord(): LegacyThemeRecord {
   };
 }
 
-async function readLegacyUserPreferences(): Promise<UserPreferences> {
+async function readLegacyUserPreferences(): Promise<LegacyUserPreferencesInput> {
   const legacyTheme = readLegacyThemeRecord();
   const legacyDefaultChatAgentKind = await readPersistedValue<string>("defaultChatAgentKind");
   const legacyDefaultChatModelId = await readPersistedValue<string>("defaultChatModelId");
+  const legacyDefaultChatModelIdByAgentKind =
+    await readPersistedValue<Record<string, string>>("defaultChatModelIdByAgentKind");
   const legacyDefaultOpenInTargetId = await readPersistedValue<string>("defaultOpenInTargetId");
   const legacyBranchPrefixType = await readPersistedValue<BranchPrefixType>("branchPrefixType");
   const hasLegacyPreference =
@@ -177,6 +185,7 @@ async function readLegacyUserPreferences(): Promise<UserPreferences> {
     || legacyTheme.colorMode !== undefined
     || legacyDefaultChatAgentKind !== undefined
     || legacyDefaultChatModelId !== undefined
+    || legacyDefaultChatModelIdByAgentKind !== undefined
     || legacyDefaultOpenInTargetId !== undefined
     || legacyBranchPrefixType !== undefined;
   const defaults = hasLegacyPreference ? PERSISTED_RECORD_BACKFILL : NEW_USER_DEFAULTS;
@@ -187,14 +196,18 @@ async function readLegacyUserPreferences(): Promise<UserPreferences> {
     uiFontSizeId: defaults.uiFontSizeId,
     readableCodeFontSizeId: defaults.readableCodeFontSizeId,
     defaultChatAgentKind: legacyDefaultChatAgentKind ?? defaults.defaultChatAgentKind,
-    defaultChatModelId: legacyDefaultChatModelId ?? defaults.defaultChatModelId,
+    ...(legacyDefaultChatModelId !== undefined
+      ? { defaultChatModelId: legacyDefaultChatModelId }
+      : {}),
+    defaultChatModelIdByAgentKind:
+      legacyDefaultChatModelIdByAgentKind ?? defaults.defaultChatModelIdByAgentKind,
     defaultSessionModeByAgentKind: defaults.defaultSessionModeByAgentKind,
     defaultOpenInTargetId: legacyDefaultOpenInTargetId ?? defaults.defaultOpenInTargetId,
     branchPrefixType: legacyBranchPrefixType ?? defaults.branchPrefixType,
     turnEndSoundEnabled: defaults.turnEndSoundEnabled,
     turnEndSoundId: defaults.turnEndSoundId,
     transparentChromeEnabled: defaults.transparentChromeEnabled,
-    powersInCodingSessionsEnabled: defaults.powersInCodingSessionsEnabled,
+    pluginsInCodingSessionsEnabled: defaults.pluginsInCodingSessionsEnabled,
     subagentsEnabled: defaults.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: defaults.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: defaults.cloudRuntimeInputSyncEnabled,
@@ -218,6 +231,30 @@ function sanitizeDefaultSessionModeByAgentKind(
         ? [[agentKind, modeId]]
         : []
     )),
+  );
+}
+
+function normalizeDefaultChatModelId(agentKind: string, modelId: string): string {
+  return agentKind === "claude"
+    ? LEGACY_CLAUDE_MODEL_IDS[modelId] ?? modelId
+    : modelId;
+}
+
+function sanitizeDefaultChatModelIdByAgentKind(
+  value: unknown,
+): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([agentKind, modelId]) => {
+      const trimmedAgentKind = agentKind.trim();
+      const trimmedModelId = typeof modelId === "string" ? modelId.trim() : "";
+      return trimmedAgentKind && trimmedModelId
+        ? [[trimmedAgentKind, normalizeDefaultChatModelId(trimmedAgentKind, trimmedModelId)]]
+        : [];
+    }),
   );
 }
 
@@ -274,7 +311,9 @@ function sanitizeReviewKindPreference(value: unknown): ReviewKindPreference | nu
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
-  const raw = value as Partial<ReviewKindPreference>;
+  const raw = value as Partial<ReviewKindPreference> & {
+    autoSendFeedback?: unknown;
+  };
   const maxRounds = typeof raw.maxRounds === "number"
     && Number.isFinite(raw.maxRounds)
     ? clampRounds(raw.maxRounds)
@@ -284,8 +323,10 @@ function sanitizeReviewKindPreference(value: unknown): ReviewKindPreference | nu
     : [];
   return {
     maxRounds,
-    autoSendFeedback: typeof raw.autoSendFeedback === "boolean"
-      ? raw.autoSendFeedback
+    autoIterate: typeof raw.autoIterate === "boolean"
+      ? raw.autoIterate
+      : typeof raw.autoSendFeedback === "boolean"
+        ? raw.autoSendFeedback
       : true,
     reviewers: dedupeReviewPersonaPreferences(reviewers).slice(0, MAX_REVIEWERS_PER_RUN),
   };
@@ -342,30 +383,74 @@ function dedupeReviewPersonalityPreferences(
   });
 }
 
-async function readAll(): Promise<UserPreferences> {
-  const persisted = await readPersistedValue<UserPreferences>(USER_PREFERENCES_KEY);
+async function readAll(): Promise<LegacyUserPreferencesInput> {
+  const persisted = await readPersistedValue<LegacyUserPreferencesInput>(USER_PREFERENCES_KEY);
   if (persisted) {
-    return {
-      ...PERSISTED_RECORD_BACKFILL,
-      ...persisted,
-    };
+    return persisted;
   }
 
   return readLegacyUserPreferences();
 }
 
-export function migrateUserPreferences(preferences: UserPreferences): {
+export function migrateUserPreferences(preferences: LegacyUserPreferencesInput): {
   preferences: UserPreferences;
   changed: boolean;
 } {
-  const next = { ...preferences };
+  const rawPreferences = preferences;
+  const legacyPowersPreference = rawPreferences.powersInCodingSessionsEnabled;
+  const hasCurrentPluginsPreference =
+    typeof rawPreferences.pluginsInCodingSessionsEnabled === "boolean";
+  const hasLegacyPowersPreference =
+    typeof legacyPowersPreference === "boolean";
+  const {
+    defaultChatModelId,
+    defaultChatModelIdByAgentKind,
+    ...preferencesWithoutLegacyModel
+  } = preferences;
+  const next = {
+    ...PERSISTED_RECORD_BACKFILL,
+    ...preferencesWithoutLegacyModel,
+    defaultChatModelIdByAgentKind: {},
+  } as UserPreferences & { powersInCodingSessionsEnabled?: unknown };
   let changed = false;
 
-  if (next.defaultChatAgentKind === "claude") {
-    const migratedModelId = LEGACY_CLAUDE_MODEL_IDS[next.defaultChatModelId];
-    if (migratedModelId && migratedModelId !== next.defaultChatModelId) {
-      next.defaultChatModelId = migratedModelId;
-      changed = true;
+  const sanitizedDefaultChatAgentKind = typeof next.defaultChatAgentKind === "string"
+    ? next.defaultChatAgentKind.trim()
+    : PERSISTED_RECORD_BACKFILL.defaultChatAgentKind;
+  if (sanitizedDefaultChatAgentKind !== next.defaultChatAgentKind) {
+    next.defaultChatAgentKind = sanitizedDefaultChatAgentKind;
+    changed = true;
+  }
+
+  const sanitizedDefaultChatModelIdByAgentKind = sanitizeDefaultChatModelIdByAgentKind(
+    defaultChatModelIdByAgentKind,
+  );
+  if (
+    defaultChatModelIdByAgentKind === undefined
+    || JSON.stringify(sanitizedDefaultChatModelIdByAgentKind)
+      !== JSON.stringify(defaultChatModelIdByAgentKind)
+  ) {
+    changed = true;
+  }
+  next.defaultChatModelIdByAgentKind = sanitizedDefaultChatModelIdByAgentKind;
+
+  if (defaultChatModelId !== undefined) {
+    changed = true;
+    const legacyModelId = typeof defaultChatModelId === "string"
+      ? defaultChatModelId.trim()
+      : "";
+    if (
+      next.defaultChatAgentKind
+      && legacyModelId
+      && !next.defaultChatModelIdByAgentKind[next.defaultChatAgentKind]
+    ) {
+      next.defaultChatModelIdByAgentKind = {
+        ...next.defaultChatModelIdByAgentKind,
+        [next.defaultChatAgentKind]: normalizeDefaultChatModelId(
+          next.defaultChatAgentKind,
+          legacyModelId,
+        ),
+      };
     }
   }
 
@@ -383,8 +468,17 @@ export function migrateUserPreferences(preferences: UserPreferences): {
     changed = true;
   }
 
-  if (typeof next.powersInCodingSessionsEnabled !== "boolean") {
-    next.powersInCodingSessionsEnabled = PERSISTED_RECORD_BACKFILL.powersInCodingSessionsEnabled;
+  if (!hasCurrentPluginsPreference) {
+    // "Powers" was the old product name. Read the legacy persisted key once,
+    // then write future records with the current "plugins" store field.
+    next.pluginsInCodingSessionsEnabled =
+      hasLegacyPowersPreference
+        ? legacyPowersPreference
+        : PERSISTED_RECORD_BACKFILL.pluginsInCodingSessionsEnabled;
+    changed = true;
+  }
+  if ("powersInCodingSessionsEnabled" in rawPreferences) {
+    delete next.powersInCodingSessionsEnabled;
     changed = true;
   }
 
@@ -459,14 +553,14 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
     uiFontSizeId: state.uiFontSizeId,
     readableCodeFontSizeId: state.readableCodeFontSizeId,
     defaultChatAgentKind: state.defaultChatAgentKind,
-    defaultChatModelId: state.defaultChatModelId,
+    defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
     defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
     defaultOpenInTargetId: state.defaultOpenInTargetId,
     branchPrefixType: state.branchPrefixType,
     turnEndSoundEnabled: state.turnEndSoundEnabled,
     turnEndSoundId: state.turnEndSoundId,
     transparentChromeEnabled: state.transparentChromeEnabled,
-    powersInCodingSessionsEnabled: state.powersInCodingSessionsEnabled,
+    pluginsInCodingSessionsEnabled: state.pluginsInCodingSessionsEnabled,
     subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: state.cloudRuntimeInputSyncEnabled,

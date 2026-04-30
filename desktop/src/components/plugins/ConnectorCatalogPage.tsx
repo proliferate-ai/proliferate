@@ -1,12 +1,5 @@
-import { useState } from "react";
+import { useConnectorCatalogActions } from "@/hooks/mcp/use-connector-catalog-actions";
 import { useConnectorsCatalogState } from "@/hooks/mcp/use-connectors-catalog-state";
-import { useConnectOAuthConnector } from "@/hooks/mcp/use-connect-oauth-connector";
-import { useDeleteConnector } from "@/hooks/mcp/use-delete-connector";
-import { useInstallConnector } from "@/hooks/mcp/use-install-connector";
-import { useInstalledConnectorActions } from "@/hooks/mcp/use-installed-connector-actions";
-import { useReconnectOAuthConnector } from "@/hooks/mcp/use-reconnect-oauth-connector";
-import { useUpdateConnectorSecret } from "@/hooks/mcp/use-update-connector-secret";
-import type { ConnectorSettings, InstalledConnectorRecord } from "@/lib/domain/mcp/types";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -20,68 +13,7 @@ import { DeleteConnectorDialog } from "./DeleteConnectorDialog";
 
 export function ConnectorCatalogPage() {
   const state = useConnectorsCatalogState();
-  const installedActions = useInstalledConnectorActions();
-  const installMutation = useInstallConnector();
-  const connectOAuthMutation = useConnectOAuthConnector();
-  const reconnectOAuthMutation = useReconnectOAuthConnector();
-  const updateSecretMutation = useUpdateConnectorSecret();
-  const deleteMutation = useDeleteConnector();
-
-  const [deleteTarget, setDeleteTarget] = useState<InstalledConnectorRecord | null>(null);
-
-  const callbacks = {
-    onCancelOAuth: async () => {
-      await connectOAuthMutation.cancelPendingConnection();
-      await reconnectOAuthMutation.cancelPendingConnection();
-    },
-    onConnectOAuth: (catalogEntryId: InstalledConnectorRecord["catalogEntry"]["id"], settings?: Parameters<typeof connectOAuthMutation.mutateAsync>[0]["settings"]) =>
-      connectOAuthMutation.mutateAsync({ catalogEntryId, settings }),
-    onDelete: async (
-      connectionId: string,
-      catalogEntryId: InstalledConnectorRecord["catalogEntry"]["id"],
-    ) => {
-      await deleteMutation.mutateAsync({ connectionId, catalogEntryId });
-      state.closeModal();
-    },
-    onInstallSecret: async (
-      catalogEntryId: InstalledConnectorRecord["catalogEntry"]["id"],
-      secretFields: Record<string, string>,
-      settings?: ConnectorSettings,
-    ) => {
-      await installMutation.mutateAsync({ catalogEntryId, secretFields, settings });
-    },
-    onReconnect: (
-      connectionId: string,
-      catalogEntryId: InstalledConnectorRecord["catalogEntry"]["id"],
-      settings?: Parameters<typeof reconnectOAuthMutation.mutateAsync>[0]["settings"],
-    ) =>
-      reconnectOAuthMutation.mutateAsync({
-        connectionId,
-        catalogEntryId,
-        settings,
-      }),
-    onUpdateSecret: async (
-      connectionId: string,
-      catalogEntryId: InstalledConnectorRecord["catalogEntry"]["id"],
-      secretFields: Record<string, string>,
-      settings?: ConnectorSettings,
-    ) => {
-      await updateSecretMutation.mutateAsync({
-        connectionId,
-        catalogEntryId,
-        secretFields,
-        settings,
-      });
-    },
-  };
-
-  const handleDeleteConfirmed = async (
-    connectionId: string,
-    catalogEntryId: InstalledConnectorRecord["catalogEntry"]["id"],
-  ) => {
-    await deleteMutation.mutateAsync({ connectionId, catalogEntryId });
-    setDeleteTarget(null);
-  };
+  const actions = useConnectorCatalogActions({ closeModal: state.closeModal });
 
   const showLoadingState = state.isLoading
     && state.connected.length === 0
@@ -114,7 +46,7 @@ export function ConnectorCatalogPage() {
         {showLoadingState ? (
           <LoadingState
             message="Loading integrations"
-            subtext="Fetching the latest Powers catalog and connection state."
+            subtext="Fetching the latest Plugins catalog and connection state."
           />
         ) : showLoadError ? (
           <div className="rounded-lg border border-border bg-card/50 px-4 py-8 text-center">
@@ -153,13 +85,15 @@ export function ConnectorCatalogPage() {
                     <ConnectedConnectorCard
                       key={model.record.metadata.connectionId}
                       model={model}
-                      pending={installedActions.isPending(model.record.metadata.connectionId)}
-                      onDelete={() => setDeleteTarget(model.record)}
+                      pending={actions.installedConnectorActions.isPending(
+                        model.record.metadata.connectionId,
+                      )}
+                      onDelete={() => actions.requestDelete(model.record)}
                       onManage={() => state.openManage(model.record.metadata.connectionId)}
                       onReconnect={() => state.openManage(model.record.metadata.connectionId)}
                       onStatusClick={() => state.openRecovery(model.record)}
                       onToggle={(enabled) => {
-                        void installedActions.onToggle(model.record, enabled);
+                        void actions.installedConnectorActions.onToggle(model.record, enabled);
                       }}
                     />
                   ))}
@@ -211,16 +145,16 @@ export function ConnectorCatalogPage() {
           modal={state.modal}
           onClose={state.closeModal}
           onSetTab={state.setActiveTab}
-          callbacks={callbacks}
+          callbacks={actions.detailCallbacks}
         />
       )}
 
-      {deleteTarget && (
+      {actions.deleteTarget && (
         <DeleteConnectorDialog
-          open={!!deleteTarget}
-          onClose={() => setDeleteTarget(null)}
-          onDelete={handleDeleteConfirmed}
-          record={deleteTarget}
+          open={!!actions.deleteTarget}
+          onClose={actions.closeDeleteDialog}
+          onDelete={actions.confirmDelete}
+          record={actions.deleteTarget}
         />
       )}
     </>

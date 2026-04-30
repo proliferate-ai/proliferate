@@ -161,7 +161,7 @@ describe("review setup config", () => {
       personalityTemplates: templates,
       storedDefaults: {
         maxRounds: 2,
-        autoSendFeedback: true,
+        autoIterate: true,
         reviewers: [
           reviewer({
             id: "plan-skeptic",
@@ -189,7 +189,7 @@ describe("review setup config", () => {
     const stored = draftToStoredReviewDefaults({
       kind: "plan",
       maxRounds: 2,
-      autoSendFeedback: true,
+      autoIterate: true,
       reviewers: [
         reviewer({
           id: "plan-skeptic",

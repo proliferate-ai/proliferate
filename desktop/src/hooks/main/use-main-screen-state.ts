@@ -29,6 +29,10 @@ import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
 import type { RightPanelMode } from "@/components/workspace/shell/right-panel/RightPanel";
+import {
+  CLOSED_PUBLISH_DIALOG_STATE,
+  type PublishDialogState,
+} from "./publish-dialog-state";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
@@ -45,12 +49,8 @@ export interface MainScreenLayoutState {
   setTerminalCollapsed: Dispatch<SetStateAction<boolean>>;
   terminalFocusRequestToken: number;
   setTerminalFocusRequestToken: Dispatch<SetStateAction<number>>;
-  commitOpen: boolean;
-  setCommitOpen: Dispatch<SetStateAction<boolean>>;
-  pushOpen: boolean;
-  setPushOpen: Dispatch<SetStateAction<boolean>>;
-  prOpen: boolean;
-  setPrOpen: Dispatch<SetStateAction<boolean>>;
+  publishDialog: PublishDialogState;
+  setPublishDialog: Dispatch<SetStateAction<PublishDialogState>>;
   filePaletteOpen: boolean;
   setFilePaletteOpen: Dispatch<SetStateAction<boolean>>;
   rightPanelWidth: number;
@@ -81,9 +81,9 @@ export function useMainScreenState(): MainScreenState {
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [terminalCollapsed, setTerminalCollapsed] = useState(false);
   const [terminalFocusRequestToken, setTerminalFocusRequestToken] = useState(0);
-  const [commitOpen, setCommitOpen] = useState(false);
-  const [pushOpen, setPushOpen] = useState(false);
-  const [prOpen, setPrOpen] = useState(false);
+  const [publishDialog, setPublishDialog] = useState<PublishDialogState>(
+    CLOSED_PUBLISH_DIALOG_STATE,
+  );
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
   const [rightPanelWidth, setRightPanelWidth] = useState(420);
   const sidebarOpen = useWorkspaceUiStore((state) => state.sidebarOpen);
@@ -181,12 +181,8 @@ export function useMainScreenState(): MainScreenState {
       setTerminalCollapsed,
       terminalFocusRequestToken,
       setTerminalFocusRequestToken,
-      commitOpen,
-      setCommitOpen,
-      pushOpen,
-      setPushOpen,
-      prOpen,
-      setPrOpen,
+      publishDialog,
+      setPublishDialog,
       filePaletteOpen,
       setFilePaletteOpen,
       rightPanelWidth,
