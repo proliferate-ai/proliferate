@@ -2,31 +2,20 @@
 
 from __future__ import annotations
 
-import logging
-
 from proliferate.constants.billing import BILLING_MODE_ENFORCE
 from proliferate.db.models.cloud import CloudWorkspace
 from proliferate.db.store.cloud_runtime_environments import load_runtime_environment_for_workspace
-from proliferate.db.store.cloud_workspaces import (
-    load_active_sandbox_for_workspace,
-    load_cloud_workspace_by_id,
-)
-from proliferate.integrations.sandbox import get_sandbox_provider
+from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
 from proliferate.server.billing.service import get_billing_snapshot_for_subject
-from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
-from proliferate.server.cloud.credentials.service import load_active_cloud_credential_payloads
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.anyharness_api import (
     get_runtime_ready_agent_kinds,
-    reconcile_remote_agents,
 )
-from proliferate.server.cloud.runtime.credentials import (
-    normalize_provision_credentials,
-    write_credential_files,
+from proliferate.server.cloud.runtime.credential_freshness import (
+    ensure_runtime_environment_credentials_current,
 )
 from proliferate.server.cloud.runtime.ensure_running import (
     ensure_environment_runtime_ready,
-    ensure_workspace_runtime_ready,
 )
 from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.runtime.provision import provision_workspace as _provision_workspace
@@ -36,7 +25,13 @@ provision_workspace = _provision_workspace
 
 
 async def sync_workspace_credentials(workspace: CloudWorkspace) -> None:
-    billing = await get_billing_snapshot_for_subject(workspace.billing_subject_id)
+    runtime_environment = await load_runtime_environment_for_workspace(workspace)
+    billing_subject_id = (
+        runtime_environment.billing_subject_id
+        if runtime_environment is not None
+        else workspace.billing_subject_id
+    )
+    billing = await get_billing_snapshot_for_subject(billing_subject_id)
     if billing.billing_mode == BILLING_MODE_ENFORCE and billing.active_spend_hold:
         raise CloudApiError(
             "workspace_not_ready",
@@ -47,73 +42,21 @@ async def sync_workspace_credentials(workspace: CloudWorkspace) -> None:
             status_code=409,
         )
 
-    sandbox_record = await load_active_sandbox_for_workspace(workspace)
-    if sandbox_record is None:
+    if runtime_environment is None:
         raise CloudApiError(
             "workspace_not_ready",
             (
-                "Cloud workspace does not have an active sandbox yet. "
+                "Cloud workspace does not have a runtime environment yet. "
                 "Credentials will apply on the next start."
             ),
             status_code=409,
         )
 
-    provider = get_sandbox_provider(sandbox_record.provider)
-    sandbox_state = await provider.get_sandbox_state(sandbox_record.external_sandbox_id)
-    if sandbox_state is None or sandbox_state.state not in {"running", "started"}:
-        raise CloudApiError(
-            "workspace_not_ready",
-            (
-                "Cloud workspace is not running right now. "
-                "Credentials will apply on the next start."
-            ),
-            status_code=409,
-        )
-
-    credential_payloads = await load_active_cloud_credential_payloads(workspace.user_id)
-    credentials = normalize_provision_credentials(credential_payloads)
-
-    runtime_url: str | None = None
-    access_token: str | None = None
-    if workspace.runtime_url and workspace.runtime_token_ciphertext:
-        access_token = decrypt_text(workspace.runtime_token_ciphertext)
-        runtime_url = await ensure_workspace_runtime_ready(
-            workspace,
-            allow_launcher_restart=True,
-            access_token=access_token,
-        )
-
-    # Credential files should still be refreshed in the sandbox even when the
-    # AnyHarness runtime is unavailable; remote agent reconciliation remains
-    # best-effort below and only runs when the runtime is ready.
-    sandbox = await provider.connect_running_sandbox(sandbox_record.external_sandbox_id)
-    runtime_context = await provider.resolve_runtime_context(sandbox)
-
-    await write_credential_files(
-        provider,
-        sandbox,
+    await ensure_runtime_environment_credentials_current(
+        runtime_environment.id,
         workspace_id=workspace.id,
-        credentials=credentials,
-        runtime_context=runtime_context,
+        allow_process_restart=True,
     )
-
-    if runtime_url and access_token:
-        try:
-            await reconcile_remote_agents(
-                runtime_url,
-                access_token,
-                workspace_id=workspace.id,
-                synced_providers=credentials.synced_providers,
-            )
-        except Exception as exc:
-            log_cloud_event(
-                "cloud runtime reconcile failed after credential sync",
-                level=logging.WARNING,
-                workspace_id=workspace.id,
-                runtime_url=runtime_url,
-                error=format_exception_message(exc),
-                error_type=exc.__class__.__name__,
-            )
 
 
 async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnectionTarget:
@@ -160,6 +103,11 @@ async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnecti
         allow_launcher_restart=True,
         access_token=access_token,
     )
+    credential_freshness = await ensure_runtime_environment_credentials_current(
+        runtime_environment.id,
+        workspace_id=workspace.id,
+        allow_process_restart=True,
+    )
     reloaded_workspace = await load_cloud_workspace_by_id(workspace.id)
     reloaded_environment = await load_runtime_environment_for_workspace(
         reloaded_workspace or workspace,
@@ -186,4 +134,5 @@ async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnecti
         anyharness_workspace_id=reloaded_workspace.anyharness_workspace_id,
         runtime_generation=reloaded_environment.runtime_generation,
         ready_agent_kinds=ready_agent_kinds,
+        credential_freshness=credential_freshness,
     )

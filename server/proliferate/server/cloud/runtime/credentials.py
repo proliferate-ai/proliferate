@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,10 +11,14 @@ from uuid import UUID
 
 from proliferate.constants.cloud import (
     CLAUDE_ALLOWED_AUTH_FILES,
+    CODEX_ALLOWED_AUTH_FILES,
     GEMINI_ALLOWED_AUTH_FILES,
 )
 from proliferate.integrations.sandbox import SandboxProvider, SandboxRuntimeContext
-from proliferate.server.cloud.runtime.sandbox_exec import run_sandbox_command_logged
+from proliferate.server.cloud.runtime.sandbox_exec import (
+    assert_command_succeeded,
+    run_sandbox_command_logged,
+)
 
 
 @dataclass(frozen=True)
@@ -84,6 +89,15 @@ class ProvisionCredentials:
         if self.gemini is not None:
             files.extend(self.gemini.auth_files)
         return tuple(files)
+
+
+MANAGED_CREDENTIAL_FILE_PATHS: tuple[str, ...] = tuple(
+    sorted(
+        set(CLAUDE_ALLOWED_AUTH_FILES)
+        | set(CODEX_ALLOWED_AUTH_FILES)
+        | set(GEMINI_ALLOWED_AUTH_FILES)
+    )
+)
 
 
 def _mapping_value(payload: object) -> Mapping[str, object]:
@@ -191,7 +205,26 @@ async def write_credential_files(
     workspace_id: UUID,
     credentials: ProvisionCredentials,
     runtime_context: SandboxRuntimeContext,
+    cleanup_managed_files: bool = True,
 ) -> None:
+    if cleanup_managed_files:
+        cleanup_paths = " ".join(
+            shlex.quote(f"{runtime_context.home_dir}/{relative_path}")
+            for relative_path in MANAGED_CREDENTIAL_FILE_PATHS
+        )
+        assert_command_succeeded(
+            await run_sandbox_command_logged(
+                provider,
+                sandbox,
+                workspace_id=workspace_id,
+                label="cleanup_managed_credential_files",
+                command=f"rm -f {cleanup_paths}",
+                runtime_context=runtime_context,
+                timeout_seconds=30,
+            ),
+            "Cloud credential cleanup failed",
+        )
+
     for file in credentials.iter_files():
         sandbox_path = f"{runtime_context.home_dir}/{file.relative_path}"
         parent_dir = str(Path(sandbox_path).parent)
@@ -201,7 +234,7 @@ async def write_credential_files(
             sandbox,
             workspace_id=workspace_id,
             label=label,
-            command=f"mkdir -p {parent_dir}",
+            command=f"mkdir -p {shlex.quote(parent_dir)}",
             runtime_context=runtime_context,
             timeout_seconds=30,
         )

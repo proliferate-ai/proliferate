@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from proliferate.integrations.sandbox import RuntimeEndpoint, SandboxHandle, SandboxRuntimeContext
 
 if TYPE_CHECKING:
+    from proliferate.server.cloud.runtime.credential_freshness import CredentialFreshnessSnapshot
     from proliferate.server.cloud.runtime.credentials import ProvisionCredentials
 
 
@@ -53,6 +54,8 @@ class CloudProvisionInput:
     git_user_email: str
     anyharness_data_key: str
     credentials: ProvisionCredentials
+    credential_files_revision: str
+    credential_process_revision: str
     repo_env_vars: dict[str, str]
     requested_base_sha: str | None = None
     runtime_environment_id: UUID = dataclass_field(default_factory=uuid4)
@@ -87,3 +90,4 @@ class RuntimeConnectionTarget:
     anyharness_workspace_id: str | None
     runtime_generation: int
     ready_agent_kinds: list[str]
+    credential_freshness: CredentialFreshnessSnapshot

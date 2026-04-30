@@ -216,7 +216,7 @@ async def sync_cloud_credential_for_user(
     user_id: UUID,
     provider: CloudAgentKind,
     body: SyncCloudCredentialRequest,
-) -> CloudCredentialAuthMode:
+) -> bool:
     spec = _provider_spec(provider)
     if body.auth_mode == "env":
         env_vars = getattr(body, "env_vars", None)
@@ -228,13 +228,12 @@ async def sync_cloud_credential_for_user(
             "authMode": "env",
             "envVars": normalized_env_vars,
         }
-        await _persist_cloud_credential_if_changed(
+        return await _persist_cloud_credential_if_changed(
             user_id=user_id,
             provider=provider,
             payload=payload,
             auth_mode="env",
         )
-        return "env"
 
     normalized_files = _normalize_file_payload(spec, body)
     payload = {
@@ -242,13 +241,12 @@ async def sync_cloud_credential_for_user(
         "authMode": "file",
         "files": normalized_files,
     }
-    await _persist_cloud_credential_if_changed(
+    return await _persist_cloud_credential_if_changed(
         user_id=user_id,
         provider=provider,
         payload=payload,
         auth_mode="file",
     )
-    return "file"
 
 
 async def _persist_cloud_credential_if_changed(
@@ -257,9 +255,9 @@ async def _persist_cloud_credential_if_changed(
     provider: CloudAgentKind,
     payload: Mapping[str, object],
     auth_mode: CloudCredentialAuthMode,
-) -> None:
+) -> bool:
     stored_payload = dict(payload)
-    await persist_cloud_credential_if_changed(
+    return await persist_cloud_credential_if_changed(
         user_id,
         provider,
         encrypt_json(stored_payload),
@@ -271,5 +269,5 @@ async def _persist_cloud_credential_if_changed(
 async def delete_cloud_credential_for_user(
     user_id: UUID,
     provider: CloudAgentKind,
-) -> None:
-    await persist_cloud_credential_delete(user_id, provider)
+) -> bool:
+    return await persist_cloud_credential_delete(user_id, provider)

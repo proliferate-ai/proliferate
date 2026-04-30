@@ -46,6 +46,15 @@ export function cloudWorkspaceConnectionKey(workspaceId: string) {
   return [...cloudRootKey(), "workspaces", workspaceId, "connection"] as const;
 }
 
+export function isCloudWorkspaceConnectionQueryKey(
+  queryKey: readonly unknown[],
+): boolean {
+  return queryKey[0] === "cloud"
+    && queryKey[1] === "workspaces"
+    && typeof queryKey[2] === "string"
+    && queryKey[3] === "connection";
+}
+
 export function isCloudWorkspaceRepoConfigStatusQueryKey(
   queryKey: readonly unknown[],
 ): boolean {

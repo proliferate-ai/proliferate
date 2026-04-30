@@ -17,6 +17,7 @@ from proliferate.server.cloud.credentials.models import (
     allowed_agent_kinds,
     ready_agent_kinds,
 )
+from proliferate.server.cloud.runtime.credential_freshness import CredentialFreshnessSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,26 @@ class WorkspaceDetail(WorkspaceSummary):
     anyharness_workspace_id: str | None = Field(serialization_alias="anyharnessWorkspaceId")
 
 
+class WorkspaceCredentialFreshness(BaseModel):
+    status: Literal[
+        "current",
+        "stale",
+        "restart_required",
+        "apply_failed",
+        "missing_credentials",
+    ]
+    files_current: bool = Field(serialization_alias="filesCurrent")
+    process_current: bool = Field(serialization_alias="processCurrent")
+    requires_restart: bool = Field(serialization_alias="requiresRestart")
+    last_error: str | None = Field(default=None, serialization_alias="lastError")
+    last_error_at: str | None = Field(default=None, serialization_alias="lastErrorAt")
+    files_applied_at: str | None = Field(default=None, serialization_alias="filesAppliedAt")
+    process_applied_at: str | None = Field(
+        default=None,
+        serialization_alias="processAppliedAt",
+    )
+
+
 class WorkspaceConnection(BaseModel):
     runtime_url: str = Field(serialization_alias="runtimeUrl")
     access_token: str = Field(serialization_alias="accessToken")
@@ -107,12 +128,19 @@ class WorkspaceConnection(BaseModel):
     runtime_generation: int = Field(serialization_alias="runtimeGeneration")
     allowed_agent_kinds: list[CloudAgentKind] = Field(serialization_alias="allowedAgentKinds")
     ready_agent_kinds: list[str] = Field(serialization_alias="readyAgentKinds")
+    credential_freshness: WorkspaceCredentialFreshness = Field(
+        serialization_alias="credentialFreshness",
+    )
 
 
 class WorkspaceRuntimeSummary(BaseModel):
     environment_id: str | None = Field(serialization_alias="environmentId")
     status: Literal["pending", "provisioning", "running", "paused", "error", "disabled"]
     generation: int
+    credential_freshness: WorkspaceCredentialFreshness | None = Field(
+        default=None,
+        serialization_alias="credentialFreshness",
+    )
     action_block_kind: str | None = Field(default=None, serialization_alias="actionBlockKind")
     action_block_reason: str | None = Field(default=None, serialization_alias="actionBlockReason")
 
@@ -143,10 +171,28 @@ def _origin_payload(workspace: CloudWorkspace) -> OriginContext | None:
         return None
 
 
+def credential_freshness_payload(
+    snapshot: CredentialFreshnessSnapshot | None,
+) -> WorkspaceCredentialFreshness | None:
+    if snapshot is None:
+        return None
+    return WorkspaceCredentialFreshness(
+        status=snapshot.status,
+        files_current=snapshot.files_current,
+        process_current=snapshot.process_current,
+        requires_restart=snapshot.requires_restart,
+        last_error=snapshot.last_error,
+        last_error_at=_to_iso(snapshot.last_error_at),
+        files_applied_at=_to_iso(snapshot.files_applied_at),
+        process_applied_at=_to_iso(snapshot.process_applied_at),
+    )
+
+
 def workspace_summary_payload(
     workspace: CloudWorkspace,
     *,
     runtime_environment: CloudRuntimeEnvironment | None = None,
+    credential_freshness: CredentialFreshnessSnapshot | None = None,
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,
 ) -> WorkspaceSummary:
@@ -175,6 +221,7 @@ def workspace_summary_payload(
                 if runtime_environment is not None
                 else workspace.runtime_generation
             ),
+            credential_freshness=credential_freshness_payload(credential_freshness),
             action_block_kind=action_block_kind,
             action_block_reason=action_block_reason,
         ),
@@ -200,12 +247,14 @@ def workspace_detail_payload(
     credential_statuses: list[CredentialStatusRecord],
     *,
     runtime_environment: CloudRuntimeEnvironment | None = None,
+    credential_freshness: CredentialFreshnessSnapshot | None = None,
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,
 ) -> WorkspaceDetail:
     summary = workspace_summary_payload(
         workspace,
         runtime_environment=runtime_environment,
+        credential_freshness=credential_freshness,
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
     )

@@ -4,7 +4,7 @@ import { listSyncableCloudCredentials } from "@/platform/tauri/credentials";
 
 export async function autoSyncDetectedCloudCredentialsIfNeeded(
   error: unknown,
-  syncCredential: (provider: CloudAgentKind) => Promise<void>,
+  syncCredential: (provider: CloudAgentKind) => Promise<unknown>,
 ): Promise<boolean> {
   if (
     !(error instanceof ProliferateClientError)

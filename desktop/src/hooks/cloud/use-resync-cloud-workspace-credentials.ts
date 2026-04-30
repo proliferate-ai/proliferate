@@ -12,7 +12,7 @@ import {
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { cloudWorkspaceConnectionKey } from "./query-keys";
+import { isCloudWorkspaceConnectionQueryKey } from "./query-keys";
 
 export function useResyncCloudWorkspaceCredentials(workspaceId: string | null) {
   const queryClient = useQueryClient();
@@ -32,8 +32,7 @@ export function useResyncCloudWorkspaceCredentials(workspaceId: string | null) {
     onSuccess: async (workspace) => {
       const invalidations = [
         queryClient.invalidateQueries({
-          queryKey: cloudWorkspaceConnectionKey(workspace.id),
-          exact: true,
+          predicate: (query) => isCloudWorkspaceConnectionQueryKey(query.queryKey),
         }),
       ];
       if (parseCloudWorkspaceSyntheticId(selectedWorkspaceId) === workspace.id) {

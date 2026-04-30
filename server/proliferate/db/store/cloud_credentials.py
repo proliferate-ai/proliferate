@@ -43,7 +43,7 @@ async def sync_cloud_credential_if_changed(
     auth_mode: Literal["env", "file"],
     payload_matches: CloudCredentialPayloadMatches,
     payload_format: str = "json-v1",
-) -> None:
+) -> bool:
     existing = list(
         (
             await db.execute(
@@ -73,13 +73,13 @@ async def sync_cloud_credential_if_changed(
             active.last_synced_at = now
             active.updated_at = now
             await db.commit()
-            return
+            return False
 
     for record in existing:
         if record.payload_format == payload_format and payload_matches(record.payload_ciphertext):
             record.last_synced_at = now
             await db.commit()
-            return
+            return False
 
     for record in existing:
         record.revoked_at = now
@@ -97,13 +97,14 @@ async def sync_cloud_credential_if_changed(
         )
     )
     await db.commit()
+    return True
 
 
 async def delete_cloud_credential(
     db: AsyncSession,
     user_id: UUID,
     provider: CloudAgentKind,
-) -> None:
+) -> bool:
     now = utcnow()
     records = list(
         (
@@ -121,6 +122,7 @@ async def delete_cloud_credential(
     for record in records:
         record.revoked_at = now
     await db.commit()
+    return bool(records)
 
 
 async def load_cloud_credentials_for_user(user_id: UUID) -> list[CloudCredential]:
@@ -135,9 +137,9 @@ async def persist_cloud_credential_if_changed(
     auth_mode: Literal["env", "file"],
     payload_matches: CloudCredentialPayloadMatches,
     payload_format: str = "json-v1",
-) -> None:
+) -> bool:
     async with db_engine.async_session_factory() as db:
-        await sync_cloud_credential_if_changed(
+        return await sync_cloud_credential_if_changed(
             db,
             user_id,
             provider,
@@ -151,6 +153,6 @@ async def persist_cloud_credential_if_changed(
 async def persist_cloud_credential_delete(
     user_id: UUID,
     provider: CloudAgentKind,
-) -> None:
+) -> bool:
     async with db_engine.async_session_factory() as db:
-        await delete_cloud_credential(db, user_id, provider)
+        return await delete_cloud_credential(db, user_id, provider)

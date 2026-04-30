@@ -300,6 +300,8 @@ def _make_provision_input(*, codex_enabled: bool) -> CloudProvisionInput:
             claude=ClaudeProvisionCredential(api_key="anthropic-key"),
             codex=CodexProvisionCredential(auth_json="{}") if codex_enabled else None,
         ),
+        credential_files_revision="credential-files:v1:test",
+        credential_process_revision="credential-process:v1:test",
         repo_env_vars={},
     )
 
@@ -679,6 +681,7 @@ class TestLaunchAndConnectRuntime:
         provider.write_file = _write_file
         provider.resolve_runtime_endpoint = _resolve_runtime_endpoint
 
+        monkeypatch.setattr(runtime_provision, "_set_workspace_status", _set_workspace_status)
         monkeypatch.setattr(
             runtime_provision, "run_sandbox_command_logged", _run_sandbox_command_logged
         )
@@ -705,7 +708,6 @@ class TestLaunchAndConnectRuntime:
             "prepare_remote_mobility_destination",
             _prepare_remote_mobility_destination,
         )
-        monkeypatch.setattr(runtime_provision, "_set_workspace_status", _set_workspace_status)
 
         await runtime_provision._launch_and_connect_runtime(
             tracker,
@@ -851,6 +853,9 @@ class TestProvisionWorkspaceGitSetup:
         async def _apply_workspace_repo_config_after_provision(*args, **kwargs) -> None:
             return None
 
+        async def _save_runtime_environment_state(*args, **kwargs) -> None:
+            return None
+
         monkeypatch.setattr(runtime_provision, "_load_provision_input", _load_provision_input)
         monkeypatch.setattr(runtime_provision, "get_configured_sandbox_provider", lambda: provider)
         monkeypatch.setattr(runtime_provision, "_set_workspace_status", _noop_status)
@@ -907,6 +912,11 @@ class TestProvisionWorkspaceGitSetup:
             runtime_provision,
             "apply_workspace_repo_config_after_provision",
             _apply_workspace_repo_config_after_provision,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "save_runtime_environment_state",
+            _save_runtime_environment_state,
         )
         monkeypatch.setattr(runtime_provision, "log_cloud_event", lambda *args, **kwargs: None)
         monkeypatch.setattr(
@@ -978,6 +988,10 @@ class TestProvisionWorkspaceGitSetup:
             calls.append(f"attach_workspace:{runtime_token}")
             return handshake
 
+        async def _ensure_runtime_environment_credentials_current(*args, **kwargs):
+            calls.append("ensure_credentials_current")
+            return SimpleNamespace(status="current")
+
         async def _finalize_workspace_provision_for_ids(*args, **kwargs) -> None:
             calls.append("finalize_workspace")
 
@@ -1010,6 +1024,11 @@ class TestProvisionWorkspaceGitSetup:
         monkeypatch.setattr(runtime_provision, "checkout_cloud_branch", _unexpected)
         monkeypatch.setattr(runtime_provision, "configure_git_identity", _unexpected)
         monkeypatch.setattr(runtime_provision, "_launch_and_connect_runtime", _unexpected)
+        monkeypatch.setattr(
+            runtime_provision,
+            "ensure_runtime_environment_credentials_current",
+            _ensure_runtime_environment_credentials_current,
+        )
         monkeypatch.setattr(
             runtime_provision,
             "_attach_workspace_to_running_runtime",
@@ -1046,6 +1065,7 @@ class TestProvisionWorkspaceGitSetup:
 
         assert calls == [
             "connect_existing_runtime",
+            "ensure_credentials_current",
             "attach_workspace:stored-runtime-token",
             "finalize_workspace",
         ]

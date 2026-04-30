@@ -135,5 +135,5 @@ export async function getCloudWorkspaceConnection(
     await getProliferateClient().GET("/v1/cloud/workspaces/{workspace_id}/connection", {
       params: { path: { workspace_id: workspaceId } },
     })
-  ).data!;
+  ).data! as CloudConnectionInfo;
 }

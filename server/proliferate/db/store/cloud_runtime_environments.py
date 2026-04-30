@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -202,6 +204,12 @@ async def persist_runtime_environment_state(
     root_anyharness_repo_root_id: str | None | object = _UNSET,
     active_sandbox_id: UUID | None | object = _UNSET,
     increment_runtime_generation: bool = False,
+    credential_files_applied_revision: str | None | object = _UNSET,
+    credential_files_applied_at: datetime | None | object = _UNSET,
+    credential_process_applied_revision: str | None | object = _UNSET,
+    credential_process_applied_at: datetime | None | object = _UNSET,
+    credential_last_error: str | None | object = _UNSET,
+    credential_last_error_at: datetime | None | object = _UNSET,
     repo_env_applied_version: int | object = _UNSET,
     last_error: str | None | object = _UNSET,
 ) -> CloudRuntimeEnvironment:
@@ -219,6 +227,20 @@ async def persist_runtime_environment_state(
         environment.root_anyharness_repo_root_id = root_anyharness_repo_root_id
     if active_sandbox_id is not _UNSET:
         environment.active_sandbox_id = active_sandbox_id
+    if credential_files_applied_revision is not _UNSET:
+        environment.credential_files_applied_revision = credential_files_applied_revision
+    if credential_files_applied_at is not _UNSET:
+        environment.credential_files_applied_at = credential_files_applied_at
+    if credential_process_applied_revision is not _UNSET:
+        environment.credential_process_applied_revision = credential_process_applied_revision
+    if credential_process_applied_at is not _UNSET:
+        environment.credential_process_applied_at = credential_process_applied_at
+    if credential_last_error is not _UNSET:
+        environment.credential_last_error = (
+            credential_last_error[:2000] if isinstance(credential_last_error, str) else None
+        )
+    if credential_last_error_at is not _UNSET:
+        environment.credential_last_error_at = credential_last_error_at
     if repo_env_applied_version is not _UNSET:
         environment.repo_env_applied_version = repo_env_applied_version
     if last_error is not _UNSET:
@@ -248,6 +270,30 @@ async def load_runtime_environment_by_id(
 ) -> CloudRuntimeEnvironment | None:
     async with db_engine.async_session_factory() as db:
         return await db.get(CloudRuntimeEnvironment, runtime_environment_id)
+
+
+@asynccontextmanager
+async def runtime_environment_credential_apply_lock(
+    runtime_environment_id: UUID,
+) -> AsyncIterator[None]:
+    """Serialize credential apply operations for a runtime environment."""
+
+    async with db_engine.async_session_factory() as db:
+        dialect_name = db.get_bind().dialect.name
+        lock_key = f"runtime-credentials:{runtime_environment_id}"
+        if dialect_name == "postgresql":
+            await db.execute(
+                text("SELECT pg_advisory_lock(hashtextextended(:lock_key, 0))"),
+                {"lock_key": lock_key},
+            )
+        try:
+            yield
+        finally:
+            if dialect_name == "postgresql":
+                await db.execute(
+                    text("SELECT pg_advisory_unlock(hashtextextended(:lock_key, 0))"),
+                    {"lock_key": lock_key},
+                )
 
 
 async def load_runtime_environment_for_workspace(

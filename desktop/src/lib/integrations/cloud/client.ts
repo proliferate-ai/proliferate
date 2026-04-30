@@ -28,10 +28,15 @@ export type CloudRuntimeStatus =
   | "error"
   | "disabled";
 
+export type CloudCredentialFreshness =
+  components["schemas"]["WorkspaceCredentialFreshness"];
+export type CloudCredentialFreshnessStatus = CloudCredentialFreshness["status"];
+
 export interface CloudWorkspaceRuntimeSummary {
   environmentId: string | null;
   status: CloudRuntimeStatus;
   generation: number;
+  credentialFreshness?: CloudCredentialFreshness | null;
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
 }
@@ -70,6 +75,8 @@ export type CloudWorkspaceDetail = Omit<
 };
 export type CloudOriginContext        = components["schemas"]["OriginContext"];
 export type CloudConnectionInfo       = components["schemas"]["WorkspaceConnection"];
+export type CloudCredentialMutationResponse =
+  components["schemas"]["CloudCredentialMutationResponse"];
 export type CloudRepoBranchesResponse = components["schemas"]["RepoBranchesResponse"];
 export type CloudRepoConfigSummary    = components["schemas"]["CloudRepoConfigSummary"];
 export type CloudRepoConfigsListResponse = components["schemas"]["CloudRepoConfigsListResponse"];

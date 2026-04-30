@@ -15,7 +15,6 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_PROVISION,
 )
 from proliferate.constants.cloud import (
-    SUPPORTED_CLOUD_AGENTS,
     CloudRuntimeEnvironmentStatus,
     CloudWorkspaceStatus,
 )
@@ -69,8 +68,11 @@ from proliferate.server.cloud.runtime.bootstrap import (
     install_node_runtime,
     stage_runtime_binary,
 )
+from proliferate.server.cloud.runtime.credential_freshness import (
+    build_credential_revision_state,
+    ensure_runtime_environment_credentials_current,
+)
 from proliferate.server.cloud.runtime.credentials import (
-    normalize_provision_credentials,
     write_credential_files,
 )
 from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
@@ -98,7 +100,7 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
     run_sandbox_command_logged,
     runtime_launcher_path,
 )
-from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_text
+from proliferate.utils.crypto import decrypt_text, encrypt_text
 from proliferate.utils.time import duration_ms, utcnow
 
 WorkspaceStatus = LegacyWorkspaceStatus
@@ -192,12 +194,8 @@ async def _load_provision_input(
     git_user_name, git_user_email = _resolve_git_identity(user, github_account)
 
     credential_records = await load_cloud_credentials_for_user(workspace.user_id)
-    credential_payloads = {
-        record.provider: decrypt_json(record.payload_ciphertext)
-        for record in credential_records
-        if record.provider in SUPPORTED_CLOUD_AGENTS and record.revoked_at is None
-    }
-    if not credential_payloads:
+    credential_revision_state = build_credential_revision_state(credential_records)
+    if credential_revision_state.missing_credentials:
         raise CloudApiError(
             "missing_supported_credentials",
             "No synced cloud credentials were found for this user.",
@@ -223,7 +221,9 @@ async def _load_provision_input(
         git_user_name=git_user_name,
         git_user_email=git_user_email,
         anyharness_data_key=decrypt_text(runtime_environment.anyharness_data_key_ciphertext),
-        credentials=normalize_provision_credentials(credential_payloads),
+        credentials=credential_revision_state.credentials,
+        credential_files_revision=credential_revision_state.files_revision,
+        credential_process_revision=credential_revision_state.process_revision,
         repo_env_vars=repo_config.env_vars if repo_configured else {},
         repo_env_version=repo_config.env_vars_version if repo_configured else 0,
         requested_base_sha=requested_base_sha,
@@ -844,6 +844,13 @@ async def provision_workspace(
                 credentials=ctx.credentials,
                 runtime_context=connected.runtime_context,
             )
+            await save_runtime_environment_state(
+                ctx.runtime_environment_id,
+                credential_files_applied_revision=ctx.credential_files_revision,
+                credential_files_applied_at=utcnow(),
+                credential_last_error=None,
+                credential_last_error_at=None,
+            )
             tracker.complete()
 
             await _set_workspace_status(
@@ -889,6 +896,17 @@ async def provision_workspace(
             tracker.complete()
 
         if reused_runtime is not None:
+            credential_freshness = await ensure_runtime_environment_credentials_current(
+                ctx.runtime_environment_id,
+                workspace_id=workspace_id,
+                allow_process_restart=True,
+            )
+            if credential_freshness.status != "current":
+                raise CloudApiError(
+                    "runtime_credentials_not_current",
+                    "Cloud runtime credentials must refresh before reusing this runtime.",
+                    status_code=409,
+                )
             await _set_workspace_status(
                 workspace_id,
                 CloudWorkspaceStatus.materializing,
@@ -923,16 +941,28 @@ async def provision_workspace(
             anyharness_workspace_id=handshake.anyharness_workspace_id,
             template_version=connected.handle.template_version,
         )
+        runtime_state_updates: dict[str, object] = {
+            "status": CloudRuntimeEnvironmentStatus.running.value,
+            "runtime_url": connected.endpoint.runtime_url,
+            "runtime_token_ciphertext": encrypt_text(handshake.runtime_token),
+            "root_anyharness_workspace_id": handshake.root_anyharness_workspace_id,
+            "root_anyharness_repo_root_id": handshake.anyharness_repo_root_id,
+            "increment_runtime_generation": launched_runtime_this_attempt,
+            "repo_env_applied_version": ctx.repo_env_version,
+            "last_error": None,
+        }
+        if launched_runtime_this_attempt:
+            runtime_state_updates.update(
+                {
+                    "credential_process_applied_revision": ctx.credential_process_revision,
+                    "credential_process_applied_at": utcnow(),
+                    "credential_last_error": None,
+                    "credential_last_error_at": None,
+                }
+            )
         await save_runtime_environment_state(
             ctx.runtime_environment_id,
-            status=CloudRuntimeEnvironmentStatus.running.value,
-            runtime_url=connected.endpoint.runtime_url,
-            runtime_token_ciphertext=encrypt_text(handshake.runtime_token),
-            root_anyharness_workspace_id=handshake.root_anyharness_workspace_id,
-            root_anyharness_repo_root_id=handshake.anyharness_repo_root_id,
-            increment_runtime_generation=launched_runtime_this_attempt,
-            repo_env_applied_version=ctx.repo_env_version,
-            last_error=None,
+            **runtime_state_updates,
         )
         provisioned_workspace = await load_cloud_workspace_by_id(workspace_id)
         if provisioned_workspace is not None:

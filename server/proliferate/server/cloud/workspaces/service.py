@@ -23,6 +23,7 @@ from proliferate.db.models.cloud import CloudWorkspace
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
 )
+from proliferate.db.store.cloud_credentials import load_cloud_credentials_for_user
 from proliferate.db.store.cloud_runtime_environments import load_runtime_environment_for_workspace
 from proliferate.db.store.cloud_workspaces import (
     create_cloud_workspace_for_user,
@@ -64,6 +65,11 @@ from proliferate.server.cloud.repos.service import (
     get_repo_branches_for_user as get_github_repo_branches,
 )
 from proliferate.server.cloud.runtime.anyharness_api import CloudRuntimeReconnectError
+from proliferate.server.cloud.runtime.credential_freshness import (
+    build_credential_freshness_snapshot,
+    build_credential_revision_state,
+    build_runtime_credential_freshness_snapshot,
+)
 from proliferate.server.cloud.runtime.scheduler import schedule_workspace_provision
 from proliferate.server.cloud.runtime.service import (
     get_workspace_connection,
@@ -73,6 +79,7 @@ from proliferate.server.cloud.workspaces.models import (
     WorkspaceConnection,
     WorkspaceDetail,
     WorkspaceSummary,
+    credential_freshness_payload,
     workspace_detail_payload,
     workspace_summary_payload,
 )
@@ -151,10 +158,17 @@ async def list_cloud_workspaces_for_user(
     user_id: UUID,
 ) -> list[WorkspaceSummary]:
     workspaces = await list_cloud_workspaces_store(user_id)
+    credential_records = await load_cloud_credentials_for_user(user_id)
+    credential_revisions = build_credential_revision_state(credential_records)
     snapshots_by_subject: dict[UUID, BillingSnapshot] = {}
     summaries: list[WorkspaceSummary] = []
     for workspace in workspaces:
         runtime_environment = await load_runtime_environment_for_workspace(workspace)
+        credential_freshness = (
+            build_credential_freshness_snapshot(runtime_environment, credential_revisions)
+            if runtime_environment is not None
+            else None
+        )
         billing_subject_id = (
             runtime_environment.billing_subject_id
             if runtime_environment is not None
@@ -169,6 +183,7 @@ async def list_cloud_workspaces_for_user(
             workspace_summary_payload(
                 workspace,
                 runtime_environment=runtime_environment,
+                credential_freshness=credential_freshness,
                 action_block_kind=action_block_kind,
                 action_block_reason=action_block_reason,
             )
@@ -254,6 +269,9 @@ async def _build_workspace_detail(
     workspace: CloudWorkspace,
 ) -> WorkspaceDetail:
     runtime_environment = await load_runtime_environment_for_workspace(workspace)
+    credential_freshness = await build_runtime_credential_freshness_snapshot(
+        runtime_environment,
+    )
     statuses = await load_cloud_credential_statuses(workspace.user_id)
     billing = await get_billing_snapshot_for_subject(
         runtime_environment.billing_subject_id
@@ -265,6 +283,7 @@ async def _build_workspace_detail(
         workspace,
         statuses,
         runtime_environment=runtime_environment,
+        credential_freshness=credential_freshness,
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
     )
@@ -877,4 +896,5 @@ async def get_cloud_connection(
         runtime_generation=target.runtime_generation,
         allowed_agent_kinds=allowed_agent_kinds(),
         ready_agent_kinds=target.ready_agent_kinds,
+        credential_freshness=credential_freshness_payload(target.credential_freshness),
     )

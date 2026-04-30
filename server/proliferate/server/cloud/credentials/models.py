@@ -100,6 +100,11 @@ class CredentialStatus(BaseModel):
     last_synced_at: str | None = Field(default=None, serialization_alias="lastSyncedAt")
 
 
+class CloudCredentialMutationResponse(BaseModel):
+    ok: bool = True
+    changed: bool
+
+
 def _to_iso(value: object) -> str | None:
     if value is None:
         return None

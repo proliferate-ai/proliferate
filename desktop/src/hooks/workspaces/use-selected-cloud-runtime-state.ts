@@ -99,11 +99,16 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
   const state = useMemo(() => buildSelectedCloudRuntimeViewModel({
     persistedStatus,
     connectionState,
+    credentialFreshness: connectionQuery.data?.credentialFreshness
+      ?? selectedCloudWorkspace?.runtime?.credentialFreshness
+      ?? null,
     isWarm,
   }), [
     connectionState,
+    connectionQuery.data?.credentialFreshness,
     isWarm,
     persistedStatus,
+    selectedCloudWorkspace?.runtime?.credentialFreshness,
   ]);
 
   return {

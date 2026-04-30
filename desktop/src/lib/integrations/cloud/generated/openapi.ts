@@ -1184,6 +1184,16 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** CloudCredentialMutationResponse */
+        CloudCredentialMutationResponse: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+            /** Changed */
+            changed: boolean;
+        };
         /** CloudMcpConnectionResponse */
         CloudMcpConnectionResponse: {
             /** Connectionid */
@@ -2349,6 +2359,29 @@ export interface components {
             allowedAgentKinds: ("claude" | "codex" | "gemini")[];
             /** Readyagentkinds */
             readyAgentKinds: string[];
+            credentialFreshness: components["schemas"]["WorkspaceCredentialFreshness"];
+        };
+        /** WorkspaceCredentialFreshness */
+        WorkspaceCredentialFreshness: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "current" | "stale" | "restart_required" | "apply_failed" | "missing_credentials";
+            /** Filescurrent */
+            filesCurrent: boolean;
+            /** Processcurrent */
+            processCurrent: boolean;
+            /** Requiresrestart */
+            requiresRestart: boolean;
+            /** Lasterror */
+            lastError?: string | null;
+            /** Lasterrorat */
+            lastErrorAt?: string | null;
+            /** Filesappliedat */
+            filesAppliedAt?: string | null;
+            /** Processappliedat */
+            processAppliedAt?: string | null;
         };
         /** WorkspaceDetail */
         WorkspaceDetail: {
@@ -2427,6 +2460,7 @@ export interface components {
             status: "pending" | "provisioning" | "running" | "paused" | "error" | "disabled";
             /** Generation */
             generation: number;
+            credentialFreshness?: components["schemas"]["WorkspaceCredentialFreshness"] | null;
             /** Actionblockkind */
             actionBlockKind?: string | null;
             /** Actionblockreason */
@@ -3982,9 +4016,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
+                    "application/json": components["schemas"]["CloudCredentialMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4015,9 +4047,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
+                    "application/json": components["schemas"]["CloudCredentialMutationResponse"];
                 };
             };
             /** @description Validation Error */
