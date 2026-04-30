@@ -17,8 +17,20 @@ interface AutoHideScrollAreaProps {
   onViewportScroll?: (viewport: HTMLDivElement) => void;
 }
 
+interface ScrollThumbState {
+  size: number;
+  offset: number;
+  visible: boolean;
+}
+
 const HIDE_DELAY_MS = 700;
 const MIN_THUMB_SIZE = 28;
+const THUMB_MEASUREMENT_EPSILON = 0.5;
+const HIDDEN_THUMB_STATE: ScrollThumbState = {
+  size: 0,
+  offset: 0,
+  visible: false,
+};
 
 export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaProps>(
   function AutoHideScrollArea(
@@ -37,11 +49,8 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
     const hideTimerRef = useRef<number | null>(null);
     const dragOffsetRef = useRef(0);
     const draggingRef = useRef(false);
-    const [thumb, setThumb] = useState({
-      size: 0,
-      offset: 0,
-      visible: false,
-    });
+    const thumbStateRef = useRef<ScrollThumbState>(HIDDEN_THUMB_STATE);
+    const [thumb, setThumb] = useState<ScrollThumbState>(HIDDEN_THUMB_STATE);
 
     useImperativeHandle(ref, () => viewportRef.current as HTMLDivElement);
 
@@ -52,17 +61,21 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       }
     };
 
+    const commitThumbState = (next: ScrollThumbState) => {
+      if (areThumbStatesEqual(thumbStateRef.current, next)) {
+        return;
+      }
+      thumbStateRef.current = next;
+      setThumb(next);
+    };
+
     const updateThumb = (visible = false) => {
       const viewport = viewportRef.current;
       if (!viewport) return;
 
       const { clientHeight, scrollHeight, scrollTop } = viewport;
       if (scrollHeight <= clientHeight + 1) {
-        setThumb((current) =>
-          current.size === 0 && !current.visible
-            ? current
-            : { size: 0, offset: 0, visible: false },
-        );
+        commitThumbState(HIDDEN_THUMB_STATE);
         return;
       }
 
@@ -74,29 +87,40 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       const maxScroll = Math.max(scrollHeight - clientHeight, 1);
       const offset = maxOffset * (scrollTop / maxScroll);
 
-      setThumb((current) => ({
+      const current = thumbStateRef.current;
+      commitThumbState({
         size,
         offset,
         visible: visible || current.visible || draggingRef.current,
-      }));
+      });
     };
 
     const scheduleHide = () => {
       clearHideTimer();
       if (draggingRef.current) return;
       hideTimerRef.current = window.setTimeout(() => {
-        setThumb((current) => ({ ...current, visible: false }));
+        const current = thumbStateRef.current;
+        if (current.visible) {
+          commitThumbState({ ...current, visible: false });
+        }
       }, HIDE_DELAY_MS);
     };
-
-    useEffect(() => {
-      updateThumb(false);
-    }, [children]);
 
     useEffect(() => {
       const viewport = viewportRef.current;
       const content = contentRef.current;
       if (!viewport || !content) return;
+      let resizeFrame: number | null = null;
+
+      const requestResizeUpdate = () => {
+        if (resizeFrame !== null) {
+          return;
+        }
+        resizeFrame = window.requestAnimationFrame(() => {
+          resizeFrame = null;
+          updateThumb(false);
+        });
+      };
 
       const handleScroll = () => {
         updateThumb(true);
@@ -105,12 +129,16 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
       };
       viewport.addEventListener("scroll", handleScroll, { passive: true });
 
-      const observer = new ResizeObserver(() => updateThumb(false));
+      const observer = new ResizeObserver(requestResizeUpdate);
       observer.observe(viewport);
       observer.observe(content);
+      requestResizeUpdate();
 
       return () => {
         clearHideTimer();
+        if (resizeFrame !== null) {
+          window.cancelAnimationFrame(resizeFrame);
+        }
         viewport.removeEventListener("scroll", handleScroll);
         observer.disconnect();
       };
@@ -163,7 +191,10 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
 
       const thumbTop = thumb.offset;
       dragOffsetRef.current = event.clientY - viewport.getBoundingClientRect().top - thumbTop;
-      setThumb((current) => ({ ...current, visible: true }));
+      const current = thumbStateRef.current;
+      if (!current.visible) {
+        commitThumbState({ ...current, visible: true });
+      }
       event.preventDefault();
       event.stopPropagation();
     };
@@ -205,3 +236,12 @@ export const AutoHideScrollArea = forwardRef<HTMLDivElement, AutoHideScrollAreaP
     );
   },
 );
+
+function areThumbStatesEqual(
+  current: ScrollThumbState,
+  next: ScrollThumbState,
+): boolean {
+  return current.visible === next.visible
+    && Math.abs(current.size - next.size) < THUMB_MEASUREMENT_EPSILON
+    && Math.abs(current.offset - next.offset) < THUMB_MEASUREMENT_EPSILON;
+}
