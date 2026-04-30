@@ -71,6 +71,7 @@ export function CoworkArtifactTurnCard({
             <Button
               variant="ghost"
               size="sm"
+              data-chat-transcript-ignore
               onClick={() => onOpenArtifact?.(presentation.summary!.id)}
               className="shrink-0"
             >

@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -50,6 +51,7 @@ import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actio
 import { useMessageListScroll } from "@/hooks/chat/use-message-list-scroll";
 import { useOpenCoworkArtifact } from "@/hooks/cowork/use-open-cowork-artifact";
 import { useOpenCoworkCodingSession } from "@/hooks/cowork/use-open-cowork-coding-session";
+import { useChatTranscriptSelection } from "@/hooks/chat/use-chat-transcript-selection";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useBrailleFillsweep } from "@/hooks/ui/use-braille-sweep";
 import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/prompt-content";
@@ -67,6 +69,8 @@ import {
   summarizeCollapsedActions,
   type TurnDisplayBlock,
 } from "@/lib/domain/chat/transcript-presentation";
+import { buildTranscriptCopyText } from "@/lib/domain/chat/transcript-copy";
+import { normalizeToolResultText } from "@/lib/domain/chat/tool-result-text";
 import {
   extractClaudePlanBody,
   isClaudeExitPlanModeCall,
@@ -112,6 +116,11 @@ import {
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
 } from "@/lib/domain/chat/transcript-trailing-status";
+import {
+  resolveAssistantTurnActionTime,
+  resolveOptimisticPromptActionTime,
+  resolveUserMessageActionTime,
+} from "@/lib/domain/chat/transcript-action-time";
 import type {
   FileChangeContentPart,
   FileReadContentPart,
@@ -202,7 +211,7 @@ export function MessageList({
       true,
     )
     : null;
-  const visibleTurnIds = transcript.turnOrder.filter((turnId) => {
+  const visibleTurnIds = useMemo(() => transcript.turnOrder.filter((turnId) => {
     const turn = transcript.turnsById[turnId];
     if (!turn) return false;
 
@@ -213,7 +222,13 @@ export function MessageList({
       && isLatestTurnInProgress
       && !latestTurnHasAssistantRenderableContent
     );
-  });
+  }), [
+    latestTurnHasAssistantRenderableContent,
+    latestTurnId,
+    transcript.turnOrder,
+    transcript.turnsById,
+    visibleOptimisticPrompt,
+  ]);
   const latestTurnInProgress = !!latestTurn && !latestTurn.completedAt;
   const latestTurnPresentation = useMemo(
     () => latestTurn ? buildTurnPresentation(latestTurn, transcript) : null,
@@ -288,6 +303,24 @@ export function MessageList({
     selectedWorkspaceId,
     activeSessionId,
   });
+  const selectionRootRef = useRef<HTMLDivElement>(null);
+  const getTranscriptCopyText = useCallback(() => buildTranscriptCopyText({
+    transcript,
+    visibleTurnIds,
+    visibleOptimisticPrompt,
+    proposedPlanToolCallIds: toolCallIdsWithProposedPlan,
+  }), [
+    transcript,
+    visibleTurnIds,
+    visibleOptimisticPrompt,
+    toolCallIdsWithProposedPlan,
+  ]);
+
+  useChatTranscriptSelection({
+    rootRef: selectionRootRef,
+    getCopyText: getTranscriptCopyText,
+  });
+
   return (
     <div className="flex-1 min-h-0" data-telemetry-block>
       <ProposedPlanToolCallIdsContext.Provider value={toolCallIdsWithProposedPlan}>
@@ -299,7 +332,12 @@ export function MessageList({
                 className={`${CHAT_SURFACE_GUTTER_CLASSNAME} pt-4`}
                 style={{ paddingBottom: bottomInsetPx }}
               >
-                <div className={CHAT_COLUMN_CLASSNAME}>
+                <div
+                  ref={selectionRootRef}
+                  data-chat-transcript-root="true"
+                  tabIndex={-1}
+                  className={`${CHAT_COLUMN_CLASSNAME} select-none outline-none`}
+                >
                   {visibleTurnIds.map((turnId, turnIdx) => {
                     const turn = transcript.turnsById[turnId];
                     if (!turn) return null;
@@ -319,6 +357,13 @@ export function MessageList({
                       tailAssistantProseRootId,
                       transcript,
                     );
+                    const tailAssistantItem = tailAssistantProseRootId
+                      ? transcript.itemsById[tailAssistantProseRootId]
+                      : null;
+                    const tailAssistantActionTime = resolveAssistantTurnActionTime({
+                      assistantItem: tailAssistantItem?.kind === "assistant_prose" ? tailAssistantItem : null,
+                      turn,
+                    });
                     // Hide the trailing indicator only while the assistant prose item
                     // itself is actively streaming. If Codex closes the prose item but
                     // keeps working internally, the trailing indicator should return.
@@ -370,6 +415,7 @@ export function MessageList({
                             content={tailAssistantCopyContent}
                             showCopyButton={!!turn.completedAt}
                             reserveSlot={shouldReserveTurnAssistantActionSlot}
+                            timestampLabel={tailAssistantActionTime}
                           />
                           {trailingStatus && (
                             <div className={trailingStatusClassName}>{trailingStatus}</div>
@@ -412,6 +458,7 @@ export function MessageList({
                               content={visibleOptimisticPrompt.text}
                               contentParts={visibleOptimisticPrompt.contentParts}
                               showCopyButton
+                              timestampLabel={resolveOptimisticPromptActionTime(visibleOptimisticPrompt)}
                             />
                           );
                         })()}
@@ -860,6 +907,7 @@ function TranscriptItemBlock({
             content={item.text}
             contentParts={item.contentParts}
             showCopyButton
+            timestampLabel={resolveUserMessageActionTime(item)}
             footer={(
               <UserMessageProvenanceChrome
                 sourceSessionId={item.promptProvenance.sourceSessionId}
@@ -878,6 +926,7 @@ function TranscriptItemBlock({
           content={item.text}
           contentParts={item.contentParts}
           showCopyButton
+          timestampLabel={resolveUserMessageActionTime(item)}
         />
       );
     }
@@ -887,10 +936,7 @@ function TranscriptItemBlock({
 
       return (
         <div className="flex justify-start relative">
-          <div
-            data-chat-selection-unit
-            className="flex flex-col w-full min-w-0 max-w-full break-words"
-          >
+          <div className="flex flex-col w-full min-w-0 max-w-full break-words">
             <AssistantMessage
               content={item.text}
               isStreaming={item.isStreaming}
@@ -1019,10 +1065,12 @@ function TurnAssistantActionRow({
   content,
   showCopyButton = false,
   reserveSlot = false,
+  timestampLabel = null,
 }: {
   content: string | null;
   showCopyButton?: boolean;
   reserveSlot?: boolean;
+  timestampLabel?: string | null;
 }) {
   if (!content || (!showCopyButton && !reserveSlot)) {
     return null;
@@ -1034,6 +1082,7 @@ function TurnAssistantActionRow({
         {showCopyButton && (
           <CopyMessageButton
             content={content}
+            timestampLabel={timestampLabel}
             visibilityClassName="opacity-0 group-hover/turn:opacity-100"
           />
         )}
@@ -1437,6 +1486,7 @@ function AgentGroupBlock({
     <div className="py-0.5">
       {/* Agent header — clickable to collapse/expand */}
       <div
+        {...(headerExpandable ? { "data-chat-transcript-ignore": true } : {})}
         onClick={() => headerExpandable && setExpanded(!expanded)}
         className={`group/tool-action-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-chat leading-[var(--text-chat--line-height)] transition-colors ${
           headerExpandable
@@ -1563,6 +1613,7 @@ function AsyncAgentLaunchBlock({
             type="button"
             variant="ghost"
             size="sm"
+            data-chat-transcript-ignore
             className="-ml-2 h-auto px-2 py-1 text-xs"
             onClick={() => setDetailsExpanded((expanded) => !expanded)}
           >
@@ -1598,7 +1649,7 @@ function AgentResultBlock({ content }: { content: string }) {
   }, [content]);
 
   return (
-    <div data-chat-selection-unit className="mt-1">
+    <div className="mt-1">
       <div
         className={`relative ${!resultExpanded && needsTruncation ? "overflow-hidden" : ""}`}
         style={!resultExpanded && needsTruncation ? { maxHeight: AGENT_RESULT_COLLAPSED_HEIGHT } : undefined}
@@ -1616,6 +1667,7 @@ function AgentResultBlock({ content }: { content: string }) {
               <Button
                 variant="inverted"
                 size="pill"
+                data-chat-transcript-ignore
                 onClick={() => setResultExpanded(true)}
                 className="pointer-events-auto"
               >
@@ -1686,12 +1738,6 @@ function buildCollapsedSummaryIcons(summary: {
     icons.push(<ClipboardList key="subagents" className="size-3.5" />);
   }
   return icons;
-}
-
-function normalizeToolResultText(text: string): string {
-  const trimmed = text.trim();
-  const match = trimmed.match(/^```(?:console|text|bash|sh)?\n([\s\S]*?)\n```$/);
-  return match ? match[1] : text;
 }
 
 function isSubagentItem(item: ToolCallItem): boolean {

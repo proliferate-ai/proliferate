@@ -880,20 +880,20 @@ mod tests {
                 && *name == "Opus 4.7"
                 && description.unwrap_or("").contains("1M context")
         }));
-        assert!(labels.contains(&(
-            "claude-opus-4-6",
-            "Opus 4.6",
-            Some("Pinned previous Opus model")
-        )));
-        let opus_1m = claude
+        let opus_47 = claude
             .models
             .iter()
             .find(|model| model.id == "opus[1m]")
-            .expect("opus 1m model");
-        assert!(!opus_1m
+            .expect("opus 4.7 model");
+        assert!(!opus_47
             .aliases
             .iter()
             .any(|alias| alias == "claude-opus-4-6"));
+        assert!(labels.contains(&(
+            "claude-opus-4-6",
+            "Opus 4.6",
+            Some("Pinned previous Opus model"),
+        )));
     }
 
     #[test]

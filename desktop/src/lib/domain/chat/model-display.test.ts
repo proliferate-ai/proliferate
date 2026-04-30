@@ -32,7 +32,7 @@ describe("resolveModelDisplayName", () => {
     ).toBe("Sonnet 4.6");
   });
 
-  it("has a fallback label for pinned Claude Opus 4.6", () => {
+  it("uses a concise display label for pinned Claude Opus 4.6", () => {
     expect(
       resolveModelDisplayName({
         agentKind: "claude",

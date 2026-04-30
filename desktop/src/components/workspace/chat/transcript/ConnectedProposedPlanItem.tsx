@@ -25,7 +25,7 @@ export function ConnectedProposedPlanItem({
     reviewPlan,
     isApprovingPlan,
     isRejectingPlan,
-    isPreparingPlanReference,
+    isImplementingPlan,
   } = useProposedPlanActions();
   const decision = item.decision;
   const plan = useMemo(() => proposedPlanItemToAttachment(item), [item]);
@@ -58,7 +58,7 @@ export function ConnectedProposedPlanItem({
           }
           isApproving={isApprovingPlan}
           isRejecting={isRejectingPlan}
-          isImplementingHere={isPreparingPlanReference}
+          isImplementingHere={isImplementingPlan}
         />
       </div>
     </div>

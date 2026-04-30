@@ -186,7 +186,7 @@ describe("user preference migration", () => {
     });
   });
 
-  it("preserves pinned Claude Opus 4.6 in model maps", () => {
+  it("preserves pinned Claude Opus 4.6 model preferences", () => {
     const result = migrateUserPreferences({
       ...USER_PREFERENCE_DEFAULTS,
       defaultChatModelIdByAgentKind: {

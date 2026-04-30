@@ -600,15 +600,19 @@ mod tests {
             kind: "claude".to_string(),
             display_name: "Claude".to_string(),
             default_model_id: Some("sonnet".to_string()),
-            models: vec![
-                plain_model("sonnet", true),
-                plain_model("opus[1m]", false),
-                plain_model("claude-opus-4-6", false),
-            ],
+            models: {
+                let mut opus = plain_model("opus[1m]", false);
+                opus.aliases = vec!["claude-opus-4-6".to_string()];
+                vec![
+                    plain_model("sonnet", true),
+                    opus,
+                    plain_model("claude-opus-4-6", false),
+                ]
+            },
         };
 
         let resolved = resolve_model_id(&registry, Some("claude-opus-4-6"))
-            .expect("exact catalog model id should be preserved");
+            .expect("pinned Opus 4.6 model id should resolve directly");
 
         assert_eq!(resolved.as_deref(), Some("claude-opus-4-6"));
     }

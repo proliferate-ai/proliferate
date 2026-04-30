@@ -10,6 +10,7 @@ export interface UserMessageProps {
   content: string;
   contentParts?: ContentPart[];
   showCopyButton?: boolean;
+  timestampLabel?: string | null;
   footer?: ReactNode;
 }
 
@@ -18,6 +19,7 @@ export function UserMessage({
   content,
   contentParts = [],
   showCopyButton = false,
+  timestampLabel = null,
   footer,
 }: UserMessageProps) {
   const [expanded, setExpanded] = useState(false);
@@ -43,7 +45,6 @@ export function UserMessage({
 
   return (
     <div
-      data-chat-selection-unit
       className={showCopyButton ? "group/msg flex justify-end" : "flex justify-end"}
     >
       <div className="flex w-full flex-col items-end justify-end gap-1">
@@ -80,6 +81,7 @@ export function UserMessage({
                   type="button"
                   variant="ghost"
                   size="sm"
+                  data-chat-transcript-ignore
                   onClick={() => setExpanded((v) => !v)}
                   className="h-auto px-1 py-0 text-[11px] text-muted-foreground hover:bg-transparent hover:text-foreground"
                 >
@@ -98,6 +100,7 @@ export function UserMessage({
           <div className="pr-1 pt-0.5">
             <CopyMessageButton
               content={content}
+              timestampLabel={timestampLabel}
               visibilityClassName="opacity-0 group-hover/msg:opacity-100"
             />
           </div>

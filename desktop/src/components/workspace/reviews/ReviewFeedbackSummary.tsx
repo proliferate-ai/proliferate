@@ -116,6 +116,7 @@ function ReviewFeedbackAssignmentRow({
             type="button"
             variant="ghost"
             size="icon-sm"
+            data-chat-transcript-ignore
             aria-label={`Open ${assignment.personaLabel} session`}
             title={`Open ${assignment.personaLabel} session`}
             onClick={() => onOpenSession(assignment.reviewerSessionId!)}
@@ -137,6 +138,7 @@ function ReviewFeedbackAssignmentRow({
             type="button"
             variant="ghost"
             size="icon-sm"
+            data-chat-transcript-ignore
             aria-label={`Open ${assignment.personaLabel} critique`}
             title={`Open ${assignment.personaLabel} critique`}
             onClick={onOpenCritique}
