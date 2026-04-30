@@ -317,7 +317,7 @@ export function ChatInput() {
           )}
           {isEditingQueuedPrompt ? (
             <div
-              className="mb-2 flex-grow select-text overflow-y-auto px-3"
+              className="mb-2 flex-grow select-text overflow-y-auto px-4"
               style={{
                 minHeight: `${CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM}rem`,
                 maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,

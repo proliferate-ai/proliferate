@@ -5,7 +5,6 @@ import {
 } from "react";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { resolvePreferredOpenTarget } from "@/lib/domain/chat/preference-resolvers";
-import { BranchBadge } from "@/components/workspace/shell/BranchBadge";
 import { HeaderTabs } from "@/components/workspace/shell/HeaderTabs";
 import { Button } from "@/components/ui/Button";
 import { GitActionsButton } from "@/components/workspace/git/GitActionsButton";
@@ -23,9 +22,6 @@ import type { GitStatusSnapshot, Workspace } from "@anyharness/sdk";
 import type { CurrentPullRequestResponse } from "@anyharness/sdk";
 
 interface GlobalHeaderProps {
-  branchName?: string;
-  additions?: number;
-  deletions?: number;
   gitStatus: GitStatusSnapshot | null;
   existingPr: NonNullable<CurrentPullRequestResponse["pullRequest"]> | null;
   selectedWorkspace: Workspace | undefined;
@@ -45,9 +41,6 @@ interface GlobalHeaderProps {
 }
 
 export function GlobalHeader({
-  branchName,
-  additions,
-  deletions,
   gitStatus,
   existingPr,
   selectedWorkspace,
@@ -65,10 +58,6 @@ export function GlobalHeader({
   onViewPr,
   onRenameBranch: _onRenameBranch,
 }: GlobalHeaderProps) {
-  const hasStats =
-    additions !== undefined &&
-    deletions !== undefined &&
-    (additions > 0 || deletions > 0);
 
   const [targets, setTargets] = useState<OpenTarget[]>([]);
   const defaultOpenInTargetId = useUserPreferencesStore((s) => s.defaultOpenInTargetId);
@@ -102,9 +91,6 @@ export function GlobalHeader({
 
       {/* Right side - branch + open-in + git + panel toggle */}
       <div className="flex shrink-0 items-center gap-2">
-        {branchName && (
-          <BranchBadge branchName={branchName} />
-        )}
         <Button
           variant="secondary"
           size="sm"
@@ -144,12 +130,6 @@ export function GlobalHeader({
           title={rightPanelOpen ? "Hide side panel" : "Show side panel"}
           className="h-7 px-1.5 text-xs rounded-md"
         >
-          {hasStats && (
-            <span className="mr-1 flex items-center gap-1 text-xs tabular-nums">
-              <span className="text-git-green">+{additions}</span>
-              <span className="text-git-red">-{deletions}</span>
-            </span>
-          )}
           <SplitPanel className="size-3.5 text-muted-foreground" />
         </Button>
       </div>

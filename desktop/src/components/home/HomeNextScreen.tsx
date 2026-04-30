@@ -190,7 +190,7 @@ export function HomeNextScreen() {
                 <div className="flex w-full flex-wrap items-center justify-start gap-1" />
               </div>
               <div
-                className="mb-2 flex-grow select-text overflow-y-auto px-3"
+                className="mb-2 flex-grow select-text overflow-y-auto px-4"
                 style={{
                   minHeight: `${HOME_COMPOSER_INPUT_MIN_HEIGHT_REM}rem`,
                   maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,

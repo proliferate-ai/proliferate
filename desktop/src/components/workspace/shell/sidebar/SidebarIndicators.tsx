@@ -39,7 +39,7 @@ export function SidebarStatusGlyph({
     case "waiting_input":
     case "waiting_plan":
     case "iterating":
-      return <Spinner className="size-3.5 text-sidebar-muted-foreground opacity-60" />;
+      return <Spinner className="size-3 text-sidebar-muted-foreground opacity-60" />;
     case "queued_prompt":
       return <MessageSquare className="size-3 text-info" />;
     case "needs_review":
