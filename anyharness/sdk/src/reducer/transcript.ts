@@ -939,6 +939,9 @@ function mergeContentParts(existing: ContentPart[], incoming: ContentPart[]): Co
 
   const leadingSnapshotTypes = [
     "text",
+    "image",
+    "resource",
+    "resource_link",
     "reasoning",
     "file_read",
   ] as const;
