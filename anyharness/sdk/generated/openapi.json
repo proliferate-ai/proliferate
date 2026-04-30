@@ -1633,6 +1633,16 @@
               }
             }
           },
+          "400": {
+            "description": "Unsupported event history window",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Session not found",
             "content": {

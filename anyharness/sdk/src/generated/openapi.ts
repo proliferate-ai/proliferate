@@ -4859,6 +4859,15 @@ export interface operations {
                     "application/json": components["schemas"]["SessionEventEnvelope"][];
                 };
             };
+            /** @description Unsupported event history window */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Session not found */
             404: {
                 headers: {

@@ -13,7 +13,10 @@ import type { WorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
 import type { PendingSessionConfigChanges } from "@/lib/domain/sessions/pending-config";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
 import { DEFAULT_RUNTIME_URL } from "@/config/runtime";
-import { isDebugMeasurementEnabled } from "@/lib/infra/debug-measurement";
+import {
+  isDebugMeasurementEnabled,
+  type MeasurementOperationId,
+} from "@/lib/infra/debug-measurement";
 
 type ConnectionState = "connecting" | "healthy" | "failed";
 
@@ -27,7 +30,7 @@ export interface HotPaintGate {
   workspaceId: string;
   sessionId: string;
   nonce: number;
-  operationId: `mop_${string}` | null;
+  operationId: MeasurementOperationId | null;
   kind: "workspace_hot_reopen" | "session_hot_switch";
 }
 
@@ -197,26 +200,32 @@ export const useHarnessStore = create<HarnessState>((set) => ({
 }));
 
 const RETAINED_SESSION_SLOT_WARNING_THRESHOLD = 50;
+const retainedSessionSlotWarningEnabled = isDebugMeasurementEnabled();
 let lastRetainedSlotWarningBucket = 0;
 
-useHarnessStore.subscribe((state) => {
-  if (!isDebugMeasurementEnabled()) {
-    return;
-  }
-  const retainedSlotCount = Object.keys(state.sessionSlots).length;
-  const warningBucket = Math.floor(
-    retainedSlotCount / RETAINED_SESSION_SLOT_WARNING_THRESHOLD,
-  );
-  if (warningBucket <= 0 || warningBucket === lastRetainedSlotWarningBucket) {
-    return;
-  }
-  lastRetainedSlotWarningBucket = warningBucket;
-  console.warn("[debug-measurement] retained session slot warning", {
-    tag: "retained_session_slot_warning",
-    retainedSlotCount,
-    threshold: RETAINED_SESSION_SLOT_WARNING_THRESHOLD,
+if (retainedSessionSlotWarningEnabled) {
+  const unsubscribeRetainedSlotWarning = useHarnessStore.subscribe((state) => {
+    const retainedSlotCount = Object.keys(state.sessionSlots).length;
+    const warningBucket = Math.floor(
+      retainedSlotCount / RETAINED_SESSION_SLOT_WARNING_THRESHOLD,
+    );
+    if (warningBucket <= 0 || warningBucket === lastRetainedSlotWarningBucket) {
+      return;
+    }
+    lastRetainedSlotWarningBucket = warningBucket;
+    console.warn("[debug-measurement] retained session slot warning", {
+      tag: "retained_session_slot_warning",
+      retainedSlotCount,
+      threshold: RETAINED_SESSION_SLOT_WARNING_THRESHOLD,
+    });
   });
-});
+
+  if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+      unsubscribeRetainedSlotWarning();
+    });
+  }
+}
 
 export function isHotPaintGatePendingForWorkspace(
   gate: HotPaintGate | null,

@@ -264,11 +264,14 @@ impl SessionService {
         }
 
         match (after_seq, before_seq, limit, turn_limit) {
-            (Some(seq), _, Some(limit), _) => self
+            (Some(_), Some(_), _, _) | (Some(_), _, _, Some(_)) => anyhow::bail!(
+                "after_seq cannot be combined with before_seq or turn_limit"
+            ),
+            (Some(seq), None, Some(limit), None) => self
                 .session_store
                 .list_events_after_limited(session_id, seq, limit)
                 .map(Some),
-            (Some(seq), _, None, _) => self
+            (Some(seq), None, None, None) => self
                 .session_store
                 .list_events_after(session_id, seq)
                 .map(Some),

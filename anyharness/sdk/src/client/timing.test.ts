@@ -72,6 +72,26 @@ describe("AnyHarness timing observer", () => {
     expect(events[0]).not.toHaveProperty("url");
   });
 
+  it("allows multiple timing observers to coexist", async () => {
+    const firstEvents: AnyHarnessTimingEvent[] = [];
+    const secondEvents: AnyHarnessTimingEvent[] = [];
+    const cleanupFirst = setAnyHarnessTimingObserver((event) => firstEvents.push(event));
+    const cleanupSecond = setAnyHarnessTimingObserver((event) => secondEvents.push(event));
+    const client = new AnyHarnessClient({
+      baseUrl: "http://runtime.test",
+      fetch: vi.fn(async () => jsonResponse([])) as typeof globalThis.fetch,
+    });
+
+    await client.workspaces.list();
+    cleanupSecond();
+    await client.workspaces.list();
+    cleanupFirst();
+    await client.workspaces.list();
+
+    expect(firstEvents).toHaveLength(2);
+    expect(secondEvents).toHaveLength(1);
+  });
+
   it("preserves caller headers and adds measurement attribution", async () => {
     const events: AnyHarnessTimingEvent[] = [];
     setAnyHarnessTimingObserver((event) => events.push(event));

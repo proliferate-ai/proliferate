@@ -551,7 +551,7 @@ export function useWorkspaceBootstrapActions() {
           workspaceId,
           requestOptions: sessionRequestOptions ?? undefined,
           forceRefresh: true,
-        }).catch(() => [] as WorkspaceSession[]);
+        });
         recordMeasurementWorkflowStep({
           operationId: measurementOperationId,
           step: "workspace.bootstrap.sessions",

@@ -6,6 +6,7 @@ export {
 } from "./client/core.js";
 export type {
   AnyHarnessClientOptions,
+  AnyHarnessMeasurementOperationId,
   AnyHarnessRequestOptions,
   AnyHarnessTimingCategory,
   AnyHarnessTimingEvent,

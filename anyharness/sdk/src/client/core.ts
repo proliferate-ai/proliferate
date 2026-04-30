@@ -23,10 +23,12 @@ export interface AnyHarnessClientOptions {
   fetch?: typeof globalThis.fetch;
 }
 
+export type AnyHarnessMeasurementOperationId = `mop_${string}`;
+
 export interface AnyHarnessRequestOptions {
   headers?: HeadersInit;
   signal?: AbortSignal;
-  measurementOperationId?: string;
+  measurementOperationId?: AnyHarnessMeasurementOperationId;
   timingCategory?: AnyHarnessTimingCategory;
   timingScope?: AnyHarnessTimingScope;
 }
@@ -64,7 +66,7 @@ export type AnyHarnessTimingEvent =
       method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
       status: number | "network_error" | "aborted";
       durationMs: number;
-      measurementOperationId?: string;
+      measurementOperationId?: AnyHarnessMeasurementOperationId;
       runtimeUrlHash?: string;
     }
   | {
@@ -81,27 +83,31 @@ export type AnyHarnessTimingEvent =
       eventCount?: number;
       maxInterArrivalGapMs?: number;
       malformedEventCount?: number;
-      measurementOperationId?: string;
+      measurementOperationId?: AnyHarnessMeasurementOperationId;
       runtimeUrlHash?: string;
     };
 
 export type AnyHarnessTimingObserver = (event: AnyHarnessTimingEvent) => void;
 
-let anyHarnessTimingObserver: AnyHarnessTimingObserver | null = null;
+const anyHarnessTimingObservers = new Set<AnyHarnessTimingObserver>();
 
 export function setAnyHarnessTimingObserver(
   observer: AnyHarnessTimingObserver | null,
 ): () => void {
-  anyHarnessTimingObserver = observer;
+  if (!observer) {
+    anyHarnessTimingObservers.clear();
+    return () => undefined;
+  }
+  anyHarnessTimingObservers.add(observer);
   return () => {
-    if (anyHarnessTimingObserver === observer) {
-      anyHarnessTimingObserver = null;
-    }
+    anyHarnessTimingObservers.delete(observer);
   };
 }
 
 export function emitAnyHarnessTimingEvent(event: AnyHarnessTimingEvent): void {
-  anyHarnessTimingObserver?.(event);
+  for (const observer of [...anyHarnessTimingObservers]) {
+    observer(event);
+  }
 }
 
 export function withTimingCategory(
@@ -279,6 +285,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 export function hashTimingScope(value: string): string {
+  // Stable grouping hash only; this is not anonymization or a privacy boundary.
   let hash = 2166136261;
   for (let i = 0; i < value.length; i += 1) {
     hash ^= value.charCodeAt(i);

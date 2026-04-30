@@ -5,6 +5,7 @@ import {
 import {
   emitAnyHarnessTimingEvent,
   hashTimingScope,
+  type AnyHarnessMeasurementOperationId,
 } from "../client/core.js";
 
 export interface SessionStreamOptions {
@@ -19,7 +20,7 @@ export interface SessionStreamOptions {
   onClose?: () => void;
   timing?: {
     category: "session.stream";
-    measurementOperationId?: string;
+    measurementOperationId?: AnyHarnessMeasurementOperationId;
     runtimeUrlHash?: string;
   };
 }

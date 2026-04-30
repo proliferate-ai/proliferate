@@ -1,5 +1,6 @@
 import {
   hashTimingScope,
+  type AnyHarnessMeasurementOperationId,
   type AnyHarnessRequestOptions,
   type AnyHarnessTimingCategory,
 } from "@anyharness/sdk";
@@ -9,7 +10,7 @@ import {
 // VITE_PROLIFERATE_DEBUG_ANYHARNESS_TIMING=1; emitted records are limited to
 // ids, counts, durations, categories, and hashed scopes.
 
-export type MeasurementOperationId = `mop_${string}`;
+export type MeasurementOperationId = AnyHarnessMeasurementOperationId;
 
 export type MeasurementOperationKind =
   | "workspace_open"
