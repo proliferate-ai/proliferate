@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
-use super::executor::{resolve_git_repo_root, run_git, run_git_ok};
+use super::executor::{
+    resolve_git_repo_root, run_git, run_git_ok, run_git_with_timeout, TimedGitOutput,
+};
 use super::parse_status::parse_porcelain_v2;
 use super::types::{
     CommitError, GitActionAvailability, GitBranch, GitChangedFile, GitDiffResult, GitFileStatus,
@@ -281,6 +284,22 @@ impl GitService {
         workspace_path: &Path,
         remote: Option<&str>,
     ) -> Result<(String, String, bool), PushError> {
+        Self::push_current_branch_inner(workspace_path, remote, None)
+    }
+
+    pub fn push_current_branch_with_timeout(
+        workspace_path: &Path,
+        remote: Option<&str>,
+        timeout: Duration,
+    ) -> Result<(String, String, bool), PushError> {
+        Self::push_current_branch_inner(workspace_path, remote, Some(timeout))
+    }
+
+    fn push_current_branch_inner(
+        workspace_path: &Path,
+        remote: Option<&str>,
+        timeout: Option<Duration>,
+    ) -> Result<(String, String, bool), PushError> {
         let repo_root = run_git_ok(workspace_path, &["rev-parse", "--show-toplevel"])?
             .trim()
             .to_string();
@@ -305,10 +324,22 @@ impl GitService {
 
         let remote_name = remote.unwrap_or("origin");
 
-        let push = if upstream.success {
-            run_git(&repo_root_path, &["push", remote_name, &branch])?
+        let push_args: Vec<&str> = if upstream.success {
+            vec!["push", remote_name, &branch]
         } else {
-            run_git(&repo_root_path, &["push", "-u", remote_name, &branch])?
+            vec!["push", "-u", remote_name, &branch]
+        };
+        let push = if let Some(timeout) = timeout {
+            match run_git_with_timeout(&repo_root_path, &push_args, timeout)? {
+                TimedGitOutput::Completed(output) => output,
+                TimedGitOutput::TimedOut => {
+                    return Err(PushError::Failed {
+                        message: format!("push timed out after {}s", timeout.as_secs()),
+                    });
+                }
+            }
+        } else {
+            run_git(&repo_root_path, &push_args)?
         };
 
         if !push.success {

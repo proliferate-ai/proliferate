@@ -1,19 +1,21 @@
 use anyharness_contract::v1::{
     DetectProjectSetupResponse, GitBranchRef, PrepareRepoRootMobilityDestinationRequest,
-    PrepareRepoRootMobilityDestinationResponse, RepoRoot, RepoRootKind,
+    PrepareRepoRootMobilityDestinationResponse, ReadWorkspaceFileResponse, RepoRoot, RepoRootKind,
     ResolveRepoRootFromPathRequest,
 };
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     Json,
 };
 
 use super::access::map_access_error;
 use super::blocking::run_blocking;
 use super::error::ApiError;
+use super::files::{map_service_error, read_response_to_contract, run_files_task, FilePathQuery};
 use super::workspaces::workspace_to_contract;
 use super::workspaces_contract::detection_result_to_contract;
 use crate::app::AppState;
+use crate::files::service::WorkspaceFilesService;
 use crate::git::GitService;
 use crate::repo_roots::model::RepoRootRecord;
 use crate::workspaces::types::ResolveRepoRootError;
@@ -125,6 +127,38 @@ pub async fn list_repo_root_git_branches(
             })
             .collect(),
     ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/repo-roots/{repo_root_id}/files/file",
+    params(
+        ("repo_root_id" = String, Path, description = "Repo root ID"),
+        ("path" = String, Query, description = "Repo-root-relative file path"),
+    ),
+    responses(
+        (status = 200, description = "Read repo root file", body = ReadWorkspaceFileResponse),
+        (status = 400, description = "Invalid path or non-text file", body = anyharness_contract::v1::ProblemDetails),
+        (status = 404, description = "Repo root or file not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "repo-roots"
+)]
+pub async fn read_repo_root_file(
+    State(state): State<AppState>,
+    Path(repo_root_id): Path<String>,
+    Query(query): Query<FilePathQuery>,
+) -> Result<Json<ReadWorkspaceFileResponse>, ApiError> {
+    let repo_root = load_repo_root(&state, repo_root_id).await?;
+    let repo_root_path = repo_root.path;
+    let path = query.path;
+    let response = run_files_task("read repo root file", move || {
+        WorkspaceFilesService::read_file(std::path::Path::new(&repo_root_path), &path)
+            .map(read_response_to_contract)
+            .map_err(map_service_error)
+    })
+    .await?;
+
+    Ok(Json(response))
 }
 
 #[utoipa::path(

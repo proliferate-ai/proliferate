@@ -47,7 +47,13 @@ const MAX_CLOUD_CREATE_ATTEMPTS = 3;
 
 interface CreateCloudWorkspaceAndEnterOptions {
   repoGroupKeyToExpand?: string | null;
+  latencyFlowId?: string | null;
 }
+
+export type CloudWorkspaceEntryResult =
+  | { status: "ready"; workspaceId: string; cloudWorkspaceId: string; attemptId: string }
+  | { status: "awaiting-ready"; workspaceId: string; cloudWorkspaceId: string; attemptId: string }
+  | { status: "interrupted" };
 
 function resolveErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
@@ -63,6 +69,7 @@ function buildRepoTargetFromRequest(
   return {
     gitOwner: request.gitOwner,
     gitRepoName: request.gitRepoName,
+    baseBranch: request.baseBranch ?? null,
   };
 }
 
@@ -120,13 +127,11 @@ export function useCreateCloudWorkspace() {
     initialRequest?: CreateCloudWorkspaceRequest;
     allowConflictRetry: boolean;
     repoGroupKeyToExpand?: string | null;
-  }) => {
+    latencyFlowId?: string | null;
+  }): Promise<CloudWorkspaceEntryResult> => {
     const startedAt = startLatencyTimer();
     const repoLabel = `${args.target.gitOwner}/${args.target.gitRepoName}`;
     const attemptId = createPendingWorkspaceAttemptId();
-    if (args.repoGroupKeyToExpand) {
-      ensureRepoGroupExpanded(args.repoGroupKeyToExpand);
-    }
     const cloudWorkspaces = getWorkspaceCollectionsFromCache(
       queryClient,
       runtimeUrl,
@@ -170,7 +175,7 @@ export function useCreateCloudWorkspace() {
       } else if (isAttemptCurrent(attemptId)) {
         setPendingWorkspaceEntry(nextEntry);
       } else {
-        return;
+        return { status: "interrupted" };
       }
       currentEntry = nextEntry;
 
@@ -200,7 +205,7 @@ export function useCreateCloudWorkspace() {
           totalElapsedMs: elapsedMs(startedAt),
         });
         if (!isAttemptCurrent(attemptId)) {
-          return;
+          return { status: "interrupted" };
         }
 
         const workspaceId = cloudWorkspaceSyntheticId(workspace.id);
@@ -212,18 +217,30 @@ export function useCreateCloudWorkspace() {
           request: { kind: "select-existing", workspaceId },
         };
         setPendingWorkspaceEntry(updatedEntry);
+
+        if (workspace.status === "ready") {
+          const selectionFinalized = await finalizeSelection(updatedEntry, workspaceId, {
+            latencyFlowId: args.latencyFlowId,
+            repoGroupKeyToExpand: args.repoGroupKeyToExpand,
+          });
+          if (!selectionFinalized) {
+            return { status: "interrupted" };
+          }
+          return {
+            status: "ready",
+            workspaceId,
+            cloudWorkspaceId: workspace.id,
+            attemptId,
+          };
+        }
+
         if (args.repoGroupKeyToExpand) {
           ensureRepoGroupExpanded(args.repoGroupKeyToExpand);
         }
-
-        if (workspace.status === "ready") {
-          await finalizeSelection(updatedEntry, workspaceId);
-          return;
-        }
-
         await selectWorkspace(workspaceId, {
           force: true,
           preservePending: true,
+          latencyFlowId: args.latencyFlowId,
         });
         logLatency("workspace.cloud_create.awaiting_ready", {
           attemptId,
@@ -232,7 +249,12 @@ export function useCreateCloudWorkspace() {
           attemptCount,
           retryCount,
         });
-        return;
+        return {
+          status: "awaiting-ready",
+          workspaceId,
+          cloudWorkspaceId: workspace.id,
+          attemptId,
+        };
       } catch (error) {
         if (
           isCloudWorkspaceBranchConflictError(error)
@@ -260,9 +282,10 @@ export function useCreateCloudWorkspace() {
           currentEntry ?? nextEntry,
           resolveErrorMessage(error, "Failed to create cloud workspace."),
         );
-        return;
+        return { status: "interrupted" };
       }
     }
+    return { status: "interrupted" };
   }, [
     authUser,
     beginPendingWorkspace,
@@ -284,6 +307,19 @@ export function useCreateCloudWorkspace() {
       target,
       allowConflictRetry: true,
       repoGroupKeyToExpand: options?.repoGroupKeyToExpand,
+      latencyFlowId: options?.latencyFlowId,
+    });
+  }, [runCloudWorkspaceCreateFlow]);
+
+  const createCloudWorkspaceAndEnterWithResult = useCallback(async (
+    target: CloudWorkspaceRepoTarget,
+    options?: CreateCloudWorkspaceAndEnterOptions,
+  ): Promise<CloudWorkspaceEntryResult> => {
+    return runCloudWorkspaceCreateFlow({
+      target,
+      allowConflictRetry: true,
+      repoGroupKeyToExpand: options?.repoGroupKeyToExpand,
+      latencyFlowId: options?.latencyFlowId,
     });
   }, [runCloudWorkspaceCreateFlow]);
 
@@ -299,6 +335,7 @@ export function useCreateCloudWorkspace() {
 
   return {
     createCloudWorkspaceAndEnter,
+    createCloudWorkspaceAndEnterWithResult,
     retryCloudWorkspaceAndEnter,
     isCreatingCloudWorkspace: createMutation.isPending,
   };

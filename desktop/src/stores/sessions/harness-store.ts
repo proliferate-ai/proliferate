@@ -60,6 +60,7 @@ interface HarnessState {
   clearSelection: () => void;
   putSessionSlot: (sessionId: string, slot: SessionSlot) => void;
   patchSessionSlot: (sessionId: string, patch: Partial<SessionSlot>) => void;
+  removeSessionSlot: (sessionId: string) => void;
   setActiveSessionId: (sessionId: string | null) => void;
 
   pendingWorkspaceEntry: PendingWorkspaceEntry | null;
@@ -141,6 +142,14 @@ export const useHarnessStore = create<HarnessState>((set) => ({
         [sessionId]: { ...slot, ...patch },
       },
     };
+  }),
+
+  removeSessionSlot: (sessionId) => set((state) => {
+    if (!state.sessionSlots[sessionId]) {
+      return state;
+    }
+    const { [sessionId]: _removed, ...sessionSlots } = state.sessionSlots;
+    return { sessionSlots };
   }),
 
   setActiveSessionId: (activeSessionId) => set({ activeSessionId }),

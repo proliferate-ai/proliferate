@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CloudRepoConfigResponse } from "@/lib/integrations/cloud/client";
 import { saveCloudRepoConfig } from "@/lib/integrations/cloud/repo-configs";
-import { readWorkspaceTextFile } from "@/lib/integrations/anyharness/files";
+import { readRepoTrackedTextFile } from "@/lib/integrations/anyharness/files";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import {
@@ -22,25 +22,30 @@ interface SaveCloudRepoConfigInput {
   setupScript: string;
 }
 
-async function buildTrackedFilesPayload(
+export async function buildTrackedFilesPayload(
   runtimeUrl: string,
   repository: SettingsRepositoryEntry,
   trackedFilePaths: string[],
 ) {
-  const localWorkspaceId = repository.localWorkspaceId?.trim();
-  if (!localWorkspaceId) {
-    throw new Error("A local workspace is required to read tracked files.");
+  if (trackedFilePaths.length === 0) {
+    return [];
   }
 
   return await Promise.all(
-    trackedFilePaths.map(async (relativePath) => ({
-      relativePath,
-      content: await readWorkspaceTextFile(
+    trackedFilePaths.map(async (relativePath) => {
+      const file = await readRepoTrackedTextFile(
         runtimeUrl,
-        localWorkspaceId,
+        {
+          localWorkspaceId: repository.localWorkspaceId,
+          repoRootId: repository.repoRootId,
+        },
         relativePath,
-      ),
-    })),
+      );
+      return {
+        relativePath,
+        content: file.content,
+      };
+    }),
   );
 }
 
@@ -56,7 +61,7 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
       if (!repository?.gitOwner || !repository.gitRepoName) {
         throw new Error("A GitHub-backed repository is required.");
       }
-      if (!runtimeUrl.trim()) {
+      if (trackedFilePaths.length > 0 && !runtimeUrl.trim()) {
         throw new Error("Local runtime is not connected.");
       }
 
@@ -87,10 +92,13 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
       trackProductEvent("cloud_repo_config_saved", {
         env_var_count: Object.keys(variables.envVars).length,
         tracked_file_count: response.trackedFiles.length,
+        ...(variables.trackedFilePaths.length > 0
+          ? { tracked_file_source: repository.localWorkspaceId ? "workspace" : "repo_root" }
+          : {}),
         has_setup_script: response.setupScript.trim().length > 0,
       });
-      if (repository.localWorkspaceId && repository.gitOwner && repository.gitRepoName) {
-        const { gitOwner, gitRepoName, localWorkspaceId } = repository;
+      if ((repository.localWorkspaceId || repository.repoRootId) && repository.gitOwner && repository.gitRepoName) {
+        const { gitOwner, gitRepoName, localWorkspaceId, repoRootId } = repository;
         emitRuntimeInputSyncEvent({
           trigger: "repo_config_mutation",
           descriptors: response.trackedFiles.map((file) => ({
@@ -98,6 +106,7 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
             gitOwner,
             gitRepoName,
             localWorkspaceId,
+            repoRootId,
             relativePath: file.relativePath,
           })),
         });

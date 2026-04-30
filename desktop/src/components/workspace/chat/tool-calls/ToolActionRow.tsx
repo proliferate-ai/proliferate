@@ -154,7 +154,7 @@ export function ToolActionLeadingAffordance({
             : "scale-100 opacity-100"
         }`}
       >
-        <span className="[&_svg]:size-2.5 [&_svg]:text-muted-foreground transition-colors group-hover/tool-action-row:[&_svg]:text-foreground/70">
+        <span className="flex h-3 w-3 items-center justify-center text-xs leading-none transition-colors [&_svg]:size-2.5 [&_svg]:text-muted-foreground group-hover/tool-action-row:[&_svg]:text-foreground/70">
           {icon}
         </span>
       </span>

@@ -11,18 +11,21 @@ interface ChatInputState {
   draftByWorkspaceId: Record<string, ChatComposerDraft>;
   editDraftBySessionId: Record<string, string>;
   editingQueueSeqBySessionId: Record<string, number>;
+  focusRequestNonce: number;
   setDraft: (workspaceId: string, value: ChatComposerDraft) => void;
   setDraftText: (workspaceId: string, value: string) => void;
   appendDraftText: (workspaceId: string, value: string) => void;
   clearDraft: (workspaceId: string) => void;
   setEditDraft: (sessionId: string, value: string) => void;
   setEditingQueueSeq: (sessionId: string, seq: number | null) => void;
+  requestFocus: () => void;
 }
 
 export const useChatInputStore = create<ChatInputState>((set) => ({
   draftByWorkspaceId: {},
   editDraftBySessionId: {},
   editingQueueSeqBySessionId: {},
+  focusRequestNonce: 0,
 
   setDraft: (workspaceId, value) => set((state) => {
     const nextDrafts = { ...state.draftByWorkspaceId };
@@ -114,4 +117,8 @@ export const useChatInputStore = create<ChatInputState>((set) => ({
       editingQueueSeqBySessionId: nextEditing,
     };
   }),
+
+  requestFocus: () => set((state) => ({
+    focusRequestNonce: state.focusRequestNonce + 1,
+  })),
 }));

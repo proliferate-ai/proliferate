@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import {
   buildWorkspaceArrivalEvent,
   collectWorktreeBasenamesForRepo,
@@ -68,6 +69,10 @@ function isAttemptCurrent(attemptId: string): boolean {
   return useHarnessStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
 }
 
+function requestChatInputFocus(): void {
+  useChatInputStore.getState().requestFocus();
+}
+
 function resolveErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
@@ -75,6 +80,10 @@ function resolveErrorMessage(error: unknown, fallback: string): string {
 interface CreateLocalWorkspaceAndEnterOptions {
   lightweight?: boolean;
   repoGroupKeyToExpand?: string | null;
+}
+
+interface CreateLocalWorkspaceAndEnterInternalOptions extends CreateLocalWorkspaceAndEnterOptions {
+  throwOnFailure?: boolean;
 }
 
 interface CreateWorktreeAndEnterOptions {
@@ -125,6 +134,7 @@ export function useWorkspaceEntryActions() {
     });
     useWorkspaceFilesStore.getState().reset();
     enterPendingWorkspaceShell(entry);
+    requestChatInputFocus();
   }, [enterPendingWorkspaceShell]);
 
   const finalizeSelection = useCallback(async (
@@ -213,10 +223,10 @@ export function useWorkspaceEntryActions() {
     });
   }, [setPendingWorkspaceEntry]);
 
-  const createLocalWorkspaceAndEnter = useCallback(async (
+  const createLocalWorkspaceAndEnterInternal = useCallback(async (
     sourceRoot: string,
-    options?: CreateLocalWorkspaceAndEnterOptions,
-  ) => {
+    options?: CreateLocalWorkspaceAndEnterInternalOptions,
+  ): Promise<WorkspaceEntryResult | null> => {
     const startedAt = startLatencyTimer();
     const sourceRepoGroupKey = options?.repoGroupKeyToExpand ?? sourceRoot;
     // Open immediately for feedback; success reopens using the returned workspace.
@@ -227,6 +237,7 @@ export function useWorkspaceEntryActions() {
     // the sidebar while already in a workspace.
     if (options?.lightweight) {
       try {
+        requestChatInputFocus();
         const workspace = await createLocalWorkspace(sourceRoot);
         await selectWorkspaceWithArrival({
           workspaceId: workspace.id,
@@ -235,10 +246,10 @@ export function useWorkspaceEntryActions() {
           baseBranchName: null,
           repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(workspace, repoRoots),
         });
+        return { workspaceId: workspace.id };
       } catch (error) {
         throw error;
       }
-      return;
     }
 
     const entry = buildSubmittingPendingEntry({
@@ -263,16 +274,17 @@ export function useWorkspaceEntryActions() {
         requestElapsedMs: elapsedMs(startedAt),
       });
       if (!isAttemptCurrent(entry.attemptId)) {
-        return;
+        return null;
       }
       const selectionEntry: PendingWorkspaceEntry = {
         ...entry,
         workspaceId: workspace.id,
         request: { kind: "select-existing", workspaceId: workspace.id },
       };
-      await finalizeSelection(selectionEntry, workspace.id, {
+      const selectionFinalized = await finalizeSelection(selectionEntry, workspace.id, {
         repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(workspace, repoRoots),
       });
+      return selectionFinalized ? { workspaceId: workspace.id } : null;
     } catch (error) {
       const currentPending = useHarnessStore.getState().pendingWorkspaceEntry;
       const workspaceId = currentPending?.attemptId === entry.attemptId
@@ -288,6 +300,10 @@ export function useWorkspaceEntryActions() {
           : entry,
         resolveErrorMessage(error, "Failed to create workspace."),
       );
+      if (options?.throwOnFailure) {
+        throw error;
+      }
+      return null;
     }
   }, [
     beginPendingWorkspace,
@@ -297,6 +313,27 @@ export function useWorkspaceEntryActions() {
     repoRoots,
     selectWorkspaceWithArrival,
   ]);
+
+  const createLocalWorkspaceAndEnter = useCallback(async (
+    sourceRoot: string,
+    options?: CreateLocalWorkspaceAndEnterOptions,
+  ) => {
+    await createLocalWorkspaceAndEnterInternal(sourceRoot, options);
+  }, [createLocalWorkspaceAndEnterInternal]);
+
+  const createLocalWorkspaceAndEnterWithResult = useCallback(async (
+    sourceRoot: string,
+    options?: CreateLocalWorkspaceAndEnterOptions,
+  ): Promise<WorkspaceEntryResult> => {
+    const result = await createLocalWorkspaceAndEnterInternal(sourceRoot, {
+      ...options,
+      throwOnFailure: true,
+    });
+    if (!result) {
+      throw new Error("Workspace creation was interrupted.");
+    }
+    return result;
+  }, [createLocalWorkspaceAndEnterInternal]);
 
   const createWorktreeAndEnterInternal = useCallback(async (
     input: string | CreateWorktreeWorkspaceInput,
@@ -323,6 +360,7 @@ export function useWorkspaceEntryActions() {
     // Used when creating from the sidebar while already in a workspace.
     if (options?.lightweight) {
       try {
+        requestChatInputFocus();
         const resolved = await resolveWorktreeCreationInput(normalizedInput);
         const result = await createWorktreeWorkspace(resolved.params, {
           latencyFlowId: options.latencyFlowId,
@@ -484,6 +522,7 @@ export function useWorkspaceEntryActions() {
 
   return {
     createLocalWorkspaceAndEnter,
+    createLocalWorkspaceAndEnterWithResult,
     isCreatingLocalWorkspace,
     createWorktreeAndEnter,
     createWorktreeAndEnterWithResult,

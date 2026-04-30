@@ -33,6 +33,7 @@ export interface ShortcutDef<Id extends string = string> {
 export interface ComposerShortcutDef {
   key: string;
   label: string;
+  nonMacLabel?: string;
   description: string;
 }
 
@@ -192,7 +193,8 @@ export type ShortcutId = (typeof SHORTCUTS)[keyof typeof SHORTCUTS]["id"];
 export const COMPOSER_SHORTCUTS = {
   submitMessage: {
     key: "Enter",
-    label: "↵",
+    label: "↵ / ⌘↵",
+    nonMacLabel: "↵ / Ctrl+Enter",
     description: "Submit message",
   },
   previousMode: {

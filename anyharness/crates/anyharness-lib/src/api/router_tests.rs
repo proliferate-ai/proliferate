@@ -227,6 +227,119 @@ async fn legacy_repo_root_post_route_still_resolves_repo_root() {
 }
 
 #[tokio::test]
+async fn repo_root_file_read_route_reads_text_files() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let repo_root = TempDirGuard::new("repo-root-read-file");
+    init_repo(repo_root.path());
+    fs::create_dir_all(repo_root.path().join("dir")).expect("create dir");
+    fs::write(repo_root.path().join("dir/file name.txt"), "tracked\n").expect("write file");
+    let state = test_state(false);
+    let app = build_router(state);
+
+    let resolve_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/repo-roots/resolve")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "path": repo_root.path().display().to_string() }).to_string(),
+                ))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(resolve_response.status(), StatusCode::OK);
+    let body = to_bytes(resolve_response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let repo_payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    let repo_root_id = repo_payload["id"].as_str().expect("repo root id");
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/v1/repo-roots/{repo_root_id}/files/file?path=dir%2Ffile%20name.txt"
+                ))
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    assert_eq!(payload["path"], "dir/file name.txt");
+    assert_eq!(payload["content"], "tracked\n");
+    assert_eq!(payload["isText"], true);
+    assert_eq!(payload["tooLarge"], false);
+}
+
+#[tokio::test]
+async fn repo_root_file_read_route_rejects_unsafe_paths() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let repo_root = TempDirGuard::new("repo-root-read-unsafe-file");
+    init_repo(repo_root.path());
+    let state = test_state(false);
+    let app = build_router(state);
+
+    let resolve_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/repo-roots/resolve")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({ "path": repo_root.path().display().to_string() }).to_string(),
+                ))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    let body = to_bytes(resolve_response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let repo_payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    let repo_root_id = repo_payload["id"].as_str().expect("repo root id");
+
+    for path in ["..%2Fsecret", "%2Ftmp%2Fsecret", ".git%2Fconfig"] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!(
+                        "/v1/repo-roots/{repo_root_id}/files/file?path={path}"
+                    ))
+                    .body(Body::empty())
+                    .expect("expected request"),
+            )
+            .await
+            .expect("expected response");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read response body");
+        let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+        assert_eq!(payload["code"], "INVALID_FILE_PATH");
+    }
+}
+
+#[tokio::test]
 async fn workspace_mobility_preflight_warns_for_active_terminals_without_blocking() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))

@@ -40,7 +40,7 @@ fn default_search_limit() -> usize {
     50
 }
 
-async fn run_files_task<T, F>(task_label: &'static str, task: F) -> Result<T, ApiError>
+pub(super) async fn run_files_task<T, F>(task_label: &'static str, task: F) -> Result<T, ApiError>
 where
     T: Send + 'static,
     F: FnOnce() -> Result<T, ApiError> + Send + 'static,
@@ -50,7 +50,7 @@ where
         .map_err(|e| ApiError::internal(format!("{task_label} task failed: {e}")))?
 }
 
-fn map_service_error(e: FileServiceError) -> ApiError {
+pub(super) fn map_service_error(e: FileServiceError) -> ApiError {
     let code = e.problem_code();
     let detail = e.to_string();
     match e.status_code() {
@@ -163,7 +163,9 @@ fn list_response_to_contract(result: ListWorkspaceFilesResult) -> ListWorkspaceF
     }
 }
 
-fn read_response_to_contract(result: ReadWorkspaceFileResult) -> ReadWorkspaceFileResponse {
+pub(super) fn read_response_to_contract(
+    result: ReadWorkspaceFileResult,
+) -> ReadWorkspaceFileResponse {
     ReadWorkspaceFileResponse {
         path: result.path,
         kind: file_kind_to_contract(result.kind),

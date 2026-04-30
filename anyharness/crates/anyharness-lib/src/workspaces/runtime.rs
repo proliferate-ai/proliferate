@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use uuid::Uuid;
 
@@ -15,9 +15,12 @@ use super::types::{
     CreateWorktreeResult, ProjectSetupDetectionResult, ResolveRepoRootError,
     SetWorkspaceDisplayNameError, SetupScriptExecutionResult, SetupScriptExecutionStatus,
 };
+use crate::git::service::GitService;
 use crate::origin::OriginContext;
 use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;
+
+const BRANCH_PUBLISH_TIMEOUT: Duration = Duration::from_secs(20);
 
 pub struct WorkspaceRuntime {
     service: WorkspaceService,
@@ -252,6 +255,11 @@ impl WorkspaceRuntime {
         };
 
         let target_path_string = target_path.display().to_string();
+        let branch_existed_before_create = git_ref_exists(
+            Path::new(&repo_root.path),
+            &format!("refs/heads/{requested_branch}"),
+        );
+
         resolver::create_mobility_git_worktree(
             &repo_root.path,
             &target_path_string,
@@ -260,6 +268,13 @@ impl WorkspaceRuntime {
         )?;
 
         let ctx = resolver::resolve_git_context(&target_path_string)?;
+        if !branch_existed_before_create {
+            publish_created_branch_if_possible(
+                &ctx.repo_root,
+                requested_branch,
+                ctx.remote_url.as_deref(),
+            );
+        }
         let record = build_workspace_record(
             &repo_root,
             &ctx.repo_root,
@@ -673,6 +688,59 @@ fn reconcile_current_branch(mut record: WorkspaceRecord) -> anyhow::Result<Works
     Ok(record)
 }
 
+fn publish_created_branch_if_possible(
+    workspace_path: &str,
+    branch_name: &str,
+    remote_url: Option<&str>,
+) {
+    if remote_url
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_none()
+    {
+        tracing::info!(
+            workspace_path = %workspace_path,
+            branch_name = %branch_name,
+            "[workspace-latency] workspace.worktree.branch_publish.skipped_no_origin"
+        );
+        return;
+    }
+
+    let started = Instant::now();
+    tracing::info!(
+        workspace_path = %workspace_path,
+        branch_name = %branch_name,
+        "[workspace-latency] workspace.worktree.branch_publish.start"
+    );
+
+    match GitService::push_current_branch_with_timeout(
+        Path::new(workspace_path),
+        Some("origin"),
+        BRANCH_PUBLISH_TIMEOUT,
+    ) {
+        Ok((remote, pushed_branch, published)) => {
+            tracing::info!(
+                workspace_path = %workspace_path,
+                requested_branch = %branch_name,
+                pushed_branch = %pushed_branch,
+                remote = %remote,
+                published,
+                elapsed_ms = started.elapsed().as_millis(),
+                "[workspace-latency] workspace.worktree.branch_publish.success"
+            );
+        }
+        Err(error) => {
+            tracing::info!(
+                workspace_path = %workspace_path,
+                branch_name = %branch_name,
+                elapsed_ms = started.elapsed().as_millis(),
+                error = %error,
+                "[workspace-latency] workspace.worktree.branch_publish.skipped"
+            );
+        }
+    }
+}
+
 fn path_basename(path: &str) -> String {
     Path::new(path)
         .file_name()
@@ -781,4 +849,207 @@ fn setup_shell_command(script: &str) -> Command {
     let mut command = Command::new(shell);
     command.args(["-lc", script]);
     command
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+
+    use uuid::Uuid;
+
+    use super::WorkspaceRuntime;
+    use crate::persistence::Db;
+    use crate::repo_roots::service::RepoRootService;
+    use crate::repo_roots::store::RepoRootStore;
+    use crate::workspaces::service::WorkspaceService;
+    use crate::workspaces::store::WorkspaceStore;
+
+    struct TempDirGuard {
+        path: PathBuf,
+    }
+
+    impl TempDirGuard {
+        fn new(prefix: &str) -> Self {
+            let path = env::temp_dir().join(format!("anyharness-{prefix}-{}", Uuid::new_v4()));
+            fs::create_dir_all(&path).expect("create temp dir");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDirGuard {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[test]
+    fn create_worktree_keeps_created_branch_local() {
+        let remote = TempDirGuard::new("runtime-worktree-remote");
+        let source = TempDirGuard::new("runtime-worktree-source");
+        let target = TempDirGuard::new("runtime-worktree-target");
+        let runtime_home = TempDirGuard::new("runtime-worktree-home");
+        let _ = fs::remove_dir_all(target.path());
+
+        run_git(remote.path(), ["init", "--bare", "-b", "main"]);
+        init_repo(source.path());
+        let remote_path = remote.path().display().to_string();
+        run_git(source.path(), ["remote", "add", "origin", &remote_path]);
+        run_git(source.path(), ["push", "-u", "origin", "main"]);
+
+        let db = Db::open_in_memory().expect("open db");
+        let runtime = make_runtime(&db, runtime_home.path());
+        let source_workspace = runtime
+            .create_workspace(&source.path().display().to_string())
+            .expect("create source workspace");
+
+        let result = runtime
+            .create_worktree(
+                &source_workspace.repo_root.id,
+                &target.path().display().to_string(),
+                "feature/local-only",
+                Some("main"),
+                None,
+            )
+            .expect("create worktree");
+
+        let worktree_path = Path::new(&result.workspace.path);
+        let local_head = git_stdout(worktree_path, ["rev-parse", "HEAD"]);
+        let main_head = git_stdout(source.path(), ["rev-parse", "main"]);
+
+        assert_eq!(local_head.trim(), main_head.trim());
+        assert_git_ref_missing(remote.path(), "refs/heads/feature/local-only");
+        assert_git_command_fails(
+            worktree_path,
+            [
+                "rev-parse",
+                "--abbrev-ref",
+                "--symbolic-full-name",
+                "@{upstream}",
+            ],
+        );
+    }
+
+    #[test]
+    fn create_mobility_destination_publishes_created_branch_to_origin() {
+        let remote = TempDirGuard::new("runtime-mobility-remote");
+        let source = TempDirGuard::new("runtime-mobility-source");
+        let runtime_home = TempDirGuard::new("runtime-mobility-home");
+
+        run_git(remote.path(), ["init", "--bare", "-b", "main"]);
+        init_repo(source.path());
+        let remote_path = remote.path().display().to_string();
+        run_git(source.path(), ["remote", "add", "origin", &remote_path]);
+        run_git(source.path(), ["push", "-u", "origin", "main"]);
+
+        let db = Db::open_in_memory().expect("open db");
+        let runtime = make_runtime(&db, runtime_home.path());
+        let source_workspace = runtime
+            .create_workspace(&source.path().display().to_string())
+            .expect("create source workspace");
+        let base_sha = git_stdout(source.path(), ["rev-parse", "HEAD"]);
+
+        let workspace = runtime
+            .create_mobility_destination(
+                &source_workspace.repo_root.id,
+                "feature/mobility-pushed",
+                &base_sha,
+                Some("destination-1"),
+                None,
+            )
+            .expect("create mobility destination");
+
+        let worktree_path = Path::new(&workspace.path);
+        let local_head = git_stdout(worktree_path, ["rev-parse", "HEAD"]);
+        let remote_head = git_stdout(
+            remote.path(),
+            ["rev-parse", "refs/heads/feature/mobility-pushed"],
+        );
+        let upstream = git_stdout(
+            worktree_path,
+            [
+                "rev-parse",
+                "--abbrev-ref",
+                "--symbolic-full-name",
+                "@{upstream}",
+            ],
+        );
+
+        assert_eq!(local_head.trim(), remote_head.trim());
+        assert_eq!(upstream.trim(), "origin/feature/mobility-pushed");
+    }
+
+    fn init_repo(path: &Path) {
+        run_git(path, ["init", "-b", "main"]);
+        run_git(path, ["config", "user.email", "codex@example.com"]);
+        run_git(path, ["config", "user.name", "Codex"]);
+        fs::write(path.join("README.md"), "seed\n").expect("write seed file");
+        run_git(path, ["add", "README.md"]);
+        run_git(path, ["commit", "-m", "Initial commit"]);
+    }
+
+    fn make_runtime(db: &Db, runtime_home: &Path) -> WorkspaceRuntime {
+        let workspace_service =
+            WorkspaceService::new(WorkspaceStore::new(db.clone()), runtime_home.to_path_buf());
+        let repo_root_service = RepoRootService::new(RepoRootStore::new(db.clone()));
+        WorkspaceRuntime::new(
+            workspace_service,
+            WorkspaceStore::new(db.clone()),
+            repo_root_service,
+            runtime_home.to_path_buf(),
+        )
+    }
+
+    fn run_git<const N: usize>(cwd: &Path, args: [&str; N]) {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("spawn git");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn assert_git_ref_missing(cwd: &Path, ref_name: &str) {
+        assert_git_command_fails(cwd, ["rev-parse", "--verify", ref_name]);
+    }
+
+    fn assert_git_command_fails<const N: usize>(cwd: &Path, args: [&str; N]) {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("spawn git");
+        assert!(
+            !output.status.success(),
+            "git {:?} unexpectedly succeeded with stdout: {}",
+            args,
+            String::from_utf8_lossy(&output.stdout)
+        );
+    }
+
+    fn git_stdout<const N: usize>(cwd: &Path, args: [&str; N]) -> String {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("spawn git");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
 }

@@ -26,6 +26,28 @@ cd server
 uv run pytest -q
 ```
 
+## Local Full-Stack Profiles
+
+Use `make dev PROFILE=<name>` for full-stack local development, especially when
+multiple worktrees need to run at the same time. Do not use the default-port
+`make dev-runtime`, `make dev-server`, or `make dev-desktop` shortcuts for
+multi-worktree testing.
+
+Useful commands:
+
+```bash
+make dev-init PROFILE=<name>
+make dev-list
+make dev PROFILE=<name>
+make dev PROFILE=<name> STRIPE=1
+```
+
+Profile state lives under
+`~/.proliferate-local/dev/profiles/<name>/`; AnyHarness runtime state lives
+under `~/.proliferate-local/runtimes/<name>/`. Read
+`docs/reference/dev-profiles.md` before changing profile launch behavior,
+ports, generated Tauri config, or dev app identity.
+
 ## Read This First
 
 Start with:

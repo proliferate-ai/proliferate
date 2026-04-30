@@ -1,6 +1,7 @@
 import { CHAT_COMPOSER_LABELS } from "@/config/chat";
 import { COMPOSER_SHORTCUTS } from "@/config/shortcuts";
 import { ArrowUp, StopSquare } from "@/components/ui/icons";
+import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 
 export function ChatComposerActions({
   isRunning,
@@ -34,9 +35,10 @@ export function ChatComposerActions({
   }
 
   const canSubmit = !isEmpty && !isDisabled;
+  const submitShortcutLabel = getShortcutDisplayLabel(COMPOSER_SHORTCUTS.submitMessage);
   const title = isEditingQueuedPrompt
-    ? `Save edit (${COMPOSER_SHORTCUTS.submitMessage.label})`
-    : `${CHAT_COMPOSER_LABELS.send} (${COMPOSER_SHORTCUTS.submitMessage.label})`;
+    ? `Save edit (${submitShortcutLabel})`
+    : `${CHAT_COMPOSER_LABELS.send} (${submitShortcutLabel})`;
 
   return (
     <button

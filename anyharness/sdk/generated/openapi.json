@@ -837,6 +837,66 @@
         }
       }
     },
+    "/v1/repo-roots/{repo_root_id}/files/file": {
+      "get": {
+        "tags": [
+          "repo-roots"
+        ],
+        "operationId": "read_repo_root_file",
+        "parameters": [
+          {
+            "name": "repo_root_id",
+            "in": "path",
+            "description": "Repo root ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Repo-root-relative file path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read repo root file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadWorkspaceFileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid path or non-text file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Repo root or file not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/repo-roots/{repo_root_id}/git/branches": {
       "get": {
         "tags": [
@@ -8680,6 +8740,59 @@
           }
         }
       },
+      "ReadWorkspaceFileResponse": {
+        "type": "object",
+        "required": [
+          "path",
+          "kind",
+          "sizeBytes",
+          "isText",
+          "tooLarge"
+        ],
+        "properties": {
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "encoding": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isText": {
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/WorkspaceFileKind"
+          },
+          "modifiedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "tooLarge": {
+            "type": "boolean"
+          },
+          "versionToken": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "ReasoningVisibility": {
         "type": "string",
         "enum": [
@@ -10999,6 +11112,14 @@
             "minimum": 0
           }
         }
+      },
+      "WorkspaceFileKind": {
+        "type": "string",
+        "enum": [
+          "file",
+          "directory",
+          "symlink"
+        ]
       },
       "WorkspaceKind": {
         "type": "string",

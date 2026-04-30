@@ -5,13 +5,14 @@ import {
   dequeueRuntimeInputSyncDescriptor,
   enqueueRuntimeInputSyncDescriptors,
   MAX_RUNTIME_INPUT_SYNC_TRACKED_FILE_BYTES,
+  runtimeInputSyncDescriptorTrackedFileSourceKind,
   runtimeInputSyncDescriptorSourceKind,
   type RuntimeInputSyncDescriptor,
   type RuntimeInputSyncFailureKind,
   type RuntimeInputSyncQueueState,
   type RuntimeInputSyncTrigger,
 } from "@/lib/domain/cloud/runtime-input-sync";
-import { readWorkspaceTextFile } from "@/lib/integrations/anyharness/files";
+import { readRepoTrackedTextFile } from "@/lib/integrations/anyharness/files";
 import { resyncCloudRepoFileFromLocal } from "@/lib/integrations/cloud/repo-configs";
 import { getCloudRepoConfig } from "@/lib/integrations/cloud/repo-configs";
 import { listSyncableCloudCredentials } from "@/platform/tauri/credentials";
@@ -136,11 +137,15 @@ export function useRuntimeInputSyncRuntime() {
       return;
     }
 
-    const content = await readWorkspaceTextFile(
+    const file = await readRepoTrackedTextFile(
       runtimeUrl,
-      descriptor.localWorkspaceId,
+      {
+        localWorkspaceId: descriptor.localWorkspaceId,
+        repoRootId: descriptor.repoRootId,
+      },
       descriptor.relativePath,
     );
+    const content = file.content;
     if (contentByteLength(content) > MAX_RUNTIME_INPUT_SYNC_TRACKED_FILE_BYTES) {
       throw new Error("Tracked file is too large.");
     }
@@ -167,6 +172,7 @@ export function useRuntimeInputSyncRuntime() {
     ]);
     trackProductEvent("cloud_repo_file_resynced", {
       tracked_file_count: response.trackedFiles.length,
+      tracked_file_source: file.sourceKind,
     });
   }, []);
 
@@ -216,6 +222,9 @@ export function useRuntimeInputSyncRuntime() {
           counts.failures += 1;
           trackProductEvent("runtime_input_sync_item_failed", {
             source_kind: runtimeInputSyncDescriptorSourceKind(descriptor),
+            ...(descriptor.kind === "repo_tracked_file"
+              ? { tracked_file_source: runtimeInputSyncDescriptorTrackedFileSourceKind(descriptor) }
+              : {}),
             failure_kind: classifyRuntimeInputSyncFailure(error),
           });
         }

@@ -7,6 +7,8 @@ import {
 import { collectTurnFilePatches } from "@/lib/domain/chat/turn-file-patches";
 import type { TranscriptState, TurnRecord } from "@anyharness/sdk";
 
+const TURN_DIFF_VIEWPORT_CLASS = "max-h-[calc(var(--diffs-line-height)*18)]";
+
 interface TurnDiffPanelProps {
   turn: TurnRecord;
   transcript: TranscriptState;
@@ -19,7 +21,7 @@ export function TurnDiffPanel({ turn, transcript, onOpenFile }: TurnDiffPanelPro
     [turn, transcript],
   );
   const hasPatches = filePatches.length > 0;
-  const [manualToggled, setManualToggled] = useState<Set<string>>(new Set());
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
 
   if (!hasPatches) {
     return null;
@@ -28,7 +30,7 @@ export function TurnDiffPanel({ turn, transcript, onOpenFile }: TurnDiffPanelPro
   const fileCount = filePatches.length;
 
   const toggleExpanded = (path: string) => {
-    setManualToggled((prev) => {
+    setExpandedPaths((prev) => {
       const next = new Set(prev);
       if (next.has(path)) {
         next.delete(path);
@@ -42,7 +44,7 @@ export function TurnDiffPanel({ turn, transcript, onOpenFile }: TurnDiffPanelPro
   return (
     <FileChangesCard fileCount={fileCount} className="mt-2">
       {filePatches.map((fp) => {
-        const isExpanded = !manualToggled.has(fp.path);
+        const isExpanded = expandedPaths.has(fp.path);
         const combinedPatch = fp.patches.join("\n");
 
         return (
@@ -60,6 +62,7 @@ export function TurnDiffPanel({ turn, transcript, onOpenFile }: TurnDiffPanelPro
               <DiffViewer
                 patch={combinedPatch}
                 filePath={fp.path}
+                viewportClassName={TURN_DIFF_VIEWPORT_CLASS}
                 variant="chat"
               />
             )}

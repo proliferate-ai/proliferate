@@ -24,6 +24,7 @@ export function PowersScreen() {
   const transparentChromeEnabled = useTransparentChromeEnabled();
   const {
     phase: updaterPhase,
+    downloadProgress,
     downloadUpdate,
     openRestartPrompt,
   } = useUpdater();
@@ -61,6 +62,7 @@ export function PowersScreen() {
             </IconButton>
             <SidebarUpdatePill
               phase={updaterPhase}
+              downloadProgress={downloadProgress}
               onDownloadUpdate={downloadUpdate}
               onOpenRestartPrompt={openRestartPrompt}
             />
@@ -102,6 +104,7 @@ export function PowersScreen() {
               </IconButton>
               <SidebarUpdatePill
                 phase={updaterPhase}
+                downloadProgress={downloadProgress}
                 onDownloadUpdate={downloadUpdate}
                 onOpenRestartPrompt={openRestartPrompt}
               />

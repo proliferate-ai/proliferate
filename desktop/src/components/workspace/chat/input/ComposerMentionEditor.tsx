@@ -10,6 +10,10 @@ import {
 import { createPortal } from "react-dom";
 import { useChatFileMentionSearch } from "@/hooks/chat/use-chat-file-mention-search";
 import {
+  isComposerMentionSelectKey,
+  isRawComposerSubmitKey,
+} from "@/lib/domain/chat/composer-keyboard";
+import {
   createTextDraft,
   findMentionTrigger,
   linearOffsetFromPosition,
@@ -31,6 +35,7 @@ interface ComposerMentionEditorProps {
   canSubmit: boolean;
   disabled: boolean;
   onSubmit: () => void;
+  onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   minHeightRem: number;
   maxHeightRem: number;
   searchHostElement?: HTMLElement | null;
@@ -43,6 +48,7 @@ export function ComposerMentionEditor({
   canSubmit,
   disabled,
   onSubmit,
+  onKeyDown,
   minHeightRem,
   maxHeightRem,
   searchHostElement,
@@ -154,7 +160,7 @@ export function ComposerMentionEditor({
         search.moveHighlight(-1);
         return;
       }
-      if (event.key === "Enter" || event.key === "Tab") {
+      if (isComposerMentionSelectKey(event)) {
         event.preventDefault();
         search.selectHighlighted();
         return;
@@ -167,12 +173,13 @@ export function ComposerMentionEditor({
       }
     }
 
+    onKeyDown?.(event);
+    if (event.defaultPrevented) {
+      return;
+    }
+
     if (
-      event.key === "Enter"
-      && !event.shiftKey
-      && !event.altKey
-      && !event.ctrlKey
-      && !event.metaKey
+      isRawComposerSubmitKey(event)
     ) {
       event.preventDefault();
       if (canSubmit) {
@@ -181,6 +188,7 @@ export function ComposerMentionEditor({
     }
   }, [
     canSubmit,
+    onKeyDown,
     onSubmit,
     search,
     trigger,
@@ -226,7 +234,8 @@ export function ComposerMentionEditor({
           onClick={updateSelection}
           onKeyUp={updateSelection}
           placeholder={placeholder}
-          disabled={disabled}
+          readOnly={disabled}
+          aria-disabled={disabled}
           spellCheck={false}
           autoComplete="off"
           autoCorrect="off"
@@ -235,7 +244,9 @@ export function ComposerMentionEditor({
             minHeight: `${minHeightRem}rem`,
             maxHeight: `${maxHeightRem}rem`,
           }}
-          className="min-h-0 px-0 py-0 text-chat leading-[var(--text-chat--line-height)] text-foreground placeholder:text-[color:color-mix(in_oklab,var(--color-faint)_50%,transparent)]"
+          className={`min-h-0 px-0 py-0 text-chat leading-[var(--text-chat--line-height)] text-foreground placeholder:text-[color:color-mix(in_oklab,var(--color-faint)_50%,transparent)] ${
+            disabled ? "opacity-60" : ""
+          }`}
         />
       </div>
     </>

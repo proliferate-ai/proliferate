@@ -31,7 +31,7 @@ from proliferate.server.cloud.mcp_catalog.types import (
     UrlVariant,
 )
 
-CATALOG_VERSION = "2026-04-20.2"
+CATALOG_VERSION = "2026-04-21.1"
 
 __all__ = [
     "ArgTemplate",
@@ -103,34 +103,6 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
             "Read pull requests, reviews, and discussions",
             "Browse issues, labels, and milestones",
             "Pull in README and doc content from repos",
-        ),
-    ),
-    CatalogEntry(
-        id="gmail",
-        version=1,
-        name="Gmail",
-        one_liner="Search and read authorized Gmail messages.",
-        description=(
-            "Use Gmail to find relevant email threads and bring message context into a "
-            "session after you authorize the connected Google account."
-        ),
-        docs_url=(
-            "https://support.anthropic.com/en/articles/11088742-using-the-gmail-and-"
-            "google-calendar-integrations"
-        ),
-        availability="universal",
-        transport="http",
-        auth_kind="oauth",
-        http=HttpLaunchTemplate(
-            url=StaticUrl("https://gmail.mcp.claude.com/mcp"),
-            display_url="https://gmail.mcp.claude.com/mcp",
-        ),
-        server_name_base="gmail",
-        icon_id="gmail",
-        capabilities=(
-            "Search authorized Gmail messages",
-            "Read matching email threads",
-            "Use email context when answering session questions",
         ),
     ),
     CatalogEntry(

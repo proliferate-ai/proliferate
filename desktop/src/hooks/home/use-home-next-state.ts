@@ -1,186 +1,116 @@
 import { useMemo } from "react";
-import type { GitBranchRef, ModelRegistry, RepoRoot, Workspace } from "@anyharness/sdk";
 import {
-  useModelRegistriesQuery,
-  useRepoRootGitBranchesQuery,
-} from "@anyharness/sdk-react";
-import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
-import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
-import {
-  buildHomeNextAgentOptions,
-  findHomeNextMatchingWorkspace,
-  localBranchNames,
-  resolveHomeNextDefaultBranchName,
-  resolveHomeNextRepositorySelection,
-  resolveSelectedHomeNextAgentOption,
-  type HomeNextLaunchTarget,
+  type HomeNextDestination,
+  type HomeNextModelSelection,
+  type HomeNextRepoLaunchKind,
   type HomeNextRepositorySelection,
 } from "@/lib/domain/home/home-next-launch";
-import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
-import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-
-const EMPTY_WORKSPACES: Workspace[] = [];
-const EMPTY_REPO_ROOTS: RepoRoot[] = [];
-const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
-const EMPTY_BRANCH_REFS: GitBranchRef[] = [];
+import { useHomeNextModelSelection } from "@/hooks/home/use-home-next-model-selection";
+import { useHomeNextModeSelection } from "@/hooks/home/use-home-next-mode-selection";
+import { useHomeNextRepositorySelection } from "@/hooks/home/use-home-next-repository-selection";
 
 interface UseHomeNextStateArgs {
-  selectedAgentKind: string | null;
+  destination: HomeNextDestination;
   repositorySelection: HomeNextRepositorySelection;
-  selectedBranch: string | null;
+  repoLaunchKind: HomeNextRepoLaunchKind;
+  modelSelectionOverride: HomeNextModelSelection | null;
+  baseBranchOverride: string | null;
+  modeOverrideId: string | null;
 }
 
 export function useHomeNextState({
-  selectedAgentKind,
+  destination,
   repositorySelection,
-  selectedBranch,
+  repoLaunchKind,
+  modelSelectionOverride,
+  baseBranchOverride,
+  modeOverrideId,
 }: UseHomeNextStateArgs) {
-  const { readyAgents, isLoading: agentsLoading } = useAgentCatalog();
-  const modelRegistriesQuery = useModelRegistriesQuery();
-  const modelRegistries = modelRegistriesQuery.data ?? EMPTY_MODEL_REGISTRIES;
-  const { localWorkspaces = EMPTY_WORKSPACES, repoRoots = EMPTY_REPO_ROOTS } =
-    useStandardRepoProjection();
-  const hiddenRepoRootIds = useWorkspaceUiStore((state) => state.hiddenRepoRootIds);
-  const archivedWorkspaceIds = useWorkspaceUiStore((state) => state.archivedWorkspaceIds);
-  const workspaceLastInteracted = useWorkspaceUiStore((state) => state.workspaceLastInteracted);
-  const repoConfigs = useRepoPreferencesStore((state) => state.repoConfigs);
-  const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
-
-  const repositories = useMemo(() => {
-    const hiddenRepoRootIdSet = new Set(hiddenRepoRootIds);
-    return buildSettingsRepositoryEntries(
-      localWorkspaces.filter((workspace) =>
-        workspace.repoRootId ? !hiddenRepoRootIdSet.has(workspace.repoRootId) : true
-      ),
-      repoRoots.filter((repoRoot) => !hiddenRepoRootIdSet.has(repoRoot.id)),
-    );
-  }, [hiddenRepoRootIds, localWorkspaces, repoRoots]);
-
-  const selectedRepository = useMemo(
-    () => resolveHomeNextRepositorySelection(repositories, repositorySelection),
-    [repositories, repositorySelection],
-  );
-
-  const selectedRepoRoot = useMemo(() => (
-    selectedRepository
-      ? repoRoots.find((repoRoot) => repoRoot.id === selectedRepository.repoRootId) ?? null
-      : null
-  ), [repoRoots, selectedRepository]);
-
-  const branchQuery = useRepoRootGitBranchesQuery({
-    repoRootId: selectedRepository?.repoRootId ?? null,
-    enabled: !!selectedRepository,
+  const model = useHomeNextModelSelection({ modelSelectionOverride });
+  const repository = useHomeNextRepositorySelection({
+    destination,
+    repositorySelection,
+    repoLaunchKind,
+    baseBranchOverride,
   });
-  const branchRefs = branchQuery.data ?? EMPTY_BRANCH_REFS;
-
-  const branchOptions = useMemo(
-    () => localBranchNames(branchRefs),
-    [branchRefs],
-  );
-
-  const defaultBranchName = useMemo(() => (
-    resolveHomeNextDefaultBranchName({
-      branchRefs,
-      savedDefaultBranch: selectedRepository
-        ? repoConfigs[selectedRepository.sourceRoot]?.defaultBranch ?? null
-        : null,
-      repoRootDefaultBranch: selectedRepoRoot?.defaultBranch ?? null,
-    })
-  ), [branchRefs, repoConfigs, selectedRepoRoot?.defaultBranch, selectedRepository]);
-
-  const selectedBranchName =
-    selectedBranch && branchOptions.includes(selectedBranch)
-      ? selectedBranch
-      : defaultBranchName;
-
-  const matchingWorkspace = selectedRepository && selectedBranchName
-    ? findHomeNextMatchingWorkspace({
-      workspaces: localWorkspaces,
-      repoRootId: selectedRepository.repoRootId,
-      branchName: selectedBranchName,
-      archivedWorkspaceIds,
-      workspaceLastInteracted,
-    })
-    : null;
-  const workspaceBlockReason = getWorkspaceRuntimeBlockReason(matchingWorkspace?.id ?? null);
-
-  const agentOptions = useMemo(
-    () => buildHomeNextAgentOptions(readyAgents, modelRegistries),
-    [modelRegistries, readyAgents],
-  );
-  const selectedAgent = useMemo(
-    () => resolveSelectedHomeNextAgentOption(agentOptions, selectedAgentKind),
-    [agentOptions, selectedAgentKind],
-  );
-
-  const launchTarget = useMemo<HomeNextLaunchTarget | null>(() => {
-    if (!selectedRepository) {
-      return { kind: "cowork" };
-    }
-    if (!selectedBranchName) {
-      return null;
-    }
-    return {
-      kind: "repository",
-      repository: selectedRepository,
-      branchName: selectedBranchName,
-      existingWorkspaceId: matchingWorkspace?.id ?? null,
-    };
-  }, [matchingWorkspace?.id, selectedBranchName, selectedRepository]);
+  const mode = useHomeNextModeSelection({
+    destination,
+    modelSelection: model.effectiveModelSelection,
+    modeOverrideId,
+  });
 
   const targetDisabledReason = useMemo(() => {
-    if (agentsLoading || modelRegistriesQuery.isLoading) {
-      return "Loading agents";
+    if (model.disabledReason) {
+      return model.disabledReason;
     }
-    if (!selectedAgent) {
-      return "No ready agents";
-    }
-    if (!selectedAgent.modelId) {
-      return selectedAgent.disabledReason ?? "No launchable model";
-    }
-    if (!selectedRepository) {
+    if (destination === "cowork") {
       return null;
     }
-    if (branchQuery.isLoading) {
+    if (!repository.selectedRepository) {
+      return "Choose a repository";
+    }
+
+    if (repoLaunchKind === "local") {
+      return null;
+    }
+
+    if (repository.branchQuery.isLoading) {
       return "Loading branches";
     }
-    if (branchQuery.isError) {
+    if (repository.branchQuery.isError) {
       return "Couldn't load branches";
     }
-    if (branchOptions.length === 0) {
+    if (repository.branchOptions.length === 0) {
       return "No local branches found";
     }
-    if (!selectedBranchName) {
-      return "Choose a branch";
+    if (!repository.selectedBranchName) {
+      return "Choose a base branch";
     }
-    if (workspaceBlockReason) {
-      return workspaceBlockReason;
+
+    if (repoLaunchKind === "cloud") {
+      if (!repository.cloudActive) {
+        return "Sign in to use cloud workspaces";
+      }
+      if (!repository.cloudRepoTarget) {
+        return "Cloud is unavailable for this repository";
+      }
+      if (repository.cloudRepoAction.kind === "loading") {
+        return "Loading cloud configuration";
+      }
+      if (repository.cloudRepoAction.kind === "configure") {
+        return "Configure cloud for this repository";
+      }
+      if (repository.cloudRepoAction.kind !== "create") {
+        return "Cloud is unavailable for this repository";
+      }
     }
-    return null;
+
+    return repository.launchTarget ? null : "Choose where to launch";
   }, [
-    agentsLoading,
-    branchOptions.length,
-    branchQuery.isError,
-    branchQuery.isLoading,
-    modelRegistriesQuery.isLoading,
-    selectedAgent,
-    selectedBranchName,
-    selectedRepository,
-    workspaceBlockReason,
+    destination,
+    model.disabledReason,
+    repoLaunchKind,
+    repository.branchOptions.length,
+    repository.branchQuery.isError,
+    repository.branchQuery.isLoading,
+    repository.cloudActive,
+    repository.cloudRepoAction.kind,
+    repository.cloudRepoTarget,
+    repository.launchTarget,
+    repository.selectedBranchName,
+    repository.selectedRepository,
   ]);
 
   return {
-    agentOptions,
-    selectedAgent,
-    repositories,
-    selectedRepository,
-    branchOptions,
-    selectedBranchName,
-    branchQuery,
-    launchTarget,
+    ...repository,
+    ...model,
+    modeOptions: mode.modeOptions,
+    effectiveMode: mode.effectiveMode,
+    effectiveModeId: mode.effectiveModeId,
     targetDisabledReason,
-    canLaunchTarget: targetDisabledReason === null && launchTarget !== null,
+    canLaunchTarget:
+      targetDisabledReason === null
+      && repository.launchTarget !== null
+      && model.effectiveModelSelection !== null,
   };
 }

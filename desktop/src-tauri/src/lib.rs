@@ -35,7 +35,51 @@ const SHORTCUT_TRIGGERED_EVENT: &str = "shortcut://triggered";
 const KNOWN_SHORTCUT_IDS: &[&str] = &[CLOSE_ACTIVE_TAB_MENU_ID, OPEN_SETTINGS_MENU_ID];
 
 #[cfg(target_os = "macos")]
+fn dev_profile_display_name() -> Option<String> {
+    if std::env::var_os("PROLIFERATE_DEV").is_none() {
+        return None;
+    }
+    let profile = std::env::var("PROLIFERATE_DEV_PROFILE").ok()?;
+    let profile = profile.trim();
+    if profile.is_empty() {
+        None
+    } else {
+        Some(format!("Proliferate ({profile})"))
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn app_display_name<R: Runtime>(app: &AppHandle<R>) -> String {
+    dev_profile_display_name().unwrap_or_else(|| app.package_info().name.clone())
+}
+
+#[cfg(target_os = "macos")]
+fn apply_dev_app_display_name() {
+    let Some(display_name) = dev_profile_display_name() else {
+        return;
+    };
+    let ns_display_name = objc2_foundation::NSString::from_str(&display_name);
+    objc2_foundation::NSProcessInfo::processInfo().setProcessName(&ns_display_name);
+
+    let Some(mtm) = objc2::MainThreadMarker::new() else {
+        return;
+    };
+    let app = objc2_app_kit::NSApplication::sharedApplication(mtm);
+    let Some(main_menu) = app.mainMenu() else {
+        return;
+    };
+    let Some(app_menu_item) = main_menu.itemAtIndex(0) else {
+        return;
+    };
+    app_menu_item.setTitle(&ns_display_name);
+    if let Some(app_menu) = app_menu_item.submenu() {
+        app_menu.setTitle(&ns_display_name);
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R>> {
+    let app_name = app_display_name(app);
     let close_tab_item = MenuItemBuilder::with_id(CLOSE_ACTIVE_TAB_MENU_ID, "Close Tab")
         .accelerator("CmdOrCtrl+W")
         .build(app)?;
@@ -46,11 +90,11 @@ fn build_macos_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu
     // Custom Quit item (not PredefinedMenuItem::quit()) so the accelerator
     // routes through on_menu_event into our confirmation dialog instead of
     // calling [NSApp terminate:] directly, which bypasses the Rust event loop.
-    let quit_item = MenuItemBuilder::with_id(APP_QUIT_MENU_ID, "Quit Proliferate")
+    let quit_item = MenuItemBuilder::with_id(APP_QUIT_MENU_ID, format!("Quit {app_name}"))
         .accelerator("CmdOrCtrl+Q")
         .build(app)?;
 
-    let app_menu = SubmenuBuilder::new(app, app.package_info().name.clone())
+    let app_menu = SubmenuBuilder::new(app, app_name)
         .about(None)
         .separator()
         .item(&open_settings_item)
@@ -172,6 +216,9 @@ pub fn run() {
 
     builder
         .setup(move |app| {
+            #[cfg(target_os = "macos")]
+            apply_dev_app_display_name();
+
             #[cfg(any(target_os = "linux", windows))]
             {
                 let _ = app.deep_link().register_all();

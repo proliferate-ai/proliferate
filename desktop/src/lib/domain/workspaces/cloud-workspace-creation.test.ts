@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProliferateClientError } from "@/lib/integrations/cloud/client";
 import {
+  buildCloudRepoActionBySourceRoot,
   buildCloudWorkspaceAttemptFromRequest,
   buildConfiguredCloudRepoKeys,
   buildNextCloudWorkspaceAttempt,
@@ -64,6 +65,35 @@ describe("cloud workspace creation helpers", () => {
     })).toEqual({ kind: "create", label: "New cloud workspace" });
   });
 
+  it("builds cloud action state independently for each repository row", () => {
+    const actions = buildCloudRepoActionBySourceRoot({
+      repositories: [
+        {
+          sourceRoot: "/repos/rocket",
+          gitOwner: "acme",
+          gitRepoName: "rocket",
+        },
+        {
+          sourceRoot: "/repos/draft",
+          gitOwner: "acme",
+          gitRepoName: "draft",
+        },
+        {
+          sourceRoot: "/repos/local-only",
+          gitOwner: null,
+          gitRepoName: null,
+        },
+      ],
+      cloudActive: true,
+      configuredRepoKeys: new Set(["acme::rocket"]),
+      isInitialConfigLoad: false,
+    });
+
+    expect(actions["/repos/rocket"]).toEqual({ kind: "create", label: "New cloud workspace" });
+    expect(actions["/repos/draft"]).toEqual({ kind: "configure", label: "Configure cloud" });
+    expect(actions["/repos/local-only"]).toEqual({ kind: "hidden", label: null });
+  });
+
   it("derives taken slugs from the active branch prefix only", () => {
     const taken = collectTakenCloudWorkspaceSlugs({
       branchPrefixType: "proliferate",
@@ -99,6 +129,29 @@ describe("cloud workspace creation helpers", () => {
       displayName: null,
     });
     expect(attempt.triedBranchNames).toEqual(new Set([attempt.branchName]));
+  });
+
+  it("passes the selected base branch while keeping generated branch naming", () => {
+    vi.spyOn(globalThis.crypto, "getRandomValues").mockImplementation((typedArray) => {
+      (typedArray as Uint32Array)[0] = 0;
+      return typedArray;
+    });
+
+    const attempt = buildNextCloudWorkspaceAttempt({
+      target: {
+        gitOwner: "acme",
+        gitRepoName: "rocket",
+        baseBranch: "release",
+      },
+      branchPrefixType: "proliferate",
+      authUser: null,
+      knownBranchNames: new Set(),
+      triedBranchNames: new Set<string>(),
+    });
+
+    expect(attempt.branchName).not.toBe("release");
+    expect(attempt.request.baseBranch).toBe("release");
+    expect(attempt.request.branchName).toBe(attempt.branchName);
   });
 
   it("reuses an explicit cloud request without generating a new branch", () => {

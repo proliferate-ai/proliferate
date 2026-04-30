@@ -22,6 +22,8 @@ const FILTER_OPTIONS: { id: ChangesFilter; label: string }[] = [
   { id: "staged", label: "Staged" },
 ];
 
+const GIT_PANEL_DIFF_VIEWPORT_CLASS = "max-h-[calc(var(--diffs-line-height)*18)]";
+
 interface GitPanelFile {
   path: string;
   includedState: string;
@@ -63,14 +65,26 @@ function FileDiffContent({
   if (diff?.truncated) {
     return (
       <div>
-        {diff.patch && <DiffViewer patch={diff.patch} filePath={filePath} />}
+        {diff.patch && (
+          <DiffViewer
+            patch={diff.patch}
+            filePath={filePath}
+            viewportClassName={GIT_PANEL_DIFF_VIEWPORT_CLASS}
+          />
+        )}
         <p className="px-3 pb-1 text-[10px] text-muted-foreground">Diff truncated</p>
       </div>
     );
   }
 
   if (diff?.patch) {
-    return <DiffViewer patch={diff.patch} filePath={filePath} />;
+    return (
+      <DiffViewer
+        patch={diff.patch}
+        filePath={filePath}
+        viewportClassName={GIT_PANEL_DIFF_VIEWPORT_CLASS}
+      />
+    );
   }
 
   return null;

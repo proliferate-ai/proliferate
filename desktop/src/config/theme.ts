@@ -2,7 +2,7 @@
 // Preset definitions
 // ---------------------------------------------------------------------------
 
-export const THEME_PRESETS = ["ship", "mono", "tbpn", "original"] as const;
+export const THEME_PRESETS = ["mono", "ship", "tbpn", "original"] as const;
 export type ThemePreset = (typeof THEME_PRESETS)[number];
 
 export const COLOR_MODES = ["dark", "light", "system"] as const;
@@ -57,7 +57,7 @@ export function applyThemePreference(
 }
 
 export function initializeTheme(
-  preset: ThemePreset = "ship",
+  preset: ThemePreset = "mono",
   mode: ColorMode = "dark",
 ) {
   document.documentElement.dataset.theme = preset;

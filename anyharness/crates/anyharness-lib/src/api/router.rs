@@ -65,6 +65,10 @@ pub fn build_router(state: AppState) -> Router {
             get(repo_roots::list_repo_root_git_branches),
         )
         .route(
+            "/repo-roots/{repo_root_id}/files/file",
+            get(repo_roots::read_repo_root_file),
+        )
+        .route(
             "/repo-roots/{repo_root_id}/detect-setup",
             get(repo_roots::detect_repo_root_setup),
         )

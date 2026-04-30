@@ -52,11 +52,29 @@ Additional requirements:
 
 ```bash
 make server-install
-make dev
+make dev PROFILE=main
 ```
 
-`make dev` starts local Postgres, applies migrations, starts AnyHarness on
-`:8457`, starts the server on `:8000`, and opens the desktop app.
+`make dev PROFILE=<name>` starts local Postgres, creates and migrates a
+profile-specific database, starts AnyHarness, starts the server, and opens the
+desktop app. Each profile gets stable local ports and state under
+`~/.proliferate-local/dev/profiles/<name>`, so multiple worktrees can run the
+full stack at the same time. Profile names use lowercase letters, numbers,
+hyphens, and underscores.
+
+```bash
+make dev-init PROFILE=main  # prepare profile state without launching
+make dev-list               # show known profiles and live port status
+make dev PROFILE=main       # runtime + server + desktop + local Postgres
+make dev PROFILE=main STRIPE=1  # also start Stripe webhook forwarding
+```
+
+The individual `make dev-runtime`, `make dev-server`, and `make dev-desktop`
+shortcuts remain default-port workflows. Use `make dev PROFILE=<name>` for
+multi-worktree development.
+
+See [`docs/reference/dev-profiles.md`](docs/reference/dev-profiles.md) for the
+profile state model, override rules, and app-label behavior.
 
 For cloud sandbox development, configure `server/.env.local` with:
 
@@ -69,7 +87,8 @@ E2B_TEMPLATE_NAME=...
 
 ```bash
 make dev-local          # Desktop app with bundled local runtime
-make dev                # Runtime + server + desktop + local Postgres
+make dev PROFILE=main   # Runtime + server + desktop + local Postgres
+make dev-list           # List prepared/running dev profiles
 make dev-runtime        # AnyHarness runtime on :8457
 make dev-server         # FastAPI server on :8000
 make sdk-build          # Generate and build the TypeScript SDK
@@ -92,11 +111,6 @@ server/               FastAPI cloud control plane
 ## Contributing
 
 Issues, feedback, and pull requests are welcome.
-
-## Diff Test
-
-This short note is intentionally small so local diff rendering can be checked
-without changing product behavior.
 
 ## License
 

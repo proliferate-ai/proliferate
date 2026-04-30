@@ -28,6 +28,7 @@ import { useQueuedPromptEdit } from "@/hooks/chat/use-queued-prompt-edit";
 import { focusChatInput } from "@/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "@/lib/domain/chat/file-mentions";
 import { canAttachPromptContent } from "@/lib/domain/chat/prompt-content";
+import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { Button } from "@/components/ui/Button";
 import { AddMessage } from "@/components/ui/icons";
 import { ChatComposerActions } from "./ChatComposerActions";
@@ -51,6 +52,7 @@ export function ChatInput() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mentionSearchHost, setMentionSearchHost] = useState<HTMLDivElement | null>(null);
   const workspaceSelectionNonce = useHarnessStore((state) => state.workspaceSelectionNonce);
+  const focusRequestNonce = useChatInputStore((state) => state.focusRequestNonce);
   const {
     activeSessionId,
     activeSlot,
@@ -126,6 +128,17 @@ export function ChatInput() {
     onCancelEdit: cancelEdit,
   });
 
+  const focusComposer = useCallback((): boolean => {
+    if (isEditingQueuedPrompt) {
+      if (!textareaRef.current) {
+        return false;
+      }
+      textareaRef.current.focus({ preventScroll: true });
+      return true;
+    }
+    return focusChatInput();
+  }, [isEditingQueuedPrompt]);
+
   const handleFileInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       attachments.addFiles(event.target.files);
@@ -154,25 +167,48 @@ export function ChatInput() {
   }, [attachments, canAttach]);
 
   useEffect(() => {
-    if ((!selectedWorkspaceId && !activeSessionId) || isDisabled) {
+    if (!selectedWorkspaceId && !activeSessionId) {
       return;
     }
 
     const timer = window.setTimeout(() => {
-      if (isEditingQueuedPrompt) {
-        textareaRef.current?.focus({ preventScroll: true });
-        return;
-      }
-      focusChatInput();
+      focusComposer();
     }, 50);
     return () => window.clearTimeout(timer);
   }, [
     activeSessionId,
-    isDisabled,
-    isEditingQueuedPrompt,
+    focusComposer,
     selectedWorkspaceId,
     workspaceSelectionNonce,
   ]);
+
+  useEffect(() => {
+    if (focusRequestNonce === 0) {
+      return;
+    }
+
+    let timer: number | null = null;
+    let attempts = 0;
+    let cancelled = false;
+    const attemptFocus = () => {
+      if (cancelled) {
+        return;
+      }
+      attempts += 1;
+      if (focusComposer() || attempts >= 8) {
+        return;
+      }
+      timer = window.setTimeout(attemptFocus, 25);
+    };
+
+    timer = window.setTimeout(attemptFocus, 0);
+    return () => {
+      cancelled = true;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [focusComposer, focusRequestNonce]);
 
   useLayoutEffect(() => {
     const el = textareaRef.current;
@@ -284,6 +320,7 @@ export function ChatInput() {
               canSubmit={canSubmit}
               disabled={isDisabled}
               onSubmit={onSubmit}
+              onKeyDown={handleKeyDown}
               minHeightRem={CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM}
               maxHeightRem={CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}
               searchHostElement={mentionSearchHost}

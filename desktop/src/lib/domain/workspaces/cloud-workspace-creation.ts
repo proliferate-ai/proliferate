@@ -16,6 +16,7 @@ import {
 export interface CloudWorkspaceRepoTarget {
   gitOwner: string;
   gitRepoName: string;
+  baseBranch?: string | null;
 }
 
 export type CloudWorkspaceCreateInput =
@@ -27,6 +28,12 @@ export type CloudRepoActionState =
   | { kind: "loading"; label: "Loading cloud..." }
   | { kind: "configure"; label: "Configure cloud" }
   | { kind: "create"; label: "New cloud workspace" };
+
+interface CloudRepoActionRepository {
+  sourceRoot: string;
+  gitOwner?: string | null;
+  gitRepoName?: string | null;
+}
 
 export function buildConfiguredCloudRepoKeys(
   configs: readonly CloudRepoConfigSummary[] | null | undefined,
@@ -57,6 +64,30 @@ export function resolveCloudRepoActionState(args: {
     : { kind: "configure", label: "Configure cloud" };
 }
 
+export function buildCloudRepoActionBySourceRoot(args: {
+  repositories: readonly CloudRepoActionRepository[];
+  cloudActive: boolean;
+  configuredRepoKeys: ReadonlySet<string>;
+  isInitialConfigLoad: boolean;
+}): Record<string, CloudRepoActionState> {
+  const actions: Record<string, CloudRepoActionState> = {};
+  for (const repository of args.repositories) {
+    const gitOwner = repository.gitOwner?.trim();
+    const gitRepoName = repository.gitRepoName?.trim();
+    const repoTarget = gitOwner && gitRepoName
+      ? { gitOwner, gitRepoName }
+      : null;
+    actions[repository.sourceRoot] = args.cloudActive
+      ? resolveCloudRepoActionState({
+        repoTarget,
+        configuredRepoKeys: args.configuredRepoKeys,
+        isInitialConfigLoad: args.isInitialConfigLoad,
+      })
+      : { kind: "hidden", label: null };
+  }
+  return actions;
+}
+
 export function collectKnownCloudBranchNames(args: {
   target: CloudWorkspaceRepoTarget;
   cloudWorkspaces: readonly CloudWorkspaceSummary[];
@@ -82,10 +113,12 @@ export function isCreateCloudWorkspaceRequest(
 export function getCloudWorkspaceRepoTarget(
   input: CloudWorkspaceCreateInput,
 ): CloudWorkspaceRepoTarget {
-  return {
+  const baseTarget = {
     gitOwner: input.gitOwner,
     gitRepoName: input.gitRepoName,
   };
+  const baseBranch = input.baseBranch?.trim();
+  return baseBranch ? { ...baseTarget, baseBranch } : baseTarget;
 }
 
 export function collectTakenCloudWorkspaceSlugs(args: {
@@ -151,6 +184,7 @@ export function buildNextCloudWorkspaceAttempt(args: {
       gitProvider: "github",
       gitOwner: args.target.gitOwner,
       gitRepoName: args.target.gitRepoName,
+      baseBranch: args.target.baseBranch?.trim() || undefined,
       branchName,
       displayName: null,
     },

@@ -7,6 +7,7 @@ import {
   Archive,
   BrailleSweepBadge,
   CircleAlert,
+  MessageSquare,
   Pencil,
 } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
@@ -40,6 +41,7 @@ interface WorkspaceItemProps {
   activity?: SessionViewState;
   lastInteracted?: string | null;
   unread?: boolean;
+  pendingPromptCount?: number;
   onSelect?: () => void;
   onArchive?: () => void;
   onUnarchive?: () => void;
@@ -62,6 +64,7 @@ export function WorkspaceItem({
   activity = "idle",
   lastInteracted,
   unread = false,
+  pendingPromptCount = 0,
   onSelect,
   onArchive,
   onUnarchive,
@@ -94,7 +97,14 @@ export function WorkspaceItem({
             tooltip: "Error",
             element: <CircleAlert className="size-3 text-destructive" />,
           }
-          : unread
+          : pendingPromptCount > 0
+            ? {
+              tooltip: pendingPromptCount === 1
+                ? "Queued Home prompt"
+                : `${pendingPromptCount} queued Home prompts`,
+              element: <MessageSquare className="size-3 text-special" />,
+            }
+            : unread
             ? {
               tooltip: "Unread",
               element: <div className="size-1.5 rounded-full bg-unread" />,

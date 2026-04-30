@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CloudRepoConfigResponse } from "@/lib/integrations/cloud/client";
 import { resyncCloudRepoFileFromLocal } from "@/lib/integrations/cloud/repo-configs";
-import { readWorkspaceTextFile } from "@/lib/integrations/anyharness/files";
+import { readRepoTrackedTextFile } from "@/lib/integrations/anyharness/files";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import {
@@ -27,21 +27,24 @@ export function useResyncCloudRepoFile(repository: SettingsRepositoryEntry | nul
       if (!repository?.gitOwner || !repository.gitRepoName) {
         throw new Error("A GitHub-backed repository is required.");
       }
-      if (!repository.localWorkspaceId) {
-        throw new Error("A local workspace is required to resync files from disk.");
+      if (!repository.localWorkspaceId && !repository.repoRootId) {
+        throw new Error("A local workspace or repo root is required to resync files from disk.");
       }
       if (!runtimeUrl.trim()) {
         throw new Error("Local runtime is not connected.");
       }
 
-      const content = await readWorkspaceTextFile(
+      const file = await readRepoTrackedTextFile(
         runtimeUrl,
-        repository.localWorkspaceId,
+        {
+          localWorkspaceId: repository.localWorkspaceId,
+          repoRootId: repository.repoRootId,
+        },
         relativePath,
       );
       return await resyncCloudRepoFileFromLocal(repository.gitOwner, repository.gitRepoName, {
         relativePath,
-        content,
+        content: file.content,
       });
     },
     onSuccess: async (response, variables) => {
@@ -61,8 +64,9 @@ export function useResyncCloudRepoFile(repository: SettingsRepositoryEntry | nul
 
       trackProductEvent("cloud_repo_file_resynced", {
         tracked_file_count: response.trackedFiles.length,
+        tracked_file_source: repository.localWorkspaceId ? "workspace" : "repo_root",
       });
-      if (repository.localWorkspaceId) {
+      if (repository.localWorkspaceId || repository.repoRootId) {
         emitRuntimeInputSyncEvent({
           trigger: "repo_config_mutation",
           descriptors: [{
@@ -70,6 +74,7 @@ export function useResyncCloudRepoFile(repository: SettingsRepositoryEntry | nul
             gitOwner: repository.gitOwner,
             gitRepoName: repository.gitRepoName,
             localWorkspaceId: repository.localWorkspaceId,
+            repoRootId: repository.repoRootId,
             relativePath: variables.relativePath,
           }],
         });

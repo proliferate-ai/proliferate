@@ -1,33 +1,28 @@
-import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   CHAT_COMPOSER_INPUT,
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
 } from "@/config/chat";
+import { HomeModePicker } from "@/components/home/HomeModePicker";
+import { HomeModelPicker } from "@/components/home/HomeModelPicker";
+import { HomeTargetPicker } from "@/components/home/HomeTargetPicker";
+import { ChatComposerActions } from "@/components/workspace/chat/input/ChatComposerActions";
+import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
+import { Button } from "@/components/ui/Button";
+import { Textarea } from "@/components/ui/Textarea";
 import { useHomeNextLaunch } from "@/hooks/home/use-home-next-launch";
 import { useHomeNextState } from "@/hooks/home/use-home-next-state";
 import { useHomeScreen } from "@/hooks/home/use-home-screen";
-import type { HomeNextRepositorySelection } from "@/lib/domain/home/home-next-launch";
-import { ChatComposerActions } from "@/components/workspace/chat/input/ChatComposerActions";
-import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
-import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Textarea } from "@/components/ui/Textarea";
 import {
-  Check,
-  CircleAlert,
-  Clock,
-  Folder,
-  GitBranchIcon,
-  LoaderCircle,
-  Plus,
-  ProviderIcon,
-  Search,
-  Settings,
-  Sparkles,
-} from "@/components/ui/icons";
+  type HomeNextDestination,
+  type HomeNextModelSelection,
+  type HomeNextRepoLaunchKind,
+  type HomeNextRepositorySelection,
+} from "@/lib/domain/home/home-next-launch";
+import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
+import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
+import { Check, CircleAlert, Clock, Folder, LoaderCircle, Settings } from "@/components/ui/icons";
 import type { HomeActionId, HomeStatusIcon } from "@/lib/domain/home/home-screen";
 
 const HOME_COMPOSER_INPUT_MIN_HEIGHT_REM = 6.5;
@@ -55,114 +50,19 @@ function resolveActionIcon(actionId: HomeActionId) {
   }
 }
 
-function matchesSearch(values: string[], search: string): boolean {
-  const normalizedSearch = search.trim().toLowerCase();
-  if (!normalizedSearch) {
-    return true;
-  }
-
-  return values.some((value) => value.toLowerCase().includes(normalizedSearch));
-}
-
-interface PickerControlProps {
-  icon: ReactNode;
-  label: string;
-  disabled?: boolean;
-  searchValue?: string;
-  searchPlaceholder?: string;
-  onSearchChange?: (value: string) => void;
-  children: (close: () => void) => ReactNode;
-}
-
-function PickerControl({
-  icon,
-  label,
-  disabled = false,
-  searchValue,
-  searchPlaceholder = "Search",
-  onSearchChange,
-  children,
-}: PickerControlProps) {
-  if (disabled) {
-    return (
-      <ComposerControlButton
-        disabled
-        tone="quiet"
-        icon={icon}
-        label={label}
-        className="max-w-[12rem]"
-      />
-    );
-  }
-
-  return (
-    <PopoverButton
-      trigger={(
-        <ComposerControlButton
-          icon={icon}
-          label={label}
-          className="max-w-[12rem]"
-        />
-      )}
-      side="top"
-      className="w-72 rounded-xl border border-border bg-popover p-1 shadow-floating"
-    >
-      {(close) => (
-        <div className="flex max-h-80 min-h-0 flex-col">
-          {onSearchChange ? (
-            <PickerSearch
-              value={searchValue ?? ""}
-              placeholder={searchPlaceholder}
-              onChange={onSearchChange}
-            />
-          ) : null}
-          <div className="min-h-0 overflow-y-auto py-1">
-            {children(close)}
-          </div>
-        </div>
-      )}
-    </PopoverButton>
-  );
-}
-
-interface PickerSearchProps {
-  value: string;
-  placeholder: string;
-  onChange: (value: string) => void;
-}
-
-function PickerSearch({ value, placeholder, onChange }: PickerSearchProps) {
-  return (
-    <div className="border-b border-border/70 p-1 pb-2">
-      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-background/70 px-2.5">
-        <Search className="size-3.5 shrink-0 text-muted-foreground" />
-        <Input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
-          className="h-8 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
-        />
-      </div>
-    </div>
-  );
-}
-
-function EmptyPickerRow({ label }: { label: string }) {
-  return (
-    <div className="px-2.5 py-2 text-sm text-muted-foreground">
-      {label}
-    </div>
-  );
-}
-
 export function HomeNextScreen() {
+  const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [draft, setDraft] = useState("");
-  const [selectedAgentKind, setSelectedAgentKind] = useState<string | null>(null);
-  const [repositorySelection, setRepositorySelection] = useState<HomeNextRepositorySelection>({ kind: "auto" });
-  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
-  const [repoSearch, setRepoSearch] = useState("");
-  const [branchSearch, setBranchSearch] = useState("");
+  const [destination, setDestination] = useState<HomeNextDestination>("cowork");
+  const [repositorySelection, setRepositorySelection] =
+    useState<HomeNextRepositorySelection>({ kind: "auto" });
+  const [repoLaunchKind, setRepoLaunchKind] = useState<HomeNextRepoLaunchKind>("worktree");
+  const [modelSelectionOverride, setModelSelectionOverride] =
+    useState<HomeNextModelSelection | null>(null);
+  const [baseBranchOverride, setBaseBranchOverride] = useState<string | null>(null);
+  const [modeOverrideId, setModeOverrideId] = useState<string | null>(null);
+  const [targetSearch, setTargetSearch] = useState("");
   const {
     actionCards,
     statusMessage,
@@ -170,54 +70,36 @@ export function HomeNextScreen() {
     handleHomeAction,
   } = useHomeScreen();
   const homeNext = useHomeNextState({
-    selectedAgentKind,
+    destination,
     repositorySelection,
-    selectedBranch,
+    repoLaunchKind,
+    modelSelectionOverride,
+    baseBranchOverride,
+    modeOverrideId,
   });
   const { isLaunching, launch } = useHomeNextLaunch();
 
-  const filteredRepositories = useMemo(() => (
-    homeNext.repositories.filter((repository) =>
-      matchesSearch([repository.name, repository.sourceRoot], repoSearch)
-    )
-  ), [homeNext.repositories, repoSearch]);
-  const filteredBranches = useMemo(() => (
-    homeNext.branchOptions.filter((branch) => matchesSearch([branch], branchSearch))
-  ), [branchSearch, homeNext.branchOptions]);
-
-  const promptTarget = homeNext.selectedRepository?.name?.trim();
+  const promptTarget = destination === "repository"
+    ? homeNext.selectedRepository?.name?.trim()
+    : null;
   const heading = promptTarget
     ? `What should we build in ${promptTarget}?`
     : "What should we build?";
-  const selectedAgentLabel = homeNext.selectedAgent
-    ? homeNext.selectedAgent.modelDisplayName
-      ? `${homeNext.selectedAgent.displayName} · ${homeNext.selectedAgent.modelDisplayName}`
-      : homeNext.selectedAgent.displayName
-    : "No agents";
-  const branchLabel = homeNext.selectedRepository
-    ? homeNext.branchQuery.isLoading
-      ? "Loading branches"
-      : homeNext.selectedBranchName ?? "No branches"
-    : "Branch";
   const submitDisabledReason = draft.trim().length === 0
     ? null
     : homeNext.targetDisabledReason;
   const canSubmit =
     draft.trim().length > 0
     && homeNext.canLaunchTarget
-    && !!homeNext.selectedAgent?.modelId
+    && !!homeNext.effectiveModelSelection
+    && !!homeNext.launchTarget
     && !isLaunching;
-
   useLayoutEffect(() => {
     const el = textareaRef.current;
-    if (!el) {
-      return;
-    }
+    if (!el) return;
 
     const lineHeightPx = parseFloat(getComputedStyle(el).lineHeight);
-    if (!Number.isFinite(lineHeightPx) || lineHeightPx <= 0) {
-      return;
-    }
+    if (!Number.isFinite(lineHeightPx) || lineHeightPx <= 0) return;
 
     const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize);
     const homeMinHeightPx = Number.isFinite(rootFontSizePx)
@@ -233,58 +115,51 @@ export function HomeNextScreen() {
   }, [draft]);
 
   async function handleSubmit() {
-    if (!canSubmit || !homeNext.selectedAgent || !homeNext.launchTarget) {
-      return;
-    }
+    if (!canSubmit || !homeNext.effectiveModelSelection || !homeNext.launchTarget) return;
 
     const succeeded = await launch({
       text: draft,
-      agent: homeNext.selectedAgent,
+      modelSelection: homeNext.effectiveModelSelection,
+      modeId: homeNext.effectiveModeId,
       target: homeNext.launchTarget,
     });
-    if (succeeded) {
-      setDraft("");
-    }
+    if (succeeded) setDraft("");
   }
 
   function handleCancel() {
-    if (!isLaunching) {
-      setDraft("");
-    }
+    if (!isLaunching) setDraft("");
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.nativeEvent.isComposing) {
-      return;
-    }
-
-    if (
-      event.key === "Escape"
-      && !event.shiftKey
-      && !event.altKey
-      && !event.ctrlKey
-      && !event.metaKey
-    ) {
+    if (event.nativeEvent.isComposing) return;
+    if (event.key === "Escape" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
       handleCancel();
       return;
     }
-
-    if (
-      event.key === "Enter"
-      && (event.metaKey || event.ctrlKey)
-      && !event.shiftKey
-      && !event.altKey
-      && canSubmit
-    ) {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && canSubmit) {
       event.preventDefault();
       void handleSubmit();
+    }
+  }
+
+  function handleConfigureCloud(repository?: SettingsRepositoryEntry) {
+    const repoTarget = repository
+      ? {
+        gitOwner: repository.gitOwner?.trim(),
+        gitRepoName: repository.gitRepoName?.trim(),
+      }
+      : homeNext.cloudRepoTarget;
+    const target = repoTarget?.gitOwner && repoTarget.gitRepoName
+      ? { gitOwner: repoTarget.gitOwner, gitRepoName: repoTarget.gitRepoName }
+      : null;
+    if (target) {
+      navigate(buildCloudRepoSettingsHref(target.gitOwner, target.gitRepoName));
     }
   }
 
   return (
     <div className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground" data-telemetry-block>
       <div className="absolute inset-x-0 top-0 h-10" data-tauri-drag-region="true" />
-
       <main className="flex min-h-0 flex-1 items-center justify-center overflow-auto px-6 py-16">
         <div className="w-full max-w-3xl">
           <div className="mb-5 flex flex-col items-center text-center">
@@ -298,9 +173,7 @@ export function HomeNextScreen() {
               className="relative flex flex-col"
               onSubmit={(event) => {
                 event.preventDefault();
-                if (canSubmit) {
-                  void handleSubmit();
-                }
+                if (canSubmit) void handleSubmit();
               }}
             >
               <div className="px-2 py-1.5">
@@ -336,116 +209,45 @@ export function HomeNextScreen() {
 
               <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-[5px] px-2">
                 <div className="flex min-w-0 flex-wrap items-center gap-[5px]">
-                  <PickerControl
-                    icon={homeNext.selectedAgent ? <ProviderIcon kind={homeNext.selectedAgent.kind} className="size-4" /> : <Sparkles className="size-3.5" />}
-                    label={selectedAgentLabel}
-                    disabled={homeNext.agentOptions.length === 0}
-                  >
-                    {(close) => (
-                      <>
-                        {homeNext.agentOptions.map((agent) => {
-                          const agentLabel = agent.modelDisplayName
-                            ? `${agent.displayName} · ${agent.modelDisplayName}`
-                            : `${agent.displayName} · No model`;
-                          return (
-                            <PopoverMenuItem
-                              key={agent.kind}
-                              disabled={!!agent.disabledReason}
-                              icon={<ProviderIcon kind={agent.kind} className="size-4" />}
-                              label={agentLabel}
-                              trailing={homeNext.selectedAgent?.kind === agent.kind ? <Check className="size-3.5" /> : null}
-                              onClick={() => {
-                                setSelectedAgentKind(agent.kind);
-                                close();
-                              }}
-                            />
-                          );
-                        })}
-                      </>
-                    )}
-                  </PickerControl>
-
-                  <PickerControl
-                    icon={homeNext.selectedRepository ? <Folder className="size-3.5" /> : <Sparkles className="size-3.5" />}
-                    label={homeNext.selectedRepository?.name ?? "No repository"}
-                    searchValue={repoSearch}
-                    searchPlaceholder="Search repositories"
-                    onSearchChange={setRepoSearch}
-                  >
-                    {(close) => (
-                      <>
-                        <PopoverMenuItem
-                          icon={<Sparkles className="size-3.5" />}
-                          label="No repository"
-                          trailing={homeNext.selectedRepository ? null : <Check className="size-3.5" />}
-                          onClick={() => {
-                            setRepositorySelection({ kind: "none" });
-                            setSelectedBranch(null);
-                            setRepoSearch("");
-                            close();
-                          }}
-                        />
-                        <div className="my-1 h-px bg-border" />
-                        {filteredRepositories.map((repository) => (
-                          <PopoverMenuItem
-                            key={repository.sourceRoot}
-                            icon={<Folder className="size-3.5" />}
-                            label={repository.name}
-                            trailing={homeNext.selectedRepository?.sourceRoot === repository.sourceRoot ? <Check className="size-3.5" /> : null}
-                            onClick={() => {
-                              setRepositorySelection({ kind: "repository", sourceRoot: repository.sourceRoot });
-                              setSelectedBranch(null);
-                              setRepoSearch("");
-                              close();
-                            }}
-                          />
-                        ))}
-                        {filteredRepositories.length === 0 ? (
-                          <EmptyPickerRow label="No repositories found" />
-                        ) : null}
-                        {homeNext.repositories.length > 0 && <div className="my-1 h-px bg-border" />}
-                        <PopoverMenuItem
-                          icon={<Plus className="size-3.5" />}
-                          label="Add repository"
-                          onClick={() => {
-                            handleHomeAction("add-repository");
-                            setRepoSearch("");
-                            close();
-                          }}
-                        />
-                      </>
-                    )}
-                  </PickerControl>
-
-                  <PickerControl
-                    icon={<GitBranchIcon className="size-3.5" />}
-                    label={branchLabel}
-                    disabled={!homeNext.selectedRepository || homeNext.branchOptions.length === 0}
-                    searchValue={branchSearch}
-                    searchPlaceholder="Search branches"
-                    onSearchChange={setBranchSearch}
-                  >
-                    {(close) => (
-                      <>
-                        {filteredBranches.map((branch) => (
-                          <PopoverMenuItem
-                            key={branch}
-                            icon={<GitBranchIcon className="size-3.5" />}
-                            label={branch}
-                            trailing={homeNext.selectedBranchName === branch ? <Check className="size-3.5" /> : null}
-                            onClick={() => {
-                              setSelectedBranch(branch);
-                              setBranchSearch("");
-                              close();
-                            }}
-                          />
-                        ))}
-                        {filteredBranches.length === 0 ? (
-                          <EmptyPickerRow label="No branches found" />
-                        ) : null}
-                      </>
-                    )}
-                  </PickerControl>
+                  <HomeTargetPicker
+                    destination={destination}
+                    repoLaunchKind={repoLaunchKind}
+                    repositories={homeNext.repositories}
+                    selectedRepository={homeNext.selectedRepository}
+                    selectedBranchName={homeNext.selectedBranchName}
+                    branchOptions={homeNext.branchOptions}
+                    branchLoading={homeNext.branchQuery.isLoading}
+                    cloudActionBySourceRoot={homeNext.cloudRepoActionBySourceRoot}
+                    searchValue={targetSearch}
+                    onSearchChange={setTargetSearch}
+                    onSelectCowork={() => {
+                      setDestination("cowork");
+                    }}
+                    onSelectRepositoryTarget={(sourceRoot, launchKind) => {
+                      setDestination("repository");
+                      setRepositorySelection({ kind: "repository", sourceRoot });
+                      setRepoLaunchKind(launchKind);
+                      if (launchKind === "local") {
+                        setBaseBranchOverride(null);
+                      }
+                    }}
+                    onSelectBranch={setBaseBranchOverride}
+                    onAddRepository={() => handleHomeAction("add-repository")}
+                    onConfigureCloud={handleConfigureCloud}
+                  />
+                  <HomeModelPicker
+                    groups={homeNext.modelGroups}
+                    selectedModel={homeNext.selectedModel}
+                    onSelect={(selection) => {
+                      setModelSelectionOverride(selection);
+                      setModeOverrideId(null);
+                    }}
+                  />
+                  <HomeModePicker
+                    modes={homeNext.modeOptions}
+                    selectedMode={homeNext.effectiveMode}
+                    onSelect={setModeOverrideId}
+                  />
                 </div>
 
                 <div className="flex items-center">
@@ -462,8 +264,18 @@ export function HomeNextScreen() {
           </ChatComposerSurface>
 
           {submitDisabledReason ? (
-            <div className="mx-auto mt-2 max-w-2xl px-2 text-center text-sm text-muted-foreground">
-              {submitDisabledReason}
+            <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-sm text-muted-foreground">
+              <span>{submitDisabledReason}</span>
+              {repoLaunchKind === "cloud" && homeNext.cloudRepoAction.kind === "configure" ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleConfigureCloud()}
+                  className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
+                >
+                  Configure
+                </Button>
+              ) : null}
             </div>
           ) : null}
 

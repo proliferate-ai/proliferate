@@ -35,9 +35,10 @@ The script is idempotent. It creates these test-mode resources if missing:
 With `--write-env-local`, non-secret IDs are written to `server/.env.local`.
 The script never writes `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET`.
 
-`make dev` also runs this setup before sourcing `server/.env.local`, so a first
-local dev run gets the generated non-secret Stripe IDs in the backend process.
-It does not persist Stripe secrets locally.
+Profile-based `make dev PROFILE=<name>` does not run this setup automatically.
+Run `make stripe-setup-test` when you need durable local Stripe price and meter
+IDs in `server/.env.local`. Profile dev overrides port-specific Stripe redirect
+URLs in the backend process environment at launch time.
 
 When launched through `make dev` or `make dev-server`, the backend process reads
 the Stripe CLI test-mode key from `stripe config --list` if `STRIPE_SECRET_KEY`
@@ -49,15 +50,15 @@ or run through `make dev-server`.
 
 ## End-To-End Dev Flow
 
-1. Start the full local app:
+1. Start the full local app with Stripe forwarding enabled:
 
    ```bash
-   make dev
+   make dev PROFILE=billing STRIPE=1
    ```
 
-   This runs migrations, creates/validates Stripe test resources, injects the
-   Stripe CLI test key into the backend process, starts a Stripe webhook
-   listener, starts the backend, and opens the desktop app.
+   This runs migrations for the selected profile database, injects the Stripe
+   CLI test key into the backend process, starts a Stripe webhook listener,
+   starts the backend, and opens the desktop app.
    `make dev` and `make dev-server` export `DEBUG=true` for the backend process
    so a fresh local worktree does not need a committed production secret file.
 
@@ -93,7 +94,7 @@ meter exports in test mode, use:
 CLOUD_BILLING_MODE=enforce
 ```
 
-Then restart `make dev`.
+Then restart `make dev PROFILE=<name>`.
 
 ## Send A Meter Hit
 
@@ -127,27 +128,26 @@ priced as raw units.
 
 ## Local Webhook Delivery
 
-`make dev` starts a Stripe snapshot-event listener automatically when the Stripe
-CLI is installed and authenticated. If Stripe is unavailable, dev continues
-without the listener.
+`make dev PROFILE=<name>` starts a Stripe snapshot-event listener only when
+`STRIPE=1` is set. If Stripe is unavailable, dev continues without the listener.
 
 When the listener starts, `make dev` exports `STRIPE_WEBHOOK_SECRET` into the
 backend process from `stripe listen --print-secret`. The secret is not written
 to `server/.env.local`.
 
-The listener forwards checkout/subscription/invoice events to the planned local
-Stripe webhook path:
+The listener forwards checkout/subscription/invoice events to the selected
+profile API port:
 
 ```bash
 stripe listen \
   --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed \
-  --forward-to http://127.0.0.1:8000/v1/billing/webhooks/stripe
+  --forward-to http://127.0.0.1:$PROLIFERATE_API_PORT/v1/billing/webhooks/stripe
 ```
 
 The endpoint verifies the Stripe signature before parsing the event and returns
 a small acknowledgement with the Stripe event id and event type.
 
-If you are not using `make dev`, start the listener manually:
+If you are not using profile-based `make dev`, start the listener manually:
 
 ```bash
 stripe listen --forward-to http://127.0.0.1:8000/v1/billing/webhooks/stripe

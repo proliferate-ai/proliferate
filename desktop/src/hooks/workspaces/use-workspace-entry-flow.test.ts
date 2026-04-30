@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildSubmittingPendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 const mocks = vi.hoisted(() => ({
@@ -7,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   setPendingWorkspaceEntry: vi.fn(),
   setWorkspaceArrivalEvent: vi.fn(),
   resetWorkspaceFiles: vi.fn(),
+  requestChatInputFocus: vi.fn(),
   harnessState: {
     pendingWorkspaceEntry: null,
     enterPendingWorkspaceShell: vi.fn(),
@@ -29,6 +31,14 @@ vi.mock("@/stores/editor/workspace-files-store", () => ({
   useWorkspaceFilesStore: {
     getState: () => ({
       reset: mocks.resetWorkspaceFiles,
+    }),
+  },
+}));
+
+vi.mock("@/stores/chat/chat-input-store", () => ({
+  useChatInputStore: {
+    getState: () => ({
+      requestFocus: mocks.requestChatInputFocus,
     }),
   },
 }));
@@ -56,6 +66,7 @@ describe("useWorkspaceEntryFlow", () => {
     mocks.setPendingWorkspaceEntry.mockReset();
     mocks.setWorkspaceArrivalEvent.mockReset();
     mocks.resetWorkspaceFiles.mockReset();
+    mocks.requestChatInputFocus.mockReset();
     mocks.harnessState.enterPendingWorkspaceShell = mocks.enterPendingWorkspaceShell;
     mocks.harnessState.setPendingWorkspaceEntry = mocks.setPendingWorkspaceEntry;
     mocks.harnessState.setWorkspaceArrivalEvent = mocks.setWorkspaceArrivalEvent;
@@ -91,5 +102,24 @@ describe("useWorkspaceEntryFlow", () => {
     expect(mocks.selectWorkspace).toHaveBeenCalledWith("workspace-1", {
       force: true,
     });
+    expect(mocks.requestChatInputFocus).toHaveBeenCalledTimes(1);
+  });
+
+  it("requests composer focus when opening the pending workspace shell", async () => {
+    const { useWorkspaceEntryFlow } = await import("./use-workspace-entry-flow");
+    const entry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "attempt-1",
+      selectedWorkspaceId: null,
+      source: "local-created",
+      displayName: "proliferate",
+      request: { kind: "local", sourceRoot: "/Users/pablo/proliferate" },
+    });
+
+    const flow = useWorkspaceEntryFlow();
+    flow.beginPendingWorkspace(entry);
+
+    expect(mocks.resetWorkspaceFiles).toHaveBeenCalledTimes(1);
+    expect(mocks.enterPendingWorkspaceShell).toHaveBeenCalledWith(entry);
+    expect(mocks.requestChatInputFocus).toHaveBeenCalledTimes(1);
   });
 });

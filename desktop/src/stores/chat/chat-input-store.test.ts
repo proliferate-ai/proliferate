@@ -11,6 +11,7 @@ describe("chat input store", () => {
       draftByWorkspaceId: {},
       editDraftBySessionId: {},
       editingQueueSeqBySessionId: {},
+      focusRequestNonce: 0,
     });
   });
 
@@ -61,5 +62,17 @@ describe("chat input store", () => {
 
     useChatInputStore.getState().setDraftText("workspace-1", " \n ");
     expect(useChatInputStore.getState().draftByWorkspaceId["workspace-1"]).toBeUndefined();
+  });
+
+  it("tracks explicit composer focus requests", () => {
+    useChatInputStore.getState().setDraftText("workspace-1", "hello");
+
+    useChatInputStore.getState().requestFocus();
+    useChatInputStore.getState().requestFocus();
+
+    expect(useChatInputStore.getState().focusRequestNonce).toBe(2);
+    expect(serializeChatDraftToPrompt(
+      useChatInputStore.getState().draftByWorkspaceId["workspace-1"]!,
+    )).toBe("hello");
   });
 });

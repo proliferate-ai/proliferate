@@ -186,7 +186,12 @@ export function useAppShortcuts(): void {
       return;
     }
 
+    const latencyFlowId = startLatencyFlow({
+      flowKind: "cloud_workspace_create",
+      source: "shortcut",
+    });
     void createCloudWorkspaceAndEnter(target, {
+      latencyFlowId,
       repoGroupKeyToExpand: sidebarRepoGroupKeyForCloudTarget(target, repoRoots),
     });
   });

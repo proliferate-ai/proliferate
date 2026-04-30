@@ -67,7 +67,7 @@ export function KeyboardShortcutsPane() {
               <ShortcutRow
                 key={shortcut.key}
                 description={shortcut.description}
-                label={shortcut.label}
+                label={getShortcutDisplayLabel(shortcut)}
               />
             );
           })}

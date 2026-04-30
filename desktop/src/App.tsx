@@ -13,6 +13,7 @@ import { useAppShortcuts } from "@/hooks/app/use-app-shortcuts"
 import { useAuthBootstrap } from "@/hooks/auth/use-auth-bootstrap"
 import { useAgentAutoReconcile } from "@/hooks/agents/use-agent-auto-reconcile"
 import { useRuntimeInputSyncRuntime } from "@/hooks/cloud/use-runtime-input-sync-runtime"
+import { useHomeDeferredLaunchRunner } from "@/hooks/home/use-home-deferred-launch-runner"
 import { useOnboardingFinalizer } from "@/hooks/onboarding/use-onboarding-finalizer"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/use-shortcut-dispatcher"
 import { useTurnEndSound } from "@/hooks/sessions/use-turn-end-sound"
@@ -47,6 +48,14 @@ const ChatPlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
       import("@/pages/ChatPlaygroundPage").then((m) => ({
         default: m.ChatPlaygroundPage,
+      })),
+    )
+  : null
+
+const UpdatePlaygroundPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/pages/UpdatePlaygroundPage").then((m) => ({
+        default: m.UpdatePlaygroundPage,
       })),
     )
   : null
@@ -128,6 +137,7 @@ function AppRuntime() {
   useTurnEndSound()
   useAgentAutoReconcile()
   useOnboardingFinalizer()
+  useHomeDeferredLaunchRunner()
 
   useEffect(() => {
     logStartupDebug("app.bootstrap.start")
@@ -211,6 +221,16 @@ function AppRuntime() {
             element={
               <Suspense fallback={null}>
                 <ChatPlaygroundPage />
+              </Suspense>
+            }
+          />
+        )}
+        {import.meta.env.DEV && UpdatePlaygroundPage && (
+          <Route
+            path="/playground/updates"
+            element={
+              <Suspense fallback={null}>
+                <UpdatePlaygroundPage />
               </Suspense>
             }
           />

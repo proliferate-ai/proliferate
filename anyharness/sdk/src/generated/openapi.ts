@@ -324,6 +324,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/repo-roots/{repo_root_id}/files/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["read_repo_root_file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/repo-roots/{repo_root_id}/git/branches": {
         parameters: {
             query?: never;
@@ -2372,6 +2388,18 @@ export interface components {
             /** @description Stable ACP value identifier used when setting this option. */
             value: string;
         };
+        ReadWorkspaceFileResponse: {
+            content?: string | null;
+            encoding?: string | null;
+            isText: boolean;
+            kind: components["schemas"]["WorkspaceFileKind"];
+            modifiedAt?: string | null;
+            path: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            tooLarge: boolean;
+            versionToken?: string | null;
+        };
         /** @enum {string} */
         ReasoningVisibility: "private";
         ReconcileAgentResult: {
@@ -2882,6 +2910,8 @@ export interface components {
             runningCount: number;
             totalSessionCount: number;
         };
+        /** @enum {string} */
+        WorkspaceFileKind: "file" | "directory" | "symlink";
         /** @enum {string} */
         WorkspaceKind: "worktree" | "local";
         /** @enum {string} */
@@ -3655,6 +3685,50 @@ export interface operations {
                 };
             };
             /** @description Repo root not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    read_repo_root_file: {
+        parameters: {
+            query: {
+                /** @description Repo-root-relative file path */
+                path: string;
+            };
+            header?: never;
+            path: {
+                /** @description Repo root ID */
+                repo_root_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read repo root file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadWorkspaceFileResponse"];
+                };
+            };
+            /** @description Invalid path or non-text file */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Repo root or file not found */
             404: {
                 headers: {
                     [name: string]: unknown;

@@ -34,7 +34,13 @@ STRIPE_LOCAL_SECRET_ENV = if [ -z "$${STRIPE_SECRET_KEY:-}" ] && command -v stri
 	fi; \
 fi;
 
-.PHONY: dev dev-local dev-desktop dev-runtime dev-server server-db-up server-db-wait \
+ifneq ($(filter dev dev-init,$(MAKECMDGOALS)),)
+ifeq ($(strip $(PROFILE)),)
+$(error PROFILE is required. Example: make dev PROFILE=main)
+endif
+endif
+
+.PHONY: dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server server-db-up server-db-wait \
         server-db-down server-db-ready db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         sdk-generate sdk-build sdk-react-build runtime-build desktop-build rebuild \
@@ -52,36 +58,103 @@ fi;
 
 # --- Dev (builds SDK, starts runtime + desktop together) ---
 
-dev: export PROLIFERATE_DEV := 1
-dev: export DEBUG := true
-dev: sdk-build server-migrate
-	@echo "Starting runtime on :8457, backend on :8000, and desktop app..."
-	@trap 'kill 0' EXIT; \
-	stripe_listener_ready=0; \
-	if command -v stripe >/dev/null 2>&1; then \
-		echo "Preparing Stripe test resources..."; \
-		if node scripts/stripe-setup-test-mode.mjs --write-env-local >/dev/null; then \
-			stripe_listener_ready=1; \
-		else \
-			echo "Skipping Stripe listener. Run \`stripe login\` and retry if you need billing webhooks."; \
-		fi; \
-	else \
-		echo "Skipping Stripe listener. Install Stripe CLI if you need billing webhooks."; \
+dev: sdk-build server-db-ready
+	@set -e; \
+	if [ -z "$(PROFILE)" ]; then \
+		echo "PROFILE is required. Example: make dev PROFILE=main"; \
+		exit 1; \
 	fi; \
+	launch_env=$$( \
+		PROLIFERATE_API_PORT="$(PROLIFERATE_API_PORT)" \
+		PROLIFERATE_WEB_PORT="$(PROLIFERATE_WEB_PORT)" \
+		PROLIFERATE_WEB_HMR_PORT="$(PROLIFERATE_WEB_HMR_PORT)" \
+		ANYHARNESS_PORT="$(ANYHARNESS_PORT)" \
+		ANYHARNESS_RUNTIME_HOME="$(ANYHARNESS_RUNTIME_HOME)" \
+		PROLIFERATE_DEV_HOME="$(PROLIFERATE_DEV_HOME)" \
+		PROLIFERATE_DEV_DB_NAME="$(PROLIFERATE_DEV_DB_NAME)" \
+		node scripts/dev.mjs ensure --profile "$(PROFILE)" --lock \
+	); \
+	database_url_override_set="$${DATABASE_URL+x}"; \
+	database_url_override_value="$${DATABASE_URL:-}"; \
+	cleanup() { \
+		status=$$?; \
+		trap - EXIT INT TERM; \
+		if [ -n "$${PROLIFERATE_DEV_HOME:-}" ]; then \
+			rm -f "$$(dirname "$$PROLIFERATE_DEV_HOME")/run.lock"; \
+		fi; \
+		kill 0 >/dev/null 2>&1 || true; \
+		exit $$status; \
+	}; \
+	trap cleanup EXIT INT TERM; \
 	$(SERVER_ENV_SOURCE) \
+	. "$$launch_env"; \
 	$(STRIPE_LOCAL_SECRET_ENV) \
 	$(LOCAL_CODEX_ACP_ENV) \
+	if [ "$$database_url_override_set" = "x" ]; then \
+		export DATABASE_URL="$$database_url_override_value"; \
+		use_profile_db=0; \
+	else \
+		export DATABASE_URL="$$( \
+			LOCAL_PGHOST="$(LOCAL_PGHOST)" \
+			LOCAL_PGPORT="$(LOCAL_PGPORT)" \
+			LOCAL_PGUSER="$(LOCAL_PGUSER)" \
+			LOCAL_PGPASSWORD="$(LOCAL_PGPASSWORD)" \
+			node scripts/dev.mjs database-url --db-name "$$PROLIFERATE_DEV_DB_NAME" \
+		)"; \
+		use_profile_db=1; \
+	fi; \
+	export API_BASE_URL="http://127.0.0.1:$$PROLIFERATE_API_PORT"; \
+	export CORS_ALLOW_ORIGINS="http://localhost:$$PROLIFERATE_WEB_PORT,http://127.0.0.1:$$PROLIFERATE_WEB_PORT,http://tauri.localhost,tauri://localhost"; \
+	export STRIPE_CHECKOUT_SUCCESS_URL="http://localhost:$$PROLIFERATE_WEB_PORT/settings/cloud?checkout=success"; \
+	export STRIPE_CHECKOUT_CANCEL_URL="http://localhost:$$PROLIFERATE_WEB_PORT/settings/cloud?checkout=cancel"; \
+	export STRIPE_CUSTOMER_PORTAL_RETURN_URL="http://localhost:$$PROLIFERATE_WEB_PORT/settings/cloud"; \
+	export STRIPE_FORWARD_TO="http://127.0.0.1:$$PROLIFERATE_API_PORT/v1/billing/webhooks/stripe"; \
+	if [ "$$use_profile_db" = "1" ]; then \
+		LOCAL_PGHOST="$(LOCAL_PGHOST)" \
+		LOCAL_PGPORT="$(LOCAL_PGPORT)" \
+		LOCAL_PGUSER="$(LOCAL_PGUSER)" \
+		LOCAL_PGPASSWORD="$(LOCAL_PGPASSWORD)" \
+		USE_EXISTING_POSTGRES="$(USE_EXISTING_POSTGRES)" \
+		node scripts/dev.mjs ensure-db --db-name "$$PROLIFERATE_DEV_DB_NAME"; \
+	fi; \
+	(cd server && DATABASE_URL="$$DATABASE_URL" .venv/bin/alembic upgrade head); \
+	stripe_listener_ready=0; \
+	if [ "$(STRIPE)" = "1" ]; then \
+		if command -v stripe >/dev/null 2>&1; then \
+			stripe_listener_ready=1; \
+		else \
+			echo "Skipping Stripe listener. Install Stripe CLI if you need billing webhooks."; \
+		fi; \
+	fi; \
 	if [ "$$stripe_listener_ready" = "1" ]; then \
 		stripe_webhook_secret=$$(stripe listen --print-secret 2>/dev/null || true); \
 		if [ -n "$$stripe_webhook_secret" ]; then \
 			export STRIPE_WEBHOOK_SECRET="$$stripe_webhook_secret"; \
 		fi; \
-		stripe listen --events "$(STRIPE_SNAPSHOT_EVENTS)" --forward-to "$(STRIPE_FORWARD_TO)" & \
+		stripe listen --events "$(STRIPE_SNAPSHOT_EVENTS)" --forward-to "$$STRIPE_FORWARD_TO" & \
 	fi; \
-	RUST_LOG=info ANYHARNESS_DEV_CORS=1 $(CARGO) run --bin anyharness -- serve & \
-	cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port 8000 & \
+	echo "Starting profile $$PROLIFERATE_DEV_PROFILE: runtime :$$ANYHARNESS_PORT, backend :$$PROLIFERATE_API_PORT, web :$$PROLIFERATE_WEB_PORT"; \
+	RUST_LOG=info ANYHARNESS_DEV_CORS=1 $(CARGO) run --bin anyharness -- serve --port "$$ANYHARNESS_PORT" --runtime-home "$$ANYHARNESS_RUNTIME_HOME" & \
+	(cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port "$$PROLIFERATE_API_PORT") & \
 	sleep 2; \
-	cd desktop && ANYHARNESS_DEV_URL=http://127.0.0.1:8457 pnpm tauri dev --config src-tauri/tauri.dev.json
+	(cd desktop && pnpm tauri dev --runner "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri-runner.sh" --config "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri.dev.json")
+
+dev-init:
+	@if [ -z "$(PROFILE)" ]; then \
+		echo "PROFILE is required. Example: make dev-init PROFILE=main"; \
+		exit 1; \
+	fi
+	@PROLIFERATE_API_PORT="$(PROLIFERATE_API_PORT)" \
+	PROLIFERATE_WEB_PORT="$(PROLIFERATE_WEB_PORT)" \
+	PROLIFERATE_WEB_HMR_PORT="$(PROLIFERATE_WEB_HMR_PORT)" \
+	ANYHARNESS_PORT="$(ANYHARNESS_PORT)" \
+	ANYHARNESS_RUNTIME_HOME="$(ANYHARNESS_RUNTIME_HOME)" \
+	PROLIFERATE_DEV_HOME="$(PROLIFERATE_DEV_HOME)" \
+	PROLIFERATE_DEV_DB_NAME="$(PROLIFERATE_DEV_DB_NAME)" \
+	node scripts/dev.mjs ensure --profile "$(PROFILE)"
+
+dev-list:
+	@node scripts/dev.mjs list
 
 dev-local: export PROLIFERATE_DEV := 1
 dev-local: sdk-build

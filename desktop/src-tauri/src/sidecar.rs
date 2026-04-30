@@ -381,10 +381,14 @@ pub async fn boot(sidecar: &SharedSidecar) {
             runtime_url = %dev_url,
             "ANYHARNESS_DEV_URL set, using external runtime"
         );
-        let mut guard = sidecar.lock().await;
-        guard.info.url = dev_url;
-        guard.info.status = RuntimeStatus::Healthy;
-        persist_runtime_info(&guard.info, None);
+        {
+            let mut guard = sidecar.lock().await;
+            guard.info.port = runtime_url_port(&dev_url).unwrap_or(guard.info.port);
+            guard.info.url = dev_url;
+            guard.info.status = RuntimeStatus::Starting;
+            persist_runtime_info(&guard.info, None);
+        }
+        wait_healthy(sidecar, false).await;
         return;
     }
 
@@ -427,7 +431,7 @@ pub async fn boot(sidecar: &SharedSidecar) {
                 guard.info.status = RuntimeStatus::Starting;
                 persist_runtime_info(&guard.info, None);
             }
-            wait_healthy(sidecar).await;
+            wait_healthy(sidecar, true).await;
         }
         Err(e) => {
             tracing::error!(
@@ -458,7 +462,7 @@ pub async fn restart(sidecar: &SharedSidecar, launch_env: HashMap<String, String
     boot(sidecar).await;
 }
 
-async fn wait_healthy(sidecar: &SharedSidecar) {
+async fn wait_healthy(sidecar: &SharedSidecar, require_child: bool) {
     let start = std::time::Instant::now();
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(2))
@@ -468,7 +472,13 @@ async fn wait_healthy(sidecar: &SharedSidecar) {
     loop {
         let url = {
             let mut guard = sidecar.lock().await;
-            if let Some(child) = guard.child.as_mut() {
+            if require_child {
+                let Some(child) = guard.child.as_mut() else {
+                    guard.info.status = RuntimeStatus::Stopped;
+                    persist_runtime_info(&guard.info, None);
+                    tracing::error!("AnyHarness sidecar handle missing during startup");
+                    return;
+                };
                 match child.try_wait() {
                     Ok(Some(status)) => {
                         guard.info.status = RuntimeStatus::Failed;
@@ -490,14 +500,9 @@ async fn wait_healthy(sidecar: &SharedSidecar) {
                         return;
                     }
                 }
-            } else {
-                guard.info.status = RuntimeStatus::Stopped;
-                persist_runtime_info(&guard.info, None);
-                tracing::error!("AnyHarness sidecar handle missing during startup");
-                return;
             }
 
-            format!("{}/health", guard.info.url)
+            runtime_health_url(&guard.info.url)
         };
 
         if start.elapsed() > HEALTH_POLL_TIMEOUT {
@@ -506,7 +511,7 @@ async fn wait_healthy(sidecar: &SharedSidecar) {
             persist_runtime_info(&guard.info, None);
             tracing::error!(
                 timeout_ms = HEALTH_POLL_TIMEOUT.as_millis(),
-                "AnyHarness sidecar failed to become healthy in time"
+                "AnyHarness runtime failed to become healthy in time"
             );
             return;
         }
@@ -514,7 +519,7 @@ async fn wait_healthy(sidecar: &SharedSidecar) {
         match client.get(&url).send().await {
             Ok(resp) if resp.status().is_success() => {
                 let health = resp.json::<RuntimeHealthRecord>().await.ok();
-                tracing::info!(health_url = %url, "AnyHarness sidecar is healthy");
+                tracing::info!(health_url = %url, "AnyHarness runtime is healthy");
                 let mut guard = sidecar.lock().await;
                 guard.info.status = RuntimeStatus::Healthy;
                 persist_runtime_info(&guard.info, health.as_ref());
@@ -525,6 +530,16 @@ async fn wait_healthy(sidecar: &SharedSidecar) {
 
         tokio::time::sleep(HEALTH_POLL_INTERVAL).await;
     }
+}
+
+fn runtime_health_url(runtime_url: &str) -> String {
+    format!("{}/health", runtime_url.trim_end_matches('/'))
+}
+
+fn runtime_url_port(runtime_url: &str) -> Option<u16> {
+    reqwest::Url::parse(runtime_url)
+        .ok()
+        .and_then(|url| url.port_or_known_default())
 }
 
 pub fn create_sidecar_with_auto_port() -> SharedSidecar {

@@ -2,6 +2,7 @@ import { useCallback, type KeyboardEvent } from "react";
 import { getPreviousSessionModeValue } from "@/lib/domain/chat/session-mode-control";
 import { COMPOSER_SHORTCUTS } from "@/config/shortcuts";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls";
+import { isComposerSubmitKey } from "@/lib/domain/chat/composer-keyboard";
 
 interface UseChatComposerKeyboardArgs {
   handleSubmit: () => Promise<void> | void;
@@ -65,10 +66,7 @@ export function useChatComposerKeyboard({
     }
 
     if (
-      event.key === COMPOSER_SHORTCUTS.submitMessage.key
-      && !event.shiftKey
-      && !event.altKey
-      && !event.nativeEvent.isComposing
+      isComposerSubmitKey(event)
       && canSubmit
     ) {
       event.preventDefault();

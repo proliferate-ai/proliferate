@@ -635,14 +635,18 @@ impl CoworkRuntime {
                     .ok_or_else(|| {
                         anyhow::anyhow!("session missing for cowork thread {}", thread.id)
                     })?;
-                Ok(CoworkThreadSummary {
-                    title: session.title.clone(),
-                    updated_at: session.updated_at.clone(),
-                    last_activity_at: session.last_prompt_at.clone(),
-                    thread,
-                })
+                Ok((thread, session))
             })
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect::<anyhow::Result<Vec<_>>>()?
+            .into_iter()
+            .filter(|(_, session)| session.dismissed_at.is_none() && session.closed_at.is_none())
+            .map(|(thread, session)| CoworkThreadSummary {
+                title: session.title.clone(),
+                updated_at: session.updated_at.clone(),
+                last_activity_at: session.last_prompt_at.clone(),
+                thread,
+            })
+            .collect::<Vec<_>>();
 
         threads.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
         Ok(threads)
@@ -1019,7 +1023,12 @@ impl CoworkRuntime {
         for managed in workspaces {
             let linked_sessions = self
                 .delegation_service
-                .list_coding_session_links(parent_session_id, &managed.workspace_id)?;
+                .list_coding_session_links(parent_session_id, &managed.workspace_id)?
+                .into_iter()
+                .filter(|(_, session)| {
+                    session.dismissed_at.is_none() && session.closed_at.is_none()
+                })
+                .collect::<Vec<_>>();
             let link_ids = linked_sessions
                 .iter()
                 .map(|(link, _session)| link.id.clone())

@@ -10,6 +10,7 @@ import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 import {
   failLatencyFlow,
   startLatencyFlow,
@@ -23,6 +24,9 @@ export function usePendingWorkspaceEntryActions() {
   );
   const setWorkspaceArrivalEvent = useHarnessStore(
     (state) => state.setWorkspaceArrivalEvent,
+  );
+  const clearDeferredLaunchesForWorkspace = useDeferredHomeLaunchStore((state) =>
+    state.clearForWorkspace
   );
   const { data: workspaceCollections } = useWorkspaces();
   const {
@@ -120,6 +124,9 @@ export function usePendingWorkspaceEntryActions() {
   ]);
 
   const handleBack = useCallback(async (entry: PendingWorkspaceEntry) => {
+    if (entry.workspaceId) {
+      clearDeferredLaunchesForWorkspace(entry.workspaceId);
+    }
     if (entry.originTarget.kind === "home") {
       const selectedWorkspaceId = useHarnessStore.getState().selectedWorkspaceId;
       if (selectedWorkspaceId) {
@@ -140,6 +147,7 @@ export function usePendingWorkspaceEntryActions() {
     }
   }, [
     clearWorkspaceRuntimeState,
+    clearDeferredLaunchesForWorkspace,
     navigate,
     selectWorkspace,
     setPendingWorkspaceEntry,

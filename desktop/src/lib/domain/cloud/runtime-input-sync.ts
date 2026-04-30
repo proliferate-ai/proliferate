@@ -39,7 +39,8 @@ export interface RepoTrackedFileRuntimeInputSyncDescriptor {
   kind: "repo_tracked_file";
   gitOwner: string;
   gitRepoName: string;
-  localWorkspaceId: string;
+  localWorkspaceId?: string | null;
+  repoRootId?: string | null;
   relativePath: string;
 }
 
@@ -83,10 +84,37 @@ export function runtimeInputSyncDescriptorKey(
         "repo_tracked_file",
         descriptor.gitOwner,
         descriptor.gitRepoName,
-        descriptor.localWorkspaceId,
+        runtimeInputSyncDescriptorEffectiveSourceKey(descriptor) ?? "missing-source",
         descriptor.relativePath,
       ].join(":");
   }
+}
+
+export function runtimeInputSyncDescriptorEffectiveSourceKey(
+  descriptor: RepoTrackedFileRuntimeInputSyncDescriptor,
+): string | null {
+  const localWorkspaceId = descriptor.localWorkspaceId?.trim();
+  if (localWorkspaceId) {
+    return `workspace:${localWorkspaceId}`;
+  }
+  const repoRootId = descriptor.repoRootId?.trim();
+  if (repoRootId) {
+    return `repo-root:${repoRootId}`;
+  }
+  return null;
+}
+
+export function runtimeInputSyncDescriptorTrackedFileSourceKind(
+  descriptor: RepoTrackedFileRuntimeInputSyncDescriptor,
+): "workspace" | "repo_root" | null {
+  const sourceKey = runtimeInputSyncDescriptorEffectiveSourceKey(descriptor);
+  if (sourceKey?.startsWith("workspace:")) {
+    return "workspace";
+  }
+  if (sourceKey?.startsWith("repo-root:")) {
+    return "repo_root";
+  }
+  return null;
 }
 
 export function runtimeInputSyncDescriptorSourceKind(
@@ -108,9 +136,10 @@ export function normalizeRuntimeInputSyncDescriptor(
     case "repo_tracked_file": {
       const gitOwner = descriptor.gitOwner.trim();
       const gitRepoName = descriptor.gitRepoName.trim();
-      const localWorkspaceId = descriptor.localWorkspaceId.trim();
+      const localWorkspaceId = descriptor.localWorkspaceId?.trim() ?? "";
+      const repoRootId = descriptor.repoRootId?.trim() ?? "";
       const relativePath = descriptor.relativePath.trim().replace(/\\/g, "/");
-      if (!gitOwner || !gitRepoName || !localWorkspaceId || !relativePath) {
+      if (!gitOwner || !gitRepoName || (!localWorkspaceId && !repoRootId) || !relativePath) {
         return null;
       }
       if (
@@ -125,7 +154,8 @@ export function normalizeRuntimeInputSyncDescriptor(
         kind: "repo_tracked_file",
         gitOwner,
         gitRepoName,
-        localWorkspaceId,
+        localWorkspaceId: localWorkspaceId || null,
+        repoRootId: repoRootId || null,
         relativePath,
       };
     }

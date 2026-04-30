@@ -5,6 +5,7 @@ import {
   dequeueRuntimeInputSyncDescriptor,
   enqueueRuntimeInputSyncDescriptors,
   normalizeRuntimeInputSyncDescriptor,
+  runtimeInputSyncDescriptorEffectiveSourceKey,
 } from "./runtime-input-sync";
 
 describe("runtime input sync domain", () => {
@@ -28,6 +29,7 @@ describe("runtime input sync domain", () => {
           gitOwner: "acme",
           gitRepoName: "rocket",
           localWorkspaceId: "workspace",
+          repoRootId: "repo-root",
           relativePath: "config/.env",
         },
         {
@@ -47,6 +49,7 @@ describe("runtime input sync domain", () => {
         gitOwner: "acme",
         gitRepoName: "rocket",
         localWorkspaceId: "workspace",
+        repoRootId: "repo-root",
         relativePath: "config/.env",
       },
     ]);
@@ -57,22 +60,41 @@ describe("runtime input sync domain", () => {
       kind: "repo_tracked_file",
       gitOwner: "acme",
       gitRepoName: "rocket",
-      localWorkspaceId: "workspace",
+      repoRootId: "repo-root",
       relativePath: "../.env",
     })).toBeNull();
     expect(normalizeRuntimeInputSyncDescriptor({
       kind: "repo_tracked_file",
       gitOwner: "acme",
       gitRepoName: "rocket",
-      localWorkspaceId: "workspace",
+      repoRootId: "repo-root",
       relativePath: "config/.env",
     })).toEqual({
       kind: "repo_tracked_file",
       gitOwner: "acme",
       gitRepoName: "rocket",
-      localWorkspaceId: "workspace",
+      localWorkspaceId: null,
+      repoRootId: "repo-root",
       relativePath: "config/.env",
     });
+  });
+
+  it("uses workspace-first source keys for repo tracked file descriptors", () => {
+    expect(runtimeInputSyncDescriptorEffectiveSourceKey({
+      kind: "repo_tracked_file",
+      gitOwner: "acme",
+      gitRepoName: "rocket",
+      localWorkspaceId: "workspace",
+      repoRootId: "repo-root",
+      relativePath: "config/.env",
+    })).toBe("workspace:workspace");
+    expect(runtimeInputSyncDescriptorEffectiveSourceKey({
+      kind: "repo_tracked_file",
+      gitOwner: "acme",
+      gitRepoName: "rocket",
+      repoRootId: "repo-root",
+      relativePath: "config/.env",
+    })).toBe("repo-root:repo-root");
   });
 
   it("removes descriptor keys after dequeue", () => {

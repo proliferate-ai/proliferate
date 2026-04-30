@@ -29,7 +29,26 @@ const USER_PREFERENCES_KEY = "user_preferences";
 const LEGACY_THEME_KEY = "proliferate-theme";
 const LEGACY_MODE_KEY = "proliferate-mode";
 
-export const USER_PREFERENCE_DEFAULTS: UserPreferences = {
+export const NEW_USER_DEFAULTS: UserPreferences = {
+  themePreset: "mono",
+  colorMode: "dark",
+  defaultChatAgentKind: "",
+  defaultChatModelId: "",
+  defaultSessionModeByAgentKind: {},
+  defaultOpenInTargetId: "",
+  branchPrefixType: "none",
+  turnEndSoundEnabled: false,
+  turnEndSoundId: "ding",
+  transparentChromeEnabled: false,
+  powersInCodingSessionsEnabled: false,
+  subagentsEnabled: true,
+  coworkWorkspaceDelegationEnabled: true,
+  cloudRuntimeInputSyncEnabled: false,
+  onboardingCompletedVersion: 0,
+  onboardingPrimaryGoalId: "",
+};
+
+export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   themePreset: "ship",
   colorMode: "dark",
   defaultChatAgentKind: "",
@@ -39,6 +58,8 @@ export const USER_PREFERENCE_DEFAULTS: UserPreferences = {
   branchPrefixType: "none",
   turnEndSoundEnabled: false,
   turnEndSoundId: "ding",
+  // Existing persisted records keep the legacy transparent chrome default;
+  // only fresh installs use the opaque NEW_USER_DEFAULTS value.
   transparentChromeEnabled: true,
   powersInCodingSessionsEnabled: false,
   subagentsEnabled: true,
@@ -47,6 +68,8 @@ export const USER_PREFERENCE_DEFAULTS: UserPreferences = {
   onboardingCompletedVersion: 0,
   onboardingPrimaryGoalId: "",
 };
+
+export const USER_PREFERENCE_DEFAULTS = NEW_USER_DEFAULTS;
 
 const LEGACY_CLAUDE_MODEL_IDS: Record<string, string> = {
   "claude-sonnet-4-5": "sonnet",
@@ -91,32 +114,36 @@ function readLegacyThemeRecord(): LegacyThemeRecord {
 
 async function readLegacyUserPreferences(): Promise<UserPreferences> {
   const legacyTheme = readLegacyThemeRecord();
+  const legacyDefaultChatAgentKind = await readPersistedValue<string>("defaultChatAgentKind");
+  const legacyDefaultChatModelId = await readPersistedValue<string>("defaultChatModelId");
+  const legacyDefaultOpenInTargetId = await readPersistedValue<string>("defaultOpenInTargetId");
+  const legacyBranchPrefixType = await readPersistedValue<BranchPrefixType>("branchPrefixType");
+  const hasLegacyPreference =
+    legacyTheme.themePreset !== undefined
+    || legacyTheme.colorMode !== undefined
+    || legacyDefaultChatAgentKind !== undefined
+    || legacyDefaultChatModelId !== undefined
+    || legacyDefaultOpenInTargetId !== undefined
+    || legacyBranchPrefixType !== undefined;
+  const defaults = hasLegacyPreference ? PERSISTED_RECORD_BACKFILL : NEW_USER_DEFAULTS;
 
   return {
-    themePreset: legacyTheme.themePreset ?? USER_PREFERENCE_DEFAULTS.themePreset,
-    colorMode: legacyTheme.colorMode ?? USER_PREFERENCE_DEFAULTS.colorMode,
-    defaultChatAgentKind:
-      (await readPersistedValue<string>("defaultChatAgentKind"))
-      ?? USER_PREFERENCE_DEFAULTS.defaultChatAgentKind,
-    defaultChatModelId:
-      (await readPersistedValue<string>("defaultChatModelId"))
-      ?? USER_PREFERENCE_DEFAULTS.defaultChatModelId,
-    defaultSessionModeByAgentKind: USER_PREFERENCE_DEFAULTS.defaultSessionModeByAgentKind,
-    defaultOpenInTargetId:
-      (await readPersistedValue<string>("defaultOpenInTargetId"))
-      ?? USER_PREFERENCE_DEFAULTS.defaultOpenInTargetId,
-    branchPrefixType:
-      (await readPersistedValue<BranchPrefixType>("branchPrefixType"))
-      ?? USER_PREFERENCE_DEFAULTS.branchPrefixType,
-    turnEndSoundEnabled: USER_PREFERENCE_DEFAULTS.turnEndSoundEnabled,
-    turnEndSoundId: USER_PREFERENCE_DEFAULTS.turnEndSoundId,
-    transparentChromeEnabled: USER_PREFERENCE_DEFAULTS.transparentChromeEnabled,
-    powersInCodingSessionsEnabled: USER_PREFERENCE_DEFAULTS.powersInCodingSessionsEnabled,
-    subagentsEnabled: USER_PREFERENCE_DEFAULTS.subagentsEnabled,
-    coworkWorkspaceDelegationEnabled: USER_PREFERENCE_DEFAULTS.coworkWorkspaceDelegationEnabled,
-    cloudRuntimeInputSyncEnabled: USER_PREFERENCE_DEFAULTS.cloudRuntimeInputSyncEnabled,
-    onboardingCompletedVersion: USER_PREFERENCE_DEFAULTS.onboardingCompletedVersion,
-    onboardingPrimaryGoalId: USER_PREFERENCE_DEFAULTS.onboardingPrimaryGoalId,
+    themePreset: legacyTheme.themePreset ?? defaults.themePreset,
+    colorMode: legacyTheme.colorMode ?? defaults.colorMode,
+    defaultChatAgentKind: legacyDefaultChatAgentKind ?? defaults.defaultChatAgentKind,
+    defaultChatModelId: legacyDefaultChatModelId ?? defaults.defaultChatModelId,
+    defaultSessionModeByAgentKind: defaults.defaultSessionModeByAgentKind,
+    defaultOpenInTargetId: legacyDefaultOpenInTargetId ?? defaults.defaultOpenInTargetId,
+    branchPrefixType: legacyBranchPrefixType ?? defaults.branchPrefixType,
+    turnEndSoundEnabled: defaults.turnEndSoundEnabled,
+    turnEndSoundId: defaults.turnEndSoundId,
+    transparentChromeEnabled: defaults.transparentChromeEnabled,
+    powersInCodingSessionsEnabled: defaults.powersInCodingSessionsEnabled,
+    subagentsEnabled: defaults.subagentsEnabled,
+    coworkWorkspaceDelegationEnabled: defaults.coworkWorkspaceDelegationEnabled,
+    cloudRuntimeInputSyncEnabled: defaults.cloudRuntimeInputSyncEnabled,
+    onboardingCompletedVersion: defaults.onboardingCompletedVersion,
+    onboardingPrimaryGoalId: defaults.onboardingPrimaryGoalId,
   };
 }
 
@@ -140,7 +167,7 @@ async function readAll(): Promise<UserPreferences> {
   const persisted = await readPersistedValue<UserPreferences>(USER_PREFERENCES_KEY);
   if (persisted) {
     return {
-      ...USER_PREFERENCE_DEFAULTS,
+      ...PERSISTED_RECORD_BACKFILL,
       ...persisted,
     };
   }
@@ -168,32 +195,32 @@ export function migrateUserPreferences(preferences: UserPreferences): {
     && next.branchPrefixType !== "proliferate"
     && next.branchPrefixType !== "github_username"
   ) {
-    next.branchPrefixType = USER_PREFERENCE_DEFAULTS.branchPrefixType;
+    next.branchPrefixType = PERSISTED_RECORD_BACKFILL.branchPrefixType;
     changed = true;
   }
 
   if (typeof next.transparentChromeEnabled !== "boolean") {
-    next.transparentChromeEnabled = USER_PREFERENCE_DEFAULTS.transparentChromeEnabled;
+    next.transparentChromeEnabled = PERSISTED_RECORD_BACKFILL.transparentChromeEnabled;
     changed = true;
   }
 
   if (typeof next.powersInCodingSessionsEnabled !== "boolean") {
-    next.powersInCodingSessionsEnabled = USER_PREFERENCE_DEFAULTS.powersInCodingSessionsEnabled;
+    next.powersInCodingSessionsEnabled = PERSISTED_RECORD_BACKFILL.powersInCodingSessionsEnabled;
     changed = true;
   }
 
   if (typeof next.subagentsEnabled !== "boolean") {
-    next.subagentsEnabled = USER_PREFERENCE_DEFAULTS.subagentsEnabled;
+    next.subagentsEnabled = PERSISTED_RECORD_BACKFILL.subagentsEnabled;
     changed = true;
   }
 
   if (typeof next.coworkWorkspaceDelegationEnabled !== "boolean") {
-    next.coworkWorkspaceDelegationEnabled = USER_PREFERENCE_DEFAULTS.coworkWorkspaceDelegationEnabled;
+    next.coworkWorkspaceDelegationEnabled = PERSISTED_RECORD_BACKFILL.coworkWorkspaceDelegationEnabled;
     changed = true;
   }
 
   if (typeof next.cloudRuntimeInputSyncEnabled !== "boolean") {
-    next.cloudRuntimeInputSyncEnabled = USER_PREFERENCE_DEFAULTS.cloudRuntimeInputSyncEnabled;
+    next.cloudRuntimeInputSyncEnabled = PERSISTED_RECORD_BACKFILL.cloudRuntimeInputSyncEnabled;
     changed = true;
   }
 

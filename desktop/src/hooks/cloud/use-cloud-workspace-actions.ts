@@ -24,6 +24,7 @@ import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
+import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 
 export function useCloudWorkspaceActions() {
   const queryClient = useQueryClient();
@@ -31,6 +32,9 @@ export function useCloudWorkspaceActions() {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const { selectWorkspace, clearWorkspaceRuntimeState } = useWorkspaceSelection();
   const { syncCloudCredential } = useCloudCredentialActions();
+  const clearDeferredLaunchesForWorkspace = useDeferredHomeLaunchStore((state) =>
+    state.clearForWorkspace
+  );
 
   async function invalidateCloudResources() {
     await Promise.all([
@@ -132,6 +136,9 @@ export function useCloudWorkspaceActions() {
     },
     onSuccess: async (_, workspaceId) => {
       clearWorkspaceRuntimeState(workspaceId, { clearSelection: true });
+      clearDeferredLaunchesForWorkspace(
+        workspaceId.startsWith("cloud:") ? workspaceId : cloudWorkspaceSyntheticId(workspaceId),
+      );
       await invalidateCloudResources();
       trackProductEvent("cloud_workspace_deleted", {
         workspace_kind: "cloud",

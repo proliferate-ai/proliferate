@@ -44,9 +44,9 @@ use anyharness_contract::v1::{
     PromptSessionResponse, PromptSessionStatus, ProposedPlanDecisionState, ProposedPlanDetail,
     ProposedPlanDocumentResponse, ProposedPlanNativeResolutionState, ProposedPlanSummary,
     ProviderConfig, PullRequestState, PullRequestSummary, PushRequest, PushResponse,
-    RawSessionConfigOption, RawSessionConfigValue, ReasoningVisibility, ReconcileAgentResult,
-    ReconcileAgentsRequest, ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome,
-    ReplayRecordingSummary, RepoRoot, RepoRootKind, ResolveInteractionRequest,
+    RawSessionConfigOption, RawSessionConfigValue, ReadWorkspaceFileResponse, ReasoningVisibility,
+    ReconcileAgentResult, ReconcileAgentsRequest, ReconcileAgentsResponse, ReconcileJobStatus,
+    ReconcileOutcome, ReplayRecordingSummary, RepoRoot, RepoRootKind, ResolveInteractionRequest,
     ResolveRepoRootFromPathRequest, ResolveWorkspaceFromPathRequest, ResolveWorkspaceResponse,
     ResumeSessionRequest, RunCommandRequest, RunCommandResponse, RuntimeCapabilities, Session,
     SessionEndReason, SessionEndedEvent, SessionEvent, SessionEventEnvelope, SessionExecutionPhase,
@@ -64,8 +64,8 @@ use anyharness_contract::v1::{
     UpdateWorkspaceDisplayNameRequest, UpdateWorkspaceMobilityRuntimeStateRequest,
     UsageUpdatePayload, UserInputInteractionPayload, UserInputQuestion, UserInputQuestionOption,
     UserInputSubmittedAnswer, Workspace, WorkspaceExecutionPhase, WorkspaceExecutionSummary,
-    WorkspaceKind, WorkspaceMobilityArchive, WorkspaceMobilityBlocker, WorkspaceMobilityFileEntry,
-    WorkspaceMobilityPreflightResponse, WorkspaceMobilityRuntimeMode,
+    WorkspaceFileKind, WorkspaceKind, WorkspaceMobilityArchive, WorkspaceMobilityBlocker,
+    WorkspaceMobilityFileEntry, WorkspaceMobilityPreflightResponse, WorkspaceMobilityRuntimeMode,
     WorkspaceMobilityRuntimeState, WorkspaceMobilitySessionBundle,
     WorkspaceMobilitySessionCandidate, WorkspaceSessionLaunchAgent, WorkspaceSessionLaunchCatalog,
     WorkspaceSessionLaunchModel, WorkspaceSurface,
@@ -103,6 +103,7 @@ use anyharness_contract::v1::{
         super::http::repo_roots::get_repo_root,
         super::http::repo_roots::resolve_repo_root,
         super::http::repo_roots::list_repo_root_git_branches,
+        super::http::repo_roots::read_repo_root_file,
         super::http::repo_roots::detect_repo_root_setup,
         super::http::repo_roots::prepare_repo_root_mobility_destination,
         super::http::cowork::get_cowork_status,
@@ -176,6 +177,8 @@ use anyharness_contract::v1::{
         RepoRootKind,
         RepoRoot,
         ResolveRepoRootFromPathRequest,
+        WorkspaceFileKind,
+        ReadWorkspaceFileResponse,
         PrepareRepoRootMobilityDestinationRequest,
         PrepareRepoRootMobilityDestinationResponse,
         CoworkRoot,
@@ -448,6 +451,7 @@ mod tests {
             "/v1/replay/recordings",
             "/v1/replay/sessions",
             "/v1/replay/sessions/{session_id}/advance",
+            "/v1/repo-roots/{repo_root_id}/files/file",
         ] {
             assert!(paths.contains_key(path), "missing OpenAPI path: {path}");
         }
@@ -593,6 +597,8 @@ mod tests {
             "ErrorEvent",
             "StopReason",
             "RuntimeCapabilities",
+            "WorkspaceFileKind",
+            "ReadWorkspaceFileResponse",
         ] {
             assert!(
                 schemas.contains_key(schema),

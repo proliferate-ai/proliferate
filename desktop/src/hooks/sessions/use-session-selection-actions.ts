@@ -5,10 +5,8 @@ import {
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Session } from "@anyharness/sdk";
-import { clearLastViewedSession } from "@/stores/preferences/workspace-ui-store";
 import {
   resolveStatusFromExecutionSummary,
-  sessionSlotBelongsToWorkspace,
 } from "@/lib/domain/sessions/activity";
 import {
   useHarnessStore,
@@ -24,6 +22,7 @@ import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-a
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
+import { useDismissedSessionCleanup } from "@/hooks/sessions/use-dismissed-session-cleanup";
 import {
   elapsedMs,
   logLatency,
@@ -77,33 +76,17 @@ async function ensureRuntimeReadyForSessions(): Promise<string> {
   return readyState.runtimeUrl;
 }
 
-function removeSessionSlot(sessionId: string): void {
-  useHarnessStore.setState((state) => {
-    if (!state.sessionSlots[sessionId]) {
-      return state;
-    }
-
-    const nextSlots = { ...state.sessionSlots };
-    delete nextSlots[sessionId];
-
-    return {
-      sessionSlots: nextSlots,
-    };
-  });
-}
-
 export function useSessionSelectionActions() {
   const queryClient = useQueryClient();
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
+  const cleanupDismissedSession = useDismissedSessionCleanup();
   const {
     activateSession,
-    closeSessionSlotStream,
     ensureSessionStreamConnected,
     rehydrateSessionSlotFromHistory,
   } = useSessionRuntimeActions();
   const {
-    removeWorkspaceSessionRecord,
     upsertWorkspaceSessionRecord,
   } = useWorkspaceSessionCache();
 
@@ -284,8 +267,6 @@ export function useSessionSelectionActions() {
       return;
     }
 
-    closeSessionSlotStream(sessionId);
-
     try {
       const { connection } = await getSessionClientAndWorkspace(sessionId);
       await getAnyHarnessClient(connection).sessions.dismiss(sessionId);
@@ -293,30 +274,10 @@ export function useSessionSelectionActions() {
       // Dismiss failed.
     }
 
-    removeSessionSlot(sessionId);
-
-    let nextActiveId = useHarnessStore.getState().activeSessionId;
-    if (nextActiveId === sessionId) {
-      nextActiveId = Object.values(useHarnessStore.getState().sessionSlots)
-        .filter((slot) => sessionSlotBelongsToWorkspace(slot, closingSlot?.workspaceId ?? null))
-        .map((slot) => slot.sessionId)[0] ?? null;
-    }
-
-    if (nextActiveId) {
-      activateSession(nextActiveId);
-    } else {
-      useHarnessStore.getState().setActiveSessionId(null);
-    }
-
-    if (workspaceId) {
-      clearLastViewedSession(workspaceId, sessionId);
-      removeWorkspaceSessionRecord(workspaceId, sessionId);
-    }
+    cleanupDismissedSession(sessionId, workspaceId);
   }, [
-    activateSession,
-    closeSessionSlotStream,
+    cleanupDismissedSession,
     getWorkspaceRuntimeBlockReason,
-    removeWorkspaceSessionRecord,
     showToast,
   ]);
 

@@ -54,8 +54,9 @@ The desktop redirect scheme, callback path, deep-link launch behavior, and auth
 token lifetimes now live in `server/proliferate/constants/auth.py`. They are
 code defaults on this branch, not env overrides.
 
-Desktop runtime overrides live in `~/.proliferate/config.json` (or
-`~/.proliferate-local/config.json` in dev). The supported fields are:
+Desktop runtime overrides live in `~/.proliferate/config.json` (or the
+profile-specific `PROLIFERATE_DEV_HOME/config.json` in profile dev). The
+supported fields are:
 
 ```json
 {

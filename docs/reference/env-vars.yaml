@@ -31,7 +31,7 @@
   secret: false
   default: ""
   description: Canonical public API base URL for absolute auth callback generation
-  tags: [self-hosted, production]
+  tags: [local-dev, self-hosted, production]
 
 - name: DATABASE_URL
   secret: true
@@ -50,6 +50,48 @@
   default: "http://localhost:1420,...,tauri://localhost"
   description: Comma-separated browser/webview origins allowed to call the API
   tags: [local-dev, self-hosted, production]
+
+- name: PROLIFERATE_DEV
+  secret: false
+  default: ""
+  description: Enables local desktop/runtime dev profile behavior
+  tags: [local-dev, desktop]
+
+- name: PROLIFERATE_DEV_PROFILE
+  secret: false
+  default: ""
+  description: Local dev profile name used by make dev PROFILE=<name>
+  tags: [local-dev, desktop]
+
+- name: PROLIFERATE_DEV_HOME
+  secret: false
+  default: ""
+  description: Profile-specific desktop file-backed state directory
+  tags: [local-dev, desktop]
+
+- name: PROLIFERATE_API_PORT
+  secret: false
+  default: "8000"
+  description: Profile-specific local API port
+  tags: [local-dev]
+
+- name: PROLIFERATE_WEB_PORT
+  secret: false
+  default: "1420"
+  description: Profile-specific local Vite dev server port
+  tags: [local-dev, desktop]
+
+- name: PROLIFERATE_WEB_HMR_PORT
+  secret: false
+  default: "1421"
+  description: Profile-specific local Vite hot-module-reload websocket port
+  tags: [local-dev, desktop]
+
+- name: PROLIFERATE_DEV_DB_NAME
+  secret: false
+  default: ""
+  description: Profile-specific local Postgres database name
+  tags: [local-dev]
 
 - name: JWT_SECRET
   secret: true
@@ -212,6 +254,12 @@
   default: ""
   description: Customer portal return URL
   tags: [local-dev, production]
+
+- name: STRIPE_FORWARD_TO
+  secret: false
+  default: "http://127.0.0.1:8000/v1/billing/webhooks/stripe"
+  description: Local Stripe CLI webhook forwarding destination used by Makefile dev targets
+  tags: [local-dev]
 
 # ═══════════════════════════════════════════════════════════════════════
 # Server: Cloud Runtime Injection (both E2B and Daytona)
@@ -499,10 +547,22 @@
   description: Skip bundled sidecar, connect to an external AnyHarness
   tags: [local-dev]
 
+- name: ANYHARNESS_DEV_CORS
+  secret: false
+  default: ""
+  description: Enables permissive AnyHarness CORS for local desktop dev
+  tags: [local-dev]
+
 - name: ANYHARNESS_PORT
   secret: false
   default: ""
   description: Override the local sidecar port
+  tags: [local-dev]
+
+- name: ANYHARNESS_RUNTIME_HOME
+  secret: false
+  default: ""
+  description: Profile-specific AnyHarness runtime state directory used by the local dev launcher
   tags: [local-dev]
 
 # ═══════════════════════════════════════════════════════════════════════

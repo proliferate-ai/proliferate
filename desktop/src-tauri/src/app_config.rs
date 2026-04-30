@@ -43,6 +43,18 @@ pub fn app_dir_name() -> &'static str {
     app_dir_name_for_native_dev_profile(native_dev_profile())
 }
 
+fn dev_home_override_path() -> Option<PathBuf> {
+    if !native_dev_profile() {
+        return None;
+    }
+
+    std::env::var("PROLIFERATE_DEV_HOME")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
 pub fn home_dir() -> Result<PathBuf, String> {
     std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
@@ -51,6 +63,10 @@ pub fn home_dir() -> Result<PathBuf, String> {
 }
 
 pub fn app_dir_path() -> Result<PathBuf, String> {
+    if let Some(path) = dev_home_override_path() {
+        return Ok(path);
+    }
+
     Ok(home_dir()?.join(app_dir_name()))
 }
 

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { IconButton } from "@/components/ui/IconButton";
@@ -10,6 +10,7 @@ import { usePendingWorkspaceEntryActions } from "@/hooks/workspaces/use-pending-
 import { useCloudWorkspaceStatusScreenActions } from "@/hooks/cloud/use-cloud-workspace-status-screen-actions";
 import { useRerunSetupMutation } from "@anyharness/sdk-react";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 import { ArrowUpRight, LoaderCircle, X } from "@/components/ui/icons";
 import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/arrival";
 
@@ -108,6 +109,20 @@ export function WorkspaceArrivalAttachedPanel() {
   const panelState = useWorkspaceStatusPanelState();
   const [expanded, setExpanded] = useState(true);
   const { handleRetry, handleBack } = usePendingWorkspaceEntryActions();
+  const deferredLaunchesById = useDeferredHomeLaunchStore((state) => state.launches);
+  const deferredWorkspaceId = panelState?.kind === "pending"
+    ? panelState.entry.workspaceId
+    : panelState?.kind === "cloud-status"
+      ? panelState.workspaceId
+      : null;
+  const deferredPromptCount = useMemo(() => {
+    if (!deferredWorkspaceId) {
+      return 0;
+    }
+    return Object.values(deferredLaunchesById).filter(
+      (launch) => launch.workspaceId === deferredWorkspaceId,
+    ).length;
+  }, [deferredLaunchesById, deferredWorkspaceId]);
 
   const arrivalActions = useWorkspaceArrivalActions({
     workspacePath: panelState?.kind === "arrival" ? panelState.workspacePath : null,
@@ -220,6 +235,14 @@ export function WorkspaceArrivalAttachedPanel() {
           </SectionRow>
         )}
 
+        {deferredPromptCount > 0 ? (
+          <SectionRow label="Prompt">
+            <span className="truncate text-base text-muted-foreground">
+              Queued prompt will send when this cloud workspace is ready.
+            </span>
+          </SectionRow>
+        ) : null}
+
         {panelState.isFailed && (
           <SectionRow label="Actions">
             <div className="flex items-center gap-2">
@@ -253,6 +276,7 @@ export function WorkspaceArrivalAttachedPanel() {
       model={model}
       isPrimaryActionPending={cloudActions.isPrimaryActionPending}
       onPrimaryAction={cloudActions.handlePrimaryAction}
+      pendingPromptCount={deferredPromptCount}
     />
   );
 }

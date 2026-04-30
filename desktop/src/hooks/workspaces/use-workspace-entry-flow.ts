@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/arrival";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
@@ -12,8 +13,17 @@ import {
   logLatency,
 } from "@/lib/infra/debug-latency";
 
+interface FinalizeSelectionOptions {
+  latencyFlowId?: string | null;
+  repoGroupKeyToExpand?: string | null;
+}
+
 function isAttemptCurrent(attemptId: string): boolean {
   return useHarnessStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
+}
+
+function requestChatInputFocus(): void {
+  useChatInputStore.getState().requestFocus();
 }
 
 export function useWorkspaceEntryFlow() {
@@ -40,18 +50,24 @@ export function useWorkspaceEntryFlow() {
     });
     useWorkspaceFilesStore.getState().reset();
     enterPendingWorkspaceShell(entry);
+    requestChatInputFocus();
   }, [enterPendingWorkspaceShell]);
 
   const finalizeSelection = useCallback(async (
     entry: PendingWorkspaceEntry,
     workspaceId: string,
-  ) => {
+    options?: FinalizeSelectionOptions,
+  ): Promise<boolean> => {
     logLatency("workspace.entry.selection.start", {
       attemptId: entry.attemptId,
       source: entry.source,
       workspaceId,
       elapsedSincePendingMs: elapsedSince(entry.createdAt),
     });
+
+    if (options?.repoGroupKeyToExpand) {
+      ensureRepoGroupExpanded(options.repoGroupKeyToExpand);
+    }
 
     setPendingWorkspaceEntry({
       ...entry,
@@ -63,6 +79,7 @@ export function useWorkspaceEntryFlow() {
     await selectWorkspace(workspaceId, {
       force: true,
       preservePending: true,
+      latencyFlowId: options?.latencyFlowId,
     });
 
     if (!isAttemptCurrent(entry.attemptId)) {
@@ -71,7 +88,7 @@ export function useWorkspaceEntryFlow() {
         source: entry.source,
         workspaceId,
       });
-      return;
+      return false;
     }
 
     setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
@@ -87,6 +104,7 @@ export function useWorkspaceEntryFlow() {
       workspaceId,
       totalElapsedMs: elapsedSince(entry.createdAt),
     });
+    return true;
   }, [selectWorkspace, setPendingWorkspaceEntry, setWorkspaceArrivalEvent]);
 
   const failPendingEntry = useCallback((
@@ -132,6 +150,7 @@ export function useWorkspaceEntryFlow() {
       setupScript: input.setupScript ?? null,
       baseBranchName: input.baseBranchName ?? null,
     }));
+    requestChatInputFocus();
     await selectWorkspace(input.workspaceId, input.latencyFlowId
       ? { force: true, latencyFlowId: input.latencyFlowId }
       : { force: true });

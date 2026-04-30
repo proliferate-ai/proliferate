@@ -41,12 +41,14 @@ interface WorkspaceArrivalCloudPanelProps {
   model: CloudWorkspaceStatusScreenModel;
   isPrimaryActionPending: boolean;
   onPrimaryAction: (() => void) | null;
+  pendingPromptCount?: number;
 }
 
 export function WorkspaceArrivalCloudPanel({
   model,
   isPrimaryActionPending,
   onPrimaryAction,
+  pendingPromptCount = 0,
 }: WorkspaceArrivalCloudPanelProps) {
   const compactView = buildCloudWorkspaceCompactStatusView(model);
   const [expanded, setExpanded] = useState(() => shouldExpandByDefault(model.mode));
@@ -108,6 +110,14 @@ export function WorkspaceArrivalCloudPanel({
           <span className="text-sm text-muted-foreground">{model.footer.message}</span>
         </SectionRow>
       )}
+
+      {pendingPromptCount > 0 ? (
+        <SectionRow label="Prompt">
+          <span className="text-sm text-muted-foreground">
+            Queued prompt will send when this cloud workspace is ready.
+          </span>
+        </SectionRow>
+      ) : null}
     </ComposerAttachedPanel>
   );
 }

@@ -68,6 +68,7 @@ export function useCoworkThreadWorkflow() {
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const setDraftText = useChatInputStore((state) => state.setDraftText);
   const clearDraft = useChatInputStore((state) => state.clearDraft);
+  const requestComposerFocus = useChatInputStore((state) => state.requestFocus);
   const createCoworkThreadMutation = useCreateCoworkThreadMutation();
 
   const navigateToWorkspaceShell = useCallback(() => {
@@ -79,11 +80,12 @@ export function useCoworkThreadWorkflow() {
   const createThreadWithResolvedConfig = useCallback(async (input: {
     agentKind: string;
     modelId: string;
+    modeId?: string | null;
     draftText?: string | null;
     sourceWorkspaceId?: string | null;
   }) => {
     const totalStartedAt = startLatencyTimer();
-    const modeId = resolveCoworkDefaultSessionModeId(input.agentKind);
+    const modeId = input.modeId?.trim() || resolveCoworkDefaultSessionModeId(input.agentKind);
     const pendingRequest: PendingCoworkRequestInput = {
       agentKind: input.agentKind,
       modelId: input.modelId,
@@ -106,6 +108,7 @@ export function useCoworkThreadWorkflow() {
       modelId: input.modelId,
     });
     enterPendingWorkspaceShell(entry);
+    requestComposerFocus();
     navigateToWorkspaceShell();
 
     try {
@@ -216,6 +219,7 @@ export function useCoworkThreadWorkflow() {
     navigateToWorkspaceShell,
     preferences.coworkWorkspaceDelegationEnabled,
     queryClient,
+    requestComposerFocus,
     runtimeUrl,
     selectWorkspace,
     setDraftText,
@@ -255,12 +259,14 @@ export function useCoworkThreadWorkflow() {
   const createThreadFromSelection = useCallback(async (input: {
     agentKind: string;
     modelId: string;
+    modeId?: string | null;
     draftText?: string | null;
     sourceWorkspaceId?: string | null;
   }) => {
     return createThreadWithResolvedConfig({
       agentKind: input.agentKind,
       modelId: input.modelId,
+      modeId: input.modeId,
       draftText: input.draftText,
       sourceWorkspaceId: input.sourceWorkspaceId,
     });

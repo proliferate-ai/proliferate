@@ -148,19 +148,19 @@ export function TerminalPanel({
             const isActive = tabId === activeTabId;
             const fallbackTitle = `Terminal ${idx + 1}`;
             const displayTitle = tab.title === "Terminal" ? fallbackTitle : tab.title;
-            const shapeClassName = "-mb-px rounded-t-md";
+            const shapeClassName = "rounded-t-md";
             const activeClassName = transparentChromeEnabled
-              ? "border-border border-b-background bg-background/85 text-foreground backdrop-blur-xl"
-              : "border-border border-b-background bg-background text-foreground";
+              ? "bg-background/85 text-foreground backdrop-blur-xl"
+              : "bg-background text-foreground";
 
             return (
               <div
                 key={tabId}
                 role="presentation"
-                className={`group/tab flex h-8 min-w-0 max-w-44 shrink-0 items-center border px-0.5 transition-colors ${shapeClassName} ${
+                className={`group/tab flex h-8 min-w-0 max-w-44 shrink-0 items-center px-0.5 transition-colors ${shapeClassName} ${
                   isActive
                     ? activeClassName
-                    : "border-transparent bg-transparent text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground"
+                    : "bg-transparent text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground"
                 }`}
               >
                 <Button
@@ -211,7 +211,7 @@ export function TerminalPanel({
             title="New terminal"
             onClick={handleNewTab}
             disabled={!isRuntimeReady}
-            className="mb-0.5"
+            className="mb-1"
           >
             <Plus className="size-3 text-muted-foreground" />
           </IconButton>

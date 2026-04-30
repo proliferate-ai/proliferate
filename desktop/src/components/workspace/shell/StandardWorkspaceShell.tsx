@@ -54,6 +54,7 @@ export function StandardWorkspaceShell() {
   const transparentChromeEnabled = useTransparentChromeEnabled();
   const {
     phase: updaterPhase,
+    downloadProgress,
     downloadUpdate,
     openRestartPrompt,
   } = useUpdater();
@@ -89,6 +90,7 @@ export function StandardWorkspaceShell() {
               </IconButton>
               <SidebarUpdatePill
                 phase={updaterPhase}
+                downloadProgress={downloadProgress}
                 onDownloadUpdate={downloadUpdate}
                 onOpenRestartPrompt={openRestartPrompt}
               />
@@ -129,6 +131,7 @@ export function StandardWorkspaceShell() {
                 </IconButton>
                 <SidebarUpdatePill
                   phase={updaterPhase}
+                  downloadProgress={downloadProgress}
                   onDownloadUpdate={downloadUpdate}
                   onOpenRestartPrompt={openRestartPrompt}
                 />

@@ -16,6 +16,7 @@ export type RuntimeInputSyncTelemetryTrigger =
 export type RuntimeInputSyncTelemetrySourceKind =
   | "credential"
   | "repo_tracked_file";
+export type TrackedFileTelemetrySource = "workspace" | "repo_root";
 export type RuntimeInputSyncTelemetryFailureKind =
   | "cloud_unavailable"
   | "missing_local_source"
@@ -84,10 +85,12 @@ export interface DesktopProductEventMap {
   cloud_repo_config_saved: {
     env_var_count: number;
     tracked_file_count: number;
+    tracked_file_source?: TrackedFileTelemetrySource;
     has_setup_script: boolean;
   };
   cloud_repo_file_resynced: {
     tracked_file_count: number;
+    tracked_file_source: TrackedFileTelemetrySource;
   };
   cloud_workspace_created: {
     attempt_count: number;
@@ -158,6 +161,7 @@ export interface DesktopProductEventMap {
   };
   runtime_input_sync_item_failed: {
     source_kind: RuntimeInputSyncTelemetrySourceKind;
+    tracked_file_source?: TrackedFileTelemetrySource | null;
     failure_kind: RuntimeInputSyncTelemetryFailureKind;
   };
   runtime_input_sync_toggled: {

@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { AgentSummary, GitBranchRef, ModelRegistry, Workspace } from "@anyharness/sdk";
 import {
+  buildHomeNextModelGroups,
   buildHomeNextAgentOptions,
+  findHomeNextLocalWorkspace,
   findHomeNextMatchingWorkspace,
   localBranchNames,
+  resolveEffectiveHomeModelSelection,
+  resolveHomeLaunchTarget,
   resolveHomeNextDefaultBranchName,
   resolveSelectedHomeNextAgentOption,
 } from "./home-next-launch";
@@ -150,6 +154,25 @@ describe("findHomeNextMatchingWorkspace", () => {
   });
 });
 
+describe("findHomeNextLocalWorkspace", () => {
+  it("selects only non-archived local checkouts and ignores worktrees", () => {
+    const match = findHomeNextLocalWorkspace({
+      repoRootId: "repo-root-1",
+      archivedWorkspaceIds: ["archived-local"],
+      workspaceLastInteracted: {
+        local: "2026-04-03T00:00:00.000Z",
+      },
+      workspaces: [
+        workspace({ id: "worktree", kind: "worktree" }),
+        workspace({ id: "archived-local", kind: "local" }),
+        workspace({ id: "local", kind: "local" }),
+      ],
+    });
+
+    expect(match?.id).toBe("local");
+  });
+});
+
 describe("home-next agent helpers", () => {
   it("resolves ready agent options with registry-backed default models", () => {
     const options = buildHomeNextAgentOptions(
@@ -188,6 +211,119 @@ describe("home-next agent helpers", () => {
       kind: "codex",
       modelId: null,
       disabledReason: "No launchable model",
+    });
+  });
+});
+
+describe("home-next model helpers", () => {
+  it("builds all ready registry models and treats encoded model ids as opaque", () => {
+    const groups = buildHomeNextModelGroups(
+      [
+        agent({ kind: "cursor", displayName: "Cursor" }),
+        agent({ kind: "missing", displayName: "Missing", readiness: "install_required" }),
+      ],
+      [
+        registry({
+          kind: "cursor",
+          displayName: "Cursor",
+          defaultModelId: "default[]",
+          models: [
+            { id: "default[]", displayName: "Auto", isDefault: true },
+            {
+              id: "gpt-5.4[reasoning=medium,fast=false]",
+              displayName: "GPT 5.4",
+              isDefault: false,
+            },
+          ],
+        }),
+        registry({
+          kind: "missing",
+          displayName: "Missing",
+          models: [{ id: "missing-model", displayName: "Missing", isDefault: true }],
+        }),
+      ],
+      { kind: "cursor", modelId: "gpt-5.4[reasoning=medium,fast=false]" },
+    );
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.models.map((model) => model.modelId)).toEqual([
+      "default[]",
+      "gpt-5.4[reasoning=medium,fast=false]",
+    ]);
+    expect(groups[0]?.models[1]?.isSelected).toBe(true);
+  });
+
+  it("resolves model defaults from user preference, provider default, then first model", () => {
+    const groups = buildHomeNextModelGroups(
+      [agent({ kind: "codex" }), agent({ kind: "claude" })],
+      [
+        registry({
+          kind: "codex",
+          defaultModelId: "gpt-5.4",
+          models: [
+            { id: "gpt-5.4-mini", displayName: "Mini", isDefault: false },
+            { id: "gpt-5.4", displayName: "GPT 5.4", isDefault: true },
+          ],
+        }),
+        registry({
+          kind: "claude",
+          defaultModelId: null,
+          models: [{ id: "sonnet", displayName: "Sonnet", isDefault: false }],
+        }),
+      ],
+      null,
+    );
+
+    expect(resolveEffectiveHomeModelSelection(groups, null, {
+      defaultChatAgentKind: "claude",
+      defaultChatModelId: "sonnet",
+    })).toEqual({ kind: "claude", modelId: "sonnet" });
+    expect(resolveEffectiveHomeModelSelection(groups, null, {
+      defaultChatAgentKind: "missing",
+      defaultChatModelId: "missing",
+    })).toEqual({ kind: "claude", modelId: "sonnet" });
+  });
+});
+
+describe("resolveHomeLaunchTarget", () => {
+  const repository = {
+    sourceRoot: "/repo",
+    name: "repo",
+    secondaryLabel: null,
+    workspaceCount: 1,
+    repoRootId: "repo-root-1",
+    localWorkspaceId: "worktree-source",
+    gitProvider: "github",
+    gitOwner: "owner",
+    gitRepoName: "repo",
+  };
+
+  it("resolves cloud base branch without generating a target branch", () => {
+    expect(resolveHomeLaunchTarget({
+      destination: "repository",
+      repository,
+      repoLaunchKind: "cloud",
+      baseBranch: "main",
+      existingLocalWorkspaceId: null,
+    })).toEqual({
+      kind: "cloud",
+      gitOwner: "owner",
+      gitRepoName: "repo",
+      baseBranch: "main",
+    });
+  });
+
+  it("resolves local with only a strict local checkout id", () => {
+    expect(resolveHomeLaunchTarget({
+      destination: "repository",
+      repository,
+      repoLaunchKind: "local",
+      baseBranch: null,
+      existingLocalWorkspaceId: "local-1",
+    })).toEqual({
+      kind: "local",
+      sourceRoot: "/repo",
+      existingWorkspaceId: "local-1",
     });
   });
 });

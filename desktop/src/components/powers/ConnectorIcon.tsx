@@ -11,7 +11,6 @@ import {
   Calendar,
   Folder,
   GitHub,
-  GmailBrandIcon,
   Globe,
   Search,
   Sun,
@@ -52,7 +51,6 @@ function TavilyGlyph({ className, ...props }: SVGProps<SVGSVGElement>) {
 
 const CONNECTOR_ICONS = {
   calendar: Calendar,
-  gmail: GmailBrandIcon,
   github: GitHub,
   globe: Globe,
   linear: LinearGlyph,

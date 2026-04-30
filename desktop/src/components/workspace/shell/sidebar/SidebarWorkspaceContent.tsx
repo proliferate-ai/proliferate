@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   resolveCloudRepoActionState,
   type CloudWorkspaceRepoTarget,
@@ -7,6 +8,7 @@ import type {
   SidebarGroupState,
 } from "@/lib/domain/workspaces/sidebar";
 import { BrailleSweepBadge } from "@/components/ui/icons";
+import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 import { RepoGroup } from "./RepoGroup";
 import { SidebarShowToggleRow } from "./SidebarShowToggleRow";
 import { WorkspaceItem } from "./WorkspaceItem";
@@ -86,6 +88,15 @@ export function SidebarWorkspaceContent({
   onRemoveRepo,
   onOpenRepoSettings,
 }: SidebarWorkspaceContentProps) {
+  const deferredLaunchesById = useDeferredHomeLaunchStore((state) => state.launches);
+  const deferredPromptCountByWorkspace = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const launch of Object.values(deferredLaunchesById)) {
+      counts.set(launch.workspaceId, (counts.get(launch.workspaceId) ?? 0) + 1);
+    }
+    return counts;
+  }, [deferredLaunchesById]);
+
   if (isLoading && emptyState === "noWorkspaces") {
     return <SidebarLoadingState />;
   }
@@ -191,6 +202,7 @@ export function SidebarWorkspaceContent({
                 cloudStatus={item.cloudStatus}
                 lastInteracted={item.lastInteracted}
                 unread={item.unread}
+                pendingPromptCount={deferredPromptCountByWorkspace.get(item.id) ?? 0}
                 onSelect={() => onSelectWorkspace(item.id)}
                 onArchive={item.archived ? undefined : () => onArchiveWorkspace(item.id)}
                 onUnarchive={item.archived ? () => onUnarchiveWorkspace(item.id) : undefined}

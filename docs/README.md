@@ -55,6 +55,9 @@ start of the task, not after implementation has already started.
 
 ## Deployment and environment reference
 
+- `docs/reference/dev-profiles.md`
+  - local multi-worktree `make dev PROFILE=<name>` workflow, profile state,
+    port allocation, and generated Tauri runner behavior
 - `docs/reference/deployment-self-hosting.md`
   - complete setup runbook for every deployment mode (local dev, self-hosted,
     AWS CloudFormation, production)

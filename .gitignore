@@ -60,6 +60,7 @@ desktop/src/lib/domain/chat/__fixtures__/recorded/
 # Scratch files
 context.md
 email.tsx
+codex/
 /*.txt
 
 # Lock files not managed by workspace

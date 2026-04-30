@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SHORTCUTS } from "@/config/shortcuts";
+import { COMPOSER_SHORTCUTS, SHORTCUTS } from "@/config/shortcuts";
 import {
   getShortcutDisplayLabel,
   isTextEntryTarget,
@@ -132,6 +132,17 @@ describe("shortcut matching", () => {
         altKey: false,
       } as KeyboardEvent,
     )).toBeNull();
+  });
+
+  it("uses platform-specific composer shortcut labels", () => {
+    expect(getShortcutDisplayLabel(COMPOSER_SHORTCUTS.submitMessage)).toBe("↵ / Ctrl+Enter");
+
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+
+    expect(getShortcutDisplayLabel(COMPOSER_SHORTCUTS.submitMessage)).toBe("↵ / ⌘↵");
   });
 });
 

@@ -6,6 +6,7 @@ export type LatencyFlowKind =
   | "session_restore"
   | "session_switch"
   | "workspace_switch"
+  | "cloud_workspace_create"
   | "worktree_enter";
 
 export type LatencyFlowStage =

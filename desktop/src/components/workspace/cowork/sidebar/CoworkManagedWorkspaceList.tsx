@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type {
   CoworkCodingSessionSummary,
   CoworkManagedWorkspaceSummary,
@@ -8,8 +9,12 @@ import {
   ChevronDown,
   ChevronRight,
 } from "@/components/ui/icons";
+import { PopoverButton } from "@/components/ui/PopoverButton";
+import { SessionTitleRenamePopover } from "@/components/workspace/shell/SessionTitleRenamePopover";
 import { SidebarRowSurface } from "@/components/workspace/shell/sidebar/SidebarRowSurface";
+import { useCoworkSessionActions } from "@/hooks/cowork/use-cowork-session-actions";
 import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
+import { CoworkSessionActionsMenu } from "./CoworkSessionActionsMenu";
 
 function workspaceLabel(workspace: CoworkManagedWorkspaceSummary, index: number): string {
   return workspace.label?.trim()
@@ -43,7 +48,7 @@ function completionOutcomeLabel(outcome: string): string {
         : "Updated";
 }
 
-function CoworkCodingSessionRow({
+function CoworkCodingSessionRowSurface({
   session,
   workspaceId,
   index,
@@ -60,10 +65,7 @@ function CoworkCodingSessionRow({
   return (
     <SidebarRowSurface
       active={active}
-      onPress={() => onOpenSession({
-        workspaceId,
-        sessionId: session.codingSessionId,
-      })}
+      onPress={() => onOpenSession({ workspaceId, sessionId: session.codingSessionId })}
       className="h-[30px] pl-2 pr-1 py-1 focus-visible:outline-offset-[-2px]"
       data-telemetry-mask="true"
     >
@@ -87,9 +89,80 @@ function CoworkCodingSessionRow({
   );
 }
 
+function CoworkCodingSessionRow({
+  session,
+  workspaceId,
+  parentSessionId,
+  index,
+  active,
+  onOpenSession,
+}: {
+  session: CoworkCodingSessionSummary;
+  workspaceId: string;
+  parentSessionId: string;
+  index: number;
+  active: boolean;
+  onOpenSession: (input: { workspaceId: string; sessionId: string }) => void;
+}) {
+  const [renaming, setRenaming] = useState(false);
+  const { renameCodingSession, archiveCodingSession } = useCoworkSessionActions();
+
+  const rowSurface = (
+    <CoworkCodingSessionRowSurface
+      session={session}
+      workspaceId={workspaceId}
+      index={index}
+      active={active}
+      onOpenSession={onOpenSession}
+    />
+  );
+
+  return (
+    <PopoverButton
+      triggerMode="contextMenu"
+      className="w-44 rounded-lg border border-border bg-popover p-1 shadow-floating"
+      trigger={
+        <div className="min-w-0" data-telemetry-mask="true">
+          <SessionTitleRenamePopover
+            currentTitle={sessionLabel(session, index)}
+            trigger={<div className="min-w-0">{rowSurface}</div>}
+            triggerMode="doubleClick"
+            externalOpen={renaming}
+            onOpenChange={setRenaming}
+            onRename={(title) => renameCodingSession({
+              sessionId: session.codingSessionId,
+              workspaceId,
+              title,
+              parentSessionId,
+            })}
+          />
+        </div>
+      }
+    >
+      {(close) => (
+        <CoworkSessionActionsMenu
+          onRename={() => {
+            close();
+            setRenaming(true);
+          }}
+          onArchive={() => {
+            close();
+            void archiveCodingSession({
+              sessionId: session.codingSessionId,
+              workspaceId,
+              parentSessionId,
+            });
+          }}
+        />
+      )}
+    </PopoverButton>
+  );
+}
+
 function CoworkManagedWorkspaceBlock({
   workspace,
   index,
+  parentSessionId,
   selectedWorkspaceId,
   activeSessionId,
   expanded,
@@ -99,6 +172,7 @@ function CoworkManagedWorkspaceBlock({
 }: {
   workspace: CoworkManagedWorkspaceSummary;
   index: number;
+  parentSessionId: string;
   selectedWorkspaceId: string | null;
   activeSessionId: string | null;
   expanded: boolean;
@@ -155,6 +229,7 @@ function CoworkManagedWorkspaceBlock({
               key={session.sessionLinkId}
               session={session}
               workspaceId={workspace.workspaceId}
+              parentSessionId={parentSessionId}
               index={sessionIndex}
               active={
                 selectedWorkspaceId === workspace.workspaceId
@@ -172,6 +247,7 @@ function CoworkManagedWorkspaceBlock({
 interface CoworkManagedWorkspaceListProps {
   workspaces: CoworkManagedWorkspaceSummary[];
   isLoading: boolean;
+  parentSessionId: string;
   selectedWorkspaceId: string | null;
   activeSessionId: string | null;
   expandedWorkspaces: Set<string>;
@@ -183,6 +259,7 @@ interface CoworkManagedWorkspaceListProps {
 export function CoworkManagedWorkspaceList({
   workspaces,
   isLoading,
+  parentSessionId,
   selectedWorkspaceId,
   activeSessionId,
   expandedWorkspaces,
@@ -206,6 +283,7 @@ export function CoworkManagedWorkspaceList({
           key={workspace.ownershipId}
           workspace={workspace}
           index={index}
+          parentSessionId={parentSessionId}
           selectedWorkspaceId={selectedWorkspaceId}
           activeSessionId={activeSessionId}
           expanded={expandedWorkspaces.has(workspace.ownershipId)}

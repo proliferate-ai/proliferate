@@ -25,6 +25,24 @@ const KNOWN_ENV_VARS: &[&str] = &[
     "AMP_API_KEY",
 ];
 
+fn dev_profile() -> Option<String> {
+    if std::env::var_os("PROLIFERATE_DEV").is_none() {
+        return None;
+    }
+
+    std::env::var("PROLIFERATE_DEV_PROFILE")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn profile_scoped_account(base: &str) -> String {
+    match dev_profile() {
+        Some(profile) => format!("{base}:{profile}"),
+        None => base.to_string(),
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthSessionRecord {
     pub access_token: String,
@@ -302,7 +320,8 @@ pub async fn delete_env_var_secret(name: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn get_auth_session() -> Result<Option<AuthSessionRecord>, String> {
-    match read_password(AUTH_SERVICE, AUTH_SESSION_ACCOUNT)? {
+    let account = profile_scoped_account(AUTH_SESSION_ACCOUNT);
+    match read_password(AUTH_SERVICE, &account)? {
         Some(raw) => serde_json::from_str(&raw)
             .map(Some)
             .map_err(|e| e.to_string()),
@@ -313,17 +332,22 @@ pub async fn get_auth_session() -> Result<Option<AuthSessionRecord>, String> {
 #[tauri::command]
 pub async fn set_auth_session(session: AuthSessionRecord) -> Result<(), String> {
     let raw = serde_json::to_string(&session).map_err(|e| e.to_string())?;
-    set_password(AUTH_SERVICE, AUTH_SESSION_ACCOUNT, &raw)
+    set_password(
+        AUTH_SERVICE,
+        &profile_scoped_account(AUTH_SESSION_ACCOUNT),
+        &raw,
+    )
 }
 
 #[tauri::command]
 pub async fn clear_auth_session() -> Result<(), String> {
-    delete_password(AUTH_SERVICE, AUTH_SESSION_ACCOUNT)
+    delete_password(AUTH_SERVICE, &profile_scoped_account(AUTH_SESSION_ACCOUNT))
 }
 
 #[tauri::command]
 pub async fn get_pending_auth() -> Result<Option<PendingAuthRecord>, String> {
-    match read_password(AUTH_SERVICE, PENDING_AUTH_ACCOUNT)? {
+    let account = profile_scoped_account(PENDING_AUTH_ACCOUNT);
+    match read_password(AUTH_SERVICE, &account)? {
         Some(raw) => serde_json::from_str(&raw)
             .map(Some)
             .map_err(|e| e.to_string()),
@@ -334,12 +358,16 @@ pub async fn get_pending_auth() -> Result<Option<PendingAuthRecord>, String> {
 #[tauri::command]
 pub async fn set_pending_auth(record: PendingAuthRecord) -> Result<(), String> {
     let raw = serde_json::to_string(&record).map_err(|e| e.to_string())?;
-    set_password(AUTH_SERVICE, PENDING_AUTH_ACCOUNT, &raw)
+    set_password(
+        AUTH_SERVICE,
+        &profile_scoped_account(PENDING_AUTH_ACCOUNT),
+        &raw,
+    )
 }
 
 #[tauri::command]
 pub async fn clear_pending_auth() -> Result<(), String> {
-    delete_password(AUTH_SERVICE, PENDING_AUTH_ACCOUNT)
+    delete_password(AUTH_SERVICE, &profile_scoped_account(PENDING_AUTH_ACCOUNT))
 }
 
 #[tauri::command]

@@ -168,7 +168,11 @@ export function useWorkspaceSidebarActions() {
     }
 
     navigateToWorkspaceShell();
-    void createCloudWorkspaceAndEnter(target, { repoGroupKeyToExpand });
+    const latencyFlowId = startLatencyFlow({
+      flowKind: "cloud_workspace_create",
+      source: "sidebar",
+    });
+    void createCloudWorkspaceAndEnter(target, { latencyFlowId, repoGroupKeyToExpand });
   }, [
     createCloudWorkspaceAndEnter,
     isCreatingCloudWorkspace,

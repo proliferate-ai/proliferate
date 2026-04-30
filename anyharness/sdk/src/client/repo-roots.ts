@@ -6,6 +6,7 @@ import type {
   RepoRoot,
   ResolveRepoRootFromPathRequest,
 } from "../types/repo-roots.js";
+import type { ReadWorkspaceFileResponse } from "../types/files.js";
 import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
 
 export class RepoRootsClient {
@@ -36,6 +37,12 @@ export class RepoRootsClient {
     return this.transport.get<GitBranchRef[]>(
       `/v1/repo-roots/${encodeURIComponent(repoRootId)}/git/branches`,
       options,
+    );
+  }
+
+  async readFile(repoRootId: string, path: string): Promise<ReadWorkspaceFileResponse> {
+    return this.transport.get<ReadWorkspaceFileResponse>(
+      `/v1/repo-roots/${encodeURIComponent(repoRootId)}/files/file?path=${encodeURIComponent(path)}`,
     );
   }
 
