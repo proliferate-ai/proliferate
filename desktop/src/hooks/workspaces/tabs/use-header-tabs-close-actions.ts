@@ -1,103 +1,93 @@
 import { useCallback } from "react";
 import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
-import { resolveChatTabContextMenuSessionIds } from "@/lib/domain/workspaces/tabs/context-menu";
+import {
+  isSameWorkspaceShellTab,
+  type WorkspaceShellTab,
+} from "@/lib/domain/workspaces/tabs/shell-tabs";
 import type {
-  MainTab,
   WorkspaceFileBuffer,
 } from "@/stores/editor/workspace-files-store";
 
 export function useHeaderTabsCloseActions({
-  activeMainTab,
-  activeSessionId,
-  openTabs,
-  stripChatSessionIds,
+  activeShellTab,
+  orderedTabs,
   buffersByPath,
   closeTab,
   hideChatSessionTabs,
-  clearSelection,
 }: {
-  activeMainTab: MainTab;
-  activeSessionId: string | null;
-  openTabs: string[];
-  stripChatSessionIds: string[];
+  activeShellTab: WorkspaceShellTab | null;
+  orderedTabs: WorkspaceShellTab[];
   buffersByPath: Record<string, WorkspaceFileBuffer>;
   closeTab: (path: string) => void;
   hideChatSessionTabs: (
     sessionIds: string[],
     options?: { selectFallback?: boolean },
   ) => boolean;
-  clearSelection: () => void;
 }) {
-  const closeRenderedChatTabsToRight = useCallback((anchorSessionId: string) => {
-    const idsToClose = resolveChatTabContextMenuSessionIds(
-      stripChatSessionIds,
-      anchorSessionId,
-      "close-right",
-    );
-    if (idsToClose.length === 0) {
-      return true;
-    }
-    clearSelection();
-    return hideChatSessionTabs(idsToClose, { selectFallback: true });
-  }, [clearSelection, hideChatSessionTabs, stripChatSessionIds]);
-
-  const closeOtherRenderedChatTabs = useCallback((anchorSessionId: string) => {
-    const idsToClose = resolveChatTabContextMenuSessionIds(
-      stripChatSessionIds,
-      anchorSessionId,
-      "close-others",
-    );
-    if (idsToClose.length === 0) {
-      return true;
-    }
-    clearSelection();
-    return hideChatSessionTabs(idsToClose, { selectFallback: true });
-  }, [clearSelection, hideChatSessionTabs, stripChatSessionIds]);
-
   const closeFilePaths = useCallback((paths: string[]) => {
     const dirtyPaths = paths.filter((path) => buffersByPath[path]?.isDirty);
     if (
       dirtyPaths.length > 0
       && !window.confirm("Discard unsaved changes in the selected tabs?")
     ) {
-      return;
+      return false;
     }
     paths.forEach((path) => closeTab(path));
+    return true;
   }, [buffersByPath, closeTab]);
 
-  useShortcutHandler("workspace.close-other-tabs", () => {
-    if (activeMainTab.kind === "file") {
-      closeFilePaths(openTabs.filter((path) => path !== activeMainTab.path));
-      return true;
-    }
-
-    if (!activeSessionId) {
+  const closeWorkspaceTabs = useCallback((tabs: WorkspaceShellTab[]) => {
+    const filePaths = tabs
+      .filter((tab): tab is Extract<WorkspaceShellTab, { kind: "file" }> => tab.kind === "file")
+      .map((tab) => tab.path);
+    if (!closeFilePaths(filePaths)) {
       return false;
     }
 
-    return closeOtherRenderedChatTabs(activeSessionId);
+    const chatSessionIds = tabs
+      .filter((tab): tab is Extract<WorkspaceShellTab, { kind: "chat" }> => tab.kind === "chat")
+      .map((tab) => tab.sessionId);
+    if (chatSessionIds.length > 0) {
+      return hideChatSessionTabs(chatSessionIds, { selectFallback: true });
+    }
+    return true;
+  }, [closeFilePaths, hideChatSessionTabs]);
+
+  const closeOtherWorkspaceTabs = useCallback((anchorTab: WorkspaceShellTab) => {
+    return closeWorkspaceTabs(
+      orderedTabs.filter((tab) => !isSameWorkspaceShellTab(tab, anchorTab)),
+    );
+  }, [closeWorkspaceTabs, orderedTabs]);
+
+  const closeWorkspaceTabsToRight = useCallback((anchorTab: WorkspaceShellTab) => {
+    const index = orderedTabs.findIndex((tab) =>
+      isSameWorkspaceShellTab(tab, anchorTab)
+    );
+    if (index < 0) {
+      return false;
+    }
+    return closeWorkspaceTabs(orderedTabs.slice(index + 1));
+  }, [closeWorkspaceTabs, orderedTabs]);
+
+  useShortcutHandler("workspace.close-other-tabs", () => {
+    if (!activeShellTab) {
+      return false;
+    }
+
+    return closeOtherWorkspaceTabs(activeShellTab);
   });
 
   useShortcutHandler("workspace.close-tabs-to-right", () => {
-    if (activeMainTab.kind === "file") {
-      const index = openTabs.indexOf(activeMainTab.path);
-      if (index < 0) {
-        return false;
-      }
-      closeFilePaths(openTabs.slice(index + 1));
-      return true;
-    }
-
-    if (!activeSessionId) {
+    if (!activeShellTab) {
       return false;
     }
 
-    return closeRenderedChatTabsToRight(activeSessionId);
+    return closeWorkspaceTabsToRight(activeShellTab);
   });
 
   return {
     closeFilePaths,
-    closeOtherRenderedChatTabs,
-    closeRenderedChatTabsToRight,
+    closeOtherWorkspaceTabs,
+    closeWorkspaceTabsToRight,
   };
 }

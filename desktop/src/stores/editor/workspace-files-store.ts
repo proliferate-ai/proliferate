@@ -20,8 +20,6 @@ export interface WorkspaceFileBuffer {
   lastError?: string | null;
 }
 
-export type MainTab = { kind: "chat" } | { kind: "file"; path: string };
-
 interface WorkspaceFilesState {
   workspaceId: string | null;
   runtimeWorkspaceId: string | null;
@@ -34,7 +32,6 @@ interface WorkspaceFilesState {
   directoryLoadStateByPath: Record<string, FileLoadState>;
 
   openTabs: string[];
-  activeMainTab: MainTab;
   activeFilePath: string | null;
   buffersByPath: Record<string, WorkspaceFileBuffer>;
   tabModes: Record<string, "edit" | "diff">;
@@ -57,7 +54,6 @@ interface WorkspaceFilesState {
   reorderOpenTabs: (orderedPaths: string[]) => void;
   setActiveTab: (filePath: string) => void;
   setTabMode: (filePath: string, mode: "edit" | "diff") => void;
-  activateChatTab: () => void;
   setBufferLoading: (filePath: string) => void;
   setBufferLoaded: (filePath: string, result: ReadWorkspaceFileResponse) => void;
   setBufferLoadError: (filePath: string, error: string) => void;
@@ -75,7 +71,6 @@ function emptyFilesState() {
     directoryEntriesByPath: {} as Record<string, WorkspaceFileEntry[]>,
     directoryLoadStateByPath: {} as Record<string, FileLoadState>,
     openTabs: [] as string[],
-    activeMainTab: { kind: "chat" } as MainTab,
     activeFilePath: null as string | null,
     buffersByPath: {} as Record<string, WorkspaceFileBuffer>,
     tabModes: {} as Record<string, "edit" | "diff">,
@@ -189,26 +184,16 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesState>((set, get) => 
     set({
       openTabs,
       activeFilePath: filePath,
-      activeMainTab: { kind: "file", path: filePath },
     });
   },
 
   closeTab: (filePath) => {
-    const { openTabs, activeFilePath, activeMainTab, buffersByPath } = get();
+    const { openTabs, activeFilePath, buffersByPath } = get();
     const nextTabs = openTabs.filter((t) => t !== filePath);
-
-    const wasActive =
-      activeMainTab.kind === "file" && activeMainTab.path === filePath;
 
     const nextActive = activeFilePath === filePath
       ? nextTabs[nextTabs.length - 1] ?? null
       : activeFilePath;
-
-    const nextMainTab: MainTab = wasActive
-      ? nextActive
-        ? { kind: "file", path: nextActive }
-        : { kind: "chat" }
-      : activeMainTab;
 
     const nextBuffers = { ...buffersByPath };
     delete nextBuffers[filePath];
@@ -221,7 +206,6 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesState>((set, get) => 
     set({
       openTabs: nextTabs,
       activeFilePath: nextActive,
-      activeMainTab: nextMainTab,
       buffersByPath: nextBuffers,
       tabModes: nextModes,
       tabPatches: nextPatches,
@@ -246,7 +230,6 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesState>((set, get) => 
     set({
       openTabs,
       activeFilePath: filePath,
-      activeMainTab: { kind: "file", path: filePath },
       tabModes: { ...get().tabModes, [filePath]: "diff" },
       tabPatches: { ...get().tabPatches, [filePath]: patch },
     });
@@ -272,15 +255,11 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesState>((set, get) => 
   },
 
   setActiveTab: (filePath) => {
-    set({ activeFilePath: filePath, activeMainTab: { kind: "file", path: filePath } });
+    set({ activeFilePath: filePath });
   },
 
   setTabMode: (filePath, mode) => {
     set({ tabModes: { ...get().tabModes, [filePath]: mode } });
-  },
-
-  activateChatTab: () => {
-    set({ activeMainTab: { kind: "chat" } });
   },
 
   setBufferLoaded: (filePath, result) => {

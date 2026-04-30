@@ -7,12 +7,13 @@ import {
   uniqueIds,
 } from "@/lib/domain/workspaces/tabs/visibility";
 import { resolveSessionErrorAttentionKey } from "@/lib/domain/sessions/activity";
+import { chatWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useWorkspaceTabsStore } from "@/stores/workspaces/workspace-tabs-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -34,7 +35,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const activeSessionId = useHarnessStore((state) => state.activeSessionId);
   const setActiveSessionId = useHarnessStore((state) => state.setActiveSessionId);
-  const activateChatTab = useWorkspaceFilesStore((state) => state.activateChatTab);
+  const setActiveShellTabKey = useWorkspaceTabsStore((state) => state.setActiveShellTabKey);
   const setVisibleChatSessionIdsForWorkspace = useWorkspaceUiStore(
     (state) => state.setVisibleChatSessionIdsForWorkspace,
   );
@@ -55,7 +56,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     if (!selectedWorkspaceId) {
       return;
     }
-    activateChatTab();
+    setActiveShellTabKey(selectedWorkspaceId, chatWorkspaceShellTabKey(sessionId));
     const latencyFlowId = startLatencyFlow({
       flowKind: "session_switch",
       source,
@@ -67,7 +68,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
       const message = error instanceof Error ? error.message : String(error);
       showToast(message);
     });
-  }, [activateChatTab, selectSession, selectedWorkspaceId, showToast]);
+  }, [selectSession, selectedWorkspaceId, setActiveShellTabKey, showToast]);
 
   const markErroredSessionsViewedBeforeHide = useCallback((idsToHide: string[]) => {
     if (idsToHide.length === 0) {
@@ -139,6 +140,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
         selectSessionId(fallbackId, "header_tab");
       } else if (activeSessionId && expandedHideSet.has(activeSessionId)) {
         setActiveSessionId(null);
+        setActiveShellTabKey(selectedWorkspaceId, null);
       }
     }
 
@@ -152,6 +154,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     selectSessionId,
     selectedWorkspaceId,
     setActiveSessionId,
+    setActiveShellTabKey,
     setVisibleChatSessionIdsForWorkspace,
   ]);
 

@@ -1,5 +1,3 @@
-import { collectGroupIds } from "@/lib/domain/workspaces/tabs/visibility";
-
 export type DropSide = "before" | "after";
 
 export interface DragLayoutRow {
@@ -13,9 +11,10 @@ export interface DropPlacement {
   side: DropSide;
 }
 
-export type TabDragUnit =
-  | { kind: "topLevel"; ids: string[] }
-  | { kind: "child"; childId: string; parentId: string };
+export interface TabDragUnit {
+  kind: "topLevel";
+  ids: string[];
+}
 
 export function resolveDropSide(args: {
   pointerX: number;
@@ -86,95 +85,20 @@ export function resolveDragOffsetX(args: {
   return args.pointerX - args.grabOffsetX - args.currentLeft;
 }
 
-export function buildChatDragUnit(args: {
-  sourceId: string;
-  orderedIds: string[];
-  childToParent: Map<string, string>;
-}): TabDragUnit | null {
-  if (!args.orderedIds.includes(args.sourceId)) {
-    return null;
-  }
-
-  const parentId = args.childToParent.get(args.sourceId);
-  if (parentId) {
-    return {
-      kind: "child",
-      childId: args.sourceId,
-      parentId,
-    };
-  }
-
-  return {
-    kind: "topLevel",
-    ids: collectGroupIds({
-      rootSessionId: args.sourceId,
-      visibleIds: args.orderedIds,
-      childToParent: args.childToParent,
-    }),
-  };
-}
-
-export function reorderChatTabsByDrag(args: {
-  orderedIds: string[];
-  draggedId: string;
-  targetId: string;
+export function reorderShellTabsByDrag(args: {
+  orderedKeys: string[];
+  draggedKey: string;
+  targetKey: string;
   side: DropSide;
-  childToParent: Map<string, string>;
+  unitsBySourceId: ReadonlyMap<string, readonly string[]>;
 }): string[] {
-  if (args.draggedId === args.targetId) {
-    return args.orderedIds;
-  }
-
-  const draggedUnit = buildChatDragUnit({
-    sourceId: args.draggedId,
-    orderedIds: args.orderedIds,
-    childToParent: args.childToParent,
-  });
-  if (!draggedUnit) {
-    return args.orderedIds;
-  }
-
-  if (draggedUnit.kind === "child") {
-    return reorderChildWithinGroup({
-      orderedIds: args.orderedIds,
-      childId: draggedUnit.childId,
-      parentId: draggedUnit.parentId,
-      targetId: args.targetId,
-      side: args.side,
-      childToParent: args.childToParent,
-    });
-  }
-
-  const targetParentId = args.childToParent.get(args.targetId);
-  const targetRootId = targetParentId ?? args.targetId;
-  const targetIds = collectGroupIds({
-    rootSessionId: targetRootId,
-    visibleIds: args.orderedIds,
-    childToParent: args.childToParent,
-  });
+  const movingIds = args.unitsBySourceId.get(args.draggedKey) ?? [args.draggedKey];
+  const targetIds = args.unitsBySourceId.get(args.targetKey) ?? [args.targetKey];
 
   return moveIdsByPlacement({
-    orderedIds: args.orderedIds,
-    movingIds: draggedUnit.ids,
-    targetIds,
-    side: args.side,
-  });
-}
-
-export function reorderFileTabsByDrag(args: {
-  orderedPaths: string[];
-  draggedPath: string;
-  targetPath: string;
-  side: DropSide;
-}): string[] {
-  if (args.draggedPath === args.targetPath) {
-    return args.orderedPaths;
-  }
-
-  return moveIdsByPlacement({
-    orderedIds: args.orderedPaths,
-    movingIds: [args.draggedPath],
-    targetIds: [args.targetPath],
+    orderedIds: args.orderedKeys,
+    movingIds: [...movingIds],
+    targetIds: [...targetIds],
     side: args.side,
   });
 }
@@ -184,44 +108,6 @@ export function isSameDropPlacement(
   right: DropPlacement | null,
 ): boolean {
   return left?.targetId === right?.targetId && left?.side === right?.side;
-}
-
-function reorderChildWithinGroup(args: {
-  orderedIds: string[];
-  childId: string;
-  parentId: string;
-  targetId: string;
-  side: DropSide;
-  childToParent: Map<string, string>;
-}): string[] {
-  if (args.childToParent.get(args.targetId) !== args.parentId) {
-    return args.orderedIds;
-  }
-
-  const siblingIds = args.orderedIds.filter(
-    (id) => args.childToParent.get(id) === args.parentId,
-  );
-  if (!siblingIds.includes(args.childId) || !siblingIds.includes(args.targetId)) {
-    return args.orderedIds;
-  }
-
-  const nextSiblingIds = moveIdsByPlacement({
-    orderedIds: siblingIds,
-    movingIds: [args.childId],
-    targetIds: [args.targetId],
-    side: args.side,
-  });
-  if (nextSiblingIds === siblingIds) {
-    return args.orderedIds;
-  }
-
-  let siblingIndex = 0;
-  return args.orderedIds.map((id) => {
-    if (args.childToParent.get(id) !== args.parentId) {
-      return id;
-    }
-    return nextSiblingIds[siblingIndex++] ?? id;
-  });
 }
 
 function moveIdsByPlacement(args: {

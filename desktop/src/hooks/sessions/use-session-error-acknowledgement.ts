@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { resolveSessionErrorAttentionKey } from "@/lib/domain/sessions/activity";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { parseWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useWorkspaceTabsStore } from "@/stores/workspaces/workspace-tabs-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 
 function isDocumentVisibleAndFocused(): boolean {
@@ -13,14 +14,19 @@ function isDocumentVisibleAndFocused(): boolean {
 
 export function useSessionErrorAcknowledgement(): void {
   const activeSessionId = useHarnessStore((state) => state.activeSessionId);
+  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const errorAttentionKey = useHarnessStore((state) => {
     const sessionId = state.activeSessionId;
     const slot = sessionId ? state.sessionSlots[sessionId] ?? null : null;
     return resolveSessionErrorAttentionKey(slot);
   });
-  const isChatActiveMainTab = useWorkspaceFilesStore(
-    (state) => state.activeMainTab.kind === "chat",
+  const activeShellTabKey = useWorkspaceTabsStore((state) =>
+    selectedWorkspaceId ? state.activeShellTabKeyByWorkspace[selectedWorkspaceId] ?? null : null
   );
+  const activeShellTab = activeShellTabKey
+    ? parseWorkspaceShellTabKey(activeShellTabKey)
+    : null;
+  const isChatActiveShellTab = activeShellTab?.kind === "chat";
   const markSessionErrorViewed = useWorkspaceUiStore(
     (state) => state.markSessionErrorViewed,
   );
@@ -47,7 +53,7 @@ export function useSessionErrorAcknowledgement(): void {
   }, []);
 
   useEffect(() => {
-    if (!activeSessionId || !isChatActiveMainTab || !errorAttentionKey) {
+    if (!activeSessionId || !isChatActiveShellTab || !errorAttentionKey) {
       return;
     }
     if (!isDocumentVisibleAndFocused()) {
@@ -59,7 +65,7 @@ export function useSessionErrorAcknowledgement(): void {
     activeSessionId,
     errorAttentionKey,
     focusVisibilityNonce,
-    isChatActiveMainTab,
+    isChatActiveShellTab,
     markSessionErrorViewed,
   ]);
 }

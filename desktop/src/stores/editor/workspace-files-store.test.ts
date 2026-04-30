@@ -15,9 +15,6 @@ describe("workspace files tab order", () => {
     useWorkspaceFilesStore.getState().reorderOpenTabs(["c.ts", "a.ts", "b.ts"]);
 
     expect(useWorkspaceFilesStore.getState().openTabs).toEqual(["c.ts", "a.ts", "b.ts"]);
-    expect(useWorkspaceFilesStore.getState().activeMainTab).toEqual({
-      kind: "file",
-      path: "c.ts",
-    });
+    expect(useWorkspaceFilesStore.getState().activeFilePath).toBe("c.ts");
   });
 });

@@ -15,6 +15,9 @@ import {
   type HeaderStripRow,
 } from "@/lib/domain/workspaces/tabs/group-rows";
 import {
+  type HeaderShellStripRow,
+} from "@/lib/domain/workspaces/tabs/shell-rows";
+import {
   deriveManualChatGroupsForDisplay,
   isManualChatGroupId,
   normalizeManualChatGroupsForMutation,
@@ -33,6 +36,10 @@ import {
 } from "@/lib/domain/sessions/activity";
 import { getEffectiveSessionTitle } from "@/lib/domain/sessions/title";
 import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
+import {
+  useWorkspaceActiveChatTabId,
+  useWorkspaceShellTabsState,
+} from "@/hooks/workspaces/tabs/use-workspace-shell-tabs-state";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore, type SessionSlot } from "@/stores/sessions/harness-store";
@@ -60,9 +67,9 @@ export interface HeaderChatMenuEntry {
 }
 
 export type HeaderChatStripRow = HeaderStripRow<HeaderChatTabEntry>;
+export type HeaderWorkspaceShellStripRow = HeaderShellStripRow<HeaderChatTabEntry>;
 
 export function useWorkspaceHeaderTabsViewModel() {
-  const activeMainTab = useWorkspaceFilesStore((s) => s.activeMainTab);
   const openTabs = useWorkspaceFilesStore((s) => s.openTabs);
   const buffersByPath = useWorkspaceFilesStore((s) => s.buffersByPath);
   const tabModes = useWorkspaceFilesStore((s) => s.tabModes);
@@ -154,6 +161,10 @@ export function useWorkspaceHeaderTabsViewModel() {
   const persistedManualGroups = selectedWorkspaceId
     ? manualGroupsByWorkspace[selectedWorkspaceId] ?? []
     : [];
+  const activeChatSessionIdForTabs = useWorkspaceActiveChatTabId({
+    selectedWorkspaceId,
+    fallbackSessionId: activeSessionId,
+  });
   const persistedVisibleIdsForResolution = useMemo(
     () => persistedVisibleIds?.filter((sessionId) =>
       sessionId === activeSessionId || !hierarchyChildren.rowsBySessionId.has(sessionId)
@@ -260,7 +271,6 @@ export function useWorkspaceHeaderTabsViewModel() {
     }
     return map;
   }, [displayManualGroups]);
-  const isChatActive = activeMainTab.kind === "chat";
   const chatTabs = useMemo<HeaderChatTabEntry[]>(
     () => groupedTabs
       .map((grouped) => {
@@ -287,7 +297,7 @@ export function useWorkspaceHeaderTabsViewModel() {
             ? getKnownSessionViewState(known)
             : getLinkedChildViewState(hierarchyChild!),
           isReviewAgentChild: hierarchyChild?.source === "review",
-          isActive: isChatActive && grouped.sessionId === activeSessionId,
+          isActive: grouped.sessionId === activeChatSessionIdForTabs,
           groupColor,
           visualGroupId: manualGroup?.id ?? (subagentGroupColor ? grouped.groupRootSessionId : null),
           manualGroupId: manualGroup?.id ?? null,
@@ -296,12 +306,11 @@ export function useWorkspaceHeaderTabsViewModel() {
       })
       .filter((tab): tab is HeaderChatTabEntry => !!tab),
     [
-      activeSessionId,
+      activeChatSessionIdForTabs,
       groupedTabs,
       hierarchyChildren.rowsBySessionId,
       hierarchy.childrenByParentSessionId,
       hierarchy.resolvedSessionIds,
-      isChatActive,
       knownSessions,
       manualGroupByTopLevelSessionId,
     ],
@@ -333,6 +342,21 @@ export function useWorkspaceHeaderTabsViewModel() {
       .map((row) => row.tab.sessionId),
     [stripRows],
   );
+  const {
+    activeShellTab,
+    activeShellTabKey,
+    shellRows,
+    orderedTabs,
+    orderedShellTabKeys,
+  } = useWorkspaceShellTabsState({
+    selectedWorkspaceId,
+    activeSessionId,
+    shellChatSessionIds: stripVisibleChatSessionIds,
+    openTabs,
+    stripRows,
+    displayManualGroups,
+    subagentChildIdsByParentId: hierarchyChildren.childIdsByParentSessionId,
+  });
 
   useEffect(() => {
     if (!selectedWorkspaceId || collapsedParentIds.length === 0) {
@@ -406,28 +430,31 @@ export function useWorkspaceHeaderTabsViewModel() {
           title: getKnownSessionTitle(known),
           agentKind: getKnownSessionAgentKind(known),
           viewState: getKnownSessionViewState(known),
-          isActive: isChatActive && id === activeSessionId,
+          isActive: id === activeChatSessionIdForTabs,
           isVisible: visibleChatSessionIds.includes(id),
         };
       }),
     [
-      activeSessionId,
+      activeChatSessionIdForTabs,
       hierarchy.childToParent,
-      isChatActive,
       knownSessions,
       visibleChatSessionIds,
     ],
   );
 
   return {
-    activeMainTab,
     activeSessionId,
+    activeShellTab,
+    activeShellTabKey,
     selectedWorkspaceId,
     openTabs,
     buffersByPath,
     tabModes,
     chatTabs,
     stripRows,
+    shellRows,
+    orderedTabs,
+    orderedShellTabKeys,
     stripChatSessionIds,
     menuChatTabs,
     visibleChatSessionIds,

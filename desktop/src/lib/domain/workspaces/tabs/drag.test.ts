@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildChatDragUnit,
   isSameDropPlacement,
-  reorderChatTabsByDrag,
-  reorderFileTabsByDrag,
+  reorderShellTabsByDrag,
   resolveDragOffsetX,
   resolveDropSide,
   resolveDropTarget,
@@ -55,103 +53,44 @@ describe("drop geometry", () => {
   });
 });
 
-describe("chat tab drag reorder", () => {
-  const childToParent = new Map([
-    ["a-child-1", "a"],
-    ["a-child-2", "a"],
-    ["b-child", "b"],
-  ]);
-
-  it("builds a top-level group unit from a parent or collapsed pill source", () => {
-    expect(buildChatDragUnit({
-      sourceId: "a",
-      orderedIds: ["x", "a", "a-child-1", "a-child-2", "z"],
-      childToParent,
-    })).toEqual({
-      kind: "topLevel",
-      ids: ["a", "a-child-1", "a-child-2"],
-    });
+describe("shell tab drag reorder", () => {
+  it("moves standalone shell keys independently", () => {
+    expect(reorderShellTabsByDrag({
+      orderedKeys: ["chat:a", "file:a.ts", "file:b.ts"],
+      draggedKey: "file:b.ts",
+      targetKey: "chat:a",
+      side: "before",
+      unitsBySourceId: new Map(),
+    })).toEqual(["file:b.ts", "chat:a", "file:a.ts"]);
   });
 
-  it("builds a child unit for child tabs", () => {
-    expect(buildChatDragUnit({
-      sourceId: "a-child-1",
-      orderedIds: ["a", "a-child-1", "a-child-2"],
-      childToParent,
-    })).toEqual({
-      kind: "child",
-      childId: "a-child-1",
-      parentId: "a",
-    });
-  });
+  it("moves grouped chat keys as an atomic shell slice", () => {
+    const unitsBySourceId = new Map<string, readonly string[]>([
+      ["chat:a", ["chat:a", "chat:b"]],
+      ["file:src/a.ts", ["file:src/a.ts"]],
+    ]);
 
-  it("moves a group as a contiguous slice", () => {
-    expect(reorderChatTabsByDrag({
-      orderedIds: ["a", "a-child-1", "a-child-2", "b", "c"],
-      draggedId: "a",
-      targetId: "c",
+    expect(reorderShellTabsByDrag({
+      orderedKeys: ["chat:a", "chat:b", "file:src/a.ts"],
+      draggedKey: "chat:a",
+      targetKey: "file:src/a.ts",
       side: "after",
-      childToParent,
-    })).toEqual(["b", "c", "a", "a-child-1", "a-child-2"]);
+      unitsBySourceId,
+    })).toEqual(["file:src/a.ts", "chat:a", "chat:b"]);
   });
 
-  it("moves a collapsed group using the full persisted group slice", () => {
-    expect(reorderChatTabsByDrag({
-      orderedIds: ["a", "a-child-1", "a-child-2", "b", "c"],
-      draggedId: "a",
-      targetId: "b",
-      side: "after",
-      childToParent,
-    })).toEqual(["b", "a", "a-child-1", "a-child-2", "c"]);
-  });
+  it("snaps drops on grouped chat members outside the full shell slice", () => {
+    const unitsBySourceId = new Map<string, readonly string[]>([
+      ["chat:a", ["chat:a", "chat:b"]],
+      ["file:src/a.ts", ["file:src/a.ts"]],
+    ]);
 
-  it("does not split a group when dragging a standalone tab around a child target", () => {
-    expect(reorderChatTabsByDrag({
-      orderedIds: ["x", "a", "a-child-1", "a-child-2", "z"],
-      draggedId: "x",
-      targetId: "a-child-2",
-      side: "after",
-      childToParent,
-    })).toEqual(["a", "a-child-1", "a-child-2", "x", "z"]);
-  });
-
-  it("reorders a child only among siblings in the same group", () => {
-    expect(reorderChatTabsByDrag({
-      orderedIds: ["a", "a-child-1", "a-child-2", "b", "b-child"],
-      draggedId: "a-child-2",
-      targetId: "a-child-1",
+    expect(reorderShellTabsByDrag({
+      orderedKeys: ["chat:a", "chat:b", "file:src/a.ts"],
+      draggedKey: "file:src/a.ts",
+      targetKey: "chat:a",
       side: "before",
-      childToParent,
-    })).toEqual(["a", "a-child-2", "a-child-1", "b", "b-child"]);
-  });
-
-  it("ignores child drops outside the same group", () => {
-    const orderedIds = ["a", "a-child-1", "a-child-2", "b", "b-child"];
-    expect(reorderChatTabsByDrag({
-      orderedIds,
-      draggedId: "a-child-2",
-      targetId: "b-child",
-      side: "before",
-      childToParent,
-    })).toBe(orderedIds);
-
-    expect(reorderChatTabsByDrag({
-      orderedIds,
-      draggedId: "a-child-2",
-      targetId: "b",
-      side: "before",
-      childToParent,
-    })).toBe(orderedIds);
-  });
-});
-
-describe("file tab drag reorder", () => {
-  it("reorders file tabs independently", () => {
-    expect(reorderFileTabsByDrag({
-      orderedPaths: ["a.ts", "b.ts", "c.ts"],
-      draggedPath: "c.ts",
-      targetPath: "a.ts",
-      side: "before",
-    })).toEqual(["c.ts", "a.ts", "b.ts"]);
+      unitsBySourceId,
+    })).toEqual(["file:src/a.ts", "chat:a", "chat:b"]);
   });
 });

@@ -24,8 +24,7 @@ import { useResizeObserverWidth } from "@/hooks/ui/use-resize-observer-width";
 import { useHeaderTabsCloseActions } from "@/hooks/workspaces/tabs/use-header-tabs-close-actions";
 import { useHeaderTabsGroupEditor } from "@/hooks/workspaces/tabs/use-header-tabs-group-editor";
 import {
-  getChatDragRowId,
-  getFileDragRowId,
+  getShellDragRowId,
   useHeaderTabsLayout,
 } from "@/hooks/workspaces/tabs/use-header-tabs-layout";
 import {
@@ -36,17 +35,18 @@ import {
 import { useManualChatGroupActions } from "@/hooks/workspaces/tabs/use-manual-chat-group-actions";
 import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
 import { useTabGroupActions } from "@/hooks/workspaces/tabs/use-tab-group-actions";
-import {
-  useChatTabDrag,
-  useFileTabDrag,
-} from "@/hooks/workspaces/tabs/use-tab-drag";
+import { useShellTabOrderActions } from "@/hooks/workspaces/tabs/use-shell-tab-order-actions";
+import { useShellTabDrag } from "@/hooks/workspaces/tabs/use-tab-drag";
 import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
 import { useWorkspaceTabActions } from "@/hooks/workspaces/use-workspace-tab-actions";
 import {
   TAB_GROUP_PILL_WIDTH,
 } from "@/lib/domain/workspaces/tabs/chrome-layout";
+import {
+  fileWorkspaceShellTabKey,
+} from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useWorkspaceTabsStore } from "@/stores/workspaces/workspace-tabs-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function HeaderTabs() {
@@ -66,16 +66,15 @@ export function HeaderTabs() {
     removeSessions: removeSessionsFromManualChatGroups,
   } = useManualChatGroupActions();
 
-  const setVisibleChatSessionIdsForWorkspace = useWorkspaceUiStore(
-    (state) => state.setVisibleChatSessionIdsForWorkspace,
-  );
   const closeTab = useWorkspaceFilesStore((state) => state.closeTab);
   const setActiveTab = useWorkspaceFilesStore((state) => state.setActiveTab);
-  const reorderOpenTabs = useWorkspaceFilesStore((state) => state.reorderOpenTabs);
+  const setActiveShellTabKey = useWorkspaceTabsStore((state) => state.setActiveShellTabKey);
 
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
-  const chatStrip = useResizeObserverWidth<HTMLDivElement>();
-  const fileStrip = useResizeObserverWidth<HTMLDivElement>();
+  const shellStrip = useResizeObserverWidth<HTMLDivElement>();
+  const shellTabOrderActions = useShellTabOrderActions({
+    workspaceId: viewModel.selectedWorkspaceId,
+  });
 
   useShortcutHandler("session.rename", () => {
     if (viewModel.activeSessionId) {
@@ -95,16 +94,13 @@ export function HeaderTabs() {
   });
 
   const {
-    chatLayout,
+    layout,
     chatGroupUnderlines,
-    chatDragRows,
-    fileLayout,
-    fileDragRows,
+    dragRows,
+    dragUnitsBySourceId,
   } = useHeaderTabsLayout({
-    chatWidth: chatStrip.width,
-    fileWidth: fileStrip.width,
-    stripRows: viewModel.stripRows,
-    openTabs: viewModel.openTabs,
+    width: shellStrip.width,
+    shellRows: viewModel.shellRows,
   });
 
   const dismissChatSession = useCallback((sessionId: string) => {
@@ -127,46 +123,32 @@ export function HeaderTabs() {
 
   const {
     closeFilePaths,
-    closeOtherRenderedChatTabs,
-    closeRenderedChatTabsToRight,
+    closeOtherWorkspaceTabs,
+    closeWorkspaceTabsToRight,
   } = useHeaderTabsCloseActions({
-    activeMainTab: viewModel.activeMainTab,
-    activeSessionId: viewModel.activeSessionId,
-    openTabs: viewModel.openTabs,
-    stripChatSessionIds: viewModel.stripChatSessionIds,
+    activeShellTab: viewModel.activeShellTab,
+    orderedTabs: viewModel.orderedTabs,
     buffersByPath: viewModel.buffersByPath,
     closeTab,
     hideChatSessionTabs: chatVisibilityActions.hideChatSessionTabs,
-    clearSelection: multiSelect.clearSelection,
   });
 
-  const chatDrag = useChatTabDrag({
-    stripRef: chatStrip.ref,
-    rows: chatDragRows,
-    orderedIds: viewModel.visibleChatSessionIds,
-    childToParent: viewModel.childToParent,
+  const shellDrag = useShellTabDrag({
+    stripRef: shellStrip.ref,
+    rows: dragRows,
+    orderedIds: viewModel.orderedShellTabKeys,
+    unitsBySourceId: dragUnitsBySourceId,
     onDragStart: multiSelect.clearSelection,
-    onReorder: (nextIds) => {
-      if (!viewModel.selectedWorkspaceId) {
-        return;
-      }
-      setVisibleChatSessionIdsForWorkspace(viewModel.selectedWorkspaceId, nextIds);
-    },
-  });
-  const fileDrag = useFileTabDrag({
-    stripRef: fileStrip.ref,
-    rows: fileDragRows,
-    orderedIds: viewModel.openTabs,
-    onReorder: reorderOpenTabs,
+    onReorder: shellTabOrderActions.reorderShellTabs,
   });
 
   return (
     <div className="flex h-full min-w-0 flex-1 items-end gap-1 overflow-hidden px-1">
       <WorkspaceTabStrip
-        label="Chat tabs"
-        stripRef={chatStrip.ref}
-        className="h-9 flex-[2_1_0%]"
-        {...chatDrag.stripDragProps}
+        label="Workspace tabs"
+        stripRef={shellStrip.ref}
+        className="h-9 min-w-0 flex-1"
+        {...shellDrag.stripDragProps}
       >
         {chatGroupUnderlines.map((range) => (
           <span
@@ -174,23 +156,74 @@ export function HeaderTabs() {
             aria-hidden="true"
             className="pointer-events-none absolute bottom-0 z-[6] h-0.5 rounded-full"
             style={{
-              left: range.left + chatDrag.getRowDragOffset(`pill:${range.groupId}`),
+              left: range.left + shellDrag.getRowDragOffset(`pill:${range.groupId}`),
               width: range.width,
               backgroundColor: range.color,
             }}
           />
         ))}
-        {viewModel.stripRows.map((row, index) => {
-          const width = chatLayout.widths[index] ?? (row.kind === "pill" ? TAB_GROUP_PILL_WIDTH : 160);
-          const position = chatLayout.positions[index] ?? 0;
-          const rowId = getChatDragRowId(row);
-          const isDragging = chatDrag.isDraggingRow(rowId);
-          const dragOffset = chatDrag.getRowDragOffset(rowId);
+        {viewModel.shellRows.map((shellRow, index) => {
+          const rowKind = shellRow.kind === "chat" && shellRow.row.kind === "pill" ? "pill" : "tab";
+          const width = layout.widths[index] ?? (rowKind === "pill" ? TAB_GROUP_PILL_WIDTH : 160);
+          const position = layout.positions[index] ?? 0;
+          const rowId = getShellDragRowId(shellRow);
+          const isDragging = shellDrag.isDraggingRow(rowId);
+          const dragOffset = shellDrag.getRowDragOffset(rowId);
+          if (shellRow.kind === "file") {
+            const path = shellRow.path;
+            const isActive = viewModel.activeShellTab?.kind === "file"
+              && viewModel.activeShellTab.path === path;
+            const buf = viewModel.buffersByPath[path];
+            const isDirty = buf?.isDirty ?? false;
+            const isDiff = viewModel.tabModes[path] === "diff";
+            return (
+              <div
+                key={path}
+                {...shellDrag.getRowDragProps(rowId)}
+                className={`absolute bottom-0 h-9 app-region-no-drag ${
+                  isDragging
+                    ? "z-[20] cursor-grabbing opacity-80"
+                    : `${isActive ? "z-[5]" : "z-[1] hover:z-[2]"} cursor-grab transition-transform duration-150`
+                }`}
+                style={{
+                  width,
+                  transform: `translate3d(${position + dragOffset}px, 0, 0)`,
+                }}
+              >
+                <FileTabWithMenu
+                  path={path}
+                  isActive={isActive}
+                  isDirty={isDirty}
+                  isDiff={isDiff}
+                  width={width}
+                  hideLeftDivider={index === 0}
+                  hideRightDivider={index === viewModel.shellRows.length - 1}
+                  onSelect={() => {
+                    if (shellDrag.shouldSuppressClick(rowId)) {
+                      return;
+                    }
+                    setActiveTab(path);
+                    if (viewModel.selectedWorkspaceId) {
+                      setActiveShellTabKey(
+                        viewModel.selectedWorkspaceId,
+                        fileWorkspaceShellTabKey(path),
+                      );
+                    }
+                  }}
+                  onClose={() => closeFilePaths([path])}
+                  onCloseOthers={() => closeOtherWorkspaceTabs({ kind: "file", path })}
+                  onCloseRight={() => closeWorkspaceTabsToRight({ kind: "file", path })}
+                />
+              </div>
+            );
+          }
+
+          const row = shellRow.row;
           if (row.kind === "pill") {
             return (
               <div
                 key={`pill-${row.groupId}`}
-                {...(row.groupKind === "subagent" ? chatDrag.getRowDragProps(rowId) : {})}
+                {...(row.groupKind === "subagent" ? shellDrag.getRowDragProps(rowId) : {})}
                 className={`absolute bottom-0 flex h-9 items-end pb-2 app-region-no-drag ${
                   isDragging
                     ? "z-[20] cursor-grabbing opacity-80"
@@ -210,7 +243,7 @@ export function HeaderTabs() {
                   width={width}
                   isCollapsed={row.isCollapsed}
                   onToggle={() => {
-                    if (chatDrag.shouldSuppressClick(rowId)) {
+                    if (shellDrag.shouldSuppressClick(rowId)) {
                       return;
                     }
                     tabGroupActions.toggleGroupCollapsed(row.groupId);
@@ -251,10 +284,16 @@ export function HeaderTabs() {
             && multiSelect.multiSelectedSessionIds.has(tab.id)
             && multiSelect.selectedTopLevelSessionIds.length >= 2;
           const canDragTab = !tab.isReviewAgentChild;
+          const previousShellRow = viewModel.shellRows[index - 1];
+          const nextShellRow = viewModel.shellRows[index + 1];
+          const previousIsChatTab =
+            previousShellRow?.kind === "chat" && previousShellRow.row.kind === "tab";
+          const nextIsChatTab =
+            nextShellRow?.kind === "chat" && nextShellRow.row.kind === "tab";
           return (
             <div
               key={tab.id}
-              {...(canDragTab ? chatDrag.getRowDragProps(rowId) : {})}
+              {...(canDragTab ? shellDrag.getRowDragProps(rowId) : {})}
               className={`absolute bottom-0 h-9 app-region-no-drag ${
                 isDragging
                   ? "z-[20] cursor-grabbing opacity-80"
@@ -270,8 +309,8 @@ export function HeaderTabs() {
               <ChatTabWithMenu
                 tab={tab}
                 width={width}
-                hideLeftDivider={viewModel.stripRows[index - 1]?.kind !== "tab"}
-                hideRightDivider={viewModel.stripRows[index + 1]?.kind !== "tab"}
+                hideLeftDivider={!previousIsChatTab}
+                hideRightDivider={!nextIsChatTab}
                 renaming={renamingSessionId === tab.id}
                 onRenameOpenChange={(isOpen) => {
                   if (!isOpen) setRenamingSessionId(null);
@@ -299,7 +338,7 @@ export function HeaderTabs() {
                   }
                 }}
                 onSelect={(event) => {
-                  if (chatDrag.shouldSuppressClick(rowId)) {
+                  if (shellDrag.shouldSuppressClick(rowId)) {
                     return;
                   }
                   if (multiSelect.consumeSuppressedSelectClick(tab.id)) {
@@ -318,8 +357,8 @@ export function HeaderTabs() {
                   multiSelect.clearSelection();
                   chatVisibilityActions.hideChatSessionTabs([tab.id], { selectFallback: true });
                 }}
-                onCloseOthers={() => closeOtherRenderedChatTabs(tab.id)}
-                onCloseRight={() => closeRenderedChatTabsToRight(tab.id)}
+                onCloseOthers={() => closeOtherWorkspaceTabs({ kind: "chat", sessionId: tab.id })}
+                onCloseRight={() => closeWorkspaceTabsToRight({ kind: "chat", sessionId: tab.id })}
                 onDismiss={() => dismissChatSession(tab.id)}
               />
             </div>
@@ -356,60 +395,6 @@ export function HeaderTabs() {
             />
           )}
         </PopoverButton>
-      )}
-
-      {viewModel.openTabs.length > 0 && (
-        <WorkspaceTabStrip
-          label="File tabs"
-          stripRef={fileStrip.ref}
-          className="h-9 max-w-[45%] flex-1"
-          {...fileDrag.stripDragProps}
-        >
-          {viewModel.openTabs.map((path, index) => {
-            const isActive = viewModel.activeMainTab.kind === "file"
-              && viewModel.activeMainTab.path === path;
-            const buf = viewModel.buffersByPath[path];
-            const isDirty = buf?.isDirty ?? false;
-            const isDiff = viewModel.tabModes[path] === "diff";
-            const width = fileLayout.widths[index] ?? 150;
-            const rowId = getFileDragRowId(path);
-            const isDragging = fileDrag.isDraggingRow(rowId);
-            const dragOffset = fileDrag.getRowDragOffset(rowId);
-            return (
-              <div
-                key={path}
-                {...fileDrag.getRowDragProps(rowId)}
-                className={`absolute bottom-0 h-9 app-region-no-drag ${
-                  isDragging
-                    ? "z-[20] cursor-grabbing opacity-80"
-                    : `${isActive ? "z-[5]" : "z-[1] hover:z-[2]"} cursor-grab transition-transform duration-150`
-                }`}
-                style={{
-                  width,
-                  transform: `translate3d(${(fileLayout.positions[index] ?? 0) + dragOffset}px, 0, 0)`,
-                }}
-              >
-                <FileTabWithMenu
-                  path={path}
-                  openTabs={viewModel.openTabs}
-                  isActive={isActive}
-                  isDirty={isDirty}
-                  isDiff={isDiff}
-                  width={width}
-                  hideLeftDivider={index === 0}
-                  hideRightDivider={index === viewModel.openTabs.length - 1}
-                  onSelect={() => {
-                    if (fileDrag.shouldSuppressClick(rowId)) {
-                      return;
-                    }
-                    setActiveTab(path);
-                  }}
-                  onClosePaths={closeFilePaths}
-                />
-              </div>
-            );
-          })}
-        </WorkspaceTabStrip>
       )}
 
       <Button

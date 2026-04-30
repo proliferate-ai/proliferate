@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from "react";
+import { useCallback } from "react";
 import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/use-configured-launch-readiness";
 import { useCloseActiveWorkspaceTab } from "@/hooks/workspaces/use-close-active-workspace-tab";
@@ -6,13 +6,13 @@ import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-ta
 import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import {
-  buildWorkspaceShellTabs,
-  resolveActiveWorkspaceShellTab,
+  fileWorkspaceShellTabKey,
   resolveRelativeWorkspaceShellTab,
   resolveWorkspaceShellTabByShortcutIndex,
   type WorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { useWorkspaceTabsStore } from "@/stores/workspaces/workspace-tabs-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   failLatencyFlow,
@@ -20,9 +20,8 @@ import {
 } from "@/lib/infra/latency-flow";
 
 export function useWorkspaceTabActions() {
-  const activeMainTab = useWorkspaceFilesStore((state) => state.activeMainTab);
-  const openTabs = useWorkspaceFilesStore((state) => state.openTabs);
   const setActiveTab = useWorkspaceFilesStore((state) => state.setActiveTab);
+  const setActiveShellTabKey = useWorkspaceTabsStore((state) => state.setActiveShellTabKey);
 
   const headerTabs = useWorkspaceHeaderTabsViewModel();
   const showToast = useToastStore((state) => state.show);
@@ -39,33 +38,8 @@ export function useWorkspaceTabActions() {
     createEmptySessionWithResolvedConfig,
   } = useSessionActions();
 
-  const orderedTabs = useMemo(
-    () => buildWorkspaceShellTabs({
-      selectedWorkspaceId: headerTabs.selectedWorkspaceId,
-      sessionSlots: Object.fromEntries(
-        headerTabs.liveChatSessionIds.map((sessionId) => [
-          sessionId,
-          { sessionId, workspaceId: headerTabs.selectedWorkspaceId },
-        ]),
-      ),
-      visibleChatSessionIds: headerTabs.stripChatSessionIds,
-      openTabs,
-    }),
-    [
-      headerTabs.liveChatSessionIds,
-      headerTabs.selectedWorkspaceId,
-      headerTabs.stripChatSessionIds,
-      openTabs,
-    ],
-  );
-
-  const activeTab = useMemo(
-    () => resolveActiveWorkspaceShellTab({
-      activeMainTab,
-      activeSessionId: headerTabs.activeSessionId,
-    }),
-    [activeMainTab, headerTabs.activeSessionId],
-  );
+  const orderedTabs = headerTabs.orderedTabs;
+  const activeTab = headerTabs.activeShellTab;
 
   const activateWorkspaceTab = useCallback((tab: WorkspaceShellTab) => {
     if (tab.kind === "chat") {
@@ -73,8 +47,19 @@ export function useWorkspaceTabActions() {
     }
 
     setActiveTab(tab.path);
+    if (headerTabs.selectedWorkspaceId) {
+      setActiveShellTabKey(
+        headerTabs.selectedWorkspaceId,
+        fileWorkspaceShellTabKey(tab.path),
+      );
+    }
     return true;
-  }, [chatVisibilityActions, setActiveTab]);
+  }, [
+    chatVisibilityActions,
+    headerTabs.selectedWorkspaceId,
+    setActiveShellTabKey,
+    setActiveTab,
+  ]);
 
   const activateRelativeTab = useCallback((delta: number) => {
     const nextTab = resolveRelativeWorkspaceShellTab({

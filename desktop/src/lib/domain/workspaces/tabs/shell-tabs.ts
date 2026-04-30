@@ -4,18 +4,63 @@ export type WorkspaceShellTab =
   | { kind: "chat"; sessionId: string }
   | { kind: "file"; path: string };
 
+export type WorkspaceShellTabKey = string;
+
+const CHAT_TAB_KEY_PREFIX = "chat:";
+const FILE_TAB_KEY_PREFIX = "file:";
+
 export interface WorkspaceSessionTabCandidate {
   sessionId: string;
   workspaceId: string | null;
 }
 
-export interface MainTabState {
-  kind: "chat";
+export function chatWorkspaceShellTabKey(sessionId: string): WorkspaceShellTabKey {
+  return `${CHAT_TAB_KEY_PREFIX}${sessionId}`;
 }
 
-export interface FileMainTabState {
-  kind: "file";
-  path: string;
+export function fileWorkspaceShellTabKey(path: string): WorkspaceShellTabKey {
+  return `${FILE_TAB_KEY_PREFIX}${path}`;
+}
+
+export function getWorkspaceShellTabKey(tab: WorkspaceShellTab): WorkspaceShellTabKey {
+  return tab.kind === "chat"
+    ? chatWorkspaceShellTabKey(tab.sessionId)
+    : fileWorkspaceShellTabKey(tab.path);
+}
+
+export function parseWorkspaceShellTabKey(key: WorkspaceShellTabKey): WorkspaceShellTab | null {
+  if (key.startsWith(CHAT_TAB_KEY_PREFIX)) {
+    const sessionId = key.slice(CHAT_TAB_KEY_PREFIX.length);
+    return sessionId ? { kind: "chat", sessionId } : null;
+  }
+
+  if (key.startsWith(FILE_TAB_KEY_PREFIX)) {
+    const path = key.slice(FILE_TAB_KEY_PREFIX.length);
+    return path ? { kind: "file", path } : null;
+  }
+
+  return null;
+}
+
+export function partitionWorkspaceShellTabKeys(
+  keys: readonly WorkspaceShellTabKey[],
+): {
+  chatSessionIds: string[];
+  filePaths: string[];
+} {
+  const chatSessionIds: string[] = [];
+  const filePaths: string[] = [];
+
+  for (const key of keys) {
+    const tab = parseWorkspaceShellTabKey(key);
+    if (tab?.kind === "chat") {
+      chatSessionIds.push(tab.sessionId);
+    } else if (tab?.kind === "file") {
+      filePaths.push(tab.path);
+    }
+  }
+
+  return { chatSessionIds, filePaths };
 }
 
 export function isSameWorkspaceShellTab(
@@ -42,6 +87,7 @@ export function buildWorkspaceShellTabs(args: {
   sessionSlots: Record<string, WorkspaceSessionTabCandidate>;
   visibleChatSessionIds?: string[];
   openTabs: string[];
+  orderKeys?: readonly WorkspaceShellTabKey[];
 }): WorkspaceShellTab[] {
   const visibleSet = args.visibleChatSessionIds
     ? new Set(args.visibleChatSessionIds)
@@ -68,28 +114,102 @@ export function buildWorkspaceShellTabs(args: {
     path,
   }));
 
-  return [...chatTabs, ...fileTabs];
+  return orderWorkspaceShellTabs({
+    tabs: [...chatTabs, ...fileTabs],
+    orderKeys: args.orderKeys,
+  });
 }
 
-export function resolveActiveWorkspaceShellTab(args: {
-  activeMainTab: MainTabState | FileMainTabState;
-  activeSessionId: string | null;
-}): WorkspaceShellTab | null {
-  if (args.activeMainTab.kind === "file") {
-    return {
-      kind: "file",
-      path: args.activeMainTab.path,
-    };
+export function resolveWorkspaceShellTabFromKey(
+  key: WorkspaceShellTabKey | null | undefined,
+  tabs: readonly WorkspaceShellTab[],
+): WorkspaceShellTab | null {
+  if (!key) {
+    return null;
+  }
+  const parsed = parseWorkspaceShellTabKey(key);
+  if (!parsed) {
+    return null;
+  }
+  return tabs.find((tab) => isSameWorkspaceShellTab(tab, parsed)) ?? null;
+}
+
+export function orderWorkspaceShellTabs(args: {
+  tabs: readonly WorkspaceShellTab[];
+  orderKeys?: readonly WorkspaceShellTabKey[];
+}): WorkspaceShellTab[] {
+  if (!args.orderKeys || args.orderKeys.length === 0) {
+    return [...args.tabs];
   }
 
-  if (!args.activeSessionId) {
+  const tabByKey = new Map(args.tabs.map((tab) => [getWorkspaceShellTabKey(tab), tab]));
+  const ordered: WorkspaceShellTab[] = [];
+  const seen = new Set<WorkspaceShellTabKey>();
+
+  for (const key of args.orderKeys) {
+    const tab = tabByKey.get(key);
+    if (!tab || seen.has(key)) {
+      continue;
+    }
+    ordered.push(tab);
+    seen.add(key);
+  }
+
+  for (const tab of args.tabs) {
+    const key = getWorkspaceShellTabKey(tab);
+    if (!seen.has(key)) {
+      ordered.push(tab);
+      seen.add(key);
+    }
+  }
+
+  return ordered;
+}
+
+export function sanitizeWorkspaceShellTabOrder(args: {
+  orderKeys: readonly WorkspaceShellTabKey[];
+  liveTabs: readonly WorkspaceShellTab[];
+}): WorkspaceShellTabKey[] {
+  return orderWorkspaceShellTabs({
+    tabs: args.liveTabs,
+    orderKeys: args.orderKeys,
+  }).map(getWorkspaceShellTabKey);
+}
+
+export function resolveFallbackWorkspaceShellTab(args: {
+  tabs: readonly WorkspaceShellTab[];
+  closingTabs: readonly WorkspaceShellTab[];
+  activeTab: WorkspaceShellTab | null;
+  anchorTab?: WorkspaceShellTab | null;
+}): WorkspaceShellTab | null {
+  const closingKeys = new Set(args.closingTabs.map(getWorkspaceShellTabKey));
+  if (args.activeTab && !closingKeys.has(getWorkspaceShellTabKey(args.activeTab))) {
+    return args.activeTab;
+  }
+
+  const remaining = args.tabs.filter((tab) => !closingKeys.has(getWorkspaceShellTabKey(tab)));
+  if (remaining.length === 0) {
     return null;
   }
 
-  return {
-    kind: "chat",
-    sessionId: args.activeSessionId,
-  };
+  const anchor = args.anchorTab ?? args.activeTab;
+  if (!anchor) {
+    return remaining[0] ?? null;
+  }
+
+  const anchorIndex = args.tabs.findIndex((tab) => isSameWorkspaceShellTab(tab, anchor));
+  if (anchorIndex < 0) {
+    return remaining[0] ?? null;
+  }
+
+  for (let index = anchorIndex; index >= 0; index -= 1) {
+    const candidate = args.tabs[index];
+    if (candidate && !closingKeys.has(getWorkspaceShellTabKey(candidate))) {
+      return candidate;
+    }
+  }
+
+  return remaining[0] ?? null;
 }
 
 export function resolveRelativeWorkspaceShellTab(args: {

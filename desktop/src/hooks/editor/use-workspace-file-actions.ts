@@ -10,8 +10,10 @@ import {
   startLatencyTimer,
 } from "@/lib/infra/debug-latency";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { fileWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { useWorkspaceTabsStore } from "@/stores/workspaces/workspace-tabs-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 function buildConnection(
@@ -57,6 +59,7 @@ export function useWorkspaceFileActions() {
   const setDirectoryEntries = useWorkspaceFilesStore((state) => state.setDirectoryEntries);
   const focusFileTab = useWorkspaceFilesStore((state) => state.focusFileTab);
   const setDiffTab = useWorkspaceFilesStore((state) => state.setDiffTab);
+  const setActiveShellTabKey = useWorkspaceTabsStore((state) => state.setActiveShellTabKey);
   const setBufferLoading = useWorkspaceFilesStore((state) => state.setBufferLoading);
   const setBufferLoaded = useWorkspaceFilesStore((state) => state.setBufferLoaded);
   const setBufferLoadError = useWorkspaceFilesStore((state) => state.setBufferLoadError);
@@ -321,8 +324,12 @@ export function useWorkspaceFileActions() {
 
   const openFile = useCallback(async (filePath: string) => {
     focusFileTab(filePath);
+    const workspaceId = useWorkspaceFilesStore.getState().workspaceId;
+    if (workspaceId) {
+      setActiveShellTabKey(workspaceId, fileWorkspaceShellTabKey(filePath));
+    }
     await readFileIntoStore(filePath);
-  }, [focusFileTab, readFileIntoStore]);
+  }, [focusFileTab, readFileIntoStore, setActiveShellTabKey]);
 
   const openFileDiff = useCallback(async (filePath: string) => {
     const state = useWorkspaceFilesStore.getState();
@@ -342,6 +349,7 @@ export function useWorkspaceFileActions() {
     }
 
     setDiffTab(filePath, tabPatches[filePath] ?? null);
+    setActiveShellTabKey(workspaceId, fileWorkspaceShellTabKey(filePath));
 
     const loadDiff = async () => {
       try {
@@ -363,7 +371,7 @@ export function useWorkspaceFileActions() {
       loadDiff(),
       readFileIntoStore(filePath),
     ]);
-  }, [assertWorkspaceRuntimeReady, readFileIntoStore, setDiffTab]);
+  }, [assertWorkspaceRuntimeReady, readFileIntoStore, setActiveShellTabKey, setDiffTab]);
 
   const saveFile = useCallback(async (filePath: string) => {
     const state = useWorkspaceFilesStore.getState();
