@@ -10,8 +10,8 @@ mod telemetry;
 mod telemetry_file_logging;
 
 use commands::{
-    anonymous_telemetry, config, diagnostics as diagnostics_commands, keychain, mcp_oauth, process,
-    runtime, shell, window_chrome,
+    anonymous_telemetry, config, diagnostics as diagnostics_commands, keychain, process, runtime,
+    shell, window_chrome,
 };
 use quit_flow::QuitFlowState;
 use tauri::Manager;
@@ -145,20 +145,12 @@ pub fn run() {
             keychain::export_syncable_cloud_credential,
             keychain::set_env_var_secret,
             keychain::delete_env_var_secret,
-            keychain::get_connector_secret,
-            keychain::set_connector_secret,
-            keychain::delete_connector_secret,
             keychain::get_auth_session,
             keychain::set_auth_session,
             keychain::clear_auth_session,
             keychain::get_pending_auth,
             keychain::set_pending_auth,
             keychain::clear_pending_auth,
-            mcp_oauth::connect_oauth_connector,
-            mcp_oauth::cancel_oauth_connector_connect,
-            mcp_oauth::get_oauth_connector_bundle_state,
-            mcp_oauth::get_valid_oauth_access_token,
-            mcp_oauth::delete_oauth_connector_bundle,
         ]);
 
     #[cfg(target_os = "macos")]

@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 
 const SERVICE: &str = "com.proliferate.app.env";
 const AUTH_SERVICE: &str = "com.proliferate.app.auth";
-const CONNECTOR_SERVICE: &str = "com.proliferate.app.connectors";
 const RUNTIME_SERVICE: &str = "com.proliferate.app.runtime";
 const AUTH_SESSION_ACCOUNT: &str = "desktop_session";
 const PENDING_AUTH_ACCOUNT: &str = "desktop_pending_auth";
@@ -127,14 +126,6 @@ const CLOUD_CREDENTIAL_PROVIDERS: &[CloudCredentialProviderSpec] = &[
 
 fn read_env_secret(name: &str) -> Result<Option<String>, String> {
     read_password(SERVICE, name)
-}
-
-fn connector_account(connection_id: &str, field_id: &str) -> String {
-    format!("{connection_id}:{field_id}")
-}
-
-fn connector_oauth_account(connection_id: &str) -> String {
-    format!("oauth:{connection_id}")
 }
 
 enum KeychainRequest {
@@ -270,22 +261,6 @@ fn delete_password(service: &str, account: &str) -> Result<(), String> {
         .map_err(|_| "Keychain worker did not return a result.".to_string())?
 }
 
-pub(crate) fn read_connector_oauth_bundle(connection_id: &str) -> Result<Option<String>, String> {
-    read_password(CONNECTOR_SERVICE, &connector_oauth_account(connection_id))
-}
-
-pub(crate) fn set_connector_oauth_bundle(connection_id: &str, value: &str) -> Result<(), String> {
-    set_password(
-        CONNECTOR_SERVICE,
-        &connector_oauth_account(connection_id),
-        value,
-    )
-}
-
-pub(crate) fn delete_connector_oauth_bundle(connection_id: &str) -> Result<(), String> {
-    delete_password(CONNECTOR_SERVICE, &connector_oauth_account(connection_id))
-}
-
 fn ensure_runtime_data_key() -> Result<String, String> {
     if let Some(value) = read_password(RUNTIME_SERVICE, ANYHARNESS_DATA_KEY_ACCOUNT)? {
         return Ok(value);
@@ -323,41 +298,6 @@ pub async fn set_env_var_secret(name: String, value: String) -> Result<(), Strin
 #[tauri::command]
 pub async fn delete_env_var_secret(name: String) -> Result<(), String> {
     delete_password(SERVICE, &name)
-}
-
-#[tauri::command]
-pub async fn get_connector_secret(
-    connection_id: String,
-    field_id: String,
-) -> Result<Option<String>, String> {
-    read_password(
-        CONNECTOR_SERVICE,
-        &connector_account(&connection_id, &field_id),
-    )
-}
-
-#[tauri::command]
-pub async fn set_connector_secret(
-    connection_id: String,
-    field_id: String,
-    value: String,
-) -> Result<(), String> {
-    set_password(
-        CONNECTOR_SERVICE,
-        &connector_account(&connection_id, &field_id),
-        &value,
-    )
-}
-
-#[tauri::command]
-pub async fn delete_connector_secret(
-    connection_id: String,
-    field_id: String,
-) -> Result<(), String> {
-    delete_password(
-        CONNECTOR_SERVICE,
-        &connector_account(&connection_id, &field_id),
-    )
 }
 
 #[tauri::command]

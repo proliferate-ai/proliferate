@@ -46,6 +46,25 @@ export type CloudRepoConfigResponse   = components["schemas"]["CloudRepoConfigRe
 export type SaveCloudRepoConfigRequest = components["schemas"]["SaveCloudRepoConfigRequest"];
 export type CloudMcpConnectionSyncStatus = components["schemas"]["CloudMcpConnectionSyncStatus"];
 export type SyncCloudMcpConnectionRequest = components["schemas"]["SyncCloudMcpConnectionRequest"];
+export type CloudMcpCatalogResponse = components["schemas"]["ConnectorCatalogResponse"];
+export type CloudMcpCatalogEntry = components["schemas"]["ConnectorCatalogEntryModel"];
+export type CloudMcpConnection = components["schemas"]["CloudMcpConnectionResponse"];
+export type CloudMcpConnectionsResponse = components["schemas"]["CloudMcpConnectionsResponse"];
+export type CreateCloudMcpConnectionRequest =
+  components["schemas"]["CreateCloudMcpConnectionRequest"];
+export type PatchCloudMcpConnectionRequest =
+  components["schemas"]["PatchCloudMcpConnectionRequest"];
+export type PutCloudMcpSecretAuthRequest =
+  components["schemas"]["PutCloudMcpSecretAuthRequest"];
+export type CloudMcpOAuthFlowStatusResponse =
+  components["schemas"]["CloudMcpOAuthFlowStatusResponse"];
+export type StartCloudMcpOAuthFlowResponse =
+  components["schemas"]["StartCloudMcpOAuthFlowResponse"];
+export type MaterializeCloudMcpRequest = components["schemas"]["MaterializeCloudMcpRequest"];
+export type MaterializeCloudMcpResponse = components["schemas"]["MaterializeCloudMcpResponse"];
+export type LocalStdioCandidate = components["schemas"]["LocalStdioCandidateModel"];
+export type CloudMcpMaterializationWarning =
+  components["schemas"]["CloudMcpMaterializationWarningModel"];
 export type PutCloudRepoFileRequest   = components["schemas"]["PutCloudRepoFileRequest"];
 export type CloudWorkspaceRepoConfigStatusResponse = components["schemas"]["CloudWorkspaceRepoConfigStatusResponse"];
 export type ResyncCloudWorkspaceFilesResponse = components["schemas"]["ResyncCloudWorkspaceFilesResponse"];

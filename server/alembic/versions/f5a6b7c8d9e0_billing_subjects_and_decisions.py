@@ -6,9 +6,9 @@ Create Date: 2026-04-18 10:00:00.000000
 
 """
 
+import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
-import uuid
 
 import sqlalchemy as sa
 
@@ -185,7 +185,14 @@ def upgrade() -> None:
         bind.execute(
             sa.text(
                 """
-                INSERT INTO billing_subject (id, kind, user_id, organization_id, created_at, updated_at)
+                INSERT INTO billing_subject (
+                    id,
+                    kind,
+                    user_id,
+                    organization_id,
+                    created_at,
+                    updated_at
+                )
                 VALUES (:id, :kind, :user_id, NULL, :created_at, :updated_at)
                 ON CONFLICT (user_id) DO NOTHING
                 """
@@ -202,17 +209,33 @@ def upgrade() -> None:
     subject_ids = _subject_ids_by_user(bind)
     for user_id, subject_id in subject_ids.items():
         bind.execute(
-            sa.text("UPDATE billing_grant SET billing_subject_id = :subject_id WHERE user_id = :user_id"),
-            {"subject_id": subject_id, "user_id": user_id},
-        )
-        bind.execute(
             sa.text(
-                "UPDATE billing_entitlement SET billing_subject_id = :subject_id WHERE user_id = :user_id"
+                """
+                UPDATE billing_grant
+                SET billing_subject_id = :subject_id
+                WHERE user_id = :user_id
+                """
             ),
             {"subject_id": subject_id, "user_id": user_id},
         )
         bind.execute(
-            sa.text("UPDATE usage_segment SET billing_subject_id = :subject_id WHERE user_id = :user_id"),
+            sa.text(
+                """
+                UPDATE billing_entitlement
+                SET billing_subject_id = :subject_id
+                WHERE user_id = :user_id
+                """
+            ),
+            {"subject_id": subject_id, "user_id": user_id},
+        )
+        bind.execute(
+            sa.text(
+                """
+                UPDATE usage_segment
+                SET billing_subject_id = :subject_id
+                WHERE user_id = :user_id
+                """
+            ),
             {"subject_id": subject_id, "user_id": user_id},
         )
         bind.execute(
@@ -251,6 +274,7 @@ def upgrade() -> None:
         "cloud_workspace",
         ["billing_subject_id"],
     )
+
 
 def downgrade() -> None:
     """Downgrade schema."""

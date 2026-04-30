@@ -15,59 +15,36 @@ import { ConnectorCredentialField } from "./ConnectorCredentialField";
 import { SupabaseSettingsFields } from "./SupabaseSettingsFields";
 
 export function ConnectorConfigureTab({
-  busy,
   disabled,
   entry,
   error,
   focus,
   isConnected,
-  onRetrySync,
   onSecretChange,
   onSupabaseSettingsChange,
   primaryAction,
-  retrying,
   secretValue,
   status,
   supabaseSettings,
   variant,
 }: {
-  busy: boolean;
   disabled: boolean;
   entry: ConnectorCatalogEntry;
   error: string | null;
   focus: ConnectorConfigureFocus;
   isConnected: boolean;
-  onRetrySync?: () => void;
   onSecretChange: (value: string) => void;
   onSupabaseSettingsChange: (value: SupabaseConnectorSettings) => void;
   primaryAction?: ReactNode;
-  retrying: boolean;
   secretValue: string;
   status: ConnectorCardStatus | null;
   supabaseSettings: SupabaseConnectorSettings;
   variant: ConnectorSetupVariant;
 }) {
-  const showSyncBanner = focus === "sync" || status?.intent === "sync_issue";
   const showReconnectBanner = focus === "reconnect" || status?.intent === "needs_reconnect";
 
   return (
     <div className="space-y-4">
-      {showSyncBanner && onRetrySync && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-          <span>Cloud sync couldn't finish. We'll retry automatically.</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onRetrySync}
-            disabled={retrying || busy}
-            aria-label={`Retry sync for ${entry.name}`}
-          >
-            Retry
-          </Button>
-        </div>
-      )}
-
       {showReconnectBanner && (variant === "oauth" || variant === "oauth_structured") && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           Reconnect in your browser to use {entry.name} again.

@@ -1,84 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type {
-  ConnectOAuthConnectorResult,
-  GetValidOAuthAccessTokenResult,
-} from "@/platform/tauri/mcp-oauth";
 
-const mocks = vi.hoisted(() => {
-  let persistedState: unknown;
-  const connectorSecrets = new Map<string, string>();
-  const oauthBundles = new Set<string>();
-
-  return {
-    get persistedState() {
-      return persistedState;
-    },
-    set persistedState(value: unknown) {
-      persistedState = value;
-    },
-    connectorSecrets,
-    oauthBundles,
-    readPersistedValueMock: vi.fn(async () => persistedState),
-    persistValueMock: vi.fn(async (_key: string, value: unknown) => {
-      persistedState = structuredClone(value);
-    }),
-    getConnectorSecretMock: vi.fn(async (connectionId: string, fieldId: string) => (
-      connectorSecrets.get(`${connectionId}:${fieldId}`) ?? null
-    )),
-    setConnectorSecretMock: vi.fn(async (connectionId: string, fieldId: string, value: string) => {
-      connectorSecrets.set(`${connectionId}:${fieldId}`, value);
-    }),
-    deleteConnectorSecretMock: vi.fn(async (connectionId: string, fieldId: string) => {
-      connectorSecrets.delete(`${connectionId}:${fieldId}`);
-    }),
-    connectOAuthConnectorMock: vi.fn(async (input: { connectionId: string }): Promise<ConnectOAuthConnectorResult> => {
-      oauthBundles.add(input.connectionId);
-      return { kind: "completed" as const };
-    }),
-    getOAuthConnectorBundleStateMock: vi.fn(async (connectionId: string) => ({
-      hasBundle: oauthBundles.has(connectionId),
-      expiresAt: null,
-    })),
-    getValidOAuthAccessTokenMock: vi.fn(async (): Promise<GetValidOAuthAccessTokenResult> => ({
-      kind: "missing",
-    })),
-    deleteOAuthConnectorBundleMock: vi.fn(async (connectionId: string) => {
-      oauthBundles.delete(connectionId);
-    }),
-    syncCloudMcpConnectionMock: vi.fn(async () => undefined),
-    deleteCloudMcpConnectionMock: vi.fn(async () => undefined),
-    commandExistsMock: vi.fn(async () => true),
-  };
-});
-
-vi.mock("@/lib/infra/preferences-persistence", () => ({
-  readPersistedValue: mocks.readPersistedValueMock,
-  persistValue: mocks.persistValueMock,
-}));
-
-vi.mock("@/platform/tauri/connectors", () => ({
-  getConnectorSecret: mocks.getConnectorSecretMock,
-  setConnectorSecret: mocks.setConnectorSecretMock,
-  deleteConnectorSecret: mocks.deleteConnectorSecretMock,
+const mocks = vi.hoisted(() => ({
+  commandExistsMock: vi.fn(async () => true),
+  materializeCloudMcpServersMock: vi.fn(),
 }));
 
 vi.mock("@/platform/tauri/process", () => ({
   commandExists: mocks.commandExistsMock,
 }));
 
-vi.mock("@/platform/tauri/mcp-oauth", () => ({
-  connectOAuthConnector: mocks.connectOAuthConnectorMock,
-  getOAuthConnectorBundleState: mocks.getOAuthConnectorBundleStateMock,
-  getValidOAuthAccessToken: mocks.getValidOAuthAccessTokenMock,
-  deleteOAuthConnectorBundle: mocks.deleteOAuthConnectorBundleMock,
+vi.mock("@/lib/integrations/cloud/mcp_materialization", () => ({
+  materializeCloudMcpServers: mocks.materializeCloudMcpServersMock,
 }));
 
-vi.mock("@/lib/integrations/cloud/mcp_connections", () => ({
-  syncCloudMcpConnection: mocks.syncCloudMcpConnectionMock,
-  deleteCloudMcpConnection: mocks.deleteCloudMcpConnectionMock,
-}));
-
-import { connectOAuthConnector, installConnector } from "@/lib/infra/mcp/persistence";
 import {
   COWORK_WORKSPACE_PATH_PLACEHOLDER,
   resolveSessionMcpServersForLaunch,
@@ -100,44 +34,64 @@ function launchContext(
   };
 }
 
-describe("mcp launch resolution", () => {
+function materialized(overrides?: Record<string, unknown>) {
+  return {
+    catalogVersion: "test",
+    mcpServers: [],
+    mcpBindingSummaries: [],
+    localStdioCandidates: [],
+    warnings: [],
+    ...overrides,
+  };
+}
+
+describe("cloud MCP launch resolution", () => {
   beforeEach(() => {
-    mocks.persistedState = undefined;
-    mocks.connectorSecrets.clear();
-    mocks.oauthBundles.clear();
-    mocks.readPersistedValueMock.mockClear();
-    mocks.persistValueMock.mockClear();
-    mocks.getConnectorSecretMock.mockClear();
-    mocks.setConnectorSecretMock.mockClear();
-    mocks.deleteConnectorSecretMock.mockClear();
-    mocks.connectOAuthConnectorMock.mockClear();
-    mocks.getOAuthConnectorBundleStateMock.mockClear();
-    mocks.getValidOAuthAccessTokenMock.mockClear();
-    mocks.deleteOAuthConnectorBundleMock.mockClear();
-    mocks.syncCloudMcpConnectionMock.mockClear();
-    mocks.deleteCloudMcpConnectionMock.mockClear();
     mocks.commandExistsMock.mockReset();
     mocks.commandExistsMock.mockResolvedValue(true);
-    mocks.getValidOAuthAccessTokenMock.mockResolvedValue({
-      kind: "missing",
-    });
+    mocks.materializeCloudMcpServersMock.mockReset();
+    mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized());
   });
 
-  it("resolves installed http connectors into session MCP servers", async () => {
-    await installConnector("context7", "ctx7sk-example");
+  it("uses cloud materialization for concrete remote MCP servers", async () => {
+    mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized({
+      mcpServers: [
+        {
+          transport: "http",
+          connectionId: "conn_context7",
+          catalogEntryId: "context7",
+          serverName: "context7",
+          url: "https://mcp.context7.com/mcp",
+          headers: [{ name: "Authorization", value: "Bearer token" }],
+        },
+      ],
+      mcpBindingSummaries: [
+        {
+          id: "conn_context7",
+          serverName: "context7",
+          displayName: "Context7",
+          transport: "http",
+          outcome: "applied",
+        },
+      ],
+    }));
 
     const resolution = await resolveSessionMcpServersForLaunch(launchContext({
-      targetLocation: "local",
+      targetLocation: "cloud",
       workspacePath: "/workspace",
     }));
 
-    expect(resolution.warnings).toEqual([]);
-    expect(resolution.mcpServers).toHaveLength(1);
-    expect(resolution.mcpServers[0]).toMatchObject({
-      catalogEntryId: "context7",
-      transport: "http",
-      url: "https://mcp.context7.com/mcp",
+    expect(mocks.materializeCloudMcpServersMock).toHaveBeenCalledWith({
+      targetLocation: "cloud",
     });
+    expect(resolution.warnings).toEqual([]);
+    expect(resolution.mcpServers).toEqual([
+      expect.objectContaining({
+        catalogEntryId: "context7",
+        transport: "http",
+        url: "https://mcp.context7.com/mcp",
+      }),
+    ]);
     expect(resolution.mcpBindingSummaries).toEqual([
       expect.objectContaining({
         displayName: "Context7",
@@ -145,14 +99,11 @@ describe("mcp launch resolution", () => {
         transport: "http",
       }),
     ]);
-    expect(JSON.stringify(resolution.mcpBindingSummaries)).not.toContain("ctx7sk-example");
-    expect(JSON.stringify(resolution.mcpBindingSummaries)).not.toContain("https://");
+    expect(JSON.stringify(resolution.mcpBindingSummaries)).not.toContain("Bearer token");
     expect(JSON.stringify(resolution.mcpBindingSummaries)).not.toContain("/workspace");
   });
 
-  it("does not resolve coding Powers when the launch policy is disabled", async () => {
-    await installConnector("context7", "ctx7sk-example");
-
+  it("does not call cloud materialization when launch policy is disabled", async () => {
     const resolution = await resolveSessionMcpServersForLaunch(launchContext({
       targetLocation: "local",
       workspacePath: "/workspace",
@@ -162,105 +113,90 @@ describe("mcp launch resolution", () => {
       },
     }));
 
-    expect(resolution.mcpServers).toEqual([]);
-    expect(resolution.warnings).toEqual([]);
-    expect(resolution.mcpBindingSummaries).toEqual([
-      expect.objectContaining({
-        displayName: "Context7",
-        outcome: "not_applied",
-        reason: "policy_disabled",
-      }),
-    ]);
-  });
-
-  it("returns an empty known summary list when resolution runs with no connectors", async () => {
-    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
-      targetLocation: "local",
-      workspacePath: "/workspace",
-    }));
-
-    expect(resolution.mcpServers).toEqual([]);
-    expect(resolution.warnings).toEqual([]);
-    expect(resolution.mcpBindingSummaries).toEqual([]);
-  });
-
-  it("resolves Exa API keys into MCP query auth", async () => {
-    await installConnector("exa", "exa-example");
-
-    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
-      targetLocation: "local",
-      workspacePath: "/workspace",
-    }));
-
-    expect(resolution.warnings).toEqual([]);
-    expect(resolution.mcpServers).toHaveLength(1);
-    expect(resolution.mcpServers[0]).toMatchObject({
-      catalogEntryId: "exa",
-      transport: "http",
-      url: "https://mcp.exa.ai/mcp?exaApiKey=exa-example",
-      headers: [],
+    expect(mocks.materializeCloudMcpServersMock).not.toHaveBeenCalled();
+    expect(resolution).toEqual({
+      mcpServers: [],
+      mcpBindingSummaries: [],
+      warnings: [],
     });
   });
 
-  it("warns when an enabled connector is missing its saved secret", async () => {
-    await installConnector("context7", "ctx7sk-example");
-    const connectionId = (mocks.persistedState as {
-      connections: Array<{ connectionId: string }>;
-    }).connections[0]!.connectionId;
-    mocks.connectorSecrets.delete(`${connectionId}:api_key`);
+  it("finalizes local stdio candidates without sending workspace paths to cloud", async () => {
+    mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized({
+      mcpBindingSummaries: [
+        {
+          id: "conn_filesystem",
+          serverName: "filesystem",
+          displayName: "Filesystem",
+          transport: "stdio",
+          outcome: "applied",
+        },
+      ],
+      localStdioCandidates: [
+        {
+          connectionId: "conn_filesystem",
+          catalogEntryId: "filesystem",
+          serverName: "filesystem",
+          connectorName: "Filesystem",
+          command: "npx",
+          args: [{ source: { kind: "workspace_path" } }],
+          env: [],
+        },
+      ],
+    }));
 
     const resolution = await resolveSessionMcpServersForLaunch(launchContext({
       targetLocation: "local",
       workspacePath: "/workspace",
     }));
 
-    expect(resolution.mcpServers).toEqual([]);
-    expect(resolution.warnings).toEqual([
-      expect.objectContaining({
-        kind: "missing_secret",
-        catalogEntryId: "context7",
-      }),
-    ]);
-  });
-
-  it("downgrades unreadable connector secrets into missing-secret warnings", async () => {
-    await installConnector("context7", "ctx7sk-example");
-    mocks.getConnectorSecretMock.mockRejectedValueOnce(new Error("keychain unavailable"));
-
-    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
+    expect(mocks.materializeCloudMcpServersMock).toHaveBeenCalledWith({
       targetLocation: "local",
-      workspacePath: "/workspace",
-    }));
-
-    expect(resolution.mcpServers).toEqual([]);
-    expect(resolution.warnings).toEqual([
+    });
+    expect(JSON.stringify(mocks.materializeCloudMcpServersMock.mock.calls)).not.toContain(
+      "/workspace",
+    );
+    expect(resolution.warnings).toEqual([]);
+    expect(resolution.mcpServers).toEqual([
       expect.objectContaining({
-        kind: "missing_secret",
-        catalogEntryId: "context7",
-      }),
-    ]);
-  });
-
-  it("skips local-only connectors for cloud launches", async () => {
-    await installConnector("filesystem", "");
-
-    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
-      targetLocation: "cloud",
-      workspacePath: "/workspace",
-    }));
-
-    expect(resolution.mcpServers).toEqual([]);
-    expect(resolution.warnings).toEqual([
-      expect.objectContaining({
-        kind: "unsupported_target",
+        args: ["/workspace"],
         catalogEntryId: "filesystem",
+        transport: "stdio",
+      }),
+    ]);
+    expect(resolution.mcpBindingSummaries).toEqual([
+      expect.objectContaining({
+        id: "conn_filesystem",
+        outcome: "applied",
+        transport: "stdio",
       }),
     ]);
   });
 
-  it("skips stdio connectors when the local command is missing", async () => {
-    await installConnector("playwright", "");
+  it("converts missing stdio commands into not-applied summaries", async () => {
     mocks.commandExistsMock.mockResolvedValue(false);
+    mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized({
+      mcpBindingSummaries: [
+        {
+          id: "conn_playwright",
+          serverName: "playwright",
+          displayName: "Playwright",
+          transport: "stdio",
+          outcome: "applied",
+        },
+      ],
+      localStdioCandidates: [
+        {
+          connectionId: "conn_playwright",
+          catalogEntryId: "playwright",
+          serverName: "playwright",
+          connectorName: "Playwright",
+          command: "npx",
+          args: [],
+          env: [],
+        },
+      ],
+    }));
 
     const resolution = await resolveSessionMcpServersForLaunch(launchContext({
       targetLocation: "local",
@@ -270,38 +206,41 @@ describe("mcp launch resolution", () => {
     expect(resolution.mcpServers).toEqual([]);
     expect(resolution.warnings).toEqual([
       expect.objectContaining({
-        kind: "missing_stdio_command",
+        kind: "command_missing",
         catalogEntryId: "playwright",
-      }),
-    ]);
-  });
-
-  it("skips workspace-bound stdio connectors when the workspace path is unavailable", async () => {
-    await installConnector("filesystem", "");
-
-    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
-      targetLocation: "local",
-      workspacePath: null,
-    }));
-
-    expect(resolution.mcpServers).toEqual([]);
-    expect(resolution.warnings).toEqual([
-      expect.objectContaining({
-        kind: "workspace_path_unresolved",
-        catalogEntryId: "filesystem",
       }),
     ]);
     expect(resolution.mcpBindingSummaries).toEqual([
       expect.objectContaining({
         outcome: "not_applied",
-        reason: "workspace_path_unresolved",
+        reason: "resolver_error",
       }),
     ]);
-    expect(JSON.stringify(resolution.mcpBindingSummaries)).not.toContain("/workspace");
   });
 
   it("keeps cowork workspace-bound stdio connectors resolvable before thread path exists", async () => {
-    await installConnector("filesystem", "");
+    mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized({
+      mcpBindingSummaries: [
+        {
+          id: "conn_filesystem",
+          serverName: "filesystem",
+          displayName: "Filesystem",
+          transport: "stdio",
+          outcome: "applied",
+        },
+      ],
+      localStdioCandidates: [
+        {
+          connectionId: "conn_filesystem",
+          catalogEntryId: "filesystem",
+          serverName: "filesystem",
+          connectorName: "Filesystem",
+          command: "npx",
+          args: [{ source: { kind: "workspace_path" } }],
+          env: [],
+        },
+      ],
+    }));
 
     const resolution = await resolveSessionMcpServersForLaunch(launchContext({
       targetLocation: "local",
@@ -314,109 +253,10 @@ describe("mcp launch resolution", () => {
     expect(resolution.warnings).toEqual([]);
     expect(resolution.mcpServers).toEqual([
       expect.objectContaining({
-        args: expect.arrayContaining([COWORK_WORKSPACE_PATH_PLACEHOLDER]),
+        args: [COWORK_WORKSPACE_PATH_PLACEHOLDER],
         catalogEntryId: "filesystem",
         transport: "stdio",
       }),
     ]);
-    expect(resolution.mcpBindingSummaries).toEqual([
-      expect.objectContaining({
-        outcome: "applied",
-        transport: "stdio",
-      }),
-    ]);
-  });
-
-  it("downgrades OAuth token refresh failures into reconnect warnings", async () => {
-    await connectOAuthConnector("linear");
-    mocks.getValidOAuthAccessTokenMock.mockRejectedValueOnce(new Error("refresh failed"));
-
-    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
-      targetLocation: "cloud",
-      workspacePath: "/workspace",
-    }));
-
-    expect(resolution.mcpServers).toEqual([]);
-    expect(resolution.warnings).toEqual([
-      expect.objectContaining({
-        kind: "needs_reconnect",
-        catalogEntryId: "linear",
-      }),
-    ]);
-  });
-
-  it("injects Gmail OAuth bearer auth into session MCP servers", async () => {
-    await connectOAuthConnector("gmail");
-    mocks.getValidOAuthAccessTokenMock.mockResolvedValue({
-      kind: "ready",
-      accessToken: "gmail-token",
-      expiresAt: null,
-    });
-
-    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
-      targetLocation: "cloud",
-      workspacePath: "/workspace",
-    }));
-
-    expect(resolution.warnings).toEqual([]);
-    expect(resolution.mcpServers).toHaveLength(1);
-    expect(resolution.mcpServers[0]).toMatchObject({
-      catalogEntryId: "gmail",
-      transport: "http",
-      url: "https://gmail.mcp.claude.com/mcp",
-      headers: [
-        {
-          name: "Authorization",
-          value: "Bearer gmail-token",
-        },
-      ],
-    });
-  });
-
-  it("injects the same OAuth bearer header for local and cloud launches", async () => {
-    await connectOAuthConnector("linear");
-    mocks.getValidOAuthAccessTokenMock.mockResolvedValue({
-      kind: "ready",
-      accessToken: "linear-token",
-      expiresAt: null,
-    });
-
-    const [localResolution, cloudResolution] = await Promise.all([
-      resolveSessionMcpServersForLaunch(launchContext({
-        targetLocation: "local",
-        workspacePath: "/workspace",
-      })),
-      resolveSessionMcpServersForLaunch(launchContext({
-        targetLocation: "cloud",
-        workspacePath: "/workspace",
-      })),
-    ]);
-
-    expect(localResolution.warnings).toEqual([]);
-    expect(cloudResolution.warnings).toEqual([]);
-    expect(localResolution.mcpServers).toHaveLength(1);
-    expect(cloudResolution.mcpServers).toHaveLength(1);
-    expect(localResolution.mcpServers[0]).toMatchObject({
-      catalogEntryId: "linear",
-      transport: "http",
-      url: "https://mcp.linear.app/mcp",
-      headers: [
-        {
-          name: "Authorization",
-          value: "Bearer linear-token",
-        },
-      ],
-    });
-    expect(cloudResolution.mcpServers[0]).toMatchObject({
-      catalogEntryId: "linear",
-      transport: "http",
-      url: "https://mcp.linear.app/mcp",
-      headers: [
-        {
-          name: "Authorization",
-          value: "Bearer linear-token",
-        },
-      ],
-    });
   });
 });

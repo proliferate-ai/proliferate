@@ -96,6 +96,8 @@ class Settings(BaseSettings):
     cloud_runtime_sentry_environment: str = ""
     cloud_runtime_sentry_release: str = ""
     cloud_runtime_sentry_traces_sample_rate: float = 1.0
+    cloud_mcp_enabled: bool = True
+    cloud_mcp_oauth_callback_base_url: str = ""
     e2b_api_key: str = ""
     e2b_template_name: str = ""
     e2b_webhook_signature_secret: str = ""

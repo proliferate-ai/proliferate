@@ -13,7 +13,6 @@ import { useAppShortcuts } from "@/hooks/app/use-app-shortcuts"
 import { useAuthBootstrap } from "@/hooks/auth/use-auth-bootstrap"
 import { useAgentAutoReconcile } from "@/hooks/agents/use-agent-auto-reconcile"
 import { useRuntimeInputSyncRuntime } from "@/hooks/cloud/use-runtime-input-sync-runtime"
-import { useConnectorSyncRetryDaemon } from "@/hooks/mcp/use-connector-sync-retry-daemon"
 import { useOnboardingFinalizer } from "@/hooks/onboarding/use-onboarding-finalizer"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/use-shortcut-dispatcher"
 import { useTurnEndSound } from "@/hooks/sessions/use-turn-end-sound"
@@ -128,7 +127,6 @@ function AppRuntime() {
   useAppShortcuts()
   useTurnEndSound()
   useAgentAutoReconcile()
-  useConnectorSyncRetryDaemon()
   useOnboardingFinalizer()
 
   useEffect(() => {

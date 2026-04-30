@@ -1,7 +1,10 @@
 import { useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ConnectorSettings } from "@/lib/domain/mcp/types";
-import { classifyOAuthCommandTelemetryFailure } from "@/lib/domain/mcp/oauth";
+import {
+  classifyOAuthCommandTelemetryFailure,
+  OAuthConnectorCommandError,
+} from "@/lib/domain/mcp/oauth";
 import {
   cancelOAuthConnectorConnect,
   connectOAuthConnector,
@@ -10,7 +13,6 @@ import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { OAuthConnectorCommandError } from "@/platform/tauri/mcp-oauth";
 import { refreshMcpConnectorsQuery } from "./use-connectors";
 
 export function useConnectOAuthConnector() {
@@ -53,7 +55,7 @@ export function useConnectOAuthConnector() {
       });
       captureTelemetryException(new Error(`mcp_oauth_${oauthError.kind}`), {
         tags: {
-          action: "connect_oauth_connector",
+          action: "connect_cloud_oauth_connector",
           domain: "mcp_connectors",
         },
         extras: {

@@ -1,108 +1,198 @@
 import {
   isConnectorCatalogEntryAvailable,
-  connectorSupportsCloudSecretSync,
-  getConnectorCatalogEntry,
   getPrimarySecretField,
   isOAuthConnectorCatalogEntry,
 } from "@/lib/domain/mcp/catalog";
 import {
-  buildOAuthConnectorServerUrl,
   validateOAuthConnectorSettings,
 } from "@/lib/domain/mcp/oauth";
-import { generateConnectorServerName } from "@/lib/domain/mcp/server-name";
 import { normalizeConnectorSecretValue, validateConnectorSecretValue } from "@/lib/domain/mcp/validation";
 import type {
   ConnectorCatalogEntry,
   ConnectorSettings,
+  ConnectOAuthConnectorResult,
   InstalledConnectorRecord,
-  SavedConnectorMetadata,
 } from "@/lib/domain/mcp/types";
 import {
-  listAvailableConnectorEntries,
-  listInstalledConnectorRecords,
-  loadConnectorSecretValue,
-  mutateConnectorState,
-  readConnectorState,
-  updateConnectorSyncState,
-} from "@/lib/infra/mcp/state";
-import { syncConnectorReplica } from "@/lib/infra/mcp/sync";
-import { deleteCloudMcpConnection } from "@/lib/integrations/cloud/mcp_connections";
-import { deleteConnectorSecret, setConnectorSecret } from "@/platform/tauri/connectors";
+  createCloudMcpConnection,
+  deleteCloudMcpConnectionV2,
+  listCloudMcpConnections,
+  patchCloudMcpConnection,
+  putCloudMcpSecretAuth,
+} from "@/lib/integrations/cloud/mcp_connections";
 import {
-  connectOAuthConnector as runOAuthConnectorFlow,
-  cancelOAuthConnectorConnect as cancelNativeOAuthConnectorConnect,
-  type ConnectOAuthConnectorResult,
-  deleteOAuthConnectorBundle,
-} from "@/platform/tauri/mcp-oauth";
+  cancelCloudMcpOAuthFlow,
+  getCloudMcpOAuthFlowStatus,
+  startCloudMcpOAuthFlow,
+} from "@/lib/integrations/cloud/mcp_oauth";
+import { getCloudMcpCatalog } from "@/lib/integrations/cloud/mcp_catalog";
+import type { CloudMcpCatalogEntry, CloudMcpConnection } from "@/lib/integrations/cloud/client";
+import { openExternal } from "@/platform/tauri/shell";
 
 export interface ConnectorPaneData {
   installed: InstalledConnectorRecord[];
   available: readonly ConnectorCatalogEntry[];
 }
 
+const pendingCloudOAuthFlows = new Map<string, string>();
+
 export async function loadConnectorPaneData(): Promise<ConnectorPaneData> {
-  const [installed, available] = await Promise.all([
-    listInstalledConnectorRecords(),
-    listAvailableConnectorEntries(),
+  return loadCloudConnectorPaneData();
+}
+
+async function loadCloudConnectorPaneData(): Promise<ConnectorPaneData> {
+  const [catalog, connectionsResponse] = await Promise.all([
+    getCloudMcpCatalog(),
+    listCloudMcpConnections(),
   ]);
-  return { installed, available };
-}
-
-function connectorWriteFailureMessage(name: string): string {
-  return `Couldn't save ${name}. Try again.`;
-}
-
-async function ensureConnectorSecretRoundTrip(
-  connectionId: string,
-  fieldId: string,
-  expectedValue: string,
-  connectorName: string,
-): Promise<void> {
-  // The native keychain can occasionally report a successful write while a
-  // follow-up read still returns no value, so connector install/update only
-  // succeeds after we verify the just-written secret is actually readable.
-  // On macOS this usually means the app signature cannot read items created
-  // by a previous build of the same binary — common for unsigned dev builds.
-  const storedValue = await loadConnectorSecretValue(connectionId, fieldId);
-  if (storedValue !== expectedValue) {
-    throw new Error(
-      `${connectorWriteFailureMessage(connectorName)} The macOS keychain did not return the token after writing it. On unsigned dev builds this can happen after a rebuild — delete this connector and re-add it.`,
-    );
-  }
-}
-
-function buildSavedConnectorMetadata(input: {
-  catalogEntry: ConnectorCatalogEntry;
-  connectionId: string;
-  existingConnections: SavedConnectorMetadata[];
-  settings?: ConnectorSettings;
-}): SavedConnectorMetadata {
-  const now = new Date().toISOString();
+  const entries = catalog.entries
+    .map(cloudCatalogEntryToLocal)
+    .filter(isConnectorCatalogEntryAvailable);
+  const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
+  const installed = connectionsResponse.connections
+    .map((connection) => cloudConnectionToInstalledRecord(connection, entriesById))
+    .filter((record): record is InstalledConnectorRecord => record !== null);
+  const installedEntryIds = new Set(installed.map((record) => record.catalogEntry.id));
   return {
-    connectionId: input.connectionId,
-    catalogEntryId: input.catalogEntry.id,
-    enabled: true,
-    serverName: generateConnectorServerName(
-      input.catalogEntry.serverNameBase,
-      input.connectionId,
-      input.existingConnections,
-    ),
-    syncState: connectorSupportsCloudSecretSync(input.catalogEntry) ? "degraded" : "synced",
-    createdAt: now,
-    updatedAt: now,
-    lastSyncedAt: connectorSupportsCloudSecretSync(input.catalogEntry) ? null : now,
-    settings: input.settings,
+    installed,
+    available: entries.filter((entry) => !installedEntryIds.has(entry.id)),
   };
+}
+
+async function loadCloudCatalogEntry(catalogEntryId: string): Promise<ConnectorCatalogEntry> {
+  const catalog = await getCloudMcpCatalog();
+  const entry = catalog.entries
+    .map(cloudCatalogEntryToLocal)
+    .find((candidate) => candidate.id === catalogEntryId);
+  if (!entry) {
+    throw new Error("Connector catalog entry was not found.");
+  }
+  return entry;
+}
+
+function cloudCatalogEntryToLocal(entry: CloudMcpCatalogEntry): ConnectorCatalogEntry {
+  const common = {
+    id: entry.id as ConnectorCatalogEntry["id"],
+    name: entry.name,
+    oneLiner: entry.oneLiner,
+    description: entry.description,
+    docsUrl: entry.docsUrl,
+    availability: entry.availability,
+    cloudSecretSync: entry.cloudSecretSync,
+    serverNameBase: entry.serverNameBase,
+    iconId: entry.iconId as ConnectorCatalogEntry["iconId"],
+    requiredFields: entry.requiredFields.map((field) => ({
+      id: field.id,
+      label: field.label,
+      placeholder: field.placeholder,
+      helperText: field.helperText,
+      getTokenInstructions: field.getTokenInstructions,
+      prefixHint: field.prefixHint ?? undefined,
+    })),
+    capabilities: entry.capabilities,
+  };
+  if (entry.transport === "stdio") {
+    return {
+      ...common,
+      transport: "stdio",
+      command: entry.command ?? "",
+      args: (entry.args ?? []).map((arg) => (
+        arg.source.kind === "workspace_path"
+          ? { source: { kind: "workspace_path" } }
+          : { source: { kind: "static", value: arg.source.value ?? "" } }
+      )),
+      env: (entry.env ?? []).map((env) => (
+        env.source.kind === "field"
+          ? { name: env.name, source: { kind: "field", fieldId: env.source.fieldId ?? "" } }
+          : { name: env.name, source: { kind: "static", value: env.source.value ?? "" } }
+      )),
+    };
+  }
+  if (entry.authKind === "oauth") {
+    return {
+      ...common,
+      transport: "http",
+      authKind: "oauth",
+      url: entry.url,
+    };
+  }
+  return {
+    ...common,
+    transport: "http",
+    authKind: "secret",
+    authStyle: entry.authStyle?.kind === "header"
+      ? { kind: "header", headerName: entry.authStyle.headerName ?? "" }
+      : entry.authStyle?.kind === "query"
+        ? { kind: "query", parameterName: entry.authStyle.parameterName ?? "" }
+        : { kind: "bearer" },
+    authFieldId: entry.authFieldId ?? "",
+    url: entry.url,
+  };
+}
+
+function cloudConnectionToInstalledRecord(
+  connection: CloudMcpConnection,
+  entriesById: Map<string, ConnectorCatalogEntry>,
+): InstalledConnectorRecord | null {
+  const catalogEntry = entriesById.get(connection.catalogEntryId);
+  if (!catalogEntry) {
+    return null;
+  }
+  const settings = sanitizeCloudConnectorSettings(connection.settings);
+  return {
+    catalogEntry,
+    broken: connection.authStatus !== "ready",
+    metadata: {
+      connectionId: connection.connectionId,
+      catalogEntryId: catalogEntry.id,
+      enabled: connection.enabled,
+      serverName: connection.serverName,
+      createdAt: connection.createdAt,
+      updatedAt: connection.updatedAt,
+      lastSyncedAt: connection.updatedAt,
+      settings,
+    },
+  };
+}
+
+function sanitizeCloudConnectorSettings(
+  settings: Record<string, unknown>,
+): ConnectorSettings | undefined {
+  if (
+    settings.kind === "supabase"
+    && typeof settings.projectRef === "string"
+    && typeof settings.readOnly === "boolean"
+  ) {
+    return {
+      kind: "supabase",
+      projectRef: settings.projectRef,
+      readOnly: settings.readOnly,
+    };
+  }
+  return undefined;
+}
+
+function connectorSettingsToCloud(
+  settings: ConnectorSettings | undefined,
+): Record<string, unknown> | undefined {
+  if (!settings) {
+    return undefined;
+  }
+  if (settings.kind === "supabase") {
+    return {
+      kind: "supabase",
+      projectRef: settings.projectRef,
+      readOnly: settings.readOnly,
+    };
+  }
+  return undefined;
 }
 
 export async function installConnector(
   catalogEntryId: string,
   secretValue: string,
-): Promise<{ degraded: boolean }> {
-  const catalogEntry = getConnectorCatalogEntry(catalogEntryId);
-  if (!catalogEntry) {
-    throw new Error("Connector catalog entry was not found.");
-  }
+): Promise<void> {
+  const catalogEntry = await loadCloudCatalogEntry(catalogEntryId);
   if (!isConnectorCatalogEntryAvailable(catalogEntry)) {
     throw new Error(`${catalogEntry.name} isn't available yet.`);
   }
@@ -119,70 +209,23 @@ export async function installConnector(
     }
   }
 
-  const connectionId = crypto.randomUUID();
-
+  const connection = await createCloudMcpConnection({
+    catalogEntryId: catalogEntry.id,
+    enabled: true,
+  });
   if (field) {
-    await setConnectorSecret(connectionId, field.id, normalizedSecret);
-    try {
-      await ensureConnectorSecretRoundTrip(
-        connectionId,
-        field.id,
-        normalizedSecret,
-        catalogEntry.name,
-      );
-    } catch (error) {
-      await deleteConnectorSecret(connectionId, field.id).catch(() => undefined);
-      throw error;
-    }
-  }
-
-  let metadata: SavedConnectorMetadata;
-  try {
-    metadata = await mutateConnectorState((state) => {
-      if (state.connections.some((item) => item.catalogEntryId === catalogEntry.id)) {
-        throw new Error(`${catalogEntry.name} is already connected.`);
-      }
-      const nextMetadata = buildSavedConnectorMetadata({
-        catalogEntry,
-        connectionId,
-        existingConnections: state.connections,
-      });
-      return {
-        state: {
-          ...state,
-          connections: [...state.connections, nextMetadata],
-        },
-        result: nextMetadata,
-      };
+    await putCloudMcpSecretAuth(connection.connectionId, {
+      secretFields: { [field.id]: normalizedSecret },
     });
-  } catch (error) {
-    if (field) {
-      await deleteConnectorSecret(connectionId, field.id).catch(() => undefined);
-    }
-    throw error;
-  }
-
-  if (!connectorSupportsCloudSecretSync(catalogEntry)) {
-    return { degraded: false };
-  }
-
-  try {
-    const synced = await syncConnectorReplica(metadata);
-    return { degraded: !synced };
-  } catch {
-    return { degraded: true };
   }
 }
 
 export async function connectOAuthConnector(
   catalogEntryId: string,
   settings?: ConnectorSettings,
-  connectionId = crypto.randomUUID(),
+  pendingAliasConnectionId?: string,
 ): Promise<ConnectOAuthConnectorResult> {
-  const catalogEntry = getConnectorCatalogEntry(catalogEntryId);
-  if (!catalogEntry) {
-    throw new Error("Connector catalog entry was not found.");
-  }
+  const catalogEntry = await loadCloudCatalogEntry(catalogEntryId);
   if (!isConnectorCatalogEntryAvailable(catalogEntry)) {
     throw new Error(`${catalogEntry.name} isn't available yet.`);
   }
@@ -195,223 +238,139 @@ export async function connectOAuthConnector(
     throw new Error(settingsError);
   }
 
-  const connectResult = await runOAuthConnectorFlow({
-    connectionId,
-    serverUrl: buildOAuthConnectorServerUrl(catalogEntry, settings),
+  const connection = await createCloudMcpConnection({
+    catalogEntryId: catalogEntry.id,
+    settings: connectorSettingsToCloud(settings),
+    enabled: true,
   });
-  if (connectResult.kind === "canceled") {
-    return connectResult;
+  const result = await runCloudOAuthFlow(connection.connectionId, pendingAliasConnectionId);
+  if (result.kind === "canceled") {
+    await deleteCloudMcpConnectionV2(connection.connectionId).catch(() => undefined);
   }
-
-  try {
-    await mutateConnectorState((latestState) => {
-      if (latestState.connections.some((item) => item.catalogEntryId === catalogEntry.id)) {
-        throw new Error(`${catalogEntry.name} is already connected.`);
-      }
-
-      const metadata = buildSavedConnectorMetadata({
-        catalogEntry,
-        connectionId,
-        existingConnections: latestState.connections,
-        settings,
-      });
-
-      return {
-        state: {
-          ...latestState,
-          connections: [...latestState.connections, metadata],
-        },
-        result: undefined,
-      };
-    });
-  } catch (error) {
-    await deleteOAuthConnectorBundle(connectionId).catch(() => undefined);
-    throw error;
-  }
-
-  return connectResult;
+  return result;
 }
 
 export async function cancelOAuthConnectorConnect(connectionId: string): Promise<void> {
-  await cancelNativeOAuthConnectorConnect(connectionId);
+  const flowId = pendingCloudOAuthFlows.get(connectionId);
+  if (flowId) {
+    await cancelCloudMcpOAuthFlow(flowId);
+    clearPendingCloudOAuthFlowByFlowId(flowId);
+  }
+}
+
+async function runCloudOAuthFlow(
+  connectionId: string,
+  pendingAliasConnectionId?: string,
+): Promise<ConnectOAuthConnectorResult> {
+  const started = await startCloudMcpOAuthFlow(connectionId);
+  pendingCloudOAuthFlows.set(connectionId, started.flowId);
+  if (pendingAliasConnectionId) {
+    pendingCloudOAuthFlows.set(pendingAliasConnectionId, started.flowId);
+  }
+  await openExternal(started.authorizationUrl);
+  const deadline = Date.now() + 5 * 60 * 1000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const status = await getCloudMcpOAuthFlowStatus(started.flowId);
+    if (status.status === "completed") {
+      clearPendingCloudOAuthFlow(connectionId);
+      if (pendingAliasConnectionId) {
+        clearPendingCloudOAuthFlow(pendingAliasConnectionId);
+      }
+      return { kind: "completed" };
+    }
+    if (status.status === "cancelled") {
+      clearPendingCloudOAuthFlow(connectionId);
+      if (pendingAliasConnectionId) {
+        clearPendingCloudOAuthFlow(pendingAliasConnectionId);
+      }
+      return { kind: "canceled" };
+    }
+    if (status.status === "failed" || status.status === "expired") {
+      clearPendingCloudOAuthFlow(connectionId);
+      if (pendingAliasConnectionId) {
+        clearPendingCloudOAuthFlow(pendingAliasConnectionId);
+      }
+      throw new Error("Couldn't complete OAuth for this connector.");
+    }
+  }
+  await cancelCloudMcpOAuthFlow(started.flowId).catch(() => undefined);
+  clearPendingCloudOAuthFlow(connectionId);
+  if (pendingAliasConnectionId) {
+    clearPendingCloudOAuthFlow(pendingAliasConnectionId);
+  }
+  throw new Error("OAuth authorization timed out.");
+}
+
+function clearPendingCloudOAuthFlow(connectionId: string): void {
+  pendingCloudOAuthFlows.delete(connectionId);
+}
+
+function clearPendingCloudOAuthFlowByFlowId(flowId: string): void {
+  for (const [connectionId, pendingFlowId] of pendingCloudOAuthFlows) {
+    if (pendingFlowId === flowId) {
+      pendingCloudOAuthFlows.delete(connectionId);
+    }
+  }
 }
 
 export async function reconnectOAuthConnector(
   connectionId: string,
   settings?: ConnectorSettings,
 ): Promise<ConnectOAuthConnectorResult> {
-  const state = await readConnectorState();
-  const metadata = state.connections.find((item) => item.connectionId === connectionId) ?? null;
-  if (!metadata) {
+  const connection = (await listCloudMcpConnections()).connections
+    .find((item) => item.connectionId === connectionId);
+  if (!connection) {
     throw new Error("Connector was not found.");
   }
-  const catalogEntry = getConnectorCatalogEntry(metadata.catalogEntryId);
-  if (!catalogEntry || !isOAuthConnectorCatalogEntry(catalogEntry)) {
+  const catalogEntry = await loadCloudCatalogEntry(connection.catalogEntryId);
+  if (!isOAuthConnectorCatalogEntry(catalogEntry)) {
     throw new Error("Connector doesn't use browser auth.");
   }
-
-  const nextSettings = settings ?? metadata.settings;
+  const nextSettings = settings ?? sanitizeCloudConnectorSettings(connection.settings);
   const settingsError = validateOAuthConnectorSettings(catalogEntry, nextSettings);
   if (settingsError) {
     throw new Error(settingsError);
   }
-
-  const reconnectResult = await runOAuthConnectorFlow({
-    connectionId: metadata.connectionId,
-    serverUrl: buildOAuthConnectorServerUrl(catalogEntry, nextSettings),
-  });
-  if (reconnectResult.kind === "canceled") {
-    return reconnectResult;
-  }
-
-  try {
-    await mutateConnectorState((latestState) => {
-      const latestMetadata = latestState.connections.find((item) => item.connectionId === connectionId) ?? null;
-      if (!latestMetadata) {
-        throw new Error("Connector was not found.");
-      }
-      if (latestMetadata.catalogEntryId !== catalogEntry.id) {
-        throw new Error("Connector changed while reconnecting.");
-      }
-      return {
-        state: {
-          ...latestState,
-          connections: latestState.connections.map((item) => (
-            item.connectionId === connectionId
-              ? {
-                  ...item,
-                  settings: nextSettings,
-                  updatedAt: new Date().toISOString(),
-                }
-              : item
-          )),
-        },
-        result: undefined,
-      };
+  if (nextSettings) {
+    await patchCloudMcpConnection(connectionId, {
+      settings: connectorSettingsToCloud(nextSettings),
     });
-  } catch (error) {
-    await deleteOAuthConnectorBundle(connectionId).catch(() => undefined);
-    throw error;
   }
-
-  return reconnectResult;
+  return runCloudOAuthFlow(connectionId);
 }
 
 export async function updateConnectorSecret(
   connectionId: string,
   secretValue: string,
-): Promise<{ degraded: boolean }> {
-  const state = await readConnectorState();
-  const metadata = state.connections.find((item) => item.connectionId === connectionId) ?? null;
-  if (!metadata) {
+): Promise<void> {
+  const connection = (await listCloudMcpConnections()).connections
+    .find((item) => item.connectionId === connectionId);
+  if (!connection) {
     throw new Error("Connector was not found.");
   }
-  const catalogEntry = getConnectorCatalogEntry(metadata.catalogEntryId);
-  if (!catalogEntry) {
-    throw new Error("Connector catalog entry was not found.");
-  }
-  if (isOAuthConnectorCatalogEntry(catalogEntry)) {
-    throw new Error(`${catalogEntry.name} uses browser auth.`);
-  }
+  const catalogEntry = await loadCloudCatalogEntry(connection.catalogEntryId);
   const field = getPrimarySecretField(catalogEntry);
   if (!field) {
     throw new Error(`${catalogEntry.name} doesn't store a token.`);
   }
-
   const normalizedSecret = normalizeConnectorSecretValue(secretValue);
   const validationError = validateConnectorSecretValue(normalizedSecret);
   if (validationError) {
     throw new Error(validationError);
   }
-
-  await setConnectorSecret(connectionId, field.id, normalizedSecret);
-  await ensureConnectorSecretRoundTrip(
-    connectionId,
-    field.id,
-    normalizedSecret,
-    catalogEntry.name,
-  );
-  await updateConnectorSyncState(connectionId, "degraded", metadata.lastSyncedAt);
-  try {
-    const synced = await syncConnectorReplica({
-      ...metadata,
-      syncState: "degraded",
-    });
-    return { degraded: !synced };
-  } catch {
-    return { degraded: true };
-  }
+  await putCloudMcpSecretAuth(connectionId, {
+    secretFields: { [field.id]: normalizedSecret },
+  });
 }
 
 export async function setConnectorEnabled(
   connectionId: string,
   enabled: boolean,
 ): Promise<void> {
-  await mutateConnectorState((state) => ({
-    state: {
-      ...state,
-      connections: state.connections.map((metadata) => (
-        metadata.connectionId === connectionId
-          ? { ...metadata, enabled, updatedAt: new Date().toISOString() }
-          : metadata
-      )),
-    },
-    result: undefined,
-  }));
+  await patchCloudMcpConnection(connectionId, { enabled });
 }
 
 export async function deleteConnector(connectionId: string): Promise<void> {
-  const state = await readConnectorState();
-  const metadata = state.connections.find((item) => item.connectionId === connectionId) ?? null;
-  if (!metadata) {
-    return;
-  }
-
-  const catalogEntry = getConnectorCatalogEntry(metadata.catalogEntryId);
-  if (catalogEntry) {
-    // Tolerate individual keychain failures so orphaned metadata can always be
-    // cleaned up even when the underlying secret/OAuth bundle is missing or
-    // ACL-denied (e.g. unsigned dev builds after a rebuild).
-    await Promise.all(
-      [
-        ...catalogEntry.requiredFields.map(
-          (field) => deleteConnectorSecret(connectionId, field.id).catch(() => undefined),
-        ),
-        ...(isOAuthConnectorCatalogEntry(catalogEntry)
-          ? [deleteOAuthConnectorBundle(connectionId).catch(() => undefined)]
-          : []),
-      ],
-    );
-  }
-  await mutateConnectorState((latestState) => ({
-    state: {
-      connections: latestState.connections.filter((item) => item.connectionId !== connectionId),
-      pendingDeletes: latestState.pendingDeletes,
-    },
-    result: undefined,
-  }));
-
-  if (!catalogEntry || !connectorSupportsCloudSecretSync(catalogEntry)) {
-    return;
-  }
-
-  try {
-    await deleteCloudMcpConnection(connectionId);
-  } catch {
-    await mutateConnectorState((nextState) => ({
-      state: {
-        ...nextState,
-        pendingDeletes: [
-          ...nextState.pendingDeletes.filter((item) => item.connectionId !== connectionId),
-          {
-            connectionId,
-            catalogEntryId: metadata.catalogEntryId,
-            deletedAt: new Date().toISOString(),
-            lastAttemptAt: new Date().toISOString(),
-          },
-        ],
-      },
-      result: undefined,
-    }));
-  }
+  await deleteCloudMcpConnectionV2(connectionId);
 }

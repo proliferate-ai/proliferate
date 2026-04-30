@@ -11,12 +11,10 @@ export type RuntimeInputSyncTelemetryTrigger =
   | "hourly"
   | "retry"
   | "credential_mutation"
-  | "mcp_mutation"
   | "repo_config_mutation"
   | "runtime_reconnected";
 export type RuntimeInputSyncTelemetrySourceKind =
   | "credential"
-  | "mcp_api_key_replica"
   | "repo_tracked_file";
 export type RuntimeInputSyncTelemetryFailureKind =
   | "cloud_unavailable"
@@ -33,7 +31,9 @@ export type SetupScriptTelemetryStatus = "failed" | "not_run" | "succeeded";
 export type ConnectorSkipReasonKind =
   | "missing_secret"
   | "needs_reconnect"
-  | "missing_stdio_command"
+  | "command_missing"
+  | "invalid_settings"
+  | "refresh_failed"
   | "workspace_path_unresolved"
   | "unsupported_target"
   | "resolver_error";
@@ -131,20 +131,11 @@ export interface DesktopProductEventMap {
   };
   connector_install_succeeded: {
     connector_id: string;
-    result: "synced" | "degraded";
+    result: "synced";
   };
   connector_skipped_at_launch: {
     connector_id: string;
     reason_kind: ConnectorSkipReasonKind;
-  };
-  connector_sync_degraded: {
-    connector_id: string;
-  };
-  connector_sync_recovered: {
-    connector_id: string;
-  };
-  connector_sync_retry_clicked: {
-    connector_id: string | "all";
   };
   connector_toggled: {
     connector_id: string;
@@ -152,7 +143,7 @@ export interface DesktopProductEventMap {
   };
   connector_updated: {
     connector_id: string;
-    result: "synced" | "degraded";
+    result: "synced";
   };
   connectors_pane_viewed: undefined;
   runtime_connection_state_changed: {
@@ -162,7 +153,6 @@ export interface DesktopProductEventMap {
   runtime_input_sync_cycle_completed: {
     trigger: RuntimeInputSyncTelemetryTrigger;
     credential_count: number;
-    mcp_count: number;
     repo_file_count: number;
     failure_count: number;
   };

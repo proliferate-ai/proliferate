@@ -51,8 +51,6 @@ const RUNTIME_INPUT_STATUS_LABELS: Record<RuntimeInputSyncStatus, string> = {
   synced_to_cloud: "Synced to cloud",
   manual_sync: "Manual resync",
   sync_failed: "Sync issue",
-  needs_reconnect: "Needs reconnect",
-  cloud_owned_sync_unsupported: "Cloud-owned sync unsupported",
 };
 
 const RUNTIME_INPUT_STATUS_CLASSES: Record<RuntimeInputSyncStatus, string> = {
@@ -62,8 +60,6 @@ const RUNTIME_INPUT_STATUS_CLASSES: Record<RuntimeInputSyncStatus, string> = {
   synced_to_cloud: "border-border/50 bg-muted/40 text-foreground",
   manual_sync: "border-border/50 bg-muted/40 text-muted-foreground",
   sync_failed: "border-border/60 bg-muted/40 text-foreground",
-  needs_reconnect: "border-destructive/40 bg-destructive/10 text-destructive",
-  cloud_owned_sync_unsupported: "border-border/50 bg-muted/40 text-muted-foreground",
 };
 
 function formatSandboxHours(value: number | null | undefined): string {

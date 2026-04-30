@@ -1,4 +1,3 @@
-import { CONNECTOR_CATALOG } from "@/config/mcp-catalog";
 import type {
   ConnectorAvailability,
   ConnectorCatalogEntry,
@@ -65,14 +64,6 @@ export function connectorSupportsTarget(
 export function stdioConnectorNeedsWorkspacePath(catalogEntry: ConnectorCatalogEntry): boolean {
   return catalogEntry.transport === "stdio"
     && catalogEntry.args.some((arg) => arg.source.kind === "workspace_path");
-}
-
-export const ACTIVE_CONNECTOR_CATALOG = CONNECTOR_CATALOG.filter(
-  isConnectorCatalogEntryAvailable,
-);
-
-export function getConnectorCatalogEntry(catalogEntryId: string) {
-  return CONNECTOR_CATALOG.find((entry) => entry.id === catalogEntryId) ?? null;
 }
 
 export function isOAuthConnectorCatalogEntry(

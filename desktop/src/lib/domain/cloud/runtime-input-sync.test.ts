@@ -23,13 +23,32 @@ describe("runtime input sync domain", () => {
       [
         { kind: "credential", provider: "claude" },
         { kind: "credential", provider: "claude" },
-        { kind: "mcp_api_key_replica" },
+        {
+          kind: "repo_tracked_file",
+          gitOwner: "acme",
+          gitRepoName: "rocket",
+          localWorkspaceId: "workspace",
+          relativePath: "config/.env",
+        },
+        {
+          kind: "repo_tracked_file",
+          gitOwner: "acme",
+          gitRepoName: "rocket",
+          localWorkspaceId: "workspace",
+          relativePath: "config/.env",
+        },
       ],
     );
 
     expect(state.items).toEqual([
       { kind: "credential", provider: "claude" },
-      { kind: "mcp_api_key_replica" },
+      {
+        kind: "repo_tracked_file",
+        gitOwner: "acme",
+        gitRepoName: "rocket",
+        localWorkspaceId: "workspace",
+        relativePath: "config/.env",
+      },
     ]);
   });
 

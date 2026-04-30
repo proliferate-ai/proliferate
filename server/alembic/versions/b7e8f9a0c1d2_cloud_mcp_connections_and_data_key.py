@@ -40,7 +40,9 @@ def upgrade() -> None:
         sa.Column("connection_id", sa.String(length=255), nullable=False),
         sa.Column("catalog_entry_id", sa.String(length=255), nullable=False),
         sa.Column("payload_ciphertext", sa.Text(), nullable=False),
-        sa.Column("payload_format", sa.String(length=32), nullable=False, server_default="json-v1"),
+        sa.Column(
+            "payload_format", sa.String(length=32), nullable=False, server_default="json-v1"
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=False),

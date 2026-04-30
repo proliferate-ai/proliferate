@@ -1,16 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   ConnectorCatalogEntry,
   ConnectorCatalogId,
   InstalledConnectorRecord,
 } from "@/lib/domain/mcp/types";
-import {
-  connectorSupportsCloudSecretSync,
-} from "@/lib/domain/mcp/catalog";
 import { trackConnectorConnectClicked } from "@/hooks/mcp/use-install-connector";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useConnectors } from "./use-connectors";
-import { useConnectorSyncRetry } from "./use-connector-sync-retry";
 
 const EMPTY_INSTALLED: InstalledConnectorRecord[] = [];
 const EMPTY_AVAILABLE: readonly ConnectorCatalogEntry[] = [];
@@ -25,8 +21,6 @@ export type ConnectorCardStatusIntent =
   | "connected"
   | "needs_token"
   | "needs_reconnect"
-  | "sync_issue"
-  | "cloud_owned_sync_unsupported"
   | "off";
 
 export interface ConnectorCardStatus {
@@ -114,14 +108,6 @@ export function resolveConnectorStatus(record: InstalledConnectorRecord): Connec
       tone: "error",
     };
   }
-  if (record.metadata.syncState === "degraded") {
-    return {
-      intent: "sync_issue",
-      label: "Sync issue",
-      actionable: true,
-      tone: "warning",
-    };
-  }
   if (!record.metadata.enabled) {
     return {
       intent: "off",
@@ -130,20 +116,12 @@ export function resolveConnectorStatus(record: InstalledConnectorRecord): Connec
       tone: "muted",
     };
   }
-  if (connectorSupportsCloudSecretSync(record.catalogEntry)) {
-    return {
-      intent: "connected",
-      label: "Synced to cloud",
-      actionable: false,
-      tone: "neutral",
-    };
-  }
   if (isOAuth) {
     return {
-      intent: "cloud_owned_sync_unsupported",
-      label: "Cloud-owned sync unsupported",
+      intent: "connected",
+      label: "Connected",
       actionable: false,
-      tone: "muted",
+      tone: "neutral",
     };
   }
   return {
@@ -171,8 +149,6 @@ function focusFromStatus(status: ConnectorCardStatus): ConnectorConfigureFocus {
       return "token";
     case "needs_reconnect":
       return "reconnect";
-    case "sync_issue":
-      return "sync";
     default:
       return null;
   }
@@ -192,16 +168,9 @@ export function useConnectorsCatalogState() {
   const { data } = useConnectors();
   const [searchQuery, setSearchQuery] = useState("");
   const [modal, setModal] = useState<InternalModalState>(null);
-  const { retryPendingConnectorSync } = useConnectorSyncRetry();
-  const retryPendingConnectorSyncRef = useRef(retryPendingConnectorSync.mutateAsync);
-
-  useEffect(() => {
-    retryPendingConnectorSyncRef.current = retryPendingConnectorSync.mutateAsync;
-  }, [retryPendingConnectorSync.mutateAsync]);
 
   useEffect(() => {
     trackProductEvent("connectors_pane_viewed", undefined);
-    void retryPendingConnectorSyncRef.current({ silent: true });
   }, []);
 
   const installed = data?.installed ?? EMPTY_INSTALLED;

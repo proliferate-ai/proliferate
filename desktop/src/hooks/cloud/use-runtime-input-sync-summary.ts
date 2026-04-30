@@ -1,10 +1,8 @@
 import { useCallback, useMemo } from "react";
-import { connectorSupportsCloudSecretSync, isOAuthConnectorCatalogEntry } from "@/lib/domain/mcp/catalog";
 import type { RuntimeInputSyncStatus } from "@/lib/domain/cloud/runtime-input-sync";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { cloudRepositoryKey, isCloudRepository } from "@/lib/domain/settings/repositories";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
-import { useConnectors } from "@/hooks/mcp/use-connectors";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useCloudCredentials } from "./use-cloud-credentials";
 import { useCloudRepoConfigs } from "./use-cloud-repo-configs";
@@ -42,53 +40,6 @@ function summarizeCredentialRows(
   };
 }
 
-function summarizeMcpRows(
-  connectors: ReturnType<typeof useConnectors>["data"],
-): RuntimeInputSyncSummaryRow {
-  const installed = connectors?.installed ?? [];
-  const apiKeyConnectors = installed.filter((record) =>
-    connectorSupportsCloudSecretSync(record.catalogEntry)
-  );
-  const oauthConnectors = installed.filter((record) =>
-    isOAuthConnectorCatalogEntry(record.catalogEntry)
-  );
-  const degradedCount = apiKeyConnectors.filter(
-    (record) => record.metadata.syncState === "degraded",
-  ).length;
-  const syncedCount = apiKeyConnectors.length - degradedCount;
-
-  if (degradedCount > 0) {
-    return {
-      id: "mcp",
-      label: "Powers API-key replicas",
-      description: `${degradedCount} API-key Power${degradedCount === 1 ? " has" : "s have"} a cloud sync issue.`,
-      status: "sync_failed",
-    };
-  }
-  if (syncedCount > 0) {
-    return {
-      id: "mcp",
-      label: "Powers API-key replicas",
-      description: `${syncedCount} API-key Power${syncedCount === 1 ? " is" : "s are"} synced to cloud.`,
-      status: "synced_to_cloud",
-    };
-  }
-  if (oauthConnectors.length > 0) {
-    return {
-      id: "mcp",
-      label: "Powers API-key replicas",
-      description: "OAuth Powers can launch from desktop sessions; cloud-owned sync is unsupported.",
-      status: "cloud_owned_sync_unsupported",
-    };
-  }
-  return {
-    id: "mcp",
-    label: "Powers API-key replicas",
-    description: "No API-key Powers are configured for cloud sync.",
-    status: "not_configured",
-  };
-}
-
 function summarizeRepoRows(
   repositories: SettingsRepositoryEntry[],
   repoConfigs: ReturnType<typeof useCloudRepoConfigs>["data"],
@@ -121,7 +72,6 @@ export function useRuntimeInputSyncSummary(
   );
   const setPreference = useUserPreferencesStore((state) => state.set);
   const credentials = useCloudCredentials();
-  const connectors = useConnectors();
   const repoConfigs = useCloudRepoConfigs();
   const setEnabled = useCallback((enabled: boolean) => {
     setPreference("cloudRuntimeInputSyncEnabled", enabled);
@@ -130,9 +80,8 @@ export function useRuntimeInputSyncSummary(
 
   const rows = useMemo(() => [
     summarizeCredentialRows(credentials.data),
-    summarizeMcpRows(connectors.data),
     summarizeRepoRows(repositories, repoConfigs.data),
-  ], [connectors.data, credentials.data, repoConfigs.data, repositories]);
+  ], [credentials.data, repoConfigs.data, repositories]);
 
   return {
     enabled: cloudRuntimeInputSyncEnabled,

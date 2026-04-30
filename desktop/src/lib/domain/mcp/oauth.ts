@@ -1,29 +1,29 @@
 import type {
   ConnectorCatalogEntry,
   ConnectorSettings,
-  SupabaseConnectorSettings,
 } from "@/lib/domain/mcp/types";
 import type { TelemetryFailureKind } from "@/lib/domain/telemetry/failures";
-import type { OAuthCommandErrorKind } from "@/platform/tauri/mcp-oauth";
 
-export function buildSupabaseConnectorUrl(settings: SupabaseConnectorSettings): string {
-  const url = new URL("https://mcp.supabase.com/mcp");
-  url.searchParams.set("project_ref", settings.projectRef);
-  url.searchParams.set("read_only", settings.readOnly ? "true" : "false");
-  return url.toString();
-}
+export type OAuthCommandErrorKind =
+  | "discovery_failed"
+  | "registration_failed"
+  | "exchange_failed"
+  | "refresh_failed"
+  | "callback_timeout"
+  | "state_mismatch"
+  | "unexpected";
 
-export function buildOAuthConnectorServerUrl(
-  catalogEntry: Extract<ConnectorCatalogEntry, { transport: "http"; authKind: "oauth" }>,
-  settings?: ConnectorSettings,
-): string {
-  if (catalogEntry.id === "supabase") {
-    if (settings?.kind !== "supabase") {
-      return catalogEntry.url;
-    }
-    return buildSupabaseConnectorUrl(settings);
+export class OAuthConnectorCommandError extends Error {
+  readonly kind: OAuthCommandErrorKind;
+
+  readonly retryable: boolean;
+
+  constructor(kind: OAuthCommandErrorKind, message: string, retryable: boolean) {
+    super(message);
+    this.name = "OAuthConnectorCommandError";
+    this.kind = kind;
+    this.retryable = retryable;
   }
-  return catalogEntry.url;
 }
 
 export function validateOAuthConnectorSettings(

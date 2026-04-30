@@ -1,14 +1,51 @@
 import type { SessionMcpBindingSummary } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
-import { CONNECTOR_CATALOG } from "@/config/mcp-catalog";
-import type { InstalledConnectorRecord } from "@/lib/domain/mcp/types";
+import type { ConnectorCatalogEntry, InstalledConnectorRecord } from "@/lib/domain/mcp/types";
 import { shouldShowPowersNeedsRestart } from "./SessionPowersSummary";
+
+const TEST_CATALOG: Record<string, ConnectorCatalogEntry> = {
+  context7: {
+    id: "context7",
+    name: "Context7",
+    oneLiner: "Docs",
+    description: "Docs",
+    docsUrl: "https://example.com",
+    availability: "universal",
+    cloudSecretSync: true,
+    transport: "http",
+    authKind: "secret",
+    authStyle: { kind: "bearer" },
+    authFieldId: "api_key",
+    url: "https://mcp.example.com/mcp",
+    serverNameBase: "context7",
+    iconId: "context7",
+    requiredFields: [],
+    capabilities: [],
+  },
+  filesystem: {
+    id: "filesystem",
+    name: "Filesystem",
+    oneLiner: "Files",
+    description: "Files",
+    docsUrl: "https://example.com",
+    availability: "local_only",
+    cloudSecretSync: false,
+    transport: "stdio",
+    command: "npx",
+    args: [{ source: { kind: "workspace_path" } }],
+    env: [],
+    serverNameBase: "filesystem",
+    iconId: "folder",
+    requiredFields: [],
+    capabilities: [],
+  },
+};
 
 function installedConnector(
   connectionId: string,
   catalogEntryId: InstalledConnectorRecord["metadata"]["catalogEntryId"] = "context7",
 ): InstalledConnectorRecord {
-  const catalogEntry = CONNECTOR_CATALOG.find((entry) => entry.id === catalogEntryId);
+  const catalogEntry = TEST_CATALOG[catalogEntryId];
   if (!catalogEntry) {
     throw new Error(`missing catalog entry ${catalogEntryId}`);
   }
@@ -22,7 +59,6 @@ function installedConnector(
       enabled: true,
       lastSyncedAt: null,
       serverName: catalogEntry.serverNameBase,
-      syncState: "synced",
       updatedAt: "2026-04-19T00:00:00.000Z",
     },
   };

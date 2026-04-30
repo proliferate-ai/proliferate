@@ -189,7 +189,7 @@ function reportConnectorLaunchWarnings(
       showToast(`${warning.connectorName} wasn't available in this session because it only supports local runtimes.`, "info");
       return;
     }
-    if (warning.kind === "missing_stdio_command") {
+    if (warning.kind === "command_missing") {
       showToast(`${warning.connectorName} wasn't available in this session because its local command wasn't installed.`, "info");
       return;
     }

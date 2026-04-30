@@ -197,6 +197,9 @@ async def test_alembic_upgrade_creates_current_schema() -> None:
                     "billing_entitlement",
                     "billing_grant",
                     "cloud_mcp_connection",
+                    "cloud_mcp_connection_auth",
+                    "cloud_mcp_oauth_client",
+                    "cloud_mcp_oauth_flow",
                     "cloud_credential",
                     "cloud_workspace_handoff_op",
                     "cloud_workspace_mobility",
@@ -217,6 +220,21 @@ async def test_alembic_upgrade_creates_current_schema() -> None:
                 )
                 assert "git_base_branch" in columns
                 assert "anyharness_data_key_ciphertext" in columns
+
+                mcp_connection_columns = await conn.run_sync(
+                    lambda sync_conn: {
+                        column["name"]
+                        for column in inspect(sync_conn).get_columns("cloud_mcp_connection")
+                    }
+                )
+                assert {
+                    "org_id",
+                    "catalog_entry_version",
+                    "server_name",
+                    "enabled",
+                    "settings_json",
+                    "config_version",
+                } <= mcp_connection_columns
 
                 version = await conn.scalar(text("SELECT version_num FROM alembic_version"))
                 assert version == HEAD_REVISION

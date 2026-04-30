@@ -1,14 +1,12 @@
 import { useCallback, useState } from "react";
 import type { InstalledConnectorRecord } from "@/lib/domain/mcp/types";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { useConnectorSyncRetry } from "./use-connector-sync-retry";
 import { useToggleConnector } from "./use-toggle-connector";
 
 export function useInstalledConnectorActions() {
   const showToast = useToastStore((state) => state.show);
   const [pendingConnectionIds, setPendingConnectionIds] = useState<Set<string>>(new Set());
   const toggleMutation = useToggleConnector();
-  const { retryConnectorSync } = useConnectorSyncRetry();
 
   const setPending = useCallback((connectionId: string, active: boolean) => {
     setPendingConnectionIds((current) => {
@@ -41,21 +39,8 @@ export function useInstalledConnectorActions() {
     }
   }, [setPending, showToast, toggleMutation]);
 
-  const onRetry = useCallback(async (record: InstalledConnectorRecord) => {
-    setPending(record.metadata.connectionId, true);
-    try {
-      await retryConnectorSync.mutateAsync({
-        connectionId: record.metadata.connectionId,
-        catalogEntryId: record.catalogEntry.id,
-      });
-    } finally {
-      setPending(record.metadata.connectionId, false);
-    }
-  }, [retryConnectorSync, setPending]);
-
   return {
     isPending: (connectionId: string) => pendingConnectionIds.has(connectionId),
-    onRetry,
     onToggle,
   };
 }

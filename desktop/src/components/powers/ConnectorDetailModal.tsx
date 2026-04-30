@@ -7,10 +7,10 @@ import { validateOAuthConnectorSettings } from "@/lib/domain/mcp/oauth";
 import type {
   ConnectorCatalogEntry,
   ConnectorSettings,
+  ConnectOAuthConnectorResult,
   SupabaseConnectorSettings,
 } from "@/lib/domain/mcp/types";
 import { validateConnectorSecretValue } from "@/lib/domain/mcp/validation";
-import type { ConnectOAuthConnectorResult } from "@/platform/tauri/mcp-oauth";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { Button } from "@/components/ui/Button";
 import { ModalShell } from "@/components/ui/ModalShell";
@@ -41,10 +41,6 @@ type DetailCallbacks = {
     catalogEntryId: ConnectorCatalogEntry["id"],
     settings?: ConnectorSettings,
   ) => Promise<ConnectOAuthConnectorResult>;
-  onRetrySync: (
-    connectionId: string,
-    catalogEntryId: ConnectorCatalogEntry["id"],
-  ) => Promise<boolean>;
   onUpdateSecret: (
     connectionId: string,
     catalogEntryId: ConnectorCatalogEntry["id"],
@@ -87,7 +83,6 @@ export function ConnectorDetailModal({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
-  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
     setSecretValue("");
@@ -96,7 +91,6 @@ export function ConnectorDetailModal({
   }, [entry.id, connectionId, existingSettings]);
 
   const { variant } = modal;
-  const busy = submitting || reconnecting;
   const oauthEntry =
     entry.transport === "http" && entry.authKind === "oauth" ? entry : null;
   const oauthValidationError = oauthEntry
@@ -239,16 +233,6 @@ export function ConnectorDetailModal({
     );
   }
 
-  async function handleRetrySync() {
-    if (!connectionId) return;
-    setRetrying(true);
-    try {
-      await callbacks.onRetrySync(connectionId, entry.id);
-    } finally {
-      setRetrying(false);
-    }
-  }
-
   async function handleCancelOAuth() {
     try {
       await callbacks.onCancelOAuth();
@@ -348,13 +332,11 @@ export function ConnectorDetailModal({
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {modal.tab === "configure" && (
           <ConnectorConfigureTab
-            busy={busy}
             disabled={submitting || reconnecting}
             entry={entry}
             error={error}
             focus={focus}
             isConnected={isConnected}
-            onRetrySync={connectionId ? handleRetrySync : undefined}
             onSecretChange={(value) => {
               setSecretValue(value);
               if (error) setError(null);
@@ -364,7 +346,6 @@ export function ConnectorDetailModal({
               if (error) setError(null);
             }}
             primaryAction={primaryButton}
-            retrying={retrying}
             secretValue={secretValue}
             status={status}
             supabaseSettings={supabaseSettings}

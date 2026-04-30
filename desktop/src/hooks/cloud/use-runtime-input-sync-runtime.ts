@@ -17,7 +17,6 @@ import { getCloudRepoConfig } from "@/lib/integrations/cloud/repo-configs";
 import { listSyncableCloudCredentials } from "@/platform/tauri/credentials";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
-import { useConnectorSyncRetry } from "@/hooks/mcp/use-connector-sync-retry";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
@@ -34,7 +33,6 @@ const HOURLY_RETRY_MS = 3_600_000;
 
 interface RuntimeInputSyncCycleCounts {
   credential: number;
-  mcp_api_key_replica: number;
   repo_tracked_file: number;
   failures: number;
 }
@@ -42,7 +40,6 @@ interface RuntimeInputSyncCycleCounts {
 function emptyCounts(): RuntimeInputSyncCycleCounts {
   return {
     credential: 0,
-    mcp_api_key_replica: 0,
     repo_tracked_file: 0,
     failures: 0,
   };
@@ -50,7 +47,6 @@ function emptyCounts(): RuntimeInputSyncCycleCounts {
 
 function hasRuntimeInputSyncCounts(counts: RuntimeInputSyncCycleCounts): boolean {
   return counts.credential > 0
-    || counts.mcp_api_key_replica > 0
     || counts.repo_tracked_file > 0
     || counts.failures > 0;
 }
@@ -98,13 +94,11 @@ export function useRuntimeInputSyncRuntime() {
     (state) => state.cloudRuntimeInputSyncEnabled,
   );
   const { cloudActive } = useCloudAvailabilityState();
-  const { retryPendingConnectorSync } = useConnectorSyncRetry();
   const [online, setOnline] = useState(isOnline);
   const queueRef = useRef<RuntimeInputSyncQueueState>(createRuntimeInputSyncQueueState());
   const inFlightRef = useRef(false);
   const runtimeUrlRef = useRef(runtimeUrl);
   const queryClientRef = useRef(queryClient);
-  const retryPendingConnectorSyncRef = useRef(retryPendingConnectorSync.mutateAsync);
   const keepFreshActiveRef = useRef(false);
   const previousOnlineRef = useRef(online);
 
@@ -115,10 +109,6 @@ export function useRuntimeInputSyncRuntime() {
   useEffect(() => {
     queryClientRef.current = queryClient;
   }, [queryClient]);
-
-  useEffect(() => {
-    retryPendingConnectorSyncRef.current = retryPendingConnectorSync.mutateAsync;
-  }, [retryPendingConnectorSync.mutateAsync]);
 
   const keepFreshActive =
     preferencesHydrated && cloudRuntimeInputSyncEnabled && cloudActive && online;
@@ -193,9 +183,6 @@ export function useRuntimeInputSyncRuntime() {
           }),
         ]);
         return;
-      case "mcp_api_key_replica":
-        await retryPendingConnectorSyncRef.current({ silent: true });
-        return;
       case "repo_tracked_file":
         await syncRepoFile(descriptor);
         return;
@@ -239,7 +226,6 @@ export function useRuntimeInputSyncRuntime() {
         trackProductEvent("runtime_input_sync_cycle_completed", {
           trigger,
           credential_count: counts.credential,
-          mcp_count: counts.mcp_api_key_replica,
           repo_file_count: counts.repo_tracked_file,
           failure_count: counts.failures,
         });
@@ -255,7 +241,6 @@ export function useRuntimeInputSyncRuntime() {
         descriptors.push({ kind: "credential", provider: source.provider });
       }
     }
-    descriptors.push({ kind: "mcp_api_key_replica" });
 
     enqueue(descriptors);
   }, [enqueue]);

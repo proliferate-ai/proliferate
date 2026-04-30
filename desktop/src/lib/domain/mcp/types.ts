@@ -14,7 +14,6 @@ export type ConnectorCatalogId =
   | "playwright";
 
 export type ConnectorAvailability = "universal" | "local_only" | "cloud_only";
-export type ConnectorSyncState = "synced" | "degraded";
 
 export interface ConnectorCatalogField {
   id: string;
@@ -65,6 +64,10 @@ export interface SupabaseConnectorSettings {
 
 export type ConnectorSettings = SupabaseConnectorSettings;
 
+export type ConnectOAuthConnectorResult =
+  | { kind: "completed" }
+  | { kind: "canceled" };
+
 interface ConnectorCatalogEntryBase {
   id: ConnectorCatalogId;
   name: string;
@@ -113,7 +116,6 @@ export interface SavedConnectorMetadata {
   catalogEntryId: ConnectorCatalogId;
   enabled: boolean;
   serverName: string;
-  syncState: ConnectorSyncState;
   createdAt: string;
   updatedAt: string;
   lastSyncedAt: string | null;
@@ -147,7 +149,9 @@ interface ConnectorLaunchResolutionWarningBase {
 export type ConnectorLaunchResolutionWarning =
   | (ConnectorLaunchResolutionWarningBase & { kind: "missing_secret" })
   | (ConnectorLaunchResolutionWarningBase & { kind: "needs_reconnect" })
-  | (ConnectorLaunchResolutionWarningBase & { kind: "missing_stdio_command" })
+  | (ConnectorLaunchResolutionWarningBase & { kind: "command_missing" })
   | (ConnectorLaunchResolutionWarningBase & { kind: "workspace_path_unresolved" })
   | (ConnectorLaunchResolutionWarningBase & { kind: "unsupported_target" })
+  | (ConnectorLaunchResolutionWarningBase & { kind: "invalid_settings" })
+  | (ConnectorLaunchResolutionWarningBase & { kind: "refresh_failed" })
   | (ConnectorLaunchResolutionWarningBase & { kind: "resolver_error" });

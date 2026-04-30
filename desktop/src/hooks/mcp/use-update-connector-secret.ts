@@ -4,7 +4,6 @@ import {
   captureTelemetryException,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
-import { emitRuntimeInputSyncEvent } from "@/hooks/cloud/runtime-input-sync-events";
 import { refreshMcpConnectorsQuery } from "./use-connectors";
 
 export function useUpdateConnectorSecret() {
@@ -19,20 +18,11 @@ export function useUpdateConnectorSecret() {
       catalogEntryId: string;
       secretValue: string;
     }) => updateConnectorSecret(input.connectionId, input.secretValue),
-    onSuccess: async (result, variables) => {
+    onSuccess: async (_result, variables) => {
       await refreshMcpConnectorsQuery(queryClient);
       trackProductEvent("connector_updated", {
         connector_id: variables.catalogEntryId,
-        result: result.degraded ? "degraded" : "synced",
-      });
-      if (result.degraded) {
-        trackProductEvent("connector_sync_degraded", {
-          connector_id: variables.catalogEntryId,
-        });
-      }
-      emitRuntimeInputSyncEvent({
-        trigger: "mcp_mutation",
-        descriptors: [{ kind: "mcp_api_key_replica" }],
+        result: "synced",
       });
     },
     onError: (error, variables) => {

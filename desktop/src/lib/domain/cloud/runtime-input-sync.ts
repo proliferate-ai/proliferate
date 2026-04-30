@@ -2,7 +2,6 @@ import type { CloudAgentKind } from "@/lib/integrations/cloud/client";
 
 export type RuntimeInputSyncSourceKind =
   | "credential"
-  | "mcp_api_key_replica"
   | "repo_tracked_file";
 
 export type RuntimeInputSyncStatus =
@@ -11,9 +10,7 @@ export type RuntimeInputSyncStatus =
   | "syncing"
   | "synced_to_cloud"
   | "manual_sync"
-  | "sync_failed"
-  | "needs_reconnect"
-  | "cloud_owned_sync_unsupported";
+  | "sync_failed";
 
 export type RuntimeInputSyncTrigger =
   | "preference_enabled"
@@ -22,7 +19,6 @@ export type RuntimeInputSyncTrigger =
   | "hourly"
   | "retry"
   | "credential_mutation"
-  | "mcp_mutation"
   | "repo_config_mutation"
   | "runtime_reconnected";
 
@@ -39,10 +35,6 @@ export interface CredentialRuntimeInputSyncDescriptor {
   provider: CloudAgentKind;
 }
 
-export interface McpRuntimeInputSyncDescriptor {
-  kind: "mcp_api_key_replica";
-}
-
 export interface RepoTrackedFileRuntimeInputSyncDescriptor {
   kind: "repo_tracked_file";
   gitOwner: string;
@@ -53,7 +45,6 @@ export interface RepoTrackedFileRuntimeInputSyncDescriptor {
 
 export type RuntimeInputSyncDescriptor =
   | CredentialRuntimeInputSyncDescriptor
-  | McpRuntimeInputSyncDescriptor
   | RepoTrackedFileRuntimeInputSyncDescriptor;
 
 export interface RuntimeInputSyncQueueState {
@@ -87,8 +78,6 @@ export function runtimeInputSyncDescriptorKey(
   switch (descriptor.kind) {
     case "credential":
       return `credential:${descriptor.provider}`;
-    case "mcp_api_key_replica":
-      return "mcp_api_key_replica";
     case "repo_tracked_file":
       return [
         "repo_tracked_file",
@@ -116,8 +105,6 @@ export function normalizeRuntimeInputSyncDescriptor(
         || descriptor.provider === "gemini"
         ? descriptor
         : null;
-    case "mcp_api_key_replica":
-      return descriptor;
     case "repo_tracked_file": {
       const gitOwner = descriptor.gitOwner.trim();
       const gitRepoName = descriptor.gitRepoName.trim();

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useConnectorsCatalogState } from "@/hooks/mcp/use-connectors-catalog-state";
 import { useConnectOAuthConnector } from "@/hooks/mcp/use-connect-oauth-connector";
-import { useConnectorSyncRetry } from "@/hooks/mcp/use-connector-sync-retry";
 import { useDeleteConnector } from "@/hooks/mcp/use-delete-connector";
 import { useInstallConnector } from "@/hooks/mcp/use-install-connector";
 import { useInstalledConnectorActions } from "@/hooks/mcp/use-installed-connector-actions";
@@ -25,7 +24,6 @@ export function ConnectorCatalogPage() {
   const reconnectOAuthMutation = useReconnectOAuthConnector();
   const updateSecretMutation = useUpdateConnectorSecret();
   const deleteMutation = useDeleteConnector();
-  const { retryConnectorSync } = useConnectorSyncRetry();
 
   const [deleteTarget, setDeleteTarget] = useState<InstalledConnectorRecord | null>(null);
 
@@ -59,16 +57,6 @@ export function ConnectorCatalogPage() {
         catalogEntryId,
         settings,
       }),
-    onRetrySync: async (
-      connectionId: string,
-      catalogEntryId: InstalledConnectorRecord["catalogEntry"]["id"],
-    ) => {
-      const result = await retryConnectorSync.mutateAsync({
-        connectionId,
-        catalogEntryId,
-      });
-      return result.recovered;
-    },
     onUpdateSecret: async (
       connectionId: string,
       catalogEntryId: InstalledConnectorRecord["catalogEntry"]["id"],
