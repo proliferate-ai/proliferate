@@ -3,20 +3,21 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyharness_contract::v1::{
-    MarkReviewRevisionReadyRequest, PromptInputBlock, ReviewRunDetail, ReviewRunUpdatedPayload,
-    StartCodeReviewRequest, StartPlanReviewRequest,
+    MarkReviewRevisionReadyRequest, PromptInputBlock, RetryReviewAssignmentRequest,
+    ReviewRunDetail, ReviewRunUpdatedPayload, StartCodeReviewRequest, StartPlanReviewRequest,
 };
 
 use super::hooks::ReviewHookEvent;
 use super::model::{
-    ReviewFeedbackJobRecord, ReviewFeedbackJobState, ReviewKind, ReviewModeVerificationStatus,
-    ReviewRunRecord, ReviewRunStatus,
+    ReviewAssignmentRecord, ReviewFeedbackJobRecord, ReviewFeedbackJobState, ReviewKind,
+    ReviewModeVerificationStatus, ReviewRunRecord, ReviewRunStatus,
 };
 use super::runtime_helpers::{
     build_reviewer_prompt, map_create_session_error, reviewer_system_prompt_append,
     reviewers_from_contract, verify_mode,
 };
 use super::service::{ReviewError, ReviewService, StartReviewInput};
+use crate::acp::provider_errors::OPUS_4_6_FALLBACK_MODEL_ID;
 use crate::origin::OriginContext;
 use crate::sessions::extensions::SessionTurnOutcome;
 use crate::sessions::model::SessionMcpBindingPolicy;
@@ -250,6 +251,67 @@ impl ReviewRuntime {
         self.mark_revision_ready(run_id, req).await
     }
 
+    pub async fn retry_assignment(
+        &self,
+        run_id: &str,
+        assignment_id: &str,
+        req: RetryReviewAssignmentRequest,
+    ) -> Result<ReviewRunDetail, ReviewError> {
+        let model_id = req
+            .model_id
+            .as_deref()
+            .unwrap_or(OPUS_4_6_FALLBACK_MODEL_ID);
+        let run = self
+            .service
+            .store()
+            .find_run(run_id)
+            .map_err(ReviewError::Internal)?
+            .ok_or_else(|| ReviewError::RunNotFound(run_id.to_string()))?;
+        if self
+            .service
+            .store()
+            .find_assignment_for_run(run_id, assignment_id)
+            .map_err(ReviewError::Internal)?
+            .is_none()
+        {
+            return Err(ReviewError::AssignmentNotFound(assignment_id.to_string()));
+        }
+        let deadline_at = (chrono::Utc::now()
+            + chrono::Duration::minutes(crate::reviews::service::REVIEWER_DEADLINE_MINUTES))
+        .to_rfc3339();
+        let assignment = self
+            .service
+            .store()
+            .prepare_assignment_retry(run_id, assignment_id, Some(model_id), &deadline_at)
+            .map_err(ReviewError::Internal)?
+            .ok_or(ReviewError::RetryNotAllowed)?;
+        if let Err(error) = self.launch_new_assignment_session(&run, &assignment).await {
+            let detail = format!("Retry launch failed: {error}");
+            if let Err(restore_error) = self
+                .service
+                .store()
+                .restore_assignment_retryable_after_retry_launch_failed(
+                    run_id,
+                    assignment_id,
+                    Some(&detail),
+                )
+            {
+                tracing::warn!(
+                    review_run_id = %run_id,
+                    assignment_id,
+                    error = %restore_error,
+                    "failed to restore retryable review assignment after retry launch failure"
+                );
+            }
+            self.emit_review_run_updated(&run.parent_session_id, run_id)
+                .await;
+            return Err(error);
+        }
+        self.emit_review_run_updated(&run.parent_session_id, run_id)
+            .await;
+        self.service.get_run_detail(run_id)
+    }
+
     pub async fn stop_run(&self, run_id: &str) -> Result<ReviewRunDetail, ReviewError> {
         let reviewer_session_ids = self.service.stop_run(run_id)?;
         for session_id in reviewer_session_ids {
@@ -370,6 +432,12 @@ impl ReviewRuntime {
                     error = %detail,
                     "failed to launch review round"
                 );
+                if matches!(error, ReviewError::RetryNotAllowed) {
+                    runtime
+                        .emit_review_run_updated(&run.parent_session_id, &run_id)
+                        .await;
+                    return;
+                }
                 if let Err(mark_error) = runtime.service.store().mark_run_system_failed(
                     &run_id,
                     round_id.as_deref(),
@@ -408,7 +476,8 @@ impl ReviewRuntime {
                     previous.reviewer_session_id.as_deref(),
                     previous.session_link_id.as_deref(),
                 ) {
-                    self.service
+                    let launched = self
+                        .service
                         .store()
                         .update_assignment_launched(
                             &assignment.id,
@@ -418,70 +487,144 @@ impl ReviewRuntime {
                             previous.mode_verification_status,
                         )
                         .map_err(ReviewError::Internal)?;
+                    if !launched {
+                        return Err(ReviewError::RetryNotAllowed);
+                    }
                     self.send_reviewer_assignment_prompt(session_id, run, &assignment)
                         .await?;
                     continue;
                 }
             }
-            let child = self
-                .session_runtime
-                .create_durable_session(
-                    &run.workspace_id,
-                    &assignment.agent_kind,
-                    assignment.model_id.as_deref(),
-                    assignment.requested_mode_id.as_deref(),
-                    Some(vec![reviewer_system_prompt_append()]),
-                    Vec::new(),
-                    None,
-                    SessionMcpBindingPolicy::InternalOnly,
-                    false,
-                    OriginContext::system_local_runtime(),
-                )
-                .map_err(map_create_session_error)?;
-            let session_link_id = self.service.link_reviewer_session(
-                &run.id,
-                &assignment.id,
-                &run.parent_session_id,
-                &child.id,
-                Some(assignment.persona_label.clone()),
-                None,
-                ReviewModeVerificationStatus::Pending,
-            )?;
-            let started = match self
-                .session_runtime
-                .start_persisted_session(&child, None)
-                .await
-            {
-                Ok(started) => started,
-                Err(error) => {
-                    let detail = format!("{error:?}");
-                    self.service
-                        .store()
-                        .mark_assignment_system_failed(
-                            &assignment.id,
-                            "reviewer_start_failed",
-                            Some(&detail),
-                        )
-                        .map_err(ReviewError::Internal)?;
-                    return Err(map_create_session_error(error));
-                }
-            };
-            let actual_mode_id = started.current_mode_id.as_deref();
-            let mode_status = verify_mode(assignment.requested_mode_id.as_deref(), actual_mode_id);
-            self.service
-                .store()
-                .update_assignment_launched(
-                    &assignment.id,
-                    &started.id,
-                    &session_link_id,
-                    actual_mode_id,
-                    mode_status,
-                )
-                .map_err(ReviewError::Internal)?;
-            self.send_reviewer_assignment_prompt(&started.id, run, &assignment)
-                .await?;
+            self.launch_new_assignment_session(run, &assignment).await?;
         }
         Ok(())
+    }
+
+    async fn launch_new_assignment_session(
+        &self,
+        run: &ReviewRunRecord,
+        assignment: &ReviewAssignmentRecord,
+    ) -> Result<(), ReviewError> {
+        let child = match self.session_runtime.create_durable_session(
+            &run.workspace_id,
+            &assignment.agent_kind,
+            assignment.model_id.as_deref(),
+            assignment.requested_mode_id.as_deref(),
+            Some(vec![reviewer_system_prompt_append()]),
+            Vec::new(),
+            None,
+            SessionMcpBindingPolicy::InternalOnly,
+            false,
+            OriginContext::system_local_runtime(),
+        ) {
+            Ok(child) => child,
+            Err(error) => {
+                let detail = format!("{error:?}");
+                self.service
+                    .store()
+                    .mark_assignment_system_failed(
+                        &assignment.id,
+                        "reviewer_create_failed",
+                        Some(&detail),
+                    )
+                    .map_err(ReviewError::Internal)?;
+                return Err(map_create_session_error(error));
+            }
+        };
+        let session_link_id = match self.service.link_reviewer_session(
+            &run.id,
+            &assignment.id,
+            &run.parent_session_id,
+            &child.id,
+            Some(assignment.persona_label.clone()),
+            None,
+            ReviewModeVerificationStatus::Pending,
+        ) {
+            Ok(link_id) => link_id,
+            Err(ReviewError::RetryNotAllowed) => {
+                self.delete_unlaunched_reviewer_session(run, assignment, &child.id);
+                return Err(ReviewError::RetryNotAllowed);
+            }
+            Err(error) => {
+                self.delete_unlaunched_reviewer_session(run, assignment, &child.id);
+                let detail = error.to_string();
+                self.service
+                    .store()
+                    .mark_assignment_system_failed(
+                        &assignment.id,
+                        "reviewer_link_failed",
+                        Some(&detail),
+                    )
+                    .map_err(ReviewError::Internal)?;
+                return Err(error);
+            }
+        };
+        let started = match self
+            .session_runtime
+            .start_persisted_session(&child, None)
+            .await
+        {
+            Ok(started) => started,
+            Err(error) => {
+                let detail = format!("{error:?}");
+                self.service
+                    .store()
+                    .mark_assignment_system_failed(
+                        &assignment.id,
+                        "reviewer_start_failed",
+                        Some(&detail),
+                    )
+                    .map_err(ReviewError::Internal)?;
+                return Err(map_create_session_error(error));
+            }
+        };
+        let actual_mode_id = started.current_mode_id.as_deref();
+        let mode_status = verify_mode(assignment.requested_mode_id.as_deref(), actual_mode_id);
+        let launched = self
+            .service
+            .store()
+            .update_assignment_launched(
+                &assignment.id,
+                &started.id,
+                &session_link_id,
+                actual_mode_id,
+                mode_status,
+            )
+            .map_err(ReviewError::Internal)?;
+        if !launched {
+            if let Err(error) = self.session_runtime.close_live_session(&started.id).await {
+                tracing::warn!(
+                    review_run_id = %run.id,
+                    assignment_id = %assignment.id,
+                    reviewer_session_id = %started.id,
+                    error = ?error,
+                    "failed to close reviewer session after review launch was cancelled"
+                );
+            }
+            return Err(ReviewError::RetryNotAllowed);
+        }
+        self.send_reviewer_assignment_prompt(&started.id, run, assignment)
+            .await
+    }
+
+    fn delete_unlaunched_reviewer_session(
+        &self,
+        run: &ReviewRunRecord,
+        assignment: &ReviewAssignmentRecord,
+        reviewer_session_id: &str,
+    ) {
+        if let Err(error) = self
+            .service
+            .delete_unlaunched_reviewer_session(reviewer_session_id)
+        {
+            tracing::warn!(
+                review_run_id = %run.id,
+                assignment_id = %assignment.id,
+                reviewer_session_id,
+                error = %error,
+                "failed to delete reviewer session after review launch failed before start"
+            );
+        }
     }
 
     fn previous_reviewers_by_persona(
@@ -653,7 +796,7 @@ impl ReviewRuntime {
                         }
                     }
                 }
-                if let Err(error) = self.handle_reviewer_turn_finished(&ctx.session_id).await {
+                if let Err(error) = self.handle_reviewer_turn_finished(&ctx).await {
                     tracing::warn!(
                         session_id = %ctx.session_id,
                         error = %error,
@@ -664,15 +807,47 @@ impl ReviewRuntime {
         }
     }
 
-    async fn handle_reviewer_turn_finished(&self, session_id: &str) -> Result<(), ReviewError> {
+    async fn handle_reviewer_turn_finished(
+        &self,
+        ctx: &crate::sessions::extensions::SessionTurnFinishedContext,
+    ) -> Result<(), ReviewError> {
         let Some(assignment) = self
             .service
             .store()
-            .find_assignment_for_reviewer_session(session_id)
+            .find_assignment_for_reviewer_session(&ctx.session_id)
             .map_err(ReviewError::Internal)?
         else {
             return Ok(());
         };
+        if ctx.outcome == SessionTurnOutcome::Failed
+            && matches!(
+                ctx.error_details.as_ref(),
+                Some(anyharness_contract::v1::ErrorEventDetails::ProviderRateLimit { .. })
+            )
+        {
+            if let Some(updated) = self
+                .service
+                .store()
+                .mark_assignment_retryable_failed(
+                    &assignment.id,
+                    &ctx.session_id,
+                    "provider_rate_limit",
+                    Some("Reviewer hit the provider rate limit. Retry with Opus 4.6."),
+                )
+                .map_err(ReviewError::Internal)?
+            {
+                if let Some(run) = self
+                    .service
+                    .store()
+                    .find_run(&updated.review_run_id)
+                    .map_err(ReviewError::Internal)?
+                {
+                    self.emit_review_run_updated(&run.parent_session_id, &run.id)
+                        .await;
+                }
+            }
+            return Ok(());
+        }
         if assignment.reminder_count < 2 {
             if self
                 .service
@@ -682,7 +857,7 @@ impl ReviewRuntime {
             {
                 self.session_runtime
                     .send_text_prompt_with_provenance(
-                        session_id,
+                        &ctx.session_id,
                         "Submit your review verdict now with submit_review_result. If you need to fail the review, include the concrete findings in critiqueMarkdown. Do not continue with only prose.".to_string(),
                         PromptProvenance::System {
                             label: Some("review_submit_reminder".to_string()),

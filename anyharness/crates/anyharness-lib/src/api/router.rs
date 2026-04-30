@@ -219,6 +219,10 @@ pub fn build_router(state: AppState) -> Router {
             get(git::get_git_diff),
         )
         .route(
+            "/workspaces/{workspace_id}/git/diff/branch-files",
+            get(git::list_git_branch_diff_files),
+        )
+        .route(
             "/workspaces/{workspace_id}/git/branches",
             get(git::list_git_branches),
         )
@@ -310,6 +314,10 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/reviews/{review_run_id}/assignments/{assignment_id}/critique",
             get(reviews::get_review_assignment_critique),
+        )
+        .route(
+            "/reviews/{review_run_id}/assignments/{assignment_id}/retry",
+            post(reviews::retry_review_assignment),
         )
         .route("/reviews/{review_run_id}/stop", post(reviews::stop_review))
         .route(

@@ -40,6 +40,7 @@ pub enum ReviewAssignmentStatus {
     Launching,
     Reviewing,
     Reminded,
+    RetryableFailed,
     Submitted,
     Cancelled,
     TimedOut,
@@ -108,6 +109,13 @@ pub struct SendReviewFeedbackRequest {}
 pub struct MarkReviewRevisionReadyRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub revised_plan_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RetryReviewAssignmentRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

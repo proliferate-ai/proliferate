@@ -14,9 +14,11 @@ anyharness/crates/anyharness-contract/src/v1/events.rs
 anyharness/crates/anyharness-contract/src/v1/sessions.rs
 anyharness/crates/anyharness-lib/src/reviews/runtime.rs
 anyharness/crates/anyharness-lib/src/reviews/service.rs
+anyharness/crates/anyharness-lib/src/reviews/store.rs
 anyharness/crates/anyharness-lib/src/sessions/live_config.rs
 anyharness/crates/anyharness-lib/src/sessions/prompt.rs
 anyharness/crates/anyharness-lib/src/sessions/runtime.rs
+anyharness/crates/anyharness-lib/src/sessions/service.rs
 anyharness/crates/anyharness-lib/src/sessions/store.rs
 anyharness/crates/anyharness-lib/src/cowork/runtime.rs
 anyharness/crates/anyharness-lib/src/mobility/service.rs

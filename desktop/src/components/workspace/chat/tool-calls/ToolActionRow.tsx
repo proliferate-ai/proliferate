@@ -56,6 +56,7 @@ export function ToolActionRow({
         <div
           role="button"
           tabIndex={0}
+          data-chat-transcript-ignore
           aria-expanded={expanded}
           className={`group/tool-action-row inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-[var(--text-chat--line-height)] font-normal outline-none focus-visible:underline ${
             status === "failed"

@@ -372,6 +372,7 @@ export function RightPanelHeaderTabs({
             <Tooltip
               content="Open new tab menu"
               className="right-panel-new-tab-tooltip"
+              singleLine
             >
               <PopoverButton
                 align="end"

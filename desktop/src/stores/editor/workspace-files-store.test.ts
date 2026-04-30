@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { useWorkspaceFilesStore } from "./workspace-files-store";
+import {
+  useWorkspaceFilesStore,
+  workspaceFileDiffPatchKey,
+} from "./workspace-files-store";
 
 describe("workspace files tab order", () => {
   beforeEach(() => {
@@ -16,5 +19,22 @@ describe("workspace files tab order", () => {
 
     expect(useWorkspaceFilesStore.getState().openTabs).toEqual(["c.ts", "a.ts", "b.ts"]);
     expect(useWorkspaceFilesStore.getState().activeFilePath).toBe("c.ts");
+  });
+
+  it("stores scoped diff patches separately for the same file tab", () => {
+    const store = useWorkspaceFilesStore.getState();
+    store.setDiffTab("a.ts", "unstaged patch", { scope: "unstaged" });
+    store.setDiffTab("a.ts", "staged patch", { scope: "staged" });
+
+    const state = useWorkspaceFilesStore.getState();
+    expect(state.tabDiffDescriptorsByPath["a.ts"]).toEqual({
+      scope: "staged",
+      baseRef: null,
+      oldPath: null,
+    });
+    expect(state.tabPatches[workspaceFileDiffPatchKey("a.ts", { scope: "unstaged" })])
+      .toBe("unstaged patch");
+    expect(state.tabPatches[workspaceFileDiffPatchKey("a.ts", { scope: "staged" })])
+      .toBe("staged patch");
   });
 });

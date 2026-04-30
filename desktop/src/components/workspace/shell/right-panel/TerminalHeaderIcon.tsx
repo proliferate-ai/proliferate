@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { useTerminalTabNativeContextMenu } from "@/hooks/terminals/use-terminal-tab-native-context-menu";
 import {
   Check,
   Pencil,
@@ -46,6 +47,17 @@ export function TerminalHeaderIcon({
   const [renameDraft, setRenameDraft] = useState(displayTitle);
   const [renaming, setRenaming] = useState(false);
   const [isEditingHeaderTitle, setIsEditingHeaderTitle] = useState(false);
+
+  const handleRenameCommand = () => {
+    onSelect();
+    setIsEditingHeaderTitle(true);
+  };
+
+  const { onContextMenuCapture } = useTerminalTabNativeContextMenu({
+    isRuntimeReady,
+    onRename: handleRenameCommand,
+    onClose,
+  });
 
   useEffect(() => {
     if (!isEditingHeaderTitle) {
@@ -143,6 +155,7 @@ export function TerminalHeaderIcon({
         onSelect();
       }}
       onDoubleClick={() => setIsEditingHeaderTitle(true)}
+      onContextMenuCapture={onContextMenuCapture}
       className={HEADER_TERMINAL_TAB_CLASS}
     >
       <span className="ui-tab-system-tab__content">
@@ -170,49 +183,26 @@ export function TerminalHeaderIcon({
           trigger={trigger}
         >
           {(close) => (
-            <form
-              className="flex flex-col gap-2 p-1"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const title = renameDraft.trim();
-                if (!title || title.length > 160) {
-                  return;
-                }
-                submitRename(title, close);
-              }}
-            >
-              <div className="flex items-center gap-2 px-1 pt-1 text-xs text-muted-foreground">
-                <Pencil className="size-3.5" />
-                <span>Rename terminal</span>
-              </div>
-              <Input
-                value={renameDraft}
-                maxLength={160}
-                onChange={(event) => setRenameDraft(event.target.value)}
-                className="h-8 text-xs"
-                data-right-panel-tab-no-drag="true"
-                autoFocus
+            <div className="py-0.5">
+              <PopoverMenuItem
+                label="Rename"
+                icon={<Pencil className="size-3.5" />}
+                onClick={() => {
+                  close();
+                  handleRenameCommand();
+                }}
               />
-              <div className="flex items-center justify-end gap-1">
-                <PopoverMenuItem
-                  label="Close"
-                  type="button"
-                  icon={<X className="size-3.5" />}
-                  disabled={!isRuntimeReady}
-                  className="h-8 px-2 py-0 text-xs text-destructive"
-                  onClick={() => {
-                    close();
-                    onClose();
-                  }}
-                />
-                <PopoverMenuItem
-                  label="Save"
-                  type="submit"
-                  disabled={renaming || !renameDraft.trim()}
-                  className="h-8 justify-center px-3 py-0 text-xs"
-                />
-              </div>
-            </form>
+              <PopoverMenuItem
+                label="Close"
+                icon={<X className="size-3.5" />}
+                disabled={!isRuntimeReady}
+                className="text-destructive hover:text-destructive"
+                onClick={() => {
+                  close();
+                  onClose();
+                }}
+              />
+            </div>
           )}
         </PopoverButton>
         <div

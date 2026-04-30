@@ -1732,6 +1732,7 @@ impl SessionRuntime {
                                 outcome: result.outcome,
                                 stop_reason: result.stop_reason.clone(),
                                 last_event_seq: result.last_event_seq,
+                                error_details: result.error_details.clone(),
                             });
                         }
                     }

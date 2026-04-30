@@ -1,7 +1,7 @@
 import { useState } from "react";
+import type { GitDiffScope } from "@anyharness/sdk";
 import {
   useGitDiffQuery,
-  useGitStatusQuery,
   useStageGitPathsMutation,
   useUnstageGitPathsMutation,
 } from "@anyharness/sdk-react";
@@ -12,37 +12,41 @@ import { Button } from "@/components/ui/Button";
 import { ArrowUpRight, Check, ChevronDown, Plus, RefreshCw } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-
-type ChangesFilter = "unstaged" | "staged";
-
-const FILTER_OPTIONS: { id: ChangesFilter; label: string }[] = [
-  { id: "unstaged", label: "Unstaged" },
-  { id: "staged", label: "Staged" },
-];
+import { useGitPanelState } from "@/hooks/workspaces/use-git-panel-state";
+import {
+  GIT_PANEL_MODE_OPTIONS,
+  gitPanelDiffScope,
+  gitPanelEmptyMessage,
+  gitPanelOpenAction,
+  type GitPanelFile,
+  type GitPanelMode,
+} from "@/lib/domain/workspaces/git-panel-diff";
 
 const GIT_PANEL_DIFF_VIEWPORT_CLASS = "max-h-[calc(var(--diffs-line-height)*18)]";
 
-interface GitPanelFile {
-  path: string;
-  includedState: string;
-  additions: number;
-  deletions: number;
-}
-
 function FileDiffContent({
   filePath,
+  displayPath,
   workspaceId,
+  scope,
+  baseRef,
+  oldPath,
   enabled,
 }: {
   filePath: string;
+  displayPath: string;
   workspaceId: string | null;
+  scope: GitDiffScope;
+  baseRef: string | null;
+  oldPath: string | null;
   enabled: boolean;
 }) {
   const { data: diff, isLoading } = useGitDiffQuery({
     workspaceId,
     path: filePath,
+    scope,
+    baseRef,
+    oldPath,
     enabled,
   });
 
@@ -68,7 +72,7 @@ function FileDiffContent({
         {diff.patch && (
           <DiffViewer
             patch={diff.patch}
-            filePath={filePath}
+            filePath={displayPath}
             viewportClassName={GIT_PANEL_DIFF_VIEWPORT_CLASS}
           />
         )}
@@ -81,7 +85,7 @@ function FileDiffContent({
     return (
       <DiffViewer
         patch={diff.patch}
-        filePath={filePath}
+        filePath={displayPath}
         viewportClassName={GIT_PANEL_DIFF_VIEWPORT_CLASS}
       />
     );
@@ -91,49 +95,43 @@ function FileDiffContent({
 }
 
 export function GitPanel() {
-  const [changesFilter, setChangesFilter] = useState<ChangesFilter>("unstaged");
+  const [changesFilter, setChangesFilter] = useState<GitPanelMode>("unstaged");
   const [manualToggled, setManualToggled] = useState<Set<string>>(new Set());
-  const { openFileDiff } = useWorkspaceFileActions();
-  const selectedWorkspaceId = useHarnessStore((s) => s.selectedWorkspaceId);
-  const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
-  const runtimeBlockedReason = getWorkspaceRuntimeBlockReason(selectedWorkspaceId);
-  const isRuntimeReady = runtimeBlockedReason === null;
-  const {
-    data: gitStatus,
-    isLoading: gitStatusLoading,
-    error: gitStatusError,
-    refetch: refetchGitStatus,
-  } = useGitStatusQuery({ enabled: isRuntimeReady });
+  const { openFile, openFileDiff } = useWorkspaceFileActions();
   const stageMutation = useStageGitPathsMutation();
   const unstageMutation = useUnstageGitPathsMutation();
+  const {
+    activeWorkspaceId,
+    baseRef,
+    files: visibleFiles,
+    totalChangedCount,
+    visibleChangedCount,
+    activeFilterLabel,
+    isRuntimeReady,
+    runtimeBlockedReason,
+    isLoading,
+    errorMessage,
+    refetch,
+  } = useGitPanelState(changesFilter);
+  const diffScope = gitPanelDiffScope(changesFilter);
+  const isBranchMode = changesFilter === "branch";
 
-  const files: GitPanelFile[] = (gitStatus?.files ?? []).filter(
-    (file: GitPanelFile) => file.path.length > 0 && !file.path.startsWith(".claude/worktrees/"),
-  );
-  const unstagedFiles = files.filter((file) => file.includedState !== "included");
-  const stagedFiles = files.filter((file) => file.includedState !== "excluded");
-  const visibleFiles = changesFilter === "staged" ? stagedFiles : unstagedFiles;
-  const totalChangedCount = files.length;
-  const visibleChangedCount = visibleFiles.length;
-  const activeFilterLabel = FILTER_OPTIONS.find((o) => o.id === changesFilter)!.label;
-  const gitStatusMessage = gitStatusError instanceof Error ? gitStatusError.message : null;
-
-  const toggleExpanded = (path: string) => {
+  const toggleExpanded = (key: string) => {
     setManualToggled((prev) => {
       const next = new Set(prev);
-      if (next.has(path)) {
-        next.delete(path);
+      if (next.has(key)) {
+        next.delete(key);
       } else {
-        next.add(path);
+        next.add(key);
       }
       return next;
     });
   };
 
   // Git diffs default collapsed. Manual toggle opens or recloses each file.
-  const isFileExpanded = (file: { path: string; additions: number; deletions: number }) => {
+  const isFileExpanded = (file: GitPanelFile) => {
     const defaultOpen = false;
-    return manualToggled.has(file.path) ? !defaultOpen : defaultOpen;
+    return manualToggled.has(file.key) ? !defaultOpen : defaultOpen;
   };
 
   return (
@@ -141,7 +139,9 @@ export function GitPanel() {
       <div className="flex items-center justify-between px-2 py-2 border-b border-sidebar-border/70 shrink-0">
         <p className="px-1 text-xs text-muted-foreground">
           {totalChangedCount === 0
-            ? "Working tree clean"
+            ? isBranchMode
+              ? "No branch changes"
+              : "Working tree clean"
             : `${visibleChangedCount} ${activeFilterLabel.toLowerCase()} file${visibleChangedCount !== 1 ? "s" : ""}`}
         </p>
         <div className="flex items-center gap-1">
@@ -162,7 +162,7 @@ export function GitPanel() {
           >
             {(close) => (
               <div className="flex flex-col gap-px">
-                {FILTER_OPTIONS.map((option) => (
+                {GIT_PANEL_MODE_OPTIONS.map((option) => (
                   <Button
                     key={option.id}
                     type="button"
@@ -191,7 +191,7 @@ export function GitPanel() {
             type="button"
             variant="ghost"
             size="icon-sm"
-            onClick={() => void refetchGitStatus()}
+            onClick={() => void refetch()}
             disabled={!isRuntimeReady}
             className="h-6 w-6 rounded-md text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
             title="Refresh changes"
@@ -203,80 +203,85 @@ export function GitPanel() {
       </div>
 
       <AutoHideScrollArea className="flex-1 min-h-0" viewportClassName="px-2 py-2">
-        {gitStatusLoading && (
+        {isLoading && (
           <div className="px-2 py-4 space-y-2">
             <div className="h-3 w-32 bg-muted/50 rounded animate-pulse" />
             <div className="h-3 w-48 bg-muted/50 rounded animate-pulse" />
             <div className="h-3 w-40 bg-muted/50 rounded animate-pulse" />
           </div>
         )}
-        {gitStatusMessage && (
-          <p className="px-2 py-4 text-xs text-destructive">{gitStatusMessage}</p>
+        {errorMessage && (
+          <p className="px-2 py-4 text-xs text-destructive">{errorMessage}</p>
         )}
-        {!gitStatusMessage && runtimeBlockedReason && (
+        {!errorMessage && runtimeBlockedReason && (
           <p className="px-2 py-4 text-xs text-muted-foreground">{runtimeBlockedReason}</p>
         )}
-        {!gitStatusLoading && !gitStatusMessage && visibleFiles.length === 0 && (
+        {!isLoading && !errorMessage && visibleFiles.length === 0 && (
           <p className="px-2 py-4 text-xs text-muted-foreground text-center">
-            {changesFilter === "staged"
-              ? "No staged changes"
-              : "No unstaged changes"}
+            {gitPanelEmptyMessage(changesFilter)}
           </p>
         )}
 
-        {!gitStatusLoading && visibleFiles.length > 0 && (
+        {!isLoading && visibleFiles.length > 0 && (
           <div className="flex flex-col gap-2">
             {visibleFiles.map((file) => {
-              const baseName = file.path.split("/").pop() ?? file.path;
+              const baseName = file.displayPath.split("/").pop() ?? file.displayPath;
               const isExpanded = isFileExpanded(file);
               const isStaged = file.includedState !== "excluded";
+              const openAction = gitPanelOpenAction(changesFilter, file);
 
               return (
                 <FileDiffCard
-                  key={file.path}
-                  filePath={file.path}
+                  key={file.key}
+                  filePath={file.displayPath}
                   additions={file.additions}
                   deletions={file.deletions}
                   isExpanded={isExpanded}
-                  onToggleExpand={() => toggleExpanded(file.path)}
+                  onToggleExpand={() => toggleExpanded(file.key)}
                   actions={
                     <>
+                      {!isBranchMode && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isStaged) {
+                              void unstageMutation.mutateAsync([file.path]);
+                            } else {
+                              void stageMutation.mutateAsync([file.path]);
+                            }
+                          }}
+                          disabled={!isRuntimeReady}
+                          aria-label={isStaged ? `Unstage ${baseName}` : `Stage ${baseName}`}
+                          className={`size-6 hover:bg-sidebar-accent ${
+                            isStaged
+                              ? "text-git-green"
+                              : "text-muted-foreground"
+                          }`}
+                          title={isStaged ? "Unstage" : "Stage"}
+                        >
+                          {isStaged ? (
+                            <Check className="size-3" />
+                          ) : (
+                            <Plus className="size-3" />
+                          )}
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (isStaged) {
-                            void unstageMutation.mutateAsync([file.path]);
-                          } else {
-                            void stageMutation.mutateAsync([file.path]);
+                          if (openAction === "file") {
+                            void openFile(file.path);
+                          } else if (openAction === "diff") {
+                            void openFileDiff(file.path, { scope: diffScope });
                           }
                         }}
-                        disabled={!isRuntimeReady}
-                        aria-label={isStaged ? `Unstage ${baseName}` : `Stage ${baseName}`}
-                        className={`size-6 hover:bg-sidebar-accent ${
-                          isStaged
-                            ? "text-git-green"
-                            : "text-muted-foreground"
-                        }`}
-                        title={isStaged ? "Unstage" : "Stage"}
-                      >
-                        {isStaged ? (
-                          <Check className="size-3" />
-                        ) : (
-                          <Plus className="size-3" />
-                        )}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void openFileDiff(file.path);
-                        }}
-                        disabled={!isRuntimeReady}
+                        disabled={!isRuntimeReady || openAction === "disabled"}
                         aria-label={`Open ${baseName}`}
                         className="size-6 text-muted-foreground hover:bg-sidebar-accent"
                         title="Open file"
@@ -288,7 +293,11 @@ export function GitPanel() {
                 >
                   <FileDiffContent
                     filePath={file.path}
-                    workspaceId={selectedWorkspaceId}
+                    displayPath={file.displayPath}
+                    workspaceId={activeWorkspaceId}
+                    scope={diffScope}
+                    baseRef={isBranchMode ? baseRef : null}
+                    oldPath={isBranchMode ? file.oldPath : null}
                     enabled={isRuntimeReady}
                   />
                 </FileDiffCard>

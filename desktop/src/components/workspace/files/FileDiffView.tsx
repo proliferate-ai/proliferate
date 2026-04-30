@@ -1,4 +1,7 @@
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import {
+  useWorkspaceFilesStore,
+  workspaceFileDiffPatchKey,
+} from "@/stores/editor/workspace-files-store";
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
 import { ModeToggle } from "./ModeToggle";
 
@@ -7,7 +10,11 @@ interface FileDiffViewProps {
 }
 
 export function FileDiffView({ filePath }: FileDiffViewProps) {
-  const patch = useWorkspaceFilesStore((s) => s.tabPatches[filePath]);
+  const descriptor = useWorkspaceFilesStore(
+    (s) => s.tabDiffDescriptorsByPath[filePath],
+  );
+  const patchKey = workspaceFileDiffPatchKey(filePath, descriptor);
+  const patch = useWorkspaceFilesStore((s) => s.tabPatches[patchKey]);
 
   return (
     <div className="flex flex-col h-full">

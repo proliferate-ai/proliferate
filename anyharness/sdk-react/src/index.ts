@@ -47,6 +47,7 @@ export {
   anyHarnessGitStatusKey,
   anyHarnessGitDiffScopeKey,
   anyHarnessGitDiffKey,
+  anyHarnessGitBranchDiffFilesKey,
   anyHarnessGitBranchesKey,
   anyHarnessPullRequestKey,
   anyHarnessWorkspaceFilesScopeKey,
@@ -145,12 +146,14 @@ export {
   useStartPlanReviewMutation,
   useStartCodeReviewMutation,
   useStopReviewMutation,
+  useRetryReviewAssignmentMutation,
   useSendReviewFeedbackMutation,
   useMarkReviewRevisionReadyMutation,
 } from "./hooks/reviews.js";
 export {
   useGitStatusQuery,
   useGitDiffQuery,
+  useGitBranchDiffFilesQuery,
   useGitBranchesQuery,
   useStageGitPathsMutation,
   useUnstageGitPathsMutation,

@@ -446,20 +446,23 @@ fn resolve_model_id(
     model_registry: &ModelRegistryMetadata,
     provided_model_id: Option<&str>,
 ) -> anyhow::Result<Option<String>> {
-    let normalized_model_id = provided_model_id.map(|model_id| {
-        normalize_legacy_model_id(model_registry.kind.as_str(), model_id).unwrap_or(model_id)
+    let valid_ids = model_registry
+        .models
+        .iter()
+        .map(|model| model.id.as_str())
+        .collect::<Vec<_>>();
+    let resolved_model_id = provided_model_id.map(|model_id| {
+        if valid_ids.contains(&model_id) {
+            return model_id;
+        }
+        let normalized_model_id =
+            normalize_legacy_model_id(model_registry.kind.as_str(), model_id).unwrap_or(model_id);
+        resolve_model_alias(model_registry, normalized_model_id).unwrap_or(normalized_model_id)
     });
-
-    let resolved_model_id = normalized_model_id
-        .map(|model_id| resolve_model_alias(model_registry, model_id).unwrap_or(model_id));
 
     resolve_catalog_id(
         resolved_model_id,
-        &model_registry
-            .models
-            .iter()
-            .map(|model| model.id.as_str())
-            .collect::<Vec<_>>(),
+        &valid_ids,
         model_registry.default_model_id.as_deref(),
         "model",
     )
@@ -501,7 +504,7 @@ fn normalize_legacy_model_id(agent_kind: &str, model_id: &str) -> Option<&'stati
     match model_id {
         "claude-sonnet-4-5" | "claude-sonnet-4-6" => Some("sonnet"),
         "claude-sonnet-4-5-1m" | "claude-sonnet-4-6-1m" => Some("sonnet[1m]"),
-        "claude-opus-4-5" | "claude-opus-4-6" | "claude-opus-4-6-1m" | "opus" => Some("opus[1m]"),
+        "claude-opus-4-5" | "claude-opus-4-6-1m" | "opus" => Some("opus[1m]"),
         "claude-haiku-4-5" => Some("haiku"),
         _ => None,
     }
@@ -589,5 +592,28 @@ mod tests {
             .expect("catalog alias should resolve");
 
         assert_eq!(resolved.as_deref(), Some("opus[1m]"));
+    }
+
+    #[test]
+    fn preserves_pinned_claude_opus_4_6_model_id() {
+        let registry = ModelRegistryMetadata {
+            kind: "claude".to_string(),
+            display_name: "Claude".to_string(),
+            default_model_id: Some("sonnet".to_string()),
+            models: {
+                let mut opus = plain_model("opus[1m]", false);
+                opus.aliases = vec!["claude-opus-4-6".to_string()];
+                vec![
+                    plain_model("sonnet", true),
+                    opus,
+                    plain_model("claude-opus-4-6", false),
+                ]
+            },
+        };
+
+        let resolved = resolve_model_id(&registry, Some("claude-opus-4-6"))
+            .expect("pinned Opus 4.6 model id should resolve directly");
+
+        assert_eq!(resolved.as_deref(), Some("claude-opus-4-6"));
     }
 }

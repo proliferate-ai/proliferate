@@ -10,11 +10,11 @@ use crate::sessions::runtime_event::{RuntimeEventInjectionError, RuntimeInjected
 use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::{
     AvailableCommandsUpdatePayload, ConfigOptionUpdatePayload, ContentPart,
-    CurrentModeUpdatePayload, ErrorEvent, FileChangeOperation, FileOpenTarget, FileReadScope,
-    InteractionKind, InteractionOutcome, InteractionRequestedEvent, InteractionResolvedEvent,
-    ItemCompletedEvent, ItemDeltaEvent, ItemStartedEvent, PendingPromptAddedPayload,
-    PendingPromptRemovedPayload, PendingPromptUpdatedPayload, PlanEntry, PromptProvenance,
-    SessionEndReason, SessionEndedEvent, SessionEvent, SessionEventEnvelope,
+    CurrentModeUpdatePayload, ErrorEvent, ErrorEventDetails, FileChangeOperation, FileOpenTarget,
+    FileReadScope, InteractionKind, InteractionOutcome, InteractionRequestedEvent,
+    InteractionResolvedEvent, ItemCompletedEvent, ItemDeltaEvent, ItemStartedEvent,
+    PendingPromptAddedPayload, PendingPromptRemovedPayload, PendingPromptUpdatedPayload, PlanEntry,
+    PromptProvenance, SessionEndReason, SessionEndedEvent, SessionEvent, SessionEventEnvelope,
     SessionInfoUpdatePayload, SessionStartedEvent, SessionStateUpdatePayload, StopReason,
     TranscriptItemDeltaPayload, TranscriptItemKind, TranscriptItemPayload, TranscriptItemStatus,
     TurnEndedEvent, TurnStartedEvent, UsageUpdatePayload,
@@ -712,12 +712,25 @@ impl SessionEventSink {
     }
 
     pub fn error(&mut self, message: String, code: Option<String>) {
+        self.error_with_details(message, code, None);
+    }
+
+    pub fn error_with_details(
+        &mut self,
+        message: String,
+        code: Option<String>,
+        details: Option<ErrorEventDetails>,
+    ) {
         self.close_open_items();
         self.close_plan_item();
         self.close_tool_items();
         let item_id = uuid::Uuid::new_v4().to_string();
         self.emit_with_ids(
-            SessionEvent::Error(ErrorEvent { message, code }),
+            SessionEvent::Error(ErrorEvent {
+                message,
+                code,
+                details,
+            }),
             self.current_turn_id.clone(),
             Some(item_id),
         );

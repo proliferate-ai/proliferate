@@ -4,7 +4,10 @@ import { getProviderDisplayName } from "@/config/providers";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { getPendingSessionConfigChange } from "@/lib/domain/sessions/pending-config";
-import { resolveModelDisplayName } from "@/lib/domain/chat/model-display";
+import {
+  resolveMatchingModelControlLabel,
+  resolveModelDisplayName,
+} from "@/lib/domain/chat/model-display";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useActiveChatSessionState } from "./use-active-chat-session-state";
 import { useConfiguredLaunchReadiness } from "./use-configured-launch-readiness";
@@ -52,13 +55,17 @@ export function useChatModelSelectorState() {
     activeSlot?.pendingConfigChanges,
     activeSlot?.liveConfig?.normalizedControls.model?.rawConfigId ?? null,
   );
+  const currentSelection = currentLaunchIdentity ?? configuredLaunch.selection;
+  const modelControl = activeSlot?.liveConfig?.normalizedControls.model ?? null;
   const displayedModelValue =
     pendingModelChange?.value
-    ?? activeSlot?.liveConfig?.normalizedControls.model?.currentValue
+    ?? modelControl?.currentValue
     ?? null;
-  const liveConfigModelLabel = activeSlot?.liveConfig?.normalizedControls.model?.values.find(
-    (value) => value.value === displayedModelValue,
-  )?.label ?? null;
+  const liveConfigModelLabel = resolveMatchingModelControlLabel({
+    modelId: currentSelection?.modelId,
+    control: modelControl,
+    displayedModelValue,
+  });
 
   const currentModelDisplayName = useMemo(
     () => resolveCurrentModelDisplayName({
@@ -75,7 +82,6 @@ export function useChatModelSelectorState() {
     ],
   );
 
-  const currentSelection = currentLaunchIdentity ?? configuredLaunch.selection;
   const resolvedConnectionState = selectedCloudRuntime.state?.phase === "ready"
     ? connectionState
     : selectedCloudRuntime.state

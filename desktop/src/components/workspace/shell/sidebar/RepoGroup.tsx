@@ -2,9 +2,17 @@ import { type ReactNode, useState } from "react";
 import { ChevronRight, CloudIcon, Folder, FolderFilled, GitBranchIcon, Plus, Settings, Trash } from "@/components/ui/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Button } from "@/components/ui/Button";
+import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { SHORTCUTS } from "@/config/shortcuts";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
+import {
+  confirmRepoRemoval,
+  repoRemovalConfirmationCopy,
+  requestRepoRemovalConfirmation,
+} from "@/lib/domain/workspaces/repo-context-menu";
+import { useRepoGroupNativeContextMenu } from "@/hooks/workspaces/use-repo-group-native-context-menu";
 import { SidebarActionButton } from "./SidebarActionButton";
 
 interface RepoGroupProps {
@@ -41,6 +49,24 @@ export function RepoGroup({
   onRemoveRepo,
   onOpenSettings,
 }: RepoGroupProps) {
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const handleRequestRemove = () => requestRepoRemovalConfirmation(
+    () => setRemoveConfirmOpen(true),
+  );
+  const handleConfirmRemove = () => {
+    confirmRepoRemoval({
+      closeConfirmation: () => setRemoveConfirmOpen(false),
+      removeRepo: onRemoveRepo,
+    });
+  };
+  const removeConfirmationCopy = repoRemovalConfirmationCopy(name);
+  const { onContextMenuCapture } = useRepoGroupNativeContextMenu({
+    canOpenSettings: !!onOpenSettings,
+    canRemoveRepo: !!onRemoveRepo,
+    onOpenSettings: () => onOpenSettings?.(),
+    onRequestRemove: handleRequestRemove,
+  });
+
   const headerRow = (
     <div
       role="button"
@@ -52,6 +78,7 @@ export function RepoGroup({
           onToggleCollapsed();
         }
       }}
+      onContextMenuCapture={onContextMenuCapture}
       className="group/folder-row flex cursor-pointer select-none items-center justify-between overflow-x-hidden text-sm rounded-lg hover:bg-sidebar-accent py-0.5 h-[30px] focus-visible:outline focus-visible:outline-offset-2"
     >
       <div className="flex min-w-0 flex-1 items-center gap-1 pl-1">
@@ -166,11 +193,20 @@ export function RepoGroup({
         {(close) => (
           <RepoContextMenuContent
             onOpenSettings={onOpenSettings}
-            onRemoveRepo={onRemoveRepo}
+            onRequestRemove={handleRequestRemove}
             onClose={close}
           />
         )}
       </PopoverButton>
+      <ConfirmationDialog
+        open={removeConfirmOpen}
+        title={removeConfirmationCopy.title}
+        description={removeConfirmationCopy.description}
+        confirmLabel={removeConfirmationCopy.confirmLabel}
+        confirmVariant={removeConfirmationCopy.confirmVariant}
+        onClose={() => setRemoveConfirmOpen(false)}
+        onConfirm={handleConfirmRemove}
+      />
 
       {/* Workspace items */}
       {!collapsed && <div className="flex w-full min-w-0 flex-col gap-px">{children}</div>}
@@ -180,55 +216,34 @@ export function RepoGroup({
 
 function RepoContextMenuContent({
   onOpenSettings,
-  onRemoveRepo,
+  onRequestRemove,
   onClose,
 }: {
   onOpenSettings?: () => void;
-  onRemoveRepo?: () => void;
+  onRequestRemove?: () => void;
   onClose: () => void;
 }) {
-  const [confirmingRemove, setConfirmingRemove] = useState(false);
-
   return (
     <>
       {onOpenSettings && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
+        <PopoverMenuItem
+          icon={<Settings className="size-3.5 shrink-0 text-muted-foreground" />}
+          label="Settings"
+          variant="sidebar"
           onClick={() => { onClose(); onOpenSettings(); }}
-          className={POPOVER_ROW}
-        >
-          <Settings className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="flex-1 truncate text-left">Settings</span>
-        </Button>
+        />
       )}
-      {onOpenSettings && onRemoveRepo && (
+      {onOpenSettings && onRequestRemove && (
         <div className="my-1 h-px bg-border" />
       )}
-      {onRemoveRepo && !confirmingRemove && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setConfirmingRemove(true)}
-          className={`${POPOVER_ROW} text-destructive hover:text-destructive`}
-        >
-          <Trash className="size-3.5 shrink-0" />
-          <span className="flex-1 truncate text-left">Remove repository</span>
-        </Button>
-      )}
-      {onRemoveRepo && confirmingRemove && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => { onClose(); onRemoveRepo(); }}
-          className={`${POPOVER_ROW} text-destructive hover:text-destructive`}
-        >
-          <Trash className="size-3.5 shrink-0" />
-          <span className="flex-1 truncate text-left">Confirm remove?</span>
-        </Button>
+      {onRequestRemove && (
+        <PopoverMenuItem
+          icon={<Trash className="size-3.5 shrink-0" />}
+          label="Remove repository"
+          variant="sidebar"
+          className="text-destructive hover:text-destructive"
+          onClick={() => { onClose(); onRequestRemove(); }}
+        />
       )}
     </>
   );

@@ -35,6 +35,14 @@ function normalizeDisplayLabel(label: string): string {
   );
 }
 
+type ModelControlLabelSource = {
+  currentValue?: string | null;
+  values: Array<{
+    value: string;
+    label: string;
+  }>;
+} | null | undefined;
+
 function formatGptModelId(modelId: string): string | null {
   const match = /^gpt-(\d(?:\.\d+)?)(?:-(.+))?$/.exec(modelId);
   if (!match) {
@@ -67,6 +75,19 @@ function formatClaudeModelId(modelId: string): string | null {
 
 export function shouldHideModel(agentKind: string, modelId: string): boolean {
   return HIDDEN_MODEL_IDS.has(modelKey(agentKind, modelId));
+}
+
+export function resolveMatchingModelControlLabel(args: {
+  modelId: string | null | undefined;
+  control: ModelControlLabelSource;
+  displayedModelValue?: string | null;
+}): string | null {
+  const displayedModelValue = args.displayedModelValue ?? args.control?.currentValue ?? null;
+  if (!args.modelId || displayedModelValue !== args.modelId) {
+    return null;
+  }
+
+  return args.control?.values.find((value) => value.value === args.modelId)?.label ?? null;
 }
 
 export function resolveModelDisplayName(args: {

@@ -26,6 +26,14 @@ pub enum GitIncludedState {
     Partial,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GitDiffScope {
+    WorkingTree,
+    Unstaged,
+    Staged,
+    Branch,
+}
+
 #[derive(Debug, Clone)]
 pub struct GitChangedFile {
     pub path: String,
@@ -80,11 +88,35 @@ pub struct GitStatusSnapshot {
 #[derive(Debug, Clone)]
 pub struct GitDiffResult {
     pub path: String,
+    pub scope: GitDiffScope,
     pub binary: bool,
     pub truncated: bool,
     pub additions: u32,
     pub deletions: u32,
+    pub base_ref: Option<String>,
+    pub resolved_base_oid: Option<String>,
+    pub merge_base_oid: Option<String>,
+    pub head_oid: Option<String>,
     pub patch: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitDiffFile {
+    pub path: String,
+    pub old_path: Option<String>,
+    pub status: GitFileStatus,
+    pub additions: u32,
+    pub deletions: u32,
+    pub binary: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitBranchDiffFilesResult {
+    pub base_ref: String,
+    pub resolved_base_oid: String,
+    pub merge_base_oid: String,
+    pub head_oid: String,
+    pub files: Vec<GitDiffFile>,
 }
 
 #[derive(Debug, Clone)]
@@ -114,6 +146,20 @@ pub enum PushError {
     Rejected { message: String },
     #[error("git push failed: {message}")]
     Failed { message: String },
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GitDiffError {
+    #[error("invalid git diff base ref")]
+    InvalidBaseRef,
+    #[error("git diff base ref not found")]
+    BaseRefNotFound,
+    #[error("git diff merge base not found")]
+    MergeBaseNotFound,
+    #[error("git diff failed: {message}")]
+    GitFailed { message: String },
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }

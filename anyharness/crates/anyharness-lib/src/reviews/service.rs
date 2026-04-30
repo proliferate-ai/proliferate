@@ -77,6 +77,8 @@ pub enum ReviewError {
     AmbiguousRevisedPlan,
     #[error("cannot submit review result after assignment is terminal")]
     AssignmentTerminal,
+    #[error("review assignment cannot be retried in its current state")]
+    RetryNotAllowed,
     #[error("review {0} is too large")]
     ReviewSubmissionTooLarge(&'static str),
     #[error("session link failed: {0}")]
@@ -235,7 +237,8 @@ impl ReviewService {
                 created_by_tool_call_id: None,
             })
             .map_err(map_link_error)?;
-        self.store
+        let launched = self
+            .store
             .update_assignment_launched(
                 assignment_id,
                 reviewer_session_id,
@@ -244,6 +247,12 @@ impl ReviewService {
                 mode_status,
             )
             .map_err(ReviewError::Internal)?;
+        if !launched {
+            self.link_service
+                .delete_link(&link.id)
+                .map_err(ReviewError::Internal)?;
+            return Err(ReviewError::RetryNotAllowed);
+        }
         tracing::info!(
             review_run_id = %run_id,
             assignment_id,
@@ -433,6 +442,15 @@ impl ReviewService {
 
     pub fn stop_run(&self, run_id: &str) -> Result<Vec<String>, ReviewError> {
         self.store.stop_run(run_id).map_err(ReviewError::Internal)
+    }
+
+    pub(crate) fn delete_unlaunched_reviewer_session(
+        &self,
+        session_id: &str,
+    ) -> Result<(), ReviewError> {
+        self.session_store
+            .delete_session(session_id)
+            .map_err(ReviewError::Internal)
     }
 
     pub fn mark_parent_feedback_turn_finished(
@@ -1159,7 +1177,7 @@ mod tests {
             .pop()
             .expect("next assignment");
 
-        service
+        let launched = service
             .store()
             .update_assignment_launched(
                 &next_assignment.id,
@@ -1169,6 +1187,7 @@ mod tests {
                 ReviewModeVerificationStatus::Pending,
             )
             .expect("reuse reviewer session");
+        assert!(launched);
         let visible = service
             .store()
             .find_assignment_for_reviewer_session("child-1")
@@ -1176,6 +1195,341 @@ mod tests {
             .expect("active reviewer assignment");
 
         assert_eq!(visible.id, next_assignment.id);
+    }
+
+    #[test]
+    fn retry_launch_failure_restores_retryable_assignment_after_system_failure() {
+        let (service, _session_store) = service_fixture();
+        let run = service
+            .start_review(StartReviewInput {
+                workspace_id: "workspace-1".to_string(),
+                parent_session_id: "parent-1".to_string(),
+                kind: ReviewKind::Code,
+                title: "Review current changes".to_string(),
+                target_plan: None,
+                target_code_manifest: None,
+                max_rounds: 2,
+                auto_iterate: true,
+                reviewers: vec![reviewer()],
+            })
+            .expect("start review");
+        let assignment = service
+            .store()
+            .list_assignments_for_run(&run.id)
+            .expect("list assignments")
+            .pop()
+            .expect("assignment");
+        service
+            .link_reviewer_session(
+                &run.id,
+                &assignment.id,
+                "parent-1",
+                "child-1",
+                Some("Plan skeptic".to_string()),
+                None,
+                ReviewModeVerificationStatus::Pending,
+            )
+            .expect("link reviewer");
+        service
+            .store()
+            .mark_assignment_retryable_failed(
+                &assignment.id,
+                "child-1",
+                "provider_rate_limit",
+                Some("original provider limit"),
+            )
+            .expect("mark retryable")
+            .expect("retryable assignment");
+
+        let prepared = service
+            .store()
+            .prepare_assignment_retry(
+                &run.id,
+                &assignment.id,
+                Some("claude-opus-4-6"),
+                "2026-04-28T01:00:00Z",
+            )
+            .expect("prepare retry")
+            .expect("prepared assignment");
+        assert_eq!(prepared.status, ReviewAssignmentStatus::Launching);
+        service
+            .store()
+            .mark_assignment_system_failed(
+                &assignment.id,
+                "reviewer_start_failed",
+                Some("start failed"),
+            )
+            .expect("mark system failed");
+
+        let restored = service
+            .store()
+            .restore_assignment_retryable_after_retry_launch_failed(
+                &run.id,
+                &assignment.id,
+                Some("Retry launch failed: start failed"),
+            )
+            .expect("restore retryable");
+
+        assert!(restored);
+        let updated = service
+            .store()
+            .find_assignment(&assignment.id)
+            .expect("find assignment")
+            .expect("assignment");
+        assert_eq!(updated.status, ReviewAssignmentStatus::RetryableFailed);
+        assert_eq!(
+            updated.failure_reason.as_deref(),
+            Some("provider_rate_limit")
+        );
+        assert_eq!(
+            updated.failure_detail.as_deref(),
+            Some("Retry launch failed: start failed")
+        );
+        assert_eq!(updated.model_id.as_deref(), Some("claude-opus-4-6"));
+        let completion = service
+            .try_complete_round(&updated.review_round_id)
+            .expect("try complete round");
+        assert!(completion.is_none());
+        let run_after_restore = service
+            .store()
+            .find_run(&run.id)
+            .expect("find run")
+            .expect("run");
+        assert_eq!(run_after_restore.status, ReviewRunStatus::Reviewing);
+    }
+
+    #[test]
+    fn retry_prompt_failure_restores_retryable_assignment_and_blocks_late_submission() {
+        let (service, session_store) = service_fixture();
+        session_store
+            .insert(&session_record("child-retry-1"))
+            .expect("insert retry child");
+        let run = service
+            .start_review(StartReviewInput {
+                workspace_id: "workspace-1".to_string(),
+                parent_session_id: "parent-1".to_string(),
+                kind: ReviewKind::Code,
+                title: "Review current changes".to_string(),
+                target_plan: None,
+                target_code_manifest: None,
+                max_rounds: 2,
+                auto_iterate: true,
+                reviewers: vec![reviewer()],
+            })
+            .expect("start review");
+        let assignment = service
+            .store()
+            .list_assignments_for_run(&run.id)
+            .expect("list assignments")
+            .pop()
+            .expect("assignment");
+        service
+            .link_reviewer_session(
+                &run.id,
+                &assignment.id,
+                "parent-1",
+                "child-1",
+                Some("Plan skeptic".to_string()),
+                None,
+                ReviewModeVerificationStatus::Pending,
+            )
+            .expect("link reviewer");
+        service
+            .store()
+            .mark_assignment_retryable_failed(
+                &assignment.id,
+                "child-1",
+                "provider_rate_limit",
+                Some("original provider limit"),
+            )
+            .expect("mark retryable")
+            .expect("retryable assignment");
+        service
+            .store()
+            .prepare_assignment_retry(
+                &run.id,
+                &assignment.id,
+                Some("claude-opus-4-6"),
+                "2026-04-28T01:00:00Z",
+            )
+            .expect("prepare retry")
+            .expect("prepared assignment");
+        service
+            .link_reviewer_session(
+                &run.id,
+                &assignment.id,
+                "parent-1",
+                "child-retry-1",
+                Some("Plan skeptic".to_string()),
+                None,
+                ReviewModeVerificationStatus::Pending,
+            )
+            .expect("link retry reviewer");
+
+        let restored = service
+            .store()
+            .restore_assignment_retryable_after_retry_launch_failed(
+                &run.id,
+                &assignment.id,
+                Some("Retry launch failed: prompt rejected"),
+            )
+            .expect("restore retryable");
+
+        assert!(restored);
+        let updated = service
+            .store()
+            .find_assignment(&assignment.id)
+            .expect("find assignment")
+            .expect("assignment");
+        assert_eq!(updated.status, ReviewAssignmentStatus::RetryableFailed);
+        assert_eq!(
+            updated.reviewer_session_id.as_deref(),
+            Some("child-retry-1")
+        );
+        assert_eq!(
+            updated.failure_reason.as_deref(),
+            Some("provider_rate_limit")
+        );
+
+        let late_submission = service
+            .submit_assignment_result(
+                "child-retry-1",
+                true,
+                "Looks ready.",
+                "## Approval\n\nNo blockers.",
+                "/tmp/review.md",
+            )
+            .expect_err("retryable failed assignment must not accept submissions");
+        assert!(matches!(
+            late_submission,
+            ReviewError::AssignmentNotFound(_)
+        ));
+    }
+
+    #[test]
+    fn retry_launch_update_does_not_resurrect_stopped_assignment() {
+        let (service, session_store) = service_fixture();
+        session_store
+            .insert(&session_record("child-retry-1"))
+            .expect("insert retry child");
+        let run = service
+            .start_review(StartReviewInput {
+                workspace_id: "workspace-1".to_string(),
+                parent_session_id: "parent-1".to_string(),
+                kind: ReviewKind::Code,
+                title: "Review current changes".to_string(),
+                target_plan: None,
+                target_code_manifest: None,
+                max_rounds: 2,
+                auto_iterate: true,
+                reviewers: vec![reviewer()],
+            })
+            .expect("start review");
+        let assignment = service
+            .store()
+            .list_assignments_for_run(&run.id)
+            .expect("list assignments")
+            .pop()
+            .expect("assignment");
+        service
+            .link_reviewer_session(
+                &run.id,
+                &assignment.id,
+                "parent-1",
+                "child-1",
+                Some("Plan skeptic".to_string()),
+                None,
+                ReviewModeVerificationStatus::Pending,
+            )
+            .expect("link reviewer");
+        service
+            .store()
+            .mark_assignment_retryable_failed(
+                &assignment.id,
+                "child-1",
+                "provider_rate_limit",
+                Some("original provider limit"),
+            )
+            .expect("mark retryable")
+            .expect("retryable assignment");
+        service
+            .store()
+            .prepare_assignment_retry(
+                &run.id,
+                &assignment.id,
+                Some("claude-opus-4-6"),
+                "2026-04-28T01:00:00Z",
+            )
+            .expect("prepare retry")
+            .expect("prepared assignment");
+
+        let reviewer_ids = service.stop_run(&run.id).expect("stop run");
+        assert!(reviewer_ids.is_empty());
+
+        let link_after_stop = service
+            .link_reviewer_session(
+                &run.id,
+                &assignment.id,
+                "parent-1",
+                "child-retry-1",
+                Some("Plan skeptic".to_string()),
+                Some("bypassPermissions"),
+                ReviewModeVerificationStatus::Verified,
+            )
+            .expect_err("stopped review must reject retry reviewer link");
+        assert!(matches!(link_after_stop, ReviewError::RetryNotAllowed));
+        let leaked_link = service
+            .link_service
+            .find_link_by_relation(
+                SessionLinkRelation::ReviewAgent,
+                "parent-1",
+                "child-retry-1",
+            )
+            .expect("find retry link");
+        assert!(leaked_link.is_none());
+
+        let launched = service
+            .store()
+            .update_assignment_launched(
+                &assignment.id,
+                "child-retry-1",
+                "retry-link-1",
+                Some("bypassPermissions"),
+                ReviewModeVerificationStatus::Verified,
+            )
+            .expect("attempt launch update after stop");
+        service
+            .store()
+            .mark_assignment_system_failed(
+                &assignment.id,
+                "reviewer_start_failed",
+                Some("late start failure"),
+            )
+            .expect("late system failure marker");
+
+        assert!(!launched);
+        let updated = service
+            .store()
+            .find_assignment(&assignment.id)
+            .expect("find assignment")
+            .expect("assignment");
+        assert_eq!(updated.status, ReviewAssignmentStatus::Cancelled);
+        assert_eq!(updated.reviewer_session_id, None);
+        assert_eq!(updated.session_link_id, None);
+        let stopped = service
+            .store()
+            .find_run(&run.id)
+            .expect("find run")
+            .expect("run");
+        assert_eq!(stopped.status, ReviewRunStatus::Stopped);
+
+        service
+            .delete_unlaunched_reviewer_session("child-retry-1")
+            .expect("delete unlaunched reviewer");
+        let deleted_child = session_store
+            .find_by_id("child-retry-1")
+            .expect("find deleted child");
+        assert!(deleted_child.is_none());
     }
 
     #[test]

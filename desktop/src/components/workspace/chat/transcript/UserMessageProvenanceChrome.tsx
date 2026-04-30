@@ -38,6 +38,7 @@ export function UserMessageProvenanceChrome({
         type="button"
         variant="ghost"
         size="sm"
+        data-chat-transcript-ignore
         className="h-auto max-w-full justify-end gap-1.5 rounded-none bg-transparent px-0 py-0 text-xs font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0"
         title={`Open ${title}`}
         aria-label={`Open ${title}`}

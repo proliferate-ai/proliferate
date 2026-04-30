@@ -1,6 +1,7 @@
 use anyharness_contract::v1::{
-    MarkReviewRevisionReadyRequest, ProblemDetails, ReviewCritiqueResponse, ReviewRunResponse,
-    SessionReviewsResponse, StartCodeReviewRequest, StartPlanReviewRequest,
+    MarkReviewRevisionReadyRequest, ProblemDetails, RetryReviewAssignmentRequest,
+    ReviewCritiqueResponse, ReviewRunResponse, SessionReviewsResponse, StartCodeReviewRequest,
+    StartPlanReviewRequest,
 };
 use axum::{
     extract::{Path, State},
@@ -110,6 +111,34 @@ pub async fn get_review_assignment_critique(
         .get_assignment_critique(&review_run_id, &assignment_id)
         .map_err(map_review_error)?;
     Ok(Json(critique))
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/reviews/{review_run_id}/assignments/{assignment_id}/retry",
+    params(
+        ("review_run_id" = String, Path, description = "Review run ID"),
+        ("assignment_id" = String, Path, description = "Review assignment ID")
+    ),
+    request_body = RetryReviewAssignmentRequest,
+    responses(
+        (status = 200, description = "Retried review assignment", body = ReviewRunResponse),
+        (status = 404, description = "Review or assignment not found", body = ProblemDetails),
+        (status = 409, description = "Review assignment cannot be retried", body = ProblemDetails),
+    ),
+    tag = "reviews"
+)]
+pub async fn retry_review_assignment(
+    State(state): State<AppState>,
+    Path((review_run_id, assignment_id)): Path<(String, String)>,
+    Json(req): Json<RetryReviewAssignmentRequest>,
+) -> Result<Json<ReviewRunResponse>, ApiError> {
+    let run = state
+        .review_runtime
+        .retry_assignment(&review_run_id, &assignment_id, req)
+        .await
+        .map_err(map_review_error)?;
+    Ok(Json(ReviewRunResponse { run }))
 }
 
 #[utoipa::path(
@@ -256,6 +285,9 @@ fn map_review_error(error: ReviewError) -> ApiError {
         | ReviewError::ReviewSubmissionTooLarge(_)
         | ReviewError::PlanParentMismatch => {
             ApiError::bad_request(error.to_string(), "REVIEW_INVALID")
+        }
+        ReviewError::RetryNotAllowed => {
+            ApiError::conflict(error.to_string(), "REVIEW_RETRY_NOT_ALLOWED")
         }
         other => ApiError::internal(other.to_string()),
     }

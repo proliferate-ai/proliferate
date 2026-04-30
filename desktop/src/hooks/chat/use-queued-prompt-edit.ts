@@ -67,6 +67,13 @@ export function useQueuedPromptEditReader(): {
   return { visiblePendingPrompts, beginEdit };
 }
 
+export function useQueuedPromptEditStatus(): {
+  isEditing: boolean;
+} {
+  const { editingSeq } = useDerivedEditingState();
+  return { isEditing: editingSeq != null };
+}
+
 /**
  * Full workflow variant — owns the cleanup effect for stale edits.
  * Consumed exactly once (in `ChatInput`) so the effect runs a single

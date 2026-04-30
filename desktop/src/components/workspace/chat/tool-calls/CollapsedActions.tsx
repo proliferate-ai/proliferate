@@ -45,6 +45,7 @@ export function CollapsedActions({
         type="button"
         variant="ghost"
         size="sm"
+        data-chat-transcript-ignore
         aria-expanded={expanded}
         className={`group/collapsed-actions h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline`}
         onClick={() => {
