@@ -35,9 +35,9 @@ import { Button } from "@/components/ui/Button";
 import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerAddActionPopover } from "./ComposerAddActionPopover";
 import { ComposerMentionEditor } from "./ComposerMentionEditor";
+import { ComposerTextarea } from "./ComposerTextarea";
 import { ModelSelector } from "./ModelSelector";
 import { SessionConfigControls } from "./SessionConfigControls";
-import { Textarea } from "@/components/ui/Textarea";
 import { ChatComposerSurface } from "./ChatComposerSurface";
 import { DraftAttachmentPreviewList } from "@/components/workspace/chat/content/PromptContentRenderer";
 
@@ -323,10 +323,9 @@ export function ChatInput() {
                 maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
               }}
             >
-              <Textarea
+              <ComposerTextarea
                 data-telemetry-mask
                 ref={textareaRef}
-                variant="ghost"
                 rows={CHAT_COMPOSER_INPUT.minRows}
                 value={editDraft}
                 onChange={(event) => setEditDraftText(event.target.value)}
@@ -340,7 +339,6 @@ export function ChatInput() {
                   minHeight: `${CHAT_COMPOSER_INPUT_MIN_HEIGHT_REM}rem`,
                   maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
                 }}
-                className="min-h-0 px-0 py-0 text-chat leading-[var(--text-chat--line-height)] text-foreground placeholder:text-[color:color-mix(in_oklab,var(--color-faint)_50%,transparent)]"
               />
             </div>
           ) : (

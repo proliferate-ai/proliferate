@@ -23,8 +23,8 @@ import {
   type MentionTrigger,
 } from "@/lib/domain/chat/file-mentions";
 import { formatMarkdownFileLink } from "@/lib/domain/chat/file-mention-links";
-import { Textarea } from "@/components/ui/Textarea";
 import { ComposerFileMentionSearch } from "./ComposerFileMentionSearch";
+import { ComposerTextarea } from "./ComposerTextarea";
 
 type FileSearchResult = SearchWorkspaceFilesResponse["results"][number];
 
@@ -221,11 +221,10 @@ export function ComposerMentionEditor({
           maxHeight: `${maxHeightRem}rem`,
         }}
       >
-        <Textarea
+        <ComposerTextarea
           data-chat-composer-editor
           data-telemetry-mask
           ref={textareaRef}
-          variant="ghost"
           rows={2}
           value={text}
           onChange={(event) => handleChange(event.target.value)}
@@ -244,9 +243,7 @@ export function ComposerMentionEditor({
             minHeight: `${minHeightRem}rem`,
             maxHeight: `${maxHeightRem}rem`,
           }}
-          className={`min-h-0 px-0 py-0 text-chat leading-[var(--text-chat--line-height)] text-foreground placeholder:text-[color:color-mix(in_oklab,var(--color-faint)_50%,transparent)] ${
-            disabled ? "opacity-60" : ""
-          }`}
+          className={disabled ? "opacity-60" : ""}
         />
       </div>
     </>
