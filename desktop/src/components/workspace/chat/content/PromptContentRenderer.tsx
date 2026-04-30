@@ -102,13 +102,7 @@ function PromptDisplayPartView({
   variant: PromptContentRendererVariant;
 }) {
   if (part.type === "text") {
-    return part.isFallback ? (
-      <LegacyTextFallback text={part.text} />
-    ) : (
-      <div className="whitespace-pre-wrap break-words text-chat">
-        {part.text}
-      </div>
-    );
+    return <FileLinkedText text={part.text} />;
   }
 
   return (
@@ -120,7 +114,7 @@ function PromptDisplayPartView({
   );
 }
 
-function LegacyTextFallback({ text }: { text: string }) {
+function FileLinkedText({ text }: { text: string }) {
   const tokens = tokenizeSerializedFileLinks(text);
 
   return (
