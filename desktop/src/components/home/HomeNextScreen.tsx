@@ -9,8 +9,8 @@ import { HomeModelPicker } from "@/components/home/HomeModelPicker";
 import { HomeTargetPicker } from "@/components/home/HomeTargetPicker";
 import { ChatComposerActions } from "@/components/workspace/chat/input/ChatComposerActions";
 import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
+import { ComposerTextarea } from "@/components/workspace/chat/input/ComposerTextarea";
 import { Button } from "@/components/ui/Button";
-import { Textarea } from "@/components/ui/Textarea";
 import { useHomeNextLaunch } from "@/hooks/home/use-home-next-launch";
 import { useHomeNextState } from "@/hooks/home/use-home-next-state";
 import { useHomeScreen } from "@/hooks/home/use-home-screen";
@@ -190,16 +190,15 @@ export function HomeNextScreen() {
                 <div className="flex w-full flex-wrap items-center justify-start gap-1" />
               </div>
               <div
-                className="mb-2 flex-grow select-text overflow-y-auto px-3"
+                className="mb-2 flex-grow select-text overflow-y-auto px-4"
                 style={{
                   minHeight: `${HOME_COMPOSER_INPUT_MIN_HEIGHT_REM}rem`,
                   maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
                 }}
               >
-                <Textarea
+                <ComposerTextarea
                   data-telemetry-mask
                   ref={textareaRef}
-                  variant="ghost"
                   rows={4}
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
@@ -213,7 +212,6 @@ export function HomeNextScreen() {
                     minHeight: `${HOME_COMPOSER_INPUT_MIN_HEIGHT_REM}rem`,
                     maxHeight: `${CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
                   }}
-                  className="min-h-0 px-0 py-0 text-chat leading-[var(--text-chat--line-height)] text-foreground placeholder:text-[color:color-mix(in_oklab,var(--color-faint)_50%,transparent)]"
                 />
               </div>
 

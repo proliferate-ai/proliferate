@@ -169,9 +169,6 @@ export function StandardWorkspaceShell() {
             )}
             {hasWorkspaceShell && (
               <GlobalHeader
-                branchName={gitStatus?.currentBranch ?? undefined}
-                additions={gitStatus?.summary.additions}
-                deletions={gitStatus?.summary.deletions}
                 existingPr={existingPr}
                 selectedWorkspace={selectedWorkspace}
                 rightPanelOpen={rightPanelOpen}
