@@ -2,7 +2,9 @@ import { useCallback } from "react";
 import { Button } from "@/components/ui/Button";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Copy, ExternalLink } from "@/components/ui/icons";
+import { useFilePathNativeContextMenu } from "@/hooks/editor/use-file-path-native-context-menu";
 import { useOpenInDefaultEditor } from "@/hooks/editor/use-open-in-default-editor";
 import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
 
@@ -41,6 +43,11 @@ export function ToolFileChip({
   const handleCopy = useCallback(() => {
     void copyPath(absolute ?? workspacePath ?? pathLabel);
   }, [absolute, workspacePath, pathLabel, copyPath]);
+  const { onContextMenuCapture } = useFilePathNativeContextMenu({
+    canOpen: !!absolute,
+    onOpen: handleOpen,
+    onCopy: handleCopy,
+  });
 
   const chipClass =
     "inline-flex min-w-0 max-w-full items-center gap-0.5 rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-[0.625rem] leading-none text-foreground/90 transition-colors";
@@ -71,6 +78,7 @@ export function ToolFileChip({
       variant="ghost"
       size="sm"
       title={pathLabel}
+      onContextMenuCapture={onContextMenuCapture}
       onClick={(event) => {
         event.stopPropagation();
         handleOpen();
@@ -90,33 +98,23 @@ export function ToolFileChip({
     >
       {(close) => (
         <div className="flex flex-col gap-px">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
+          <PopoverMenuItem
+            icon={<ExternalLink className="size-3.5 shrink-0" />}
+            label="Open file"
             disabled={!absolute}
             onClick={() => {
               handleOpen();
               close();
             }}
-            className="h-auto w-full justify-start gap-2 rounded-md px-2 py-1.5 text-[0.5rem] text-foreground/80 hover:bg-accent/40 hover:text-foreground disabled:hover:bg-transparent disabled:hover:text-foreground/80"
-          >
-            <ExternalLink className="size-3.5 shrink-0" />
-            <span>Open file</span>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
+          />
+          <PopoverMenuItem
+            icon={<Copy className="size-3.5 shrink-0" />}
+            label="Copy path"
             onClick={() => {
               handleCopy();
               close();
             }}
-            className="h-auto w-full justify-start gap-2 rounded-md px-2 py-1.5 text-[0.5rem] text-foreground/80 hover:bg-accent/40 hover:text-foreground"
-          >
-            <Copy className="size-3.5 shrink-0" />
-            <span>Copy path</span>
-          </Button>
+          />
         </div>
       )}
     </PopoverButton>

@@ -1,6 +1,9 @@
 import { useCallback, type ReactNode } from "react";
+import { Button } from "@/components/ui/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Copy, ExternalLink } from "@/components/ui/icons";
+import { useFilePathNativeContextMenu } from "@/hooks/editor/use-file-path-native-context-menu";
 import { useOpenInDefaultEditor } from "@/hooks/editor/use-open-in-default-editor";
 import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
 import { splitPathLineSuffix } from "@/lib/domain/files/path-detection";
@@ -41,16 +44,24 @@ export function FilePathLink({ rawPath, children }: FilePathLinkProps) {
   const handleCopy = useCallback(() => {
     void copyPath(absolute ?? rawPath);
   }, [absolute, rawPath, copyPath]);
+  const { onContextMenuCapture } = useFilePathNativeContextMenu({
+    canOpen: !!absolute,
+    onOpen: handleOpen,
+    onCopy: handleCopy,
+  });
 
   const trigger = (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="sm"
       onClick={handleOpen}
+      onContextMenuCapture={onContextMenuCapture}
       title={absolute ?? rawPath}
-      className="m-0 inline cursor-pointer border-0 bg-transparent p-0 align-baseline font-mono text-[inherit] leading-[inherit] text-link-foreground hover:underline focus-visible:outline-none focus-visible:underline"
+      className="m-0 inline h-auto whitespace-normal break-words border-0 bg-transparent p-0 align-baseline font-mono text-[inherit] leading-[inherit] text-link-foreground shadow-none hover:bg-transparent hover:text-link-foreground hover:underline focus-visible:outline-none focus-visible:underline"
     >
       {children ?? rawPath}
-    </button>
+    </Button>
   );
 
   return (
@@ -62,29 +73,23 @@ export function FilePathLink({ rawPath, children }: FilePathLinkProps) {
     >
       {(close) => (
         <div className="flex flex-col gap-px">
-          <button
-            type="button"
+          <PopoverMenuItem
+            icon={<ExternalLink className="size-3.5 shrink-0" />}
+            label="Open file"
             disabled={!absolute}
             onClick={() => {
               handleOpen();
               close();
             }}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[0.5rem] text-foreground/80 transition-colors hover:bg-accent/40 hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-foreground/80"
-          >
-            <ExternalLink className="size-3.5 shrink-0" />
-            <span>Open file</span>
-          </button>
-          <button
-            type="button"
+          />
+          <PopoverMenuItem
+            icon={<Copy className="size-3.5 shrink-0" />}
+            label="Copy path"
             onClick={() => {
               handleCopy();
               close();
             }}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[0.5rem] text-foreground/80 transition-colors hover:bg-accent/40 hover:text-foreground"
-          >
-            <Copy className="size-3.5 shrink-0" />
-            <span>Copy path</span>
-          </button>
+          />
         </div>
       )}
     </PopoverButton>

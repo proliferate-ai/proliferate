@@ -14,6 +14,7 @@ import renderIcon from "@/assets/connector-icons/render.svg";
 import renderDarkIcon from "@/assets/connector-icons/render-dark.svg";
 import supabaseIcon from "@/assets/connector-icons/supabase.png";
 import { useResolvedMode } from "@/hooks/theme/use-theme";
+import { selectConnectorIconTileClass } from "@/lib/domain/mcp/connector-icon-tile";
 import {
   Calendar,
   Folder,
@@ -76,8 +77,6 @@ interface ConnectorIconImageConfig {
   tileClassName?: string;
   darkTileClassName?: string;
 }
-
-const DEFAULT_IMAGE_TILE_CLASS = "bg-brand-logo-tile";
 
 const CONNECTOR_ICON_IMAGES = {
   cloudflare: { lightSrc: cloudflareIcon },
@@ -151,14 +150,4 @@ function selectConnectorIconImage(
   resolvedMode: "dark" | "light",
 ): string {
   return resolvedMode === "dark" && config.darkSrc ? config.darkSrc : config.lightSrc;
-}
-
-function selectConnectorIconTileClass(
-  config: ConnectorIconImageConfig,
-  resolvedMode: "dark" | "light",
-): string {
-  if (resolvedMode === "dark" && config.darkTileClassName) {
-    return config.darkTileClassName;
-  }
-  return config.tileClassName ?? DEFAULT_IMAGE_TILE_CLASS;
 }
