@@ -23,6 +23,7 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useBranchRenameStore } from "@/stores/workspaces/branch-rename-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
+import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
 
 const BRANCH_RENAME_POLL_INTERVAL_MS = 250;
 const BRANCH_RENAME_TIMEOUT_MS = 60_000;
@@ -41,6 +42,7 @@ export function useWorkspaceBranchRenameMonitor() {
   const syncingCloudBranchRef = useRef<string | null>(null);
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const { data: workspaceCollections } = useWorkspaces();
   const selectedCloudWorkspace = workspaceCollections?.cloudWorkspaces.find(
@@ -65,7 +67,7 @@ export function useWorkspaceBranchRenameMonitor() {
     && (!!pendingRename || !!selectedCloudWorkspace);
 
   const gitStatusQuery = useGitStatusQuery({
-    enabled: !!selectedWorkspaceId && isRuntimeReadyForWorkspace,
+    enabled: !!selectedWorkspaceId && isRuntimeReadyForWorkspace && !hotPaintPending,
     refetchInterval: shouldPoll ? BRANCH_RENAME_POLL_INTERVAL_MS : false,
     refetchIntervalInBackground: shouldPoll,
   });

@@ -21,10 +21,13 @@ export function useWorkspaceSidebarActions() {
   const location = useLocation();
   const navigate = useNavigate();
   const setPendingWorkspaceEntry = useHarnessStore((state) => state.setPendingWorkspaceEntry);
+  const deselectWorkspacePreservingSlots = useHarnessStore(
+    (state) => state.deselectWorkspacePreservingSlots,
+  );
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const mobility = useWorkspaceMobilityState();
-  const { selectWorkspace, clearWorkspaceRuntimeState } = useWorkspaceSelection();
+  const { selectWorkspace } = useWorkspaceSelection();
   const {
     createLocalWorkspaceAndEnter,
     createWorktreeAndEnter,
@@ -54,14 +57,15 @@ export function useWorkspaceSidebarActions() {
     }
 
     if (selectedWorkspaceId) {
-      clearWorkspaceRuntimeState(selectedWorkspaceId, { clearSelection: true });
+      deselectWorkspacePreservingSlots();
+      useWorkspaceFilesStore.getState().reset();
     } else if (pendingWorkspaceEntry) {
       setPendingWorkspaceEntry(null);
       useWorkspaceFilesStore.getState().reset();
     }
     navigate(path);
   }, [
-    clearWorkspaceRuntimeState,
+    deselectWorkspacePreservingSlots,
     mobility.selectionLocked,
     navigate,
     pendingWorkspaceEntry,

@@ -14,6 +14,7 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/pending-entry";
 import type { WorkspaceArrivalViewModel } from "@/lib/domain/workspaces/arrival";
+import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
 
 export type WorkspaceStatusPanelState =
   | {
@@ -90,6 +91,7 @@ function buildPendingDetail(entry: PendingWorkspaceEntry): string | null {
 
 export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const { data: workspaceCollections } = useWorkspaces();
   const arrival = useWorkspaceArrivalState();
@@ -112,6 +114,7 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
     enabled:
       !!selectedWorkspaceId
       && !arrival.viewModel
+      && !hotPaintPending
       && configuredSetupScript.length > 0,
     refetchWhileRunning: false,
   });

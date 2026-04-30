@@ -53,6 +53,8 @@ interface SessionStreamCallbacks {
   measurementOperationId?: MeasurementOperationId | null;
 }
 
+const SESSION_HISTORY_FETCH_TIMEOUT_MS = 10_000;
+
 function buildConnection(baseUrl: string, authToken?: string): AnyHarnessClientConnection {
   return { runtimeUrl: baseUrl, authToken };
 }
@@ -293,8 +295,12 @@ export async function fetchSessionHistory(
   sessionId: string,
   options?: {
     afterSeq?: number;
+    beforeSeq?: number;
+    limit?: number;
+    turnLimit?: number;
     requestHeaders?: HeadersInit;
     measurementOperationId?: MeasurementOperationId | null;
+    timeoutMs?: number;
   },
 ) {
   const { connection } = await measureSessionWorkflowStep(
@@ -308,16 +314,41 @@ export async function fetchSessionHistory(
     category: "session.events.list",
     headers: options?.requestHeaders,
   });
+  const timeoutMs = options?.timeoutMs ?? SESSION_HISTORY_FETCH_TIMEOUT_MS;
+  const abortController =
+    timeoutMs > 0 && typeof AbortController !== "undefined"
+      ? new AbortController()
+      : null;
+  const timeoutId = abortController
+    ? globalThis.setTimeout(() => abortController.abort(), timeoutMs)
+    : null;
+  const requestWithTimeout = abortController
+    ? { ...request, signal: abortController.signal }
+    : request;
+  const hasHistoryOptions = options?.afterSeq != null
+    || options?.beforeSeq != null
+    || options?.limit != null
+    || options?.turnLimit != null
+    || !!requestWithTimeout;
 
-  return client.sessions.listEvents(
-    sessionId,
-    options?.afterSeq != null || request
-      ? {
-        ...(options?.afterSeq != null ? { afterSeq: options.afterSeq } : {}),
-        ...(request ? { request } : {}),
-      }
-      : undefined,
-  );
+  try {
+    return await client.sessions.listEvents(
+      sessionId,
+      hasHistoryOptions
+        ? {
+          ...(options?.afterSeq != null ? { afterSeq: options.afterSeq } : {}),
+          ...(options?.beforeSeq != null ? { beforeSeq: options.beforeSeq } : {}),
+          ...(options?.limit != null ? { limit: options.limit } : {}),
+          ...(options?.turnLimit != null ? { turnLimit: options.turnLimit } : {}),
+          ...(requestWithTimeout ? { request: requestWithTimeout } : {}),
+        }
+        : undefined,
+    );
+  } finally {
+    if (timeoutId !== null) {
+      globalThis.clearTimeout(timeoutId);
+    }
+  }
 }
 
 export async function fetchSessionSummary(
@@ -439,6 +470,41 @@ export function collectInactiveSessionStreamIds(
   return prunableSessionIds;
 }
 
+export function detachAndCloseSessionSlotStreams(
+  sessionIds: Iterable<string>,
+): number {
+  const uniqueSessionIds = Array.from(new Set(sessionIds));
+  if (uniqueSessionIds.length === 0) {
+    return 0;
+  }
+
+  const state = useHarnessStore.getState();
+  const nextSlots = { ...state.sessionSlots };
+  const handles: SessionStreamHandle[] = [];
+  for (const sessionId of uniqueSessionIds) {
+    const slot = nextSlots[sessionId];
+    if (!slot?.sseHandle) {
+      continue;
+    }
+    handles.push(slot.sseHandle);
+    nextSlots[sessionId] = {
+      ...slot,
+      sseHandle: null,
+      streamConnectionState: "disconnected",
+    };
+  }
+
+  if (handles.length === 0) {
+    return 0;
+  }
+
+  useHarnessStore.setState({ sessionSlots: nextSlots });
+  for (const handle of handles) {
+    handle.close();
+  }
+  return handles.length;
+}
+
 export function pruneInactiveSessionStreams(
   options?: {
     preserveSessionIds?: Iterable<string>;
@@ -453,21 +519,7 @@ export function pruneInactiveSessionStreams(
     return [];
   }
 
-  const nextSlots = { ...state.sessionSlots };
-  for (const sessionId of prunableSessionIds) {
-    const slot = nextSlots[sessionId];
-    if (!slot?.sseHandle) {
-      continue;
-    }
-    slot.sseHandle.close();
-    nextSlots[sessionId] = {
-      ...slot,
-      sseHandle: null,
-      streamConnectionState: "disconnected",
-    };
-  }
-
-  useHarnessStore.setState({ sessionSlots: nextSlots });
+  detachAndCloseSessionSlotStreams(prunableSessionIds);
   logLatency("session.stream.pruned", {
     closedSessionCount: prunableSessionIds.length,
   });

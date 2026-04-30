@@ -38,6 +38,9 @@ pub struct ListSessionsQuery {
 #[derive(Debug, Deserialize)]
 pub struct ListSessionEventsQuery {
     pub after_seq: Option<i64>,
+    pub before_seq: Option<i64>,
+    pub limit: Option<i64>,
+    pub turn_limit: Option<i64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -651,6 +654,9 @@ pub async fn get_session(
     params(
         ("session_id" = String, Path, description = "Session ID"),
         ("after_seq" = Option<i64>, Query, description = "Return only events with seq greater than this value"),
+        ("before_seq" = Option<i64>, Query, description = "Return only events with seq less than this value"),
+        ("limit" = Option<i64>, Query, description = "Return at most this many newest matching events, or use as the event budget when turn_limit is set"),
+        ("turn_limit" = Option<i64>, Query, description = "Return complete newest turns, bounded by the limit event budget"),
     ),
     responses(
         (status = 200, description = "Session event history", body = Vec<SessionEventEnvelope>),
@@ -668,9 +674,15 @@ pub async fn list_session_events(
     let latency_fields = latency_trace_fields(latency.as_ref());
     let started = Instant::now();
     let after_seq = query.after_seq.map(|seq| seq.max(0));
+    let before_seq = query.before_seq.map(|seq| seq.max(0));
+    let limit = query.limit.map(|limit| limit.clamp(1, 5_000));
+    let turn_limit = query.turn_limit.map(|turn_limit| turn_limit.clamp(1, 200));
     tracing::info!(
         session_id = %session_id,
         after_seq,
+        before_seq,
+        limit,
+        turn_limit,
         flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
@@ -679,7 +691,7 @@ pub async fn list_session_events(
     );
     let event_records = state
         .session_service
-        .list_session_event_records(&session_id, after_seq)
+        .list_session_event_records(&session_id, after_seq, before_seq, limit, turn_limit)
         .map_err(|e| ApiError::internal(e.to_string()))?
         .ok_or_else(|| {
             ApiError::not_found(
@@ -707,6 +719,9 @@ pub async fn list_session_events(
         session_id = %session_id,
         event_count = envelopes.len(),
         after_seq,
+        before_seq,
+        limit,
+        turn_limit,
         elapsed_ms = started.elapsed().as_millis(),
         flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,

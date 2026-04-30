@@ -25,6 +25,7 @@ export interface AnyHarnessClientOptions {
 
 export interface AnyHarnessRequestOptions {
   headers?: HeadersInit;
+  signal?: AbortSignal;
   measurementOperationId?: string;
   timingCategory?: AnyHarnessTimingCategory;
   timingScope?: AnyHarnessTimingScope;
@@ -211,6 +212,7 @@ export class AnyHarnessTransport {
       const res = await this.fetch(`${this.baseUrl}${path}`, {
         method,
         headers: this.buildHeaders(headers, options),
+        signal: options?.signal,
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
       this.emitRequestTiming(method, options, res.status, timingNow() - startedAt);

@@ -1,7 +1,7 @@
-import { closeSessionSlotHandles } from "@/lib/domain/sessions/activity";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { detachAndCloseSessionSlotStreams } from "@/lib/integrations/anyharness/session-runtime";
 import { clearWorkspaceBootstrappedInSession } from "../workspace-bootstrap-memory";
 import type { WorkspaceSelectionDeps } from "./types";
 
@@ -15,7 +15,7 @@ export function clearWorkspaceRuntimeState(
     Object.entries(sessionSlots).filter(([, slot]) => slot.workspaceId === workspaceId),
   );
 
-  closeSessionSlotHandles(workspaceSlots);
+  detachAndCloseSessionSlotStreams(Object.keys(workspaceSlots));
   deps.removeWorkspaceSlots(workspaceId);
   useChatInputStore.getState().clearDraft(workspaceId);
   clearWorkspaceBootstrappedInSession(workspaceId);

@@ -8,7 +8,9 @@ export type MeasurementOperationId = `mop_${string}`;
 
 export type MeasurementOperationKind =
   | "workspace_open"
+  | "workspace_hot_reopen"
   | "session_switch"
+  | "session_hot_switch"
   | "session_stream_sample"
   | "composer_typing"
   | "transcript_scroll"
@@ -64,6 +66,9 @@ export type MeasurementTimingCategory =
   | MeasurementCloudCategory;
 
 export type MeasurementWorkflowStep =
+  | "workspace.hot_reopen.activate"
+  | "workspace.hot_reopen.after_paint"
+  | "workspace.hot_reopen.reconcile"
   | "workspace.collections.fetch"
   | "workspace.collections.build"
   | "workspace.bootstrap.sessions"
@@ -77,6 +82,7 @@ export type MeasurementWorkflowStep =
   | "session.select.slot_store"
   | "session.select.history_hydrate"
   | "session.select.stream_connect"
+  | "session.select.stream_connect_scheduled"
   | "session.history.replay"
   | "session.history.store"
   | "session.history.mount_subagents"
@@ -86,6 +92,7 @@ export type MeasurementWorkflowStep =
   | "session.stream.initial_refresh"
   | "session.stream.skip_cold_idle"
   | "session.stream.open_handle"
+  | "session.stream.open"
   | "session.stream.resolve_target"
   | "session.resume.resolve_target"
   | "session.resume.workspace_get"
@@ -510,10 +517,21 @@ export function recordMeasurementMetric(input: MeasurementMetricInput): void {
     if (!operation) {
       continue;
     }
+    if (input.type === "request" && isHotPaintOperationKind(operation.kind)) {
+      console.error("[debug-measurement] request attributed to hot paint operation", {
+        operationId: operation.id,
+        operationKind: operation.kind,
+        category: input.category,
+      });
+    }
     operation.hasMetrics = true;
     applyMetric(operation.aggregate, input);
     touchMeasurementOperation(operation.id);
   }
+}
+
+function isHotPaintOperationKind(kind: MeasurementOperationKind): boolean {
+  return kind === "workspace_hot_reopen" || kind === "session_hot_switch";
 }
 
 export function recordMeasurementWorkflowStep(input: {

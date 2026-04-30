@@ -11,6 +11,7 @@ import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/query-keys"
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { clearWorkspaceRuntimeState } from "./clear-runtime-state";
+import { runHotWorkspaceReopen } from "./run-hot-workspace-reopen";
 import { runWorkspaceSelection } from "./run-workspace-selection";
 
 export function useWorkspaceSelection() {
@@ -21,13 +22,14 @@ export function useWorkspaceSelection() {
   const setSelectedLogicalWorkspaceId = useLogicalWorkspaceStore(
     (state) => state.setSelectedLogicalWorkspaceId,
   );
-  const { bootstrapWorkspace } = useWorkspaceBootstrapActions();
+  const { bootstrapWorkspace, reconcileHotWorkspace } = useWorkspaceBootstrapActions();
 
   return {
     selectWorkspace: useCallback(async (
       workspaceId: string,
       options?: {
         force?: boolean;
+        forceCold?: boolean;
         preservePending?: boolean;
         initialActiveSessionId?: string | null;
         latencyFlowId?: string | null;
@@ -59,7 +61,7 @@ export function useWorkspaceSelection() {
         })
         : [];
 
-      await runWorkspaceSelection({
+      const deps = {
         queryClient,
         logicalWorkspaces,
         rawWorkspaces: workspaceCollections?.localWorkspaces ?? [],
@@ -68,7 +70,15 @@ export function useWorkspaceSelection() {
         removeWorkspaceSlots,
         clearSelection,
         bootstrapWorkspace,
-      }, {
+        reconcileHotWorkspace,
+      };
+      if (runHotWorkspaceReopen(deps, {
+        workspaceId,
+        options,
+      })) {
+        return;
+      }
+      await runWorkspaceSelection(deps, {
         workspaceId,
         options,
       });
@@ -76,6 +86,7 @@ export function useWorkspaceSelection() {
       bootstrapWorkspace,
       clearSelection,
       queryClient,
+      reconcileHotWorkspace,
       removeWorkspaceSlots,
       setSelectedLogicalWorkspaceId,
       setSelectedWorkspace,

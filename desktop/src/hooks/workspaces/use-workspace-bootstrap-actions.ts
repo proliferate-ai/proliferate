@@ -7,14 +7,16 @@ import {
 } from "@anyharness/sdk-react";
 import type { AnyHarnessRequestOptions, ModelRegistry } from "@anyharness/sdk";
 import { useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useShallow } from "zustand/react/shallow";
 import { orderChatLaunchAgents, shouldExposeChatLaunchAgent } from "@/config/chat-launch";
 import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import type { WorkspaceSession } from "@/hooks/sessions/use-session-selection-actions";
+import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
 import {
   choosePreferredWorkspaceSession,
 } from "@/lib/domain/workspaces/selection";
@@ -57,6 +59,17 @@ interface BootstrapWorkspaceInput {
   isCurrent: () => boolean;
 }
 
+interface ReconcileHotWorkspaceInput {
+  workspaceId: string;
+  logicalWorkspaceId: string;
+  runtimeUrl: string;
+  workspaceConnection: AnyHarnessResolvedConnection;
+  sessionId: string;
+  selectionNonce: number;
+  latencyFlowId?: string | null;
+  isCurrent: () => boolean;
+}
+
 const EMPTY_WORKSPACES = [] as const;
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 
@@ -93,6 +106,31 @@ async function fetchWorkspaceLaunchCatalog(
   );
 }
 
+async function loadWorkflowWorkspaceSessions(input: {
+  queryClient: QueryClient;
+  queryKey: readonly unknown[];
+  workspaceConnection: AnyHarnessResolvedConnection;
+  workspaceId: string;
+  requestOptions?: AnyHarnessRequestOptions;
+}): Promise<WorkspaceSession[]> {
+  const cacheState = input.queryClient.getQueryState(input.queryKey);
+  const cachedSessions = input.queryClient.getQueryData<WorkspaceSession[]>(input.queryKey);
+  if (cachedSessions && cacheState?.dataUpdatedAt && !cacheState.isInvalidated) {
+    return cachedSessions;
+  }
+
+  // Bootstrap/reconcile own workspace activation. Fetch directly instead of
+  // joining a possibly hung automatic session-list query triggered by
+  // selectedWorkspaceId subscribers, then seed React Query for those surfaces.
+  const sessions = await fetchWorkspaceSessionsWithConnection(
+    input.workspaceConnection,
+    input.workspaceId,
+    input.requestOptions ? { requestOptions: input.requestOptions } : undefined,
+  );
+  input.queryClient.setQueryData(input.queryKey, sessions);
+  return sessions;
+}
+
 export function useWorkspaceBootstrapActions() {
   const queryClient = useQueryClient();
   const workspaceCollections = useWorkspaces().data;
@@ -105,6 +143,10 @@ export function useWorkspaceBootstrapActions() {
   );
   const { initForWorkspace } = useWorkspaceFileActions();
   const { selectSession, createEmptySessionWithResolvedConfig } = useSessionActions();
+  const {
+    ensureSessionStreamConnected,
+    rehydrateSessionSlotFromHistory,
+  } = useSessionRuntimeActions();
 
   const bootstrapWorkspace = useCallback(async ({
     workspaceId,
@@ -179,13 +221,12 @@ export function useWorkspaceBootstrapActions() {
       headers: getLatencyFlowRequestHeaders(latencyFlowId) ?? undefined,
     });
     const [sessions] = await Promise.all([
-      queryClient.ensureQueryData({
+      loadWorkflowWorkspaceSessions({
+        queryClient,
         queryKey: sessionsQueryKey,
-        queryFn: () => fetchWorkspaceSessionsWithConnection(
-          workspaceConnection,
-          workspaceId,
-          sessionRequestOptions ? { requestOptions: sessionRequestOptions } : undefined,
-        ),
+        workspaceConnection,
+        workspaceId,
+        requestOptions: sessionRequestOptions ?? undefined,
       }).then((result) => {
         recordMeasurementWorkflowStep({
           operationId: measurementOperationId,
@@ -433,5 +474,201 @@ export function useWorkspaceBootstrapActions() {
 
   return {
     bootstrapWorkspace,
+    reconcileHotWorkspace: useCallback(async ({
+      workspaceId,
+      logicalWorkspaceId,
+      runtimeUrl,
+      workspaceConnection,
+      sessionId,
+      latencyFlowId,
+      isCurrent,
+    }: ReconcileHotWorkspaceInput): Promise<"completed" | "stale" | "session_missing"> => {
+      if (!isCurrent()) {
+        return "stale";
+      }
+
+      const measurementOperationId = startMeasurementOperation({
+        kind: "workspace_open",
+        surfaces: [
+          "workspace-shell",
+          "workspace-sidebar",
+          "global-header",
+          "header-tabs",
+          "chat-surface",
+          "session-transcript-pane",
+          "transcript-list",
+          "file-tree",
+        ],
+        linkedLatencyFlowId: latencyFlowId ?? undefined,
+        maxDurationMs: 30_000,
+      });
+      const unbindMeasurementCategories = measurementOperationId
+        ? bindMeasurementCategories({
+          operationId: measurementOperationId,
+          categories: [
+            "session.list",
+            "session.get",
+            "session.events.list",
+            "session.resume",
+            "session.stream",
+            "file.list",
+            "git.status",
+            "workspace.session_launch",
+            "workspace.setup_status",
+          ],
+          scope: {
+            runtimeUrlHash: hashMeasurementScope(workspaceConnection.runtimeUrl),
+          },
+          ttlMs: 30_000,
+        })
+        : () => undefined;
+      let finishReason: MeasurementFinishReason = "completed";
+
+      try {
+        const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
+        const workspace = workspaces.find((entry) => entry.id === workspaceId);
+        const treeStateKey = workspace
+          ? workspaceFileTreeStateKey(workspace)
+          : workspaceId;
+        const requestHeaders = getLatencyFlowRequestHeaders(latencyFlowId) ?? undefined;
+        const sessionRequestOptions = getMeasurementRequestOptions({
+          operationId: measurementOperationId,
+          category: "session.list",
+          headers: requestHeaders,
+        });
+        const sessionsStartedAt = startLatencyTimer();
+        const sessionsQueryKey = anyHarnessSessionsKey(runtimeUrl, workspaceId);
+        const sessions = await loadWorkflowWorkspaceSessions({
+          queryClient,
+          queryKey: sessionsQueryKey,
+          workspaceConnection,
+          workspaceId,
+          requestOptions: sessionRequestOptions ?? undefined,
+        }).catch(() => [] as WorkspaceSession[]);
+        recordMeasurementWorkflowStep({
+          operationId: measurementOperationId,
+          step: "workspace.bootstrap.sessions",
+          startedAt: sessionsStartedAt,
+          count: sessions.length,
+        });
+        if (!isCurrent()) {
+          return "stale";
+        }
+
+        const sessionMeta = sessions.find((session) =>
+          session.id === sessionId && !session.dismissedAt
+        ) ?? null;
+        if (!sessionMeta) {
+          return "session_missing";
+        }
+
+        const currentSlot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
+        if (!currentSlot) {
+          return "session_missing";
+        }
+        const storeStartedAt = performance.now();
+        useHarnessStore.getState().patchSessionSlot(sessionId, {
+          workspaceId,
+          agentKind: sessionMeta.agentKind ?? currentSlot.agentKind,
+          modelId: sessionMeta.modelId ?? currentSlot.modelId ?? null,
+          modeId: sessionMeta.modeId ?? currentSlot.modeId ?? null,
+          title: sessionMeta.title ?? currentSlot.title ?? null,
+          liveConfig: sessionMeta.liveConfig ?? currentSlot.liveConfig ?? null,
+          executionSummary: sessionMeta.executionSummary ?? currentSlot.executionSummary ?? null,
+          mcpBindingSummaries: sessionMeta.mcpBindingSummaries ?? currentSlot.mcpBindingSummaries ?? null,
+          status: resolveStatusFromExecutionSummary(
+            sessionMeta.executionSummary ?? currentSlot.executionSummary ?? null,
+            sessionMeta.status ?? currentSlot.status,
+          ),
+          lastPromptAt: sessionMeta.lastPromptAt ?? currentSlot.lastPromptAt ?? null,
+        });
+        recordMeasurementMetric({
+          type: "store",
+          category: "session.list",
+          operationId: measurementOperationId ?? undefined,
+          durationMs: performance.now() - storeStartedAt,
+        });
+
+        const initStartedAt = startLatencyTimer();
+        await initForWorkspace(
+          workspaceId,
+          workspaceConnection.runtimeUrl,
+          treeStateKey,
+          workspaceConnection.anyharnessWorkspaceId,
+          workspaceConnection.authToken ?? undefined,
+        );
+        recordMeasurementWorkflowStep({
+          operationId: measurementOperationId,
+          step: "workspace.bootstrap.file_tree_init",
+          startedAt: initStartedAt,
+        });
+        if (!isCurrent()) {
+          return "stale";
+        }
+
+        const slotBeforeHydrate = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
+        const lastSeq = slotBeforeHydrate?.transcript.lastSeq ?? 0;
+        const hydrateStartedAt = startLatencyTimer();
+        const tailHydrated = await rehydrateSessionSlotFromHistory(sessionId, {
+          afterSeq: lastSeq,
+          requestHeaders,
+          measurementOperationId,
+          isCurrent,
+        });
+        if (!isCurrent()) {
+          return "stale";
+        }
+        if (!tailHydrated) {
+          await rehydrateSessionSlotFromHistory(sessionId, {
+            replace: true,
+            requestHeaders,
+            measurementOperationId,
+            isCurrent,
+          });
+        }
+        if (!isCurrent()) {
+          return "stale";
+        }
+        useHarnessStore.getState().patchSessionSlot(sessionId, { transcriptHydrated: true });
+        recordMeasurementWorkflowStep({
+          operationId: measurementOperationId,
+          step: "session.select.history_hydrate",
+          startedAt: hydrateStartedAt,
+        });
+
+        const streamStartedAt = startLatencyTimer();
+        await ensureSessionStreamConnected(sessionId, {
+          allowColdIdleNoStream: true,
+          resumeIfActive: true,
+          requestHeaders,
+          measurementOperationId,
+          isCurrent,
+        });
+        recordMeasurementWorkflowStep({
+          operationId: measurementOperationId,
+          step: "session.select.stream_connect",
+          startedAt: streamStartedAt,
+        });
+        if (!isCurrent()) {
+          return "stale";
+        }
+
+        markWorkspaceBootstrappedInSession(workspaceId);
+        markWorkspaceBootstrappedInSession(logicalWorkspaceId);
+        return "completed";
+      } catch {
+        finishReason = "error_sanitized";
+        return "stale";
+      } finally {
+        unbindMeasurementCategories();
+        finishOrCancelMeasurementOperation(measurementOperationId, finishReason);
+      }
+    }, [
+      ensureSessionStreamConnected,
+      initForWorkspace,
+      queryClient,
+      rehydrateSessionSlotFromHistory,
+      workspaceCollections,
+    ]),
   };
 }

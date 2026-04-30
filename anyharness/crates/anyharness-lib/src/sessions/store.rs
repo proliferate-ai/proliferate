@@ -974,6 +974,217 @@ impl SessionStore {
         })
     }
 
+    pub fn list_events_limited(
+        &self,
+        session_id: &str,
+        limit: i64,
+    ) -> anyhow::Result<Vec<SessionEventRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "WITH tail AS (
+                   SELECT seq, turn_id, item_id
+                   FROM session_events
+                   WHERE session_id = ?1
+                   ORDER BY seq DESC
+                   LIMIT ?2
+                 ),
+                 tail_turns AS (
+                   SELECT DISTINCT turn_id
+                   FROM tail
+                   WHERE turn_id IS NOT NULL
+                 ),
+                 tail_items AS (
+                   SELECT DISTINCT item_id
+                   FROM tail
+                   WHERE item_id IS NOT NULL
+                 )
+                 SELECT e.*
+                 FROM session_events e
+                 WHERE e.session_id = ?1
+                   AND (
+                     e.seq IN (SELECT seq FROM tail)
+                     OR (
+                       e.event_type = 'turn_started'
+                       AND e.turn_id IN (SELECT turn_id FROM tail_turns)
+                     )
+                     OR (
+                       e.event_type = 'item_started'
+                       AND e.item_id IN (SELECT item_id FROM tail_items)
+                     )
+                   )
+                 ORDER BY seq ASC",
+            )?;
+            let rows = stmt.query_map(params![session_id, limit], |row| map_event(row))?;
+            rows.collect()
+        })
+    }
+
+    pub fn list_events_for_latest_turns(
+        &self,
+        session_id: &str,
+        turn_limit: i64,
+        event_limit: i64,
+    ) -> anyhow::Result<Vec<SessionEventRecord>> {
+        self.db.with_conn(|conn| {
+            let turn_limit = turn_limit.max(1);
+            let event_limit = event_limit.max(1);
+            let mut turn_stmt = conn.prepare(
+                "SELECT turn_id, seq
+                 FROM session_events
+                 WHERE session_id = ?1
+                   AND event_type = 'turn_started'
+                   AND turn_id IS NOT NULL
+                 ORDER BY seq DESC
+                 LIMIT ?2",
+            )?;
+            let turn_rows = turn_stmt.query_map(params![session_id, turn_limit], |row| {
+                Ok((row.get::<_, String>("turn_id")?, row.get::<_, i64>("seq")?))
+            })?;
+            let turn_starts = turn_rows.collect::<rusqlite::Result<Vec<_>>>()?;
+
+            if turn_starts.is_empty() {
+                let mut stmt = conn.prepare(
+                    "SELECT *
+                     FROM (
+                       SELECT *
+                       FROM session_events
+                       WHERE session_id = ?1
+                       ORDER BY seq DESC
+                       LIMIT ?2
+                     )
+                     ORDER BY seq ASC",
+                )?;
+                let rows =
+                    stmt.query_map(params![session_id, event_limit], |row| map_event(row))?;
+                return rows.collect();
+            }
+
+            let mut selected_turn_count = turn_starts.len();
+            let mut cutoff_seq = turn_starts[selected_turn_count - 1].1;
+            loop {
+                let event_count: i64 = conn.query_row(
+                    "SELECT COUNT(*)
+                     FROM session_events
+                     WHERE session_id = ?1 AND seq >= ?2",
+                    params![session_id, cutoff_seq],
+                    |row| row.get(0),
+                )?;
+                if event_count <= event_limit || selected_turn_count <= 1 {
+                    break;
+                }
+                selected_turn_count -= 1;
+                cutoff_seq = turn_starts[selected_turn_count - 1].1;
+            }
+
+            let mut stmt = conn.prepare(
+                "SELECT *
+                 FROM session_events
+                 WHERE session_id = ?1 AND seq >= ?2
+                 ORDER BY seq ASC",
+            )?;
+            let rows = stmt.query_map(params![session_id, cutoff_seq], |row| map_event(row))?;
+            rows.collect()
+        })
+    }
+
+    pub fn list_events_before_limited(
+        &self,
+        session_id: &str,
+        before_seq: i64,
+        limit: i64,
+    ) -> anyhow::Result<Vec<SessionEventRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT *
+                 FROM (
+                   SELECT *
+                   FROM session_events
+                   WHERE session_id = ?1 AND seq < ?2
+                   ORDER BY seq DESC
+                   LIMIT ?3
+                 )
+                 ORDER BY seq ASC",
+            )?;
+            let rows =
+                stmt.query_map(params![session_id, before_seq, limit], |row| map_event(row))?;
+            rows.collect()
+        })
+    }
+
+    pub fn list_events_before_for_latest_turns(
+        &self,
+        session_id: &str,
+        before_seq: i64,
+        turn_limit: i64,
+        event_limit: i64,
+    ) -> anyhow::Result<Vec<SessionEventRecord>> {
+        self.db.with_conn(|conn| {
+            let turn_limit = turn_limit.max(1);
+            let event_limit = event_limit.max(1);
+            let mut turn_stmt = conn.prepare(
+                "SELECT turn_id, seq
+                 FROM session_events
+                 WHERE session_id = ?1
+                   AND seq < ?2
+                   AND event_type = 'turn_started'
+                   AND turn_id IS NOT NULL
+                 ORDER BY seq DESC
+                 LIMIT ?3",
+            )?;
+            let turn_rows = turn_stmt
+                .query_map(params![session_id, before_seq, turn_limit], |row| {
+                    Ok((row.get::<_, String>("turn_id")?, row.get::<_, i64>("seq")?))
+                })?;
+            let turn_starts = turn_rows.collect::<rusqlite::Result<Vec<_>>>()?;
+
+            if turn_starts.is_empty() {
+                let mut stmt = conn.prepare(
+                    "SELECT *
+                     FROM (
+                       SELECT *
+                       FROM session_events
+                       WHERE session_id = ?1 AND seq < ?2
+                       ORDER BY seq DESC
+                       LIMIT ?3
+                     )
+                     ORDER BY seq ASC",
+                )?;
+                let rows = stmt.query_map(params![session_id, before_seq, event_limit], |row| {
+                    map_event(row)
+                })?;
+                return rows.collect();
+            }
+
+            let mut selected_turn_count = turn_starts.len();
+            let mut cutoff_seq = turn_starts[selected_turn_count - 1].1;
+            loop {
+                let event_count: i64 = conn.query_row(
+                    "SELECT COUNT(*)
+                     FROM session_events
+                     WHERE session_id = ?1 AND seq >= ?2 AND seq < ?3",
+                    params![session_id, cutoff_seq, before_seq],
+                    |row| row.get(0),
+                )?;
+                if event_count <= event_limit || selected_turn_count <= 1 {
+                    break;
+                }
+                selected_turn_count -= 1;
+                cutoff_seq = turn_starts[selected_turn_count - 1].1;
+            }
+
+            let mut stmt = conn.prepare(
+                "SELECT *
+                 FROM session_events
+                 WHERE session_id = ?1 AND seq >= ?2 AND seq < ?3
+                 ORDER BY seq ASC",
+            )?;
+            let rows = stmt.query_map(params![session_id, cutoff_seq, before_seq], |row| {
+                map_event(row)
+            })?;
+            rows.collect()
+        })
+    }
+
     pub fn list_raw_notifications(
         &self,
         session_id: &str,
@@ -999,6 +1210,30 @@ impl SessionStore {
                  ORDER BY seq ASC",
             )?;
             let rows = stmt.query_map(params![session_id, after_seq], |row| map_event(row))?;
+            rows.collect()
+        })
+    }
+
+    pub fn list_events_after_limited(
+        &self,
+        session_id: &str,
+        after_seq: i64,
+        limit: i64,
+    ) -> anyhow::Result<Vec<SessionEventRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT *
+                 FROM (
+                   SELECT *
+                   FROM session_events
+                   WHERE session_id = ?1 AND seq > ?2
+                   ORDER BY seq DESC
+                   LIMIT ?3
+                 )
+                 ORDER BY seq ASC",
+            )?;
+            let rows =
+                stmt.query_map(params![session_id, after_seq, limit], |row| map_event(row))?;
             rows.collect()
         })
     }
@@ -1540,6 +1775,259 @@ mod tests {
         assert!(store
             .has_turn_started_event("session-1")
             .expect("check populated turn history"));
+    }
+
+    #[test]
+    fn limited_event_reads_return_newest_events_in_ascending_order() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        store.insert(&session_record()).expect("insert session");
+
+        for seq in 1..=5 {
+            store
+                .append_event(&SessionEventRecord {
+                    id: 0,
+                    session_id: "session-1".to_string(),
+                    seq,
+                    timestamp: format!("2026-03-25T00:01:0{seq}Z"),
+                    event_type: "turn_started".to_string(),
+                    turn_id: Some(format!("turn-{seq}")),
+                    item_id: None,
+                    payload_json: r#"{"type":"turn_started"}"#.to_string(),
+                })
+                .expect("append event");
+        }
+
+        let tail = store
+            .list_events_limited("session-1", 2)
+            .expect("list limited events");
+        assert_eq!(
+            tail.iter().map(|event| event.seq).collect::<Vec<_>>(),
+            vec![4, 5]
+        );
+
+        let filtered_tail = store
+            .list_events_after_limited("session-1", 2, 2)
+            .expect("list limited events after seq");
+        assert_eq!(
+            filtered_tail
+                .iter()
+                .map(|event| event.seq)
+                .collect::<Vec<_>>(),
+            vec![4, 5],
+        );
+    }
+
+    #[test]
+    fn limited_event_reads_include_tail_turn_and_item_start_context() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        store.insert(&session_record()).expect("insert session");
+
+        store
+            .append_event(&SessionEventRecord {
+                id: 0,
+                session_id: "session-1".to_string(),
+                seq: 1,
+                timestamp: "2026-03-25T00:01:01Z".to_string(),
+                event_type: "turn_started".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                item_id: None,
+                payload_json: r#"{"type":"turn_started"}"#.to_string(),
+            })
+            .expect("append turn start");
+
+        for seq in 2..=4 {
+            store
+                .append_event(&SessionEventRecord {
+                    id: 0,
+                    session_id: "session-1".to_string(),
+                    seq,
+                    timestamp: format!("2026-03-25T00:01:0{seq}Z"),
+                    event_type: if seq == 2 { "item_started" } else { "item_delta" }.to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    item_id: Some("item-1".to_string()),
+                    payload_json: if seq == 2 {
+                        r#"{"type":"item_started","item":{"kind":"assistant_message","status":"in_progress","sourceAgentKind":"codex","contentParts":[]}}"#
+                    } else {
+                        r#"{"type":"item_delta","delta":{"appendText":"old"}}"#
+                    }
+                    .to_string(),
+                })
+                .expect("append older item event");
+        }
+
+        for seq in 5..=7 {
+            store
+                .append_event(&SessionEventRecord {
+                    id: 0,
+                    session_id: "session-1".to_string(),
+                    seq,
+                    timestamp: format!("2026-03-25T00:01:0{seq}Z"),
+                    event_type: if seq == 5 { "item_started" } else { "item_delta" }.to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    item_id: Some("item-2".to_string()),
+                    payload_json: if seq == 5 {
+                        r#"{"type":"item_started","item":{"kind":"assistant_message","status":"in_progress","sourceAgentKind":"codex","contentParts":[]}}"#
+                    } else {
+                        r#"{"type":"item_delta","delta":{"appendText":"new"}}"#
+                    }
+                    .to_string(),
+                })
+                .expect("append recent item event");
+        }
+
+        let tail = store
+            .list_events_limited("session-1", 2)
+            .expect("list limited events");
+
+        assert_eq!(
+            tail.iter().map(|event| event.seq).collect::<Vec<_>>(),
+            vec![1, 5, 6, 7],
+        );
+    }
+
+    #[test]
+    fn latest_turn_reads_return_complete_recent_turns() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        store.insert(&session_record()).expect("insert session");
+
+        for turn in 1..=3 {
+            let start_seq = (turn - 1) * 2 + 1;
+            store
+                .append_event(&SessionEventRecord {
+                    id: 0,
+                    session_id: "session-1".to_string(),
+                    seq: start_seq,
+                    timestamp: format!("2026-03-25T00:01:{start_seq:02}Z"),
+                    event_type: "turn_started".to_string(),
+                    turn_id: Some(format!("turn-{turn}")),
+                    item_id: None,
+                    payload_json: r#"{"type":"turn_started"}"#.to_string(),
+                })
+                .expect("append turn_started");
+            store
+                .append_event(&SessionEventRecord {
+                    id: 0,
+                    session_id: "session-1".to_string(),
+                    seq: start_seq + 1,
+                    timestamp: format!("2026-03-25T00:01:{:02}Z", start_seq + 1),
+                    event_type: "turn_ended".to_string(),
+                    turn_id: Some(format!("turn-{turn}")),
+                    item_id: None,
+                    payload_json: r#"{"type":"turn_ended","stopReason":"end_turn"}"#.to_string(),
+                })
+                .expect("append turn_ended");
+        }
+
+        let tail = store
+            .list_events_for_latest_turns("session-1", 2, 100)
+            .expect("list latest turns");
+
+        assert_eq!(
+            tail.iter().map(|event| event.seq).collect::<Vec<_>>(),
+            vec![3, 4, 5, 6],
+        );
+    }
+
+    #[test]
+    fn latest_turn_reads_reduce_window_to_event_budget() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        store.insert(&session_record()).expect("insert session");
+
+        for turn in 1..=3 {
+            let start_seq = (turn - 1) * 3 + 1;
+            for offset in 0..3 {
+                let seq = start_seq + offset;
+                store
+                    .append_event(&SessionEventRecord {
+                        id: 0,
+                        session_id: "session-1".to_string(),
+                        seq,
+                        timestamp: format!("2026-03-25T00:01:{seq:02}Z"),
+                        event_type: if offset == 0 {
+                            "turn_started"
+                        } else {
+                            "item_completed"
+                        }
+                        .to_string(),
+                        turn_id: Some(format!("turn-{turn}")),
+                        item_id: Some(format!("item-{turn}-{offset}")),
+                        payload_json: if offset == 0 {
+                            r#"{"type":"turn_started"}"#
+                        } else {
+                            r#"{"type":"item_completed","item":{"kind":"assistant_message","status":"completed","sourceAgentKind":"codex","contentParts":[]}}"#
+                        }
+                        .to_string(),
+                    })
+                    .expect("append event");
+            }
+        }
+
+        let tail = store
+            .list_events_for_latest_turns("session-1", 3, 4)
+            .expect("list budgeted latest turns");
+
+        assert_eq!(
+            tail.iter().map(|event| event.seq).collect::<Vec<_>>(),
+            vec![7, 8, 9],
+        );
+    }
+
+    #[test]
+    fn older_turn_reads_return_complete_page_before_cutoff() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        store.insert(&session_record()).expect("insert session");
+
+        for turn in 1..=5 {
+            let start_seq = (turn - 1) * 2 + 1;
+            store
+                .append_event(&SessionEventRecord {
+                    id: 0,
+                    session_id: "session-1".to_string(),
+                    seq: start_seq,
+                    timestamp: format!("2026-03-25T00:01:{start_seq:02}Z"),
+                    event_type: "turn_started".to_string(),
+                    turn_id: Some(format!("turn-{turn}")),
+                    item_id: None,
+                    payload_json: r#"{"type":"turn_started"}"#.to_string(),
+                })
+                .expect("append turn_started");
+            store
+                .append_event(&SessionEventRecord {
+                    id: 0,
+                    session_id: "session-1".to_string(),
+                    seq: start_seq + 1,
+                    timestamp: format!("2026-03-25T00:01:{:02}Z", start_seq + 1),
+                    event_type: "turn_ended".to_string(),
+                    turn_id: Some(format!("turn-{turn}")),
+                    item_id: None,
+                    payload_json: r#"{"type":"turn_ended","stopReason":"end_turn"}"#.to_string(),
+                })
+                .expect("append turn_ended");
+        }
+
+        let older = store
+            .list_events_before_for_latest_turns("session-1", 7, 2, 100)
+            .expect("list older turns");
+
+        assert_eq!(
+            older.iter().map(|event| event.seq).collect::<Vec<_>>(),
+            vec![3, 4, 5, 6],
+        );
     }
 
     #[test]

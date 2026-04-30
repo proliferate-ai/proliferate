@@ -366,14 +366,6 @@ export function sessionSlotBelongsToWorkspace(
   return !!slot && !!workspaceId && slot.workspaceId === workspaceId;
 }
 
-export function closeSessionSlotHandles(
-  slots: Record<string, { sseHandle: { close(): void } | null }>,
-): void {
-  for (const slot of Object.values(slots)) {
-    slot.sseHandle?.close();
-  }
-}
-
 export function collectWorkspaceSessionViewStates(
   sessionSlots: Record<string, WorkspaceSessionActivitySnapshot>,
 ): Record<string, SessionViewState> {

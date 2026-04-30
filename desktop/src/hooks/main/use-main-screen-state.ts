@@ -18,6 +18,7 @@ import {
 } from "react";
 import { useResize } from "@/hooks/layout/use-resize";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { shouldMountWorkspaceShell } from "@/lib/domain/chat/chat-surface";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
@@ -91,6 +92,7 @@ export function useMainScreenState(): MainScreenState {
   const [filePaletteOpen, setFilePaletteOpen] = useState(false);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const workspaceArrivalEvent = useHarnessStore((state) => state.workspaceArrivalEvent);
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
   const isCloudWorkspaceSelected = selectedCloudWorkspaceId !== null;
@@ -174,9 +176,11 @@ export function useMainScreenState(): MainScreenState {
       ? selectedCloudRuntime.state?.preserveVisibleContent === true
       : false
   );
-  const { data: gitStatus } = useGitStatusQuery({ enabled: hasRuntimeReadyWorkspace });
+  const { data: gitStatus } = useGitStatusQuery({
+    enabled: hasRuntimeReadyWorkspace && !hotPaintPending,
+  });
   const shouldQueryCurrentPullRequest =
-    hasRuntimeReadyWorkspace && Boolean(gitStatus?.currentBranch?.trim());
+    hasRuntimeReadyWorkspace && !hotPaintPending && Boolean(gitStatus?.currentBranch?.trim());
   const { data: currentPullRequest } = useCurrentPullRequestQuery({
     enabled: shouldQueryCurrentPullRequest,
   });

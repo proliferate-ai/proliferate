@@ -159,8 +159,14 @@ export function anyHarnessSessionEventsKey(
   workspaceId: string | null | undefined,
   sessionId: string | null | undefined,
   afterSeq?: number,
+  limit?: number,
 ) {
-  return [...anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId), "events", afterSeq ?? null] as const;
+  return [
+    ...anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId),
+    "events",
+    afterSeq ?? null,
+    limit ?? null,
+  ] as const;
 }
 
 export function anyHarnessSessionSubagentsKey(
