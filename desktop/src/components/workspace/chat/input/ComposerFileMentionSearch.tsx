@@ -44,7 +44,7 @@ export function ComposerFileMentionSearch({
         className,
       )}
     >
-      <div className="flex h-8 items-center gap-2 border-b border-border/60 px-2.5 text-xs text-muted-foreground">
+      <div className="flex h-8 items-center gap-2 border-b border-border/60 px-2.5 text-[0.5rem] text-muted-foreground">
         {isLoading ? (
           <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
         ) : (
@@ -60,7 +60,7 @@ export function ComposerFileMentionSearch({
         style={{ scrollbarWidth: "thin", scrollbarColor: "var(--color-scrollbar-thumb) transparent" }}
       >
         {errorMessage ? (
-          <div className="px-3 py-4 text-center text-xs text-destructive">
+          <div className="px-3 py-4 text-center text-[0.5rem] text-destructive">
             {errorMessage}
           </div>
         ) : results.length > 0 ? (
@@ -106,7 +106,7 @@ export function ComposerFileMentionSearch({
             ))}
           </div>
         ) : (
-          <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+          <div className="px-3 py-4 text-center text-[0.5rem] text-muted-foreground">
             {emptyMessage}
           </div>
         )}

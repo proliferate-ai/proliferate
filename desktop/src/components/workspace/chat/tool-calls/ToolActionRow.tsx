@@ -57,7 +57,7 @@ export function ToolActionRow({
           role="button"
           tabIndex={0}
           aria-expanded={expanded}
-          className={`group/tool-action-row inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-relaxed font-normal outline-none focus-visible:underline ${
+          className={`group/tool-action-row inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-[var(--text-chat--line-height)] font-normal outline-none focus-visible:underline ${
             status === "failed"
               ? "text-destructive/80 hover:text-destructive"
               : "text-muted-foreground/80 hover:text-foreground"
@@ -76,7 +76,7 @@ export function ToolActionRow({
         </div>
       ) : (
         <div
-          className={`inline-flex min-w-0 max-w-full items-center gap-1 text-chat leading-relaxed ${
+          className={`inline-flex min-w-0 max-w-full items-center gap-1 text-chat leading-[var(--text-chat--line-height)] ${
             status === "failed" ? "text-destructive/80" : "text-muted-foreground/80"
           }`}
         >
@@ -184,7 +184,7 @@ function renderInlineHint(hint?: ReactNode) {
     return (
       <span
         title={String(hint)}
-        className="max-w-[200px] min-w-0 shrink truncate rounded-sm border border-border/60 bg-muted/45 px-1.5 py-0.5 font-mono text-xs leading-none text-muted-foreground"
+        className="max-w-[200px] min-w-0 shrink truncate rounded-sm border border-border/60 bg-muted/45 px-1.5 py-0.5 font-mono text-[0.5rem] leading-none text-muted-foreground"
       >
         {hint}
       </span>

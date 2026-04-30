@@ -236,7 +236,7 @@ export function AgentSetupModal({
                     {state.loginMessage}
                   </p>
                 )}
-                <code className="block rounded-md bg-muted px-3 py-2 font-mono text-xs text-foreground">
+                <code className="block rounded-md bg-muted px-3 py-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-foreground">
                   {state.loginCommand}
                 </code>
               </>

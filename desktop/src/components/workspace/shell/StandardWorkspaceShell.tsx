@@ -18,12 +18,9 @@ import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrom
 import { useUpdater } from "@/hooks/updater/use-updater";
 import { useRunWorkspaceCommand } from "@/hooks/workspaces/use-run-workspace-command";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
-
-const GLASS_HEADER_CLASS =
-  "flex h-10 shrink-0 items-center border-b border-foreground/10 bg-card/30 backdrop-blur-xl supports-[backdrop-filter]:bg-card/20";
-const SOLID_HEADER_CLASS = "flex h-10 shrink-0 items-center";
 
 export function StandardWorkspaceShell() {
   const { layout, data } = useMainScreenState();
@@ -56,6 +53,10 @@ export function StandardWorkspaceShell() {
     onRightSeparatorDown,
   } = layout;
   const transparentChromeEnabled = useTransparentChromeEnabled();
+  const chromeClasses = resolveStandardWorkspaceChromeClasses({
+    transparent: transparentChromeEnabled,
+    sidebarOpen,
+  });
   const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
   const activePublishWorkspaceId = selectedLogicalWorkspaceId ?? selectedWorkspaceId;
   const {
@@ -101,9 +102,7 @@ export function StandardWorkspaceShell() {
   return (
     <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? null}>
       <div
-        className={`h-screen flex overflow-hidden ${
-          transparentChromeEnabled ? "bg-transparent" : "bg-sidebar"
-        }`}
+        className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
         data-telemetry-block
       >
         <div
@@ -145,12 +144,10 @@ export function StandardWorkspaceShell() {
         )}
 
         <div
-          className={`flex min-w-0 flex-1 flex-col overflow-hidden ${
-            transparentChromeEnabled ? "bg-transparent" : "bg-background"
-          } ${sidebarOpen && !transparentChromeEnabled ? "rounded-tl-[22px] border-l border-t border-sidebar-border" : ""}`}
+          className={`flex min-w-0 flex-1 flex-col overflow-hidden ${chromeClasses.contentShell}`}
         >
           <div
-            className={transparentChromeEnabled ? GLASS_HEADER_CLASS : SOLID_HEADER_CLASS}
+            className={chromeClasses.header}
             data-tauri-drag-region="true"
           >
             {!sidebarOpen && (

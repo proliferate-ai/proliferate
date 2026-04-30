@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Button } from "@/components/ui/Button";
 import { highlightCode } from "@/lib/infra/highlighting";
 
 interface HighlightedCodePanelProps {
@@ -57,13 +58,15 @@ export function HighlightedCodePanel({
             <span className="text-sm text-muted-foreground">{displayLang}</span>
           ) : <span />}
           {showCopyButton && (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={handleCopy}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover/code:opacity-100"
+              className="h-auto rounded-none bg-transparent p-0 text-sm text-muted-foreground opacity-0 transition-colors hover:bg-transparent hover:text-foreground group-hover/code:opacity-100"
             >
               {copied ? "Copied!" : "Copy"}
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -71,7 +74,7 @@ export function HighlightedCodePanel({
       {showLineNumbers ? (
         <div
           ref={codeRef}
-          className={`overflow-x-auto overflow-y-auto font-mono text-sm leading-relaxed font-medium ${contentClassName}`}
+          className={`overflow-x-auto overflow-y-auto font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] font-medium ${contentClassName}`}
         >
           <div className="min-w-full w-max py-2">
             <table className="border-collapse">
@@ -82,7 +85,7 @@ export function HighlightedCodePanel({
                       {lineNumberStart + index}&#8594;
                     </td>
                     <td className="py-px pr-3 align-top text-foreground">
-                      <code className="whitespace-pre text-sm leading-relaxed font-mono font-medium">
+                      <code className="whitespace-pre font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] font-medium">
                         {line.length > 0 ? line : " "}
                       </code>
                     </td>
@@ -95,16 +98,16 @@ export function HighlightedCodePanel({
       ) : html ? (
         <div
           ref={codeRef}
-          className={`overflow-x-auto overflow-y-auto text-sm leading-relaxed font-mono font-medium [&_.shiki]:!bg-transparent [&_pre]:!bg-transparent [&_pre]:p-3 [&_pre]:!m-0 [&_code]:text-sm [&_code]:leading-relaxed ${contentClassName}`}
+          className={`overflow-x-auto overflow-y-auto font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] font-medium [&_.shiki]:!bg-transparent [&_pre]:!bg-transparent [&_pre]:p-3 [&_pre]:!m-0 [&_code]:text-[length:var(--readable-code-font-size)] [&_code]:leading-[var(--readable-code-line-height)] ${contentClassName}`}
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (
         <div
           ref={codeRef}
-          className={`overflow-x-auto overflow-y-auto text-sm leading-relaxed font-mono font-medium ${contentClassName}`}
+          className={`overflow-x-auto overflow-y-auto font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] font-medium ${contentClassName}`}
         >
           <pre className="p-3 m-0">
-            <code className="text-sm leading-relaxed font-mono font-medium text-foreground">{code}</code>
+            <code className="font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] font-medium text-foreground">{code}</code>
           </pre>
         </div>
       )}

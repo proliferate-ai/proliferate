@@ -93,7 +93,7 @@ export function LocalRepoSection({ repository }: LocalRepoSectionProps) {
             value={runCommandDraft}
             onChange={(event) => setRunCommandDraft(event.target.value)}
             placeholder="make dev PROFILE=my-profile"
-            className="font-mono"
+            className="font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)]"
           />
           <RunCommandHelp scope="selected workspace" className="text-sm text-muted-foreground/80" />
         </div>

@@ -9,6 +9,7 @@ import { useTerminalActions } from "@/hooks/terminals/use-terminal-actions";
 import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
 import { getTerminalTheme, onThemeChange } from "@/config/theme";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { resolveTerminalTabChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 
 interface TerminalPanelProps {
   collapsed?: boolean;
@@ -23,11 +24,6 @@ const STATUS_DOT: Record<string, string> = {
   exited: "bg-muted-foreground",
   failed: "bg-git-red",
 };
-const GLASS_TABLIST_RAIL_CLASS =
-  "relative flex shrink-0 items-center gap-1 overflow-hidden border-b border-foreground/10 bg-card/25 pr-1 backdrop-blur-md supports-[backdrop-filter]:bg-card/20";
-const SOLID_TABLIST_RAIL_CLASS =
-  "relative flex shrink-0 items-center gap-1 overflow-hidden pr-1";
-
 export function TerminalPanel({
   collapsed,
   onToggleCollapse,
@@ -43,6 +39,7 @@ export function TerminalPanel({
   const selectTab = useTerminalStore((s) => s.selectTab);
   const { createTab, closeTab, loadWorkspaceTabs } = useTerminalActions();
   const transparentChromeEnabled = useTransparentChromeEnabled();
+  const chromeClasses = resolveTerminalTabChromeClasses(transparentChromeEnabled);
   const creatingInitialTabRef = useRef(false);
   const [canConnectTabs, setCanConnectTabs] = useState(false);
 
@@ -132,7 +129,7 @@ export function TerminalPanel({
 
   return (
     <div className="flex flex-col h-full" data-telemetry-block data-focus-zone="terminal">
-      <div className={transparentChromeEnabled ? GLASS_TABLIST_RAIL_CLASS : SOLID_TABLIST_RAIL_CLASS}>
+      <div className={chromeClasses.rail}>
         <IconButton className="ml-1" onClick={onToggleCollapse} title="Collapse terminal">
           <ChevronDown className="size-4 text-muted-foreground" />
         </IconButton>
@@ -149,9 +146,7 @@ export function TerminalPanel({
             const fallbackTitle = `Terminal ${idx + 1}`;
             const displayTitle = tab.title === "Terminal" ? fallbackTitle : tab.title;
             const shapeClassName = "rounded-t-md";
-            const activeClassName = transparentChromeEnabled
-              ? "bg-background/85 text-foreground backdrop-blur-xl"
-              : "bg-background text-foreground";
+            const activeClassName = chromeClasses.active;
 
             return (
               <div
@@ -160,7 +155,7 @@ export function TerminalPanel({
                 className={`group/tab flex h-8 min-w-0 max-w-44 shrink-0 items-center px-0.5 transition-colors ${shapeClassName} ${
                   isActive
                     ? activeClassName
-                    : "bg-transparent text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground"
+                    : chromeClasses.inactive
                 }`}
               >
                 <Button

@@ -1437,7 +1437,7 @@ function AgentGroupBlock({
       {/* Agent header — clickable to collapse/expand */}
       <div
         onClick={() => headerExpandable && setExpanded(!expanded)}
-        className={`group/tool-action-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-base leading-5 transition-colors ${
+        className={`group/tool-action-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-chat leading-[var(--text-chat--line-height)] transition-colors ${
           headerExpandable
             ? "cursor-pointer text-muted-foreground hover:bg-muted/40 hover:text-foreground"
             : "cursor-default text-muted-foreground"
@@ -1553,7 +1553,7 @@ function AsyncAgentLaunchBlock({
         <AgentHeaderRunningIcon color={color} />
         <span>Running in background</span>
       </div>
-      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+      <p className="mt-1 text-sm leading-[var(--text-sm--line-height)] text-muted-foreground">
         Async subagent launched successfully. You&apos;ll be notified automatically when it completes.
       </p>
       {hasLaunchDetails && (
@@ -1573,7 +1573,7 @@ function AsyncAgentLaunchBlock({
                 className="w-full"
                 viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
               >
-                <div className="whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-relaxed text-muted-foreground">
+                <div className="whitespace-pre-wrap px-3 py-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-muted-foreground">
                   {launch.rawText}
                 </div>
               </AutoHideScrollArea>
@@ -1602,7 +1602,7 @@ function AgentResultBlock({ content }: { content: string }) {
         className={`relative ${!resultExpanded && needsTruncation ? "overflow-hidden" : ""}`}
         style={!resultExpanded && needsTruncation ? { maxHeight: AGENT_RESULT_COLLAPSED_HEIGHT } : undefined}
       >
-        <div ref={contentRef} className="text-chat leading-relaxed select-text text-foreground">
+        <div ref={contentRef} className="text-chat leading-[var(--text-chat--line-height)] select-text text-foreground">
           <MarkdownRenderer
             content={content}
             className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"

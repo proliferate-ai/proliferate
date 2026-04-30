@@ -269,6 +269,8 @@
   --diffs-font-family: var(--font-mono);
   --diffs-font-size: 10px;
   --diffs-line-height: calc(var(--diffs-font-size, 12px) * 1.8);
+  --readable-code-font-size: 0.625rem;
+  --readable-code-line-height: 1.625;
   --diffs-min-number-column-width: 4ch;
   --diffs-fg: var(--color-foreground);
   --diffs-addition-color-override: var(--color-diff-added);

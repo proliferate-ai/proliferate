@@ -1,3 +1,12 @@
+import {
+  DEFAULT_APPEARANCE_SIZE_ID,
+  resolveAppearanceSizeId,
+  resolveReadableCodeFontScale,
+  resolveUiFontScale,
+  type ReadableCodeFontSizeId,
+  type UiFontSizeId,
+} from "@/lib/domain/preferences/appearance";
+
 // ---------------------------------------------------------------------------
 // Preset definitions
 // ---------------------------------------------------------------------------
@@ -56,12 +65,61 @@ export function applyThemePreference(
   notify();
 }
 
+export interface AppearancePreference {
+  themePreset: ThemePreset;
+  colorMode: ColorMode;
+  uiFontSizeId: UiFontSizeId;
+  readableCodeFontSizeId: ReadableCodeFontSizeId;
+}
+
+function setTextScaleVariables(
+  prefix: string,
+  scale: { fontSize: string; lineHeight: string },
+) {
+  document.documentElement.style.setProperty(`--text-${prefix}`, scale.fontSize);
+  document.documentElement.style.setProperty(`--text-${prefix}--line-height`, scale.lineHeight);
+}
+
+export function applyAppearancePreference({
+  themePreset,
+  colorMode,
+  uiFontSizeId,
+  readableCodeFontSizeId,
+}: AppearancePreference) {
+  const root = document.documentElement;
+  const resolvedUiFontSizeId = resolveAppearanceSizeId(uiFontSizeId);
+  const resolvedReadableCodeFontSizeId = resolveAppearanceSizeId(readableCodeFontSizeId);
+  const uiScale = resolveUiFontScale(resolvedUiFontSizeId);
+  const readableCodeScale = resolveReadableCodeFontScale(resolvedReadableCodeFontSizeId);
+
+  root.dataset.theme = themePreset;
+  root.dataset.uiFontSize = resolvedUiFontSizeId;
+  root.dataset.readableCodeFontSize = resolvedReadableCodeFontSizeId;
+  applyMode(colorMode, themePreset);
+
+  setTextScaleVariables("xs", uiScale.xs);
+  setTextScaleVariables("sm", uiScale.sm);
+  setTextScaleVariables("base", uiScale.base);
+  setTextScaleVariables("chat", uiScale.chat);
+  setTextScaleVariables("lg", uiScale.lg);
+  setTextScaleVariables("xl", uiScale.xl);
+
+  root.style.setProperty("--diffs-font-size", readableCodeScale.diffsFontSize);
+  root.style.setProperty("--diffs-line-height", readableCodeScale.diffsLineHeight);
+  root.style.setProperty("--readable-code-font-size", readableCodeScale.codeFontSize);
+  root.style.setProperty("--readable-code-line-height", readableCodeScale.codeLineHeight);
+
+  notify();
+}
+
 export function initializeTheme(
   preset: ThemePreset = "mono",
   mode: ColorMode = "dark",
 ) {
   document.documentElement.dataset.theme = preset;
   applyMode(mode, preset);
+  document.documentElement.dataset.uiFontSize = DEFAULT_APPEARANCE_SIZE_ID;
+  document.documentElement.dataset.readableCodeFontSize = DEFAULT_APPEARANCE_SIZE_ID;
 }
 
 // ---------------------------------------------------------------------------
