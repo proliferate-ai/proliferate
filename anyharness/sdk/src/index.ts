@@ -202,6 +202,7 @@ export type {
   StartPlanReviewRequest,
   StartCodeReviewRequest,
   MarkReviewRevisionReadyRequest,
+  RetryReviewAssignmentRequest,
   ReviewAssignmentDetail,
   ReviewCritiqueResponse,
   ReviewFeedbackDeliveryDetail,
@@ -289,6 +290,7 @@ export type {
   InteractionRequestedEvent,
   InteractionResolvedEvent,
   ErrorEvent,
+  ErrorEventDetails,
 } from "./types/events.js";
 
 export type {

@@ -191,12 +191,14 @@ describe("user preference migration", () => {
       ...USER_PREFERENCE_DEFAULTS,
       defaultChatModelIdByAgentKind: {
         claude: "claude-opus-4-6",
+        codex: "gpt-5.4",
       },
     });
 
     expect(result.changed).toBe(false);
     expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
       claude: "claude-opus-4-6",
+      codex: "gpt-5.4",
     });
   });
 

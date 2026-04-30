@@ -162,6 +162,7 @@ export type InteractionResolvedEvent =
 export type ErrorEvent = components["schemas"]["ErrorEvent"] & {
   type: "error";
 };
+export type ErrorEventDetails = components["schemas"]["ErrorEventDetails"];
 
 export type SessionEvent =
   | SessionStartedEvent

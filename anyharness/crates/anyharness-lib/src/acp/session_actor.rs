@@ -17,6 +17,7 @@ use super::permission_broker::{
     InteractionBroker, InteractionBrokerOutcome, InteractionCancelOutcome, PermissionDecision,
     PermissionOutcome, ResolveInteractionError, UserInputOutcome,
 };
+use super::provider_errors::{classify_provider_rate_limit_error, PROVIDER_RATE_LIMIT_CODE};
 use super::runtime_client::RuntimeClient;
 use crate::agents::model::{AgentKind, ResolvedAgent};
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
@@ -37,13 +38,13 @@ use crate::sessions::runtime_event::{RuntimeEventInjectionResult, RuntimeInjecte
 use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::{
     AvailableCommandsUpdatePayload, ConfigApplyState, ConfigOptionUpdatePayload,
-    CurrentModeUpdatePayload, InteractionKind, InteractionOutcome, McpElicitationSubmittedField,
-    NormalizedSessionControl, PendingInteractionSummary, PendingPromptAddedPayload,
-    PendingPromptRemovalReason, PendingPromptRemovedPayload, PendingPromptUpdatedPayload,
-    ProposedPlanDecisionState, ProposedPlanNativeResolutionState, SessionEndReason,
-    SessionEventEnvelope, SessionExecutionPhase, SessionExecutionSummary, SessionInfoUpdatePayload,
-    SessionLiveConfigSnapshot, SessionStateUpdatePayload, StopReason, UsageUpdatePayload,
-    UserInputSubmittedAnswer,
+    CurrentModeUpdatePayload, ErrorEventDetails, InteractionKind, InteractionOutcome,
+    McpElicitationSubmittedField, NormalizedSessionControl, PendingInteractionSummary,
+    PendingPromptAddedPayload, PendingPromptRemovalReason, PendingPromptRemovedPayload,
+    PendingPromptUpdatedPayload, ProposedPlanDecisionState, ProposedPlanNativeResolutionState,
+    SessionEndReason, SessionEventEnvelope, SessionExecutionPhase, SessionExecutionSummary,
+    SessionInfoUpdatePayload, SessionLiveConfigSnapshot, SessionStateUpdatePayload, StopReason,
+    UsageUpdatePayload, UserInputSubmittedAnswer,
 };
 
 #[derive(Debug)]
@@ -647,6 +648,7 @@ pub struct SessionTurnFinishResult {
     pub outcome: SessionTurnOutcome,
     pub stop_reason: Option<String>,
     pub last_event_seq: i64,
+    pub error_details: Option<ErrorEventDetails>,
 }
 
 #[derive(Debug, Clone)]
@@ -1984,6 +1986,7 @@ async fn run_actor(
                                             outcome,
                                             stop_reason: Some(stop_reason),
                                             last_event_seq,
+                                            error_details: None,
                                         });
                                     }
                                     if let Err(error) = apply_pending_config_changes_if_idle(
@@ -2025,8 +2028,18 @@ async fn run_actor(
                                         background_work_count = background_work_registry.tracker_count(),
                                         "session.actor.prompt.conn_failed"
                                     );
+                                    let error_message = e.to_string();
+                                    let error_details =
+                                        classify_provider_rate_limit_error(&error_message);
+                                    let error_code = error_details
+                                        .as_ref()
+                                        .map(|_| PROVIDER_RATE_LIMIT_CODE.to_string());
                                     let mut sink = event_sink.lock().await;
-                                    sink.error(e.to_string(), None);
+                                    sink.error_with_details(
+                                        error_message,
+                                        error_code,
+                                        error_details.clone(),
+                                    );
                                     let last_event_seq = sink.debug_snapshot().next_seq - 1;
                                     drop(sink);
                                     let now = chrono::Utc::now().to_rfc3339();
@@ -2042,6 +2055,7 @@ async fn run_actor(
                                             outcome: SessionTurnOutcome::Failed,
                                             stop_reason: None,
                                             last_event_seq,
+                                            error_details,
                                         });
                                     }
                                     broken_session = true;

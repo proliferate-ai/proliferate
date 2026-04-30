@@ -451,16 +451,13 @@ fn resolve_model_id(
         .iter()
         .map(|model| model.id.as_str())
         .collect::<Vec<_>>();
-    let normalized_model_id = provided_model_id.map(|model_id| {
-        normalize_legacy_model_id(model_registry.kind.as_str(), model_id).unwrap_or(model_id)
-    });
-
-    let resolved_model_id = normalized_model_id.map(|model_id| {
+    let resolved_model_id = provided_model_id.map(|model_id| {
         if valid_ids.contains(&model_id) {
-            model_id
-        } else {
-            resolve_model_alias(model_registry, model_id).unwrap_or(model_id)
+            return model_id;
         }
+        let normalized_model_id =
+            normalize_legacy_model_id(model_registry.kind.as_str(), model_id).unwrap_or(model_id);
+        resolve_model_alias(model_registry, normalized_model_id).unwrap_or(normalized_model_id)
     });
 
     resolve_catalog_id(

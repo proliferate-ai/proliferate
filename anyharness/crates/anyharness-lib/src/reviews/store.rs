@@ -186,10 +186,10 @@ impl ReviewStore {
         session_link_id: &str,
         actual_mode_id: Option<&str>,
         mode_status: ReviewModeVerificationStatus,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<bool> {
         let now = chrono::Utc::now().to_rfc3339();
         self.db.with_conn(|conn| {
-            conn.execute(
+            let changed = conn.execute(
                 "UPDATE review_assignments
                  SET reviewer_session_id = ?1,
                      session_link_id = ?2,
@@ -197,7 +197,17 @@ impl ReviewStore {
                      mode_verification_status = ?4,
                      status = 'reviewing',
                      updated_at = ?5
-                 WHERE id = ?6",
+                 WHERE id = ?6
+                   AND status IN ('queued', 'launching', 'reviewing')
+                   AND EXISTS (
+                       SELECT 1
+                       FROM review_runs
+                       JOIN review_rounds ON review_rounds.id = review_assignments.review_round_id
+                       WHERE review_runs.id = review_assignments.review_run_id
+                         AND review_runs.active_round_id = review_assignments.review_round_id
+                         AND review_runs.status = 'reviewing'
+                         AND review_rounds.status = 'reviewing'
+                   )",
                 params![
                     reviewer_session_id,
                     session_link_id,
@@ -207,7 +217,7 @@ impl ReviewStore {
                     assignment_id
                 ],
             )?;
-            Ok(())
+            Ok(changed == 1)
         })
     }
 
@@ -225,10 +235,138 @@ impl ReviewStore {
                      failure_reason = ?1,
                      failure_detail = ?2,
                      updated_at = ?3
-                 WHERE id = ?4",
+                 WHERE id = ?4
+                   AND status IN ('queued', 'launching', 'reviewing', 'reminded')",
                 params![reason, detail, now, assignment_id],
             )?;
             Ok(())
+        })
+    }
+
+    pub fn mark_assignment_retryable_failed(
+        &self,
+        assignment_id: &str,
+        reviewer_session_id: &str,
+        reason: &str,
+        detail: Option<&str>,
+    ) -> anyhow::Result<Option<ReviewAssignmentRecord>> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.db.with_conn(|conn| {
+            let changed = conn.execute(
+                "UPDATE review_assignments
+                 SET status = 'retryable_failed',
+                     failure_reason = ?1,
+                     failure_detail = ?2,
+                     updated_at = ?3
+                 WHERE id = ?4
+                   AND reviewer_session_id = ?5
+                   AND status IN ('launching', 'reviewing', 'reminded')
+                   AND EXISTS (
+                       SELECT 1
+                       FROM review_runs
+                       JOIN review_rounds ON review_rounds.id = review_assignments.review_round_id
+                       WHERE review_runs.id = review_assignments.review_run_id
+                         AND review_runs.active_round_id = review_assignments.review_round_id
+                         AND review_runs.status = 'reviewing'
+                         AND review_rounds.status = 'reviewing'
+                   )",
+                params![reason, detail, now, assignment_id, reviewer_session_id],
+            )?;
+            if changed == 0 {
+                return Ok(None);
+            }
+            conn.query_row(
+                "SELECT * FROM review_assignments WHERE id = ?1",
+                [assignment_id],
+                map_assignment,
+            )
+            .optional()
+        })
+    }
+
+    pub fn prepare_assignment_retry(
+        &self,
+        run_id: &str,
+        assignment_id: &str,
+        model_id: Option<&str>,
+        deadline_at: &str,
+    ) -> anyhow::Result<Option<ReviewAssignmentRecord>> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.db.with_tx(|tx| {
+            let changed = tx.execute(
+                "UPDATE review_assignments
+                 SET status = 'launching',
+                     model_id = ?1,
+                     reviewer_session_id = NULL,
+                     session_link_id = NULL,
+                     actual_mode_id = NULL,
+                     mode_verification_status = 'pending',
+                     pass = NULL,
+                     summary = NULL,
+                     critique_markdown = NULL,
+                     critique_artifact_path = NULL,
+                     submitted_at = NULL,
+                     deadline_at = ?2,
+                     reminder_count = 0,
+                     failure_reason = NULL,
+                     failure_detail = NULL,
+                     updated_at = ?3
+                 WHERE id = ?4
+                   AND review_run_id = ?5
+                   AND status = 'retryable_failed'
+                   AND failure_reason = 'provider_rate_limit'
+                   AND EXISTS (
+                       SELECT 1
+                       FROM review_runs
+                       JOIN review_rounds ON review_rounds.id = review_assignments.review_round_id
+                       WHERE review_runs.id = review_assignments.review_run_id
+                         AND review_runs.active_round_id = review_assignments.review_round_id
+                         AND review_runs.status = 'reviewing'
+                         AND review_rounds.status = 'reviewing'
+                   )",
+                params![model_id, deadline_at, now, assignment_id, run_id],
+            )?;
+            if changed == 0 {
+                return Ok(None);
+            }
+            tx.query_row(
+                "SELECT * FROM review_assignments WHERE id = ?1",
+                [assignment_id],
+                map_assignment,
+            )
+            .optional()
+        })
+    }
+
+    pub fn restore_assignment_retryable_after_retry_launch_failed(
+        &self,
+        run_id: &str,
+        assignment_id: &str,
+        detail: Option<&str>,
+    ) -> anyhow::Result<bool> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.db.with_conn(|conn| {
+            let changed = conn.execute(
+                "UPDATE review_assignments
+                 SET status = 'retryable_failed',
+                     failure_reason = 'provider_rate_limit',
+                     failure_detail = ?1,
+                     updated_at = ?2
+                 WHERE id = ?3
+                   AND review_run_id = ?4
+                   AND status IN ('launching', 'reviewing', 'system_failed')
+                   AND EXISTS (
+                       SELECT 1
+                       FROM review_runs
+                       JOIN review_rounds ON review_rounds.id = review_assignments.review_round_id
+                       WHERE review_runs.id = review_assignments.review_run_id
+                         AND review_runs.active_round_id = review_assignments.review_round_id
+                         AND review_runs.status = 'reviewing'
+                         AND review_rounds.status = 'reviewing'
+                   )",
+                params![detail, now, assignment_id, run_id],
+            )?;
+            Ok(changed == 1)
         })
     }
 
@@ -449,7 +587,7 @@ impl ReviewStore {
                 "UPDATE review_assignments
                  SET status = 'cancelled', updated_at = ?1
                  WHERE review_run_id = ?2
-                   AND status IN ('queued', 'launching', 'reviewing', 'reminded')",
+                   AND status IN ('queued', 'launching', 'reviewing', 'reminded', 'retryable_failed')",
                 params![now, run_id],
             )?;
             tx.execute(

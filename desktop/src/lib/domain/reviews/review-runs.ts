@@ -22,7 +22,19 @@ export function isReviewRunShowable(run: ReviewRunDetail): boolean {
 }
 
 export function isReviewRunBusy(run: ReviewRunDetail): boolean {
-  return run.status === "reviewing" || run.status === "parent_revising";
+  if (run.status === "parent_revising") {
+    return true;
+  }
+  if (run.status !== "reviewing") {
+    return false;
+  }
+  const round = latestReviewRound(run);
+  return round?.assignments.some((assignment) =>
+    assignment.status === "queued"
+    || assignment.status === "launching"
+    || assignment.status === "reviewing"
+    || assignment.status === "reminded"
+  ) ?? false;
 }
 
 export function isReviewRunTerminal(run: ReviewRunDetail): boolean {
@@ -86,7 +98,9 @@ export function reviewRoundProgress(assignments: readonly ReviewAssignmentDetail
   return {
     submitted: assignments.filter((assignment) => assignment.status === "submitted").length,
     failed: assignments.filter((assignment) =>
-      assignment.status === "system_failed" || assignment.status === "timed_out"
+      assignment.status === "system_failed"
+      || assignment.status === "timed_out"
+      || assignment.status === "retryable_failed"
     ).length,
     total: assignments.length,
   };
@@ -121,6 +135,8 @@ export function reviewAssignmentStatusLabel(assignment: ReviewAssignmentDetail):
     case "reviewing":
     case "reminded":
       return "Reviewing";
+    case "retryable_failed":
+      return "Needs retry";
     case "cancelled":
       return "Cancelled";
     case "timed_out":
@@ -138,6 +154,8 @@ export function reviewAssignmentHeaderStatusLabel(assignment: ReviewAssignmentDe
     case "reviewing":
     case "reminded":
       return "Working";
+    case "retryable_failed":
+      return "Needs retry";
     case "submitted":
       return "Done";
     case "cancelled":
