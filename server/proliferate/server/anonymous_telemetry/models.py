@@ -22,6 +22,7 @@ ActivationMilestone = Literal[
     "first_cloud_workspace_created",
     "first_credential_synced",
     "first_connector_installed",
+    "first_bundled_agent_seed_hydrated",
 ]
 
 
