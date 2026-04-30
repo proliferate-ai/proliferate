@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CHAT_COMPOSER_INPUT,
@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { useHomeNextLaunch } from "@/hooks/home/use-home-next-launch";
 import { useHomeNextState } from "@/hooks/home/use-home-next-state";
 import { useHomeScreen } from "@/hooks/home/use-home-screen";
+import { useHomeDraftHandoffStore } from "@/stores/home/home-draft-handoff-store";
 import {
   type HomeNextDestination,
   type HomeNextModelSelection,
@@ -63,6 +64,8 @@ export function HomeNextScreen() {
   const [baseBranchOverride, setBaseBranchOverride] = useState<string | null>(null);
   const [modeOverrideId, setModeOverrideId] = useState<string | null>(null);
   const [targetSearch, setTargetSearch] = useState("");
+  const restoredDraftText = useHomeDraftHandoffStore((state) => state.draftText);
+  const clearRestoredDraftText = useHomeDraftHandoffStore((state) => state.clearDraftText);
   const {
     actionCards,
     statusMessage,
@@ -78,6 +81,13 @@ export function HomeNextScreen() {
     modeOverrideId,
   });
   const { isLaunching, launch } = useHomeNextLaunch();
+
+  useEffect(() => {
+    if (restoredDraftText !== null) {
+      setDraft(restoredDraftText);
+      clearRestoredDraftText();
+    }
+  }, [clearRestoredDraftText, restoredDraftText]);
 
   const promptTarget = destination === "repository"
     ? homeNext.selectedRepository?.name?.trim()

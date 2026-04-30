@@ -16,6 +16,8 @@ function launch(overrides: Partial<DeferredHomeLaunch> = {}): DeferredHomeLaunch
     modelId: "gpt-5.4",
     modeId: null,
     promptText: "private prompt",
+    promptId: "prompt-1",
+    launchIntentId: "launch-1",
     createdAt: Date.now(),
     ...overrides,
   };

@@ -278,8 +278,11 @@ export function useCreateCloudWorkspace() {
             retryCount,
           },
         });
+        const currentPending = useHarnessStore.getState().pendingWorkspaceEntry;
         failPendingEntry(
-          currentEntry ?? nextEntry,
+          currentPending?.attemptId === attemptId
+            ? currentPending
+            : currentEntry ?? nextEntry,
           resolveErrorMessage(error, "Failed to create cloud workspace."),
         );
         return { status: "interrupted" };

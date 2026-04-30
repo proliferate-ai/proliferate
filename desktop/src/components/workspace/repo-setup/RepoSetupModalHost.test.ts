@@ -6,11 +6,11 @@ import { RepoSetupModalHost } from "./RepoSetupModalHost";
 const repoSetupModalStore = vi.hoisted(() => {
   const state = {
     modal: null as {
-      workspaceId: string;
+      repoRootId: string;
       sourceRoot: string;
       repoName: string;
     } | null,
-    open: (modal: { workspaceId: string; sourceRoot: string; repoName: string }) => {
+    open: (modal: { repoRootId: string; sourceRoot: string; repoName: string }) => {
       state.modal = modal;
     },
     close: () => {
@@ -34,18 +34,18 @@ vi.mock("@/stores/ui/repo-setup-modal-store", () => ({
 
 vi.mock("./RepoSetupModal", () => ({
   RepoSetupModal: ({
-    workspaceId,
+    repoRootId,
     sourceRoot,
     repoName,
   }: {
-    workspaceId: string;
+    repoRootId: string;
     sourceRoot: string;
     repoName: string;
     onClose: () => void;
   }) => createElement(
     "div",
     { "data-testid": "repo-setup-modal" },
-    `${workspaceId}:${sourceRoot}:${repoName}`,
+    `${repoRootId}:${sourceRoot}:${repoName}`,
   ),
 }));
 
@@ -56,7 +56,7 @@ describe("RepoSetupModalHost", () => {
 
   it("renders the repo setup modal when the store is opened outside the sidebar tree", () => {
     repoSetupModalStore.state.open({
-      workspaceId: "repo-1",
+      repoRootId: "repo-1",
       sourceRoot: "/tmp/proliferate",
       repoName: "proliferate",
     });

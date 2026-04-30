@@ -56,6 +56,14 @@ describe("resolveWorkspaceShellSurface", () => {
     )).toBe("cowork");
   });
 
+  it("uses the cowork shell while a cowork launch intent is pending", () => {
+    expect(resolveWorkspaceShellSurface(
+      null,
+      null,
+      { pendingCoworkLaunch: true },
+    )).toBe("cowork");
+  });
+
   it("keeps standard workspaces on the standard shell", () => {
     expect(resolveWorkspaceShellSurface(
       makeWorkspace({ surface: "standard" }),

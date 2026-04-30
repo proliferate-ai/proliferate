@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Workspace } from "@anyharness/sdk";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import {
+  resolveLaunchIntentSurfaceOverride,
+  shouldMountWorkspaceShell,
   shouldKeepBootstrappedWorkspaceLoading,
   shouldShowStructuralRepoWorkspaceStatus,
 } from "@/lib/domain/chat/chat-surface";
@@ -81,5 +83,40 @@ describe("chat surface", () => {
       hasBootstrappedWorkspace: true,
       rememberedSessionId: "session-1",
     })).toBe(false);
+  });
+
+  it("mounts the workspace shell for a launch intent before workspace selection exists", () => {
+    expect(shouldMountWorkspaceShell({
+      selectedWorkspaceId: null,
+      hasPendingWorkspaceEntry: false,
+      activeLaunchIntentId: "launch-1",
+    })).toBe(true);
+  });
+
+  it("shows launch intent before session content exists", () => {
+    expect(resolveLaunchIntentSurfaceOverride({
+      activeLaunchIntentId: "launch-1",
+      launchIntentSessionId: "session-1",
+      activeSessionId: null,
+      hasVisibleSessionContent: false,
+    })).toEqual({ kind: "launch-intent", intentId: "launch-1" });
+  });
+
+  it("lets launch-owned transcript content take over from launch intent", () => {
+    expect(resolveLaunchIntentSurfaceOverride({
+      activeLaunchIntentId: "launch-1",
+      launchIntentSessionId: "session-1",
+      activeSessionId: "session-1",
+      hasVisibleSessionContent: true,
+    })).toEqual({ kind: "session-transcript", sessionId: "session-1" });
+  });
+
+  it("keeps launch intent visible over unrelated transcript content", () => {
+    expect(resolveLaunchIntentSurfaceOverride({
+      activeLaunchIntentId: "launch-1",
+      launchIntentSessionId: null,
+      activeSessionId: "previous-session",
+      hasVisibleSessionContent: true,
+    })).toEqual({ kind: "launch-intent", intentId: "launch-1" });
   });
 });

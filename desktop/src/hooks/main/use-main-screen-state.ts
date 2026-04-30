@@ -18,12 +18,14 @@ import {
 import { useResize } from "@/hooks/layout/use-resize";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
+import { shouldMountWorkspaceShell } from "@/lib/domain/chat/chat-surface";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import {
   useWorkspaceUiStore,
   WORKSPACE_SIDEBAR_MAX_WIDTH,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
 } from "@/stores/preferences/workspace-ui-store";
+import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import type { RightPanelMode } from "@/components/workspace/shell/right-panel/RightPanel";
 
@@ -107,11 +109,16 @@ export function useMainScreenState(): MainScreenState {
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const workspaceArrivalEvent = useHarnessStore((state) => state.workspaceArrivalEvent);
+  const activeLaunchIntent = useChatLaunchIntentStore((state) => state.activeIntent);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
-  const hasWorkspaceShell = Boolean(selectedWorkspaceId || pendingWorkspaceEntry);
+  const hasWorkspaceShell = shouldMountWorkspaceShell({
+    selectedWorkspaceId,
+    hasPendingWorkspaceEntry: pendingWorkspaceEntry !== null,
+    activeLaunchIntentId: activeLaunchIntent?.id ?? null,
+  });
   const hasRuntimeReadyWorkspace = Boolean(selectedWorkspaceId) && (
     selectedCloudWorkspaceId !== null
       ? selectedCloudRuntime.state?.phase === "ready"

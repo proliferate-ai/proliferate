@@ -12,6 +12,8 @@ export interface DeferredHomeLaunch {
   modelId: string;
   modeId: string | null;
   promptText: string;
+  promptId: string;
+  launchIntentId: string;
   createdAt: number;
 }
 

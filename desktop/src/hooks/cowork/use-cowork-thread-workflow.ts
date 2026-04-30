@@ -203,8 +203,12 @@ export function useCoworkThreadWorkflow() {
         elapsedSincePendingMs: elapsedSince(entry.createdAt),
       });
       if (isAttemptCurrent(entry.attemptId)) {
+        const currentPending = useHarnessStore.getState().pendingWorkspaceEntry;
+        const failedEntry = currentPending?.attemptId === entry.attemptId
+          ? currentPending
+          : entry;
         setPendingWorkspaceEntry({
-          ...entry,
+          ...failedEntry,
           stage: "failed",
           errorMessage: message,
         });

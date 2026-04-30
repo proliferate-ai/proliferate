@@ -11,9 +11,16 @@ import type {
   HomeNextModelSelection,
 } from "@/lib/domain/home/home-next-launch";
 import {
+  resolveChatLaunchRetryMode,
+  resolveLaunchIntentPendingWorkspaceId,
+  type ChatLaunchRetryMode,
+} from "@/lib/domain/chat/launch-intent";
+import {
   buildDeferredHomeLaunchId,
   useDeferredHomeLaunchStore,
 } from "@/stores/home/deferred-home-launch-store";
+import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
+import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   failLatencyFlow,
@@ -35,12 +42,61 @@ function modeOptions(modeId: string | null): { modeId?: string } {
   return modeId ? { modeId } : {};
 }
 
+function newLaunchId(): string {
+  return crypto.randomUUID();
+}
+
+function markLaunchIntentMaterializedFromPendingWorkspace(intentId: string): void {
+  const activeIntent = useChatLaunchIntentStore.getState().activeIntent;
+  if (!activeIntent || activeIntent.id !== intentId) {
+    return;
+  }
+
+  const workspaceId = resolveLaunchIntentPendingWorkspaceId(
+    activeIntent,
+    useHarnessStore.getState().pendingWorkspaceEntry,
+  );
+  if (!workspaceId) {
+    return;
+  }
+
+  useChatLaunchIntentStore.getState().markMaterializedIfActive(intentId, {
+    workspaceId,
+  });
+}
+
+function launchFailureRetryMode(intentId: string): ChatLaunchRetryMode {
+  const activeIntent = useChatLaunchIntentStore.getState().activeIntent;
+  if (!activeIntent || activeIntent.id !== intentId) {
+    return "safe";
+  }
+
+  const retryMode = resolveChatLaunchRetryMode(activeIntent);
+  if (retryMode !== "safe") {
+    return retryMode;
+  }
+
+  return resolveLaunchIntentPendingWorkspaceId(
+    activeIntent,
+    useHarnessStore.getState().pendingWorkspaceEntry,
+  )
+    ? "manual_after_workspace"
+    : "safe";
+}
+
 export function useHomeNextLaunch() {
   const navigate = useNavigate();
   const [isLaunching, setIsLaunching] = useState(false);
   const inFlightRef = useRef(false);
   const showToast = useToastStore((state) => state.show);
   const enqueueDeferredLaunch = useDeferredHomeLaunchStore((state) => state.enqueue);
+  const beginLaunchIntent = useChatLaunchIntentStore((state) => state.begin);
+  const clearLaunchIntentIfActive = useChatLaunchIntentStore((state) => state.clearIfActive);
+  const failLaunchIntentIfActive = useChatLaunchIntentStore((state) => state.failIfActive);
+  const markLaunchIntentMaterialized =
+    useChatLaunchIntentStore((state) => state.markMaterializedIfActive);
+  const markLaunchIntentSendAttempted =
+    useChatLaunchIntentStore((state) => state.markSendAttemptedIfActive);
   const { createThreadFromSelection } = useCoworkThreadWorkflow();
   const { promptSession } = useSessionPromptWorkflow();
   const { createSessionWithResolvedConfig } = useSessionActions();
@@ -56,12 +112,16 @@ export function useHomeNextLaunch() {
     modelSelection: HomeNextModelSelection;
     modeId: string | null;
     text: string;
+    promptId: string;
+    launchIntentId: string;
   }) => {
     await createSessionWithResolvedConfig({
       workspaceId: input.workspaceId,
       agentKind: input.modelSelection.kind,
       modelId: input.modelSelection.modelId,
       text: input.text,
+      promptId: input.promptId,
+      launchIntentId: input.launchIntentId,
       ...modeOptions(input.modeId),
     });
   }, [createSessionWithResolvedConfig]);
@@ -79,6 +139,26 @@ export function useHomeNextLaunch() {
 
     inFlightRef.current = true;
     setIsLaunching(true);
+    const launchIntentId = newLaunchId();
+    const promptId = newLaunchId();
+    beginLaunchIntent({
+      id: launchIntentId,
+      promptId,
+      text: prompt,
+      contentParts: [{ type: "text", text: prompt }],
+      targetKind: target.kind,
+      retryInput: {
+        text: prompt,
+        modelSelection,
+        modeId,
+        target,
+      },
+      materializedWorkspaceId: null,
+      materializedSessionId: null,
+      createdAt: Date.now(),
+      sendAttemptedAt: null,
+      failure: null,
+    });
 
     try {
       if (target.kind === "cowork") {
@@ -92,12 +172,21 @@ export function useHomeNextLaunch() {
         if (!result) {
           throw new Error("Cowork thread creation was interrupted.");
         }
+        markLaunchIntentMaterialized(launchIntentId, {
+          workspaceId: result.workspace.id,
+          sessionId: result.session.id,
+        });
 
         await promptSession({
           sessionId: result.session.id,
           text: prompt,
           workspaceId: result.workspace.id,
+          promptId,
+          onBeforePromptRequest: () => {
+            markLaunchIntentSendAttempted(launchIntentId);
+          },
         });
+        clearLaunchIntentIfActive(launchIntentId);
         return true;
       }
 
@@ -109,10 +198,23 @@ export function useHomeNextLaunch() {
           : (await createLocalWorkspaceAndEnterWithResult(target.sourceRoot, {
             repoGroupKeyToExpand: target.sourceRoot,
           })).workspaceId;
+        if (!target.existingWorkspaceId) {
+          markLaunchIntentMaterialized(launchIntentId, {
+            workspaceId,
+          });
+        }
         if (target.existingWorkspaceId) {
           await selectWorkspace(workspaceId, { force: true });
         }
-        await createFreshSession({ workspaceId, modelSelection, modeId, text: prompt });
+        await createFreshSession({
+          workspaceId,
+          modelSelection,
+          modeId,
+          text: prompt,
+          promptId,
+          launchIntentId,
+        });
+        clearLaunchIntentIfActive(launchIntentId);
         return true;
       }
 
@@ -122,7 +224,18 @@ export function useHomeNextLaunch() {
           sourceWorkspaceId: target.sourceWorkspaceId,
           baseBranch: target.baseBranch,
         });
-        await createFreshSession({ workspaceId, modelSelection, modeId, text: prompt });
+        markLaunchIntentMaterialized(launchIntentId, {
+          workspaceId,
+        });
+        await createFreshSession({
+          workspaceId,
+          modelSelection,
+          modeId,
+          text: prompt,
+          promptId,
+          launchIntentId,
+        });
+        clearLaunchIntentIfActive(launchIntentId);
         return true;
       }
 
@@ -143,14 +256,23 @@ export function useHomeNextLaunch() {
         throw new Error("Cloud workspace creation was interrupted.");
       }
       if (result.status === "ready") {
+        markLaunchIntentMaterialized(launchIntentId, {
+          workspaceId: result.workspaceId,
+        });
         await createFreshSession({
           workspaceId: result.workspaceId,
           modelSelection,
           modeId,
           text: prompt,
+          promptId,
+          launchIntentId,
         });
+        clearLaunchIntentIfActive(launchIntentId);
         return true;
       }
+      markLaunchIntentMaterialized(launchIntentId, {
+        workspaceId: result.workspaceId,
+      });
 
       enqueueDeferredLaunch({
         id: buildDeferredHomeLaunchId({
@@ -165,11 +287,18 @@ export function useHomeNextLaunch() {
         modelId: modelSelection.modelId,
         modeId,
         promptText: prompt,
+        promptId,
+        launchIntentId,
         createdAt: Date.now(),
       });
       showToast("Prompt queued. It will send when the cloud workspace is ready.", "info");
       return true;
     } catch (error) {
+      markLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
+      failLaunchIntentIfActive(launchIntentId, {
+        message: errorMessage(error),
+        retryMode: launchFailureRetryMode(launchIntentId),
+      });
       showToast(`Failed to start work: ${errorMessage(error)}`);
       return false;
     } finally {
@@ -177,12 +306,17 @@ export function useHomeNextLaunch() {
       setIsLaunching(false);
     }
   }, [
+    beginLaunchIntent,
+    clearLaunchIntentIfActive,
     createCloudWorkspaceAndEnterWithResult,
     createFreshSession,
     createLocalWorkspaceAndEnterWithResult,
     createThreadFromSelection,
     createWorktreeAndEnterWithResult,
     enqueueDeferredLaunch,
+    failLaunchIntentIfActive,
+    markLaunchIntentMaterialized,
+    markLaunchIntentSendAttempted,
     navigate,
     promptSession,
     selectWorkspace,

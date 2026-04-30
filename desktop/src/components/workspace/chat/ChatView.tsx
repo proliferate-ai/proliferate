@@ -2,6 +2,7 @@ import { useEffect, type JSX } from "react";
 import { ChatInput } from "@/components/workspace/chat/input/ChatInput";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
 import { WorkspaceMobilityFooterRow } from "@/components/workspace/chat/input/WorkspaceMobilityFooterRow";
+import { ChatLaunchIntentPane } from "@/components/workspace/chat/surface/ChatLaunchIntentPane";
 import { ChatLoadingHero } from "@/components/workspace/chat/surface/ChatLoadingHero";
 import { ChatPreMessageCanvas } from "@/components/workspace/chat/surface/ChatPreMessageCanvas";
 import { ChatReadyHero } from "@/components/workspace/chat/surface/ChatReadyHero";
@@ -19,6 +20,8 @@ function ChatContent({ mode }: { mode: ChatSurfaceState }): JSX.Element | null {
   switch (mode.kind) {
     case "no-workspace":
       return <NoWorkspaceState />;
+    case "launch-intent":
+      return <ChatLaunchIntentPane />;
     // workspace-status and session-loading share the same canvas — both
     // render ChatLoadingHero so the loading → resolve handoff plays even
     // when the user enters via the workspace-status path (cloud runtime
@@ -56,6 +59,8 @@ function shouldShowSessionInputChrome(mode: ChatSurfaceState): boolean {
       return true;
     case "no-workspace":
       return false;
+    case "launch-intent":
+      return true;
   }
 }
 

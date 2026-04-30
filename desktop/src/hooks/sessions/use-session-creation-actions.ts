@@ -18,6 +18,7 @@ import {
   type SessionSlot,
   useHarnessStore,
 } from "@/stores/sessions/harness-store";
+import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useBranchRenameStore } from "@/stores/workspaces/branch-rename-store";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
@@ -62,6 +63,8 @@ interface CreateSessionWithResolvedConfigOptions {
   modeId?: string;
   workspaceId?: string;
   latencyFlowId?: string | null;
+  promptId?: string | null;
+  launchIntentId?: string | null;
   reuseInFlightEmptySession?: boolean;
 }
 
@@ -311,7 +314,7 @@ export function useSessionCreationActions({
     const optimisticPendingPrompt = hasPrompt
       ? createOptimisticPendingPrompt(
         options.text,
-        null,
+        options.promptId ?? null,
         undefined,
         options.optimisticContentParts,
       )
@@ -439,6 +442,15 @@ export function useSessionCreationActions({
 
       replacePendingSessionSlot(pendingSessionId, session.id, realSlot);
       activateSession(session.id);
+      if (options.launchIntentId) {
+        useChatLaunchIntentStore.getState().markMaterializedIfActive(
+          options.launchIntentId,
+          {
+            workspaceId,
+            sessionId: session.id,
+          },
+        );
+      }
       upsertWorkspaceSessionRecord(workspaceId, session);
       trackProductEvent("chat_session_created", {
         workspace_kind: cloudWorkspaceId ? "cloud" : "local",
@@ -454,6 +466,13 @@ export function useSessionCreationActions({
           optimisticContentParts: options.optimisticContentParts,
           workspaceId,
           latencyFlowId: options.latencyFlowId,
+          promptId: options.promptId,
+          onBeforePromptRequest: () => {
+            if (options.launchIntentId) {
+              useChatLaunchIntentStore.getState()
+                .markSendAttemptedIfActive(options.launchIntentId);
+            }
+          },
         });
       } else {
         void ensureSessionStreamConnected(session.id, {

@@ -332,6 +332,10 @@ function resolveWorkspaceArrivalBadge(
   source: WorkspaceArrivalEvent["source"],
   isWorktree: boolean,
 ): string {
+  if (source === "cowork-created") {
+    return WORKSPACE_ARRIVAL_LABELS.workspaceBadge;
+  }
+
   if (isWorktree) {
     return WORKSPACE_ARRIVAL_LABELS.newWorktreeBadge;
   }

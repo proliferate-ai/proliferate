@@ -21,6 +21,7 @@ interface PromptSessionInput {
   latencyFlowId?: string | null;
   promptId?: string | null;
   onBeforePrompt?: (workspaceId: string) => Promise<void> | void;
+  onBeforePromptRequest?: (workspaceId: string) => Promise<void> | void;
 }
 
 export function useSessionPromptWorkflow() {
@@ -38,6 +39,7 @@ export function useSessionPromptWorkflow() {
     latencyFlowId,
     promptId,
     onBeforePrompt,
+    onBeforePromptRequest,
   }: PromptSessionInput) => {
     const slot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
     const resolvedWorkspaceId = workspaceId ?? slot?.workspaceId ?? null;
@@ -69,6 +71,9 @@ export function useSessionPromptWorkflow() {
       const { connection, workspaceId: promptWorkspaceId } = await getSessionClientAndWorkspace(
         sessionId,
       );
+      if (onBeforePromptRequest) {
+        await onBeforePromptRequest(promptWorkspaceId);
+      }
       const response = await getAnyHarnessClient(connection).sessions.prompt(
         sessionId,
         { blocks: blocks ?? [{ type: "text", text }] },
