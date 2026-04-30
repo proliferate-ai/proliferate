@@ -104,13 +104,7 @@ export function resolveSettingsSelection({
 
   if (section === "repo") {
     if (!repoSourceRoot || !repositoryRoots.has(repoSourceRoot)) {
-      const fallbackRepo = repositories[0]?.sourceRoot ?? null;
-      if (fallbackRepo) {
-        repoSourceRoot = fallbackRepo;
-      } else {
-        section = SETTINGS_DEFAULT_SECTION;
-        repoSourceRoot = null;
-      }
+      repoSourceRoot = null;
     }
   }
 

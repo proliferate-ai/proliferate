@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { type SettingsSection, type SettingsStaticSection } from "@/config/settings";
+import { type SettingsSection } from "@/config/settings";
 import { type SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import {
   buildSettingsHref,
@@ -60,7 +60,7 @@ export function useSettingsNavigation({
     navigate(buildSettingsHref(next));
   }, [navigate]);
 
-  const selectSection = useCallback((section: SettingsStaticSection) => {
+  const selectSection = useCallback((section: SettingsSection) => {
     navigateTo({ section });
   }, [navigateTo]);
 

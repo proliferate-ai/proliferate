@@ -79,13 +79,23 @@ describe("settings navigation", () => {
     });
   });
 
-  it("falls a repo settings link back to general when no repos are available", () => {
+  it("keeps the environments index when section repo has no selected repo", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "repo",
+      repositories: [repo({ sourceRoot: "/repo-a" })],
+    })).toEqual({
+      activeSection: "repo",
+      activeRepoSourceRoot: null,
+    });
+  });
+
+  it("keeps the environments index when a repo settings link has no matching repo", () => {
     expect(resolveSettingsSelection({
       rawSection: "repo",
       rawRepo: "/repo-a",
       repositories: [],
     })).toEqual({
-      activeSection: "general",
+      activeSection: "repo",
       activeRepoSourceRoot: null,
     });
   });

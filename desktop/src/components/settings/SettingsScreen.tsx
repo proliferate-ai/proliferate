@@ -1,9 +1,6 @@
 import type { ReactNode } from "react";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
-import {
-  type SettingsSection,
-  type SettingsStaticSection,
-} from "@/config/settings";
+import { type SettingsSection } from "@/config/settings";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "./panes/AccountPane";
 import { AgentsPane } from "./panes/AgentsPane";
@@ -15,7 +12,7 @@ import { CloudAuthUnavailablePane } from "./panes/CloudAuthUnavailablePane";
 import { CloudPane } from "./panes/CloudPane";
 import { CloudSignInRequiredPane } from "./panes/CloudSignInRequiredPane";
 import { CloudUnavailablePane } from "./panes/CloudUnavailablePane";
-import { RepositoryPane } from "./panes/RepositoryPane";
+import { EnvironmentsPane } from "./panes/EnvironmentsPane";
 import {
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
@@ -28,7 +25,7 @@ interface SettingsScreenProps {
   activeRepoSourceRoot: string | null;
   repositories: SettingsRepositoryEntry[];
   onNavigateHome: () => void;
-  onSelectSection: (section: SettingsStaticSection) => void;
+  onSelectSection: (section: SettingsSection) => void;
   onSelectRepo: (sourceRoot: string) => void;
 }
 
@@ -40,6 +37,8 @@ function renderSettingsSection(
   cloudActive: boolean,
   cloudSignInChecking: boolean,
   cloudSignInAvailable: boolean,
+  onSelectSection: (section: SettingsSection) => void,
+  onSelectRepo: (sourceRoot: string) => void,
 ): ReactNode {
   if (activeSection === "agents") {
     return <AgentsPane />;
@@ -75,12 +74,15 @@ function renderSettingsSection(
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
   return (
-    <RepositoryPane
-      repository={repository}
+    <EnvironmentsPane
+      repositories={repositories}
+      selectedRepository={repository}
       cloudEnabled={cloudEnabled}
       cloudActive={cloudActive}
       cloudSignInChecking={cloudSignInChecking}
       cloudSignInAvailable={cloudSignInAvailable}
+      onSelectRepository={onSelectRepo}
+      onBackToList={() => onSelectSection("repo")}
     />
   );
 }
@@ -110,12 +112,9 @@ export function SettingsScreen({
   return (
     <div className="flex h-screen bg-background text-foreground" data-telemetry-block>
       <SettingsSidebar
-        repositories={repositories}
         activeSection={activeSection}
-        activeRepoSourceRoot={activeRepoSourceRoot}
         onNavigateHome={onNavigateHome}
         onSelectSection={onSelectSection}
-        onSelectRepo={onSelectRepo}
         disabledSections={{ cloud: !cloudEnabled }}
         onCheckForUpdates={() => { void checkNow(); }}
         updateActionState={{
@@ -144,6 +143,8 @@ export function SettingsScreen({
                   cloudActive,
                   cloudSignInChecking,
                   cloudSignInAvailable,
+                  onSelectSection,
+                  onSelectRepo,
                 )}
               </SettingsContentBoundary>
             </div>

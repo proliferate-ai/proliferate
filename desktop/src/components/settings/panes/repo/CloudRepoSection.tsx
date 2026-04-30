@@ -1,5 +1,11 @@
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { CloudIcon } from "@/components/ui/icons";
+import {
+  EnvironmentPanel,
+  EnvironmentPanelRow,
+  EnvironmentSection,
+} from "@/components/settings/EnvironmentSettingsLayout";
 import { CloudDefaultBranchCard } from "@/components/cloud/repo-settings/CloudDefaultBranchCard";
 import { RepoEnvVarsCard } from "@/components/cloud/repo-settings/RepoEnvVarsCard";
 import { RepoRunCommandCard } from "@/components/cloud/repo-settings/RepoRunCommandCard";
@@ -35,6 +41,22 @@ interface CloudRepoSettingsEditorProps {
   suggestedPaths: string[];
   isLoadingConfig: boolean;
   cloudActive: boolean;
+}
+
+function CloudEnvironmentNotice({
+  description,
+}: {
+  description: string;
+}) {
+  return (
+    <EnvironmentSection title="Cloud environment" icon={CloudIcon} separated>
+      <EnvironmentPanel>
+        <EnvironmentPanelRow>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </EnvironmentPanelRow>
+      </EnvironmentPanel>
+    </EnvironmentSection>
+  );
 }
 
 function CloudRepoSettingsEditor({
@@ -81,57 +103,48 @@ function CloudRepoSettingsEditor({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        <div className="space-y-1.5">
-          <p className="text-sm font-medium text-foreground">Cloud environment</p>
-          <p className="text-sm text-muted-foreground">
-            Saved to Proliferate Cloud and used when creating cloud workspaces for this repo.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card/50 p-3">
-          <div className="min-w-0 space-y-1">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-medium text-foreground">Cloud save state</p>
-              <Badge>{statusLabel}</Badge>
-            </div>
-            <p className="truncate text-sm text-muted-foreground">
-              {repoLabel}
-              {isLoadingConfig ? " · Loading saved config..." : ""}
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {configured && (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!draft.configured || saveMutation.isPending}
-                onClick={draft.disable}
-              >
-                {draft.configured ? "Disable cloud environment" : "Disable pending"}
-              </Button>
-            )}
+    <EnvironmentSection
+      title="Cloud environment"
+      icon={CloudIcon}
+      separated
+      description={(
+        <>
+          Saved to Proliferate Cloud for {repoLabel}
+          {isLoadingConfig ? " · Loading saved config..." : ""}.
+        </>
+      )}
+      action={(
+        <>
+          <Badge>{statusLabel}</Badge>
+          {configured && (
             <Button
               type="button"
-              variant="ghost"
-              disabled={revertDisabled}
-              onClick={draft.revert}
+              variant="outline"
+              disabled={!draft.configured || saveMutation.isPending}
+              onClick={draft.disable}
             >
-              Revert
+              {draft.configured ? "Disable cloud environment" : "Disable pending"}
             </Button>
-            <Button
-              type="button"
-              loading={saveMutation.isPending}
-              disabled={saveDisabled}
-              onClick={() => { void handleSave(); }}
-            >
-              Save cloud environment
-            </Button>
-          </div>
-        </div>
-      </div>
-
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={revertDisabled}
+            onClick={draft.revert}
+          >
+            Revert
+          </Button>
+          <Button
+            type="button"
+            loading={saveMutation.isPending}
+            disabled={saveDisabled}
+            onClick={() => { void handleSave(); }}
+          >
+            Save
+          </Button>
+        </>
+      )}
+    >
       {errorMessage && (
         <p className="text-sm text-destructive">{errorMessage}</p>
       )}
@@ -143,6 +156,23 @@ function CloudRepoSettingsEditor({
         isLoading={isLoadingBranches}
         errorMessage={branchError instanceof Error ? branchError.message : null}
         onChange={draft.setDefaultBranch}
+      />
+
+      <RepoRunCommandCard
+        runCommand={draft.runCommand}
+        onChange={draft.setRunCommand}
+      />
+
+      <RepoSetupScriptCard
+        setupScript={draft.setupScript}
+        onChange={draft.setSetupScript}
+      />
+
+      <RepoEnvVarsCard
+        rows={draft.envVarRows}
+        onAddRow={draft.addEnvVarRow}
+        onUpdateRow={draft.updateEnvVarRow}
+        onRemoveRow={draft.removeEnvVarRow}
       />
 
       <RepoTrackedFilesCard
@@ -161,24 +191,7 @@ function CloudRepoSettingsEditor({
           void resyncFileMutation.mutateAsync({ relativePath });
         }}
       />
-
-      <RepoEnvVarsCard
-        rows={draft.envVarRows}
-        onAddRow={draft.addEnvVarRow}
-        onUpdateRow={draft.updateEnvVarRow}
-        onRemoveRow={draft.removeEnvVarRow}
-      />
-
-      <RepoRunCommandCard
-        runCommand={draft.runCommand}
-        onChange={draft.setRunCommand}
-      />
-
-      <RepoSetupScriptCard
-        setupScript={draft.setupScript}
-        onChange={draft.setSetupScript}
-      />
-    </div>
+    </EnvironmentSection>
   );
 }
 
@@ -209,12 +222,7 @@ export function CloudRepoSection({
 
   if (!cloudRepository) {
     return (
-      <div className="space-y-1.5 rounded-lg border border-border bg-card/50 p-3">
-        <p className="text-sm font-medium text-foreground">Cloud environment</p>
-        <p className="text-sm text-muted-foreground">
-          Cloud environments are available for GitHub-backed repositories.
-        </p>
-      </div>
+      <CloudEnvironmentNotice description="Cloud environments are available for GitHub-backed repositories." />
     );
   }
 
@@ -228,19 +236,13 @@ export function CloudRepoSection({
           : "GitHub sign-in is unavailable, so cloud environment settings cannot load.";
 
     return (
-      <div className="space-y-1.5 rounded-lg border border-border bg-card/50 p-3">
-        <p className="text-sm font-medium text-foreground">Cloud environment</p>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
+      <CloudEnvironmentNotice description={description} />
     );
   }
 
   if (isLoadingConfig) {
     return (
-      <div className="space-y-1.5 rounded-lg border border-border bg-card/50 p-3">
-        <p className="text-sm font-medium text-foreground">Cloud environment</p>
-        <p className="text-sm text-muted-foreground">Loading saved cloud environment...</p>
-      </div>
+      <CloudEnvironmentNotice description="Loading saved cloud environment..." />
     );
   }
 

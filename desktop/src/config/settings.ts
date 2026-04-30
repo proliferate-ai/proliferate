@@ -5,6 +5,7 @@ import {
   CircleQuestion,
   CircleUser,
   CloudIcon,
+  FolderList,
   Keyboard,
   RefreshCw,
   Settings,
@@ -31,7 +32,7 @@ export const SETTINGS_DEFAULT_SECTION: SettingsStaticSection = "general";
 // ── Grouped sidebar nav ──────────────────────────────────────────────
 
 export type SettingsNavItem =
-  | { kind: "section"; id: SettingsStaticSection; label: string; icon: ComponentType<IconProps> }
+  | { kind: "section"; id: SettingsSection; label: string; icon: ComponentType<IconProps> }
   | { kind: "action"; id: "checkForUpdates" | "support"; label: string; icon: ComponentType<IconProps> };
 
 export interface SettingsNavGroup {
@@ -56,6 +57,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     items: [
       { kind: "section", id: "agents", label: "Agents", icon: Blocks },
       { kind: "section", id: "review", label: "Review", icon: BrainOutline },
+      { kind: "section", id: "repo", label: "Environments", icon: FolderList },
     ],
   },
   {
