@@ -8,6 +8,8 @@ import {
   Pencil,
 } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+import { useWorkspaceSidebarNativeContextMenu } from "@/hooks/workspaces/use-workspace-sidebar-native-context-menu";
 import type {
   SidebarDetailIndicator,
   SidebarIndicatorAction,
@@ -22,9 +24,6 @@ import {
 import { SidebarActionButton } from "./SidebarActionButton";
 import { SidebarRowSurface } from "./SidebarRowSurface";
 import { WorkspaceRenamePopover } from "./WorkspaceRenamePopover";
-
-const CONTEXT_ROW =
-  "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-accent";
 
 interface WorkspaceItemProps {
   name: string;
@@ -83,11 +82,24 @@ export function WorkspaceItem({
       ? CLOUD_SIDEBAR_STATUS_DEFINITIONS[cloudStatus]
       : null;
   const [renameOpen, setRenameOpen] = useState(false);
+  const handleRenameCommand = () => setRenameOpen(true);
+  const handleArchiveCommand = () => onArchive?.();
+  const handleUnarchiveCommand = () => onUnarchive?.();
+  const { onContextMenuCapture } = useWorkspaceSidebarNativeContextMenu({
+    canRename: !!onRename,
+    archived,
+    canArchive: !!onArchive,
+    canUnarchive: !!onUnarchive,
+    onRename: handleRenameCommand,
+    onArchive: handleArchiveCommand,
+    onUnarchive: handleUnarchiveCommand,
+  });
 
   const row = (
     <SidebarRowSurface
       active={active}
       onPress={onSelect}
+      onContextMenuCapture={onContextMenuCapture}
       className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
     >
       {/* Archive button — absolutely positioned right edge, visible on hover */}
@@ -172,37 +184,31 @@ export function WorkspaceItem({
       {(close) => (
         <>
           {onRename && (
-            <button
-              type="button"
+            <PopoverMenuItem
+              icon={<Pencil className="size-3.5 shrink-0 text-muted-foreground" />}
+              label="Rename"
+              variant="sidebar"
               onClick={() => {
                 close();
-                setRenameOpen(true);
+                handleRenameCommand();
               }}
-              className={CONTEXT_ROW}
-            >
-              <Pencil className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="flex-1 truncate text-left">Rename</span>
-            </button>
+            />
           )}
           {onArchive && !archived && (
-            <button
-              type="button"
-              onClick={() => { close(); onArchive(); }}
-              className={CONTEXT_ROW}
-            >
-              <Archive className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="flex-1 truncate text-left">Archive</span>
-            </button>
+            <PopoverMenuItem
+              icon={<Archive className="size-3.5 shrink-0 text-muted-foreground" />}
+              label="Archive"
+              variant="sidebar"
+              onClick={() => { close(); handleArchiveCommand(); }}
+            />
           )}
           {onUnarchive && archived && (
-            <button
-              type="button"
-              onClick={() => { close(); onUnarchive(); }}
-              className={CONTEXT_ROW}
-            >
-              <Archive className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="flex-1 truncate text-left">Unarchive</span>
-            </button>
+            <PopoverMenuItem
+              icon={<Archive className="size-3.5 shrink-0 text-muted-foreground" />}
+              label="Unarchive"
+              variant="sidebar"
+              onClick={() => { close(); handleUnarchiveCommand(); }}
+            />
           )}
         </>
       )}

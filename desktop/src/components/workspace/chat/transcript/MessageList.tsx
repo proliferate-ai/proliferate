@@ -111,6 +111,11 @@ import {
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
 } from "@/lib/domain/chat/transcript-trailing-status";
+import {
+  resolveAssistantTurnActionTime,
+  resolveOptimisticPromptActionTime,
+  resolveUserMessageActionTime,
+} from "@/lib/domain/chat/transcript-action-time";
 import type {
   FileChangeContentPart,
   FileReadContentPart,
@@ -318,6 +323,13 @@ export function MessageList({
                       tailAssistantProseRootId,
                       transcript,
                     );
+                    const tailAssistantItem = tailAssistantProseRootId
+                      ? transcript.itemsById[tailAssistantProseRootId]
+                      : null;
+                    const tailAssistantActionTime = resolveAssistantTurnActionTime({
+                      assistantItem: tailAssistantItem?.kind === "assistant_prose" ? tailAssistantItem : null,
+                      turn,
+                    });
                     // Hide the trailing indicator only while the assistant prose item
                     // itself is actively streaming. If Codex closes the prose item but
                     // keeps working internally, the trailing indicator should return.
@@ -369,6 +381,7 @@ export function MessageList({
                             content={tailAssistantCopyContent}
                             showCopyButton={!!turn.completedAt}
                             reserveSlot={shouldReserveTurnAssistantActionSlot}
+                            timestampLabel={tailAssistantActionTime}
                           />
                           {trailingStatus && (
                             <div className={trailingStatusClassName}>{trailingStatus}</div>
@@ -411,6 +424,7 @@ export function MessageList({
                               content={visibleOptimisticPrompt.text}
                               contentParts={visibleOptimisticPrompt.contentParts}
                               showCopyButton
+                              timestampLabel={resolveOptimisticPromptActionTime(visibleOptimisticPrompt)}
                             />
                           );
                         })()}
@@ -859,6 +873,7 @@ function TranscriptItemBlock({
             content={item.text}
             contentParts={item.contentParts}
             showCopyButton
+            timestampLabel={resolveUserMessageActionTime(item)}
             footer={(
               <UserMessageProvenanceChrome
                 sourceSessionId={item.promptProvenance.sourceSessionId}
@@ -877,6 +892,7 @@ function TranscriptItemBlock({
           content={item.text}
           contentParts={item.contentParts}
           showCopyButton
+          timestampLabel={resolveUserMessageActionTime(item)}
         />
       );
     }
@@ -1018,10 +1034,12 @@ function TurnAssistantActionRow({
   content,
   showCopyButton = false,
   reserveSlot = false,
+  timestampLabel = null,
 }: {
   content: string | null;
   showCopyButton?: boolean;
   reserveSlot?: boolean;
+  timestampLabel?: string | null;
 }) {
   if (!content || (!showCopyButton && !reserveSlot)) {
     return null;
@@ -1033,6 +1051,7 @@ function TurnAssistantActionRow({
         {showCopyButton && (
           <CopyMessageButton
             content={content}
+            timestampLabel={timestampLabel}
             visibilityClassName="opacity-0 group-hover/turn:opacity-100"
           />
         )}

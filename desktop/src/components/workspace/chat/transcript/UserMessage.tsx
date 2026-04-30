@@ -10,6 +10,7 @@ export interface UserMessageProps {
   content: string;
   contentParts?: ContentPart[];
   showCopyButton?: boolean;
+  timestampLabel?: string | null;
   footer?: ReactNode;
 }
 
@@ -18,6 +19,7 @@ export function UserMessage({
   content,
   contentParts = [],
   showCopyButton = false,
+  timestampLabel = null,
   footer,
 }: UserMessageProps) {
   const [expanded, setExpanded] = useState(false);
@@ -98,6 +100,7 @@ export function UserMessage({
           <div className="pr-1 pt-0.5">
             <CopyMessageButton
               content={content}
+              timestampLabel={timestampLabel}
               visibilityClassName="opacity-0 group-hover/msg:opacity-100"
             />
           </div>

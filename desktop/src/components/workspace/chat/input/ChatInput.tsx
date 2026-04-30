@@ -6,7 +6,6 @@ import {
   useState,
   type ChangeEvent,
   type ClipboardEvent,
-  type DragEvent,
 } from "react";
 import {
   CHAT_COMPOSER_INPUT,
@@ -21,7 +20,7 @@ import { useChatComposerKeyboard } from "@/hooks/chat/use-chat-composer-keyboard
 import { useChatDraftState } from "@/hooks/chat/use-chat-draft-state";
 import { useChatModelSelectorState } from "@/hooks/chat/use-chat-model-selector-state";
 import { useChatPromptActions } from "@/hooks/chat/use-chat-prompt-actions";
-import { usePromptAttachments } from "@/hooks/chat/use-prompt-attachments";
+import type { PromptAttachmentController } from "@/hooks/chat/use-chat-prompt-attachments";
 import { usePlanDraftAttachments } from "@/hooks/plans/use-plan-draft-attachments";
 import { useChatSessionControls } from "@/hooks/chat/use-chat-session-controls";
 import { useQueuedPromptEdit } from "@/hooks/chat/use-queued-prompt-edit";
@@ -29,9 +28,9 @@ import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
 import { useReviewActions } from "@/hooks/reviews/use-review-actions";
 import { focusChatInput } from "@/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "@/lib/domain/chat/file-mentions";
-import { canAttachPromptContent } from "@/lib/domain/chat/prompt-content";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerAddActionPopover } from "./ComposerAddActionPopover";
 import { ComposerMentionEditor } from "./ComposerMentionEditor";
@@ -47,7 +46,11 @@ import { DraftAttachmentPreviewList } from "@/components/workspace/chat/content/
  * area) is owned by ChatComposerDock so it can be shared with the dev
  * playground.
  */
-export function ChatInput() {
+export function ChatInput({
+  attachments,
+}: {
+  attachments: PromptAttachmentController;
+}) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mentionSearchHost, setMentionSearchHost] = useState<HTMLDivElement | null>(null);
@@ -55,7 +58,6 @@ export function ChatInput() {
   const focusRequestNonce = useChatInputStore((state) => state.focusRequestNonce);
   const {
     activeSessionId,
-    activeSlot,
     isRunning,
   } = useActiveChatSessionState();
   const { selectedWorkspaceId, draft, setDraft, isEmpty } = useChatDraftState();
@@ -72,13 +74,10 @@ export function ChatInput() {
     cancelEdit,
     commitEdit,
   } = useQueuedPromptEdit();
-  const promptCapabilities = activeSlot?.liveConfig?.promptCapabilities ?? null;
-  const attachments = usePromptAttachments(activeSessionId, promptCapabilities);
   const planAttachments = usePlanDraftAttachments(selectedWorkspaceId);
-  const supportsAttachments = canAttachPromptContent(promptCapabilities);
   const canUseUtilityActions =
     !isEditingQueuedPrompt && !isDisabled && !areRuntimeControlsDisabled;
-  const canAttach = canUseUtilityActions && supportsAttachments;
+  const canAttach = canUseUtilityActions && attachments.canAttachFiles;
   // Plan references are resolved to markdown text by the runtime, so they do
   // not depend on file/image attachment capabilities.
   const canAttachPlan = canUseUtilityActions && !!selectedWorkspaceId;
@@ -90,7 +89,7 @@ export function ChatInput() {
     if (canAttach) {
       return "Upload image or text context.";
     }
-    if (!supportsAttachments) {
+    if (!attachments.supportsAttachments) {
       return activeSessionId
         ? "Attachments are not supported by this agent"
         : "Attachments are available after a session starts";
@@ -189,14 +188,6 @@ export function ChatInput() {
     attachments.addFiles(event.clipboardData.files);
   }, [attachments, canAttach]);
 
-  const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
-    if (!canAttach || event.dataTransfer.files.length === 0) {
-      return;
-    }
-    event.preventDefault();
-    attachments.addFiles(event.dataTransfer.files);
-  }, [attachments, canAttach]);
-
   useEffect(() => {
     if (!selectedWorkspaceId && !activeSessionId) {
       return;
@@ -277,15 +268,9 @@ export function ChatInput() {
           focusChatInput();
         }}
         onPaste={handlePaste}
-        onDrop={handleDrop}
-        onDragOver={(event) => {
-          if (canAttach) {
-            event.preventDefault();
-          }
-        }}
       >
         <form className="relative flex flex-col">
-          <input
+          <Input
             ref={fileInputRef}
             type="file"
             multiple
