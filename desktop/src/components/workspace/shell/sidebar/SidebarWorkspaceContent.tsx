@@ -143,6 +143,8 @@ export function SidebarWorkspaceContent({
       isInitialConfigLoad: cloudRepoConfigsInitialLoading,
     });
     const cloudRepoTarget = group.cloudRepoTarget;
+    const hasArchivedHiddenItems =
+      group.items.length === 0 && group.allLogicalWorkspaceIds.length > 0;
 
     return (
       <RepoGroup
@@ -176,7 +178,9 @@ export function SidebarWorkspaceContent({
       >
         {group.items.length === 0 ? (
           <p className="px-3 py-2 text-xs text-sidebar-muted-foreground">
-            This repository has no workspaces yet.
+            {hasArchivedHiddenItems
+              ? "Archived workspaces are hidden."
+              : "This repository has no workspaces yet."}
           </p>
         ) : (
           <>

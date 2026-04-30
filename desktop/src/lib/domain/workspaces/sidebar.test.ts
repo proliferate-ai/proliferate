@@ -31,6 +31,55 @@ describe("repo-root seeded groups", () => {
     expect(groups[0]?.repoRootId).toBe("repo-root-empty");
     expect(groups[0]?.items).toEqual([]);
   });
+
+  it("keeps a repo-root-backed group when all matching workspaces are archived", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "archived-workspace",
+          repoKey: "github:proliferate-ai:repo-a",
+          repoName: "repo-a",
+        }),
+      ],
+      repoRoots: [
+        makeRepoRoot({
+          id: "repo-a-root",
+          repoName: "repo-a",
+          sourceRoot: "/tmp/repo-a",
+        }),
+      ],
+      archivedIds: ["archived-workspace"],
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.sourceRoot).toBe("/tmp/repo-a");
+    expect(groups[0]?.repoRootId).toBe("repo-a-root");
+    expect(groups[0]?.items).toEqual([]);
+    expect(groups[0]?.allLogicalWorkspaceIds).toEqual(["archived-workspace"]);
+  });
+
+  it("still drops repo-root-backed groups when workspace type filters hide every item", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "worktree-hidden-by-type",
+          repoKey: "github:proliferate-ai:repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+        }),
+      ],
+      repoRoots: [
+        makeRepoRoot({
+          id: "repo-a-root",
+          repoName: "repo-a",
+          sourceRoot: "/tmp/repo-a",
+        }),
+      ],
+      workspaceTypes: ["cloud"],
+    });
+
+    expect(groups).toHaveLength(0);
+  });
 });
 
 describe("sidebar workspace filters", () => {

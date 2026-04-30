@@ -442,8 +442,15 @@ export function buildSidebarGroupStates(args: {
         item.active
         || ((args.showArchived || !item.archived) && visibleWorkspaceTypes.has(item.variant))
       );
+      const archiveHiddenItems = items.filter((item) =>
+        !item.active
+        && item.archived
+        && visibleWorkspaceTypes.has(item.variant)
+      );
       if (visibleItems.length === 0 && groupWorkspaces.length > 0) {
-        return null;
+        if (!repoRoot || archiveHiddenItems.length === 0) {
+          return null;
+        }
       }
 
       const sourceRoot = repoRoot?.path
