@@ -35,7 +35,7 @@ export interface UserPreferences {
   themePreset: ThemePreset;
   colorMode: ColorMode;
   defaultChatAgentKind: string;
-  defaultChatModelId: string;
+  defaultChatModelIdByAgentKind: Record<string, string>;
   defaultSessionModeByAgentKind: Record<string, string>;
   defaultOpenInTargetId: string;
   branchPrefixType: BranchPrefixType;
@@ -60,7 +60,7 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   themePreset: "mono",
   colorMode: "dark",
   defaultChatAgentKind: "",
-  defaultChatModelId: "",
+  defaultChatModelIdByAgentKind: {},
   defaultSessionModeByAgentKind: {},
   defaultOpenInTargetId: "",
   branchPrefixType: "none",
@@ -87,7 +87,7 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   themePreset: "ship",
   colorMode: "dark",
   defaultChatAgentKind: "",
-  defaultChatModelId: "",
+  defaultChatModelIdByAgentKind: {},
   defaultSessionModeByAgentKind: {},
   defaultOpenInTargetId: "",
   branchPrefixType: "none",
@@ -132,6 +132,11 @@ type LegacyThemeRecord = {
   colorMode?: ColorMode;
 };
 
+type LegacyUserPreferencesInput = Omit<Partial<UserPreferences>, "defaultChatModelIdByAgentKind"> & {
+  defaultChatModelId?: unknown;
+  defaultChatModelIdByAgentKind?: unknown;
+};
+
 function readLegacyThemeRecord(): LegacyThemeRecord {
   if (typeof window === "undefined") {
     return {};
@@ -155,10 +160,12 @@ function readLegacyThemeRecord(): LegacyThemeRecord {
   };
 }
 
-async function readLegacyUserPreferences(): Promise<UserPreferences> {
+async function readLegacyUserPreferences(): Promise<LegacyUserPreferencesInput> {
   const legacyTheme = readLegacyThemeRecord();
   const legacyDefaultChatAgentKind = await readPersistedValue<string>("defaultChatAgentKind");
   const legacyDefaultChatModelId = await readPersistedValue<string>("defaultChatModelId");
+  const legacyDefaultChatModelIdByAgentKind =
+    await readPersistedValue<Record<string, string>>("defaultChatModelIdByAgentKind");
   const legacyDefaultOpenInTargetId = await readPersistedValue<string>("defaultOpenInTargetId");
   const legacyBranchPrefixType = await readPersistedValue<BranchPrefixType>("branchPrefixType");
   const hasLegacyPreference =
@@ -166,6 +173,7 @@ async function readLegacyUserPreferences(): Promise<UserPreferences> {
     || legacyTheme.colorMode !== undefined
     || legacyDefaultChatAgentKind !== undefined
     || legacyDefaultChatModelId !== undefined
+    || legacyDefaultChatModelIdByAgentKind !== undefined
     || legacyDefaultOpenInTargetId !== undefined
     || legacyBranchPrefixType !== undefined;
   const defaults = hasLegacyPreference ? PERSISTED_RECORD_BACKFILL : NEW_USER_DEFAULTS;
@@ -174,7 +182,11 @@ async function readLegacyUserPreferences(): Promise<UserPreferences> {
     themePreset: legacyTheme.themePreset ?? defaults.themePreset,
     colorMode: legacyTheme.colorMode ?? defaults.colorMode,
     defaultChatAgentKind: legacyDefaultChatAgentKind ?? defaults.defaultChatAgentKind,
-    defaultChatModelId: legacyDefaultChatModelId ?? defaults.defaultChatModelId,
+    ...(legacyDefaultChatModelId !== undefined
+      ? { defaultChatModelId: legacyDefaultChatModelId }
+      : {}),
+    defaultChatModelIdByAgentKind:
+      legacyDefaultChatModelIdByAgentKind ?? defaults.defaultChatModelIdByAgentKind,
     defaultSessionModeByAgentKind: defaults.defaultSessionModeByAgentKind,
     defaultOpenInTargetId: legacyDefaultOpenInTargetId ?? defaults.defaultOpenInTargetId,
     branchPrefixType: legacyBranchPrefixType ?? defaults.branchPrefixType,
@@ -205,6 +217,30 @@ function sanitizeDefaultSessionModeByAgentKind(
         ? [[agentKind, modeId]]
         : []
     )),
+  );
+}
+
+function normalizeDefaultChatModelId(agentKind: string, modelId: string): string {
+  return agentKind === "claude"
+    ? LEGACY_CLAUDE_MODEL_IDS[modelId] ?? modelId
+    : modelId;
+}
+
+function sanitizeDefaultChatModelIdByAgentKind(
+  value: unknown,
+): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([agentKind, modelId]) => {
+      const trimmedAgentKind = agentKind.trim();
+      const trimmedModelId = typeof modelId === "string" ? modelId.trim() : "";
+      return trimmedAgentKind && trimmedModelId
+        ? [[trimmedAgentKind, normalizeDefaultChatModelId(trimmedAgentKind, trimmedModelId)]]
+        : [];
+    }),
   );
 }
 
@@ -329,30 +365,80 @@ function dedupeReviewPersonalityPreferences(
   });
 }
 
-async function readAll(): Promise<UserPreferences> {
-  const persisted = await readPersistedValue<UserPreferences>(USER_PREFERENCES_KEY);
+async function readAll(): Promise<LegacyUserPreferencesInput> {
+  const persisted = await readPersistedValue<LegacyUserPreferencesInput>(USER_PREFERENCES_KEY);
   if (persisted) {
-    return {
+    const {
+      defaultChatModelIdByAgentKind: persistedDefaultChatModelIdByAgentKind,
+      ...persistedWithoutModelMap
+    } = persisted;
+    const backfillWithoutModelMap: LegacyUserPreferencesInput = {
       ...PERSISTED_RECORD_BACKFILL,
-      ...persisted,
+    };
+    delete backfillWithoutModelMap.defaultChatModelIdByAgentKind;
+    return {
+      ...backfillWithoutModelMap,
+      ...persistedWithoutModelMap,
+      defaultChatModelIdByAgentKind: persistedDefaultChatModelIdByAgentKind,
     };
   }
 
   return readLegacyUserPreferences();
 }
 
-export function migrateUserPreferences(preferences: UserPreferences): {
+export function migrateUserPreferences(preferences: LegacyUserPreferencesInput): {
   preferences: UserPreferences;
   changed: boolean;
 } {
-  const next = { ...preferences };
+  const {
+    defaultChatModelId,
+    defaultChatModelIdByAgentKind,
+    ...preferencesWithoutLegacyModel
+  } = preferences;
+  const next: UserPreferences = {
+    ...PERSISTED_RECORD_BACKFILL,
+    ...preferencesWithoutLegacyModel,
+    defaultChatModelIdByAgentKind: {},
+  };
   let changed = false;
 
-  if (next.defaultChatAgentKind === "claude") {
-    const migratedModelId = LEGACY_CLAUDE_MODEL_IDS[next.defaultChatModelId];
-    if (migratedModelId && migratedModelId !== next.defaultChatModelId) {
-      next.defaultChatModelId = migratedModelId;
-      changed = true;
+  const sanitizedDefaultChatAgentKind = typeof next.defaultChatAgentKind === "string"
+    ? next.defaultChatAgentKind.trim()
+    : PERSISTED_RECORD_BACKFILL.defaultChatAgentKind;
+  if (sanitizedDefaultChatAgentKind !== next.defaultChatAgentKind) {
+    next.defaultChatAgentKind = sanitizedDefaultChatAgentKind;
+    changed = true;
+  }
+
+  const sanitizedDefaultChatModelIdByAgentKind = sanitizeDefaultChatModelIdByAgentKind(
+    defaultChatModelIdByAgentKind,
+  );
+  if (
+    defaultChatModelIdByAgentKind === undefined
+    || JSON.stringify(sanitizedDefaultChatModelIdByAgentKind)
+      !== JSON.stringify(defaultChatModelIdByAgentKind)
+  ) {
+    changed = true;
+  }
+  next.defaultChatModelIdByAgentKind = sanitizedDefaultChatModelIdByAgentKind;
+
+  if (defaultChatModelId !== undefined) {
+    changed = true;
+    const legacyModelId = typeof defaultChatModelId === "string"
+      ? defaultChatModelId.trim()
+      : "";
+    if (
+      next.defaultChatAgentKind
+      && legacyModelId
+      && !next.defaultChatModelIdByAgentKind[next.defaultChatAgentKind]
+    ) {
+      next.defaultChatModelIdByAgentKind = {
+        ...next.defaultChatModelIdByAgentKind,
+        [next.defaultChatAgentKind]: normalizeDefaultChatModelId(
+          next.defaultChatAgentKind,
+          legacyModelId,
+        ),
+      };
     }
   }
 
@@ -432,7 +518,7 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
     themePreset: state.themePreset,
     colorMode: state.colorMode,
     defaultChatAgentKind: state.defaultChatAgentKind,
-    defaultChatModelId: state.defaultChatModelId,
+    defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
     defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
     defaultOpenInTargetId: state.defaultOpenInTargetId,
     branchPrefixType: state.branchPrefixType,

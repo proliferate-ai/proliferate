@@ -78,7 +78,7 @@ export function useCoworkThreadWorkflow() {
   const { data: modelRegistries = EMPTY_MODEL_REGISTRIES } = useModelRegistriesQuery();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
-    defaultChatModelId: state.defaultChatModelId,
+    defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
     powersInCodingSessionsEnabled: state.powersInCodingSessionsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
   })));

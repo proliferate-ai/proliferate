@@ -4,7 +4,7 @@ import { useModelRegistriesQuery } from "@anyharness/sdk-react";
 import {
   CURRENT_ONBOARDING_VERSION,
 } from "@/config/onboarding";
-import { resolveOnboardingRecommendation } from "@/lib/domain/onboarding/recommendation";
+import { buildOnboardingFinalizerDefaultsUpdate } from "@/lib/domain/onboarding/defaults";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
@@ -22,7 +22,7 @@ export function useOnboardingFinalizer(): void {
       onboardingCompletedVersion: state.onboardingCompletedVersion,
       onboardingPrimaryGoalId: state.onboardingPrimaryGoalId,
       defaultChatAgentKind: state.defaultChatAgentKind,
-      defaultChatModelId: state.defaultChatModelId,
+      defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
       defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
       setMultiple: state.setMultiple,
     })),
@@ -32,36 +32,22 @@ export function useOnboardingFinalizer(): void {
   useEffect(() => {
     if (appliedRef.current) return;
     if (preferences.onboardingCompletedVersion < CURRENT_ONBOARDING_VERSION) return;
-    if (preferences.defaultChatAgentKind && preferences.defaultChatModelId) return;
     if (!registries || registries.length === 0) return;
 
-    const recommendation = resolveOnboardingRecommendation({
-      goalId: preferences.onboardingPrimaryGoalId,
-      availableRegistries: registries,
-      forcedAgentKind: preferences.defaultChatAgentKind || null,
+    const result = buildOnboardingFinalizerDefaultsUpdate({
+      preferences,
+      registries,
     });
-    if (!recommendation) return;
+    if (!result) return;
 
     appliedRef.current = true;
+    preferences.setMultiple(result.update);
 
-    const nextDefaultModes = recommendation.modeId
-      ? {
-        ...preferences.defaultSessionModeByAgentKind,
-        [recommendation.agentKind]:
-          preferences.defaultSessionModeByAgentKind[recommendation.agentKind]
-          ?? recommendation.modeId,
-      }
-      : preferences.defaultSessionModeByAgentKind;
-
-    preferences.setMultiple({
-      defaultChatAgentKind: recommendation.agentKind,
-      defaultChatModelId: recommendation.modelId,
-      defaultSessionModeByAgentKind: nextDefaultModes,
-    });
-
-    trackProductEvent("onboarding_defaults_finalized", {
-      goal_id: preferences.onboardingPrimaryGoalId || null,
-      recommended_agent_kind: recommendation.agentKind,
-    });
+    if (result.finalizedAgentKind) {
+      trackProductEvent("onboarding_defaults_finalized", {
+        goal_id: preferences.onboardingPrimaryGoalId || null,
+        recommended_agent_kind: result.finalizedAgentKind,
+      });
+    }
   }, [preferences, registries]);
 }
