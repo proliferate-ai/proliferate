@@ -3,11 +3,7 @@ import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { Button } from "@/components/ui/Button";
 import { X } from "@/components/ui/icons";
 import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
-
-const GLASS_TABLIST_CLASS =
-  "flex h-9 shrink-0 items-end gap-1 overflow-x-auto border-b border-foreground/10 bg-card/25 px-1 pt-1 backdrop-blur-md supports-[backdrop-filter]:bg-card/20";
-const SOLID_TABLIST_CLASS =
-  "flex h-9 shrink-0 items-end gap-1 overflow-x-auto px-1 pt-1";
+import { resolveEditorTabChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 
 export function WorkspaceEditorTabs() {
   const openTabs = useWorkspaceFilesStore((s) => s.openTabs);
@@ -16,6 +12,7 @@ export function WorkspaceEditorTabs() {
   const setActiveTab = useWorkspaceFilesStore((s) => s.setActiveTab);
   const closeTab = useWorkspaceFilesStore((s) => s.closeTab);
   const transparentChromeEnabled = useTransparentChromeEnabled();
+  const chromeClasses = resolveEditorTabChromeClasses(transparentChromeEnabled);
 
   if (openTabs.length === 0) return null;
 
@@ -31,17 +28,15 @@ export function WorkspaceEditorTabs() {
     <div
       role="tablist"
       aria-label="Open files"
-      className={transparentChromeEnabled ? GLASS_TABLIST_CLASS : SOLID_TABLIST_CLASS}
+      className={chromeClasses.tablist}
     >
       {openTabs.map((path) => {
         const isActive = path === activeFilePath;
         const buf = buffersByPath[path];
         const isDirty = buf?.isDirty ?? false;
         const basename = path.split("/").pop() ?? path;
-        const shapeClassName = transparentChromeEnabled ? "-mb-px rounded-t-md" : "rounded-md";
-        const activeClassName = transparentChromeEnabled
-          ? "border-foreground/10 border-b-background bg-background/85 text-foreground shadow-subtle backdrop-blur-xl"
-          : "border-border bg-background text-foreground shadow-subtle";
+        const shapeClassName = chromeClasses.shape;
+        const activeClassName = chromeClasses.active;
 
         return (
           <div

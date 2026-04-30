@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/Button";
 import { ChevronRight } from "@/components/ui/icons";
 
 interface TurnSeparatorProps {
@@ -34,19 +35,21 @@ export function TurnSeparator({
 
   if (interactive) {
     return (
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
         onClick={onClick}
-        className="text-chat flex w-full items-center gap-2 rounded-md border border-transparent py-1 text-muted-foreground hover:text-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="h-auto w-full gap-2 whitespace-normal rounded-md border border-transparent bg-transparent px-0 py-1 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground hover:bg-transparent hover:text-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-expanded={expanded}
       >
         {content}
-      </button>
+      </Button>
     );
   }
 
   return (
-    <div className="text-chat my-2 flex items-center gap-2 text-muted-foreground">
+    <div className="text-chat my-2 flex items-center gap-2 leading-[var(--text-chat--line-height)] text-muted-foreground">
       {content}
     </div>
   );

@@ -21,8 +21,12 @@ import {
   buildPrimaryHarnessPreferenceUpdate,
   buildSettingsChatDefaultRows,
 } from "@/lib/domain/settings/chat-defaults";
+import { emitTurnEnd } from "@/lib/integrations/anyharness/turn-end-events";
 import type { EditorInfo, OpenTargetIconId } from "@/platform/tauri/shell";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
+import {
+  type TurnEndSoundId,
+  useUserPreferencesStore,
+} from "@/stores/preferences/user-preferences-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
@@ -33,6 +37,14 @@ const BRANCH_PREFIX_OPTIONS = [
   { id: "none" as const, label: "None" },
   { id: "proliferate" as const, label: "Proliferate" },
   { id: "github_username" as const, label: "GitHub username" },
+];
+const SOUND_LABELS: Record<TurnEndSoundId, string> = {
+  ding: "Ding",
+  gong: "Gong",
+};
+const TURN_END_SOUND_OPTIONS: { id: TurnEndSoundId; label: string }[] = [
+  { id: "ding", label: "Ding" },
+  { id: "gong", label: "Gong" },
 ];
 
 export function GeneralPane() {
@@ -53,6 +65,9 @@ export function GeneralPane() {
     defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
     defaultOpenInTargetId: state.defaultOpenInTargetId,
     branchPrefixType: state.branchPrefixType,
+    themePreset: state.themePreset,
+    turnEndSoundEnabled: state.turnEndSoundEnabled,
+    turnEndSoundId: state.turnEndSoundId,
     pluginsInCodingSessionsEnabled: state.pluginsInCodingSessionsEnabled,
     subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
@@ -269,6 +284,57 @@ export function GeneralPane() {
                 })),
               }]}
             />
+          </SettingsCardRow>
+        </SettingsCard>
+      </div>
+
+      <div className="space-y-3">
+        <SectionIntro
+          title="Feedback"
+          description="Local cues for completed agent work."
+        />
+
+        <SettingsCard>
+          <SettingsCardRow
+            label="Turn end sound"
+            description="Play a sound when an agent finishes its turn"
+          >
+            <div className="flex items-center gap-2">
+              {preferences.turnEndSoundEnabled && (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="px-2.5 text-xs"
+                    onClick={() => emitTurnEnd()}
+                  >
+                    Test
+                  </Button>
+                  <SettingsMenu
+                    label={SOUND_LABELS[preferences.turnEndSoundId]}
+                    className="w-32"
+                    menuClassName="w-48"
+                    groups={[{
+                      id: "turn-end-sounds",
+                      options: TURN_END_SOUND_OPTIONS
+                        // Gong is intentionally tied to the TBPN preset's notification style.
+                        .filter((option) => option.id !== "gong" || preferences.themePreset === "tbpn")
+                        .map((option) => ({
+                          id: option.id,
+                          label: option.label,
+                          selected: option.id === preferences.turnEndSoundId,
+                          onSelect: () => preferences.set("turnEndSoundId", option.id),
+                        })),
+                    }]}
+                  />
+                </>
+              )}
+              <Switch
+                checked={preferences.turnEndSoundEnabled}
+                onChange={(value) => preferences.set("turnEndSoundEnabled", value)}
+              />
+            </div>
           </SettingsCardRow>
         </SettingsCard>
       </div>

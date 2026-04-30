@@ -19,10 +19,10 @@ export function StreamingIndicator({ startedAt }: StreamingIndicatorProps) {
 
   return (
     <div className="flex items-end gap-1 py-1 text-muted-foreground">
-      <span className="inline-block w-[1.25em] font-mono text-xl leading-none tracking-[-0.18em] text-foreground">
+      <span className="inline-block w-[1.25em] font-mono text-[1.125rem] leading-none tracking-[-0.18em] text-foreground">
         {frame}
       </span>
-      <span className="text-xs leading-none tabular-nums">{elapsed}s</span>
+      <span className="text-[0.5rem] leading-none tabular-nums">{elapsed}s</span>
     </div>
   );
 }

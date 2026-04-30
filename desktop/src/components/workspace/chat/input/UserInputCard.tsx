@@ -45,7 +45,7 @@ export function UserInputCard({
 
   const header = (
     <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-      <div className="text-chat min-w-0 truncate font-medium text-foreground">
+      <div className="text-chat min-w-0 truncate font-medium leading-[var(--text-chat--line-height)] text-foreground">
         {title}
       </div>
       {progressLabel && (

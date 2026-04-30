@@ -30,7 +30,7 @@ export function ApprovalCard({
   onDeny,
 }: ApprovalCardProps) {
   const header = (
-    <div className="text-chat min-w-0 truncate font-medium text-foreground">
+    <div className="text-chat min-w-0 truncate font-medium leading-[var(--text-chat--line-height)] text-foreground">
       {title}
     </div>
   );

@@ -429,7 +429,7 @@ function HookPreview({
           className="w-full"
           viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
         >
-          <pre className="m-0 whitespace-pre-wrap px-3 py-2 font-mono text-xs text-foreground">
+          <pre className="m-0 whitespace-pre-wrap px-3 py-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-foreground">
             {body}
           </pre>
         </AutoHideScrollArea>

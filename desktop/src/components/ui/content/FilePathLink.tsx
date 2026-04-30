@@ -69,7 +69,7 @@ export function FilePathLink({ rawPath, children }: FilePathLinkProps) {
               handleOpen();
               close();
             }}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground/80 transition-colors hover:bg-accent/40 hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-foreground/80"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[0.5rem] text-foreground/80 transition-colors hover:bg-accent/40 hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-foreground/80"
           >
             <ExternalLink className="size-3.5 shrink-0" />
             <span>Open file</span>
@@ -80,7 +80,7 @@ export function FilePathLink({ rawPath, children }: FilePathLinkProps) {
               handleCopy();
               close();
             }}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground/80 transition-colors hover:bg-accent/40 hover:text-foreground"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[0.5rem] text-foreground/80 transition-colors hover:bg-accent/40 hover:text-foreground"
           >
             <Copy className="size-3.5 shrink-0" />
             <span>Copy path</span>

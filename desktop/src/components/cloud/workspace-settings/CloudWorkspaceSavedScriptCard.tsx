@@ -21,7 +21,7 @@ export function CloudWorkspaceSavedScriptCard({
             readOnly
             rows={8}
             value={setupScript}
-            className="min-h-36 resize-y font-mono"
+            className="min-h-36 resize-y font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)]"
           />
         ) : (
           <p className="text-sm text-muted-foreground">

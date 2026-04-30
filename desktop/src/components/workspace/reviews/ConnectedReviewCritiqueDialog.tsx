@@ -42,7 +42,7 @@ export function ConnectedReviewCritiqueDialog() {
       ) : (
         <div className="max-h-[68vh] overflow-y-auto rounded-md border border-border bg-card p-4">
           <pre
-            className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground"
+            className="whitespace-pre-wrap break-words font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-foreground"
             data-telemetry-mask
           >
             {critiqueQuery.data?.critiqueMarkdown || "No critique body was submitted."}

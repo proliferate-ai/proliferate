@@ -24,7 +24,7 @@ export function RepoRunCommandCard({
             value={runCommand}
             onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value)}
             placeholder="make dev PROFILE=my-profile"
-            className="font-mono"
+            className="font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)]"
           />
           <RunCommandHelp scope="selected cloud workspace" />
         </div>

@@ -436,7 +436,8 @@ export function DiffViewer({
     );
   }
 
-  const rootClass = "font-mono text-xs leading-relaxed";
+  const rootClass =
+    "font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)]";
 
   return (
     <AutoHideScrollArea

@@ -1,4 +1,7 @@
 import type { SetupHint } from "@anyharness/sdk";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { Label } from "@/components/ui/Label";
+import { Textarea } from "@/components/ui/Textarea";
 
 interface SetupCommandEditorProps {
   hints: SetupHint[];
@@ -35,9 +38,8 @@ function HintRow({
   onToggle: (enabled: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
-      <input
-        type="checkbox"
+    <Label className="mb-0 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
+      <Checkbox
         checked={checked}
         onChange={(e) => onToggle(e.target.checked)}
         className="size-3.5 shrink-0 accent-foreground"
@@ -48,7 +50,7 @@ function HintRow({
       <span className="shrink-0 text-xs text-muted-foreground">
         {hint.detectedFile}
       </span>
-    </label>
+    </Label>
   );
 }
 
@@ -119,12 +121,12 @@ export function SetupCommandEditor({
 
       <div>
         <p className="mb-1 text-xs font-medium text-muted-foreground">Preview</p>
-        <textarea
+        <Textarea
+          variant="code"
           value={currentScript}
           onChange={(e) => onChange(e.target.value)}
           placeholder="One command per line..."
           rows={4}
-          className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
     </div>

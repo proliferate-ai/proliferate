@@ -10,6 +10,7 @@ import { CoworkWorkspaceHeader } from "@/components/workspace/cowork/CoworkWorks
 import { useResize } from "@/hooks/layout/use-resize";
 import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
 import { useUpdater } from "@/hooks/updater/use-updater";
+import { resolveCoworkWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 import {
   useWorkspaceUiStore,
   WORKSPACE_SIDEBAR_MAX_WIDTH,
@@ -24,10 +25,6 @@ interface CoworkWorkspaceShellProps {
   workspacePath: string | null;
   fallbackTitle?: string | null;
 }
-
-const GLASS_HEADER_CLASS =
-  "flex h-10 shrink-0 items-center border-b border-foreground/10 bg-card/30 backdrop-blur-xl supports-[backdrop-filter]:bg-card/20";
-const SOLID_HEADER_CLASS = "flex h-10 shrink-0 items-center";
 
 export function CoworkWorkspaceShell({
   workspaceId,
@@ -54,6 +51,10 @@ export function CoworkWorkspaceShell({
   );
   const setArtifactPanelOpen = useCoworkUiStore((state) => state.setArtifactPanelOpen);
   const transparentChromeEnabled = useTransparentChromeEnabled();
+  const chromeClasses = resolveCoworkWorkspaceChromeClasses({
+    transparent: transparentChromeEnabled,
+    sidebarOpen,
+  });
   const {
     activeSessionId,
     activeSlot,
@@ -94,9 +95,7 @@ export function CoworkWorkspaceShell({
   return (
     <WorkspacePathProvider workspacePath={workspacePath}>
       <div
-        className={`h-screen flex overflow-hidden ${
-          transparentChromeEnabled ? "bg-transparent" : "bg-sidebar"
-        }`}
+        className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
         data-telemetry-block
       >
         <div
@@ -139,12 +138,10 @@ export function CoworkWorkspaceShell({
         )}
 
         <div
-          className={`flex min-w-0 flex-1 flex-col overflow-hidden ${
-            transparentChromeEnabled ? "bg-transparent" : "bg-background"
-          } ${sidebarOpen ? "rounded-tl-lg" : ""}`}
+          className={`flex min-w-0 flex-1 flex-col overflow-hidden ${chromeClasses.contentShell}`}
         >
           <div
-            className={transparentChromeEnabled ? GLASS_HEADER_CLASS : SOLID_HEADER_CLASS}
+            className={chromeClasses.header}
             data-tauri-drag-region="true"
           >
             {!sidebarOpen && (
