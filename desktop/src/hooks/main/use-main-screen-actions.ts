@@ -8,11 +8,17 @@ import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-id
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import type { RightPanelMode } from "@/components/workspace/shell/right-panel/RightPanel";
 import type {
   MainScreenDataState,
   MainScreenLayoutState,
 } from "./use-main-screen-state";
+import {
+  CLOSED_PUBLISH_DIALOG_STATE,
+  openPublishDialogState,
+  reviewDiffsFromPublishState,
+} from "./publish-dialog-state";
 
 interface UseMainScreenActionsArgs {
   layout: MainScreenLayoutState;
@@ -27,6 +33,7 @@ export function useMainScreenActions({
   const renameBranchMutation = useRenameGitBranchMutation();
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
   const {
@@ -36,10 +43,8 @@ export function useMainScreenActions({
     setRightPanelOpen,
     setTerminalCollapsed,
     setTerminalFocusRequestToken,
-    setCommitOpen,
     setFilePaletteOpen,
-    setPushOpen,
-    setPrOpen,
+    setPublishDialog,
   } = layout;
 
   const openRightPanelMode = useCallback((mode: RightPanelMode) => {
@@ -71,39 +76,38 @@ export function useMainScreenActions({
     }
   }, [openRightPanelMode, rightPanelOpen, setRightPanelOpen]);
 
-  const openPrInBrowser = useCallback(() => {
-    if (existingPr?.url) {
-      void openExternal(existingPr.url);
+  const openPrInBrowser = useCallback((pullRequest?: MainScreenDataState["existingPr"]) => {
+    const url = pullRequest?.url ?? existingPr?.url;
+    if (url) {
+      void openExternal(url);
     }
   }, [existingPr]);
-
-  const handleCommitOpen = useCallback(() => {
-    openRightPanelMode("changes");
-    setCommitOpen(true);
-  }, [openRightPanelMode, setCommitOpen]);
-
-  const handlePushOpen = useCallback(() => {
-    openRightPanelMode("changes");
-    setPushOpen(true);
-  }, [openRightPanelMode, setPushOpen]);
-
-  const handlePrOpen = useCallback(() => {
-    openRightPanelMode("changes");
-    setPrOpen(true);
-  }, [openRightPanelMode, setPrOpen]);
 
   const handleFilePaletteOpen = useCallback(() => {
     setFilePaletteOpen(true);
   }, [setFilePaletteOpen]);
 
-  const handleViewPr = useCallback(() => {
-    openRightPanelMode("changes");
-    openPrInBrowser();
-  }, [openPrInBrowser, openRightPanelMode]);
+  const handleViewPr = useCallback((pullRequest?: MainScreenDataState["existingPr"]) => {
+    openPrInBrowser(pullRequest);
+  }, [openPrInBrowser]);
 
-  const openPrDialog = useCallback(() => {
-    setPrOpen(true);
-  }, [setPrOpen]);
+  const openPublishDialog = useCallback((intent: "commit" | "publish" | "pull_request") => {
+    setPublishDialog(openPublishDialogState(
+      selectedLogicalWorkspaceId ?? selectedWorkspaceId,
+      intent,
+    ));
+  }, [selectedLogicalWorkspaceId, selectedWorkspaceId, setPublishDialog]);
+
+  const closePublishDialog = useCallback(() => {
+    setPublishDialog(CLOSED_PUBLISH_DIALOG_STATE);
+  }, [setPublishDialog]);
+
+  const reviewDiffsFromPublish = useCallback(() => {
+    const next = reviewDiffsFromPublishState();
+    setPublishDialog(next.publishDialog);
+    setRightPanelMode(next.rightPanelMode);
+    setRightPanelOpen(next.rightPanelOpen);
+  }, [setPublishDialog, setRightPanelMode, setRightPanelOpen]);
 
   const renameBranch = useCallback(async (newName: string) => {
     const blockedReason = getWorkspaceRuntimeBlockReason(selectedWorkspaceId);
@@ -134,15 +138,13 @@ export function useMainScreenActions({
     toggleRightPanel,
     openTerminalPanel,
     onSetRightPanelMode: setRightPanelMode,
-    handleCommitOpen,
-    handlePushOpen,
-    handlePrOpen,
+    handleCommitOpen: () => openPublishDialog("commit"),
+    handlePushOpen: () => openPublishDialog("publish"),
+    handlePrOpen: () => openPublishDialog("pull_request"),
     handleFilePaletteOpen,
     handleViewPr,
-    openPrDialog,
-    onCommitClose: () => setCommitOpen(false),
+    closePublishDialog,
+    reviewDiffsFromPublish,
     onFilePaletteClose: () => setFilePaletteOpen(false),
-    onPushClose: () => setPushOpen(false),
-    onPrClose: () => setPrOpen(false),
   };
 }
