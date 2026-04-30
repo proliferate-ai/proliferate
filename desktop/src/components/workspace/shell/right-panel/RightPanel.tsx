@@ -4,10 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode,
-  type ComponentType,
   type Dispatch,
-  type PointerEvent,
   type SetStateAction,
 } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
@@ -15,24 +12,7 @@ import { useTerminalsQuery } from "@anyharness/sdk-react";
 import { WorkspaceFilesPanel } from "@/components/workspace/files/panel/WorkspaceFilesPanel";
 import { GitPanel } from "@/components/workspace/git/GitPanel";
 import { TerminalPanel } from "@/components/workspace/terminals/TerminalPanel";
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { IconButton } from "@/components/ui/IconButton";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Tooltip } from "@/components/ui/Tooltip";
 import { CloudWorkspaceSettingsPanel } from "@/components/cloud/workspace-settings/CloudWorkspaceSettingsPanel";
-import {
-  Check,
-  FileIcon,
-  GitBranchIcon,
-  Pencil,
-  Plus,
-  Settings,
-  Terminal as TerminalIcon,
-  X,
-  type IconProps,
-} from "@/components/ui/icons";
 import { useTerminalActions } from "@/hooks/terminals/use-terminal-actions";
 import {
   availableRightPanelTools,
@@ -49,47 +29,13 @@ import {
 import { isApplePlatform, isTextEntryTarget } from "@/lib/domain/shortcuts/matching";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-
-interface PanelToolConfig {
-  id: RightPanelTool;
-  label: string;
-  icon: ComponentType<IconProps>;
-}
-
-const PANEL_TOOLS: Record<RightPanelTool, PanelToolConfig> = {
-  files: { id: "files", label: "Files", icon: FileIcon },
-  git: { id: "git", label: "Git", icon: GitBranchIcon },
-  settings: { id: "settings", label: "Cloud settings", icon: Settings },
-  terminal: { id: "terminal", label: "Terminal", icon: TerminalIcon },
-};
+import {
+  RightPanelHeaderTabs,
+  type HeaderEntry,
+} from "@/components/workspace/shell/right-panel/RightPanelHeaderTabs";
+import { RightPanelPlaceholder } from "@/components/workspace/shell/right-panel/RightPanelPlaceholder";
 
 const EMPTY_TERMINALS: never[] = [];
-const HEADER_STABLE_TAB_CLASS = "ui-tab-system-tab";
-const HEADER_TERMINAL_TAB_CLASS = "ui-tab-system-tab right-panel-terminal-tab";
-const HEADER_TAB_EDIT_CLASS =
-  "ui-tab-system-tab right-panel-terminal-tab right-panel-terminal-tab--editing";
-const HEADER_TAB_ACTION_CLASS = "ui-icon-button right-panel-terminal-edit-action";
-
-type HeaderEntry =
-  | { kind: "tool"; key: RightPanelHeaderEntryKey; tool: RightPanelTool }
-  | { kind: "terminal"; key: RightPanelHeaderEntryKey; terminal: TerminalRecord };
-
-interface HeaderDragSession {
-  key: RightPanelHeaderEntryKey;
-  pointerId: number;
-  startX: number;
-  startY: number;
-  beforeKey: RightPanelHeaderEntryKey | null;
-  isDragging: boolean;
-}
-
-interface HeaderDragPreview {
-  key: RightPanelHeaderEntryKey;
-  offsetX: number;
-  beforeKey: RightPanelHeaderEntryKey | null;
-}
-
-const HEADER_DRAG_THRESHOLD_PX = 4;
 
 interface RightPanelProps {
   workspaceId: string | null;
@@ -117,12 +63,7 @@ export function RightPanel({
   const unreadByTerminal = useTerminalStore((store) => store.unreadByTerminal);
   const showToast = useToastStore((store) => store.show);
   const [terminalFocusNonce, setTerminalFocusNonce] = useState(0);
-  const [headerDragPreview, setHeaderDragPreview] = useState<HeaderDragPreview | null>(null);
-  const draggedHeaderKey = headerDragPreview?.key ?? null;
   const rootRef = useRef<HTMLDivElement>(null);
-  const headerEntryNodesRef = useRef(new Map<RightPanelHeaderEntryKey, HTMLDivElement>());
-  const headerDragSessionRef = useRef<HeaderDragSession | null>(null);
-  const suppressNextHeaderClickRef = useRef(false);
   const handledActivationTokenRef = useRef(0);
   const shouldRenderContent = isWorkspaceReady || shouldKeepContentVisible;
   const terminalsQuery = useTerminalsQuery({
@@ -452,124 +393,6 @@ export function RightPanel({
     [isCloudWorkspaceSelected, updateState],
   );
 
-  const registerHeaderEntryNode = useCallback((
-    entryKey: RightPanelHeaderEntryKey,
-    node: HTMLDivElement | null,
-  ) => {
-    if (node) {
-      headerEntryNodesRef.current.set(entryKey, node);
-      return;
-    }
-    headerEntryNodesRef.current.delete(entryKey);
-  }, []);
-
-  const resolveHeaderDropBeforeKey = useCallback((
-    clientX: number,
-    draggedKey: RightPanelHeaderEntryKey,
-  ): RightPanelHeaderEntryKey | null => {
-    const candidates = [...headerEntryNodesRef.current.entries()]
-      .filter(([entryKey]) => entryKey !== draggedKey)
-      .map(([entryKey, node]) => ({
-        entryKey,
-        rect: node.getBoundingClientRect(),
-      }))
-      .sort((left, right) => left.rect.left - right.rect.left);
-
-    const target = candidates.find(({ rect }) => clientX < rect.left + rect.width / 2);
-    return target?.entryKey ?? null;
-  }, []);
-
-  const suppressNextHeaderClick = useCallback(() => {
-    suppressNextHeaderClickRef.current = true;
-    window.setTimeout(() => {
-      suppressNextHeaderClickRef.current = false;
-    }, 50);
-  }, []);
-
-  const shouldSuppressHeaderClick = useCallback(() => {
-    if (!suppressNextHeaderClickRef.current) {
-      return false;
-    }
-    suppressNextHeaderClickRef.current = false;
-    return true;
-  }, []);
-
-  const handleHeaderPointerDown = useCallback((
-    entryKey: RightPanelHeaderEntryKey,
-    event: PointerEvent<HTMLDivElement>,
-  ) => {
-    if (event.button !== 0) {
-      return;
-    }
-    const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest("[data-right-panel-tab-no-drag='true']")) {
-      return;
-    }
-
-    headerDragSessionRef.current = {
-      key: entryKey,
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      beforeKey: null,
-      isDragging: false,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }, []);
-
-  const handleHeaderPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
-    const session = headerDragSessionRef.current;
-    if (!session || session.pointerId !== event.pointerId) {
-      return;
-    }
-
-    if (!session.isDragging) {
-      const distance = Math.hypot(event.clientX - session.startX, event.clientY - session.startY);
-      if (distance < HEADER_DRAG_THRESHOLD_PX) {
-        return;
-      }
-      session.isDragging = true;
-    }
-
-    event.preventDefault();
-    const beforeKey = resolveHeaderDropBeforeKey(event.clientX, session.key);
-    session.beforeKey = beforeKey;
-    setHeaderDragPreview({
-      key: session.key,
-      offsetX: event.clientX - session.startX,
-      beforeKey,
-    });
-  }, [resolveHeaderDropBeforeKey]);
-
-  const finishHeaderPointerDrag = useCallback((event: PointerEvent<HTMLDivElement>) => {
-    const session = headerDragSessionRef.current;
-    if (!session || session.pointerId !== event.pointerId) {
-      return;
-    }
-    if (session.isDragging) {
-      event.preventDefault();
-      handleReorderHeaderEntry(session.key, session.beforeKey);
-      suppressNextHeaderClick();
-    }
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    headerDragSessionRef.current = null;
-    setHeaderDragPreview(null);
-  }, [handleReorderHeaderEntry, suppressNextHeaderClick]);
-
-  const cancelHeaderPointerDrag = useCallback((event: PointerEvent<HTMLDivElement>) => {
-    const session = headerDragSessionRef.current;
-    if (!session || session.pointerId !== event.pointerId) {
-      return;
-    }
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    headerDragSessionRef.current = null;
-    setHeaderDragPreview(null);
-  }, []);
-
   const shouldMountTerminalPanel = shouldRenderContent
     && (activeTool === "terminal" || orderedTerminals.length > 0);
 
@@ -580,172 +403,22 @@ export function RightPanel({
       data-group="true"
       className="relative flex h-full flex-col overflow-hidden rounded-tl-lg border-l border-t border-sidebar-border bg-sidebar-background"
     >
-      <div className="right-panel-tab-system ui-tab-system editor-panel-tab-root editor-panel-tab-root--simple-tabs border-b border-sidebar-border/70">
-        <div className="ui-tab-system-bar">
-          <div className="editor-panel-tab-bar-tab-cluster">
-            <output
-              className="ui-tab-system-live-region"
-              aria-live="polite"
-              aria-atomic="true"
-            />
-
-            <div
-              className="ui-tab-system-tabs__scrollable ui-tab-system-tabs__scrollable--sections"
-              data-has-stable="true"
-            >
-              <div
-                className="ui-tab-system-tabs__viewport"
-                role="tablist"
-                aria-label="Right panel tabs"
-                aria-orientation="horizontal"
-              >
-                <div className="ui-tab-system-tabs__section" data-tab-section="workspace">
-                  {headerEntries.map((entry) => {
-                    if (entry.kind === "tool") {
-                      const panelTool = PANEL_TOOLS[entry.tool];
-                      const Icon = panelTool.icon;
-                      const isActive = activeTool === entry.tool;
-                      const isEntryDragging = headerDragPreview?.key === entry.key;
-                      return (
-                        <RightPanelHeaderEntryDropZone
-                          key={entry.key}
-                          entryKey={entry.key}
-                          isDragging={isEntryDragging}
-                          dragOffsetX={isEntryDragging ? headerDragPreview.offsetX : 0}
-                          showDropIndicator={headerDragPreview?.beforeKey === entry.key}
-                          onRegister={registerHeaderEntryNode}
-                          onPointerDown={handleHeaderPointerDown}
-                          onPointerMove={handleHeaderPointerMove}
-                          onPointerUp={finishHeaderPointerDrag}
-                          onPointerCancel={cancelHeaderPointerDrag}
-                        >
-                          <Tooltip
-                            content={panelTool.label}
-                            className="right-panel-tab-tooltip"
-                          >
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              role="tab"
-                              aria-selected={isActive}
-                              aria-controls={`tabpanel-workspace-right-panel-${entry.tool}`}
-                              tabIndex={isActive ? 0 : -1}
-                              data-reorderable="true"
-                              data-stable="true"
-                              data-active={isActive ? true : undefined}
-                              data-app-active={isActive ? true : undefined}
-                              aria-grabbed={draggedHeaderKey === entry.key}
-                              aria-label={panelTool.label}
-                              onClick={() => {
-                                if (shouldSuppressHeaderClick()) {
-                                  return;
-                                }
-                                activateTool(entry.tool);
-                              }}
-                              className={HEADER_STABLE_TAB_CLASS}
-                            >
-                              <span className="ui-tab-system-tab__content">
-                                <Icon className="ui-tab-system-tab__icon" />
-                                <span
-                                  className="ui-tab-system-tab__dirty-indicator"
-                                  aria-hidden="true"
-                                />
-                              </span>
-                            </Button>
-                          </Tooltip>
-                        </RightPanelHeaderEntryDropZone>
-                      );
-                    }
-
-                    const terminal = entry.terminal;
-                    const terminalIndex = orderedTerminals.findIndex(
-                      (item) => item.id === terminal.id,
-                    );
-                    const isActive = activeTool === "terminal"
-                      && terminal.id === selectedTerminal?.id;
-                    const fallbackTitle = `Terminal ${Math.max(terminalIndex, 0) + 1}`;
-                    const displayTitle = terminal.title === "Terminal"
-                      ? fallbackTitle
-                      : terminal.title;
-                    const isEntryDragging = headerDragPreview?.key === entry.key;
-                    return (
-                      <RightPanelHeaderEntryDropZone
-                        key={entry.key}
-                        entryKey={entry.key}
-                        isDragging={isEntryDragging}
-                        dragOffsetX={isEntryDragging ? headerDragPreview.offsetX : 0}
-                        showDropIndicator={headerDragPreview?.beforeKey === entry.key}
-                        onRegister={registerHeaderEntryNode}
-                        onPointerDown={handleHeaderPointerDown}
-                        onPointerMove={handleHeaderPointerMove}
-                        onPointerUp={finishHeaderPointerDrag}
-                        onPointerCancel={cancelHeaderPointerDrag}
-                      >
-                        <TerminalHeaderIcon
-                          terminal={terminal}
-                          displayTitle={displayTitle}
-                          isActive={isActive}
-                          unread={unreadByTerminal[terminal.id] === true}
-                          isRuntimeReady={isWorkspaceReady}
-                          isDragging={draggedHeaderKey === entry.key}
-                          shouldSuppressClick={shouldSuppressHeaderClick}
-                          onSelect={() => selectTerminal(terminal.id)}
-                          onClose={() => handleCloseTerminal(terminal.id)}
-                          onRename={(title) => handleRenameTerminal(terminal.id, title)}
-                        />
-                      </RightPanelHeaderEntryDropZone>
-                    );
-                  })}
-
-                  <div
-                    className="right-panel-tab-drop-target"
-                    data-drop-before={headerDragPreview?.beforeKey === null ? true : undefined}
-                  />
-                </div>
-              </div>
-              <div className="ui-tab-system-tabs__spacer" aria-hidden="true" />
-            </div>
-          </div>
-
-          <div className="ui-tab-system-section ui-tab-system-section__trailing">
-            <div className="editor-panel-overflow-action">
-              <Tooltip
-                content="Open new tab menu"
-                className="right-panel-new-tab-tooltip"
-              >
-                <PopoverButton
-                  align="end"
-                  trigger={
-                    <IconButton
-                      size="xs"
-                      tone="sidebar"
-                      title="Open new tab menu"
-                      className="ui-icon-button glass-editor-panel-new-tab-menu-trigger"
-                    >
-                      <Plus className="ui-icon" />
-                    </IconButton>
-                  }
-                  className="w-40 rounded-md border border-border bg-popover p-1 shadow-floating"
-                >
-                  {(close) => (
-                    <PopoverMenuItem
-                      label="Terminal"
-                      variant="sidebar"
-                      icon={<TerminalIcon className="size-4" />}
-                      disabled={!isWorkspaceReady}
-                      onClick={() => {
-                        close();
-                        void createTerminal();
-                      }}
-                    />
-                  )}
-                </PopoverButton>
-              </Tooltip>
-            </div>
-          </div>
-        </div>
-      </div>
+      <RightPanelHeaderTabs
+        entries={headerEntries}
+        activeTool={activeTool}
+        activeTerminalId={selectedTerminal?.id ?? null}
+        orderedTerminals={orderedTerminals}
+        unreadByTerminal={unreadByTerminal}
+        isWorkspaceReady={isWorkspaceReady}
+        onActivateTool={activateTool}
+        onSelectTerminal={selectTerminal}
+        onCloseTerminal={handleCloseTerminal}
+        onRenameTerminal={handleRenameTerminal}
+        onCreateTerminal={() => {
+          void createTerminal();
+        }}
+        onReorderHeaderEntry={handleReorderHeaderEntry}
+      />
 
       <div
         data-panel="true"
@@ -793,303 +466,6 @@ export function RightPanel({
         )}
       </div>
     </div>
-  );
-}
-
-function RightPanelPlaceholder({ tool }: { tool: RightPanelTool }) {
-  const title = tool === "files"
-    ? "Files are getting ready"
-    : tool === "terminal"
-      ? "Terminals are getting ready"
-      : tool === "settings"
-        ? "Cloud settings are getting ready"
-        : "Git view is getting ready";
-  const description = tool === "files"
-    ? "The file tree will appear here as soon as the workspace finishes loading."
-    : tool === "terminal"
-      ? "Terminals will connect once the workspace runtime is ready."
-      : tool === "settings"
-        ? "Repo sync status and setup controls will appear once the cloud workspace finishes loading."
-        : "Changes and diffs will appear here as soon as the workspace finishes loading.";
-
-  return (
-    <div className="flex h-full items-center justify-center px-6 text-center">
-      <div className="max-w-xs space-y-2">
-        <p className="text-sm font-medium text-foreground">{title}</p>
-        <p className="text-sm leading-6 text-muted-foreground">{description}</p>
-      </div>
-    </div>
-  );
-}
-
-interface TerminalHeaderIconProps {
-  terminal: TerminalRecord;
-  displayTitle: string;
-  isActive: boolean;
-  unread: boolean;
-  isRuntimeReady: boolean;
-  isDragging: boolean;
-  shouldSuppressClick: () => boolean;
-  onSelect: () => void;
-  onClose: () => void;
-  onRename: (title: string) => Promise<void>;
-}
-
-interface RightPanelHeaderEntryDropZoneProps {
-  entryKey: RightPanelHeaderEntryKey;
-  isDragging: boolean;
-  dragOffsetX: number;
-  showDropIndicator: boolean;
-  onRegister: (entryKey: RightPanelHeaderEntryKey, node: HTMLDivElement | null) => void;
-  onPointerDown: (
-    entryKey: RightPanelHeaderEntryKey,
-    event: PointerEvent<HTMLDivElement>,
-  ) => void;
-  onPointerMove: (event: PointerEvent<HTMLDivElement>) => void;
-  onPointerUp: (event: PointerEvent<HTMLDivElement>) => void;
-  onPointerCancel: (event: PointerEvent<HTMLDivElement>) => void;
-  children: ReactNode;
-}
-
-function RightPanelHeaderEntryDropZone({
-  entryKey,
-  isDragging,
-  dragOffsetX,
-  showDropIndicator,
-  onRegister,
-  onPointerDown,
-  onPointerMove,
-  onPointerUp,
-  onPointerCancel,
-  children,
-}: RightPanelHeaderEntryDropZoneProps) {
-  const setNode = useCallback(
-    (node: HTMLDivElement | null) => onRegister(entryKey, node),
-    [entryKey, onRegister],
-  );
-
-  return (
-    <div
-      ref={setNode}
-      className="right-panel-header-entry-shell"
-      data-dragging={isDragging ? true : undefined}
-      data-drop-before={showDropIndicator ? true : undefined}
-      style={isDragging ? { transform: `translateX(${dragOffsetX}px)` } : undefined}
-      onPointerDown={(event) => onPointerDown(entryKey, event)}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerCancel}
-      onLostPointerCapture={onPointerCancel}
-    >
-      {children}
-    </div>
-  );
-}
-
-function TerminalHeaderIcon({
-  terminal,
-  displayTitle,
-  isActive,
-  unread,
-  isRuntimeReady,
-  isDragging,
-  shouldSuppressClick,
-  onSelect,
-  onClose,
-  onRename,
-}: TerminalHeaderIconProps) {
-  const [renameDraft, setRenameDraft] = useState(displayTitle);
-  const [renaming, setRenaming] = useState(false);
-  const [isEditingHeaderTitle, setIsEditingHeaderTitle] = useState(false);
-
-  useEffect(() => {
-    if (!isEditingHeaderTitle) {
-      setRenameDraft(displayTitle);
-    }
-  }, [displayTitle, isEditingHeaderTitle]);
-
-  const submitRename = (title: string, onDone?: () => void) => {
-    const nextTitle = title.trim();
-    if (!nextTitle || nextTitle.length > 160) {
-      return;
-    }
-    setRenaming(true);
-    onRename(nextTitle)
-      .then(() => {
-        setIsEditingHeaderTitle(false);
-        onDone?.();
-      })
-      .catch(() => undefined)
-      .finally(() => setRenaming(false));
-  };
-
-  if (isActive && isEditingHeaderTitle) {
-    return (
-      <div className="right-panel-terminal-tab-shell" data-right-panel-tab-no-drag="true">
-        <form
-          className={HEADER_TAB_EDIT_CLASS}
-          onSubmit={(event) => {
-            event.preventDefault();
-            submitRename(renameDraft);
-          }}
-          data-active="true"
-          data-label-editing="true"
-        >
-          <div className="ui-tab-system-tab__content">
-            <TerminalIcon className="ui-tab-system-tab__icon" />
-            <span className="ui-tab-system-tab__label-edit-slot">
-              <Input
-                value={renameDraft}
-                maxLength={160}
-                onChange={(event) => setRenameDraft(event.target.value)}
-                className="ui-tab-system-tab__label-input"
-                autoFocus
-              />
-            </span>
-            <Button
-              type="submit"
-              size="icon-sm"
-              variant="ghost"
-              title="Save terminal title"
-              aria-label="Save terminal title"
-              disabled={renaming || !renameDraft.trim()}
-              className={HEADER_TAB_ACTION_CLASS}
-            >
-              <Check className="ui-icon" />
-            </Button>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              title="Cancel terminal title edit"
-              aria-label="Cancel terminal title edit"
-              className={HEADER_TAB_ACTION_CLASS}
-              onClick={() => {
-                setRenameDraft(displayTitle);
-                setIsEditingHeaderTitle(false);
-              }}
-            >
-              <X className="ui-icon" />
-            </Button>
-          </div>
-        </form>
-      </div>
-    );
-  }
-
-  const trigger = (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      aria-label={displayTitle}
-      role="tab"
-      aria-selected={isActive}
-      aria-controls={`tabpanel-editor-panel-group-terminal-${terminal.id}`}
-      tabIndex={isActive ? 0 : -1}
-      data-reorderable="true"
-      aria-grabbed={isDragging}
-      data-active={isActive ? true : undefined}
-      data-dragging={isDragging ? true : undefined}
-      onClick={() => {
-        if (shouldSuppressClick()) {
-          return;
-        }
-        onSelect();
-      }}
-      onDoubleClick={() => setIsEditingHeaderTitle(true)}
-      className={HEADER_TERMINAL_TAB_CLASS}
-    >
-      <span className="ui-tab-system-tab__content">
-        <TerminalIcon className="ui-tab-system-tab__icon" />
-        <span className="ui-tab-system-tab__label">
-          <span className="ui-tab-system-tab__label-primary">{displayTitle}</span>
-        </span>
-        <span
-          className="ui-tab-system-tab__dirty-indicator"
-          data-dirty={unread ? true : undefined}
-          aria-hidden="true"
-        />
-      </span>
-    </Button>
-  );
-
-  return (
-    <Tooltip content={displayTitle} className="right-panel-terminal-tooltip">
-      <div className="right-panel-terminal-tab-shell">
-        <PopoverButton
-          triggerMode="contextMenu"
-          side="bottom"
-          align="start"
-          className="w-56 rounded-md border border-border bg-popover p-1 shadow-floating"
-          trigger={trigger}
-        >
-          {(close) => (
-            <form
-              className="flex flex-col gap-2 p-1"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const title = renameDraft.trim();
-                if (!title || title.length > 160) {
-                  return;
-                }
-                submitRename(title, close);
-              }}
-            >
-              <div className="flex items-center gap-2 px-1 pt-1 text-xs text-muted-foreground">
-                <Pencil className="size-3.5" />
-                <span>Rename terminal</span>
-              </div>
-              <Input
-                value={renameDraft}
-                maxLength={160}
-                onChange={(event) => setRenameDraft(event.target.value)}
-                className="h-8 text-xs"
-                data-right-panel-tab-no-drag="true"
-                autoFocus
-              />
-              <div className="flex items-center justify-end gap-1">
-                <PopoverMenuItem
-                  label="Close"
-                  type="button"
-                  icon={<X className="size-3.5" />}
-                  disabled={!isRuntimeReady}
-                  className="h-8 px-2 py-0 text-xs text-destructive"
-                  onClick={() => {
-                    close();
-                    onClose();
-                  }}
-                />
-                <PopoverMenuItem
-                  label="Save"
-                  type="submit"
-                  disabled={renaming || !renameDraft.trim()}
-                  className="h-8 justify-center px-3 py-0 text-xs"
-                />
-              </div>
-            </form>
-          )}
-        </PopoverButton>
-        <div
-          className="ui-tab-system-tab__close-container"
-          data-right-panel-tab-no-drag="true"
-        >
-          <IconButton
-            size="xs"
-            tone="sidebar"
-            title={`Close ${displayTitle}`}
-            disabled={!isRuntimeReady}
-            className="ui-icon-button ui-tab-system-tab__close"
-            onClick={(event) => {
-              event.stopPropagation();
-              onClose();
-            }}
-          >
-            <X className="ui-icon" />
-          </IconButton>
-        </div>
-      </div>
-    </Tooltip>
   );
 }
 
