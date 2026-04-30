@@ -1816,9 +1816,7 @@ export interface components {
         /** ConnectorArgTemplateModel */
         ConnectorArgTemplateModel: {
             /** Source */
-            source: {
-                [key: string]: string;
-            };
+            source: components["schemas"]["ConnectorStaticTemplateSourceModel"] | components["schemas"]["ConnectorWorkspacePathTemplateSourceModel"] | components["schemas"]["ConnectorFieldTemplateSourceModel"];
         };
         /** ConnectorCatalogEntryModel */
         ConnectorCatalogEntryModel: {
@@ -1851,6 +1849,8 @@ export interface components {
              * @enum {string}
              */
             authKind: "secret" | "oauth" | "none";
+            /** Oauthclientmode */
+            oauthClientMode?: ("dcr" | "static") | null;
             authStyle?: components["schemas"]["ConnectorHttpAuthStyleModel"] | null;
             /** Authfieldid */
             authFieldId?: string | null;
@@ -1904,9 +1904,17 @@ export interface components {
             /** Name */
             name: string;
             /** Source */
-            source: {
-                [key: string]: string;
-            };
+            source: components["schemas"]["ConnectorStaticTemplateSourceModel"] | components["schemas"]["ConnectorFieldTemplateSourceModel"];
+        };
+        /** ConnectorFieldTemplateSourceModel */
+        ConnectorFieldTemplateSourceModel: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "secret" | "setting";
+            /** Fieldid */
+            fieldId: string;
         };
         /** ConnectorHttpAuthStyleModel */
         ConnectorHttpAuthStyleModel: {
@@ -1956,6 +1964,24 @@ export interface components {
             value: string;
             /** Label */
             label: string;
+        };
+        /** ConnectorStaticTemplateSourceModel */
+        ConnectorStaticTemplateSourceModel: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "static";
+            /** Value */
+            value: string;
+        };
+        /** ConnectorWorkspacePathTemplateSourceModel */
+        ConnectorWorkspacePathTemplateSourceModel: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "workspace_path";
         };
         /** CreateAutomationRequest */
         CreateAutomationRequest: {
@@ -2234,9 +2260,7 @@ export interface components {
         /** LocalStdioArgTemplateModel */
         LocalStdioArgTemplateModel: {
             /** Source */
-            source: {
-                [key: string]: string;
-            };
+            source: components["schemas"]["LocalStdioStaticSourceModel"] | components["schemas"]["LocalStdioWorkspacePathSourceModel"];
         };
         /** LocalStdioCandidateModel */
         LocalStdioCandidateModel: {
@@ -2259,10 +2283,25 @@ export interface components {
         LocalStdioEnvTemplateModel: {
             /** Name */
             name: string;
-            /** Source */
-            source: {
-                [key: string]: string;
-            };
+            source: components["schemas"]["LocalStdioStaticSourceModel"];
+        };
+        /** LocalStdioStaticSourceModel */
+        LocalStdioStaticSourceModel: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "static";
+            /** Value */
+            value: string;
+        };
+        /** LocalStdioWorkspacePathSourceModel */
+        LocalStdioWorkspacePathSourceModel: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "workspace_path";
         };
         /** MaterializeCloudMcpRequest */
         MaterializeCloudMcpRequest: {
@@ -2597,7 +2636,7 @@ export interface components {
              */
             outcome: "applied" | "not_applied";
             /** Reason */
-            reason?: ("missing_secret" | "needs_reconnect" | "unsupported_target" | "workspace_path_unresolved" | "policy_disabled" | "resolver_error") | null;
+            reason?: ("missing_secret" | "needs_reconnect" | "unsupported_target" | "workspace_path_unresolved" | "policy_disabled" | "resolver_error" | "invalid_settings") | null;
         };
         /** SessionMcpEnvVarModel */
         SessionMcpEnvVarModel: {

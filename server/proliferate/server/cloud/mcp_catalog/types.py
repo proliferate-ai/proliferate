@@ -6,7 +6,14 @@ from typing import Literal
 ConnectorAvailability = Literal["universal", "local_only", "cloud_only"]
 ConnectorTransport = Literal["http", "stdio"]
 ConnectorAuthKind = Literal["secret", "oauth", "none"]
+ConnectorOAuthClientMode = Literal["dcr", "static"]
 ConnectorSettingKind = Literal["string", "boolean", "select", "url"]
+LaunchUrlContext = Literal[
+    "catalog",
+    "local_materialization",
+    "cloud_materialization",
+    "oauth_resource",
+]
 
 
 class CatalogConfigurationError(ValueError):
@@ -95,14 +102,15 @@ class RenderedHttpLaunch:
 
 @dataclass(frozen=True)
 class ArgTemplate:
-    kind: Literal["static", "workspace_path"]
+    kind: Literal["static", "workspace_path", "secret", "setting"]
     value: str | None = None
+    field_id: str | None = None
 
 
 @dataclass(frozen=True)
 class EnvTemplate:
     name: str
-    kind: Literal["static", "field"]
+    kind: Literal["static", "secret", "setting"]
     value: str | None = None
     field_id: str | None = None
 
@@ -121,6 +129,7 @@ class CatalogEntry:
     server_name_base: str
     icon_id: str
     capabilities: tuple[str, ...]
+    oauth_client_mode: ConnectorOAuthClientMode | None = None
     cloud_secret_sync: bool = False
     secret_fields: tuple[CatalogSecretField, ...] = ()
     settings_fields: tuple[CatalogSettingField, ...] = ()

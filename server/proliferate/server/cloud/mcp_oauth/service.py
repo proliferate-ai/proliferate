@@ -36,8 +36,10 @@ from proliferate.integrations.mcp_oauth import (
     register_client,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_configured
 from proliferate.server.cloud.mcp_catalog.catalog import (
     CatalogConfigurationError,
+    CatalogEntry,
     get_catalog_entry,
     parse_settings,
     render_oauth_resource_url,
@@ -49,6 +51,10 @@ from proliferate.server.cloud.mcp_oauth.models import (
     StartCloudMcpOAuthFlowResponse,
     oauth_flow_start_payload,
     oauth_flow_status_payload,
+)
+from proliferate.server.cloud.mcp_oauth.static_clients import (
+    StaticOAuthClientConfig,
+    get_static_oauth_client_config,
 )
 from proliferate.utils.crypto import decrypt_text, encrypt_json, encrypt_text
 
@@ -75,7 +81,7 @@ def _redirect_uri() -> str:
     return f"{_callback_base_url()}/v1/cloud/mcp/oauth/callback"
 
 
-async def _get_or_register_client(
+async def _get_or_register_dcr_client(
     *,
     issuer: str,
     redirect_uri: str,
@@ -112,6 +118,82 @@ async def _get_or_register_client(
     )
 
 
+async def _get_static_client(
+    *,
+    entry: CatalogEntry,
+    issuer: str,
+    redirect_uri: str,
+    resource: str,
+) -> CloudMcpOAuthClientRecord:
+    config = get_static_oauth_client_config(entry.id)
+    if config is None:
+        raise McpOAuthProviderError(
+            "missing_static_oauth_client",
+            "This deployment is missing static OAuth client configuration.",
+        )
+    cached = await get_oauth_client(
+        issuer=issuer,
+        redirect_uri=redirect_uri,
+        catalog_entry_id=entry.id,
+    )
+    if cached is not None and _cached_static_client_matches(cached, config, resource):
+        return cached
+    return await upsert_oauth_client(
+        issuer=issuer,
+        redirect_uri=redirect_uri,
+        catalog_entry_id=entry.id,
+        resource=resource,
+        client_id=config.client_id,
+        client_secret_ciphertext=(
+            encrypt_text(config.client_secret) if config.client_secret else None
+        ),
+        client_secret_expires_at=None,
+        token_endpoint_auth_method=config.token_endpoint_auth_method,
+        registration_client_uri=None,
+        registration_access_token_ciphertext=None,
+    )
+
+
+def _cached_static_client_matches(
+    cached: CloudMcpOAuthClientRecord,
+    config: StaticOAuthClientConfig,
+    resource: str,
+) -> bool:
+    cached_secret = (
+        decrypt_text(cached.client_secret_ciphertext) if cached.client_secret_ciphertext else None
+    )
+    return (
+        cached.resource == resource
+        and cached.client_id == config.client_id
+        and cached_secret == config.client_secret
+        and cached.token_endpoint_auth_method == config.token_endpoint_auth_method
+        and cached.registration_client_uri is None
+        and cached.registration_access_token_ciphertext is None
+    )
+
+
+async def _get_oauth_client(
+    *,
+    entry: CatalogEntry,
+    issuer: str,
+    redirect_uri: str,
+    resource: str,
+) -> CloudMcpOAuthClientRecord:
+    if entry.oauth_client_mode == "static":
+        return await _get_static_client(
+            entry=entry,
+            issuer=issuer,
+            redirect_uri=redirect_uri,
+            resource=resource,
+        )
+    return await _get_or_register_dcr_client(
+        issuer=issuer,
+        redirect_uri=redirect_uri,
+        catalog_entry_id=entry.id,
+        resource=resource,
+    )
+
+
 async def start_cloud_mcp_oauth_flow(
     *,
     user_id: UUID,
@@ -128,11 +210,16 @@ async def start_cloud_mcp_oauth_flow(
             "MCP connection does not use OAuth.",
             status_code=400,
         )
+    if not catalog_entry_is_configured(entry):
+        raise CloudApiError(
+            "invalid_payload",
+            "MCP connector is not configured for this deployment.",
+            status_code=400,
+        )
     try:
         server_url = render_oauth_resource_url(
             entry,
             validate_settings(entry, parse_settings(connection.settings_json)),
-            allow_insecure_launch_urls=settings.cloud_mcp_allow_insecure_launch_urls,
         )
     except CatalogConfigurationError as exc:
         raise CloudApiError(
@@ -146,10 +233,10 @@ async def start_cloud_mcp_oauth_flow(
         auth_metadata = await discover_authorization_server_metadata(issuer)
         resource = normalize_resource_url(protected.resource or server_url)
         redirect_uri = _redirect_uri()
-        client = await _get_or_register_client(
+        client = await _get_oauth_client(
+            entry=entry,
             issuer=auth_metadata.issuer,
             redirect_uri=redirect_uri,
-            catalog_entry_id=entry.id,
             resource=resource,
         )
         state = random_urlsafe(32)

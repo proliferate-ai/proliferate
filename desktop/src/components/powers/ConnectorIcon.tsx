@@ -1,17 +1,23 @@
 import type { SVGProps } from "react";
 import type { ConnectorCatalogEntry } from "@/lib/domain/mcp/types";
-import braveIcon from "@/assets/connector-icons/brave.svg";
+import cloudflareIcon from "@/assets/connector-icons/cloudflare.svg";
 import context7Icon from "@/assets/connector-icons/context7.jpeg";
+import exaIcon from "@/assets/connector-icons/exa.svg";
 import filesystemIcon from "@/assets/connector-icons/filesystem.svg";
+import gitlabIcon from "@/assets/connector-icons/gitlab.svg";
+import huggingfaceIcon from "@/assets/connector-icons/huggingface.svg";
+import neonIcon from "@/assets/connector-icons/neon.svg";
 import notionIcon from "@/assets/connector-icons/notion.png";
-import openweatherIcon from "@/assets/connector-icons/openweather.svg";
 import playwrightIcon from "@/assets/connector-icons/playwright.svg";
+import posthogIcon from "@/assets/connector-icons/posthog.svg";
+import renderIcon from "@/assets/connector-icons/render.svg";
 import supabaseIcon from "@/assets/connector-icons/supabase.png";
 import {
   Calendar,
   Folder,
   GitHub,
   Globe,
+  MessageSquare,
   Search,
   Sun,
   Terminal,
@@ -55,6 +61,7 @@ const CONNECTOR_ICONS = {
   globe: Globe,
   linear: LinearGlyph,
   search: Search,
+  slack: MessageSquare,
   sun: Sun,
   tavily: TavilyGlyph,
   folder: Folder,
@@ -62,12 +69,17 @@ const CONNECTOR_ICONS = {
 } as const;
 
 const CONNECTOR_ICON_IMAGES = {
-  brave: braveIcon,
+  cloudflare: cloudflareIcon,
   context7: context7Icon,
+  exa: exaIcon,
   filesystem: filesystemIcon,
+  gitlab: gitlabIcon,
+  huggingface: huggingfaceIcon,
+  neon: neonIcon,
   notion: notionIcon,
-  openweather: openweatherIcon,
   playwright: playwrightIcon,
+  posthog: posthogIcon,
+  render: renderIcon,
   supabase: supabaseIcon,
 } as const;
 

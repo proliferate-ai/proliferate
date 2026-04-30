@@ -17,10 +17,13 @@ from proliferate.db.store.cloud_mcp.oauth_clients import get_oauth_client
 from proliferate.db.store.cloud_mcp.types import CloudMcpAuthRecord, CloudMcpConnectionRecord
 from proliferate.integrations.mcp_oauth import McpOAuthProviderError, refresh_token
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_configured
 from proliferate.server.cloud.mcp_catalog.catalog import (
     CATALOG_VERSION,
+    ArgTemplate,
     CatalogConfigurationError,
     CatalogEntry,
+    EnvTemplate,
     connector_supports_target,
     get_catalog_entry,
     parse_settings,
@@ -30,7 +33,9 @@ from proliferate.server.cloud.mcp_catalog.catalog import (
 )
 from proliferate.server.cloud.mcp_materialization.models import (
     CloudMcpMaterializationWarningModel,
+    LocalStdioArgTemplateModel,
     LocalStdioCandidateModel,
+    LocalStdioEnvTemplateModel,
     MaterializeCloudMcpRequest,
     MaterializeCloudMcpResponse,
     McpNotAppliedReason,
@@ -38,8 +43,9 @@ from proliferate.server.cloud.mcp_materialization.models import (
     SessionMcpBindingSummaryModel,
     SessionMcpHeaderModel,
     SessionMcpHttpServerModel,
-    arg_template_payload,
-    env_template_payload,
+    local_stdio_static_arg_payload,
+    local_stdio_static_env_payload,
+    local_stdio_workspace_path_arg_payload,
 )
 from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_json
 
@@ -63,6 +69,18 @@ class _MaterializedRecordResult:
     summaries: list[SessionMcpBindingSummaryModel] = field(default_factory=list)
     candidates: list[LocalStdioCandidateModel] = field(default_factory=list)
     warnings: list[CloudMcpMaterializationWarningModel] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class _StdioMaterializationFailure:
+    reason: McpNotAppliedReason
+    warning: McpWarningKind
+
+
+@dataclass(frozen=True)
+class _HttpMaterializationFailure:
+    reason: McpNotAppliedReason
+    warning: McpWarningKind
 
 
 def _cloud_mcp_enabled_or_raise() -> None:
@@ -191,6 +209,8 @@ async def _materialize_record(
     entry = get_catalog_entry(record.catalog_entry_id)
     if entry is None:
         return _MaterializedRecordResult()
+    if not catalog_entry_is_configured(entry):
+        return _MaterializedRecordResult()
     if not connector_supports_target(entry, target_location):
         return _MaterializedRecordResult(
             summaries=[
@@ -206,46 +226,60 @@ async def _materialize_record(
     if entry.transport == "stdio":
         if target_location != "local":
             return _MaterializedRecordResult()
+        candidate, failure = _materialize_stdio_candidate(record, entry)
+        if candidate is None:
+            reason = failure.reason if failure else "resolver_error"
+            warning = failure.warning if failure else "resolver_error"
+            return _MaterializedRecordResult(
+                summaries=[_summary(record, entry, outcome="not_applied", reason=reason)],
+                warnings=[_warning(record, entry, warning)],
+            )
         return _MaterializedRecordResult(
-            candidates=[
-                LocalStdioCandidateModel(
-                    connection_id=record.connection_id,
-                    catalog_entry_id=entry.id,
-                    server_name=record.server_name,
-                    connector_name=entry.name,
-                    command=entry.command,
-                    args=[arg_template_payload(template) for template in entry.args],
-                    env=[env_template_payload(template) for template in entry.env],
-                )
-            ],
+            candidates=[candidate],
             summaries=[_summary(record, entry, outcome="applied")],
         )
-    if entry.auth_kind == "secret":
-        result = _materialize_secret_http(record, entry)
+    if entry.auth_kind == "none":
+        result = _materialize_no_auth_http(record, entry, target_location=target_location)
         if result is None:
             return _MaterializedRecordResult(
                 summaries=[
-                    _summary(record, entry, outcome="not_applied", reason="missing_secret")
+                    _summary(record, entry, outcome="not_applied", reason="invalid_settings")
                 ],
-                warnings=[_warning(record, entry, "missing_secret")],
+                warnings=[_warning(record, entry, "invalid_settings")],
+            )
+        return _MaterializedRecordResult(
+            servers=[result],
+            summaries=[_summary(record, entry, outcome="applied")],
+        )
+    if entry.auth_kind == "secret":
+        result, http_failure = _materialize_secret_http(
+            record,
+            entry,
+            target_location=target_location,
+        )
+        if result is None:
+            reason = http_failure.reason if http_failure else "missing_secret"
+            warning = http_failure.warning if http_failure else "missing_secret"
+            return _MaterializedRecordResult(
+                summaries=[_summary(record, entry, outcome="not_applied", reason=reason)],
+                warnings=[_warning(record, entry, warning)],
             )
         return _MaterializedRecordResult(
             servers=[result],
             summaries=[_summary(record, entry, outcome="applied")],
         )
     if entry.auth_kind == "oauth":
-        result = await _materialize_oauth_http(record, entry)
+        result, http_failure = await _materialize_oauth_http(
+            record,
+            entry,
+            target_location=target_location,
+        )
         if result is None:
+            reason = http_failure.reason if http_failure else "needs_reconnect"
+            warning = http_failure.warning if http_failure else "needs_reconnect"
             return _MaterializedRecordResult(
-                summaries=[
-                    _summary(
-                        record,
-                        entry,
-                        outcome="not_applied",
-                        reason="needs_reconnect",
-                    )
-                ],
-                warnings=[_warning(record, entry, "needs_reconnect")],
+                summaries=[_summary(record, entry, outcome="not_applied", reason=reason)],
+                warnings=[_warning(record, entry, warning)],
             )
         return _MaterializedRecordResult(
             servers=[result],
@@ -254,10 +288,102 @@ async def _materialize_record(
     return _MaterializedRecordResult()
 
 
-def _materialize_secret_http(
+def _materialize_stdio_candidate(
     record: CloudMcpConnectionRecord,
     entry: CatalogEntry,
-) -> SessionMcpHttpServerModel | None:
+) -> tuple[LocalStdioCandidateModel | None, _StdioMaterializationFailure | None]:
+    try:
+        settings_for_record = _settings_for_record(record, entry)
+    except CatalogConfigurationError:
+        return None, _StdioMaterializationFailure("invalid_settings", "invalid_settings")
+    secrets = _secret_fields_for_record(record, entry) if entry.auth_kind == "secret" else {}
+    if secrets is None:
+        return None, _StdioMaterializationFailure("missing_secret", "missing_secret")
+    try:
+        args = [
+            _stdio_arg_payload(template, settings_for_record, secrets) for template in entry.args
+        ]
+        env = [
+            _stdio_env_payload(template, settings_for_record, secrets) for template in entry.env
+        ]
+    except CatalogConfigurationError:
+        return None, _StdioMaterializationFailure("invalid_settings", "invalid_settings")
+    return (
+        LocalStdioCandidateModel(
+            connection_id=record.connection_id,
+            catalog_entry_id=entry.id,
+            server_name=record.server_name,
+            connector_name=entry.name,
+            command=entry.command,
+            args=args,
+            env=env,
+        ),
+        None,
+    )
+
+
+def _stdio_arg_payload(
+    template: ArgTemplate,
+    settings_for_record: dict[str, object],
+    secrets: dict[str, str],
+) -> LocalStdioArgTemplateModel:
+    if template.kind == "workspace_path":
+        return local_stdio_workspace_path_arg_payload()
+    return local_stdio_static_arg_payload(
+        _resolved_stdio_source_value(
+            template.kind,
+            template.value,
+            template.field_id,
+            settings_for_record,
+            secrets,
+        )
+    )
+
+
+def _stdio_env_payload(
+    template: EnvTemplate,
+    settings_for_record: dict[str, object],
+    secrets: dict[str, str],
+) -> LocalStdioEnvTemplateModel:
+    return local_stdio_static_env_payload(
+        template.name,
+        _resolved_stdio_source_value(
+            template.kind,
+            template.value,
+            template.field_id,
+            settings_for_record,
+            secrets,
+        ),
+    )
+
+
+def _resolved_stdio_source_value(
+    kind: str,
+    value: str | None,
+    field_id: str | None,
+    settings_for_record: dict[str, object],
+    secrets: dict[str, str],
+) -> str:
+    if kind == "static":
+        return value or ""
+    if kind == "secret":
+        if not field_id or field_id not in secrets:
+            raise CatalogConfigurationError("Required stdio secret value was missing.")
+        return secrets[field_id]
+    if kind == "setting":
+        if not field_id or field_id not in settings_for_record:
+            raise CatalogConfigurationError("Required stdio setting value was missing.")
+        setting_value = settings_for_record[field_id]
+        if isinstance(setting_value, bool):
+            return "true" if setting_value else "false"
+        return str(setting_value)
+    raise CatalogConfigurationError("Unsupported stdio launch source.")
+
+
+def _secret_fields_for_record(
+    record: CloudMcpConnectionRecord,
+    entry: CatalogEntry,
+) -> dict[str, str] | None:
     if (
         record.auth is None
         or record.auth.auth_status != "ready"
@@ -269,18 +395,25 @@ def _materialize_secret_http(
     if not isinstance(secret_fields, dict):
         return None
     try:
-        cleaned_secrets = validate_secret_fields(
+        return validate_secret_fields(
             entry,
             {str(key): str(value) for key, value in secret_fields.items()},
         )
     except CatalogConfigurationError:
         return None
+
+
+def _materialize_no_auth_http(
+    record: CloudMcpConnectionRecord,
+    entry: CatalogEntry,
+    *,
+    target_location: Literal["local", "cloud"],
+) -> SessionMcpHttpServerModel | None:
     try:
         launch = render_http_launch(
             entry,
             _settings_for_record(record, entry),
-            secrets=cleaned_secrets,
-            allow_insecure_launch_urls=settings.cloud_mcp_allow_insecure_launch_urls,
+            launch_context=_launch_context(target_location),
         )
     except CatalogConfigurationError:
         return None
@@ -296,33 +429,79 @@ def _materialize_secret_http(
     )
 
 
-async def _materialize_oauth_http(
+def _materialize_secret_http(
     record: CloudMcpConnectionRecord,
     entry: CatalogEntry,
-) -> SessionMcpHttpServerModel | None:
-    token = await _ready_oauth_access_token(record)
-    if token is None:
-        return None
+    *,
+    target_location: Literal["local", "cloud"],
+) -> tuple[SessionMcpHttpServerModel | None, _HttpMaterializationFailure | None]:
+    try:
+        settings_for_record = _settings_for_record(record, entry)
+    except CatalogConfigurationError:
+        return None, _HttpMaterializationFailure("invalid_settings", "invalid_settings")
+    cleaned_secrets = _secret_fields_for_record(record, entry)
+    if cleaned_secrets is None:
+        return None, _HttpMaterializationFailure("missing_secret", "missing_secret")
     try:
         launch = render_http_launch(
             entry,
-            _settings_for_record(record, entry),
-            allow_insecure_launch_urls=settings.cloud_mcp_allow_insecure_launch_urls,
+            settings_for_record,
+            secrets=cleaned_secrets,
+            launch_context=_launch_context(target_location),
         )
     except CatalogConfigurationError:
-        return None
-    return SessionMcpHttpServerModel(
-        connection_id=record.connection_id,
-        catalog_entry_id=entry.id,
-        server_name=record.server_name,
-        url=launch.url,
-        headers=[
-            SessionMcpHeaderModel(name="Authorization", value=f"Bearer {token}"),
-            *[
+        return None, _HttpMaterializationFailure("invalid_settings", "invalid_settings")
+    return (
+        SessionMcpHttpServerModel(
+            connection_id=record.connection_id,
+            catalog_entry_id=entry.id,
+            server_name=record.server_name,
+            url=launch.url,
+            headers=[
                 SessionMcpHeaderModel(name=header.name, value=header.value)
                 for header in launch.headers
             ],
-        ],
+        ),
+        None,
+    )
+
+
+async def _materialize_oauth_http(
+    record: CloudMcpConnectionRecord,
+    entry: CatalogEntry,
+    *,
+    target_location: Literal["local", "cloud"],
+) -> tuple[SessionMcpHttpServerModel | None, _HttpMaterializationFailure | None]:
+    token = await _ready_oauth_access_token(record)
+    if token is None:
+        return None, _HttpMaterializationFailure("needs_reconnect", "needs_reconnect")
+    try:
+        settings_for_record = _settings_for_record(record, entry)
+    except CatalogConfigurationError:
+        return None, _HttpMaterializationFailure("invalid_settings", "invalid_settings")
+    try:
+        launch = render_http_launch(
+            entry,
+            settings_for_record,
+            launch_context=_launch_context(target_location),
+        )
+    except CatalogConfigurationError:
+        return None, _HttpMaterializationFailure("invalid_settings", "invalid_settings")
+    return (
+        SessionMcpHttpServerModel(
+            connection_id=record.connection_id,
+            catalog_entry_id=entry.id,
+            server_name=record.server_name,
+            url=launch.url,
+            headers=[
+                SessionMcpHeaderModel(name="Authorization", value=f"Bearer {token}"),
+                *[
+                    SessionMcpHeaderModel(name=header.name, value=header.value)
+                    for header in launch.headers
+                ],
+            ],
+        ),
+        None,
     )
 
 
@@ -331,6 +510,12 @@ def _settings_for_record(
     entry: CatalogEntry,
 ) -> dict[str, object]:
     return validate_settings(entry, parse_settings(record.settings_json))
+
+
+def _launch_context(
+    target_location: Literal["local", "cloud"],
+) -> Literal["local_materialization", "cloud_materialization"]:
+    return "local_materialization" if target_location == "local" else "cloud_materialization"
 
 
 async def _ready_oauth_access_token(
@@ -370,8 +555,16 @@ async def _ready_oauth_access_token_locked(
     token_endpoint = payload.get("tokenEndpoint")
     client_id = payload.get("clientId")
     resource = payload.get("resource")
-    token_parts = (refresh_token_value, token_endpoint, client_id, resource)
-    if not all(isinstance(value, str) and value for value in token_parts):
+    if not (
+        isinstance(refresh_token_value, str)
+        and refresh_token_value
+        and isinstance(token_endpoint, str)
+        and token_endpoint
+        and isinstance(client_id, str)
+        and client_id
+        and isinstance(resource, str)
+        and resource
+    ):
         marked = await mark_connection_auth_status_if_version(
             connection_db_id=record.id,
             expected_auth_version=auth.auth_version,

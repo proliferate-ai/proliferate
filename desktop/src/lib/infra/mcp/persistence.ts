@@ -86,6 +86,7 @@ function cloudCatalogEntryToLocal(entry: CloudMcpCatalogEntry): ConnectorCatalog
     serverNameBase: entry.serverNameBase,
     iconId: entry.iconId as ConnectorCatalogEntry["iconId"],
     displayUrl: entry.displayUrl ?? entry.url,
+    oauthClientMode: entry.oauthClientMode ?? undefined,
     secretFields: (entry.secretFields ?? entry.requiredFields).map((field) => ({
       id: field.id,
       label: field.label,
@@ -123,16 +124,8 @@ function cloudCatalogEntryToLocal(entry: CloudMcpCatalogEntry): ConnectorCatalog
       ...common,
       transport: "stdio",
       command: entry.command ?? "",
-      args: (entry.args ?? []).map((arg) => (
-        arg.source.kind === "workspace_path"
-          ? { source: { kind: "workspace_path" } }
-          : { source: { kind: "static", value: arg.source.value ?? "" } }
-      )),
-      env: (entry.env ?? []).map((env) => (
-        env.source.kind === "field"
-          ? { name: env.name, source: { kind: "field", fieldId: env.source.fieldId ?? "" } }
-          : { name: env.name, source: { kind: "static", value: env.source.value ?? "" } }
-      )),
+      args: (entry.args ?? []).map(cloudArgTemplateToLocal),
+      env: (entry.env ?? []).map(cloudEnvTemplateToLocal),
     };
   }
   if (entry.authKind === "oauth") {
@@ -140,6 +133,14 @@ function cloudCatalogEntryToLocal(entry: CloudMcpCatalogEntry): ConnectorCatalog
       ...common,
       transport: "http",
       authKind: "oauth",
+      url: entry.url,
+    };
+  }
+  if (entry.authKind === "none") {
+    return {
+      ...common,
+      transport: "http",
+      authKind: "none",
       url: entry.url,
     };
   }
@@ -155,6 +156,42 @@ function cloudCatalogEntryToLocal(entry: CloudMcpCatalogEntry): ConnectorCatalog
     authFieldId: entry.authFieldId ?? "",
     url: entry.url,
   };
+}
+
+function cloudArgTemplateToLocal(
+  arg: NonNullable<CloudMcpCatalogEntry["args"]>[number],
+): Extract<ConnectorCatalogEntry, { transport: "stdio" }>["args"][number] {
+  const source = arg.source;
+  switch (source.kind) {
+    case "workspace_path":
+      return { source: { kind: "workspace_path" } };
+    case "secret":
+      return { source: { kind: "secret", fieldId: source.fieldId } };
+    case "setting":
+      return { source: { kind: "setting", fieldId: source.fieldId } };
+    case "static":
+      return { source: { kind: "static", value: source.value } };
+  }
+  return assertNeverTemplateSource(source);
+}
+
+function cloudEnvTemplateToLocal(
+  env: NonNullable<CloudMcpCatalogEntry["env"]>[number],
+): Extract<ConnectorCatalogEntry, { transport: "stdio" }>["env"][number] {
+  const source = env.source;
+  switch (source.kind) {
+    case "secret":
+      return { name: env.name, source: { kind: "secret", fieldId: source.fieldId } };
+    case "setting":
+      return { name: env.name, source: { kind: "setting", fieldId: source.fieldId } };
+    case "static":
+      return { name: env.name, source: { kind: "static", value: source.value } };
+  }
+  return assertNeverTemplateSource(source);
+}
+
+function assertNeverTemplateSource(source: never): never {
+  throw new Error(`Unsupported MCP template source: ${JSON.stringify(source)}`);
 }
 
 function cloudConnectionToInstalledRecord(

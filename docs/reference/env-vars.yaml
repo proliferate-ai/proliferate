@@ -274,6 +274,46 @@
   tags: [local-dev]
 
 # ═══════════════════════════════════════════════════════════════════════
+# Server: Cloud MCP
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: CLOUD_MCP_ENABLED
+  secret: false
+  default: "true"
+  description: Enables cloud-owned MCP catalog, connection, OAuth, and materialization APIs
+  tags: [local-dev, self-hosted, production]
+
+- name: CLOUD_MCP_OAUTH_CALLBACK_BASE_URL
+  secret: false
+  default: ""
+  description: Public base URL used to build MCP OAuth callback URLs; falls back to API_BASE_URL
+  tags: [local-dev, self-hosted, production]
+
+- name: CLOUD_MCP_SLACK_ENABLED
+  secret: false
+  default: "false"
+  description: Shows the Slack MCP connector when static Slack OAuth config is also present
+  tags: [local-dev, self-hosted, production]
+
+- name: CLOUD_MCP_SLACK_CLIENT_ID
+  secret: true
+  default: ""
+  description: Static OAuth client ID for Slack MCP
+  tags: [local-dev, self-hosted, production]
+
+- name: CLOUD_MCP_SLACK_CLIENT_SECRET
+  secret: true
+  default: ""
+  description: Static OAuth client secret for Slack MCP
+  tags: [local-dev, self-hosted, production]
+
+- name: CLOUD_MCP_SLACK_TOKEN_ENDPOINT_AUTH_METHOD
+  secret: false
+  default: "client_secret_post"
+  description: "Slack MCP token endpoint auth method: client_secret_post or client_secret_basic"
+  tags: [local-dev, self-hosted, production]
+
+# ═══════════════════════════════════════════════════════════════════════
 # Server: Cloud Runtime Injection (both E2B and Daytona)
 # ═══════════════════════════════════════════════════════════════════════
 

@@ -6,6 +6,7 @@ from proliferate.server.cloud.mcp_catalog.builders import (
     _secret_query,
     _setting_option,
 )
+from proliferate.server.cloud.mcp_catalog.hosted_connectors import HOSTED_CONNECTOR_CATALOG
 from proliferate.server.cloud.mcp_catalog.renderer import (
     connector_supports_target,
     normalize_settings,
@@ -31,7 +32,7 @@ from proliferate.server.cloud.mcp_catalog.types import (
     UrlVariant,
 )
 
-CATALOG_VERSION = "2026-04-21.1"
+CATALOG_VERSION = "2026-04-22.4"
 
 __all__ = [
     "ArgTemplate",
@@ -106,34 +107,6 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         ),
     ),
     CatalogEntry(
-        id="google_calendar",
-        version=1,
-        name="Google Calendar",
-        one_liner="Search events and schedule context from Google Calendar.",
-        description=(
-            "Use Google Calendar to inspect authorized events, meeting details, and "
-            "schedule context after you authorize the connected Google account."
-        ),
-        docs_url=(
-            "https://support.anthropic.com/en/articles/11088742-using-the-gmail-and-"
-            "google-calendar-integrations"
-        ),
-        availability="universal",
-        transport="http",
-        auth_kind="oauth",
-        http=HttpLaunchTemplate(
-            url=StaticUrl("https://gcal.mcp.claude.com/mcp"),
-            display_url="https://gcal.mcp.claude.com/mcp",
-        ),
-        server_name_base="google_calendar",
-        icon_id="calendar",
-        capabilities=(
-            "Search authorized calendar events",
-            "Read meeting details and attendees",
-            "Use schedule context when planning work",
-        ),
-    ),
-    CatalogEntry(
         id="context7",
         version=1,
         name="Context7",
@@ -190,7 +163,7 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
             query=(_secret_query("exaApiKey", "api_key"),),
         ),
         server_name_base="exa",
-        icon_id="search",
+        icon_id="exa",
         secret_fields=(
             _secret_field(
                 "api_key",
@@ -204,39 +177,6 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
             "Search the web for current information",
             "Pull concise context from docs and code examples",
             "Research unfamiliar APIs and implementation patterns",
-        ),
-    ),
-    CatalogEntry(
-        id="brave_search",
-        version=1,
-        name="Brave Search",
-        one_liner="Search the web with Brave's independent index.",
-        description="Use Brave Search for current web results, news, and general lookups.",
-        docs_url="https://api-dashboard.search.brave.com/documentation/guides/authentication",
-        availability="universal",
-        cloud_secret_sync=True,
-        transport="http",
-        auth_kind="secret",
-        http=HttpLaunchTemplate(
-            url=StaticUrl(""),
-            display_url="",
-            headers=(HeaderTemplate("X-Subscription-Token", "{secret.api_key}"),),
-        ),
-        server_name_base="brave_search",
-        icon_id="brave",
-        secret_fields=(
-            _secret_field(
-                "api_key",
-                "API key",
-                "Paste your Brave Search API key",
-                "Create a key in your Brave Search API dashboard.",
-                "Create a key in your Brave Search API dashboard, then paste it here.",
-            ),
-        ),
-        capabilities=(
-            "Search the open web with Brave's independent index",
-            "Pull news and recent articles",
-            "Look up unfamiliar terms and references",
         ),
     ),
     CatalogEntry(
@@ -274,39 +214,6 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
             "Run focused web searches",
             "Extract clean text from pages",
             "Crawl linked pages for deeper research",
-        ),
-    ),
-    CatalogEntry(
-        id="openweather",
-        version=1,
-        name="OpenWeather",
-        one_liner="Fetch current weather and forecasts anywhere.",
-        description="Use OpenWeather for live conditions, forecasts, and weather lookups.",
-        docs_url="https://openweathermap.org/appid",
-        availability="universal",
-        cloud_secret_sync=True,
-        transport="http",
-        auth_kind="secret",
-        http=HttpLaunchTemplate(
-            url=StaticUrl(""),
-            display_url="",
-            query=(_secret_query("appid", "api_key"),),
-        ),
-        server_name_base="openweather",
-        icon_id="openweather",
-        secret_fields=(
-            _secret_field(
-                "api_key",
-                "API key",
-                "Paste your OpenWeather API key",
-                "Create an API key in your OpenWeather account.",
-                "Find your OpenWeather API key on the API key tab, then paste it here.",
-            ),
-        ),
-        capabilities=(
-            "Look up current weather conditions anywhere",
-            "Pull short-term forecasts",
-            "Check wind, humidity, and pressure for a location",
         ),
     ),
     CatalogEntry(
@@ -406,6 +313,7 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
             "Bring PostHog observability into debugging sessions",
         ),
     ),
+    *HOSTED_CONNECTOR_CATALOG,
     CatalogEntry(
         id="linear",
         version=1,
@@ -416,6 +324,7 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         availability="universal",
         transport="http",
         auth_kind="oauth",
+        oauth_client_mode="dcr",
         http=HttpLaunchTemplate(
             url=StaticUrl("https://mcp.linear.app/mcp"),
             display_url="https://mcp.linear.app/mcp",
@@ -426,6 +335,33 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
             "Search issues, projects, and cycles",
             "Inspect team workloads and states",
             "Follow up on ticket status and ownership",
+        ),
+    ),
+    CatalogEntry(
+        id="slack",
+        version=1,
+        name="Slack",
+        one_liner="Search Slack context and draft workspace follow-ups.",
+        description=(
+            "Use Slack to search workspace messages, channels, files, users, and "
+            "prepare Slack follow-ups through the official hosted MCP server."
+        ),
+        docs_url="https://docs.slack.dev/ai/slack-mcp-server/",
+        availability="universal",
+        transport="http",
+        auth_kind="oauth",
+        oauth_client_mode="static",
+        http=HttpLaunchTemplate(
+            url=StaticUrl("https://mcp.slack.com/mcp"),
+            display_url="https://mcp.slack.com/mcp",
+        ),
+        server_name_base="slack",
+        icon_id="slack",
+        capabilities=(
+            "Search messages, files, users, and channels",
+            "Read channel and thread history with authorized scopes",
+            "Draft and send Slack messages when granted write access",
+            "Read and manage Slack canvases when granted canvas scopes",
         ),
     ),
     CatalogEntry(
@@ -441,6 +377,7 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         availability="universal",
         transport="http",
         auth_kind="oauth",
+        oauth_client_mode="dcr",
         http=HttpLaunchTemplate(
             url=StaticUrl("https://mcp.supabase.com/mcp"),
             display_url="https://mcp.supabase.com/mcp",
@@ -491,6 +428,7 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         availability="universal",
         transport="http",
         auth_kind="oauth",
+        oauth_client_mode="dcr",
         http=HttpLaunchTemplate(
             url=StaticUrl("https://mcp.notion.com/mcp"),
             display_url="https://mcp.notion.com/mcp",

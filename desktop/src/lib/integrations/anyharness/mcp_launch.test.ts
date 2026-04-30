@@ -173,6 +173,87 @@ describe("cloud MCP launch resolution", () => {
     ]);
   });
 
+  it("preserves resolved stdio env values but keeps them out of summaries", async () => {
+    mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized({
+      mcpBindingSummaries: [
+        {
+          id: "conn_secret_stdio",
+          serverName: "secret_stdio",
+          displayName: "Secret Stdio",
+          transport: "stdio",
+          outcome: "applied",
+        },
+      ],
+      localStdioCandidates: [
+        {
+          connectionId: "conn_secret_stdio",
+          catalogEntryId: "secret_stdio",
+          serverName: "secret_stdio",
+          connectorName: "Secret Stdio",
+          command: "secret-stdio",
+          args: [{ source: { kind: "static", value: "readonly" } }],
+          env: [{ name: "API_KEY", source: { kind: "static", value: "secret-token" } }],
+        },
+      ],
+    }));
+
+    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
+      targetLocation: "local",
+      workspacePath: "/workspace",
+    }));
+
+    expect(resolution.warnings).toEqual([]);
+    expect(resolution.mcpServers).toEqual([
+      expect.objectContaining({
+        args: ["readonly"],
+        env: [{ name: "API_KEY", value: "secret-token" }],
+        transport: "stdio",
+      }),
+    ]);
+    expect(JSON.stringify(resolution.mcpBindingSummaries)).not.toContain("secret-token");
+  });
+
+  it("fails unsupported stdio launch sources instead of substituting empty strings", async () => {
+    mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized({
+      mcpBindingSummaries: [
+        {
+          id: "conn_secret_stdio",
+          serverName: "secret_stdio",
+          displayName: "Secret Stdio",
+          transport: "stdio",
+          outcome: "applied",
+        },
+      ],
+      localStdioCandidates: [
+        {
+          connectionId: "conn_secret_stdio",
+          catalogEntryId: "secret_stdio",
+          serverName: "secret_stdio",
+          connectorName: "Secret Stdio",
+          command: "secret-stdio",
+          args: [],
+          env: [{ name: "API_KEY", source: { kind: "secret", fieldId: "api_key" } }],
+        },
+      ],
+    }));
+
+    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
+      targetLocation: "local",
+      workspacePath: "/workspace",
+    }));
+
+    expect(resolution.mcpServers).toEqual([]);
+    expect(resolution.warnings).toEqual([
+      expect.objectContaining({ kind: "resolver_error", catalogEntryId: "secret_stdio" }),
+    ]);
+    expect(resolution.mcpBindingSummaries).toEqual([
+      expect.objectContaining({
+        outcome: "not_applied",
+        reason: "resolver_error",
+      }),
+    ]);
+  });
+
   it("converts missing stdio commands into not-applied summaries", async () => {
     mocks.commandExistsMock.mockResolvedValue(false);
     mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized({
