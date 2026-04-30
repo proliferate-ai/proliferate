@@ -111,6 +111,7 @@ async def create_cloud_workspace_record(
     origin_json: str | None,
     template_version: str,
     repo_env_vars_ciphertext: str | None = None,
+    commit: bool = True,
 ) -> CloudWorkspace:
     now = utcnow()
     billing_subject = await ensure_personal_billing_subject(db, user_id)
@@ -151,8 +152,11 @@ async def create_cloud_workspace_record(
         updated_at=now,
     )
     db.add(workspace)
-    await db.commit()
-    await db.refresh(workspace)
+    if commit:
+        await db.commit()
+        await db.refresh(workspace)
+    else:
+        await db.flush()
     return workspace
 
 

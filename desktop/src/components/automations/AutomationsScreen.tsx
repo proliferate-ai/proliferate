@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
@@ -16,12 +16,14 @@ import {
   useAutomations,
 } from "@/hooks/automations/use-automations";
 import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
+import { useCloudWorkspaceActions } from "@/hooks/cloud/use-cloud-workspace-actions";
 import { useResize } from "@/hooks/layout/use-resize";
 import { useSettingsRepositories } from "@/hooks/settings/use-settings-repositories";
 import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
 import { useUpdater } from "@/hooks/updater/use-updater";
 import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
 import { buildAutomationRepositoryOptions } from "@/lib/domain/automations/repositories";
+import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import type {
   AutomationResponse,
   AutomationRunResponse,
@@ -34,6 +36,8 @@ import {
   WORKSPACE_SIDEBAR_MIN_WIDTH,
   useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
+import { useToastStore } from "@/stores/toast/toast-store";
+import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 
 const EMPTY_AUTOMATIONS: AutomationResponse[] = [];
 const EMPTY_AUTOMATION_RUNS: AutomationRunResponse[] = [];
@@ -55,8 +59,12 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   const setSidebarWidth = useWorkspaceUiStore((s) => s.setSidebarWidth);
   const transparentChromeEnabled = useTransparentChromeEnabled();
   const { phase: updaterPhase, downloadUpdate, openRestartPrompt } = useUpdater();
+  const showToast = useToastStore((state) => state.show);
+  const { selectWorkspace } = useWorkspaceSelection();
+  const { refreshCloudWorkspace } = useCloudWorkspaceActions();
   const [editingAutomation, setEditingAutomation] = useState<AutomationResponse | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [pendingCloudWorkspaceId, setPendingCloudWorkspaceId] = useState<string | null>(null);
 
   const enabled = automationsUiEnabled();
   const { data: automationsData, isLoading } = useAutomations(enabled);
@@ -121,6 +129,20 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   const handleUpdate = async (automationId: string, body: UpdateAutomationRequest) => {
     await actions.updateAutomation({ automationId, body });
   };
+
+  const handleOpenCloudWorkspace = useCallback(async (cloudWorkspaceId: string) => {
+    setPendingCloudWorkspaceId(cloudWorkspaceId);
+    try {
+      const workspace = await refreshCloudWorkspace(cloudWorkspaceId);
+      navigate("/");
+      await selectWorkspace(cloudWorkspaceSyntheticId(workspace.id), { force: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to open workspace.";
+      showToast(message);
+    } finally {
+      setPendingCloudWorkspaceId(null);
+    }
+  }, [navigate, refreshCloudWorkspace, selectWorkspace, showToast]);
 
   const busy = actions.isCreatingAutomation
     || actions.isUpdatingAutomation
@@ -233,6 +255,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
                 error={selectedDetailError}
                 runs={runsData?.runs ?? EMPTY_AUTOMATION_RUNS}
                 runsLoading={runsLoading}
+                pendingCloudWorkspaceId={pendingCloudWorkspaceId}
                 busy={busy}
                 onBack={() => navigate("/automations")}
                 onEdit={() => {
@@ -246,6 +269,9 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
                 }}
                 onRunNow={() => {
                   if (selectedAutomation) actions.runAutomationNow(selectedAutomation.id);
+                }}
+                onOpenCloudWorkspace={(cloudWorkspaceId) => {
+                  void handleOpenCloudWorkspace(cloudWorkspaceId);
                 }}
               />
             ) : (

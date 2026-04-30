@@ -1315,11 +1315,37 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "queued" | "cancelled";
+            status: "queued" | "claimed" | "creating_workspace" | "provisioning_workspace" | "creating_session" | "dispatching" | "dispatched" | "failed" | "cancelled";
+            /** Titlesnapshot */
+            titleSnapshot: string;
+            /** Agentkindsnapshot */
+            agentKindSnapshot: string | null;
+            /** Modelidsnapshot */
+            modelIdSnapshot: string | null;
+            /** Modeidsnapshot */
+            modeIdSnapshot: string | null;
+            /** Reasoningeffortsnapshot */
+            reasoningEffortSnapshot: string | null;
+            /** Claimexpiresat */
+            claimExpiresAt: string | null;
+            /** Dispatchstartedat */
+            dispatchStartedAt: string | null;
+            /** Dispatchedat */
+            dispatchedAt: string | null;
+            /** Failedat */
+            failedAt: string | null;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId: string | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string | null;
+            /** Anyharnesssessionid */
+            anyharnessSessionId: string | null;
             /** Cancelledat */
             cancelledAt: string | null;
-            /** Lasterror */
-            lastError: string | null;
+            /** Lasterrorcode */
+            lastErrorCode: string | null;
+            /** Lasterrormessage */
+            lastErrorMessage: string | null;
             /** Createdat */
             createdAt: string;
             /** Updatedat */

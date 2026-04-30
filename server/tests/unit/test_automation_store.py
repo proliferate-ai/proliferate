@@ -67,6 +67,10 @@ async def test_due_scheduler_disables_bad_schedule_and_continues_batch(
                 schedule_timezone="UTC",
                 schedule_summary="Hourly at :00 in UTC",
                 execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
+                agent_kind="codex",
+                model_id=None,
+                mode_id=None,
+                reasoning_effort=None,
                 enabled=True,
                 paused_at=None,
                 next_run_at=now,
@@ -83,6 +87,10 @@ async def test_due_scheduler_disables_bad_schedule_and_continues_batch(
                 schedule_timezone="UTC",
                 schedule_summary="Bad",
                 execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
+                agent_kind="codex",
+                model_id=None,
+                mode_id=None,
+                reasoning_effort=None,
                 enabled=True,
                 paused_at=None,
                 next_run_at=now,
@@ -131,5 +139,10 @@ async def test_due_scheduler_disables_bad_schedule_and_continues_batch(
         assert bad.paused_at == now
         assert bad.next_run_at is None
         assert [run.automation_id for run in runs] == [good_id]
+        assert runs[0].title_snapshot == "Good"
+        assert runs[0].prompt_snapshot == "Run good"
+        assert runs[0].git_owner_snapshot == "proliferate-ai"
+        assert runs[0].git_repo_name_snapshot == "good"
+        assert runs[0].agent_kind_snapshot == "codex"
     finally:
         engine_module.async_session_factory = original_factory

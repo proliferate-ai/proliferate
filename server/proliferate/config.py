@@ -98,6 +98,13 @@ class Settings(BaseSettings):
     cloud_runtime_sentry_traces_sample_rate: float = 1.0
     cloud_mcp_enabled: bool = True
     automations_enabled: bool = False
+    automation_cloud_executor_claim_ttl_seconds: float = 300.0
+    automation_cloud_executor_heartbeat_seconds: float = 30.0
+    automation_cloud_executor_concurrency: int = 4
+    automation_cloud_executor_poll_seconds: float = 5.0
+    automation_cloud_executor_sweep_limit: int = 100
+    automation_cloud_executor_branch_prefix: str = "automation"
+    automation_cloud_executor_branch_slug_chars: int = 48
     cloud_mcp_oauth_callback_base_url: str = ""
     cloud_mcp_allow_insecure_launch_urls: bool = False
     e2b_api_key: str = ""

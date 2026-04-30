@@ -44,8 +44,21 @@ function run(overrides: Partial<AutomationRunResponse> = {}): AutomationRunRespo
     scheduledFor: null,
     executionTarget: "cloud",
     status: "queued",
+    titleSnapshot: "Daily check",
+    agentKindSnapshot: "codex",
+    modelIdSnapshot: null,
+    modeIdSnapshot: null,
+    reasoningEffortSnapshot: null,
+    claimExpiresAt: null,
+    dispatchStartedAt: null,
+    dispatchedAt: null,
+    failedAt: null,
+    cloudWorkspaceId: null,
+    anyharnessWorkspaceId: null,
+    anyharnessSessionId: null,
     cancelledAt: null,
-    lastError: null,
+    lastErrorCode: null,
+    lastErrorMessage: null,
     createdAt: "2026-04-20T00:00:00Z",
     updatedAt: "2026-04-20T00:00:00Z",
     ...overrides,
@@ -85,9 +98,9 @@ describe("validateAutomationTimezone", () => {
 });
 
 describe("automationRunStatusLabel", () => {
-  it("uses executor-unavailable copy for cloud and local queued runs", () => {
+  it("uses local executor-unavailable copy and plain Queued for cloud", () => {
     expect(automationRunStatusLabel(run({ executionTarget: "cloud" }))).toBe(
-      "Queued, cloud executor not available yet",
+      "Queued",
     );
     expect(automationRunStatusLabel(run({ executionTarget: "local" }))).toBe(
       "Queued, local executor not available yet",
@@ -96,5 +109,31 @@ describe("automationRunStatusLabel", () => {
 
   it("uses cancelled copy for cancelled runs", () => {
     expect(automationRunStatusLabel(run({ status: "cancelled" }))).toBe("Cancelled");
+  });
+
+  it("uses handoff copy for dispatched cloud runs", () => {
+    expect(automationRunStatusLabel(run({ status: "dispatched" }))).toBe("Session started");
+  });
+
+  it("uses sanitized failure copy for failed runs", () => {
+    expect(automationRunStatusLabel(run({
+      status: "failed",
+      lastErrorMessage: "The requested cloud agent is not ready in the runtime.",
+    }))).toBe("The requested cloud agent is not ready in the runtime.");
+  });
+
+  it("compacts multiline failure copy", () => {
+    const message = `${"x".repeat(180)}\nsecond line`;
+
+    expect(automationRunStatusLabel(run({
+      status: "failed",
+      lastErrorMessage: message,
+    }))).toBe(`${"x".repeat(139)}…`);
+  });
+
+  it("surfaces unknown server statuses instead of treating them as queued", () => {
+    expect(automationRunStatusLabel(run({
+      status: "retrying" as AutomationRunResponse["status"],
+    }))).toBe("Unknown status: retrying");
   });
 });

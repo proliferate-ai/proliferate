@@ -125,6 +125,10 @@ export function AutomationEditorModal({
       setError("Add a GitHub-backed repository before creating an automation.");
       return;
     }
+    if (executionTarget === "cloud" && !agentKind.trim()) {
+      setError("Choose an agent before saving a cloud automation.");
+      return;
+    }
     const timezoneError = validateAutomationTimezone(timezone);
     if (timezoneError) {
       setError(timezoneError);
@@ -298,7 +302,9 @@ export function AutomationEditorModal({
               value={agentKind}
               onChange={(event) => setAgentKind(event.target.value)}
             >
-              <option value="">Default</option>
+              <option value="">
+                {executionTarget === "cloud" ? "Select agent" : "Default"}
+              </option>
               {AUTOMATION_AGENT_KIND_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}

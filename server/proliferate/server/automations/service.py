@@ -138,6 +138,15 @@ def _normalize_reasoning_effort(value: str | None) -> str | None:
     return normalized
 
 
+def _require_cloud_agent_kind(execution_target: str, agent_kind: str | None) -> None:
+    if execution_target == AUTOMATION_EXECUTION_TARGET_CLOUD and agent_kind is None:
+        raise AutomationServiceError(
+            "automation_agent_required",
+            "Choose an agent before scheduling a cloud automation.",
+            status_code=400,
+        )
+
+
 def _normalize_schedule_or_raise(
     *,
     rrule_text: str,
@@ -210,6 +219,9 @@ async def create_automation(user_id: UUID, body: CreateAutomationRequest) -> Aut
             now=now,
         )
     )
+    execution_target = _normalize_execution_target(body.execution_target)
+    agent_kind = _normalize_agent_kind(body.agent_kind)
+    _require_cloud_agent_kind(execution_target, agent_kind)
     value = await create_automation_for_user(
         user_id=user_id,
         cloud_repo_config_id=repo_config_id,
@@ -218,8 +230,8 @@ async def create_automation(user_id: UUID, body: CreateAutomationRequest) -> Aut
         schedule_rrule=schedule_rrule,
         schedule_timezone=schedule_timezone,
         schedule_summary=schedule_summary,
-        execution_target=_normalize_execution_target(body.execution_target),
-        agent_kind=_normalize_agent_kind(body.agent_kind),
+        execution_target=execution_target,
+        agent_kind=agent_kind,
         model_id=_normalize_optional_text(body.model_id, field_name="modelId"),
         mode_id=_normalize_optional_text(body.mode_id, field_name="modeId"),
         reasoning_effort=_normalize_reasoning_effort(body.reasoning_effort),
@@ -269,6 +281,8 @@ async def update_automation(
                 status_code=400,
             )
         updates["prompt"] = _normalize_required_text(body.prompt, field_name="prompt")
+    resolved_execution_target = existing.execution_target
+    resolved_agent_kind = existing.agent_kind
     if "execution_target" in body.model_fields_set:
         if body.execution_target is None:
             raise AutomationServiceError(
@@ -276,9 +290,11 @@ async def update_automation(
                 "executionTarget cannot be null.",
                 status_code=400,
             )
-        updates["execution_target"] = _normalize_execution_target(body.execution_target)
+        resolved_execution_target = _normalize_execution_target(body.execution_target)
+        updates["execution_target"] = resolved_execution_target
     if "agent_kind" in body.model_fields_set:
-        updates["agent_kind"] = _normalize_agent_kind(body.agent_kind)
+        resolved_agent_kind = _normalize_agent_kind(body.agent_kind)
+        updates["agent_kind"] = resolved_agent_kind
     if "model_id" in body.model_fields_set:
         updates["model_id"] = _normalize_optional_text(body.model_id, field_name="modelId")
     if "mode_id" in body.model_fields_set:
@@ -305,6 +321,8 @@ async def update_automation(
         # Queued runs keep the schedule slot they were already committed to.
         # Executor-state PRs can add explicit cancellation/rescheduling semantics.
         updates["next_run_at"] = next_run_at if existing.enabled else None
+
+    _require_cloud_agent_kind(resolved_execution_target, resolved_agent_kind)
 
     value = await update_automation_for_user(
         user_id=user_id,
@@ -347,6 +365,7 @@ async def resume_automation(user_id: UUID, automation_id: UUID) -> AutomationRes
             "Automation not found.",
             status_code=404,
         )
+    _require_cloud_agent_kind(existing.execution_target, existing.agent_kind)
     next_run_at = next_future_occurrence(
         rrule_text=existing.schedule_rrule,
         timezone=existing.schedule_timezone,
@@ -383,6 +402,7 @@ async def run_automation_now(user_id: UUID, automation_id: UUID) -> AutomationRu
             "Resume this automation before queueing a manual run.",
             status_code=400,
         )
+    _require_cloud_agent_kind(existing.execution_target, existing.agent_kind)
     await _ensure_repo_config_id(
         user_id=user_id,
         git_owner=existing.git_owner,

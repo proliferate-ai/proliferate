@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.cloud import SUPPORTED_GIT_PROVIDER
 from proliferate.db import engine as db_engine
 from proliferate.db.models.automations import Automation, AutomationRun
 from proliferate.db.models.cloud import CloudRepoConfig
@@ -25,7 +26,16 @@ AUTOMATION_EXECUTION_TARGET_LOCAL: Final = "local"
 AUTOMATION_RUN_TRIGGER_MANUAL: Final = "manual"
 AUTOMATION_RUN_TRIGGER_SCHEDULED: Final = "scheduled"
 AUTOMATION_RUN_STATUS_QUEUED: Final = "queued"
+AUTOMATION_RUN_STATUS_CLAIMED: Final = "claimed"
+AUTOMATION_RUN_STATUS_CREATING_WORKSPACE: Final = "creating_workspace"
+AUTOMATION_RUN_STATUS_PROVISIONING_WORKSPACE: Final = "provisioning_workspace"
+AUTOMATION_RUN_STATUS_CREATING_SESSION: Final = "creating_session"
+AUTOMATION_RUN_STATUS_DISPATCHING: Final = "dispatching"
+AUTOMATION_RUN_STATUS_DISPATCHED: Final = "dispatched"
+AUTOMATION_RUN_STATUS_FAILED: Final = "failed"
 AUTOMATION_RUN_STATUS_CANCELLED: Final = "cancelled"
+AUTOMATION_EXECUTOR_KIND_CLOUD: Final = "cloud"
+AUTOMATION_EXECUTOR_KIND_DESKTOP: Final = "desktop"
 
 _UNSET: Final = object()
 
@@ -64,8 +74,29 @@ class AutomationRunValue:
     scheduled_for: datetime | None
     execution_target: str
     status: str
+    title_snapshot: str
+    prompt_snapshot: str
+    git_provider_snapshot: str
+    git_owner_snapshot: str
+    git_repo_name_snapshot: str
+    cloud_repo_config_id_snapshot: UUID
+    agent_kind_snapshot: str | None
+    model_id_snapshot: str | None
+    mode_id_snapshot: str | None
+    reasoning_effort_snapshot: str | None
+    executor_kind: str | None
+    claimed_at: datetime | None
+    claim_expires_at: datetime | None
+    last_heartbeat_at: datetime | None
+    dispatch_started_at: datetime | None
+    dispatched_at: datetime | None
+    failed_at: datetime | None
+    cloud_workspace_id: UUID | None
+    anyharness_workspace_id: str | None
+    anyharness_session_id: str | None
     cancelled_at: datetime | None
-    last_error: str | None
+    last_error_code: str | None
+    last_error_message: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -124,8 +155,29 @@ def _run_value(record: AutomationRun) -> AutomationRunValue:
         scheduled_for=record.scheduled_for,
         execution_target=record.execution_target,
         status=record.status,
+        title_snapshot=record.title_snapshot,
+        prompt_snapshot=record.prompt_snapshot,
+        git_provider_snapshot=record.git_provider_snapshot,
+        git_owner_snapshot=record.git_owner_snapshot,
+        git_repo_name_snapshot=record.git_repo_name_snapshot,
+        cloud_repo_config_id_snapshot=record.cloud_repo_config_id_snapshot,
+        agent_kind_snapshot=record.agent_kind_snapshot,
+        model_id_snapshot=record.model_id_snapshot,
+        mode_id_snapshot=record.mode_id_snapshot,
+        reasoning_effort_snapshot=record.reasoning_effort_snapshot,
+        executor_kind=record.executor_kind,
+        claimed_at=record.claimed_at,
+        claim_expires_at=record.claim_expires_at,
+        last_heartbeat_at=record.last_heartbeat_at,
+        dispatch_started_at=record.dispatch_started_at,
+        dispatched_at=record.dispatched_at,
+        failed_at=record.failed_at,
+        cloud_workspace_id=record.cloud_workspace_id,
+        anyharness_workspace_id=record.anyharness_workspace_id,
+        anyharness_session_id=record.anyharness_session_id,
         cancelled_at=record.cancelled_at,
-        last_error=record.last_error,
+        last_error_code=record.last_error_code,
+        last_error_message=record.last_error_message,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -286,16 +338,19 @@ async def create_manual_run_for_user(
     automation_id: UUID,
 ) -> AutomationRunValue | None:
     async with db_engine.async_session_factory() as db:
-        automation = (
+        row = (
             await db.execute(
-                select(Automation).where(
+                select(Automation, CloudRepoConfig)
+                .join(CloudRepoConfig, Automation.cloud_repo_config_id == CloudRepoConfig.id)
+                .where(
                     Automation.id == automation_id,
                     Automation.user_id == user_id,
                 )
             )
-        ).scalar_one_or_none()
-        if automation is None:
+        ).one_or_none()
+        if row is None:
             return None
+        automation, repo_config = row
         now = utcnow()
         run = AutomationRun(
             automation_id=automation.id,
@@ -304,8 +359,31 @@ async def create_manual_run_for_user(
             scheduled_for=None,
             execution_target=automation.execution_target,
             status=AUTOMATION_RUN_STATUS_QUEUED,
+            title_snapshot=automation.title,
+            prompt_snapshot=automation.prompt,
+            git_provider_snapshot=SUPPORTED_GIT_PROVIDER,
+            git_owner_snapshot=repo_config.git_owner,
+            git_repo_name_snapshot=repo_config.git_repo_name,
+            cloud_repo_config_id_snapshot=automation.cloud_repo_config_id,
+            agent_kind_snapshot=automation.agent_kind,
+            model_id_snapshot=automation.model_id,
+            mode_id_snapshot=automation.mode_id,
+            reasoning_effort_snapshot=automation.reasoning_effort,
+            executor_kind=None,
+            executor_id=None,
+            claim_id=None,
+            claimed_at=None,
+            claim_expires_at=None,
+            last_heartbeat_at=None,
+            dispatch_started_at=None,
+            dispatched_at=None,
+            failed_at=None,
+            cloud_workspace_id=None,
+            anyharness_workspace_id=None,
+            anyharness_session_id=None,
             cancelled_at=None,
-            last_error=None,
+            last_error_code=None,
+            last_error_message=None,
             created_at=now,
             updated_at=now,
         )
@@ -357,10 +435,10 @@ async def create_due_scheduled_runs_batch(
     schedule_advance_resolver: ScheduleAdvanceResolver,
 ) -> int:
     async with db_engine.async_session_factory() as db:
-        records = list(
+        rows = list(
             (
                 await db.execute(
-                    select(Automation)
+                    select(Automation, CloudRepoConfig)
                     .join(CloudRepoConfig, Automation.cloud_repo_config_id == CloudRepoConfig.id)
                     .where(
                         Automation.enabled.is_(True),
@@ -373,11 +451,10 @@ async def create_due_scheduled_runs_batch(
                     .with_for_update(skip_locked=True)
                 )
             )
-            .scalars()
             .all()
         )
         inserted_count = 0
-        for record in records:
+        for record, repo_config in rows:
             try:
                 advance = schedule_advance_resolver(
                     AutomationScheduleFields(
@@ -407,8 +484,31 @@ async def create_due_scheduled_runs_batch(
                         scheduled_for=advance.scheduled_for,
                         execution_target=record.execution_target,
                         status=AUTOMATION_RUN_STATUS_QUEUED,
+                        title_snapshot=record.title,
+                        prompt_snapshot=record.prompt,
+                        git_provider_snapshot=SUPPORTED_GIT_PROVIDER,
+                        git_owner_snapshot=repo_config.git_owner,
+                        git_repo_name_snapshot=repo_config.git_repo_name,
+                        cloud_repo_config_id_snapshot=record.cloud_repo_config_id,
+                        agent_kind_snapshot=record.agent_kind,
+                        model_id_snapshot=record.model_id,
+                        mode_id_snapshot=record.mode_id,
+                        reasoning_effort_snapshot=record.reasoning_effort,
+                        executor_kind=None,
+                        executor_id=None,
+                        claim_id=None,
+                        claimed_at=None,
+                        claim_expires_at=None,
+                        last_heartbeat_at=None,
+                        dispatch_started_at=None,
+                        dispatched_at=None,
+                        failed_at=None,
+                        cloud_workspace_id=None,
+                        anyharness_workspace_id=None,
+                        anyharness_session_id=None,
                         cancelled_at=None,
-                        last_error=None,
+                        last_error_code=None,
+                        last_error_message=None,
                         created_at=now,
                         updated_at=now,
                     )

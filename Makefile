@@ -138,8 +138,8 @@ dev: sdk-build server-db-ready
 	RUST_LOG=info ANYHARNESS_DEV_CORS=1 $(CARGO) run --bin anyharness -- serve --port "$$ANYHARNESS_PORT" --runtime-home "$$ANYHARNESS_RUNTIME_HOME" & \
 	(cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port "$$PROLIFERATE_API_PORT") & \
 	if [ "$${AUTOMATIONS_ENABLED:-}" = "true" ] || [ "$${AUTOMATIONS_ENABLED:-}" = "1" ]; then \
-		echo "Starting automation scheduler worker..."; \
-		cd server && uv run python -m proliferate.server.automations.worker --role scheduler & \
+		echo "Starting automation worker..."; \
+		cd server && uv run python -m proliferate.server.automations.worker --role all & \
 	fi; \
 	sleep 2; \
 	(cd desktop && VITE_PROLIFERATE_AUTOMATIONS_ENABLED="$${AUTOMATIONS_ENABLED:-}" pnpm tauri dev --runner "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri-runner.sh" --config "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri.dev.json")
@@ -187,7 +187,7 @@ serve:
 
 dev-automation-worker:
 	@$(SERVER_ENV_SOURCE) \
-	cd server && uv run python -m proliferate.server.automations.worker --role scheduler
+	cd server && uv run python -m proliferate.server.automations.worker --role all
 
 # --- Server (Python control plane) ---
 

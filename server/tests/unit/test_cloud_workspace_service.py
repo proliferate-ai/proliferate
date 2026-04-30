@@ -102,6 +102,53 @@ async def test_create_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
 
 
 @pytest.mark.asyncio
+async def test_automation_workspace_requires_selected_agent_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+
+    async def _repo_branches(*_args, **_kwargs) -> SimpleNamespace:
+        return SimpleNamespace(branches=["main"], default_branch="main")
+
+    async def _existing_workspace(**_kwargs):
+        return None
+
+    async def _authorization(**_kwargs) -> SandboxStartAuthorization:
+        return _allowed_start_authorization()
+
+    async def _repo_config_value(**_kwargs):
+        return SimpleNamespace(configured=True, default_branch="main")
+
+    async def _credential_statuses(_user_id):
+        return [
+            SimpleNamespace(provider="claude", synced=True),
+            SimpleNamespace(provider="codex", synced=False),
+        ]
+
+    monkeypatch.setattr(workspace_service, "get_linked_github_account", lambda _user: object())
+    monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
+    monkeypatch.setattr(workspace_service, "load_existing_cloud_workspace", _existing_workspace)
+    monkeypatch.setattr(workspace_service, "load_repo_config_value", _repo_config_value)
+    monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
+    monkeypatch.setattr(workspace_service, "load_cloud_credential_statuses", _credential_statuses)
+
+    with pytest.raises(CloudApiError) as exc_info:
+        await workspace_service._resolve_new_cloud_workspace_create(
+            user,
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            base_branch=None,
+            branch_name="automation/run-123",
+            display_name=None,
+            required_agent_kind="codex",
+        )
+
+    assert exc_info.value.code == "missing_agent_credentials"
+    assert exc_info.value.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_start_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

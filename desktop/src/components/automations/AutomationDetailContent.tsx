@@ -13,12 +13,14 @@ interface AutomationDetailContentProps {
   error: boolean;
   runs: AutomationRunResponse[];
   runsLoading: boolean;
+  pendingCloudWorkspaceId?: string | null;
   busy: boolean;
   onBack: () => void;
   onEdit: () => void;
   onPause: () => void;
   onResume: () => void;
   onRunNow: () => void;
+  onOpenCloudWorkspace: (cloudWorkspaceId: string) => void;
 }
 
 export function AutomationDetailContent({
@@ -27,12 +29,14 @@ export function AutomationDetailContent({
   error,
   runs,
   runsLoading,
+  pendingCloudWorkspaceId = null,
   busy,
   onBack,
   onEdit,
   onPause,
   onResume,
   onRunNow,
+  onOpenCloudWorkspace,
 }: AutomationDetailContentProps) {
   if (loading) {
     return (
@@ -115,10 +119,15 @@ export function AutomationDetailContent({
         <div className="mb-3">
           <h3 className="text-sm font-medium text-foreground">Run history</h3>
           <p className="text-xs text-muted-foreground">
-            Queued runs for this automation. Runs stay queued until an executor is available.
+            Runs show when a cloud session has been started, not when the agent has completed.
           </p>
         </div>
-        <AutomationRunTimeline runs={runs} loading={runsLoading} />
+        <AutomationRunTimeline
+          runs={runs}
+          loading={runsLoading}
+          pendingCloudWorkspaceId={pendingCloudWorkspaceId}
+          onOpenCloudWorkspace={onOpenCloudWorkspace}
+        />
       </section>
     </div>
   );

@@ -41,15 +41,22 @@ export const AUTOMATION_SCHEDULE_PRESET_OPTIONS = [
 ] as const;
 
 export const AUTOMATION_RUN_COPY = {
-  cloudQueued: "Queued, cloud executor not available yet",
+  queued: "Queued",
+  claimed: "Claimed by executor",
+  creatingWorkspace: "Creating cloud workspace",
+  provisioningWorkspace: "Preparing runtime",
+  creatingSession: "Creating session",
+  dispatching: "Sending prompt",
+  dispatched: "Session started",
+  failed: "Failed",
   localQueued: "Queued, local executor not available yet",
   cancelled: "Cancelled",
 } as const;
 
 export const AUTOMATION_PREEXECUTOR_COPY = {
-  pageDescription: "Definitions and queued runs are live. Executors land in the next PR.",
-  emptyState: "Create an automation to queue scheduled runs. Execution is not enabled yet.",
-  modalDescription: "Automation execution will be enabled by the executor PR.",
+  pageDescription: "Schedule recurring cloud or local agent sessions.",
+  emptyState: "Create an automation to queue scheduled runs.",
+  modalDescription: "Cloud automations start a new cloud workspace and session for each run.",
 } as const;
 
 function envFlagEnabled(value: string | undefined, defaultValue: boolean): boolean {

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass
 from uuid import UUID
 
 from proliferate.constants.billing import (
@@ -20,6 +21,9 @@ from proliferate.constants.cloud import (
 )
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud import CloudWorkspace
+from proliferate.db.store.automation_run_claims import (
+    create_cloud_workspace_for_claimed_run,
+)
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
 )
@@ -87,6 +91,20 @@ from proliferate.utils.time import duration_ms, utcnow
 
 MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 CLOUD_HUMAN_ORIGIN_JSON = '{"kind":"human","entrypoint":"cloud"}'
+CLOUD_SYSTEM_ORIGIN_JSON = '{"kind":"system","entrypoint":"cloud"}'
+
+
+@dataclass(frozen=True)
+class ResolvedCloudWorkspaceCreate:
+    git_provider: str
+    git_owner: str
+    git_repo_name: str
+    git_branch: str
+    git_base_branch: str
+    display_name: str | None
+    active_sandbox_count: int
+    synced_providers: tuple[str, ...]
+
 
 PROVISIONING_STATUSES: frozenset[str] = frozenset(
     {
@@ -289,7 +307,7 @@ async def _build_workspace_detail(
     )
 
 
-async def create_cloud_workspace(
+async def _resolve_new_cloud_workspace_create(
     user: User,
     *,
     git_provider: str,
@@ -298,7 +316,8 @@ async def create_cloud_workspace(
     base_branch: str | None,
     branch_name: str,
     display_name: str | None,
-) -> WorkspaceDetail:
+    required_agent_kind: str | None = None,
+) -> ResolvedCloudWorkspaceCreate:
     if git_provider != SUPPORTED_GIT_PROVIDER:
         raise CloudApiError(
             "unsupported_repo_provider",
@@ -412,8 +431,22 @@ async def create_cloud_workspace(
     )
     _raise_if_cloud_workspace_start_denied(authorization)
 
+    if required_agent_kind is not None and required_agent_kind not in allowed_agent_kinds():
+        raise CloudApiError(
+            "unsupported_agent_kind",
+            "The selected agent is not supported for cloud workspaces.",
+            status_code=400,
+        )
+
     statuses = await load_cloud_credential_statuses(user.id)
-    if not any(status.synced for status in statuses):
+    synced_providers = tuple(status.provider for status in statuses if status.synced)
+    if required_agent_kind is not None and required_agent_kind not in synced_providers:
+        raise CloudApiError(
+            "missing_agent_credentials",
+            f"Sync {required_agent_kind} credentials before running this cloud automation.",
+            status_code=400,
+        )
+    if not synced_providers:
         raise CloudApiError(
             "missing_supported_credentials",
             "Sync a supported cloud credential before creating a cloud workspace.",
@@ -424,30 +457,107 @@ async def create_cloud_workspace(
         repo=f"{git_owner}/{git_repo_name}",
         base_branch=resolved_base_branch,
         branch_name=cleaned_branch_name,
-        synced_providers=",".join(status.provider for status in statuses if status.synced),
+        synced_providers=",".join(synced_providers),
         active_sandbox_count=authorization.active_sandbox_count,
     )
-
-    workspace = await create_cloud_workspace_for_user(
-        user_id=user.id,
-        display_name=(display_name.strip() if display_name and display_name.strip() else None),
+    return ResolvedCloudWorkspaceCreate(
         git_provider=git_provider,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
         git_branch=cleaned_branch_name,
         git_base_branch=resolved_base_branch,
+        display_name=(display_name.strip() if display_name and display_name.strip() else None),
+        active_sandbox_count=authorization.active_sandbox_count,
+        synced_providers=synced_providers,
+    )
+
+
+async def create_cloud_workspace(
+    user: User,
+    *,
+    git_provider: str,
+    git_owner: str,
+    git_repo_name: str,
+    base_branch: str | None,
+    branch_name: str,
+    display_name: str | None,
+) -> WorkspaceDetail:
+    resolved = await _resolve_new_cloud_workspace_create(
+        user,
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        base_branch=base_branch,
+        branch_name=branch_name,
+        display_name=display_name,
+    )
+
+    workspace = await create_cloud_workspace_for_user(
+        user_id=user.id,
+        display_name=resolved.display_name,
+        git_provider=resolved.git_provider,
+        git_owner=resolved.git_owner,
+        git_repo_name=resolved.git_repo_name,
+        git_branch=resolved.git_branch,
+        git_base_branch=resolved.git_base_branch,
         origin_json=CLOUD_HUMAN_ORIGIN_JSON,
         template_version=get_configured_sandbox_provider().template_version,
     )
     log_cloud_event(
         "cloud workspace queued",
         workspace_id=workspace.id,
-        repo=f"{git_owner}/{git_repo_name}",
-        base_branch=resolved_base_branch,
-        branch_name=cleaned_branch_name,
+        repo=f"{resolved.git_owner}/{resolved.git_repo_name}",
+        base_branch=resolved.git_base_branch,
+        branch_name=resolved.git_branch,
     )
     schedule_workspace_provision(workspace.id)
     return await _build_workspace_detail(workspace)
+
+
+async def create_cloud_workspace_for_automation_run(
+    user: User,
+    *,
+    run_id: UUID,
+    claim_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+    branch_name: str,
+    display_name: str | None,
+    required_agent_kind: str,
+) -> CloudWorkspace | None:
+    resolved = await _resolve_new_cloud_workspace_create(
+        user,
+        git_provider=SUPPORTED_GIT_PROVIDER,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        base_branch=None,
+        branch_name=branch_name,
+        display_name=display_name,
+        required_agent_kind=required_agent_kind,
+    )
+    workspace = await create_cloud_workspace_for_claimed_run(
+        run_id=run_id,
+        claim_id=claim_id,
+        user_id=user.id,
+        display_name=resolved.display_name,
+        git_provider=resolved.git_provider,
+        git_owner=resolved.git_owner,
+        git_repo_name=resolved.git_repo_name,
+        git_branch=resolved.git_branch,
+        git_base_branch=resolved.git_base_branch,
+        origin_json=CLOUD_SYSTEM_ORIGIN_JSON,
+        template_version=get_configured_sandbox_provider().template_version,
+        now=utcnow(),
+    )
+    if workspace is not None:
+        log_cloud_event(
+            "automation cloud workspace created",
+            workspace_id=workspace.id,
+            automation_run_id=run_id,
+            repo=f"{resolved.git_owner}/{resolved.git_repo_name}",
+            branch_name=resolved.git_branch,
+        )
+    return workspace
 
 
 async def ensure_cloud_workspace_for_existing_branch(

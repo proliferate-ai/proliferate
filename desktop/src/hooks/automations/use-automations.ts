@@ -15,6 +15,21 @@ import {
   automationsListKey,
 } from "./query-keys";
 
+const ACTIVE_RUN_STATUSES = new Set([
+  "queued",
+  "claimed",
+  "creating_workspace",
+  "provisioning_workspace",
+  "creating_session",
+  "dispatching",
+]);
+
+function hasActiveAutomationRun(
+  data: AutomationRunListResponse | undefined,
+): boolean {
+  return data?.runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status)) ?? false;
+}
+
 export function useAutomations(enabled = true) {
   return useQuery<AutomationListResponse>({
     queryKey: automationsListKey(),
@@ -36,5 +51,10 @@ export function useAutomationRuns(automationId: string | null, enabled = true) {
     queryKey: automationRunsKey(automationId),
     queryFn: () => listAutomationRuns(automationId!),
     enabled: enabled && automationId !== null,
+    refetchInterval: (query) =>
+      enabled && automationId !== null && hasActiveAutomationRun(query.state.data)
+        ? 5000
+        : false,
+    refetchIntervalInBackground: false,
   });
 }

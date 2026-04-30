@@ -11,7 +11,17 @@ from proliferate.db.store.automations import AutomationRunValue, AutomationValue
 
 ExecutionTarget = Literal["cloud", "local"]
 RunTriggerKind = Literal["scheduled", "manual"]
-RunStatus = Literal["queued", "cancelled"]
+RunStatus = Literal[
+    "queued",
+    "claimed",
+    "creating_workspace",
+    "provisioning_workspace",
+    "creating_session",
+    "dispatching",
+    "dispatched",
+    "failed",
+    "cancelled",
+]
 
 
 def _to_iso(value: datetime | None) -> str | None:
@@ -90,8 +100,21 @@ class AutomationRunResponse(AutomationBaseModel):
     scheduled_for: str | None = Field(alias="scheduledFor")
     execution_target: ExecutionTarget = Field(alias="executionTarget")
     status: RunStatus
+    title_snapshot: str = Field(alias="titleSnapshot")
+    agent_kind_snapshot: str | None = Field(alias="agentKindSnapshot")
+    model_id_snapshot: str | None = Field(alias="modelIdSnapshot")
+    mode_id_snapshot: str | None = Field(alias="modeIdSnapshot")
+    reasoning_effort_snapshot: str | None = Field(alias="reasoningEffortSnapshot")
+    claim_expires_at: str | None = Field(alias="claimExpiresAt")
+    dispatch_started_at: str | None = Field(alias="dispatchStartedAt")
+    dispatched_at: str | None = Field(alias="dispatchedAt")
+    failed_at: str | None = Field(alias="failedAt")
+    cloud_workspace_id: str | None = Field(alias="cloudWorkspaceId")
+    anyharness_workspace_id: str | None = Field(alias="anyharnessWorkspaceId")
+    anyharness_session_id: str | None = Field(alias="anyharnessSessionId")
     cancelled_at: str | None = Field(alias="cancelledAt")
-    last_error: str | None = Field(alias="lastError")
+    last_error_code: str | None = Field(alias="lastErrorCode")
+    last_error_message: str | None = Field(alias="lastErrorMessage")
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
 
@@ -134,8 +157,21 @@ def automation_run_payload(value: AutomationRunValue) -> AutomationRunResponse:
         scheduled_for=_to_iso(value.scheduled_for),
         execution_target=value.execution_target,  # type: ignore[arg-type]
         status=value.status,  # type: ignore[arg-type]
+        title_snapshot=value.title_snapshot,
+        agent_kind_snapshot=value.agent_kind_snapshot,
+        model_id_snapshot=value.model_id_snapshot,
+        mode_id_snapshot=value.mode_id_snapshot,
+        reasoning_effort_snapshot=value.reasoning_effort_snapshot,
+        claim_expires_at=_to_iso(value.claim_expires_at),
+        dispatch_started_at=_to_iso(value.dispatch_started_at),
+        dispatched_at=_to_iso(value.dispatched_at),
+        failed_at=_to_iso(value.failed_at),
+        cloud_workspace_id=str(value.cloud_workspace_id) if value.cloud_workspace_id else None,
+        anyharness_workspace_id=value.anyharness_workspace_id,
+        anyharness_session_id=value.anyharness_session_id,
         cancelled_at=_to_iso(value.cancelled_at),
-        last_error=value.last_error,
+        last_error_code=value.last_error_code,
+        last_error_message=value.last_error_message,
         created_at=value.created_at.isoformat(),
         updated_at=value.updated_at.isoformat(),
     )

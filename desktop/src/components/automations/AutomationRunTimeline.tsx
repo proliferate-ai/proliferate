@@ -1,4 +1,6 @@
+import { memo } from "react";
 import type { AutomationRunResponse } from "@/lib/integrations/cloud/client";
+import { Button } from "@/components/ui/Button";
 import {
   automationRunStatusLabel,
   automationRunTimestampLabel,
@@ -7,9 +9,67 @@ import {
 interface AutomationRunTimelineProps {
   runs: AutomationRunResponse[];
   loading: boolean;
+  pendingCloudWorkspaceId?: string | null;
+  onOpenCloudWorkspace?: (cloudWorkspaceId: string) => void;
 }
 
-export function AutomationRunTimeline({ runs, loading }: AutomationRunTimelineProps) {
+interface AutomationRunTimelineRowProps {
+  run: AutomationRunResponse;
+  pendingCloudWorkspaceId?: string | null;
+  onOpenCloudWorkspace?: (cloudWorkspaceId: string) => void;
+}
+
+const AutomationRunTimelineRow = memo(function AutomationRunTimelineRow({
+  run,
+  pendingCloudWorkspaceId,
+  onOpenCloudWorkspace,
+}: AutomationRunTimelineRowProps) {
+  const statusLabel = automationRunStatusLabel(run);
+  const opening = run.cloudWorkspaceId === pendingCloudWorkspaceId;
+  const statusTitle = run.status === "failed"
+    ? run.lastErrorMessage ?? statusLabel
+    : statusLabel;
+
+  return (
+    <div className="rounded-lg border border-border bg-foreground/5 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p
+            className="truncate text-sm font-medium text-foreground"
+            title={statusTitle}
+          >
+            {statusLabel}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">
+            {automationRunTimestampLabel(run)}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {run.cloudWorkspaceId && onOpenCloudWorkspace && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onOpenCloudWorkspace(run.cloudWorkspaceId!)}
+              disabled={opening}
+            >
+              {opening ? "Opening..." : "Open workspace"}
+            </Button>
+          )}
+          <span className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">
+            {run.triggerKind}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+export function AutomationRunTimeline({
+  runs,
+  loading,
+  pendingCloudWorkspaceId = null,
+  onOpenCloudWorkspace,
+}: AutomationRunTimelineProps) {
   if (loading) {
     return (
       <div className="rounded-lg border border-border bg-foreground/5 p-4 text-sm text-muted-foreground">
@@ -29,24 +89,12 @@ export function AutomationRunTimeline({ runs, loading }: AutomationRunTimelinePr
   return (
     <div className="flex flex-col gap-2">
       {runs.map((run) => (
-        <div
+        <AutomationRunTimelineRow
           key={run.id}
-          className="rounded-lg border border-border bg-foreground/5 p-3"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-foreground">
-                {automationRunStatusLabel(run)}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {automationRunTimestampLabel(run)}
-              </p>
-            </div>
-            <span className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">
-              {run.triggerKind}
-            </span>
-          </div>
-        </div>
+          run={run}
+          pendingCloudWorkspaceId={pendingCloudWorkspaceId}
+          onOpenCloudWorkspace={onOpenCloudWorkspace}
+        />
       ))}
     </div>
   );
