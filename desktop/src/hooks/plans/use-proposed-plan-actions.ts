@@ -1,43 +1,95 @@
 import { useCallback, useRef, useState } from "react";
-import { AnyHarnessError } from "@anyharness/sdk";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  AnyHarnessError,
+  type ContentPart,
+  type NormalizedSessionControl,
+  type PromptInputBlock,
+} from "@anyharness/sdk";
 import {
   useApprovePlanMutation,
   useRejectPlanMutation,
 } from "@anyharness/sdk-react";
+import { completeChatPromptSubmitSideEffects } from "@/hooks/chat/chat-submit-effects";
+import { useChatAvailabilityState } from "@/hooks/chat/use-chat-availability-state";
 import { useReviewActions } from "@/hooks/reviews/use-review-actions";
-import { PLAN_ATTACHMENT_LIMIT } from "@/config/plans";
-import { PLAN_IMPLEMENT_HERE_PROMPT } from "@/config/plan-prompts";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
-import { resolveChatDraftWorkspaceId } from "@/lib/domain/chat/chat-input";
-import {
-  EMPTY_CHAT_DRAFT,
-  isChatDraftEmpty,
-} from "@/lib/domain/chat/file-mentions";
-import {
-  planAttachmentPointerFromDescriptor,
-  type PromptPlanAttachmentDescriptor,
-} from "@/lib/domain/chat/prompt-content";
+import { createPromptId } from "@/lib/domain/chat/prompt-id";
+import { type PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/prompt-content";
+import { buildPlanImplementationPrompt } from "@/lib/domain/plans/implementation-prompt";
 import { resolvePlanImplementationModeSwitch } from "@/lib/domain/plans/implementation-mode";
-import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import { useChatPlanAttachmentStore } from "@/stores/chat/chat-plan-attachment-store";
+import {
+  failLatencyFlow as failPromptLatencyFlow,
+  startLatencyFlow as startPromptLatencyFlow,
+  type StartLatencyFlowInput,
+} from "@/lib/infra/latency-flow";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+
+type PlanImplementationSessionSlot = {
+  workspaceId: string | null;
+  agentKind?: string | null;
+  liveConfig: {
+    normalizedControls: {
+      collaborationMode?: NormalizedSessionControl | null;
+      mode?: NormalizedSessionControl | null;
+    };
+  } | null;
+};
+
+interface PlanImplementationHarnessState {
+  activeSessionId: string | null;
+  sessionSlots: Record<string, PlanImplementationSessionSlot | undefined>;
+}
+
+interface PromptActiveSessionOptions {
+  latencyFlowId?: string | null;
+  promptId?: string | null;
+  blocks?: PromptInputBlock[];
+  optimisticContentParts?: ContentPart[];
+}
+
+interface ExecutePlanImplementationInput {
+  plan: PromptPlanAttachmentDescriptor;
+  getHarnessState: () => PlanImplementationHarnessState;
+  setActiveSessionConfigOption: (
+    configId: string,
+    value: string,
+    options?: { persistDefaultPreference?: boolean },
+  ) => Promise<unknown>;
+  promptActiveSession: (
+    text: string,
+    options?: PromptActiveSessionOptions,
+  ) => Promise<void>;
+  startLatencyFlow: (input: StartLatencyFlowInput) => string;
+  failLatencyFlow: (
+    flowId: string | null | undefined,
+    reason: string,
+    extraFields?: Record<string, unknown>,
+  ) => void;
+  isChatDisabled: boolean;
+  chatDisabledReason: string | null;
+  onPromptSubmitted: (input: {
+    workspaceId: string;
+    agentKind: string;
+    reuseSession: boolean;
+  }) => void;
+  showToast: (message: string) => void;
+}
 
 export function useProposedPlanActions() {
+  const queryClient = useQueryClient();
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
-    (state) => state.selectedLogicalWorkspaceId,
-  );
-  const appendDraftText = useChatInputStore((state) => state.appendDraftText);
-  const addPlanAttachment = useChatPlanAttachmentStore((state) => state.addPlanAttachment);
+  const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
+  const setWorkspaceArrivalEvent = useHarnessStore((state) => state.setWorkspaceArrivalEvent);
   const showToast = useToastStore((state) => state.show);
-  const [isPreparingPlanReference, setIsPreparingPlanReference] = useState(false);
-  const isPreparingPlanReferenceRef = useRef(false);
+  const [isImplementingPlan, setIsImplementingPlan] = useState(false);
+  const isImplementingPlanRef = useRef(false);
+  const availability = useChatAvailabilityState();
   const approveMutation = useApprovePlanMutation({ workspaceId: selectedWorkspaceId });
   const rejectMutation = useRejectPlanMutation({ workspaceId: selectedWorkspaceId });
   const reviewActions = useReviewActions();
-  const { setActiveSessionConfigOption } = useSessionActions();
+  const { promptActiveSession, setActiveSessionConfigOption } = useSessionActions();
   const approvePlanMutation = approveMutation.mutateAsync;
   const rejectPlanMutation = rejectMutation.mutateAsync;
 
@@ -64,72 +116,43 @@ export function useProposedPlanActions() {
   }, [rejectPlanMutation, showToast]);
 
   const implementPlanHere = useCallback((plan: PromptPlanAttachmentDescriptor) => {
-    if (isPreparingPlanReferenceRef.current) {
+    if (!claimPlanImplementationRun(isImplementingPlanRef)) {
       return;
     }
-    isPreparingPlanReferenceRef.current = true;
     void (async () => {
-      setIsPreparingPlanReference(true);
-      const harnessState = useHarnessStore.getState();
-      const planSessionSlot = harnessState.sessionSlots[plan.sourceSessionId] ?? null;
-      if (!planSessionSlot) {
-        showToast("Plan session is not available.");
-        return;
-      }
-      if (harnessState.activeSessionId !== plan.sourceSessionId) {
-        showToast("Select the plan's session before carrying it out.");
-        return;
-      }
-      const draftWorkspaceId = resolveChatDraftWorkspaceId(
-        selectedLogicalWorkspaceId,
-        planSessionSlot.workspaceId ?? selectedWorkspaceId,
-      );
-      if (!draftWorkspaceId) {
-        showToast("Select a workspace before implementing a plan.");
-        return;
-      }
-
-      const modeSwitch = resolvePlanImplementationModeSwitch({
-        collaborationMode:
-          planSessionSlot.liveConfig?.normalizedControls.collaborationMode ?? null,
-        mode: planSessionSlot.liveConfig?.normalizedControls.mode ?? null,
+      setIsImplementingPlan(true);
+      await executePlanImplementation({
+        plan,
+        getHarnessState: useHarnessStore.getState,
+        setActiveSessionConfigOption,
+        promptActiveSession,
+        startLatencyFlow: startPromptLatencyFlow,
+        failLatencyFlow: failPromptLatencyFlow,
+        isChatDisabled: availability.isDisabled,
+        chatDisabledReason: availability.disabledReason,
+        onPromptSubmitted: ({ workspaceId, agentKind, reuseSession }) =>
+          completeChatPromptSubmitSideEffects({
+            queryClient,
+            runtimeUrl,
+            workspaceId,
+            agentKind,
+            reuseSession,
+            setWorkspaceArrivalEvent,
+          }),
+        showToast,
       });
-      if (modeSwitch) {
-        await setActiveSessionConfigOption(modeSwitch.rawConfigId, modeSwitch.value, {
-          persistDefaultPreference: false,
-        });
-      }
-
-      const currentDraft =
-        useChatInputStore.getState().draftByWorkspaceId[draftWorkspaceId] ?? EMPTY_CHAT_DRAFT;
-      const pointer = planAttachmentPointerFromDescriptor(plan);
-      const currentPlans =
-        useChatPlanAttachmentStore.getState().attachmentsByWorkspaceId[draftWorkspaceId] ?? [];
-      const alreadyAttached = currentPlans.some((candidate) => candidate.id === pointer.id);
-      if (!alreadyAttached && currentPlans.length >= PLAN_ATTACHMENT_LIMIT) {
-        showToast(`You can attach up to ${PLAN_ATTACHMENT_LIMIT} plans.`);
-        return;
-      }
-      addPlanAttachment(draftWorkspaceId, pointer);
-      appendDraftText(
-        draftWorkspaceId,
-        isChatDraftEmpty(currentDraft)
-          ? PLAN_IMPLEMENT_HERE_PROMPT
-          : `\n\n${PLAN_IMPLEMENT_HERE_PROMPT}`,
-      );
-    })().catch((error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to prepare plan reference: ${message}`);
-    }).finally(() => {
-      isPreparingPlanReferenceRef.current = false;
-      setIsPreparingPlanReference(false);
+    })().finally(() => {
+      isImplementingPlanRef.current = false;
+      setIsImplementingPlan(false);
     });
   }, [
-    selectedLogicalWorkspaceId,
-    selectedWorkspaceId,
-    addPlanAttachment,
-    appendDraftText,
+    promptActiveSession,
+    availability.disabledReason,
+    availability.isDisabled,
+    queryClient,
+    runtimeUrl,
     setActiveSessionConfigOption,
+    setWorkspaceArrivalEvent,
     showToast,
   ]);
 
@@ -140,8 +163,113 @@ export function useProposedPlanActions() {
     reviewPlan: reviewActions.startPlanReview,
     isApprovingPlan: approveMutation.isPending,
     isRejectingPlan: rejectMutation.isPending,
-    isPreparingPlanReference,
+    isImplementingPlan,
   };
+}
+
+export async function executePlanImplementation({
+  plan,
+  getHarnessState,
+  setActiveSessionConfigOption,
+  promptActiveSession,
+  startLatencyFlow,
+  failLatencyFlow,
+  isChatDisabled,
+  chatDisabledReason,
+  onPromptSubmitted,
+  showToast,
+}: ExecutePlanImplementationInput): Promise<void> {
+  const harnessState = getHarnessState();
+  const planSessionSlot = harnessState.sessionSlots[plan.sourceSessionId] ?? null;
+  if (!planSessionSlot) {
+    showToast("Plan session is not available.");
+    return;
+  }
+  if (harnessState.activeSessionId !== plan.sourceSessionId) {
+    showToast("Select the plan's session before carrying it out.");
+    return;
+  }
+  const workspaceId = planSessionSlot.workspaceId;
+  if (!workspaceId) {
+    showToast("Select a workspace before implementing a plan.");
+    return;
+  }
+  if (isChatDisabled) {
+    showToast(chatDisabledReason ?? "Chat is unavailable.");
+    return;
+  }
+
+  const prompt = buildPlanImplementationPrompt(plan);
+  const promptId = createPromptId();
+  const latencyFlowId = startLatencyFlow({
+    flowKind: "prompt_submit",
+    source: "plan_card_implement_here",
+    targetSessionId: plan.sourceSessionId,
+    targetWorkspaceId: workspaceId,
+    promptId,
+  });
+
+  const modeSwitch = resolvePlanImplementationModeSwitch({
+    collaborationMode:
+      planSessionSlot.liveConfig?.normalizedControls.collaborationMode ?? null,
+    mode: planSessionSlot.liveConfig?.normalizedControls.mode ?? null,
+  });
+  if (modeSwitch) {
+    try {
+      await setActiveSessionConfigOption(modeSwitch.rawConfigId, modeSwitch.value, {
+        persistDefaultPreference: false,
+      });
+    } catch (error) {
+      failLatencyFlow(latencyFlowId, "plan_implementation_config_failed");
+      showPlanImplementationFailureToast(showToast, error);
+      return;
+    }
+  }
+
+  const latestHarnessState = getHarnessState();
+  const latestPlanSessionSlot =
+    latestHarnessState.sessionSlots[plan.sourceSessionId] ?? null;
+  if (
+    latestHarnessState.activeSessionId !== plan.sourceSessionId
+    || latestPlanSessionSlot?.workspaceId !== workspaceId
+  ) {
+    failLatencyFlow(latencyFlowId, "plan_implementation_target_changed");
+    showToast("Select the plan's session before carrying it out.");
+    return;
+  }
+
+  try {
+    await promptActiveSession(prompt.text, {
+      blocks: prompt.blocks,
+      optimisticContentParts: prompt.optimisticContentParts,
+      promptId,
+      latencyFlowId,
+    });
+    onPromptSubmitted({
+      workspaceId,
+      agentKind: planSessionSlot.agentKind ?? "unknown",
+      reuseSession: true,
+    });
+  } catch (error) {
+    failLatencyFlow(latencyFlowId, "plan_implementation_prompt_failed");
+    showPlanImplementationFailureToast(showToast, error);
+  }
+}
+
+export function claimPlanImplementationRun(ref: { current: boolean }): boolean {
+  if (ref.current) {
+    return false;
+  }
+  ref.current = true;
+  return true;
+}
+
+function showPlanImplementationFailureToast(
+  showToast: (message: string) => void,
+  error: unknown,
+): void {
+  const message = error instanceof Error ? error.message : String(error);
+  showToast(`Failed to carry out plan: ${message}`);
 }
 
 function isPlanDecisionVersionConflict(error: unknown): boolean {
