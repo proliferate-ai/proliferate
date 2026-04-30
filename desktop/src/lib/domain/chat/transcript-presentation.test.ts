@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createTranscriptState } from "@anyharness/sdk";
 import type { ToolCallItem } from "@anyharness/sdk";
 import {
+  buildTranscriptDisplayBlocks,
   buildTurnPresentation,
   formatCollapsedActionsSummary,
   summarizeCollapsedActions,
@@ -59,6 +60,100 @@ describe("buildTurnPresentation", () => {
       { kind: "item", itemId: "user" },
       { kind: "item", itemId: "tool" },
       { kind: "item", itemId: "final" },
+    ]);
+  });
+
+  it("builds scoped subagent work blocks with the same grouping as top-level turns", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      agent: toolItem("agent", "turn-1", 1, "subagent", "in_progress"),
+      read: {
+        ...toolItem("read", "turn-1", 2, "file_read"),
+        parentToolCallId: "agent",
+      },
+      search: {
+        ...toolItem("search", "turn-1", 3, "search"),
+        parentToolCallId: "agent",
+      },
+      command: {
+        ...terminalItem("command", "turn-1", 4, "cargo test", "in_progress"),
+        parentToolCallId: "agent",
+      },
+      nested: {
+        ...toolItem("nested", "turn-1", 5, "subagent", "in_progress"),
+        parentToolCallId: "agent",
+      },
+      nestedRead: {
+        ...toolItem("nestedRead", "turn-1", 6, "file_read"),
+        parentToolCallId: "nested",
+      },
+    };
+    const childrenByParentId = new Map<string, string[]>([
+      ["agent", ["read", "search", "command", "nested"]],
+      ["nested", ["nestedRead"]],
+    ]);
+
+    expect(buildTranscriptDisplayBlocks({
+      rootIds: childrenByParentId.get("agent") ?? [],
+      transcript,
+      childrenByParentId,
+      isComplete: false,
+    })).toEqual([
+      { kind: "collapsed_actions", blockId: "read-search", itemIds: ["read", "search"] },
+      { kind: "inline_tool", itemId: "command" },
+      { kind: "item", itemId: "nested" },
+    ]);
+  });
+
+  it("does not apply completed-history collapse inside scoped subagent work", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      agent: toolItem("agent", "turn-1", 1, "subagent"),
+      command: {
+        ...terminalItem("command", "turn-1", 2, "cargo test"),
+        parentToolCallId: "agent",
+      },
+      final: assistantItem("final", "turn-1", 3, "agent"),
+    };
+    const childrenByParentId = new Map<string, string[]>([
+      ["agent", ["command", "final"]],
+    ]);
+
+    expect(buildTranscriptDisplayBlocks({
+      rootIds: childrenByParentId.get("agent") ?? [],
+      transcript,
+      childrenByParentId,
+      isComplete: true,
+    })).toEqual([
+      { kind: "collapsed_actions", blockId: "command-command", itemIds: ["command"] },
+      { kind: "item", itemId: "final" },
+    ]);
+  });
+
+  it("keeps background-running scoped subagent work in live presentation mode", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      agent: toolItem("agent", "turn-1", 1, "subagent", "completed"),
+      cargo: {
+        ...terminalItem("cargo", "turn-1", 2, "cargo test", "completed"),
+        parentToolCallId: "agent",
+      },
+      read: {
+        ...toolItem("read", "turn-1", 3, "file_read", "in_progress"),
+        parentToolCallId: "agent",
+      },
+    };
+    const childrenByParentId = new Map<string, string[]>([
+      ["agent", ["cargo", "read"]],
+    ]);
+
+    expect(buildTranscriptDisplayBlocks({
+      rootIds: childrenByParentId.get("agent") ?? [],
+      transcript,
+      childrenByParentId,
+      isComplete: false,
+    })).toEqual([
+      { kind: "collapsed_actions", blockId: "cargo-read", itemIds: ["cargo", "read"] },
     ]);
   });
 

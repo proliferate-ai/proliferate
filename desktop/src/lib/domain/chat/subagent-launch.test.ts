@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ToolCallItem } from "@anyharness/sdk";
 import {
+  isSubagentWorkComplete,
   parseAsyncSubagentLaunch,
   parseSubagentLaunchResult,
   parseSubagentProvisioningStatus,
@@ -129,6 +130,37 @@ describe("resolveSubagentExecutionState", () => {
         { type: "tool_result_text", text: "Background subagent stopped updating before a final result was observed." },
       ],
     }))).toBe("expired_background");
+  });
+});
+
+describe("isSubagentWorkComplete", () => {
+  it("keeps completed tool calls with pending background work in live mode", () => {
+    expect(isSubagentWorkComplete(toolCallItem({
+      status: "completed",
+      semanticKind: "subagent",
+      nativeToolName: "Agent",
+      rawInput: { run_in_background: true },
+      rawOutput: backgroundWork("pending"),
+      contentParts: [
+        {
+          type: "tool_result_text",
+          text: "Async agent launched successfully.\nThe agent is working in the background.",
+        },
+      ],
+    }))).toBe(false);
+  });
+
+  it("marks failed and completed foreground work complete", () => {
+    expect(isSubagentWorkComplete(toolCallItem({
+      status: "failed",
+      semanticKind: "subagent",
+      nativeToolName: "Agent",
+    }))).toBe(true);
+    expect(isSubagentWorkComplete(toolCallItem({
+      status: "completed",
+      semanticKind: "subagent",
+      nativeToolName: "Agent",
+    }))).toBe(true);
   });
 });
 
