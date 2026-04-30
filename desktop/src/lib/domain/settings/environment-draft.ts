@@ -23,7 +23,10 @@ export interface CloudEnvironmentDraft {
 }
 
 export interface CloudEnvironmentDraftState {
+  /** Last saved cloud state, used to decide whether the draft creates/disables config. */
   baseline: CloudEnvironmentDraft;
+  /** The editor's clean state, used for dirty checks and Revert. */
+  revertDraft: CloudEnvironmentDraft;
   draft: CloudEnvironmentDraft;
 }
 
@@ -180,9 +183,12 @@ export function buildInitialCloudEnvironmentDraftState(
   savedConfig: CloudEnvironmentSavedConfig | null | undefined,
   localSeed: CloudEnvironmentLocalSeed,
 ): CloudEnvironmentDraftState {
+  const baseline = buildCloudEnvironmentBaseline(savedConfig);
+  const draft = buildInitialCloudEnvironmentDraft(savedConfig, localSeed);
   return {
-    baseline: buildCloudEnvironmentBaseline(savedConfig),
-    draft: buildInitialCloudEnvironmentDraft(savedConfig, localSeed),
+    baseline,
+    revertDraft: draft,
+    draft,
   };
 }
 
@@ -192,8 +198,20 @@ export function buildSavedCloudEnvironmentDraftState(
   const baseline = buildCloudEnvironmentBaseline(savedConfig);
   return {
     baseline,
+    revertDraft: baseline,
     draft: baseline,
   };
+}
+
+export function buildConfiguredCloudEnvironmentDraft(
+  draft: CloudEnvironmentDraft,
+  patch: Partial<CloudEnvironmentDraft> = {},
+): CloudEnvironmentDraft {
+  return normalizeCloudEnvironmentDraft({
+    ...draft,
+    ...patch,
+    configured: true,
+  });
 }
 
 export function isCloudEnvironmentDraftDirty(

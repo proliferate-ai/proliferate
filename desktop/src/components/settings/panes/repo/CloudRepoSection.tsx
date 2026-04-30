@@ -64,8 +64,7 @@ function CloudRepoSettingsEditor({
   const errorMessage = saveMutation.error?.message ?? resyncFileMutation.error?.message ?? null;
   const saveDisabled =
     !cloudActive || isLoadingConfig || saveMutation.isPending || !draft.canSave;
-  const revertDisabled =
-    saveMutation.isPending || (!draft.dirty && !draft.configurable);
+  const revertDisabled = saveMutation.isPending || !draft.dirty;
   const statusLabel = !draft.configured && configured
     ? "Will disable"
     : configured

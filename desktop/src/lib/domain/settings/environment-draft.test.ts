@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildConfiguredCloudEnvironmentDraft,
   buildCloudEnvironmentDisablePayload,
   buildCloudEnvironmentSavePayload,
   buildDisabledCloudEnvironmentDraft,
@@ -64,8 +65,9 @@ describe("cloud environment drafts", () => {
       runCommand: "pnpm dev",
     });
 
-    expect(isCloudEnvironmentDraftDirty(initial.draft, initial.baseline)).toBe(true);
-    expect(isCloudEnvironmentDraftDirty(saved.draft, saved.baseline)).toBe(false);
+    expect(isCloudEnvironmentDraftConfigurable(initial.draft, initial.baseline)).toBe(true);
+    expect(isCloudEnvironmentDraftDirty(initial.draft, initial.revertDraft)).toBe(false);
+    expect(isCloudEnvironmentDraftDirty(saved.draft, saved.revertDraft)).toBe(false);
     expect(saved.draft).toEqual({
       configured: true,
       defaultBranch: "main",
@@ -95,8 +97,9 @@ describe("cloud environment drafts", () => {
       setupScript: "pnpm install",
       runCommand: "pnpm dev",
     });
+    expect(state.revertDraft).toEqual(state.draft);
     expect(isCloudEnvironmentDraftConfigurable(state.draft, state.baseline)).toBe(true);
-    expect(isCloudEnvironmentDraftDirty(state.draft, state.baseline)).toBe(true);
+    expect(isCloudEnvironmentDraftDirty(state.draft, state.revertDraft)).toBe(false);
   });
 
   it("treats all-empty unconfigured cloud drafts as explicitly configurable", () => {
@@ -114,6 +117,42 @@ describe("cloud environment drafts", () => {
       runCommand: "",
     });
     expect(isCloudEnvironmentDraftConfigurable(state.draft, state.baseline)).toBe(true);
+    expect(isCloudEnvironmentDraftDirty(state.draft, state.revertDraft)).toBe(false);
+  });
+
+  it("marks user edits dirty separately from first-time configurability", () => {
+    const state = buildInitialCloudEnvironmentDraftState(undefined, {
+      setupScript: "pnpm install",
+      runCommand: "pnpm dev",
+    });
+
+    const edited = buildConfiguredCloudEnvironmentDraft(state.draft, {
+      runCommand: "make dev",
+    });
+
+    expect(isCloudEnvironmentDraftConfigurable(state.draft, state.baseline)).toBe(true);
+    expect(isCloudEnvironmentDraftDirty(edited, state.revertDraft)).toBe(true);
+    expect(buildCloudEnvironmentSavePayload(edited)).toMatchObject({
+      configured: true,
+      setupScript: "pnpm install",
+      runCommand: "make dev",
+    });
+  });
+
+  it("builds a configured payload when editing after a pending disable", () => {
+    const edited = buildConfiguredCloudEnvironmentDraft(
+      buildDisabledCloudEnvironmentDraft(),
+      { setupScript: "pnpm install" },
+    );
+
+    expect(buildCloudEnvironmentSavePayload(edited)).toEqual({
+      configured: true,
+      defaultBranch: null,
+      envVars: {},
+      trackedFilePaths: [],
+      setupScript: "pnpm install",
+      runCommand: "",
+    });
   });
 
   it("builds cloud disable drafts and clear payloads with required fields", () => {

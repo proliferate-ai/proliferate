@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  buildConfiguredCloudEnvironmentDraft,
   buildCloudEnvironmentSavePayload,
   buildDisabledCloudEnvironmentDraft,
   buildInitialCloudEnvironmentDraftState,
@@ -39,6 +40,12 @@ interface UseCloudRepoConfigDraftArgs {
   sourceKey: string;
 }
 
+interface CloudRepoDraftViewState {
+  draftState: CloudEnvironmentDraftState;
+  activeSourceKey: string;
+  envVarRows: CloudRepoEnvVarRow[];
+}
+
 export function useCloudRepoConfigDraft({
   savedConfig,
   localSetupScript,
@@ -53,16 +60,14 @@ export function useCloudRepoConfigDraft({
     () => buildInitialCloudEnvironmentDraftState(savedConfig, localSeed),
     [localSeed, savedConfig],
   );
-  const [draftState, setDraftState] = useState<CloudEnvironmentDraftState>(
-    () => initialDraftState,
-  );
-  const [activeSourceKey, setActiveSourceKey] = useState(sourceKey);
-  const [envVarRows, setEnvVarRows] = useState<CloudRepoEnvVarRow[]>(() =>
-    buildEnvVarRows(initialDraftState.draft.envVars),
-  );
+  const [state, setState] = useState<CloudRepoDraftViewState>(() => ({
+    draftState: initialDraftState,
+    activeSourceKey: sourceKey,
+    envVarRows: buildEnvVarRows(initialDraftState.draft.envVars),
+  }));
 
   const envVars = useMemo(() => (
-    envVarRows.reduce<Record<string, string>>((accumulator, row) => {
+    state.envVarRows.reduce<Record<string, string>>((accumulator, row) => {
       const key = row.key.trim();
       if (!key) {
         return accumulator;
@@ -70,60 +75,82 @@ export function useCloudRepoConfigDraft({
       accumulator[key] = row.value;
       return accumulator;
     }, {})
-  ), [envVarRows]);
+  ), [state.envVarRows]);
   const currentDraft = useMemo(
     () => normalizeCloudEnvironmentDraft({
-      ...draftState.draft,
+      ...state.draftState.draft,
       envVars,
     }),
-    [draftState.draft, envVars],
+    [state.draftState.draft, envVars],
   );
-  const dirty = isCloudEnvironmentDraftDirty(currentDraft, draftState.baseline);
-  const configurable = isCloudEnvironmentDraftConfigurable(currentDraft, draftState.baseline);
+  const dirty = isCloudEnvironmentDraftDirty(currentDraft, state.draftState.revertDraft);
+  const configurable = isCloudEnvironmentDraftConfigurable(currentDraft, state.draftState.baseline);
   const savePayload = useMemo(
     () => buildCloudEnvironmentSavePayload(currentDraft),
     [currentDraft],
   );
 
   useEffect(() => {
-    const sourceChanged = activeSourceKey !== sourceKey;
+    const sourceChanged = state.activeSourceKey !== sourceKey;
     if (!sourceChanged && dirty) {
       return;
     }
 
-    setDraftState(initialDraftState);
-    setEnvVarRows(buildEnvVarRows(initialDraftState.draft.envVars));
-    setActiveSourceKey(sourceKey);
-  }, [activeSourceKey, dirty, initialDraftState, sourceKey]);
+    setState({
+      draftState: initialDraftState,
+      activeSourceKey: sourceKey,
+      envVarRows: buildEnvVarRows(initialDraftState.draft.envVars),
+    });
+  }, [dirty, initialDraftState, sourceKey, state.activeSourceKey]);
 
   const updateDraft = useCallback((patch: Partial<CloudEnvironmentDraft>) => {
-    setDraftState((current) => ({
+    setState((current) => ({
       ...current,
-      draft: normalizeCloudEnvironmentDraft({
-        ...current.draft,
-        ...patch,
-      }),
+      draftState: {
+        ...current.draftState,
+        draft: buildConfiguredCloudEnvironmentDraft(current.draftState.draft, patch),
+      },
     }));
   }, []);
 
   const addEnvVarRow = useCallback(() => {
-    setEnvVarRows((current) => [
+    setState((current) => ({
       ...current,
-      { id: createRowId(), key: "", value: "" },
-    ]);
+      draftState: {
+        ...current.draftState,
+        draft: buildConfiguredCloudEnvironmentDraft(current.draftState.draft),
+      },
+      envVarRows: [
+        ...current.envVarRows,
+        { id: createRowId(), key: "", value: "" },
+      ],
+    }));
   }, []);
 
   const updateEnvVarRow = useCallback((
     rowId: string,
     patch: Partial<Pick<CloudRepoEnvVarRow, "key" | "value">>,
   ) => {
-    setEnvVarRows((current) =>
-      current.map((row) => (row.id === rowId ? { ...row, ...patch } : row)),
-    );
+    setState((current) => ({
+      ...current,
+      draftState: {
+        ...current.draftState,
+        draft: buildConfiguredCloudEnvironmentDraft(current.draftState.draft),
+      },
+      envVarRows: current.envVarRows.map((row) =>
+        row.id === rowId ? { ...row, ...patch } : row),
+    }));
   }, []);
 
   const removeEnvVarRow = useCallback((rowId: string) => {
-    setEnvVarRows((current) => current.filter((row) => row.id !== rowId));
+    setState((current) => ({
+      ...current,
+      draftState: {
+        ...current.draftState,
+        draft: buildConfiguredCloudEnvironmentDraft(current.draftState.draft),
+      },
+      envVarRows: current.envVarRows.filter((row) => row.id !== rowId),
+    }));
   }, []);
 
   const addTrackedFile = useCallback((relativePath: string) => {
@@ -133,16 +160,18 @@ export function useCloudRepoConfigDraft({
     }
 
     let added = false;
-    setDraftState((current) => {
-      if (current.draft.trackedFilePaths.includes(normalizedPath)) {
+    setState((current) => {
+      if (current.draftState.draft.trackedFilePaths.includes(normalizedPath)) {
         return current;
       }
       added = true;
       return {
         ...current,
-        draft: {
-          ...current.draft,
-          trackedFilePaths: [...current.draft.trackedFilePaths, normalizedPath],
+        draftState: {
+          ...current.draftState,
+          draft: buildConfiguredCloudEnvironmentDraft(current.draftState.draft, {
+            trackedFilePaths: [...current.draftState.draft.trackedFilePaths, normalizedPath],
+          }),
         },
       };
     });
@@ -150,42 +179,55 @@ export function useCloudRepoConfigDraft({
   }, []);
 
   const removeTrackedFile = useCallback((relativePath: string) => {
-    setDraftState((current) => ({
+    setState((current) => ({
       ...current,
-      draft: {
-        ...current.draft,
-        trackedFilePaths: current.draft.trackedFilePaths.filter((path) => path !== relativePath),
+      draftState: {
+        ...current.draftState,
+        draft: buildConfiguredCloudEnvironmentDraft(current.draftState.draft, {
+          trackedFilePaths: current.draftState.draft.trackedFilePaths.filter(
+            (path) => path !== relativePath,
+          ),
+        }),
       },
     }));
   }, []);
 
   const revert = useCallback(() => {
-    setDraftState((current) => ({
+    setState((current) => ({
       ...current,
-      draft: current.baseline,
+      draftState: {
+        ...current.draftState,
+        draft: current.draftState.revertDraft,
+      },
+      envVarRows: buildEnvVarRows(current.draftState.revertDraft.envVars),
     }));
-    setEnvVarRows(buildEnvVarRows(draftState.baseline.envVars));
-  }, [draftState.baseline]);
+  }, []);
 
   const disable = useCallback(() => {
-    setDraftState((current) => ({
+    setState((current) => ({
       ...current,
-      draft: buildDisabledCloudEnvironmentDraft(),
+      draftState: {
+        ...current.draftState,
+        draft: buildDisabledCloudEnvironmentDraft(),
+      },
+      envVarRows: [],
     }));
-    setEnvVarRows([]);
   }, []);
 
   const resetFromSavedConfig = useCallback((nextSavedConfig: CloudRepoConfigResponse | null | undefined) => {
     const nextState = buildSavedCloudEnvironmentDraftState(nextSavedConfig);
-    setDraftState(nextState);
-    setEnvVarRows(buildEnvVarRows(nextState.draft.envVars));
+    setState((current) => ({
+      ...current,
+      draftState: nextState,
+      envVarRows: buildEnvVarRows(nextState.draft.envVars),
+    }));
   }, []);
 
   return {
     configured: currentDraft.configured,
     defaultBranch: currentDraft.defaultBranch,
     setDefaultBranch: (defaultBranch: string | null) => updateDraft({ defaultBranch }),
-    envVarRows,
+    envVarRows: state.envVarRows,
     envVars,
     trackedFilePaths: currentDraft.trackedFilePaths,
     setupScript: currentDraft.setupScript,
