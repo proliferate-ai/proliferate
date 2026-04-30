@@ -45,12 +45,6 @@ export function TerminalPanel({
 
   return (
     <div className="flex h-full flex-col" data-telemetry-block data-focus-zone="terminal">
-      {activeTerminal && workspaceId && (
-        <TerminalCommandActionBar
-          terminal={activeTerminal}
-          workspaceId={workspaceId}
-        />
-      )}
       <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-background">
         {isLoading ? (
           <TerminalEmptyState label="Loading terminals" />
@@ -77,12 +71,18 @@ export function TerminalPanel({
             </TerminalErrorBoundary>
           ))
         )}
+        {activeTerminal && workspaceId && (
+          <TerminalCommandFloatingAction
+            terminal={activeTerminal}
+            workspaceId={workspaceId}
+          />
+        )}
       </div>
     </div>
   );
 }
 
-function TerminalCommandActionBar({
+function TerminalCommandFloatingAction({
   terminal,
   workspaceId,
 }: {
@@ -104,11 +104,12 @@ function TerminalCommandActionBar({
   const label = isSetup ? "Rerun setup command" : "Rerun run command";
 
   return (
-    <div className="flex h-8 shrink-0 items-center justify-end border-b border-border/60 bg-background px-2">
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-end px-3 pb-3">
       <Button
         type="button"
         size="sm"
         variant="ghost"
+        className="pointer-events-auto border border-border/60 bg-background/95 shadow-floating backdrop-blur hover:bg-accent"
         disabled={isRerunning || rerunSetup.isPending}
         onClick={() => {
           setIsRerunning(true);

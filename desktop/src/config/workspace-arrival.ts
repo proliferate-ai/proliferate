@@ -31,6 +31,7 @@ export const WORKSPACE_ARRIVAL_LABELS = {
   setupStatusOptional: "Optional",
   rerunSetup: "Rerun setup",
   addSetup: "Add setup script",
+  seeTerminal: "See terminal",
   repositorySettings: "Repository settings",
   dismiss: "Dismiss",
   noWorkspaceTitle: "Select a workspace",

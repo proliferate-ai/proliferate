@@ -238,6 +238,14 @@ export function buildWorkspaceArrivalViewModel(args: {
   const setupScriptCommand = (event.setupScript?.command ?? args.configuredSetupScript).trim();
   const hasSetupScript = setupScriptCommand.length > 0;
   const setupStatus = event.setupScript?.status ?? null;
+  const setupTerminalId = args.setupTerminalId ?? null;
+  const setupActionLabel = setupStatus === "failed"
+    ? "Details"
+    : setupTerminalId
+      ? WORKSPACE_ARRIVAL_LABELS.seeTerminal
+      : hasSetupScript
+        ? WORKSPACE_ARRIVAL_LABELS.repositorySettings
+        : WORKSPACE_ARRIVAL_LABELS.addSetup;
 
   const baseViewModel: WorkspaceArrivalBaseViewModel = {
     workspaceId: workspace.id,
@@ -269,11 +277,7 @@ export function buildWorkspaceArrivalViewModel(args: {
               ? summarizeSetupFailure(event.setupScript!)
               : WORKSPACE_ARRIVAL_LABELS.setupConfigured,
     setupCommand: hasSetupScript ? setupScriptCommand : null,
-    setupActionLabel: setupStatus === "failed"
-      ? "Details"
-      : hasSetupScript
-        ? WORKSPACE_ARRIVAL_LABELS.repositorySettings
-        : WORKSPACE_ARRIVAL_LABELS.addSetup,
+    setupActionLabel,
     setupStatusLabel: setupStatus === "running"
       ? WORKSPACE_ARRIVAL_LABELS.setupStatusRunning
       : setupStatus === "queued"
@@ -295,7 +299,7 @@ export function buildWorkspaceArrivalViewModel(args: {
     setupDetail: setupStatus === "failed" && event.setupScript
       ? `${event.setupScript.stderr}\n${event.setupScript.stdout}`.trim() || null
       : null,
-    setupTerminalId: args.setupTerminalId ?? null,
+    setupTerminalId,
   };
 
   if (isWorktree) {
