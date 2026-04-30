@@ -137,20 +137,24 @@ async def test_prompt_4xx_response_is_request_rejected(
 async def test_apply_runtime_reasoning_effort_sets_effort(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = _RecordingClient([
-        _response({
-            "liveConfig": {
-                "normalizedControls": {
-                    "effort": {
-                        "currentValue": "medium",
-                        "rawConfigId": "effort",
-                        "values": [{"value": "medium"}, {"value": "high"}],
+    client = _RecordingClient(
+        [
+            _response(
+                {
+                    "liveConfig": {
+                        "normalizedControls": {
+                            "effort": {
+                                "currentValue": "medium",
+                                "rawConfigId": "effort",
+                                "values": [{"value": "medium"}, {"value": "high"}],
+                            },
+                        },
                     },
-                },
-            },
-        }),
-        _response({"applyState": "applied"}, method="POST"),
-    ])
+                }
+            ),
+            _response({"applyState": "applied"}, method="POST"),
+        ]
+    )
     monkeypatch.setattr(session_api.httpx, "AsyncClient", lambda **_kwargs: client)
 
     await session_api.apply_runtime_reasoning_effort(
@@ -181,19 +185,23 @@ async def test_apply_runtime_reasoning_effort_sets_effort(
 async def test_apply_runtime_reasoning_effort_rejects_unsupported_effort(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = _RecordingClient([
-        _response({
-            "liveConfig": {
-                "normalizedControls": {
-                    "effort": {
-                        "currentValue": "medium",
-                        "rawConfigId": "effort",
-                        "values": [{"value": "medium"}],
+    client = _RecordingClient(
+        [
+            _response(
+                {
+                    "liveConfig": {
+                        "normalizedControls": {
+                            "effort": {
+                                "currentValue": "medium",
+                                "rawConfigId": "effort",
+                                "values": [{"value": "medium"}],
+                            },
+                        },
                     },
-                },
-            },
-        }),
-    ])
+                }
+            ),
+        ]
+    )
     monkeypatch.setattr(session_api.httpx, "AsyncClient", lambda **_kwargs: client)
 
     with pytest.raises(CloudRuntimeRequestRejectedError):

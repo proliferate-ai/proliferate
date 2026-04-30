@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from proliferate.db.store.cloud_repo_config import (
+    CloudRepoConfigLimitExceededError,
     CloudRepoConfigValue,
     CloudRepoFileInput,
     bootstrap_cloud_repo_config_for_user,
@@ -13,6 +14,10 @@ from proliferate.db.store.cloud_repo_config import (
 )
 from proliferate.db.store.cloud_workspaces import load_cloud_workspace_for_user
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
+from proliferate.server.billing.service import (
+    get_billing_snapshot,
+    repo_limit_for_billing_snapshot,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config.models import (
     CloudRepoConfigResponse,
@@ -149,16 +154,30 @@ async def save_repo_config(
             for item in body.files
         ]
     )
-    value = await persist_cloud_repo_config(
-        user_id=user_id,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-        configured=body.configured,
-        default_branch=default_branch,
-        env_vars=env_vars,
-        setup_script=body.setup_script,
-        files=files,
-    )
+    billing_snapshot = await get_billing_snapshot(user_id)
+    cloud_repo_limit = repo_limit_for_billing_snapshot(billing_snapshot)
+    try:
+        value = await persist_cloud_repo_config(
+            user_id=user_id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            configured=body.configured,
+            cloud_repo_limit=cloud_repo_limit,
+            default_branch=default_branch,
+            env_vars=env_vars,
+            setup_script=body.setup_script,
+            files=files,
+        )
+    except CloudRepoConfigLimitExceededError as error:
+        raise CloudApiError(
+            "repo_limit_exceeded",
+            (
+                f"Cloud repo limit reached. Upgrade or disable another cloud repo "
+                f"before configuring this one ({error.active_repo_count}/"
+                f"{error.cloud_repo_limit})."
+            ),
+            status_code=409,
+        ) from error
     return repo_config_payload(value)
 
 
@@ -200,11 +219,25 @@ async def bootstrap_repo_config(
     git_owner: str,
     git_repo_name: str,
 ) -> CloudRepoConfigValue:
-    return await bootstrap_cloud_repo_config_for_user(
-        user_id=user_id,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-    )
+    billing_snapshot = await get_billing_snapshot(user_id)
+    cloud_repo_limit = repo_limit_for_billing_snapshot(billing_snapshot)
+    try:
+        return await bootstrap_cloud_repo_config_for_user(
+            user_id=user_id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            cloud_repo_limit=cloud_repo_limit,
+        )
+    except CloudRepoConfigLimitExceededError as error:
+        raise CloudApiError(
+            "repo_limit_exceeded",
+            (
+                f"Cloud repo limit reached. Upgrade or disable another cloud repo "
+                f"before configuring this one ({error.active_repo_count}/"
+                f"{error.cloud_repo_limit})."
+            ),
+            status_code=409,
+        ) from error
 
 
 async def get_workspace_repo_config_status(

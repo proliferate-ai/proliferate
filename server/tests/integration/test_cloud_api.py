@@ -10,6 +10,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
+from proliferate.constants.billing import BILLING_MODE_OBSERVE
 from proliferate.db.models.auth import OAuthAccount
 from proliferate.db.models.cloud import (
     CloudCredential,
@@ -757,8 +759,7 @@ class TestCloudMcpConnections:
         body = response.json()
         assert [server["catalogEntryId"] for server in body["mcpServers"]] == ["context7"]
         assert any(
-            warning["catalogEntryId"] == "google_calendar"
-            and warning["kind"] == "resolver_error"
+            warning["catalogEntryId"] == "google_calendar" and warning["kind"] == "resolver_error"
             for warning in body["warnings"]
         )
         assert any(
@@ -1007,6 +1008,68 @@ class TestCloudRepoConfig:
             )
         ).scalar_one()
         assert record.default_branch == "release"
+
+    @pytest.mark.asyncio
+    async def test_free_plan_repo_config_limit_blocks_second_configured_repo(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_OBSERVE)
+        monkeypatch.setattr(settings, "cloud_free_repo_limit", 1)
+
+        session = await _register_and_login(client, "cloud-repo-config-limit@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        payload = {
+            "configured": True,
+            "defaultBranch": None,
+            "envVars": {},
+            "setupScript": "",
+            "files": [],
+        }
+
+        first = await client.put(
+            "/v1/cloud/repos/proliferate-ai/proliferate/config",
+            headers=headers,
+            json=payload,
+        )
+        assert first.status_code == 200
+
+        plan = await client.get("/v1/billing/cloud-plan", headers=headers)
+        assert plan.status_code == 200
+        assert plan.json()["activeCloudRepoCount"] == 1
+        assert plan.json()["cloudRepoLimit"] == 1
+
+        second = await client.put(
+            "/v1/cloud/repos/proliferate-ai/second-repo/config",
+            headers=headers,
+            json=payload,
+        )
+        assert second.status_code == 409
+        assert second.json()["detail"]["code"] == "repo_limit_exceeded"
+
+        unconfigured_second = await client.put(
+            "/v1/cloud/repos/proliferate-ai/second-repo/config",
+            headers=headers,
+            json={**payload, "configured": False},
+        )
+        assert unconfigured_second.status_code == 200
+        assert unconfigured_second.json()["configured"] is False
+
+        disabled_first = await client.put(
+            "/v1/cloud/repos/proliferate-ai/proliferate/config",
+            headers=headers,
+            json={**payload, "configured": False},
+        )
+        assert disabled_first.status_code == 200
+
+        enabled_second = await client.put(
+            "/v1/cloud/repos/proliferate-ai/second-repo/config",
+            headers=headers,
+            json=payload,
+        )
+        assert enabled_second.status_code == 200
+        assert enabled_second.json()["configured"] is True
 
     @pytest.mark.asyncio
     async def test_save_repo_config_rejects_unknown_default_branch(

@@ -16,9 +16,7 @@ from proliferate.config import settings
 
 STRIPE_API_BASE = "https://api.stripe.com/v1"
 STRIPE_TIMEOUT_SECONDS = 10.0
-TEN_SANDBOX_HOURS_SECONDS = 36000
 CLOUD_MONTHLY_AMOUNT_CENTS = 20000
-OVERAGE_BLOCK_AMOUNT_CENTS = 2000
 REFILL_10H_AMOUNT_CENTS = 2000
 
 
@@ -121,7 +119,6 @@ async def create_subscription_checkout_session(
     stripe_customer_id: str,
     billing_subject_id: str,
     cloud_monthly_price_id: str,
-    sandbox_overage_price_id: str,
     success_url: str,
     cancel_url: str,
     idempotency_key: str,
@@ -131,9 +128,10 @@ async def create_subscription_checkout_session(
         ("customer", stripe_customer_id),
         ("success_url", success_url),
         ("cancel_url", cancel_url),
+        ("allow_promotion_codes", "true"),
+        ("payment_method_collection", "always"),
         ("line_items[0][price]", cloud_monthly_price_id),
         ("line_items[0][quantity]", "1"),
-        ("line_items[1][price]", sandbox_overage_price_id),
         ("metadata[billing_subject_id]", billing_subject_id),
         ("metadata[purpose]", "cloud_subscription"),
         ("subscription_data[metadata][billing_subject_id]", billing_subject_id),
@@ -288,20 +286,14 @@ def _recurring(price: dict[str, Any]) -> dict[str, Any]:
     return recurring if isinstance(recurring, dict) else {}
 
 
-async def validate_cloud_price_configuration() -> None:
-    if not (
-        settings.stripe_cloud_monthly_price_id
-        and settings.stripe_sandbox_overage_price_id
-        and settings.stripe_refill_10h_price_id
-    ):
+async def validate_cloud_subscription_price_configuration() -> None:
+    if not settings.stripe_cloud_monthly_price_id:
         raise StripeBillingError(
             "stripe_price_unconfigured",
-            "Stripe Cloud price IDs are not configured.",
+            "Stripe Cloud monthly price ID is not configured.",
             status_code=503,
         )
     cloud = await retrieve_price(settings.stripe_cloud_monthly_price_id)
-    overage = await retrieve_price(settings.stripe_sandbox_overage_price_id)
-    refill = await retrieve_price(settings.stripe_refill_10h_price_id)
 
     _assert_price(
         cloud.get("unit_amount") == CLOUD_MONTHLY_AMOUNT_CENTS,
@@ -311,23 +303,16 @@ async def validate_cloud_price_configuration() -> None:
         _recurring(cloud).get("interval") == "month",
         "Cloud monthly price must recur monthly.",
     )
-    _assert_price(
-        overage.get("unit_amount") == OVERAGE_BLOCK_AMOUNT_CENTS,
-        "Sandbox overage price must be $20 per transformed unit.",
-    )
-    _assert_price(
-        _recurring(overage).get("usage_type") == "metered",
-        "Sandbox overage price must be metered.",
-    )
-    transform = overage.get("transform_quantity")
-    _assert_price(
-        isinstance(transform, dict) and transform.get("divide_by") == TEN_SANDBOX_HOURS_SECONDS,
-        "Sandbox overage price must divide raw seconds by 36000.",
-    )
-    _assert_price(
-        isinstance(transform, dict) and transform.get("round") == "up",
-        "Sandbox overage price must round transformed usage up.",
-    )
+
+
+async def validate_refill_price_configuration() -> None:
+    if not settings.stripe_refill_10h_price_id:
+        raise StripeBillingError(
+            "stripe_refill_price_unconfigured",
+            "Stripe refill price is not configured.",
+            status_code=503,
+        )
+    refill = await retrieve_price(settings.stripe_refill_10h_price_id)
     _assert_price(
         refill.get("unit_amount") == REFILL_10H_AMOUNT_CENTS,
         "Refill price must be $20.",

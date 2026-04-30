@@ -153,10 +153,13 @@ class TestBillingApi:
             "plan": "free",
             "billingMode": "off",
             "isUnlimited": False,
+            "hasUnlimitedCloudHours": False,
             "overQuota": False,
             "includedHours": 20.0,
             "usedHours": 0.0,
             "remainingHours": 20.0,
+            "cloudRepoLimit": settings.cloud_free_repo_limit,
+            "activeCloudRepoCount": 0,
             "concurrentSandboxLimit": settings.cloud_concurrent_sandbox_limit,
             "activeSandboxCount": 0,
             "isPaidCloud": False,
@@ -182,10 +185,13 @@ class TestBillingApi:
             "plan": "free",
             "billingMode": "off",
             "isUnlimited": False,
+            "hasUnlimitedCloudHours": False,
             "overQuota": False,
             "freeSandboxHours": 20.0,
             "usedSandboxHours": 0.0,
             "remainingSandboxHours": 20.0,
+            "cloudRepoLimit": settings.cloud_free_repo_limit,
+            "activeCloudRepoCount": 0,
             "concurrentSandboxLimit": settings.cloud_concurrent_sandbox_limit,
             "activeSandboxCount": 0,
             "isPaidCloud": False,
@@ -199,7 +205,7 @@ class TestBillingApi:
         }
 
     @pytest.mark.asyncio
-    async def test_paid_cloud_plan_carries_free_hours_after_signup(
+    async def test_paid_cloud_plan_has_unlimited_hours_after_signup(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
@@ -252,8 +258,12 @@ class TestBillingApi:
         payload = response.json()
         assert payload["plan"] == "cloud"
         assert payload["isPaidCloud"] is True
-        assert payload["freeSandboxHours"] == 120.0
-        assert payload["remainingSandboxHours"] == 120.0
+        assert payload["isUnlimited"] is False
+        assert payload["hasUnlimitedCloudHours"] is True
+        assert payload["freeSandboxHours"] is None
+        assert payload["remainingSandboxHours"] is None
+        assert payload["cloudRepoLimit"] == settings.cloud_paid_repo_limit
+        assert payload["activeCloudRepoCount"] == 0
         assert payload["concurrentSandboxLimit"] is None
 
     @pytest.mark.asyncio
@@ -338,9 +348,12 @@ class TestBillingApi:
         assert payload["plan"] == "unlimited"
         assert payload["billingMode"] == "enforce"
         assert payload["isUnlimited"] is True
+        assert payload["hasUnlimitedCloudHours"] is True
         assert payload["overQuota"] is False
         assert payload["freeSandboxHours"] is None
         assert payload["remainingSandboxHours"] is None
+        assert payload["cloudRepoLimit"] == settings.cloud_paid_repo_limit
+        assert payload["activeCloudRepoCount"] == 1
         assert payload["usedSandboxHours"] == 2.0
         assert payload["activeSandboxCount"] == 1
         assert payload["startBlocked"] is False

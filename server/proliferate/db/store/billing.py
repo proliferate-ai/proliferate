@@ -46,7 +46,12 @@ from proliferate.db.models.billing import (
     UsageSegment,
     WebhookEventReceipt,
 )
-from proliferate.db.models.cloud import CloudRuntimeEnvironment, CloudSandbox, CloudWorkspace
+from proliferate.db.models.cloud import (
+    CloudRepoConfig,
+    CloudRuntimeEnvironment,
+    CloudSandbox,
+    CloudWorkspace,
+)
 from proliferate.server.billing.models import coerce_utc, utcnow
 
 T = TypeVar("T")
@@ -62,6 +67,7 @@ class BillingSnapshotState:
     holds: list[BillingHold]
     subscriptions: list[BillingSubscription]
     usage_segments: list[UsageSegment]
+    active_cloud_repo_count: int = 0
     unaccounted_billable_seconds: float = 0.0
     historical_billable_seconds: float = 0.0
 
@@ -167,6 +173,131 @@ async def list_cloud_sandboxes_for_subject(
         )
         .scalars()
         .all()
+    )
+
+
+async def count_active_cloud_repo_environments(
+    db: AsyncSession,
+    billing_subject_id: UUID,
+) -> int:
+    repo_keys = {
+        (
+            git_provider,
+            git_owner_norm,
+            git_repo_name_norm,
+        )
+        for git_provider, git_owner_norm, git_repo_name_norm in (
+            await db.execute(
+                select(
+                    CloudWorkspace.git_provider,
+                    func.coalesce(
+                        CloudRuntimeEnvironment.git_owner_norm,
+                        func.lower(func.btrim(CloudWorkspace.git_owner)),
+                    ),
+                    func.coalesce(
+                        CloudRuntimeEnvironment.git_repo_name_norm,
+                        func.lower(func.btrim(CloudWorkspace.git_repo_name)),
+                    ),
+                )
+                .outerjoin(
+                    CloudRuntimeEnvironment,
+                    CloudWorkspace.runtime_environment_id == CloudRuntimeEnvironment.id,
+                )
+                .where(
+                    CloudWorkspace.billing_subject_id == billing_subject_id,
+                    CloudWorkspace.archived_at.is_(None),
+                )
+                .distinct()
+            )
+        ).all()
+    }
+
+    subject = await db.get(BillingSubject, billing_subject_id)
+    if subject is not None and subject.user_id is not None:
+        repo_keys.update(
+            (
+                "github",
+                git_owner_norm,
+                git_repo_name_norm,
+            )
+            for git_owner_norm, git_repo_name_norm in (
+                await db.execute(
+                    select(
+                        func.lower(func.btrim(CloudRepoConfig.git_owner)),
+                        func.lower(func.btrim(CloudRepoConfig.git_repo_name)),
+                    )
+                    .where(
+                        CloudRepoConfig.user_id == subject.user_id,
+                        CloudRepoConfig.configured.is_(True),
+                    )
+                    .distinct()
+                )
+            ).all()
+        )
+
+    return len(repo_keys)
+
+
+async def cloud_repo_slot_exists(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+    git_provider: str,
+    git_owner: str,
+    git_repo_name: str,
+) -> bool:
+    git_owner_norm = git_owner.strip().lower()
+    git_repo_name_norm = git_repo_name.strip().lower()
+    active_workspace_id = await db.scalar(
+        select(CloudWorkspace.id)
+        .outerjoin(
+            CloudRuntimeEnvironment,
+            CloudWorkspace.runtime_environment_id == CloudRuntimeEnvironment.id,
+        )
+        .where(
+            CloudWorkspace.billing_subject_id == billing_subject_id,
+            CloudWorkspace.git_provider == git_provider,
+            func.coalesce(
+                CloudRuntimeEnvironment.git_owner_norm,
+                func.lower(func.btrim(CloudWorkspace.git_owner)),
+            )
+            == git_owner_norm,
+            func.coalesce(
+                CloudRuntimeEnvironment.git_repo_name_norm,
+                func.lower(func.btrim(CloudWorkspace.git_repo_name)),
+            )
+            == git_repo_name_norm,
+            CloudWorkspace.archived_at.is_(None),
+        )
+        .limit(1)
+    )
+    if active_workspace_id is not None:
+        return True
+
+    subject = await db.get(BillingSubject, billing_subject_id)
+    if subject is None or subject.user_id is None or git_provider != "github":
+        return False
+
+    configured_repo_id = await db.scalar(
+        select(CloudRepoConfig.id)
+        .where(
+            CloudRepoConfig.user_id == subject.user_id,
+            func.lower(func.btrim(CloudRepoConfig.git_owner)) == git_owner_norm,
+            func.lower(func.btrim(CloudRepoConfig.git_repo_name)) == git_repo_name_norm,
+            CloudRepoConfig.configured.is_(True),
+        )
+        .limit(1)
+    )
+    return configured_repo_id is not None
+
+
+async def acquire_billing_subject_repo_limit_lock(
+    db: AsyncSession,
+    billing_subject_id: UUID,
+) -> None:
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+        {"key": f"cloud-repo-limit:{billing_subject_id}"},
     )
 
 
@@ -1214,6 +1345,8 @@ async def account_usage_for_billing_subject(
     period_end: datetime | None,
     overage_enabled: bool,
     billing_mode: str,
+    consume_grants: bool = True,
+    export_overage: bool = True,
     scan_until: datetime | None = None,
 ) -> BillingAccountingResult:
     if billing_mode not in {BILLING_MODE_OBSERVE, BILLING_MODE_ENFORCE}:
@@ -1271,7 +1404,7 @@ async def account_usage_for_billing_subject(
             if billing_mode == BILLING_MODE_OBSERVE
             else BILLING_USAGE_EXPORT_STATUS_PENDING
         )
-        can_export_overage = is_paid_cloud and overage_enabled
+        can_export_overage = export_overage and is_paid_cloud and overage_enabled
         accounting_boundaries = (
             (period_start_utc,) if is_paid_cloud and period_start_utc is not None else ()
         )
@@ -1282,7 +1415,7 @@ async def account_usage_for_billing_subject(
                 accounted_until = _next_accounting_boundary(
                     accounted_from,
                     range_end,
-                    grants,
+                    grants if consume_grants else [],
                     accounting_boundaries,
                 )
                 seconds = max((accounted_until - accounted_from).total_seconds(), 0.0)
@@ -1290,32 +1423,36 @@ async def account_usage_for_billing_subject(
                     break
 
                 uncovered_seconds = seconds
-                for grant in _ordered_accounting_grants(
-                    grants,
-                    is_paid_cloud=is_paid_cloud,
-                    at=accounted_from,
-                ):
-                    consumed = min(float(grant.remaining_seconds), uncovered_seconds)
-                    if consumed <= 0:
-                        continue
-                    grant.remaining_seconds = max(float(grant.remaining_seconds) - consumed, 0.0)
-                    grant.updated_at = now
-                    db.add(
-                        BillingGrantConsumption(
-                            billing_subject_id=billing_subject_id,
-                            billing_grant_id=grant.id,
-                            usage_segment_id=segment.id,
-                            accounted_from=accounted_from,
-                            accounted_until=accounted_until,
-                            seconds=consumed,
-                            source="usage_accounting",
-                            created_at=now,
+                if consume_grants:
+                    for grant in _ordered_accounting_grants(
+                        grants,
+                        is_paid_cloud=is_paid_cloud,
+                        at=accounted_from,
+                    ):
+                        consumed = min(float(grant.remaining_seconds), uncovered_seconds)
+                        if consumed <= 0:
+                            continue
+                        grant.remaining_seconds = max(
+                            float(grant.remaining_seconds) - consumed,
+                            0.0,
                         )
-                    )
-                    consumed_seconds += consumed
-                    uncovered_seconds -= consumed
-                    if uncovered_seconds <= 0:
-                        break
+                        grant.updated_at = now
+                        db.add(
+                            BillingGrantConsumption(
+                                billing_subject_id=billing_subject_id,
+                                billing_grant_id=grant.id,
+                                usage_segment_id=segment.id,
+                                accounted_from=accounted_from,
+                                accounted_until=accounted_until,
+                                seconds=consumed,
+                                source="usage_accounting",
+                                created_at=now,
+                            )
+                        )
+                        consumed_seconds += consumed
+                        uncovered_seconds -= consumed
+                        if uncovered_seconds <= 0:
+                            break
 
                 slice_is_in_paid_period = (
                     period_start_utc is None or accounted_from >= period_start_utc
@@ -1547,6 +1684,10 @@ async def _build_billing_snapshot_state_for_subject(
             db,
             billing_subject_id,
             window_started_at=recent_window_started_at,
+        ),
+        active_cloud_repo_count=await count_active_cloud_repo_environments(
+            db,
+            billing_subject_id,
         ),
         unaccounted_billable_seconds=await estimate_unaccounted_billable_seconds(
             db,

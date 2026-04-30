@@ -109,8 +109,7 @@ def _extract_reasoning_control(payload: dict[str, Any]) -> dict[str, Any] | None
 def _reasoning_control_accepts_value(control: dict[str, Any], value: str) -> bool:
     values = control.get("values")
     return isinstance(values, list) and any(
-        isinstance(candidate, dict) and candidate.get("value") == value
-        for candidate in values
+        isinstance(candidate, dict) and candidate.get("value") == value for candidate in values
     )
 
 

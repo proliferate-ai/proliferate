@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -17,6 +18,7 @@ from proliferate.constants.billing import (
     BILLING_HOLD_KIND_PAYMENT_FAILED,
     BILLING_MODE_ENFORCE,
     BILLING_MODE_OBSERVE,
+    BILLING_MODE_OFF,
     BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL,
     BILLING_USAGE_EXPORT_STATUS_OBSERVED,
     BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
@@ -39,6 +41,7 @@ from proliferate.db.models.billing import (
     UsageSegment,
 )
 from proliferate.db.store.billing import (
+    BillingAccountingResult,
     BillingSnapshotState,
     account_usage_for_billing_subject,
     bind_stripe_customer_to_billing_subject,
@@ -82,6 +85,14 @@ _STRIPE_METER_EVENT_MAX_FUTURE_SECONDS = 5 * 60
 logger = logging.getLogger("proliferate.billing.service")
 
 
+@dataclass(frozen=True)
+class UnlimitedCloudHoursState:
+    subscription: BillingSubscription | None
+    manual_entitlement: BillingEntitlement | None
+    has_unlimited_cloud_hours: bool
+    unlimited_window_start: datetime | None
+
+
 def _grant_is_active(grant: BillingGrant, now: datetime) -> bool:
     effective_at = coerce_utc(grant.effective_at) or now
     expires_at = coerce_utc(grant.expires_at)
@@ -92,6 +103,77 @@ def _entitlement_is_active(entitlement: BillingEntitlement, now: datetime) -> bo
     effective_at = coerce_utc(entitlement.effective_at) or now
     expires_at = coerce_utc(entitlement.expires_at)
     return effective_at <= now and (expires_at is None or expires_at > now)
+
+
+def _active_unlimited_cloud_entitlement(
+    entitlements: list[BillingEntitlement],
+    now: datetime,
+) -> BillingEntitlement | None:
+    active_entitlements = [
+        entitlement
+        for entitlement in entitlements
+        if (
+            entitlement.kind == UNLIMITED_CLOUD_ENTITLEMENT
+            and _entitlement_is_active(entitlement, now)
+        )
+    ]
+    if not active_entitlements:
+        return None
+    # Earliest active entitlement gives the accounting split the widest
+    # unlimited window and avoids finite accounting in the middle of entitlement coverage.
+    return min(
+        active_entitlements,
+        key=lambda entitlement: (
+            coerce_utc(entitlement.effective_at) or now,
+            coerce_utc(entitlement.created_at) or now,
+        ),
+    )
+
+
+def _subscription_unlimited_window_start(
+    subscription: BillingSubscription,
+    now: datetime,
+) -> datetime | None:
+    # Local creation time is stable across Stripe renewals; current_period_start rolls monthly.
+    created_at = coerce_utc(subscription.created_at)
+    if created_at is not None and created_at <= now:
+        return created_at
+    period_start = coerce_utc(subscription.current_period_start)
+    if period_start is not None and period_start <= now:
+        return period_start
+    return None
+
+
+def _compute_unlimited_cloud_hours_state(
+    *,
+    subscriptions: list[BillingSubscription],
+    entitlements: list[BillingEntitlement],
+    now: datetime,
+) -> UnlimitedCloudHoursState:
+    subscription = _latest_healthy_cloud_subscription(subscriptions, now)
+    manual_entitlement = _active_unlimited_cloud_entitlement(entitlements, now)
+    unlimited_boundaries = [
+        boundary
+        for boundary in (
+            (
+                _subscription_unlimited_window_start(subscription, now)
+                if subscription is not None
+                else None
+            ),
+            (
+                coerce_utc(manual_entitlement.effective_at)
+                if manual_entitlement is not None
+                else None
+            ),
+        )
+        if boundary is not None and boundary <= now
+    ]
+    return UnlimitedCloudHoursState(
+        subscription=subscription,
+        manual_entitlement=manual_entitlement,
+        has_unlimited_cloud_hours=subscription is not None or manual_entitlement is not None,
+        unlimited_window_start=min(unlimited_boundaries) if unlimited_boundaries else None,
+    )
 
 
 def _hold_reason(holds: list[BillingHold]) -> str | None:
@@ -152,6 +234,14 @@ def _latest_healthy_cloud_subscription(
     )
 
 
+def repo_limit_for_billing_snapshot(snapshot: BillingSnapshot) -> int | None:
+    if snapshot.billing_mode == BILLING_MODE_OFF:
+        return None
+    if snapshot.is_paid_cloud or snapshot.has_unlimited_cloud_hours:
+        return settings.cloud_paid_repo_limit
+    return settings.cloud_free_repo_limit
+
+
 def _grant_applies_to_paid_state(grant: BillingGrant, *, is_paid_cloud: bool) -> bool:
     if is_paid_cloud:
         return grant.grant_type in {
@@ -185,7 +275,12 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
     used_seconds = state.historical_billable_seconds + sum(
         _segment_seconds(segment, now) for segment in state.usage_segments
     )
-    healthy_subscription = _latest_healthy_cloud_subscription(state.subscriptions, now)
+    unlimited_state = _compute_unlimited_cloud_hours_state(
+        subscriptions=state.subscriptions,
+        entitlements=state.entitlements,
+        now=now,
+    )
+    healthy_subscription = unlimited_state.subscription
     is_paid_cloud = healthy_subscription is not None
     payment_healthy = is_paid_cloud
     eligible_grants = [
@@ -203,20 +298,24 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
         0.0,
     )
 
-    active_unlimited = any(
-        entitlement.kind == UNLIMITED_CLOUD_ENTITLEMENT
-        and _entitlement_is_active(entitlement, now)
-        for entitlement in state.entitlements
-    )
-    remaining_seconds_value = None if active_unlimited else max(remaining_seconds, 0.0)
+    active_manual_unlimited = unlimited_state.manual_entitlement is not None
+    has_unlimited_cloud_hours = unlimited_state.has_unlimited_cloud_hours
+    remaining_seconds_value = None if has_unlimited_cloud_hours else max(remaining_seconds, 0.0)
 
     active_sandbox_count = sum(
         1 for sandbox in state.sandboxes if sandbox.status in ACTIVE_SANDBOX_STATUSES
     )
 
     rollover_grace = _subscription_in_rollover_grace(healthy_subscription, now)
-    over_quota = not active_unlimited and remaining_seconds <= 0 and not rollover_grace
-    paid_overage_allowed = is_paid_cloud and state.subject.overage_enabled and payment_healthy
+    over_quota = not has_unlimited_cloud_hours and remaining_seconds <= 0 and not rollover_grace
+    # Overage plumbing is intentionally retained for legacy/refill controls and possible
+    # future finite paid plans; flat paid Cloud makes this false today.
+    paid_overage_allowed = (
+        not has_unlimited_cloud_hours
+        and is_paid_cloud
+        and state.subject.overage_enabled
+        and payment_healthy
+    )
     concurrent_sandbox_limit = None if is_paid_cloud else settings.cloud_concurrent_sandbox_limit
     concurrency_limited = (
         concurrent_sandbox_limit is not None and active_sandbox_count >= concurrent_sandbox_limit
@@ -237,16 +336,23 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
 
     return BillingSnapshot(
         billing_subject_id=state.billing_subject_id,
-        plan="unlimited" if active_unlimited else ("cloud" if is_paid_cloud else "free"),
+        plan="cloud" if is_paid_cloud else ("unlimited" if active_manual_unlimited else "free"),
         billing_mode=settings.cloud_billing_mode,
-        is_unlimited=active_unlimited,
+        is_unlimited=active_manual_unlimited,
+        has_unlimited_cloud_hours=has_unlimited_cloud_hours,
         over_quota=over_quota,
         is_paid_cloud=is_paid_cloud,
         payment_healthy=payment_healthy,
         overage_enabled=state.subject.overage_enabled,
-        included_hours=None if active_unlimited else included_seconds / 3600.0,
+        included_hours=None if has_unlimited_cloud_hours else included_seconds / 3600.0,
         used_hours=used_seconds / 3600.0,
-        remaining_hours=None if active_unlimited else remaining_seconds_value / 3600.0,
+        remaining_hours=(None if has_unlimited_cloud_hours else remaining_seconds_value / 3600.0),
+        cloud_repo_limit=(
+            settings.cloud_paid_repo_limit
+            if is_paid_cloud or has_unlimited_cloud_hours
+            else settings.cloud_free_repo_limit
+        ),
+        active_cloud_repo_count=state.active_cloud_repo_count,
         concurrent_sandbox_limit=concurrent_sandbox_limit,
         active_sandbox_count=active_sandbox_count,
         start_blocked=start_blocked,
@@ -321,6 +427,7 @@ async def get_billing_overview(user_id: UUID) -> BillingOverview:
         plan=snapshot.plan,
         billing_mode=snapshot.billing_mode,
         is_unlimited=snapshot.is_unlimited,
+        has_unlimited_cloud_hours=snapshot.has_unlimited_cloud_hours,
         over_quota=snapshot.over_quota,
         included_hours=(
             round(snapshot.included_hours, 2) if snapshot.included_hours is not None else None
@@ -329,6 +436,8 @@ async def get_billing_overview(user_id: UUID) -> BillingOverview:
         remaining_hours=(
             round(snapshot.remaining_hours, 4) if snapshot.remaining_hours is not None else None
         ),
+        cloud_repo_limit=snapshot.cloud_repo_limit,
+        active_cloud_repo_count=snapshot.active_cloud_repo_count,
         concurrent_sandbox_limit=snapshot.concurrent_sandbox_limit,
         active_sandbox_count=snapshot.active_sandbox_count,
         is_paid_cloud=snapshot.is_paid_cloud,
@@ -356,6 +465,7 @@ async def get_cloud_plan(user_id: UUID) -> CloudPlanInfo:
         plan=snapshot.plan,
         billing_mode=snapshot.billing_mode,
         is_unlimited=snapshot.is_unlimited,
+        has_unlimited_cloud_hours=snapshot.has_unlimited_cloud_hours,
         over_quota=snapshot.over_quota,
         free_sandbox_hours=(
             round(snapshot.included_hours, 2) if snapshot.included_hours is not None else None
@@ -364,6 +474,8 @@ async def get_cloud_plan(user_id: UUID) -> CloudPlanInfo:
         remaining_sandbox_hours=(
             round(snapshot.remaining_hours, 4) if snapshot.remaining_hours is not None else None
         ),
+        cloud_repo_limit=snapshot.cloud_repo_limit,
+        active_cloud_repo_count=snapshot.active_cloud_repo_count,
         concurrent_sandbox_limit=snapshot.concurrent_sandbox_limit,
         active_sandbox_count=snapshot.active_sandbox_count,
         is_paid_cloud=snapshot.is_paid_cloud,
@@ -427,7 +539,7 @@ async def _ensure_stripe_customer_for_user(user: User) -> tuple[UUID, str]:
 async def create_cloud_checkout_session(user: User) -> BillingUrlResponse:
     success_url, cancel_url, portal_return_url = _require_redirect_urls()
     try:
-        await stripe_billing.validate_cloud_price_configuration()
+        await stripe_billing.validate_cloud_subscription_price_configuration()
     except stripe_billing.StripeBillingError as error:
         raise _map_stripe_error(error) from error
 
@@ -449,7 +561,6 @@ async def create_cloud_checkout_session(user: User) -> BillingUrlResponse:
             stripe_customer_id=stripe_customer_id,
             billing_subject_id=str(subject_id),
             cloud_monthly_price_id=settings.stripe_cloud_monthly_price_id,
-            sandbox_overage_price_id=settings.stripe_sandbox_overage_price_id,
             success_url=success_url,
             cancel_url=cancel_url,
             idempotency_key=f"cloud-checkout:{subject_id}",
@@ -461,12 +572,10 @@ async def create_cloud_checkout_session(user: User) -> BillingUrlResponse:
 
 async def create_refill_checkout_session(user: User) -> BillingUrlResponse:
     success_url, cancel_url, _portal_return_url = _require_redirect_urls()
-    if not settings.stripe_refill_10h_price_id:
-        raise BillingServiceError(
-            "stripe_refill_price_unconfigured",
-            "Stripe refill price is not configured.",
-            status_code=503,
-        )
+    try:
+        await stripe_billing.validate_refill_price_configuration()
+    except stripe_billing.StripeBillingError as error:
+        raise _map_stripe_error(error) from error
     subject_id, stripe_customer_id = await _ensure_stripe_customer_for_user(user)
     try:
         checkout = await stripe_billing.create_refill_checkout_session(
@@ -501,6 +610,27 @@ async def update_overage_settings(user: User, *, enabled: bool) -> OverageSettin
     return OverageSettingsResponse(overage_enabled=enabled)
 
 
+async def _account_usage_for_snapshot_state(
+    state: BillingSnapshotState,
+    *,
+    scan_until: datetime,
+    consume_grants: bool,
+    subscription: BillingSubscription | None,
+) -> BillingAccountingResult:
+    return await account_usage_for_billing_subject(
+        billing_subject_id=state.billing_subject_id,
+        is_paid_cloud=subscription is not None,
+        billing_subscription_id=subscription.id if subscription is not None else None,
+        period_start=subscription.current_period_start if subscription is not None else None,
+        period_end=subscription.current_period_end if subscription is not None else None,
+        overage_enabled=state.subject.overage_enabled if subscription is not None else False,
+        billing_mode=settings.cloud_billing_mode,
+        consume_grants=consume_grants,
+        export_overage=False,
+        scan_until=scan_until,
+    )
+
+
 async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
     if settings.cloud_billing_mode not in {BILLING_MODE_OBSERVE, BILLING_MODE_ENFORCE}:
         return
@@ -509,28 +639,41 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
     for billing_subject_id in subject_ids:
         state = await load_billing_snapshot_state_for_subject(billing_subject_id)
         now = utcnow()
-        healthy_subscription = _latest_healthy_cloud_subscription(state.subscriptions, now)
-        result = await account_usage_for_billing_subject(
-            billing_subject_id=billing_subject_id,
-            is_paid_cloud=healthy_subscription is not None,
-            billing_subscription_id=(
-                healthy_subscription.id if healthy_subscription is not None else None
-            ),
-            period_start=(
-                healthy_subscription.current_period_start
-                if healthy_subscription is not None
-                else None
-            ),
-            period_end=(
-                healthy_subscription.current_period_end
-                if healthy_subscription is not None
-                else None
-            ),
-            overage_enabled=state.subject.overage_enabled,
-            billing_mode=settings.cloud_billing_mode,
-            scan_until=now,
+        unlimited_state = _compute_unlimited_cloud_hours_state(
+            subscriptions=state.subscriptions,
+            entitlements=state.entitlements,
+            now=now,
         )
-        if result.export_count > 0:
+        results = []
+        if unlimited_state.has_unlimited_cloud_hours:
+            if unlimited_state.unlimited_window_start is not None:
+                results.append(
+                    await _account_usage_for_snapshot_state(
+                        state,
+                        scan_until=unlimited_state.unlimited_window_start,
+                        consume_grants=True,
+                        subscription=None,
+                    )
+                )
+            results.append(
+                await _account_usage_for_snapshot_state(
+                    state,
+                    scan_until=now,
+                    consume_grants=False,
+                    subscription=unlimited_state.subscription,
+                )
+            )
+        else:
+            results.append(
+                await _account_usage_for_snapshot_state(
+                    state,
+                    scan_until=now,
+                    consume_grants=True,
+                    subscription=None,
+                )
+            )
+
+        if any(result.export_count > 0 for result in results):
             snapshot = _build_billing_snapshot(state)
             await record_billing_decision_event(
                 billing_subject_id=billing_subject_id,

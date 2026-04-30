@@ -13,8 +13,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud import CloudRepoConfig, CloudRepoFile
+from proliferate.db.store.billing import (
+    acquire_billing_subject_repo_limit_lock,
+    cloud_repo_slot_exists,
+    count_active_cloud_repo_environments,
+    ensure_personal_billing_subject,
+)
 from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_json, encrypt_text
 from proliferate.utils.time import utcnow
+
+
+class CloudRepoConfigLimitExceededError(RuntimeError):
+    def __init__(self, *, active_repo_count: int, cloud_repo_limit: int) -> None:
+        super().__init__("Cloud repo limit exceeded.")
+        self.active_repo_count = active_repo_count
+        self.cloud_repo_limit = cloud_repo_limit
 
 
 @dataclass(frozen=True)
@@ -209,6 +222,36 @@ async def _get_or_create_repo_config_record(
     ).scalar_one()
 
 
+async def _enforce_cloud_repo_config_limit(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    git_owner: str,
+    git_repo_name: str,
+    cloud_repo_limit: int | None,
+) -> None:
+    if cloud_repo_limit is None:
+        return
+
+    subject = await ensure_personal_billing_subject(db, user_id)
+    await acquire_billing_subject_repo_limit_lock(db, subject.id)
+    if await cloud_repo_slot_exists(
+        db,
+        billing_subject_id=subject.id,
+        git_provider="github",
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    ):
+        return
+
+    active_repo_count = await count_active_cloud_repo_environments(db, subject.id)
+    if active_repo_count >= cloud_repo_limit:
+        raise CloudRepoConfigLimitExceededError(
+            active_repo_count=active_repo_count,
+            cloud_repo_limit=cloud_repo_limit,
+        )
+
+
 async def _load_repo_file_rows(
     db: AsyncSession,
     cloud_repo_config_id: UUID,
@@ -233,6 +276,7 @@ async def save_cloud_repo_config(
     git_owner: str,
     git_repo_name: str,
     configured: bool,
+    cloud_repo_limit: int | None,
     default_branch: str | None,
     env_vars: dict[str, str],
     setup_script: str,
@@ -244,6 +288,15 @@ async def save_cloud_repo_config(
         git_owner=git_owner,
         git_repo_name=git_repo_name,
     )
+    if configured:
+        await _enforce_cloud_repo_config_limit(
+            db,
+            user_id=user_id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            cloud_repo_limit=cloud_repo_limit,
+        )
+
     now = utcnow()
     existing_files = await _load_repo_file_rows(db, record.id)
     existing_by_path = {item.relative_path: item for item in existing_files}
@@ -371,12 +424,20 @@ async def bootstrap_cloud_repo_config(
     user_id: UUID,
     git_owner: str,
     git_repo_name: str,
+    cloud_repo_limit: int | None,
 ) -> CloudRepoConfigValue:
     record = await _get_or_create_repo_config_record(
         db,
         user_id=user_id,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
+    )
+    await _enforce_cloud_repo_config_limit(
+        db,
+        user_id=user_id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        cloud_repo_limit=cloud_repo_limit,
     )
     now = utcnow()
     record.configured = True
@@ -417,6 +478,7 @@ async def persist_cloud_repo_config(
     git_owner: str,
     git_repo_name: str,
     configured: bool,
+    cloud_repo_limit: int | None,
     default_branch: str | None,
     env_vars: dict[str, str],
     setup_script: str,
@@ -429,6 +491,7 @@ async def persist_cloud_repo_config(
             git_owner=git_owner,
             git_repo_name=git_repo_name,
             configured=configured,
+            cloud_repo_limit=cloud_repo_limit,
             default_branch=default_branch,
             env_vars=env_vars,
             setup_script=setup_script,
@@ -460,6 +523,7 @@ async def bootstrap_cloud_repo_config_for_user(
     user_id: UUID,
     git_owner: str,
     git_repo_name: str,
+    cloud_repo_limit: int | None,
 ) -> CloudRepoConfigValue:
     async with db_engine.async_session_factory() as db:
         return await bootstrap_cloud_repo_config(
@@ -467,4 +531,5 @@ async def bootstrap_cloud_repo_config_for_user(
             user_id=user_id,
             git_owner=git_owner,
             git_repo_name=git_repo_name,
+            cloud_repo_limit=cloud_repo_limit,
         )

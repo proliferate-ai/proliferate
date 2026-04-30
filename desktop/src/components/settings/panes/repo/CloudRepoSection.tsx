@@ -73,20 +73,40 @@ function CloudRepoSettingsEditor({
               {isLoadingConfig ? " · Loading saved config..." : ""}
             </p>
           </div>
-          <Button
-            type="button"
-            loading={saveMutation.isPending}
-            onClick={() => {
-              void saveMutation.mutateAsync({
-                defaultBranch: draft.defaultBranch,
-                envVars: draft.envVars,
-                trackedFilePaths: draft.trackedFilePaths,
-                setupScript: draft.setupScript,
-              });
-            }}
-          >
-            Save cloud config
-          </Button>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {configured && (
+              <Button
+                type="button"
+                variant="outline"
+                loading={saveMutation.isPending}
+                onClick={() => {
+                  void saveMutation.mutateAsync({
+                    configured: false,
+                    defaultBranch: null,
+                    envVars: {},
+                    trackedFilePaths: [],
+                    setupScript: "",
+                  });
+                }}
+              >
+                Disable cloud config
+              </Button>
+            )}
+            <Button
+              type="button"
+              loading={saveMutation.isPending}
+              onClick={() => {
+                void saveMutation.mutateAsync({
+                  defaultBranch: draft.defaultBranch,
+                  envVars: draft.envVars,
+                  trackedFilePaths: draft.trackedFilePaths,
+                  setupScript: draft.setupScript,
+                });
+              }}
+            >
+              Save cloud config
+            </Button>
+          </div>
         </div>
       </div>
 

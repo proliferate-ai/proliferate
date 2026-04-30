@@ -15,6 +15,7 @@ class BillingSnapshot:
     plan: str
     billing_mode: str
     is_unlimited: bool
+    has_unlimited_cloud_hours: bool
     over_quota: bool
     is_paid_cloud: bool
     payment_healthy: bool
@@ -22,6 +23,8 @@ class BillingSnapshot:
     included_hours: float | None
     used_hours: float
     remaining_hours: float | None
+    cloud_repo_limit: int | None
+    active_cloud_repo_count: int
     concurrent_sandbox_limit: int | None
     active_sandbox_count: int
     start_blocked: bool
@@ -90,13 +93,21 @@ class PlanInfo(BillingBaseModel):
 
 
 class CloudPlanInfo(BillingBaseModel):
-    plan: str
+    plan: str = Field(
+        description=(
+            "`cloud` is a paid Cloud subscription, `unlimited` is a manual unlimited "
+            "entitlement, and both grant unlimited Cloud hours."
+        )
+    )
     billing_mode: str = Field(alias="billingMode")
     is_unlimited: bool = Field(alias="isUnlimited")
+    has_unlimited_cloud_hours: bool = Field(alias="hasUnlimitedCloudHours")
     over_quota: bool = Field(alias="overQuota")
     free_sandbox_hours: float | None = Field(alias="freeSandboxHours")
     used_sandbox_hours: float = Field(alias="usedSandboxHours")
     remaining_sandbox_hours: float | None = Field(alias="remainingSandboxHours")
+    cloud_repo_limit: int | None = Field(alias="cloudRepoLimit")
+    active_cloud_repo_count: int = Field(alias="activeCloudRepoCount")
     concurrent_sandbox_limit: int | None = Field(alias="concurrentSandboxLimit")
     active_sandbox_count: int = Field(alias="activeSandboxCount")
     is_paid_cloud: bool = Field(alias="isPaidCloud")
@@ -110,13 +121,21 @@ class CloudPlanInfo(BillingBaseModel):
 
 
 class BillingOverview(BillingBaseModel):
-    plan: str
+    plan: str = Field(
+        description=(
+            "`cloud` is a paid Cloud subscription, `unlimited` is a manual unlimited "
+            "entitlement, and both grant unlimited Cloud hours."
+        )
+    )
     billing_mode: str = Field(alias="billingMode")
     is_unlimited: bool = Field(alias="isUnlimited")
+    has_unlimited_cloud_hours: bool = Field(alias="hasUnlimitedCloudHours")
     over_quota: bool = Field(alias="overQuota")
     included_hours: float | None = Field(alias="includedHours")
     used_hours: float = Field(alias="usedHours")
     remaining_hours: float | None = Field(alias="remainingHours")
+    cloud_repo_limit: int | None = Field(alias="cloudRepoLimit")
+    active_cloud_repo_count: int = Field(alias="activeCloudRepoCount")
     concurrent_sandbox_limit: int | None = Field(alias="concurrentSandboxLimit")
     active_sandbox_count: int = Field(alias="activeSandboxCount")
     is_paid_cloud: bool = Field(alias="isPaidCloud")

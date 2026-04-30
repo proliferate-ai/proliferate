@@ -175,9 +175,7 @@ class AutomationRun(Base):
         Index(
             "ix_automation_run_dispatching_expiry",
             "claim_expires_at",
-            postgresql_where=text(
-                "status = 'dispatching' AND claim_expires_at IS NOT NULL"
-            ),
+            postgresql_where=text("status = 'dispatching' AND claim_expires_at IS NOT NULL"),
         ),
         Index("ix_automation_run_cloud_workspace_id", "cloud_workspace_id"),
     )

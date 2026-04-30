@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
+from typing import NoReturn
 from uuid import UUID
 
 from proliferate.constants.billing import (
@@ -30,6 +31,7 @@ from proliferate.db.store.billing import (
 from proliferate.db.store.cloud_credentials import load_cloud_credentials_for_user
 from proliferate.db.store.cloud_runtime_environments import load_runtime_environment_for_workspace
 from proliferate.db.store.cloud_workspaces import (
+    CloudRepoLimitExceededError,
     create_cloud_workspace_for_user,
     delete_cloud_workspace_records_for_workspace,
     load_active_sandbox_for_workspace,
@@ -53,6 +55,7 @@ from proliferate.server.billing.models import BillingSnapshot, SandboxStartAutho
 from proliferate.server.billing.service import (
     authorize_sandbox_start,
     get_billing_snapshot_for_subject,
+    repo_limit_for_billing_snapshot,
 )
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.credentials.models import allowed_agent_kinds
@@ -104,6 +107,7 @@ class ResolvedCloudWorkspaceCreate:
     display_name: str | None
     active_sandbox_count: int
     synced_providers: tuple[str, ...]
+    cloud_repo_limit: int | None
 
 
 PROVISIONING_STATUSES: frozenset[str] = frozenset(
@@ -255,6 +259,17 @@ def _raise_if_cloud_workspace_start_denied(authorization: SandboxStartAuthorizat
         authorization.message or _cloud_workspace_block_message(authorization.start_block_reason),
         status_code=403,
     )
+
+
+def _raise_repo_limit_exceeded(error: CloudRepoLimitExceededError) -> NoReturn:
+    raise CloudApiError(
+        "repo_limit_exceeded",
+        (
+            "Cloud repo limit reached. Archive an existing cloud repo before adding "
+            f"another one ({error.active_repo_count}/{error.cloud_repo_limit})."
+        ),
+        status_code=403,
+    ) from error
 
 
 def _workspace_action_block(
@@ -430,6 +445,8 @@ async def _resolve_new_cloud_workspace_create(
         workspace_id=None,
     )
     _raise_if_cloud_workspace_start_denied(authorization)
+    billing_snapshot = await get_billing_snapshot_for_subject(authorization.billing_subject_id)
+    cloud_repo_limit = repo_limit_for_billing_snapshot(billing_snapshot)
 
     if required_agent_kind is not None and required_agent_kind not in allowed_agent_kinds():
         raise CloudApiError(
@@ -469,6 +486,7 @@ async def _resolve_new_cloud_workspace_create(
         display_name=(display_name.strip() if display_name and display_name.strip() else None),
         active_sandbox_count=authorization.active_sandbox_count,
         synced_providers=synced_providers,
+        cloud_repo_limit=cloud_repo_limit,
     )
 
 
@@ -492,17 +510,21 @@ async def create_cloud_workspace(
         display_name=display_name,
     )
 
-    workspace = await create_cloud_workspace_for_user(
-        user_id=user.id,
-        display_name=resolved.display_name,
-        git_provider=resolved.git_provider,
-        git_owner=resolved.git_owner,
-        git_repo_name=resolved.git_repo_name,
-        git_branch=resolved.git_branch,
-        git_base_branch=resolved.git_base_branch,
-        origin_json=CLOUD_HUMAN_ORIGIN_JSON,
-        template_version=get_configured_sandbox_provider().template_version,
-    )
+    try:
+        workspace = await create_cloud_workspace_for_user(
+            user_id=user.id,
+            display_name=resolved.display_name,
+            git_provider=resolved.git_provider,
+            git_owner=resolved.git_owner,
+            git_repo_name=resolved.git_repo_name,
+            git_branch=resolved.git_branch,
+            git_base_branch=resolved.git_base_branch,
+            origin_json=CLOUD_HUMAN_ORIGIN_JSON,
+            template_version=get_configured_sandbox_provider().template_version,
+            cloud_repo_limit=resolved.cloud_repo_limit,
+        )
+    except CloudRepoLimitExceededError as error:
+        _raise_repo_limit_exceeded(error)
     log_cloud_event(
         "cloud workspace queued",
         workspace_id=workspace.id,
@@ -535,20 +557,24 @@ async def create_cloud_workspace_for_automation_run(
         display_name=display_name,
         required_agent_kind=required_agent_kind,
     )
-    workspace = await create_cloud_workspace_for_claimed_run(
-        run_id=run_id,
-        claim_id=claim_id,
-        user_id=user.id,
-        display_name=resolved.display_name,
-        git_provider=resolved.git_provider,
-        git_owner=resolved.git_owner,
-        git_repo_name=resolved.git_repo_name,
-        git_branch=resolved.git_branch,
-        git_base_branch=resolved.git_base_branch,
-        origin_json=CLOUD_SYSTEM_ORIGIN_JSON,
-        template_version=get_configured_sandbox_provider().template_version,
-        now=utcnow(),
-    )
+    try:
+        workspace = await create_cloud_workspace_for_claimed_run(
+            run_id=run_id,
+            claim_id=claim_id,
+            user_id=user.id,
+            display_name=resolved.display_name,
+            git_provider=resolved.git_provider,
+            git_owner=resolved.git_owner,
+            git_repo_name=resolved.git_repo_name,
+            git_branch=resolved.git_branch,
+            git_base_branch=resolved.git_base_branch,
+            origin_json=CLOUD_SYSTEM_ORIGIN_JSON,
+            template_version=get_configured_sandbox_provider().template_version,
+            now=utcnow(),
+            cloud_repo_limit=resolved.cloud_repo_limit,
+        )
+    except CloudRepoLimitExceededError as error:
+        _raise_repo_limit_exceeded(error)
     if workspace is not None:
         log_cloud_event(
             "automation cloud workspace created",
@@ -618,17 +644,29 @@ async def ensure_cloud_workspace_for_existing_branch(
             repo=f"{git_owner}/{git_repo_name}",
         )
 
-    workspace = await create_cloud_workspace_for_user(
+    authorization = await authorize_sandbox_start(
         user_id=user.id,
-        display_name=(display_name.strip() if display_name and display_name.strip() else None),
-        git_provider=git_provider,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-        git_branch=cleaned_branch_name,
-        git_base_branch=cleaned_branch_name,
-        origin_json=CLOUD_HUMAN_ORIGIN_JSON,
-        template_version=get_configured_sandbox_provider().template_version,
+        workspace_id=None,
     )
+    _raise_if_cloud_workspace_start_denied(authorization)
+    billing_snapshot = await get_billing_snapshot_for_subject(authorization.billing_subject_id)
+    cloud_repo_limit = repo_limit_for_billing_snapshot(billing_snapshot)
+
+    try:
+        workspace = await create_cloud_workspace_for_user(
+            user_id=user.id,
+            display_name=(display_name.strip() if display_name and display_name.strip() else None),
+            git_provider=git_provider,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            git_branch=cleaned_branch_name,
+            git_base_branch=cleaned_branch_name,
+            origin_json=CLOUD_HUMAN_ORIGIN_JSON,
+            template_version=get_configured_sandbox_provider().template_version,
+            cloud_repo_limit=cloud_repo_limit,
+        )
+    except CloudRepoLimitExceededError as error:
+        _raise_repo_limit_exceeded(error)
     log_cloud_event(
         "cloud workspace ensured for mobility",
         workspace_id=workspace.id,

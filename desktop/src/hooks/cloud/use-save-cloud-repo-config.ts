@@ -16,6 +16,7 @@ import {
 import { emitRuntimeInputSyncEvent } from "./runtime-input-sync-events";
 
 interface SaveCloudRepoConfigInput {
+  configured?: boolean;
   defaultBranch: string | null;
   envVars: Record<string, string>;
   trackedFilePaths: string[];
@@ -57,7 +58,13 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
     meta: {
       telemetryHandled: true,
     },
-    mutationFn: async ({ defaultBranch, envVars, trackedFilePaths, setupScript }) => {
+    mutationFn: async ({
+      configured = true,
+      defaultBranch,
+      envVars,
+      trackedFilePaths,
+      setupScript,
+    }) => {
       if (!repository?.gitOwner || !repository.gitRepoName) {
         throw new Error("A GitHub-backed repository is required.");
       }
@@ -67,7 +74,7 @@ export function useSaveCloudRepoConfig(repository: SettingsRepositoryEntry | nul
 
       const files = await buildTrackedFilesPayload(runtimeUrl, repository, trackedFilePaths);
       return await saveCloudRepoConfig(repository.gitOwner, repository.gitRepoName, {
-        configured: true,
+        configured,
         defaultBranch,
         envVars,
         setupScript,

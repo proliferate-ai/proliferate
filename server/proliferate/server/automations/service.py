@@ -24,7 +24,10 @@ from proliferate.db.store.automations import (
     load_automation_for_user,
     update_automation_for_user,
 )
-from proliferate.db.store.cloud_repo_config import bootstrap_cloud_repo_config_for_user
+from proliferate.db.store.cloud_repo_config import (
+    CloudRepoConfigLimitExceededError,
+    bootstrap_cloud_repo_config_for_user,
+)
 from proliferate.server.automations.models import (
     AutomationListResponse,
     AutomationResponse,
@@ -40,6 +43,10 @@ from proliferate.server.automations.schedule import (
     due_and_next_occurrences,
     next_future_occurrence,
     normalize_schedule,
+)
+from proliferate.server.billing.service import (
+    get_billing_snapshot,
+    repo_limit_for_billing_snapshot,
 )
 from proliferate.utils.time import utcnow
 
@@ -171,11 +178,25 @@ async def _ensure_repo_config_id(
 ) -> UUID:
     # Automations point at a repo identity. Runtime-input config for that repo can still
     # be empty; the executor PR will decide when to apply env/files/setup.
-    repo_config = await bootstrap_cloud_repo_config_for_user(
-        user_id=user_id,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-    )
+    billing_snapshot = await get_billing_snapshot(user_id)
+    cloud_repo_limit = repo_limit_for_billing_snapshot(billing_snapshot)
+    try:
+        repo_config = await bootstrap_cloud_repo_config_for_user(
+            user_id=user_id,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            cloud_repo_limit=cloud_repo_limit,
+        )
+    except CloudRepoConfigLimitExceededError as error:
+        raise AutomationServiceError(
+            "repo_limit_exceeded",
+            (
+                f"Cloud repo limit reached. Upgrade or disable another cloud repo "
+                f"before scheduling this one ({error.active_repo_count}/"
+                f"{error.cloud_repo_limit})."
+            ),
+            status_code=409,
+        ) from error
     return repo_config.id
 
 

@@ -77,6 +77,8 @@ class Settings(BaseSettings):
     # Cloud workspaces
     cloud_secret_key: str = "CHANGE-ME-IN-PRODUCTION-CLOUD-SECRET"
     cloud_free_sandbox_hours: float = 2000.0
+    cloud_free_repo_limit: int = 1
+    cloud_paid_repo_limit: int = 4
     cloud_concurrent_sandbox_limit: int = 200
     cloud_billing_mode: str = "off"
     support_slack_webhook_url: str = ""

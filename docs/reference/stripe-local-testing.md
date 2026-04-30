@@ -7,14 +7,15 @@ Use Stripe locally for commercial IO:
 
 ```text
 Checkout / portal / refill  -> Stripe test mode
-Stripe webhooks             -> local billing mirror, grants, holds
+Stripe webhooks             -> local subscription mirror, refill grants, holds
 E2B lifecycle/webhooks      -> local UsageSegment ledger
 Billing authorization       -> local billing service
-Overage export              -> local accounting rows -> Stripe meter events
+Meter events                -> legacy local checks only
 ```
 
 Do not bill directly from E2B webhooks. They update local usage state; the
-billing accounting pass exports uncovered usage to Stripe.
+billing accounting pass keeps local usage cursors current. Paid Cloud is flat
+unlimited, so new paid subscriptions do not export overage usage to Stripe.
 
 ## Test-Mode Resources
 
@@ -29,7 +30,7 @@ The script is idempotent. It creates these test-mode resources if missing:
 - `Proliferate Cloud (Local Test)` product
 - $200/month Cloud test price
 - `proliferate_sandbox_seconds` billing meter
-- $20 per 10-hour overage block test price
+- legacy $20 per 10-hour overage block test price
 - $20 10-hour refill test price
 
 With `--write-env-local`, non-secret IDs are written to `server/.env.local`.
@@ -76,19 +77,18 @@ or run through `make dev-server`.
    state on focus, and the Stripe listener forwards subscription/invoice
    webhooks to the local backend.
 
-5. Use the refill action from Cloud settings to test one-time refill Checkout.
+5. Use the billing portal action from Cloud settings to test customer portal
+   handoff.
 
-6. Toggle overage in Cloud settings to test local overage preference storage.
-
-For accounting/export behavior, set billing mode in `server/.env.local`:
+For accounting behavior, set billing mode in `server/.env.local`:
 
 ```bash
 CLOUD_BILLING_MODE=observe
 ```
 
-Observe mode consumes local grant balances and records observed export rows, but
-does not pause sandboxes or send Stripe meter events. To test actual Stripe
-meter exports in test mode, use:
+Observe mode consumes local grant balances for finite users and advances usage
+cursors, but does not pause sandboxes. To test free-tier enforcement locally,
+use:
 
 ```bash
 CLOUD_BILLING_MODE=enforce
@@ -96,7 +96,7 @@ CLOUD_BILLING_MODE=enforce
 
 Then restart `make dev PROFILE=<name>`.
 
-## Send A Meter Hit
+## Send A Legacy Meter Hit
 
 Send one local usage hit into Stripe test mode:
 
@@ -121,10 +121,10 @@ payload[value] = sandbox seconds
 Stripe meter aggregation is asynchronous, so summaries and invoice previews may
 lag after a hit is accepted.
 
-The overage price must be configured as `$20` per transformed unit with
+The legacy overage price must be configured as `$20` per transformed unit with
 `transform_quantity.divide_by=36000` and `transform_quantity.round=up`. The
-setup script validates this shape so raw second exports cannot accidentally be
-priced as raw units.
+setup script still validates this shape for meter-event tests, but new flat
+Cloud checkouts do not attach this price.
 
 ## Local Webhook Delivery
 
@@ -162,8 +162,8 @@ stripe trigger checkout.session.completed
 
 Synthetic `stripe trigger` events are useful for signature/ack checks, but most
 billing handlers filter invoice/checkout line items by the configured Cloud and
-refill price IDs. Use real local Checkout when validating monthly grants,
-refills, payment holds, and subscription mirror state.
+refill price IDs. Use real local Checkout when validating subscription mirror
+state, payment holds, and refill grants.
 
 ## Useful Local Checks
 

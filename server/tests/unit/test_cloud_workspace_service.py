@@ -116,6 +116,9 @@ async def test_automation_workspace_requires_selected_agent_credentials(
     async def _authorization(**_kwargs) -> SandboxStartAuthorization:
         return _allowed_start_authorization()
 
+    async def _billing_snapshot(_billing_subject_id):
+        return SimpleNamespace()
+
     async def _repo_config_value(**_kwargs):
         return SimpleNamespace(configured=True, default_branch="main")
 
@@ -130,6 +133,8 @@ async def test_automation_workspace_requires_selected_agent_credentials(
     monkeypatch.setattr(workspace_service, "load_existing_cloud_workspace", _existing_workspace)
     monkeypatch.setattr(workspace_service, "load_repo_config_value", _repo_config_value)
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
+    monkeypatch.setattr(workspace_service, "get_billing_snapshot_for_subject", _billing_snapshot)
+    monkeypatch.setattr(workspace_service, "repo_limit_for_billing_snapshot", lambda _snapshot: 4)
     monkeypatch.setattr(workspace_service, "load_cloud_credential_statuses", _credential_statuses)
 
     with pytest.raises(CloudApiError) as exc_info:

@@ -130,6 +130,7 @@ def canonical_repo_identity(
         name=normalized_name,
     )
 
+
 def claim_value(run: AutomationRun) -> AutomationRunClaimValue:
     if (
         run.executor_kind is None

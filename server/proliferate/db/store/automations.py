@@ -453,8 +453,7 @@ async def create_due_scheduled_runs_batch(
                     .limit(limit)
                     .with_for_update(skip_locked=True)
                 )
-            )
-            .all()
+            ).all()
         )
         inserted_count = 0
         for record, repo_config in rows:

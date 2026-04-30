@@ -109,10 +109,6 @@ function validateMonthlyCloudPrice(price) {
     price.recurring?.interval === "month",
     `Cloud monthly price ${price.id} must recur monthly.`,
   );
-  assertPriceShape(
-    price.metadata?.included_sandbox_hours === "100",
-    `Cloud monthly price ${price.id} must include 100 sandbox hours.`,
-  );
 }
 
 function validateSandboxOveragePrice(price, meterId) {
@@ -178,8 +174,6 @@ function ensureCloudMonthlyPrice(productId) {
     "metadata[environment]=local_test",
     "-d",
     "metadata[proliferate_plan]=cloud",
-    "-d",
-    "metadata[included_sandbox_hours]=100",
   ]);
   validateMonthlyCloudPrice(price);
   return price;

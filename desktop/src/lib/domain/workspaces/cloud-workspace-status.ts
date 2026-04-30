@@ -85,7 +85,10 @@ export function titleForStartBlockReason(
   reason: CloudStartBlockReason | string | null | undefined,
 ): string {
   const blockReason = normalizeStartBlockReason(reason);
-  return blockReason === "concurrency_limit" ? "Sandbox limit reached" : "Cloud usage is paused";
+  if (blockReason === "concurrency_limit") {
+    return "Sandbox limit reached";
+  }
+  return "Cloud usage is paused";
 }
 
 export function descriptionForStartBlockReason(

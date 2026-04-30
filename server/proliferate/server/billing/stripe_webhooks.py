@@ -13,7 +13,6 @@ from uuid import UUID
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
-    MONTHLY_CLOUD_GRANT_TYPE,
     REFILL_10H_GRANT_TYPE,
 )
 from proliferate.db.models.billing import BillingSubject
@@ -176,16 +175,6 @@ def _line_price_id(line: dict[str, Any]) -> str | None:
     if isinstance(price_details, dict) and isinstance(price_details.get("price"), str):
         return price_details["price"]
     return None
-
-
-def _line_period(line: dict[str, Any]) -> tuple[datetime | None, datetime | None]:
-    period = line.get("period")
-    if not isinstance(period, dict):
-        return None, None
-    return (
-        _datetime_from_timestamp(period.get("start")),
-        _datetime_from_timestamp(period.get("end")),
-    )
 
 
 def _line_items_from_object(stripe_object: dict[str, Any]) -> list[dict[str, Any]]:
@@ -391,24 +380,8 @@ async def _handle_invoice_paid(invoice: dict[str, Any]) -> None:
         await _sync_subscription(subscription)
         if subject is None:
             subject = await _subject_from_object(subscription)
-    if subject is None or subject.user_id is None:
+    if subject is None:
         return
-    line_period_start, line_period_end = _line_period(cloud_line)
-    period_start = (
-        line_period_start
-        or _datetime_from_timestamp(invoice.get("period_start"))
-        or datetime.now(UTC)
-    )
-    period_end = line_period_end or _datetime_from_timestamp(invoice.get("period_end"))
-    await ensure_billing_grant_record(
-        user_id=subject.user_id,
-        billing_subject_id=subject.id,
-        grant_type=MONTHLY_CLOUD_GRANT_TYPE,
-        hours_granted=100.0,
-        effective_at=period_start,
-        expires_at=period_end,
-        source_ref=f"stripe:invoice:{invoice_id}:cloud_monthly",
-    )
     await clear_payment_failed_holds(billing_subject_id=subject.id)
 
 

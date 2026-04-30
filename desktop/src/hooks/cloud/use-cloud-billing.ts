@@ -24,6 +24,7 @@ function hasUsableBillingPlan(
   return (
     typeof billingPlan.billingMode === "string"
     && typeof billingPlan.isUnlimited === "boolean"
+    && typeof billingPlan.hasUnlimitedCloudHours === "boolean"
     && typeof billingPlan.overQuota === "boolean"
     && typeof billingPlan.startBlocked === "boolean"
     && typeof billingPlan.activeSpendHold === "boolean"
@@ -31,6 +32,9 @@ function hasUsableBillingPlan(
     && typeof billingPlan.paymentHealthy === "boolean"
     && typeof billingPlan.overageEnabled === "boolean"
     && Number.isFinite(billingPlan.usedSandboxHours)
+    && (billingPlan.cloudRepoLimit === null
+      || Number.isFinite(billingPlan.cloudRepoLimit))
+    && Number.isFinite(billingPlan.activeCloudRepoCount)
     && (billingPlan.concurrentSandboxLimit === null
       || Number.isFinite(billingPlan.concurrentSandboxLimit))
     && Number.isFinite(billingPlan.activeSandboxCount)

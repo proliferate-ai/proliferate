@@ -183,6 +183,18 @@
   description: Free-tier usage limit (hours)
   tags: [self-hosted, production]
 
+- name: CLOUD_FREE_REPO_LIMIT
+  secret: false
+  default: "1"
+  description: Free-tier active cloud repo limit
+  tags: [self-hosted, production]
+
+- name: CLOUD_PAID_REPO_LIMIT
+  secret: false
+  default: "4"
+  description: Paid Cloud active repo limit
+  tags: [self-hosted, production]
+
 - name: CLOUD_CONCURRENT_SANDBOX_LIMIT
   secret: false
   default: "200"
@@ -198,7 +210,7 @@
 - name: STRIPE_SECRET_KEY
   secret: true
   default: ""
-  description: Stripe API key for checkout, portal, and usage export
+  description: Stripe API key for checkout, portal, price validation, and legacy usage export
   tags: [local-dev, production]
 
 - name: STRIPE_WEBHOOK_SECRET
@@ -228,7 +240,7 @@
 - name: STRIPE_SANDBOX_OVERAGE_PRICE_ID
   secret: false
   default: ""
-  description: Stripe metered 10-hour overage block price ID
+  description: Legacy Stripe metered 10-hour overage block price ID
   tags: [local-dev, production]
 
 - name: STRIPE_REFILL_10H_PRICE_ID

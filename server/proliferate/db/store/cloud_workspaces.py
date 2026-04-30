@@ -19,22 +19,60 @@ from proliferate.constants.cloud import (
     WorkspaceStatus,
 )
 from proliferate.db import engine as db_engine
-from proliferate.db.models.cloud import (
-    CloudSandbox,
-    CloudWorkspace,
+from proliferate.db.models.cloud import CloudSandbox, CloudWorkspace
+from proliferate.db.store.billing import (
+    acquire_billing_subject_repo_limit_lock,
+    cloud_repo_slot_exists,
+    count_active_cloud_repo_environments,
+    ensure_personal_billing_subject,
 )
-from proliferate.db.store.billing import ensure_personal_billing_subject
-from proliferate.db.store.cloud_runtime_environments import (
-    ensure_runtime_environment_for_repo,
-)
+from proliferate.db.store.cloud_runtime_environments import ensure_runtime_environment_for_repo
 from proliferate.utils.time import utcnow
 
 _UNSET: Final = object()
 
 
+class CloudRepoLimitExceededError(RuntimeError):
+    def __init__(self, *, active_repo_count: int, cloud_repo_limit: int) -> None:
+        super().__init__("Cloud repo limit exceeded.")
+        self.active_repo_count = active_repo_count
+        self.cloud_repo_limit = cloud_repo_limit
+
+
 def _workspace_repo_apply_lock_key(workspace_id: UUID) -> int:
     prefix = int.from_bytes(workspace_id.bytes[:8], byteorder="big", signed=False)
     return (prefix ^ WORKSPACE_REPO_APPLY_LOCK_SALT) & ((1 << 63) - 1)
+
+
+async def _enforce_cloud_repo_limit(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+    git_provider: str,
+    git_owner: str,
+    git_repo_name: str,
+    cloud_repo_limit: int | None,
+) -> None:
+    if cloud_repo_limit is None:
+        return
+    await acquire_billing_subject_repo_limit_lock(db, billing_subject_id)
+    if await cloud_repo_slot_exists(
+        db,
+        billing_subject_id=billing_subject_id,
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    ):
+        return
+    active_repo_count = await count_active_cloud_repo_environments(
+        db,
+        billing_subject_id,
+    )
+    if active_repo_count >= cloud_repo_limit:
+        raise CloudRepoLimitExceededError(
+            active_repo_count=active_repo_count,
+            cloud_repo_limit=cloud_repo_limit,
+        )
 
 
 async def list_cloud_workspaces(db: AsyncSession, user_id: UUID) -> list[CloudWorkspace]:
@@ -111,10 +149,19 @@ async def create_cloud_workspace_record(
     origin_json: str | None,
     template_version: str,
     repo_env_vars_ciphertext: str | None = None,
+    cloud_repo_limit: int | None = None,
     commit: bool = True,
 ) -> CloudWorkspace:
     now = utcnow()
     billing_subject = await ensure_personal_billing_subject(db, user_id)
+    await _enforce_cloud_repo_limit(
+        db,
+        billing_subject_id=billing_subject.id,
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        cloud_repo_limit=cloud_repo_limit,
+    )
     runtime_environment = await ensure_runtime_environment_for_repo(
         db,
         user_id=user_id,
@@ -642,6 +689,7 @@ async def create_cloud_workspace_for_user(
     origin_json: str | None,
     template_version: str,
     repo_env_vars_ciphertext: str | None = None,
+    cloud_repo_limit: int | None = None,
 ) -> CloudWorkspace:
     async with db_engine.async_session_factory() as db:
         return await create_cloud_workspace_record(
@@ -656,6 +704,7 @@ async def create_cloud_workspace_for_user(
             origin_json=origin_json,
             template_version=template_version,
             repo_env_vars_ciphertext=repo_env_vars_ciphertext,
+            cloud_repo_limit=cloud_repo_limit,
         )
 
 

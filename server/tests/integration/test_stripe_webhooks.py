@@ -13,7 +13,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.config import settings
-from proliferate.constants.billing import MONTHLY_CLOUD_GRANT_TYPE
 from proliferate.db import engine as engine_module
 from proliferate.db.models.billing import BillingGrant, BillingSubscription
 from proliferate.db.store.billing import ensure_personal_billing_subject
@@ -105,7 +104,6 @@ async def test_invoice_paid_uses_current_stripe_line_and_item_period_shapes(
         async_sessionmaker(test_engine, expire_on_commit=False),
     )
     monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_cloud")
-    monkeypatch.setattr(settings, "stripe_sandbox_overage_price_id", "price_overage")
 
     user_id = uuid.uuid4()
     subject = await ensure_personal_billing_subject(db_session, user_id)
@@ -132,12 +130,6 @@ async def test_invoice_paid_uses_current_stripe_line_and_item_period_shapes(
                     {
                         "id": "si_monthly",
                         "price": {"id": "price_cloud"},
-                        "current_period_start": 1_776_586_422,
-                        "current_period_end": 1_779_178_422,
-                    },
-                    {
-                        "id": "si_metered",
-                        "price": {"id": "price_overage"},
                         "current_period_start": 1_776_586_422,
                         "current_period_end": 1_779_178_422,
                     },
@@ -196,18 +188,16 @@ async def test_invoice_paid_uses_current_stripe_line_and_item_period_shapes(
         }
     )
 
-    grant = (
-        await db_session.execute(
-            select(BillingGrant).where(
-                BillingGrant.billing_subject_id == subject.id,
-                BillingGrant.grant_type == MONTHLY_CLOUD_GRANT_TYPE,
+    grants = list(
+        (
+            await db_session.execute(
+                select(BillingGrant).where(BillingGrant.billing_subject_id == subject.id)
             )
         )
-    ).scalar_one()
-    assert grant.hours_granted == 100.0
-    assert grant.remaining_seconds == 100.0 * 3600.0
-    assert grant.effective_at == datetime.fromtimestamp(1_776_586_422, tz=UTC)
-    assert grant.expires_at == datetime.fromtimestamp(1_779_178_422, tz=UTC)
+        .scalars()
+        .all()
+    )
+    assert grants == []
 
     subscription = (
         await db_session.execute(
@@ -220,3 +210,6 @@ async def test_invoice_paid_uses_current_stripe_line_and_item_period_shapes(
     assert subscription.current_period_start == datetime.fromtimestamp(1_776_586_422, tz=UTC)
     assert subscription.current_period_end == datetime.fromtimestamp(1_779_178_422, tz=UTC)
     assert subscription.cloud_monthly_price_id == "price_cloud"
+    assert subscription.overage_price_id is None
+    assert subscription.monthly_subscription_item_id == "si_monthly"
+    assert subscription.metered_subscription_item_id is None

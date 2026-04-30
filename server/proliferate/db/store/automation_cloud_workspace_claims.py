@@ -30,6 +30,7 @@ async def create_cloud_workspace_for_claimed_run(
     origin_json: str | None,
     template_version: str,
     now: datetime,
+    cloud_repo_limit: int | None = None,
 ) -> CloudWorkspace | None:
     async with db_engine.async_session_factory() as db:
         run = await load_claimed_run_for_update(
@@ -57,6 +58,7 @@ async def create_cloud_workspace_for_claimed_run(
             git_base_branch=git_base_branch,
             origin_json=origin_json,
             template_version=template_version,
+            cloud_repo_limit=cloud_repo_limit,
             commit=False,
         )
         run.cloud_workspace_id = workspace.id

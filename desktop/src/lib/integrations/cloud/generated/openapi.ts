@@ -1541,12 +1541,17 @@ export interface components {
         };
         /** BillingOverview */
         BillingOverview: {
-            /** Plan */
+            /**
+             * Plan
+             * @description `cloud` is a paid Cloud subscription, `unlimited` is a manual unlimited entitlement, and both grant unlimited Cloud hours.
+             */
             plan: string;
             /** Billingmode */
             billingMode: string;
             /** Isunlimited */
             isUnlimited: boolean;
+            /** Hasunlimitedcloudhours */
+            hasUnlimitedCloudHours: boolean;
             /** Overquota */
             overQuota: boolean;
             /** Includedhours */
@@ -1555,6 +1560,10 @@ export interface components {
             usedHours: number;
             /** Remaininghours */
             remainingHours: number | null;
+            /** Cloudrepolimit */
+            cloudRepoLimit: number | null;
+            /** Activecloudrepocount */
+            activeCloudRepoCount: number;
             /** Concurrentsandboxlimit */
             concurrentSandboxLimit: number | null;
             /** Activesandboxcount */
@@ -1679,12 +1688,17 @@ export interface components {
         };
         /** CloudPlanInfo */
         CloudPlanInfo: {
-            /** Plan */
+            /**
+             * Plan
+             * @description `cloud` is a paid Cloud subscription, `unlimited` is a manual unlimited entitlement, and both grant unlimited Cloud hours.
+             */
             plan: string;
             /** Billingmode */
             billingMode: string;
             /** Isunlimited */
             isUnlimited: boolean;
+            /** Hasunlimitedcloudhours */
+            hasUnlimitedCloudHours: boolean;
             /** Overquota */
             overQuota: boolean;
             /** Freesandboxhours */
@@ -1693,6 +1707,10 @@ export interface components {
             usedSandboxHours: number;
             /** Remainingsandboxhours */
             remainingSandboxHours: number | null;
+            /** Cloudrepolimit */
+            cloudRepoLimit: number | null;
+            /** Activecloudrepocount */
+            activeCloudRepoCount: number;
             /** Concurrentsandboxlimit */
             concurrentSandboxLimit: number | null;
             /** Activesandboxcount */
