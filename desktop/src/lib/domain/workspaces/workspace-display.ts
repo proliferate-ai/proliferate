@@ -2,6 +2,8 @@ import type { Workspace } from "@anyharness/sdk";
 import { humanizeBranchName, workspaceCurrentBranchName } from "@/lib/domain/workspaces/branch-naming";
 import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud-ids";
 
+const AUTOMATION_BRANCH_PATTERN = /^automation\/(.+)-[a-f0-9]{16}$/i;
+
 export function formatRelativeTime(date: string): string {
   const now = Date.now();
   const then = new Date(date).getTime();
@@ -55,6 +57,14 @@ export function workspaceBranchLabel(workspace: Workspace): string {
   return humanizeBranchName(branchName);
 }
 
+export function automationWorkspaceDefaultDisplayNameFromBranch(
+  branchName: string | null | undefined,
+): string | null {
+  const match = branchName?.trim().match(AUTOMATION_BRANCH_PATTERN);
+  const slug = match?.[1]?.trim();
+  return slug ? humanizeBranchName(slug) : null;
+}
+
 export function workspaceDisplayName(workspace: Workspace): string {
   const override = workspace.displayName?.trim();
   if (override) {
@@ -73,6 +83,10 @@ export function workspaceDefaultDisplayName(workspace: Workspace): string {
   if (workspace.kind === "worktree" || isCloudWorkspaceId(workspace.id)) {
     const branchName = workspaceCurrentBranchName(workspace);
     if (branchName) {
+      const automationName = automationWorkspaceDefaultDisplayNameFromBranch(branchName);
+      if (automationName) {
+        return automationName;
+      }
       return humanizeBranchName(branchName);
     }
   }

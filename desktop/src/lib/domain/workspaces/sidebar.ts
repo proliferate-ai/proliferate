@@ -88,6 +88,7 @@ export interface SidebarWorkspaceItemState {
   archived: boolean;
   activity: SessionViewState;
   variant: SidebarWorkspaceVariant;
+  createdByAutomation: boolean;
   cloudStatus: CloudWorkspaceStatus | null;
   lastInteracted: string | null;
   unread: boolean;
@@ -277,6 +278,40 @@ export function sidebarWorkspaceVariantForLogicalWorkspace(
       : "local";
 }
 
+function isSystemOrigin(
+  origin: { kind: string; entrypoint: string } | null | undefined,
+  entrypoint: "desktop" | "cloud",
+): boolean {
+  return origin?.kind === "system" && origin.entrypoint === entrypoint;
+}
+
+function localWorkspaceCreatedByAutomation(workspace: Workspace): boolean {
+  const currentBranch = workspace.currentBranch?.trim();
+  const originalBranch = workspace.originalBranch?.trim();
+  return isSystemOrigin(workspace.origin, "desktop")
+    && (
+      currentBranch?.startsWith("automation/")
+      || originalBranch?.startsWith("automation/")
+      || false
+    );
+}
+
+function cloudWorkspaceCreatedByAutomation(workspace: CloudWorkspaceSummary): boolean {
+  return isSystemOrigin(workspace.origin, "cloud");
+}
+
+function logicalWorkspaceCreatedByAutomation(workspace: LogicalWorkspace): boolean {
+  if (workspace.effectiveOwner === "cloud") {
+    return workspace.cloudWorkspace
+      ? cloudWorkspaceCreatedByAutomation(workspace.cloudWorkspace)
+      : false;
+  }
+
+  return workspace.localWorkspace
+    ? localWorkspaceCreatedByAutomation(workspace.localWorkspace)
+    : false;
+}
+
 export function getEffectiveExpandedSidebarGroupKeys(args: {
   groups: SidebarGroupState[];
   explicitlyExpandedRepoKeys: ReadonlySet<string>;
@@ -410,6 +445,7 @@ export function buildSidebarGroupStates(args: {
           archived,
           activity,
           variant,
+          createdByAutomation: logicalWorkspaceCreatedByAutomation(entry),
           cloudStatus: preferredCloudWorkspace
             ? preferredCloudWorkspace.status as CloudWorkspaceStatus
             : null,

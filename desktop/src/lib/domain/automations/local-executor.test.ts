@@ -5,6 +5,7 @@ import {
   buildLocalAutomationRepoCandidates,
   buildLocalAutomationWorktreePlan,
   findCandidateForClaim,
+  normalizeAutomationWorkspaceDisplayName,
   safeAutomationSlug,
   workspaceMatchesAutomationPlan,
 } from "./local-executor";
@@ -101,7 +102,16 @@ describe("local automation executor domain helpers", () => {
 
     expect(plan.branchName).toBe("automation/daily-check-fd253849c4fe4ec9");
     expect(plan.workspaceName).toBe("automation-daily-check-fd253849c4fe4ec9");
+    expect(plan.displayName).toBe("Daily Check");
     expect(plan.setupScript).toBe("pnpm install");
+  });
+
+  it("normalizes friendly automation workspace display names safely", () => {
+    expect(normalizeAutomationWorkspaceDisplayName("  Daily   repo\ncheck  ")).toBe(
+      "Daily repo check",
+    );
+    expect(normalizeAutomationWorkspaceDisplayName("   ")).toBe("Automation run");
+    expect(normalizeAutomationWorkspaceDisplayName("x".repeat(200))).toHaveLength(160);
   });
 
   it("removes repeated dots from automation branch slugs", () => {

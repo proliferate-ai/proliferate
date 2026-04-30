@@ -22,7 +22,6 @@ async def test_create_automation_bootstraps_repo_config(
 ) -> None:
     original_factory = engine_module.async_session_factory
     engine_module.async_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
-    monkeypatch.setattr(automation_service.settings, "automations_enabled", True)
     monkeypatch.setattr(
         automation_service,
         "utcnow",
@@ -67,12 +66,10 @@ async def test_create_automation_bootstraps_repo_config(
 
 @pytest.mark.asyncio
 async def test_resume_cloud_automation_requires_agent_kind(
-    monkeypatch: pytest.MonkeyPatch,
     test_engine,  # type: ignore[no-untyped-def]
 ) -> None:
     original_factory = engine_module.async_session_factory
     engine_module.async_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
-    monkeypatch.setattr(automation_service.settings, "automations_enabled", True)
     user_id = uuid.uuid4()
     automation_id = uuid.uuid4()
     repo_config_id = uuid.uuid4()
@@ -123,7 +120,6 @@ async def test_create_cloud_automation_requires_agent_kind(
 ) -> None:
     original_factory = engine_module.async_session_factory
     engine_module.async_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
-    monkeypatch.setattr(automation_service.settings, "automations_enabled", True)
     monkeypatch.setattr(
         automation_service,
         "utcnow",

@@ -1,4 +1,8 @@
+import { type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/Button";
+import { PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+import { MoreHorizontal, Pause, Pencil, Play, Zap } from "@/components/ui/icons";
 import type { AutomationResponse } from "@/lib/integrations/cloud/client";
 import { buildAutomationRowViewModel } from "@/lib/domain/automations/view-model";
 
@@ -24,59 +28,106 @@ export function AutomationRow({
   onRunNow,
 }: AutomationRowProps) {
   const view = buildAutomationRowViewModel(automation);
+  const enabled = automation.enabled;
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    event.preventDefault();
+    onSelect();
+  };
 
   return (
-    <div
-      className={`group rounded-lg border p-3 transition-colors ${
-        selected
-          ? "border-foreground/25 bg-foreground/10"
-          : "border-border bg-foreground/5 hover:bg-foreground/10"
-      }`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onSelect}
-          className="h-auto min-w-0 flex-1 justify-start rounded-md px-1 py-1 text-left hover:bg-transparent"
-        >
-          <span className="block min-w-0">
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-sm font-medium text-foreground">{view.title}</span>
-              <span className="shrink-0 rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                {view.statusLabel}
-              </span>
-            </span>
-            <span className="mt-1 block truncate text-xs text-muted-foreground">
-              {view.repoLabel}
-            </span>
-            <span className="mt-2 block truncate text-xs text-muted-foreground">
-              {view.scheduleLabel} - Next: {view.nextRunLabel} - {view.executionLabel}
-            </span>
-          </span>
-        </Button>
-        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onRunNow}
-            disabled={busy || !automation.enabled}
-            title={automation.enabled ? "Queue a manual run" : "Resume before queueing a run"}
+    <div role="listitem">
+      <div
+        onClick={onSelect}
+        className={`group cursor-pointer rounded-lg px-3 py-3 transition-colors ${
+          selected ? "bg-accent/70" : "hover:bg-accent/45"
+        }`}
+      >
+        <div className="flex min-w-0 items-center justify-between gap-4">
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label={view.title}
+            onKeyDown={handleKeyDown}
+            className="min-w-0 flex-1 cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
-            Run now
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onEdit} disabled={busy}>
-            Edit
-          </Button>
-          {automation.enabled ? (
-            <Button variant="ghost" size="sm" onClick={onPause} disabled={busy}>
-              Pause
-            </Button>
-          ) : (
-            <Button variant="ghost" size="sm" onClick={onResume} disabled={busy}>
-              Resume
-            </Button>
-          )}
+            <div className="flex min-w-0 items-baseline gap-2">
+              <span className="min-w-0 truncate text-base leading-6 text-foreground">
+                {view.title}
+              </span>
+              {!enabled && (
+                <span className="shrink-0 text-sm text-muted-foreground">Paused</span>
+              )}
+            </div>
+            <div className="mt-0.5 flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+              <span className="truncate">{view.repoLabel}</span>
+              <span aria-hidden="true">-</span>
+              <span className="truncate">Next {view.nextRunPlainLabel}</span>
+            </div>
+          </div>
+
+          <div className="flex min-h-7 shrink-0 items-center gap-1.5">
+            <span className="max-w-48 truncate text-right text-sm text-muted-foreground">
+              {view.scheduleLabel}
+            </span>
+            <PopoverButton
+              stopPropagation
+              trigger={(
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={busy}
+                  aria-label="Automation actions"
+                  className="text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=open]:bg-transparent"
+                >
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              )}
+              side="bottom"
+              align="end"
+              className="w-44 rounded-xl border border-border bg-popover p-1 shadow-floating"
+            >
+              {(close) => (
+                <>
+                  <PopoverMenuItem
+                    icon={<Zap className="size-4" />}
+                    label="Run now"
+                    disabled={busy || !enabled}
+                    onClick={() => {
+                      close();
+                      onRunNow();
+                    }}
+                  />
+                  <PopoverMenuItem
+                    icon={<Pencil className="size-4" />}
+                    label="Edit"
+                    disabled={busy}
+                    onClick={() => {
+                      close();
+                      onEdit();
+                    }}
+                  />
+                  <PopoverMenuItem
+                    icon={enabled ? <Pause className="size-4" /> : <Play className="size-4" />}
+                    label={enabled ? "Pause" : "Resume"}
+                    disabled={busy}
+                    onClick={() => {
+                      close();
+                      if (enabled) {
+                        onPause();
+                      } else {
+                        onResume();
+                      }
+                    }}
+                  />
+                </>
+              )}
+            </PopoverButton>
+          </div>
         </div>
       </div>
     </div>

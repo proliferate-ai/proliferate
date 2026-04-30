@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from proliferate.config import settings
 from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS
 from proliferate.db.store.automation_run_claims import (
     sweep_expired_dispatching_runs,
@@ -44,8 +43,6 @@ from proliferate.server.automations.schedule import (
 )
 from proliferate.utils.time import utcnow
 
-AUTOMATIONS_DISABLED_CODE = "AUTOMATIONS_DISABLED"
-AUTOMATIONS_DISABLED_MESSAGE = "Automations are not enabled for this server."
 MAX_RUN_LIST_LIMIT = 100
 DEFAULT_RUN_LIST_LIMIT = 50
 _REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh"}
@@ -63,15 +60,6 @@ class AutomationServiceError(RuntimeError):
 class SchedulerTickResult:
     created_runs: int
     swept_dispatching_runs: int = 0
-
-
-def require_automations_enabled() -> None:
-    if not settings.automations_enabled:
-        raise AutomationServiceError(
-            AUTOMATIONS_DISABLED_CODE,
-            AUTOMATIONS_DISABLED_MESSAGE,
-            status_code=404,
-        )
 
 
 def _normalize_required_text(value: str, *, field_name: str, max_length: int | None = None) -> str:
@@ -192,13 +180,11 @@ async def _ensure_repo_config_id(
 
 
 async def list_automations(user_id: UUID) -> AutomationListResponse:
-    require_automations_enabled()
     values = await list_automations_for_user(user_id)
     return AutomationListResponse(automations=[automation_payload(value) for value in values])
 
 
 async def get_automation(user_id: UUID, automation_id: UUID) -> AutomationResponse:
-    require_automations_enabled()
     value = await load_automation_for_user(user_id=user_id, automation_id=automation_id)
     if value is None:
         raise AutomationServiceError(
@@ -210,7 +196,6 @@ async def get_automation(user_id: UUID, automation_id: UUID) -> AutomationRespon
 
 
 async def create_automation(user_id: UUID, body: CreateAutomationRequest) -> AutomationResponse:
-    require_automations_enabled()
     now = utcnow()
     git_owner = _normalize_repo_part(body.git_owner, field_name="gitOwner")
     git_repo_name = _normalize_repo_part(body.git_repo_name, field_name="gitRepoName")
@@ -252,7 +237,6 @@ async def update_automation(
     automation_id: UUID,
     body: UpdateAutomationRequest,
 ) -> AutomationResponse:
-    require_automations_enabled()
     existing = await load_automation_for_user(user_id=user_id, automation_id=automation_id)
     if existing is None:
         raise AutomationServiceError(
@@ -346,7 +330,6 @@ async def update_automation(
 
 
 async def pause_automation(user_id: UUID, automation_id: UUID) -> AutomationResponse:
-    require_automations_enabled()
     value = await update_automation_for_user(
         user_id=user_id,
         automation_id=automation_id,
@@ -364,7 +347,6 @@ async def pause_automation(user_id: UUID, automation_id: UUID) -> AutomationResp
 
 
 async def resume_automation(user_id: UUID, automation_id: UUID) -> AutomationResponse:
-    require_automations_enabled()
     existing = await load_automation_for_user(user_id=user_id, automation_id=automation_id)
     if existing is None:
         raise AutomationServiceError(
@@ -395,7 +377,6 @@ async def resume_automation(user_id: UUID, automation_id: UUID) -> AutomationRes
 
 
 async def run_automation_now(user_id: UUID, automation_id: UUID) -> AutomationRunResponse:
-    require_automations_enabled()
     existing = await load_automation_for_user(user_id=user_id, automation_id=automation_id)
     if existing is None:
         raise AutomationServiceError(
@@ -431,7 +412,6 @@ async def list_automation_runs(
     *,
     limit: int = DEFAULT_RUN_LIST_LIMIT,
 ) -> AutomationRunListResponse:
-    require_automations_enabled()
     bounded_limit = max(1, min(limit, MAX_RUN_LIST_LIMIT))
     values = await list_runs_for_automation_for_user(
         user_id=user_id,
@@ -461,8 +441,6 @@ def _resolve_due_schedule(
 
 
 async def run_scheduler_tick(*, batch_size: int = 100) -> SchedulerTickResult:
-    if not settings.automations_enabled:
-        return SchedulerTickResult(created_runs=0)
     swept_dispatching_runs = await sweep_expired_dispatching_runs(now=utcnow())
     created_runs = await create_due_scheduled_runs_batch(
         now=utcnow(),

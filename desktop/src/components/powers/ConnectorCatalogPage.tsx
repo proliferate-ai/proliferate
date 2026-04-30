@@ -82,16 +82,9 @@ export function ConnectorCatalogPage() {
   };
 
   return (
-    <div className="mx-auto min-h-full w-full max-w-5xl px-6 pb-14 pt-10">
+    <>
       <section className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-medium text-foreground">Powers</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Integrations Proliferate can use inside every session.
-          </p>
-        </div>
-
-        <div className="sticky top-0 z-10 -mx-6 bg-background/95 px-6 pb-3 pt-1 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="sticky top-10 z-10 -mx-6 bg-background/95 px-6 pb-3 pt-1 backdrop-blur supports-[backdrop-filter]:bg-background/80">
           <div className="relative">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
@@ -191,6 +184,6 @@ export function ConnectorCatalogPage() {
           record={deleteTarget}
         />
       )}
-    </div>
+    </>
   );
 }

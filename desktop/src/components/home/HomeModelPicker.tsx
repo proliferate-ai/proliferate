@@ -1,5 +1,7 @@
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { HomePickerControl } from "@/components/home/HomePickerControl";
+import { PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
+import { PillControlButton } from "@/components/ui/PillControlButton";
+import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Check, ProviderIcon, Sparkles } from "@/components/ui/icons";
 import type {
   HomeNextModelGroup,
@@ -23,13 +25,21 @@ export function HomeModelPicker({
     : "No models";
 
   return (
-    <HomePickerControl
-      icon={selectedModel ? <ProviderIcon kind={selectedModel.kind} className="size-4" /> : <Sparkles className="size-3.5" />}
-      label={label}
-      disabled={groups.length === 0}
+    <PopoverButton
+      trigger={(
+        <PillControlButton
+          icon={selectedModel ? <ProviderIcon kind={selectedModel.kind} className="size-4" /> : <Sparkles className="size-3.5" />}
+          label={label}
+          disabled={groups.length === 0}
+          disclosure
+          className="max-w-[12rem]"
+        />
+      )}
+      side="top"
+      className="w-72 rounded-xl border border-border bg-popover p-1 shadow-floating"
     >
       {(close) => (
-        <>
+        <PickerPopoverContent>
           {groups.map((group, index) => (
             <div key={group.kind}>
               {index > 0 ? <div className="my-1 h-px bg-border" /> : null}
@@ -50,8 +60,8 @@ export function HomeModelPicker({
               ))}
             </div>
           ))}
-        </>
+        </PickerPopoverContent>
       )}
-    </HomePickerControl>
+    </PopoverButton>
   );
 }

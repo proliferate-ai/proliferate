@@ -21,6 +21,7 @@ function makeWorkspace(args: {
   kind?: Workspace["kind"];
   branch?: string;
   displayName?: string | null;
+  origin?: Workspace["origin"];
   updatedAt?: string;
 }): Workspace {
   const {
@@ -30,6 +31,7 @@ function makeWorkspace(args: {
     kind = "local",
     branch = kind === "worktree" ? `feature/${id}` : "main",
     displayName = null,
+    origin = null,
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
 
@@ -47,6 +49,7 @@ function makeWorkspace(args: {
     originalBranch: "main",
     currentBranch: branch,
     displayName,
+    origin,
     executionSummary: null,
     lifecycleState: "active",
     cleanupState: "none",
@@ -88,6 +91,7 @@ function makeCloudWorkspace(args: {
   repoName?: string;
   branch?: string;
   displayName?: string | null;
+  origin?: CloudWorkspaceSummary["origin"];
   updatedAt?: string;
 }): CloudWorkspaceSummary {
   const {
@@ -95,12 +99,14 @@ function makeCloudWorkspace(args: {
     repoName = "proliferate",
     branch = "main",
     displayName = null,
+    origin = null,
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
 
   return {
     id,
     displayName,
+    origin,
     repo: {
       provider: "github",
       owner: "proliferate-ai",
@@ -137,6 +143,7 @@ function makeLocalLogicalWorkspace(args: {
   repoName: string;
   kind?: Workspace["kind"];
   branch?: string;
+  origin?: Workspace["origin"];
   updatedAt?: string;
 }): LogicalWorkspace {
   const {
@@ -145,6 +152,7 @@ function makeLocalLogicalWorkspace(args: {
     repoName,
     kind = "local",
     branch,
+    origin,
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
   const localWorkspace = makeWorkspace({
@@ -153,6 +161,7 @@ function makeLocalLogicalWorkspace(args: {
     sourceRoot: repoKey,
     kind,
     branch,
+    origin,
     updatedAt,
   });
 
@@ -181,6 +190,7 @@ function makeCloudLogicalWorkspace(args: {
   repoKey: string;
   repoName: string;
   branch?: string;
+  origin?: CloudWorkspaceSummary["origin"];
   updatedAt?: string;
 }): LogicalWorkspace {
   const {
@@ -188,12 +198,14 @@ function makeCloudLogicalWorkspace(args: {
     repoKey,
     repoName,
     branch = "main",
+    origin,
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
   const cloudWorkspace = makeCloudWorkspace({
     id: `${id}-cloud`,
     repoName,
     branch,
+    origin,
     updatedAt,
   });
 
@@ -508,5 +520,118 @@ describe("sidebar workspace filters", () => {
     expect(resolveSidebarEmptyState(0, 0)).toBe("noWorkspaces");
     expect(resolveSidebarEmptyState(2, 0)).toBe("filteredOut");
     expect(resolveSidebarEmptyState(2, 1)).toBeNull();
+  });
+
+  it("marks local system automation worktrees as automation-created", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "automation-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          branch: "automation/issue-triage-fd253849c4fe4ec9",
+          origin: { kind: "system", entrypoint: "desktop" },
+        }),
+      ],
+    });
+
+    expect(groups[0]?.items[0]?.createdByAutomation).toBe(true);
+  });
+
+  it("does not mark human automation-prefixed local branches as automation-created", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "human-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          branch: "automation/issue-triage-fd253849c4fe4ec9",
+          origin: { kind: "human", entrypoint: "desktop" },
+        }),
+      ],
+    });
+
+    expect(groups[0]?.items[0]?.createdByAutomation).toBe(false);
+  });
+
+  it("does not mark non-automation local system worktrees as automation-created", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "system-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          branch: "feature/issue-triage",
+          origin: { kind: "system", entrypoint: "desktop" },
+        }),
+      ],
+    });
+
+    expect(groups[0]?.items[0]?.createdByAutomation).toBe(false);
+  });
+
+  it("marks cloud system workspaces as automation-created", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeCloudLogicalWorkspace({
+          id: "automation-cloud",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          origin: { kind: "system", entrypoint: "cloud" },
+        }),
+      ],
+    });
+
+    expect(groups[0]?.items[0]?.createdByAutomation).toBe(true);
+  });
+
+  it("follows the effective materialization for dual local/cloud rows", () => {
+    const localWorkspace = makeWorkspace({
+      id: "dual-local-materialization",
+      repoName: "repo-a",
+      sourceRoot: "/tmp/repo-a",
+      kind: "worktree",
+      branch: "automation/issue-triage-fd253849c4fe4ec9",
+      origin: { kind: "system", entrypoint: "desktop" },
+    });
+    const cloudWorkspace = makeCloudWorkspace({
+      id: "dual-cloud-materialization",
+      repoName: "repo-a",
+      branch: "feature/issue-triage",
+      origin: { kind: "human", entrypoint: "cloud" },
+    });
+    const base = makeLocalLogicalWorkspace({
+      id: "dual-local-effective",
+      repoKey: "/tmp/repo-a",
+      repoName: "repo-a",
+      kind: "worktree",
+      branch: "automation/issue-triage-fd253849c4fe4ec9",
+      origin: { kind: "system", entrypoint: "desktop" },
+    });
+    const dualLocalEffective: LogicalWorkspace = {
+      ...base,
+      localWorkspace,
+      cloudWorkspace,
+      effectiveOwner: "local",
+    };
+    const dualCloudEffective: LogicalWorkspace = {
+      ...dualLocalEffective,
+      id: "dual-cloud-effective",
+      effectiveOwner: "cloud",
+      preferredMaterializationId: `cloud:${cloudWorkspace.id}`,
+      lifecycle: "cloud_active",
+    };
+
+    const groups = buildGroups({
+      logicalWorkspaces: [dualLocalEffective, dualCloudEffective],
+    });
+
+    expect(groups[0]?.items.find((item) => item.id === "dual-local-effective")?.createdByAutomation)
+      .toBe(true);
+    expect(groups[0]?.items.find((item) => item.id === "dual-cloud-effective")?.createdByAutomation)
+      .toBe(false);
   });
 });

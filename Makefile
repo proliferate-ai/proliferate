@@ -137,12 +137,10 @@ dev: sdk-build server-db-ready
 	echo "Starting profile $$PROLIFERATE_DEV_PROFILE: runtime :$$ANYHARNESS_PORT, backend :$$PROLIFERATE_API_PORT, web :$$PROLIFERATE_WEB_PORT"; \
 	RUST_LOG=info ANYHARNESS_DEV_CORS=1 $(CARGO) run --bin anyharness -- serve --port "$$ANYHARNESS_PORT" --runtime-home "$$ANYHARNESS_RUNTIME_HOME" & \
 	(cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port "$$PROLIFERATE_API_PORT") & \
-	if [ "$${AUTOMATIONS_ENABLED:-}" = "true" ] || [ "$${AUTOMATIONS_ENABLED:-}" = "1" ]; then \
-		echo "Starting automation worker..."; \
-		cd server && uv run python -m proliferate.server.automations.worker --role all & \
-	fi; \
+	echo "Starting automation worker..."; \
+	(cd server && uv run python -m proliferate.server.automations.worker --role all) & \
 	sleep 2; \
-	(cd desktop && VITE_PROLIFERATE_AUTOMATIONS_ENABLED="$${AUTOMATIONS_ENABLED:-}" pnpm tauri dev --runner "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri-runner.sh" --config "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri.dev.json")
+	(cd desktop && pnpm tauri dev --runner "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri-runner.sh" --config "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri.dev.json")
 
 dev-init:
 	@if [ -z "$(PROFILE)" ]; then \

@@ -1,6 +1,5 @@
-import { memo } from "react";
+import { memo, type KeyboardEvent } from "react";
 import type { AutomationRunResponse } from "@/lib/integrations/cloud/client";
-import { Button } from "@/components/ui/Button";
 import {
   automationRunStatusLabel,
   automationRunTimestampLabel,
@@ -25,6 +24,10 @@ interface AutomationRunTimelineRowProps {
 
 const EMPTY_LOCAL_WORKSPACE_IDS = new Set<string>();
 
+function triggerKindLabel(kind: AutomationRunResponse["triggerKind"]): string {
+  return kind === "manual" ? "Manual" : "Scheduled";
+}
+
 const AutomationRunTimelineRow = memo(function AutomationRunTimelineRow({
   run,
   pendingCloudWorkspaceId,
@@ -40,43 +43,65 @@ const AutomationRunTimelineRow = memo(function AutomationRunTimelineRow({
   const canOpenLocalWorkspace = run.anyharnessWorkspaceId
     ? openableLocalWorkspaceIds.has(run.anyharnessWorkspaceId)
     : false;
+  const canOpenCloudWorkspace = Boolean(run.cloudWorkspaceId && onOpenCloudWorkspace);
+  const canOpenWorkspace = canOpenCloudWorkspace || Boolean(canOpenLocalWorkspace && onOpenLocalWorkspace);
+  const openWorkspace = () => {
+    if (opening) {
+      return;
+    }
+    if (run.cloudWorkspaceId && onOpenCloudWorkspace) {
+      onOpenCloudWorkspace(run.cloudWorkspaceId);
+      return;
+    }
+    if (canOpenLocalWorkspace && onOpenLocalWorkspace) {
+      onOpenLocalWorkspace(run);
+    }
+  };
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!canOpenWorkspace || (event.key !== "Enter" && event.key !== " ")) {
+      return;
+    }
+    event.preventDefault();
+    openWorkspace();
+  };
 
   return (
-    <div className="rounded-lg border border-border bg-foreground/5 p-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p
-            className="truncate text-sm font-medium text-foreground"
-            title={statusTitle}
-          >
-            {statusLabel}
-          </p>
-          <p className="truncate text-xs text-muted-foreground">
-            {automationRunTimestampLabel(run)}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {run.cloudWorkspaceId && onOpenCloudWorkspace ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onOpenCloudWorkspace(run.cloudWorkspaceId!)}
-              disabled={opening}
+    <div role="listitem">
+      <div
+        role={canOpenWorkspace ? "button" : undefined}
+        tabIndex={canOpenWorkspace ? 0 : undefined}
+        aria-label={canOpenWorkspace ? "Open workspace" : undefined}
+        aria-disabled={opening || undefined}
+        onClick={canOpenWorkspace ? openWorkspace : undefined}
+        onKeyDown={handleKeyDown}
+        className={`rounded-lg px-3 py-3 transition-colors ${
+          canOpenWorkspace
+            ? "cursor-pointer hover:bg-accent/45 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            : ""
+        }`}
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p
+              className="truncate text-base leading-6 text-foreground"
+              title={statusTitle}
             >
-              {opening ? "Opening..." : "Open workspace"}
-            </Button>
-          ) : canOpenLocalWorkspace && onOpenLocalWorkspace ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onOpenLocalWorkspace(run)}
-            >
-              Open workspace
-            </Button>
-          ) : null}
-          <span className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">
-            {run.triggerKind}
-          </span>
+              {statusLabel}
+            </p>
+            <p className="mt-0.5 truncate text-sm text-muted-foreground">
+              {automationRunTimestampLabel(run)}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <span className="text-sm text-muted-foreground">
+              {triggerKindLabel(run.triggerKind)}
+            </span>
+            {canOpenWorkspace ? (
+              <span className="text-sm text-muted-foreground">
+                {opening ? "Opening..." : "Open workspace"}
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
@@ -93,7 +118,7 @@ export function AutomationRunTimeline({
 }: AutomationRunTimelineProps) {
   if (loading) {
     return (
-      <div className="rounded-lg border border-border bg-foreground/5 p-4 text-sm text-muted-foreground">
+      <div className="-mx-3 rounded-lg px-3 py-6 text-sm text-muted-foreground">
         Loading runs...
       </div>
     );
@@ -101,14 +126,14 @@ export function AutomationRunTimeline({
 
   if (runs.length === 0) {
     return (
-      <div className="rounded-lg border border-border bg-foreground/5 p-4 text-sm text-muted-foreground">
+      <div className="-mx-3 rounded-lg px-3 py-6 text-sm text-muted-foreground">
         No runs queued yet.
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="-mx-3 flex flex-col gap-1" role="list">
       {runs.map((run) => (
         <AutomationRunTimelineRow
           key={run.id}

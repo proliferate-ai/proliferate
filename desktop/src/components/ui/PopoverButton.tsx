@@ -112,6 +112,7 @@ export function PopoverButton({
     ? cloneElement(trigger, {
         ...trigger.props,
         ref: triggerRef,
+        "data-state": open ? "open" : "closed",
         onClick: (...args: unknown[]) => {
           if (stopPropagation && args[0] && typeof (args[0] as Event).stopPropagation === "function") {
             (args[0] as Event).stopPropagation();

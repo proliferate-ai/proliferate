@@ -2,10 +2,18 @@ import type {
   AgentSummary,
   GitBranchRef,
   ModelRegistry,
-  ModelRegistryModel,
   Workspace,
 } from "@anyharness/sdk";
 import { compareChatLaunchKinds } from "@/config/chat-launch";
+import {
+  buildAgentModelGroups,
+  resolveAgentModelInfo,
+  resolveEffectiveAgentModelSelection,
+  type AgentModelGroup,
+  type AgentModelInfo,
+  type AgentModelOption,
+  type AgentModelSelection,
+} from "@/lib/domain/agents/model-options";
 import { resolveModelForRegistry } from "@/lib/domain/chat/session-config";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 
@@ -39,32 +47,10 @@ export type HomeNextDestination = "cowork" | "repository";
 
 export type HomeNextRepoLaunchKind = "worktree" | "local" | "cloud";
 
-export interface HomeNextModelSelection {
-  kind: string;
-  modelId: string;
-}
-
-export interface HomeNextModelOption {
-  kind: string;
-  modelId: string;
-  displayName: string;
-  description: string | null;
-  isDefault: boolean;
-  isSelected: boolean;
-}
-
-export interface HomeNextModelGroup {
-  kind: string;
-  providerDisplayName: string;
-  defaultModelId: string | null;
-  models: HomeNextModelOption[];
-}
-
-export interface HomeNextModelInfo {
-  kind: string;
-  providerDisplayName: string;
-  model: ModelRegistryModel;
-}
+export type HomeNextModelSelection = AgentModelSelection;
+export type HomeNextModelOption = AgentModelOption;
+export type HomeNextModelGroup = AgentModelGroup;
+export type HomeNextModelInfo = AgentModelInfo;
 
 export interface HomeNextLaunchPreferences {
   defaultChatAgentKind: string;
@@ -106,63 +92,12 @@ export function buildHomeNextAgentOptions(
     );
 }
 
-function validSelection(
-  groups: HomeNextModelGroup[],
-  selection: HomeNextModelSelection | null | undefined,
-): HomeNextModelSelection | null {
-  if (!selection) {
-    return null;
-  }
-
-  const group = groups.find((candidate) => candidate.kind === selection.kind);
-  const model = group?.models.find((candidate) => candidate.modelId === selection.modelId);
-  return model ? { kind: selection.kind, modelId: selection.modelId } : null;
-}
-
-function defaultSelectionForGroup(group: HomeNextModelGroup): HomeNextModelSelection | null {
-  const model = group.models.find((candidate) =>
-    candidate.modelId === group.defaultModelId || candidate.isDefault
-  ) ?? group.models[0];
-
-  return model
-    ? { kind: group.kind, modelId: model.modelId }
-    : null;
-}
-
 export function buildHomeNextModelGroups(
   agents: AgentSummary[],
   modelRegistries: ModelRegistry[],
   selected: HomeNextModelSelection | null,
 ): HomeNextModelGroup[] {
-  const readyAgentKinds = new Set(
-    agents
-      .filter((agent) => agent.readiness === "ready")
-      .map((agent) => agent.kind),
-  );
-
-  return modelRegistries
-    .filter((registry) => readyAgentKinds.has(registry.kind) && registry.models.length > 0)
-    .map((registry) => ({
-      kind: registry.kind,
-      providerDisplayName: registry.displayName,
-      defaultModelId: registry.defaultModelId ?? null,
-      models: registry.models.map((model) => ({
-        kind: registry.kind,
-        modelId: model.id,
-        displayName: model.displayName,
-        description: model.description ?? null,
-        isDefault: model.isDefault,
-        isSelected: selected?.kind === registry.kind && selected.modelId === model.id,
-      })),
-    }))
-    .sort((left, right) =>
-      compareChatLaunchKinds(
-        left.kind,
-        right.kind,
-        left.providerDisplayName,
-        right.providerDisplayName,
-      )
-    );
+  return buildAgentModelGroups({ agents, modelRegistries, selected });
 }
 
 export function resolveEffectiveHomeModelSelection(
@@ -170,27 +105,10 @@ export function resolveEffectiveHomeModelSelection(
   override: HomeNextModelSelection | null | undefined,
   preferences: HomeNextLaunchPreferences,
 ): HomeNextModelSelection | null {
-  const explicitSelection = validSelection(groups, override);
-  if (explicitSelection) {
-    return explicitSelection;
-  }
-
-  const preferredSelection = validSelection(groups, {
-    kind: preferences.defaultChatAgentKind,
-    modelId: preferences.defaultChatModelId,
+  return resolveEffectiveAgentModelSelection(groups, override, {
+    defaultAgentKind: preferences.defaultChatAgentKind,
+    defaultModelId: preferences.defaultChatModelId,
   });
-  if (preferredSelection) {
-    return preferredSelection;
-  }
-
-  for (const group of groups) {
-    const defaultSelection = defaultSelectionForGroup(group);
-    if (defaultSelection) {
-      return defaultSelection;
-    }
-  }
-
-  return null;
 }
 
 export function resolveHomeNextModelInfo(
@@ -198,21 +116,7 @@ export function resolveHomeNextModelInfo(
   modelRegistries: ModelRegistry[],
   selection: HomeNextModelSelection | null | undefined,
 ): HomeNextModelInfo | null {
-  if (!selection) {
-    return null;
-  }
-
-  const group = groups.find((candidate) => candidate.kind === selection.kind);
-  const registry = modelRegistries.find((candidate) => candidate.kind === selection.kind);
-  const model = registry?.models.find((candidate) => candidate.id === selection.modelId);
-
-  return group && model
-    ? {
-      kind: selection.kind,
-      providerDisplayName: group.providerDisplayName,
-      model,
-    }
-    : null;
+  return resolveAgentModelInfo(groups, modelRegistries, selection);
 }
 
 export function resolveSelectedHomeNextAgentOption(

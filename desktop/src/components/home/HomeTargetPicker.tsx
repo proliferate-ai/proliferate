@@ -1,9 +1,10 @@
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import {
-  HomeEmptyPickerRow,
-  HomePickerControl,
-  matchesHomePickerSearch,
-} from "@/components/home/HomePickerControl";
+  PickerEmptyRow,
+  PickerPopoverContent,
+} from "@/components/ui/PickerPopoverContent";
+import { PillControlButton } from "@/components/ui/PillControlButton";
+import { PopoverButton } from "@/components/ui/PopoverButton";
 import {
   Check,
   CloudIcon,
@@ -12,6 +13,7 @@ import {
   Plus,
   Sparkles,
 } from "@/components/ui/icons";
+import { matchesPickerSearch } from "@/lib/infra/search";
 import type {
   HomeNextDestination,
   HomeNextRepoLaunchKind,
@@ -124,34 +126,41 @@ export function HomeTargetPicker({
   onConfigureCloud,
 }: HomeTargetPickerProps) {
   const filteredRepositories = repositories.filter((repository) =>
-    matchesHomePickerSearch([repository.name, repository.sourceRoot], searchValue)
+    matchesPickerSearch([repository.name, repository.sourceRoot], searchValue)
   );
   const filteredBranches = branchOptions.filter((branch) =>
-    matchesHomePickerSearch([branch], searchValue)
+    matchesPickerSearch([branch], searchValue)
   );
   const isRepositoryTarget = destination === "repository" && !!selectedRepository;
   const canShowBranchChoices =
     isRepositoryTarget && (repoLaunchKind === "worktree" || repoLaunchKind === "cloud");
 
   return (
-    <HomePickerControl
-      icon={destination === "cowork"
-        ? <Sparkles className="size-3.5" />
-        : <GitBranchIcon className="size-3.5" />}
-      label={targetLabel({
-        destination,
-        selectedRepository,
-        repoLaunchKind,
-        selectedBranchName,
-      })}
-      controlClassName="max-w-[18rem]"
-      popoverClassName="w-[26rem] rounded-xl border border-border bg-popover p-1 shadow-floating"
-      searchValue={searchValue}
-      searchPlaceholder="Search targets"
-      onSearchChange={onSearchChange}
+    <PopoverButton
+      trigger={(
+        <PillControlButton
+          icon={destination === "cowork"
+            ? <Sparkles className="size-3.5" />
+            : <GitBranchIcon className="size-3.5" />}
+          label={targetLabel({
+            destination,
+            selectedRepository,
+            repoLaunchKind,
+            selectedBranchName,
+          })}
+          disclosure
+          className="max-w-[18rem]"
+        />
+      )}
+      side="top"
+      className="w-[26rem] rounded-xl border border-border bg-popover p-1 shadow-floating"
     >
       {(close) => (
-        <>
+        <PickerPopoverContent
+          searchValue={searchValue}
+          searchPlaceholder="Search targets"
+          onSearchChange={onSearchChange}
+        >
           <TargetSection label="Destination" />
           <PopoverMenuItem
             icon={<Sparkles className="size-3.5" />}
@@ -231,7 +240,7 @@ export function HomeTargetPicker({
             );
           })}
           {filteredRepositories.length === 0 ? (
-            <HomeEmptyPickerRow label="No repositories found" />
+            <PickerEmptyRow label="No repositories found" />
           ) : null}
 
           <PopoverMenuItem
@@ -248,7 +257,7 @@ export function HomeTargetPicker({
             <>
               <TargetSection label="Base branch" />
               {branchLoading ? (
-                <HomeEmptyPickerRow label="Loading branches" />
+                <PickerEmptyRow label="Loading branches" />
               ) : filteredBranches.length > 0 ? (
                 filteredBranches.map((branch) => (
                   <PopoverMenuItem
@@ -264,12 +273,12 @@ export function HomeTargetPicker({
                   />
                 ))
               ) : (
-                <HomeEmptyPickerRow label="No branches found" />
+                <PickerEmptyRow label="No branches found" />
               )}
             </>
           ) : null}
-        </>
+        </PickerPopoverContent>
       )}
-    </HomePickerControl>
+    </PopoverButton>
   );
 }

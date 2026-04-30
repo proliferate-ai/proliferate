@@ -6,6 +6,7 @@ import type { AnyHarnessClient, GetSetupStatusResponse, Session, Workspace } fro
 import { AnyHarnessError } from "@anyharness/sdk";
 import {
   LOCAL_AUTOMATION_ERROR_CODES,
+  shouldUpdateAutomationWorkspaceDisplayName,
   workspaceMatchesAutomationPlan,
   type LocalAutomationRepoCandidate,
   type LocalAutomationWorktreePlan,
@@ -104,6 +105,7 @@ async function createOrReuseWorkspace(
   if (input.claim.anyharnessWorkspaceId) {
     const workspace = await getWorkspaceOrFail(input.client, input.claim.anyharnessWorkspaceId);
     assertWorkspaceMatches(input, workspace);
+    await syncAutomationWorkspaceDisplayName(input, workspace, { force: false });
     return workspace;
   }
 
@@ -118,6 +120,7 @@ async function createOrReuseWorkspace(
     if (!attached.accepted) {
       throw new LocalAutomationExecutorError(LOCAL_AUTOMATION_ERROR_CODES.staleClaim);
     }
+    await syncAutomationWorkspaceDisplayName(input, resolved, { force: false });
     return resolved;
   }
 
@@ -140,10 +143,31 @@ async function createOrReuseWorkspace(
   if (!attached.accepted) {
     throw new LocalAutomationExecutorError(LOCAL_AUTOMATION_ERROR_CODES.staleClaim);
   }
-  await input.client.workspaces.updateDisplayName(workspace.id, {
-    displayName: input.plan.workspaceName,
-  }).catch(() => undefined);
+  await syncAutomationWorkspaceDisplayName(input, workspace, { force: true });
   return workspace;
+}
+
+async function syncAutomationWorkspaceDisplayName(
+  input: ExecuteLocalAutomationInput,
+  workspace: Workspace,
+  options: { force: boolean },
+): Promise<void> {
+  if (
+    !options.force
+    && !shouldUpdateAutomationWorkspaceDisplayName({
+      currentDisplayName: workspace.displayName,
+      workspaceName: input.plan.workspaceName,
+    })
+  ) {
+    return;
+  }
+
+  const updated = await input.client.workspaces.updateDisplayName(workspace.id, {
+    displayName: input.plan.displayName,
+  }).catch(() => null);
+  if (updated) {
+    workspace.displayName = updated.displayName;
+  }
 }
 
 async function resolveExistingTargetPath(

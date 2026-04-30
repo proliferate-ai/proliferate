@@ -1,53 +1,37 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
-import { IconButton } from "@/components/ui/IconButton";
-import { Calendar, Plus, SplitPanel } from "@/components/ui/icons";
-import { SidebarUpdatePill } from "@/components/workspace/shell/SidebarUpdatePill";
-import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
+import { PageContentFrame } from "@/components/ui/PageContentFrame";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { ArrowLeft, Pause, Pencil, Play, Plus, Zap } from "@/components/ui/icons";
+import { MainSidebarPageShell } from "@/components/workspace/shell/MainSidebarPageShell";
 import { AutomationDetailContent } from "./AutomationDetailContent";
 import { AutomationEditorModal } from "./AutomationEditorModal";
 import { AutomationListContent } from "./AutomationListContent";
-import { AUTOMATION_PREEXECUTOR_COPY, automationsUiEnabled } from "@/config/automations";
+import { AUTOMATION_PREEXECUTOR_COPY } from "@/config/automations";
 import { useAutomationActions } from "@/hooks/automations/use-automation-actions";
 import {
   useAutomationDetail,
   useAutomationRuns,
   useAutomations,
 } from "@/hooks/automations/use-automations";
-import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
 import { useCloudWorkspaceActions } from "@/hooks/cloud/use-cloud-workspace-actions";
-import { useResize } from "@/hooks/layout/use-resize";
-import { useSettingsRepositories } from "@/hooks/settings/use-settings-repositories";
-import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
-import { useUpdater } from "@/hooks/updater/use-updater";
-import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
-import { buildAutomationRepositoryOptions } from "@/lib/domain/automations/repositories";
+import { buildAutomationRowViewModel } from "@/lib/domain/automations/view-model";
+import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import type {
   AutomationResponse,
   AutomationRunResponse,
-  CloudRepoConfigSummary,
   CreateAutomationRequest,
   UpdateAutomationRequest,
 } from "@/lib/integrations/cloud/client";
-import {
-  WORKSPACE_SIDEBAR_MAX_WIDTH,
-  WORKSPACE_SIDEBAR_MIN_WIDTH,
-  useWorkspaceUiStore,
-} from "@/stores/preferences/workspace-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 
 const EMPTY_AUTOMATIONS: AutomationResponse[] = [];
 const EMPTY_AUTOMATION_RUNS: AutomationRunResponse[] = [];
-const EMPTY_REPO_CONFIGS: CloudRepoConfigSummary[] = [];
-
-const GLASS_HEADER_CLASS =
-  "flex h-10 shrink-0 items-center border-b border-foreground/10 bg-card/30 backdrop-blur-xl supports-[backdrop-filter]:bg-card/20";
-const SOLID_HEADER_CLASS = "flex h-10 shrink-0 items-center";
 
 interface AutomationsScreenProps {
   selectedAutomationId?: string | null;
@@ -55,12 +39,6 @@ interface AutomationsScreenProps {
 
 export function AutomationsScreen({ selectedAutomationId = null }: AutomationsScreenProps) {
   const navigate = useNavigate();
-  const sidebarOpen = useWorkspaceUiStore((s) => s.sidebarOpen);
-  const sidebarWidth = useWorkspaceUiStore((s) => s.sidebarWidth);
-  const setSidebarOpen = useWorkspaceUiStore((s) => s.setSidebarOpen);
-  const setSidebarWidth = useWorkspaceUiStore((s) => s.setSidebarWidth);
-  const transparentChromeEnabled = useTransparentChromeEnabled();
-  const { phase: updaterPhase, downloadUpdate, openRestartPrompt } = useUpdater();
   const showToast = useToastStore((state) => state.show);
   const { selectWorkspace } = useWorkspaceSelection();
   const { selectSession } = useSessionActions();
@@ -70,20 +48,8 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   const [editorOpen, setEditorOpen] = useState(false);
   const [pendingCloudWorkspaceId, setPendingCloudWorkspaceId] = useState<string | null>(null);
 
-  const enabled = automationsUiEnabled();
-  const { data: automationsData, isLoading } = useAutomations(enabled);
-  const { data: repoConfigsData } = useCloudRepoConfigs(enabled);
-  const { repositories } = useSettingsRepositories();
-  const { cloudWorkspaces } = useStandardRepoProjection();
+  const { data: automationsData, isLoading } = useAutomations(true);
   const automations = automationsData?.automations ?? EMPTY_AUTOMATIONS;
-  const repositoryOptions = useMemo(
-    () => buildAutomationRepositoryOptions({
-      repoConfigs: repoConfigsData?.configs ?? EMPTY_REPO_CONFIGS,
-      cloudWorkspaces,
-      repositories,
-    }),
-    [cloudWorkspaces, repoConfigsData?.configs, repositories],
-  );
   const isDetailView = selectedAutomationId !== null;
   const selectedId = isDetailView ? selectedAutomationId : null;
   const selectedFromList = useMemo(
@@ -96,22 +62,14 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     isError: selectedDetailError,
   } = useAutomationDetail(
     selectedFromList ? null : selectedId,
-    enabled && selectedId !== null && selectedFromList === null,
+    selectedId !== null && selectedFromList === null,
   );
   const selectedAutomation = selectedFromList ?? selectedDetail ?? null;
   const { data: runsData, isLoading: runsLoading } = useAutomationRuns(
     selectedId,
-    enabled && isDetailView,
+    isDetailView,
   );
   const actions = useAutomationActions();
-
-  const onLeftSeparatorDown = useResize({
-    direction: "horizontal",
-    size: sidebarWidth,
-    onResize: setSidebarWidth,
-    min: WORKSPACE_SIDEBAR_MIN_WIDTH,
-    max: WORKSPACE_SIDEBAR_MAX_WIDTH,
-  });
 
   const openCreate = () => {
     setEditingAutomation(null);
@@ -124,6 +82,11 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   };
 
   const closeEditor = () => setEditorOpen(false);
+
+  const handleConfigureCloudTarget = (target: { gitOwner: string; gitRepoName: string }) => {
+    setEditorOpen(false);
+    navigate(buildCloudRepoSettingsHref(target.gitOwner, target.gitRepoName));
+  };
 
   const handleCreate = async (body: CreateAutomationRequest) => {
     const created = await actions.createAutomation(body);
@@ -171,158 +134,160 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     || actions.isResumingAutomation
     || actions.isRunningAutomationNow;
 
-  return (
-    <div
-      className={`flex h-screen overflow-hidden ${
-        transparentChromeEnabled ? "bg-transparent" : "bg-sidebar"
-      }`}
-      data-telemetry-block
-    >
-      <div
-        id="main-sidebar"
-        className="flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out"
-        style={{ width: sidebarOpen ? sidebarWidth : 0 }}
-      >
-        <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
-          <div className="flex h-full items-center gap-2 pl-[82px]">
-            <IconButton
-              tone="sidebar"
-              size="sm"
-              onClick={() => setSidebarOpen(false)}
-              title="Hide sidebar"
-              className="rounded-md"
-            >
-              <SplitPanel className="size-4" />
-            </IconButton>
-            <SidebarUpdatePill
-              phase={updaterPhase}
-              onDownloadUpdate={downloadUpdate}
-              onOpenRestartPrompt={openRestartPrompt}
-            />
-          </div>
-        </div>
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <MainSidebar />
-        </div>
-      </div>
-
-      {sidebarOpen && (
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-controls="main-sidebar"
-          onMouseDown={onLeftSeparatorDown}
-          className="relative z-10 -ml-1 flex w-1 shrink-0 cursor-col-resize items-center justify-center transition-colors hover:bg-primary/30 active:bg-primary/50"
+  const renderCreateButton = () => (
+    <Button onClick={openCreate}>
+      <Plus className="size-4" />
+      New automation
+    </Button>
+  );
+  const renderDetailHeader = () => {
+    if (!selectedAutomation) {
+      return (
+        <PageHeader
+          title="Automation"
+          description="Loading automation..."
         />
-      )}
+      );
+    }
 
-      <div
-        className={`flex min-w-0 flex-1 flex-col overflow-hidden ${
-          transparentChromeEnabled ? "bg-transparent" : "bg-background"
-        } ${sidebarOpen && !transparentChromeEnabled ? "rounded-tl-[22px] border-l border-t border-sidebar-border" : ""}`}
-      >
-        <div
-          className={transparentChromeEnabled ? GLASS_HEADER_CLASS : SOLID_HEADER_CLASS}
-          data-tauri-drag-region="true"
+    const view = buildAutomationRowViewModel(selectedAutomation);
+    const enabled = selectedAutomation.enabled;
+    return (
+      <div className="relative flex min-w-0 flex-col">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/automations")}
+          className="absolute -top-8 -ml-2 w-fit"
         >
-          {!sidebarOpen && (
-            <div className="flex items-center gap-2 pl-[82px] pr-2">
-              <IconButton
+          <ArrowLeft className="size-4" />
+          Automations
+        </Button>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            <h2 className="truncate text-2xl font-medium text-foreground">
+              {view.title}
+            </h2>
+            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+              <span className="truncate">{view.repoLabel}</span>
+              <span aria-hidden="true">-</span>
+              <span>{view.executionLabel}</span>
+              <span aria-hidden="true">-</span>
+              <span>{view.statusLabel}</span>
+            </div>
+            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+              <span>{view.scheduleLabel}</span>
+              <span aria-hidden="true">-</span>
+              <span>Next {view.nextRunPlainLabel}</span>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => actions.runAutomationNow(selectedAutomation.id)}
+              disabled={busy || !enabled}
+              title={enabled ? "Queue a manual run" : "Resume before queueing a run"}
+            >
+              <Zap className="size-4" />
+              Run now
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => openEdit(selectedAutomation)}
+              disabled={busy}
+            >
+              <Pencil className="size-4" />
+              Edit
+            </Button>
+            {enabled ? (
+              <Button
+                variant="ghost"
                 size="sm"
-                onClick={() => setSidebarOpen(true)}
-                title="Show sidebar"
-                className="rounded-md"
+                onClick={() => actions.pauseAutomation(selectedAutomation.id)}
+                disabled={busy}
               >
-                <SplitPanel className="size-4" />
-              </IconButton>
-              <SidebarUpdatePill
-                phase={updaterPhase}
-                onDownloadUpdate={downloadUpdate}
-                onOpenRestartPrompt={openRestartPrompt}
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-auto bg-background">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-6 py-6">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Calendar className="size-4" />
-                  <span className="text-xs uppercase tracking-wide">Automations</span>
-                </div>
-                <h1 className="mt-2 text-2xl font-semibold text-foreground">
-                  Scheduled agent runs
-                </h1>
-                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                  {AUTOMATION_PREEXECUTOR_COPY.pageDescription}
-                </p>
-              </div>
-              <Button onClick={openCreate} disabled={!enabled}>
-                <Plus className="size-4" />
-                New automation
+                <Pause className="size-4" />
+                Pause
               </Button>
-            </div>
-
-            {!enabled ? (
-              <div className="rounded-lg border border-border bg-foreground/5 p-5 text-sm text-muted-foreground">
-                Automations are disabled in this build.
-              </div>
-            ) : isDetailView ? (
-              <AutomationDetailContent
-                automation={selectedAutomation}
-                loading={selectedDetailLoading}
-                error={selectedDetailError}
-                runs={runsData?.runs ?? EMPTY_AUTOMATION_RUNS}
-                runsLoading={runsLoading}
-                pendingCloudWorkspaceId={pendingCloudWorkspaceId}
-                busy={busy}
-                onBack={() => navigate("/automations")}
-                onEdit={() => {
-                  if (selectedAutomation) openEdit(selectedAutomation);
-                }}
-                onPause={() => {
-                  if (selectedAutomation) actions.pauseAutomation(selectedAutomation.id);
-                }}
-                onResume={() => {
-                  if (selectedAutomation) actions.resumeAutomation(selectedAutomation.id);
-                }}
-                onRunNow={() => {
-                  if (selectedAutomation) actions.runAutomationNow(selectedAutomation.id);
-                }}
-                onOpenCloudWorkspace={(cloudWorkspaceId) => {
-                  void handleOpenCloudWorkspace(cloudWorkspaceId);
-                }}
-                onOpenLocalWorkspace={(run) => {
-                  void handleOpenLocalWorkspace(run);
-                }}
-              />
             ) : (
-              <AutomationListContent
-                automations={automations}
-                loading={isLoading}
-                busy={busy}
-                onSelect={(automationId) => navigate(`/automations/${automationId}`)}
-                onEdit={openEdit}
-                onPause={(automationId) => actions.pauseAutomation(automationId)}
-                onResume={(automationId) => actions.resumeAutomation(automationId)}
-                onRunNow={(automationId) => actions.runAutomationNow(automationId)}
-              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => actions.resumeAutomation(selectedAutomation.id)}
+                disabled={busy}
+              >
+                <Play className="size-4" />
+                Resume
+              </Button>
             )}
           </div>
         </div>
       </div>
-
-      <AutomationEditorModal
-        open={editorOpen}
-        automation={editingAutomation}
-        repositoryOptions={repositoryOptions}
-        busy={busy}
-        onClose={closeEditor}
-        onCreate={handleCreate}
-        onUpdate={handleUpdate}
+    );
+  };
+  const pageHeader = isDetailView
+    ? renderDetailHeader()
+    : (
+      <PageHeader
+        title="Automations"
+        description={AUTOMATION_PREEXECUTOR_COPY.pageDescription}
+        action={renderCreateButton()}
       />
-    </div>
+    );
+
+  return (
+    <>
+      <MainSidebarPageShell>
+        <PageContentFrame
+          stickyTitle={isDetailView ? (selectedAutomation?.title ?? "Automation") : "Automations"}
+          stickyAction={isDetailView ? undefined : renderCreateButton()}
+          header={pageHeader}
+        >
+          {isDetailView ? (
+            <AutomationDetailContent
+              automation={selectedAutomation}
+              loading={selectedDetailLoading}
+              error={selectedDetailError}
+              runs={runsData?.runs ?? EMPTY_AUTOMATION_RUNS}
+              runsLoading={runsLoading}
+              pendingCloudWorkspaceId={pendingCloudWorkspaceId}
+              onBack={() => navigate("/automations")}
+              onOpenCloudWorkspace={(cloudWorkspaceId) => {
+                void handleOpenCloudWorkspace(cloudWorkspaceId);
+              }}
+              onOpenLocalWorkspace={(run) => {
+                void handleOpenLocalWorkspace(run);
+              }}
+            />
+          ) : (
+            <AutomationListContent
+              automations={automations}
+              loading={isLoading}
+              busy={busy}
+              onSelect={(automationId) => navigate(`/automations/${automationId}`)}
+              onEdit={openEdit}
+              onPause={(automationId) => actions.pauseAutomation(automationId)}
+              onResume={(automationId) => actions.resumeAutomation(automationId)}
+              onRunNow={(automationId) => actions.runAutomationNow(automationId)}
+            />
+          )}
+        </PageContentFrame>
+      </MainSidebarPageShell>
+
+      {editorOpen && (
+        <AutomationEditorModal
+          key={editingAutomation?.id ?? "new"}
+          open={editorOpen}
+          automation={editingAutomation}
+          busy={busy}
+          onClose={closeEditor}
+          onConfigureCloudTarget={handleConfigureCloudTarget}
+          onCreate={handleCreate}
+          onUpdate={handleUpdate}
+        />
+      )}
+    </>
   );
 }

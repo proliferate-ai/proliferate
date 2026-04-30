@@ -38,6 +38,7 @@ from proliferate.server.cloud.runtime.service import get_workspace_connection, p
 from proliferate.server.cloud.runtime.session_api import (
     CloudRuntimePromptDeliveryUncertainError,
     CloudRuntimeRequestRejectedError,
+    apply_runtime_reasoning_effort,
     close_runtime_session,
     create_runtime_session,
     prompt_runtime_session,
@@ -325,6 +326,9 @@ async def _create_or_load_session(
     if current is None:
         return None
     if current.anyharness_session_id is not None:
+        current = await _apply_reasoning_effort_for_claim(current, target)
+        if current is None:
+            return None
         return CloudRunSessionContext(claim=current, target=target)
 
     try:
@@ -366,7 +370,34 @@ async def _create_or_load_session(
     refreshed = await _require_current_claim(current)
     if refreshed is None:
         return None
+    refreshed = await _apply_reasoning_effort_for_claim(refreshed, target)
+    if refreshed is None:
+        return None
     return CloudRunSessionContext(claim=refreshed, target=target)
+
+
+async def _apply_reasoning_effort_for_claim(
+    claim: AutomationRunClaimValue,
+    target: RuntimeConnectionTarget,
+) -> AutomationRunClaimValue | None:
+    if not claim.reasoning_effort or claim.anyharness_session_id is None:
+        return claim
+    try:
+        await apply_runtime_reasoning_effort(
+            target.runtime_url,
+            target.access_token,
+            session_id=claim.anyharness_session_id,
+            reasoning_effort=claim.reasoning_effort,
+        )
+    except CloudRuntimeReconnectError:
+        logger.exception(
+            "automation cloud executor config apply failed run_id=%s session_id=%s",
+            claim.id,
+            claim.anyharness_session_id,
+        )
+        await _fail_claim(claim, code="config_apply_failed")
+        return None
+    return await _require_current_claim(claim)
 
 
 async def _send_prompt(context: CloudRunSessionContext) -> None:
@@ -490,13 +521,6 @@ async def run_cloud_executor_loop(
     )
     tasks: set[asyncio.Task[None]] = set()
     while not stop_event.is_set():
-        if not settings.automations_enabled:
-            try:
-                await asyncio.wait_for(stop_event.wait(), timeout=resolved.poll_interval_seconds)
-            except TimeoutError:
-                continue
-            continue
-
         done = {task for task in tasks if task.done()}
         for task in done:
             tasks.remove(task)

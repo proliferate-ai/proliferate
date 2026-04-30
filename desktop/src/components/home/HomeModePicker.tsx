@@ -1,5 +1,7 @@
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { HomePickerControl } from "@/components/home/HomePickerControl";
+import { PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
+import { PillControlButton } from "@/components/ui/PillControlButton";
+import { PopoverButton } from "@/components/ui/PopoverButton";
 import {
   Check,
   CircleAlert,
@@ -44,12 +46,20 @@ export function HomeModePicker({
   }
 
   return (
-    <HomePickerControl
-      icon={iconForMode(selectedMode.icon)}
-      label={selectedMode.shortLabel ?? selectedMode.label}
+    <PopoverButton
+      trigger={(
+        <PillControlButton
+          icon={iconForMode(selectedMode.icon)}
+          label={selectedMode.shortLabel ?? selectedMode.label}
+          disclosure
+          className="max-w-[12rem]"
+        />
+      )}
+      side="top"
+      className="w-72 rounded-xl border border-border bg-popover p-1 shadow-floating"
     >
       {(close) => (
-        <>
+        <PickerPopoverContent>
           {modes.map((mode) => (
             <PopoverMenuItem
               key={mode.value}
@@ -68,8 +78,8 @@ export function HomeModePicker({
               ) : null}
             </PopoverMenuItem>
           ))}
-        </>
+        </PickerPopoverContent>
       )}
-    </HomePickerControl>
+    </PopoverButton>
   );
 }

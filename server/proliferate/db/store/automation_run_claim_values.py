@@ -36,6 +36,7 @@ AUTOMATION_ERROR_MESSAGES: Final = {
     "workspace_provision_failed": "Cloud workspace provisioning failed.",
     "runtime_not_ready": "The runtime was not ready.",
     "session_create_failed": "The runtime could not create a session.",
+    "config_apply_failed": "The runtime could not apply the requested configuration.",
     "prompt_send_failed": "The runtime could not accept the automation prompt.",
     "stale_claim": "The executor lost its claim before the run was dispatched.",
     "unexpected_executor_error": "The executor could not dispatch this run.",

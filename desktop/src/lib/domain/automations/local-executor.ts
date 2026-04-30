@@ -19,10 +19,14 @@ export interface LocalAutomationWorktreePlan {
   repoRootId: string;
   branchName: string;
   workspaceName: string;
+  displayName: string;
   targetPath: string;
   baseRef: string;
   setupScript: string | null;
 }
+
+const MAX_WORKSPACE_DISPLAY_NAME_LENGTH = 160;
+const DEFAULT_AUTOMATION_WORKSPACE_DISPLAY_NAME = "Automation run";
 
 export const LOCAL_AUTOMATION_ERROR_CODES = {
   repoNotAvailable: "local_repo_not_available",
@@ -132,6 +136,20 @@ export function safeAutomationSlug(title: string, fallback: string): string {
   return slug || fallback;
 }
 
+export function normalizeAutomationWorkspaceDisplayName(title: string): string {
+  const normalized = title.trim().replace(/\s+/g, " ");
+  const truncated = normalized.slice(0, MAX_WORKSPACE_DISPLAY_NAME_LENGTH).trim();
+  return truncated || DEFAULT_AUTOMATION_WORKSPACE_DISPLAY_NAME;
+}
+
+export function shouldUpdateAutomationWorkspaceDisplayName(args: {
+  currentDisplayName: string | null | undefined;
+  workspaceName: string;
+}): boolean {
+  const current = args.currentDisplayName?.trim();
+  return !current || current === args.workspaceName;
+}
+
 export function buildLocalAutomationWorktreePlan(args: {
   claim: LocalAutomationRunClaimResponse;
   candidate: LocalAutomationRepoCandidate;
@@ -158,6 +176,7 @@ export function buildLocalAutomationWorktreePlan(args: {
     repoRootId: args.candidate.repoRoot.id,
     branchName: `automation/${slug}-${runSuffix}`,
     workspaceName,
+    displayName: normalizeAutomationWorkspaceDisplayName(args.claim.titleSnapshot),
     targetPath: `${args.homeDir}/.proliferate/worktrees/${repoName}/${workspaceName}`,
     baseRef,
     setupScript: args.setupScript?.trim() || null,

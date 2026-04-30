@@ -6,6 +6,7 @@ import type {
 import {
   automationRunStatusLabel,
   buildAutomationRowViewModel,
+  formatAutomationNextRunPlain,
 } from "./view-model";
 import { validateAutomationTimezone } from "./schedule";
 
@@ -88,6 +89,28 @@ describe("buildAutomationRowViewModel", () => {
 
     expect(view.statusLabel).toBe("Paused");
     expect(view.nextRunLabel).toBe("Paused");
+  });
+});
+
+describe("formatAutomationNextRunPlain", () => {
+  const now = new Date("2026-04-20T08:00:00Z");
+
+  it("uses relative copy for near-future runs", () => {
+    expect(formatAutomationNextRunPlain("2026-04-20T08:30:00Z", "UTC", now)).toBe(
+      "in 30 minutes",
+    );
+    expect(formatAutomationNextRunPlain("2026-04-20T09:00:00Z", "UTC", now)).toBe(
+      "in an hour",
+    );
+  });
+
+  it("uses plain calendar copy for later runs", () => {
+    expect(formatAutomationNextRunPlain("2026-04-21T09:00:00Z", "UTC", now)).toBe(
+      "tomorrow at 9:00 AM",
+    );
+    expect(formatAutomationNextRunPlain("2026-04-24T09:00:00Z", "UTC", now)).toBe(
+      "Friday at 9:00 AM",
+    );
   });
 });
 

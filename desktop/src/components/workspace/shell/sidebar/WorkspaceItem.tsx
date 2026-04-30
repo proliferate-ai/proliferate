@@ -9,7 +9,9 @@ import {
   CircleAlert,
   MessageSquare,
   Pencil,
+  RefreshCw,
 } from "@/components/ui/icons";
+import { IconButton } from "@/components/ui/IconButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { SessionViewState } from "@/lib/domain/sessions/activity";
@@ -39,12 +41,14 @@ interface WorkspaceItemProps {
   active?: boolean;
   archived?: boolean;
   activity?: SessionViewState;
+  createdByAutomation?: boolean;
   lastInteracted?: string | null;
   unread?: boolean;
   pendingPromptCount?: number;
   onSelect?: () => void;
   onArchive?: () => void;
   onUnarchive?: () => void;
+  onOpenAutomations?: () => void;
   /**
    * Persist a display name override. `null` clears it. Omit to disable the
    * Rename context menu item (e.g. for cloud entries).
@@ -62,12 +66,14 @@ export function WorkspaceItem({
   active = false,
   archived = false,
   activity = "idle",
+  createdByAutomation = false,
   lastInteracted,
   unread = false,
   pendingPromptCount = 0,
   onSelect,
   onArchive,
   onUnarchive,
+  onOpenAutomations,
   onRename,
 }: WorkspaceItemProps) {
   const hasArchiveAction = !!(onArchive || onUnarchive);
@@ -119,6 +125,32 @@ export function WorkspaceItem({
       }`}
     />
   );
+  const automationMetaIcon = createdByAutomation ? (
+    <Tooltip content={onOpenAutomations ? "Created by automation · Open Automations" : "Created by automation"}>
+      {onOpenAutomations ? (
+        <IconButton
+          tone="sidebar"
+          size="sm"
+          title="Open Automations"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenAutomations();
+          }}
+          className={`!size-4 !px-0 hover:bg-transparent ${
+            archived ? "text-sidebar-muted-foreground/40" : "text-sidebar-muted-foreground"
+          }`}
+        >
+          <RefreshCw className="size-3" />
+        </IconButton>
+      ) : (
+        <RefreshCw
+          className={`size-3 ${
+            archived ? "text-sidebar-muted-foreground/40" : "text-sidebar-muted-foreground"
+          }`}
+        />
+      )}
+    </Tooltip>
+  ) : null;
 
   const row = (
     <SidebarRowSurface
@@ -183,12 +215,13 @@ export function WorkspaceItem({
           </div>
         )}
         <div
-          className={`flex items-center justify-end text-sidebar-muted-foreground transition-transform duration-150 ease-out ${
+          className={`flex items-center justify-end gap-1 text-sidebar-muted-foreground transition-transform duration-150 ease-out ${
             hasArchiveAction
               ? "group-hover:-translate-x-4 group-focus-within:-translate-x-4"
               : ""
           }`}
         >
+          {automationMetaIcon}
           {variantMetaIcon}
         </div>
       </div>

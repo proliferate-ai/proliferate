@@ -8,7 +8,6 @@ import logging
 import signal
 from collections.abc import Sequence
 
-from proliferate.config import settings
 from proliferate.db import engine as db_engine
 from proliferate.db.migrations import validate_database_schema
 from proliferate.integrations.sentry import (
@@ -54,20 +53,8 @@ async def run_scheduler_loop(
         batch_size,
     )
     schema_validated = False
-    disabled_logged = False
     consecutive_failures = 0
     while not stop_event.is_set():
-        if not settings.automations_enabled:
-            if not disabled_logged:
-                logger.info("Automations are disabled; automation scheduler worker is idle.")
-                disabled_logged = True
-            schema_validated = False
-            try:
-                await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
-            except TimeoutError:
-                continue
-            continue
-        disabled_logged = False
         try:
             if not schema_validated:
                 await _validate_schema()
@@ -126,15 +113,13 @@ async def _amain(args: argparse.Namespace) -> None:
                 stop_event=stop_event,
             )
         elif args.role == "cloud-executor":
-            if settings.automations_enabled:
-                await _validate_schema()
+            await _validate_schema()
             await run_cloud_executor_loop(
                 stop_event=stop_event,
                 config=_cloud_executor_config_from_args(args),
             )
         else:
-            if settings.automations_enabled:
-                await _validate_schema()
+            await _validate_schema()
             cloud_executor_config = _cloud_executor_config_from_args(args)
             tasks = [
                 asyncio.create_task(

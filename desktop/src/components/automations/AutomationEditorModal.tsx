@@ -1,119 +1,109 @@
-import { useEffect, useRef, useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
+import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { Input } from "@/components/ui/Input";
-import { Label } from "@/components/ui/Label";
 import { ModalShell } from "@/components/ui/ModalShell";
-import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import {
-  AUTOMATION_AGENT_KIND_OPTIONS,
-  AUTOMATION_EXECUTION_TARGET_OPTIONS,
-  AUTOMATION_PREEXECUTOR_COPY,
   AUTOMATION_REASONING_EFFORT_OPTIONS,
-  AUTOMATION_SCHEDULE_PRESET_OPTIONS,
 } from "@/config/automations";
+import { useAutomationModelSelection } from "@/hooks/automations/use-automation-model-selection";
+import { useAutomationModeSelection } from "@/hooks/automations/use-automation-mode-selection";
+import { useAutomationTargetSelection } from "@/hooks/automations/use-automation-target-selection";
+import type {
+  AutomationModelOverride,
+  AutomationModelSelection,
+} from "@/lib/domain/automations/model-selection";
+import type { AutomationModeOverride } from "@/lib/domain/automations/mode-selection";
+import type { AutomationTargetSelection } from "@/lib/domain/automations/target-selection";
 import type {
   AutomationResponse,
   CreateAutomationRequest,
   UpdateAutomationRequest,
 } from "@/lib/integrations/cloud/client";
-import type { AutomationRepositoryOption } from "@/lib/domain/automations/repositories";
 import {
   defaultAutomationTimezone,
   presetForRrule,
-  rruleForPreset,
+  rruleForPresetAtTime,
   validateAutomationRrule,
   validateAutomationTimezone,
-  type AutomationSchedulePreset,
+  type AutomationSchedulePresetOrCustom,
 } from "@/lib/domain/automations/schedule";
+import {
+  AutomationSchedulePopover,
+  AutomationSelectPopover,
+  AutomationTemplatePopover,
+  reasoningIcon,
+} from "./AutomationEditorControls";
+import { AutomationModePicker } from "./AutomationModePicker";
+import { AutomationModelPicker } from "./AutomationModelPicker";
+import { AutomationTargetPicker } from "./AutomationTargetPicker";
 
-type SchedulePresetValue = AutomationSchedulePreset | "custom";
+type SchedulePresetValue = AutomationSchedulePresetOrCustom;
 
 interface AutomationEditorModalProps {
   open: boolean;
   automation: AutomationResponse | null;
-  repositoryOptions: AutomationRepositoryOption[];
   busy: boolean;
   onClose: () => void;
+  onConfigureCloudTarget: (target: { gitOwner: string; gitRepoName: string }) => void;
   onCreate: (body: CreateAutomationRequest) => Promise<void>;
   onUpdate: (automationId: string, body: UpdateAutomationRequest) => Promise<void>;
-}
-
-function repoValue(repo: AutomationRepositoryOption): string {
-  return `${repo.gitOwner}/${repo.gitRepoName}`;
-}
-
-function parseRepoValue(value: string): { gitOwner: string; gitRepoName: string } {
-  const [gitOwner, ...rest] = value.split("/");
-  return { gitOwner, gitRepoName: rest.join("/") };
 }
 
 export function AutomationEditorModal({
   open,
   automation,
-  repositoryOptions,
   busy,
   onClose,
+  onConfigureCloudTarget,
   onCreate,
   onUpdate,
 }: AutomationEditorModalProps) {
-  const firstRepo = repositoryOptions[0] ? repoValue(repositoryOptions[0]) : "";
   const [title, setTitle] = useState(automation?.title ?? "");
   const [prompt, setPrompt] = useState(automation?.prompt ?? "");
-  const [repo, setRepo] = useState(
-    automation ? `${automation.gitOwner}/${automation.gitRepoName}` : firstRepo,
-  );
-  const [executionTarget, setExecutionTarget] = useState<"cloud" | "local">(
-    automation?.executionTarget ?? "cloud",
-  );
+  const [targetOverride, setTargetOverride] = useState<AutomationTargetSelection | null>(null);
   const [schedulePreset, setSchedulePreset] = useState<SchedulePresetValue>(
     automation ? presetForRrule(automation.schedule.rrule) : "daily",
   );
   const [rrule, setRrule] = useState(
-    automation?.schedule.rrule ?? rruleForPreset("daily"),
+    automation?.schedule.rrule ?? rruleForPresetAtTime("daily"),
   );
   const [timezone, setTimezone] = useState(
     automation?.schedule.timezone ?? defaultAutomationTimezone(),
   );
-  const [agentKind, setAgentKind] = useState(automation?.agentKind ?? "");
-  const [modelId, setModelId] = useState(automation?.modelId ?? "");
-  const [modeId, setModeId] = useState(automation?.modeId ?? "");
+  const [modelOverride, setModelOverride] = useState<AutomationModelOverride | null>(null);
+  const [modeOverride, setModeOverride] = useState<AutomationModeOverride | null>(null);
   const [reasoningEffort, setReasoningEffort] = useState(
     automation?.reasoningEffort ?? "",
   );
   const [error, setError] = useState<string | null>(null);
-  const wasOpenRef = useRef(false);
-  const resetAutomationIdRef = useRef<string | null>(null);
+  const [pendingConfigureTarget, setPendingConfigureTarget] = useState<{
+    gitOwner: string;
+    gitRepoName: string;
+  } | null>(null);
 
-  useEffect(() => {
-    if (!open) {
-      wasOpenRef.current = false;
-      resetAutomationIdRef.current = null;
-      return;
-    }
-    const automationId = automation?.id ?? null;
-    const shouldReset = !wasOpenRef.current || resetAutomationIdRef.current !== automationId;
-    wasOpenRef.current = true;
-    resetAutomationIdRef.current = automationId;
-    if (!shouldReset) return;
-    setTitle(automation?.title ?? "");
-    setPrompt(automation?.prompt ?? "");
-    setRepo(automation ? `${automation.gitOwner}/${automation.gitRepoName}` : firstRepo);
-    setExecutionTarget(automation?.executionTarget ?? "cloud");
-    setSchedulePreset(automation ? presetForRrule(automation.schedule.rrule) : "daily");
-    setRrule(automation?.schedule.rrule ?? rruleForPreset("daily"));
-    setTimezone(automation?.schedule.timezone ?? defaultAutomationTimezone());
-    setAgentKind(automation?.agentKind ?? "");
-    setModelId(automation?.modelId ?? "");
-    setModeId(automation?.modeId ?? "");
-    setReasoningEffort(automation?.reasoningEffort ?? "");
-    setError(null);
-  }, [automation, firstRepo, open]);
-
-  useEffect(() => {
-    if (!open || automation || !firstRepo) return;
-    setRepo((current) => current || firstRepo);
-  }, [automation, firstRepo, open]);
+  const modelSelection = useAutomationModelSelection({
+    savedAgentKind: automation?.agentKind ?? null,
+    savedModelId: automation?.modelId ?? null,
+    override: modelOverride,
+    isEditing: !!automation,
+  });
+  const modeSelection = useAutomationModeSelection({
+    agentKind: modelSelection.resolution.submission.agentKind,
+    savedModeId: automation?.modeId ?? null,
+    override: modeOverride,
+    useSavedMode: !!automation && !modelOverride && !modeOverride,
+  });
+  const modelSubmission = modelSelection.resolution.submission;
+  const modeSubmission = modeSelection.resolution.submission;
+  const saveDisabledReason = modelSelection.disabledReason;
+  const targetSelection = useAutomationTargetSelection({
+    automation,
+    selectedTarget: targetOverride,
+    enabled: open,
+  });
+  const selectedTarget = targetSelection.selectedTarget;
 
   const submit = async () => {
     setError(null);
@@ -121,12 +111,12 @@ export function AutomationEditorModal({
       setError("Add a title and prompt before saving.");
       return;
     }
-    if (!automation && !repo) {
-      setError("Add a GitHub-backed repository before creating an automation.");
+    if (!targetSelection.canSubmit || !selectedTarget) {
+      setError(targetSelection.disabledReason ?? "Select a target before saving.");
       return;
     }
-    if (!agentKind.trim()) {
-      setError("Choose an agent before saving an automation.");
+    if (!modelSubmission.canSubmit) {
+      setError(saveDisabledReason ?? "Choose a supported model before saving.");
       return;
     }
     const timezoneError = validateAutomationTimezone(timezone);
@@ -141,9 +131,9 @@ export function AutomationEditorModal({
     }
     const schedule = { rrule: rrule.trim(), timezone: timezone.trim() };
     const optionalFields = {
-      agentKind: agentKind.trim() || null,
-      modelId: modelId.trim() || null,
-      modeId: modeId.trim() || null,
+      agentKind: modelSubmission.agentKind,
+      modelId: modelSubmission.modelId,
+      modeId: modeSubmission.modeId,
       reasoningEffort: reasoningEffort.trim() || null,
     };
     try {
@@ -152,18 +142,17 @@ export function AutomationEditorModal({
           title: title.trim(),
           prompt: prompt.trim(),
           schedule,
-          executionTarget,
+          executionTarget: selectedTarget.executionTarget,
           ...optionalFields,
         });
       } else {
-        const { gitOwner, gitRepoName } = parseRepoValue(repo);
         await onCreate({
           title: title.trim(),
           prompt: prompt.trim(),
-          gitOwner,
-          gitRepoName,
+          gitOwner: selectedTarget.gitOwner,
+          gitRepoName: selectedTarget.gitRepoName,
           schedule,
-          executionTarget,
+          executionTarget: selectedTarget.executionTarget,
           ...optionalFields,
         });
       }
@@ -173,176 +162,204 @@ export function AutomationEditorModal({
     }
   };
 
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void submit();
+  };
+
+  const handleRruleChange = (nextRrule: string) => {
+    setRrule(nextRrule);
+    setSchedulePreset(presetForRrule(nextRrule));
+  };
+
+  const handleModelSelect = (selection: AutomationModelSelection) => {
+    const currentAgentKind = modelSelection.resolution.submission.agentKind;
+    if (currentAgentKind === selection.kind) {
+      setModeOverride({ modeId: modeSelection.resolution.submission.modeId });
+    } else {
+      setModeOverride(null);
+    }
+    setModelOverride(selection);
+  };
+
+  const handleDefaultModelSelect = () => {
+    const currentAgentKind = modelSelection.resolution.submission.agentKind;
+    if (!currentAgentKind || !modelSelection.resolution.submission.canSubmit) {
+      return;
+    }
+    setModelOverride({ kind: currentAgentKind, modelId: null });
+    setModeOverride({ modeId: modeSelection.resolution.submission.modeId });
+  };
+
+  const hasDraftChanges = () => {
+    const initialRrule = automation?.schedule.rrule ?? rruleForPresetAtTime("daily");
+    const initialTimezone = automation?.schedule.timezone ?? defaultAutomationTimezone();
+    return title.trim() !== (automation?.title ?? "").trim()
+      || prompt.trim() !== (automation?.prompt ?? "").trim()
+      || rrule.trim() !== initialRrule.trim()
+      || timezone.trim() !== initialTimezone.trim()
+      || reasoningEffort.trim() !== (automation?.reasoningEffort ?? "").trim()
+      || targetOverride !== null
+      || modelOverride !== null
+      || modeOverride !== null;
+  };
+
+  const handleConfigureCloudTarget = (target: { gitOwner: string; gitRepoName: string }) => {
+    if (hasDraftChanges()) {
+      setPendingConfigureTarget(target);
+      return;
+    }
+    onConfigureCloudTarget(target);
+  };
+
+  const handleConfirmConfigureCloudTarget = () => {
+    const target = pendingConfigureTarget;
+    if (!target) {
+      return;
+    }
+    setPendingConfigureTarget(null);
+    onConfigureCloudTarget(target);
+  };
+
+  const reasoningOptions = [
+    { value: "", label: "Default" },
+    ...AUTOMATION_REASONING_EFFORT_OPTIONS.map((option) => ({
+      value: option.value,
+      label: option.label,
+    })),
+  ];
+
   return (
-    <ModalShell
-      open={open}
-      onClose={onClose}
-      disableClose={busy}
-      title={automation ? "Edit automation" : "New automation"}
-      description={AUTOMATION_PREEXECUTOR_COPY.modalDescription}
-      sizeClassName="max-w-2xl"
-      bodyClassName="px-5 pb-5 pt-2"
-      footer={(
-        <>
-          <Button variant="ghost" onClick={onClose} disabled={busy}>
-            Cancel
-          </Button>
-          <Button onClick={submit} loading={busy}>
-            {automation ? "Save" : "Create"}
-          </Button>
-        </>
-      )}
-    >
-      <div className="grid gap-4">
-        {error && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
+    <>
+      <ModalShell
+        open={open}
+        onClose={onClose}
+        disableClose={busy || pendingConfigureTarget !== null}
+        title={automation ? "Edit automation" : "Create automation"}
+        description="Create a scheduled automation."
+        sizeClassName="max-h-[95vh] max-w-[800px]"
+        bodyClassName="flex min-h-[24rem] flex-col px-5 pb-5 pt-0"
+        panelClassName="border-border bg-background/95 shadow-lg backdrop-blur-xl"
+        headerContent={(
+          <div className="flex min-w-0 items-center justify-between gap-4 pt-2">
+            <Input
+              id="automation-title"
+              data-testid="automation-title-input"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              aria-label="Automation title"
+              placeholder="Automation title"
+              className="h-auto min-w-0 border-0 bg-transparent px-0 py-0 pr-2 text-lg leading-tight shadow-none outline-none placeholder:text-muted-foreground focus:ring-0"
+            />
+            <AutomationTemplatePopover
+              onSelectTemplate={(template) => {
+                if (!title.trim()) {
+                  setTitle(template.title);
+                }
+                setPrompt(template.prompt);
+              }}
+            />
           </div>
         )}
-        <div className="grid gap-1.5">
-          <Label htmlFor="automation-title">Title</Label>
-          <Input
-            id="automation-title"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="Daily repo health check"
-          />
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="automation-prompt">Prompt</Label>
-          <Textarea
-            id="automation-prompt"
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            rows={7}
-            placeholder="Inspect the repo, summarize important changes, and open a follow-up issue if needed."
-          />
-        </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="grid gap-1.5">
-            <Label htmlFor="automation-repo">Repository</Label>
-            <Select
-              id="automation-repo"
-              value={repo}
-              onChange={(event) => setRepo(event.target.value)}
-              disabled={!!automation || repositoryOptions.length === 0}
-            >
-              {repositoryOptions.map((item) => (
-                <option key={repoValue(item)} value={repoValue(item)}>
-                  {item.label}
-                </option>
-              ))}
-            </Select>
-            {!automation && repositoryOptions.length === 0 && (
-              <p className="text-xs text-muted-foreground">
+      >
+        <form
+          id="automation-form"
+          onSubmit={handleSubmit}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          {error && (
+            <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          <div className="min-h-0 flex-1 overflow-y-auto py-3">
+            <Textarea
+              id="automation-prompt"
+              variant="ghost"
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              aria-label="Prompt"
+              placeholder="Add prompt e.g. look for crashes in $sentry"
+              className="min-h-[16rem] px-0 text-base leading-relaxed placeholder:text-muted-foreground"
+            />
+          </div>
+          <div className="shrink-0 pt-3">
+            {!automation && !targetSelection.isLoading && targetSelection.groups.length === 0 && (
+              <p className="mb-2 text-xs text-muted-foreground">
                 Add a local repository with a GitHub remote, or create a cloud workspace first.
               </p>
             )}
+            <div className="flex w-full flex-wrap items-center justify-between gap-2">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+                <AutomationTargetPicker
+                  groups={targetSelection.groups}
+                  selectedRow={targetSelection.selectedRow}
+                  isLoading={targetSelection.isLoading}
+                  disabledReason={targetSelection.disabledReason}
+                  onSelect={setTargetOverride}
+                  onConfigureCloud={handleConfigureCloudTarget}
+                />
+                <AutomationSchedulePopover
+                  schedulePreset={schedulePreset}
+                  rrule={rrule}
+                  timezone={timezone}
+                  onSchedulePresetChange={setSchedulePreset}
+                  onRruleChange={handleRruleChange}
+                  onTimezoneChange={setTimezone}
+                  onRruleBlur={() => setError(validateAutomationRrule(rrule))}
+                />
+                <AutomationModelPicker
+                  groups={modelSelection.groups}
+                  resolution={modelSelection.resolution}
+                  isLoading={modelSelection.isLoading}
+                  disabledReason={modelSelection.disabledReason}
+                  onSelect={handleModelSelect}
+                  onDefaultSelect={handleDefaultModelSelect}
+                />
+                <AutomationModePicker
+                  options={modeSelection.options}
+                  resolution={modeSelection.resolution}
+                  disabled={!modelSubmission.agentKind}
+                  onSelect={(modeId) => setModeOverride({ modeId })}
+                  onDefaultSelect={() => setModeOverride({ modeId: null })}
+                />
+                <AutomationSelectPopover
+                  label="Reasoning"
+                  value={reasoningEffort}
+                  options={reasoningOptions}
+                  onChange={setReasoningEffort}
+                  icon={reasoningIcon()}
+                  className="max-w-[11rem]"
+                />
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  loading={busy}
+                  disabled={
+                    (!automation && (modelSelection.isLoading || targetSelection.isLoading))
+                    || !modelSubmission.canSubmit
+                    || !targetSelection.canSubmit
+                  }
+                >
+                  {automation ? "Save" : "Create"}
+                </Button>
+              </div>
+            </div>
           </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="automation-target">Execution</Label>
-            <Select
-              id="automation-target"
-              value={executionTarget}
-              onChange={(event) => setExecutionTarget(event.target.value as "cloud" | "local")}
-            >
-              {AUTOMATION_EXECUTION_TARGET_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </Select>
-          </div>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="grid gap-1.5">
-            <Label htmlFor="automation-schedule">Schedule</Label>
-            <Select
-              id="automation-schedule"
-              value={schedulePreset}
-              onChange={(event) => {
-                const value = event.target.value as SchedulePresetValue;
-                setSchedulePreset(value);
-                if (value !== "custom") {
-                  setRrule(rruleForPreset(value));
-                }
-              }}
-            >
-              {AUTOMATION_SCHEDULE_PRESET_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-              <option value="custom">Custom RRULE</option>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="automation-timezone">Timezone</Label>
-            <Input
-              id="automation-timezone"
-              value={timezone}
-              onChange={(event) => setTimezone(event.target.value)}
-              onBlur={() => setError(validateAutomationTimezone(timezone))}
-            />
-          </div>
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="automation-rrule">RRULE</Label>
-          <Input
-            id="automation-rrule"
-            value={rrule}
-            onChange={(event) => {
-              setRrule(event.target.value);
-              setSchedulePreset(presetForRrule(event.target.value));
-            }}
-            onBlur={() => setError(validateAutomationRrule(rrule))}
-          />
-        </div>
-        <div className="grid gap-3 md:grid-cols-4">
-          <div className="grid gap-1.5">
-            <Label htmlFor="automation-agent">Agent</Label>
-            <Select
-              id="automation-agent"
-              value={agentKind}
-              onChange={(event) => setAgentKind(event.target.value)}
-            >
-              <option value="">
-                {executionTarget === "cloud" ? "Select agent" : "Default"}
-              </option>
-              {AUTOMATION_AGENT_KIND_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="automation-model">Model</Label>
-            <Input
-              id="automation-model"
-              value={modelId}
-              onChange={(event) => setModelId(event.target.value)}
-              placeholder="Default"
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="automation-mode">Mode</Label>
-            <Input
-              id="automation-mode"
-              value={modeId}
-              onChange={(event) => setModeId(event.target.value)}
-              placeholder="Default"
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="automation-reasoning">Reasoning</Label>
-            <Select
-              id="automation-reasoning"
-              value={reasoningEffort}
-              onChange={(event) => setReasoningEffort(event.target.value)}
-            >
-              <option value="">Default</option>
-              {AUTOMATION_REASONING_EFFORT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </Select>
-          </div>
-        </div>
-      </div>
-    </ModalShell>
+        </form>
+      </ModalShell>
+      <ConfirmationDialog
+        open={pendingConfigureTarget !== null}
+        onClose={() => setPendingConfigureTarget(null)}
+        onConfirm={handleConfirmConfigureCloudTarget}
+        title="Discard automation draft?"
+        description="Opening cloud repo settings will close this automation draft."
+        confirmLabel="Open settings"
+      />
+    </>
   );
 }

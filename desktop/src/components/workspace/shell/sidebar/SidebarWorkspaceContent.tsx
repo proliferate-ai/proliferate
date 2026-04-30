@@ -45,6 +45,7 @@ interface SidebarWorkspaceContentProps {
   ) => void;
   onOpenCloudRepoSettings: (target: CloudWorkspaceRepoTarget) => void;
   onSelectWorkspace: (workspaceId: string) => void;
+  onOpenAutomations: () => void;
   onArchiveWorkspace: (workspaceId: string) => void;
   onUnarchiveWorkspace: (workspaceId: string) => void;
   onRenameWorkspace: (
@@ -82,6 +83,7 @@ export function SidebarWorkspaceContent({
   onCreateCloudWorkspace,
   onOpenCloudRepoSettings,
   onSelectWorkspace,
+  onOpenAutomations,
   onArchiveWorkspace,
   onUnarchiveWorkspace,
   onRenameWorkspace,
@@ -199,11 +201,13 @@ export function SidebarWorkspaceContent({
                 archived={item.archived}
                 activity={item.activity}
                 variant={item.variant}
+                createdByAutomation={item.createdByAutomation}
                 cloudStatus={item.cloudStatus}
                 lastInteracted={item.lastInteracted}
                 unread={item.unread}
                 pendingPromptCount={deferredPromptCountByWorkspace.get(item.id) ?? 0}
                 onSelect={() => onSelectWorkspace(item.id)}
+                onOpenAutomations={onOpenAutomations}
                 onArchive={item.archived ? undefined : () => onArchiveWorkspace(item.id)}
                 onUnarchive={item.archived ? () => onUnarchiveWorkspace(item.id) : undefined}
                 onRename={

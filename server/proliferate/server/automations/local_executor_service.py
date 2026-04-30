@@ -37,10 +37,7 @@ from proliferate.server.automations.models import (
     LocalAutomationMutationResponse,
     local_claim_payload,
 )
-from proliferate.server.automations.service import (
-    _normalize_required_text,
-    require_automations_enabled,
-)
+from proliferate.server.automations.service import _normalize_required_text
 from proliferate.utils.time import utcnow
 
 DEFAULT_LOCAL_CLAIM_TTL_SECONDS = 300.0
@@ -86,7 +83,6 @@ async def claim_local_runs(
     user_id: UUID,
     body: LocalAutomationClaimRequest,
 ) -> LocalAutomationClaimListResponse:
-    require_automations_enabled()
     executor_id = _normalize_executor_id(body.executor_id)
     limit = max(1, min(body.limit, MAX_LOCAL_CLAIM_LIMIT))
     repositories = []
@@ -111,7 +107,6 @@ async def heartbeat_local_run(
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
 ) -> LocalAutomationMutationResponse:
-    require_automations_enabled()
     _normalize_executor_id(body.executor_id)
     value = await heartbeat_run_claim(
         run_id=run_id,
@@ -130,7 +125,6 @@ async def mark_local_run_creating_workspace(
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
 ) -> LocalAutomationMutationResponse:
-    require_automations_enabled()
     _normalize_executor_id(body.executor_id)
     value = await mark_run_creating_workspace(
         run_id=run_id,
@@ -148,7 +142,6 @@ async def attach_local_run_workspace(
     run_id: UUID,
     body: LocalAutomationAttachWorkspaceRequest,
 ) -> LocalAutomationMutationResponse:
-    require_automations_enabled()
     _normalize_executor_id(body.executor_id)
     value = await attach_anyharness_workspace_to_run(
         run_id=run_id,
@@ -171,7 +164,6 @@ async def mark_local_run_provisioning_workspace(
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
 ) -> LocalAutomationMutationResponse:
-    require_automations_enabled()
     _normalize_executor_id(body.executor_id)
     value = await mark_run_provisioning_workspace(
         run_id=run_id,
@@ -189,7 +181,6 @@ async def mark_local_run_creating_session(
     run_id: UUID,
     body: LocalAutomationAttachWorkspaceRequest,
 ) -> LocalAutomationMutationResponse:
-    require_automations_enabled()
     _normalize_executor_id(body.executor_id)
     value = await mark_run_creating_session(
         run_id=run_id,
@@ -212,7 +203,6 @@ async def attach_local_run_session(
     run_id: UUID,
     body: LocalAutomationAttachSessionRequest,
 ) -> LocalAutomationMutationResponse:
-    require_automations_enabled()
     _normalize_executor_id(body.executor_id)
     attached = await attach_anyharness_session_to_run(
         run_id=run_id,
@@ -240,7 +230,6 @@ async def mark_local_run_dispatching(
     run_id: UUID,
     body: LocalAutomationClaimActionRequest,
 ) -> LocalAutomationMutationResponse:
-    require_automations_enabled()
     _normalize_executor_id(body.executor_id)
     value = await mark_run_dispatching(
         run_id=run_id,
@@ -258,7 +247,6 @@ async def mark_local_run_dispatched(
     run_id: UUID,
     body: LocalAutomationAttachSessionRequest,
 ) -> LocalAutomationMutationResponse:
-    require_automations_enabled()
     _normalize_executor_id(body.executor_id)
     dispatched = await mark_run_dispatched(
         run_id=run_id,
@@ -286,7 +274,6 @@ async def mark_local_run_failed(
     run_id: UUID,
     body: LocalAutomationFailRequest,
 ) -> LocalAutomationMutationResponse:
-    require_automations_enabled()
     _normalize_executor_id(body.executor_id)
     error_code = _normalize_local_error_code(body.error_code)
     failed = await mark_run_failed(
