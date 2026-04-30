@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::ContentPart;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkspaceMobilityRuntimeMode {
@@ -144,6 +146,8 @@ pub struct WorkspaceMobilitySessionBundle {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pending_prompts: Vec<MobilityPendingPromptRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prompt_attachments: Vec<MobilityPromptAttachmentRecord>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub events: Vec<MobilitySessionEventRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub raw_notifications: Vec<MobilitySessionRawNotificationRecord>,
@@ -192,6 +196,8 @@ pub struct MobilitySessionLiveConfigSnapshotRecord {
     pub source_seq: i64,
     pub raw_config_options_json: String,
     pub normalized_controls_json: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_capabilities_json: Option<String>,
     pub updated_at: String,
 }
 
@@ -212,7 +218,32 @@ pub struct MobilityPendingPromptRecord {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt_id: Option<String>,
     pub text: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub content_parts: Vec<ContentPart>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocks_json: Option<String>,
     pub queued_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MobilityPromptAttachmentRecord {
+    pub attachment_id: String,
+    pub session_id: String,
+    pub state: String,
+    pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_uri: Option<String>,
+    pub size_bytes: u64,
+    pub sha256: String,
+    #[schema(value_type = String, format = Binary)]
+    pub content_base64: String,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

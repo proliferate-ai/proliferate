@@ -1,4 +1,5 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
+import type { PromptInputBlock } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { createOptimisticPendingPrompt } from "@/lib/domain/chat/pending-prompts";
 import { getSessionClientAndWorkspace, isPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
@@ -14,6 +15,7 @@ import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session
 interface PromptSessionInput {
   sessionId: string;
   text: string;
+  blocks?: PromptInputBlock[];
   workspaceId?: string | null;
   latencyFlowId?: string | null;
   promptId?: string | null;
@@ -29,6 +31,7 @@ export function useSessionPromptWorkflow() {
   const promptSession = useCallback(async ({
     sessionId,
     text,
+    blocks,
     workspaceId,
     latencyFlowId,
     promptId,
@@ -58,9 +61,9 @@ export function useSessionPromptWorkflow() {
       const { connection, workspaceId: promptWorkspaceId } = await getSessionClientAndWorkspace(
         sessionId,
       );
-      const response = await getAnyHarnessClient(connection).sessions.promptText(
+      const response = await getAnyHarnessClient(connection).sessions.prompt(
         sessionId,
-        text,
+        { blocks: blocks ?? [{ type: "text", text }] },
         requestOptions,
       );
 

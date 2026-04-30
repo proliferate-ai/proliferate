@@ -8,7 +8,7 @@ import {
   selectPendingUserInputInteraction,
   selectPrimaryPendingInteraction,
 } from "../../index.js";
-import type { SessionEventEnvelope, ThoughtItem, ToolCallItem } from "../../index.js";
+import type { ContentPart, SessionEventEnvelope, ThoughtItem, ToolCallItem } from "../../index.js";
 
 describe("transcript reducer", () => {
   it("reduces assistant streaming lifecycle into one completed prose item", () => {
@@ -30,6 +30,60 @@ describe("transcript reducer", () => {
     expect(item.text).toBe("Hello");
     expect(item.isStreaming).toBe(false);
     expect(state.openAssistantItemId).toBeNull();
+  });
+
+  it("preserves prompt attachment content parts across item completion", () => {
+    const contentParts: ContentPart[] = [
+      { type: "text", text: "see attached" },
+      {
+        type: "image",
+        attachmentId: "image-1",
+        mimeType: "image/png",
+        name: "screenshot.png",
+        size: 2048,
+      },
+      {
+        type: "resource",
+        attachmentId: "file-1",
+        uri: "file://README.md",
+        name: "README.md",
+        mimeType: "text/markdown",
+        size: 1024,
+        preview: "# Readme",
+      },
+      {
+        type: "resource_link",
+        uri: "file:///workspace/spec.pdf",
+        name: "spec.pdf",
+        mimeType: "application/pdf",
+        size: 4096,
+      },
+    ];
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        userMessageStarted(2, "user-1", contentParts),
+        userMessageCompleted(3, "user-1", contentParts),
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["user-1"];
+    expect(item.kind).toBe("user_message");
+    if (item.kind !== "user_message") {
+      throw new Error("expected user message item");
+    }
+    expect(item.text).toBe("see attached");
+    expect(item.contentParts.map((part) => part.type)).toEqual([
+      "text",
+      "image",
+      "resource",
+      "resource_link",
+    ]);
+    expect(item.contentParts.find((part) => part.type === "resource")).toMatchObject({
+      attachmentId: "file-1",
+      name: "README.md",
+    });
   });
 
   it("closes orphaned assistant and reasoning streams when a turn ends", () => {
@@ -835,6 +889,52 @@ function assistantCompleted(
         status: "completed",
         sourceAgentKind: "claude",
         contentParts: [{ type: "text", text }],
+      },
+    },
+  };
+}
+
+function userMessageStarted(
+  seq: number,
+  itemId: string,
+  contentParts: ContentPart[],
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:0${seq}Z`,
+    turnId: "turn-1",
+    itemId,
+    event: {
+      type: "item_started",
+      item: {
+        kind: "user_message",
+        status: "completed",
+        sourceAgentKind: "claude",
+        contentParts,
+      },
+    },
+  };
+}
+
+function userMessageCompleted(
+  seq: number,
+  itemId: string,
+  contentParts: ContentPart[],
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-04-04T00:00:0${seq}Z`,
+    turnId: "turn-1",
+    itemId,
+    event: {
+      type: "item_completed",
+      item: {
+        kind: "user_message",
+        status: "completed",
+        sourceAgentKind: "claude",
+        contentParts,
       },
     },
   };

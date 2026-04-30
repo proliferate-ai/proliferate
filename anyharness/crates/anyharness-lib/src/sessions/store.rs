@@ -1,11 +1,13 @@
 use rusqlite::{params, OptionalExtension};
 
 use super::model::{
-    PendingConfigChangeRecord, PendingPromptRecord, SessionBackgroundWorkRecord,
-    SessionBackgroundWorkState, SessionBackgroundWorkTrackerKind, SessionEventRecord,
-    SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
+    PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentKind, PromptAttachmentRecord,
+    PromptAttachmentState, SessionBackgroundWorkRecord, SessionBackgroundWorkState,
+    SessionBackgroundWorkTrackerKind, SessionEventRecord, SessionLiveConfigSnapshotRecord,
+    SessionRawNotificationRecord, SessionRecord,
 };
 use crate::persistence::Db;
+use crate::sessions::prompt::PromptPayload;
 
 #[derive(Clone)]
 pub struct SessionStore {
@@ -36,6 +38,10 @@ impl SessionStore {
             )?;
             conn.execute(
                 "DELETE FROM session_pending_prompts WHERE session_id = ?1",
+                [id],
+            )?;
+            conn.execute(
+                "DELETE FROM session_prompt_attachments WHERE session_id = ?1",
                 [id],
             )?;
             conn.execute(
@@ -332,18 +338,21 @@ impl SessionStore {
         self.db.with_conn(|conn| {
             conn.execute(
                 "INSERT INTO session_live_config_snapshots (
-                    session_id, source_seq, raw_config_options_json, normalized_controls_json, updated_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5)
+                    session_id, source_seq, raw_config_options_json, normalized_controls_json,
+                    prompt_capabilities_json, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                  ON CONFLICT(session_id) DO UPDATE SET
                     source_seq = excluded.source_seq,
                     raw_config_options_json = excluded.raw_config_options_json,
                     normalized_controls_json = excluded.normalized_controls_json,
+                    prompt_capabilities_json = excluded.prompt_capabilities_json,
                     updated_at = excluded.updated_at",
                 params![
                     record.session_id,
                     record.source_seq,
                     record.raw_config_options_json,
                     record.normalized_controls_json,
+                    record.prompt_capabilities_json,
                     record.updated_at,
                 ],
             )?;
@@ -357,6 +366,7 @@ impl SessionStore {
         live_config_snapshot: Option<&SessionLiveConfigSnapshotRecord>,
         pending_config_changes: &[PendingConfigChangeRecord],
         pending_prompts: &[PendingPromptRecord],
+        prompt_attachments: &[PromptAttachmentRecord],
         events: &[SessionEventRecord],
         raw_notifications: &[SessionRawNotificationRecord],
     ) -> anyhow::Result<()> {
@@ -370,6 +380,9 @@ impl SessionStore {
             }
             for prompt in pending_prompts {
                 insert_pending_prompt_row(conn, prompt)?;
+            }
+            for attachment in prompt_attachments {
+                insert_prompt_attachment_row(conn, attachment)?;
             }
             for event in events {
                 insert_event_row(conn, event)?;
@@ -447,7 +460,21 @@ impl SessionStore {
         text: &str,
         prompt_id: Option<&str>,
     ) -> anyhow::Result<PendingPromptRecord> {
+        self.insert_pending_prompt_payload(
+            session_id,
+            &PromptPayload::text(text.to_string()),
+            prompt_id,
+        )
+    }
+
+    pub fn insert_pending_prompt_payload(
+        &self,
+        session_id: &str,
+        payload: &PromptPayload,
+        prompt_id: Option<&str>,
+    ) -> anyhow::Result<PendingPromptRecord> {
         let queued_at = chrono::Utc::now().to_rfc3339();
+        let blocks_json = payload.blocks_json()?;
         self.db.with_tx(|tx| {
             let next_seq: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(seq), 0) + 1 FROM session_pending_prompts WHERE session_id = ?1",
@@ -455,15 +482,23 @@ impl SessionStore {
                 |row| row.get(0),
             )?;
             tx.execute(
-                "INSERT INTO session_pending_prompts (session_id, seq, prompt_id, text, queued_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![session_id, next_seq, prompt_id, text, queued_at],
+                "INSERT INTO session_pending_prompts (session_id, seq, prompt_id, text, blocks_json, queued_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    session_id,
+                    next_seq,
+                    prompt_id,
+                    payload.text_summary,
+                    blocks_json,
+                    queued_at
+                ],
             )?;
             Ok(PendingPromptRecord {
                 session_id: session_id.to_string(),
                 seq: next_seq,
                 prompt_id: prompt_id.map(|s| s.to_string()),
-                text: text.to_string(),
+                text: payload.text_summary.clone(),
+                blocks_json,
                 queued_at: queued_at.clone(),
             })
         })
@@ -501,30 +536,157 @@ impl SessionStore {
         })
     }
 
+    pub fn find_pending_prompt(
+        &self,
+        session_id: &str,
+        seq: i64,
+    ) -> anyhow::Result<Option<PendingPromptRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM session_pending_prompts
+                 WHERE session_id = ?1 AND seq = ?2",
+                params![session_id, seq],
+                map_pending_prompt,
+            )
+            .optional()
+        })
+    }
+
     pub fn update_pending_prompt_text(
         &self,
         session_id: &str,
         seq: i64,
         text: &str,
     ) -> anyhow::Result<bool> {
+        self.update_pending_prompt_payload(session_id, seq, &PromptPayload::text(text.to_string()))
+    }
+
+    pub fn update_pending_prompt_payload(
+        &self,
+        session_id: &str,
+        seq: i64,
+        payload: &PromptPayload,
+    ) -> anyhow::Result<bool> {
+        let blocks_json = payload.blocks_json()?;
         self.db.with_conn(|conn| {
             let rows = conn.execute(
                 "UPDATE session_pending_prompts
-                 SET text = ?3
+                 SET text = ?3, blocks_json = ?4
                  WHERE session_id = ?1 AND seq = ?2",
-                params![session_id, seq, text],
+                params![session_id, seq, payload.text_summary, blocks_json],
             )?;
             Ok(rows > 0)
         })
     }
 
     pub fn delete_pending_prompt(&self, session_id: &str, seq: i64) -> anyhow::Result<bool> {
+        Ok(self
+            .delete_pending_prompt_record(session_id, seq)?
+            .is_some())
+    }
+
+    pub fn delete_pending_prompt_record(
+        &self,
+        session_id: &str,
+        seq: i64,
+    ) -> anyhow::Result<Option<PendingPromptRecord>> {
         self.db.with_conn(|conn| {
-            let rows = conn.execute(
+            let record = conn
+                .query_row(
+                    "SELECT * FROM session_pending_prompts WHERE session_id = ?1 AND seq = ?2",
+                    params![session_id, seq],
+                    map_pending_prompt,
+                )
+                .optional()?;
+            if record.is_none() {
+                return Ok(None);
+            }
+            conn.execute(
                 "DELETE FROM session_pending_prompts WHERE session_id = ?1 AND seq = ?2",
                 params![session_id, seq],
             )?;
-            Ok(rows > 0)
+            Ok(record)
+        })
+    }
+
+    pub fn insert_prompt_attachment(&self, record: &PromptAttachmentRecord) -> anyhow::Result<()> {
+        self.db.with_conn(|conn| {
+            insert_prompt_attachment_row(conn, record)?;
+            Ok(())
+        })
+    }
+
+    pub fn find_prompt_attachment(
+        &self,
+        session_id: &str,
+        attachment_id: &str,
+    ) -> anyhow::Result<Option<PromptAttachmentRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM session_prompt_attachments
+                 WHERE session_id = ?1 AND attachment_id = ?2",
+                params![session_id, attachment_id],
+                map_prompt_attachment,
+            )
+            .optional()
+        })
+    }
+
+    pub fn list_prompt_attachments(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Vec<PromptAttachmentRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT * FROM session_prompt_attachments
+                 WHERE session_id = ?1
+                 ORDER BY created_at ASC, attachment_id ASC",
+            )?;
+            let rows = stmt.query_map([session_id], map_prompt_attachment)?;
+            rows.collect()
+        })
+    }
+
+    pub fn mark_prompt_attachments_state(
+        &self,
+        session_id: &str,
+        attachment_ids: &[String],
+        state: PromptAttachmentState,
+    ) -> anyhow::Result<()> {
+        if attachment_ids.is_empty() {
+            return Ok(());
+        }
+        let now = chrono::Utc::now().to_rfc3339();
+        self.db.with_tx(|conn| {
+            for attachment_id in attachment_ids {
+                conn.execute(
+                    "UPDATE session_prompt_attachments
+                     SET state = ?3, updated_at = ?4
+                     WHERE session_id = ?1 AND attachment_id = ?2",
+                    params![session_id, attachment_id, state.as_str(), now],
+                )?;
+            }
+            Ok(())
+        })
+    }
+
+    pub fn delete_prompt_attachments(
+        &self,
+        session_id: &str,
+        attachment_ids: &[&str],
+    ) -> anyhow::Result<()> {
+        if attachment_ids.is_empty() {
+            return Ok(());
+        }
+        self.db.with_tx(|conn| {
+            for attachment_id in attachment_ids {
+                conn.execute(
+                    "DELETE FROM session_prompt_attachments
+                     WHERE session_id = ?1 AND attachment_id = ?2 AND state = 'pending'",
+                    params![session_id, attachment_id],
+                )?;
+            }
+            Ok(())
         })
     }
 
@@ -842,6 +1004,7 @@ fn map_live_config_snapshot(
         source_seq: row.get("source_seq")?,
         raw_config_options_json: row.get("raw_config_options_json")?,
         normalized_controls_json: row.get("normalized_controls_json")?,
+        prompt_capabilities_json: row.get("prompt_capabilities_json")?,
         updated_at: row.get("updated_at")?,
     })
 }
@@ -885,7 +1048,27 @@ fn map_pending_prompt(row: &rusqlite::Row) -> rusqlite::Result<PendingPromptReco
         seq: row.get("seq")?,
         prompt_id: row.get("prompt_id")?,
         text: row.get("text")?,
+        blocks_json: row.get("blocks_json")?,
         queued_at: row.get("queued_at")?,
+    })
+}
+
+fn map_prompt_attachment(row: &rusqlite::Row) -> rusqlite::Result<PromptAttachmentRecord> {
+    let state: String = row.get("state")?;
+    let kind: String = row.get("kind")?;
+    Ok(PromptAttachmentRecord {
+        attachment_id: row.get("attachment_id")?,
+        session_id: row.get("session_id")?,
+        state: PromptAttachmentState::parse(&state),
+        kind: PromptAttachmentKind::parse(&kind),
+        mime_type: row.get("mime_type")?,
+        display_name: row.get("display_name")?,
+        source_uri: row.get("source_uri")?,
+        size_bytes: row.get("size_bytes")?,
+        sha256: row.get("sha256")?,
+        content: row.get("content")?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
     })
 }
 
@@ -929,18 +1112,21 @@ fn upsert_live_config_snapshot_row(
 ) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO session_live_config_snapshots (
-            session_id, source_seq, raw_config_options_json, normalized_controls_json, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5)
+            session_id, source_seq, raw_config_options_json, normalized_controls_json,
+            prompt_capabilities_json, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT(session_id) DO UPDATE SET
             source_seq = excluded.source_seq,
             raw_config_options_json = excluded.raw_config_options_json,
             normalized_controls_json = excluded.normalized_controls_json,
+            prompt_capabilities_json = excluded.prompt_capabilities_json,
             updated_at = excluded.updated_at",
         params![
             record.session_id,
             record.source_seq,
             record.raw_config_options_json,
             record.normalized_controls_json,
+            record.prompt_capabilities_json,
             record.updated_at,
         ],
     )?;
@@ -972,14 +1158,53 @@ fn insert_pending_prompt_row(
     record: &PendingPromptRecord,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        "INSERT INTO session_pending_prompts (session_id, seq, prompt_id, text, queued_at)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+        "INSERT INTO session_pending_prompts (session_id, seq, prompt_id, text, blocks_json, queued_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![
             record.session_id,
             record.seq,
             record.prompt_id,
             record.text,
+            record.blocks_json,
             record.queued_at,
+        ],
+    )?;
+    Ok(())
+}
+
+fn insert_prompt_attachment_row(
+    conn: &rusqlite::Connection,
+    record: &PromptAttachmentRecord,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO session_prompt_attachments (
+            attachment_id, session_id, state, kind, mime_type, display_name, source_uri,
+            size_bytes, sha256, content, created_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+         ON CONFLICT(attachment_id) DO UPDATE SET
+            session_id = excluded.session_id,
+            state = excluded.state,
+            kind = excluded.kind,
+            mime_type = excluded.mime_type,
+            display_name = excluded.display_name,
+            source_uri = excluded.source_uri,
+            size_bytes = excluded.size_bytes,
+            sha256 = excluded.sha256,
+            content = excluded.content,
+            updated_at = excluded.updated_at",
+        params![
+            record.attachment_id,
+            record.session_id,
+            record.state.as_str(),
+            record.kind.as_str(),
+            record.mime_type,
+            record.display_name,
+            record.source_uri,
+            record.size_bytes,
+            record.sha256,
+            record.content,
+            record.created_at,
+            record.updated_at,
         ],
     )?;
     Ok(())
@@ -1176,6 +1401,7 @@ mod tests {
                 source_seq: 1,
                 raw_config_options_json: "{}".to_string(),
                 normalized_controls_json: "{}".to_string(),
+                prompt_capabilities_json: None,
                 updated_at: "2026-03-25T00:01:02Z".to_string(),
             })
             .expect("upsert snapshot");

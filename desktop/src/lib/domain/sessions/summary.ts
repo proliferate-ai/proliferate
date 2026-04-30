@@ -56,6 +56,7 @@ export function buildSessionSlotPatchFromSummary(
         seq: entry.seq,
         promptId: entry.promptId ?? null,
         text: entry.text,
+        contentParts: entry.contentParts ?? [],
         queuedAt: entry.queuedAt,
       })),
       pendingInteractions: pendingInteractionsFromExecutionSummary(

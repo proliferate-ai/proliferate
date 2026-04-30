@@ -200,6 +200,7 @@ export function reduceEvent(
           seq: evt.seq,
           promptId: evt.promptId ?? null,
           text: evt.text,
+          contentParts: normalizeContentParts(evt.contentParts ?? []),
           queuedAt: evt.queuedAt,
         },
       ];
@@ -207,7 +208,13 @@ export function reduceEvent(
 
     case "pending_prompt_updated":
       s.pendingPrompts = s.pendingPrompts.map((entry) =>
-        entry.seq === evt.seq ? { ...entry, text: evt.text } : entry,
+        entry.seq === evt.seq
+          ? {
+            ...entry,
+            text: evt.text,
+            contentParts: normalizeContentParts(evt.contentParts ?? []),
+          }
+          : entry,
       );
       break;
 
@@ -786,6 +793,38 @@ function normalizeContentPart(part: ContentPart): ContentPart {
     case "text":
       return { type: "text", text: coerceString(raw.text) };
 
+    case "image":
+      return {
+        type: "image",
+        attachmentId: coerceString(raw.attachmentId ?? raw.attachment_id),
+        mimeType: coerceString(raw.mimeType ?? raw.mime_type),
+        name: coerceNullableString(raw.name),
+        uri: coerceNullableString(raw.uri),
+        size: coerceNullableNumber(raw.size),
+      };
+
+    case "resource":
+      return {
+        type: "resource",
+        attachmentId: coerceNullableString(raw.attachmentId ?? raw.attachment_id),
+        uri: coerceString(raw.uri),
+        name: coerceNullableString(raw.name),
+        mimeType: coerceNullableString(raw.mimeType ?? raw.mime_type),
+        size: coerceNullableNumber(raw.size),
+        preview: coerceNullableString(raw.preview),
+      };
+
+    case "resource_link":
+      return {
+        type: "resource_link",
+        uri: coerceString(raw.uri),
+        name: coerceString(raw.name),
+        mimeType: coerceNullableString(raw.mimeType ?? raw.mime_type),
+        title: coerceNullableString(raw.title),
+        description: coerceNullableString(raw.description),
+        size: coerceNullableNumber(raw.size),
+      };
+
     case "reasoning":
       return {
         type: "reasoning",
@@ -900,6 +939,9 @@ function mergeContentParts(existing: ContentPart[], incoming: ContentPart[]): Co
 
   const leadingSnapshotTypes = [
     "text",
+    "image",
+    "resource",
+    "resource_link",
     "reasoning",
     "file_read",
   ] as const;

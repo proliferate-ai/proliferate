@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ClipboardEvent,
+  type DragEvent,
+} from "react";
 import {
   CHAT_COMPOSER_INPUT,
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
@@ -12,10 +21,14 @@ import { useChatComposerKeyboard } from "@/hooks/chat/use-chat-composer-keyboard
 import { useChatDraftState } from "@/hooks/chat/use-chat-draft-state";
 import { useChatModelSelectorState } from "@/hooks/chat/use-chat-model-selector-state";
 import { useChatPromptActions } from "@/hooks/chat/use-chat-prompt-actions";
+import { usePromptAttachments } from "@/hooks/chat/use-prompt-attachments";
 import { useChatSessionControls } from "@/hooks/chat/use-chat-session-controls";
 import { useQueuedPromptEdit } from "@/hooks/chat/use-queued-prompt-edit";
 import { focusChatInput } from "@/lib/domain/focus-zone";
+import { serializeChatDraftToPrompt } from "@/lib/domain/chat/file-mentions";
+import { canAttachPromptContent } from "@/lib/domain/chat/prompt-content";
 import { Button } from "@/components/ui/Button";
+import { FilePlus } from "@/components/ui/icons";
 import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerMentionEditor } from "./ComposerMentionEditor";
 import { ModelSelector } from "./ModelSelector";
@@ -23,6 +36,8 @@ import { SessionConfigControls } from "./SessionConfigControls";
 import { Textarea } from "@/components/ui/Textarea";
 import { ChatComposerSurface } from "./ChatComposerSurface";
 import { SessionPowersSummary } from "./SessionPowersSummary";
+import { DraftAttachmentPreviewList } from "@/components/workspace/chat/content/PromptContentRenderer";
+import { ComposerControlButton } from "./ComposerControlButton";
 
 /**
  * The composer surface: mention-aware editor + model / session controls +
@@ -32,6 +47,7 @@ import { SessionPowersSummary } from "./SessionPowersSummary";
  */
 export function ChatInput() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [mentionSearchHost, setMentionSearchHost] = useState<HTMLDivElement | null>(null);
   const workspaceSelectionNonce = useHarnessStore((state) => state.workspaceSelectionNonce);
   const {
@@ -51,9 +67,19 @@ export function ChatInput() {
     cancelEdit,
     commitEdit,
   } = useQueuedPromptEdit();
+  const promptCapabilities = activeSlot?.liveConfig?.promptCapabilities ?? null;
+  const attachments = usePromptAttachments(activeSessionId, promptCapabilities);
+  const supportsAttachments = canAttachPromptContent(promptCapabilities);
+  const canAttach = !isEditingQueuedPrompt && !isDisabled && supportsAttachments;
+  const attachControlTitle = supportsAttachments
+    ? "Attach file"
+    : activeSessionId
+      ? "Attachments are not supported by this agent"
+      : "Attachments are available after a session starts";
+  const promptText = serializeChatDraftToPrompt(draft);
   const effectiveIsEmpty = isEditingQueuedPrompt
     ? editDraft.trim().length === 0
-    : isEmpty;
+    : isEmpty && !attachments.hasAttachments;
   const canSubmit = !effectiveIsEmpty && !isDisabled;
 
   const onSubmit = useCallback(async () => {
@@ -61,8 +87,10 @@ export function ChatInput() {
       await commitEdit();
       return;
     }
-    await handleSubmit();
-  }, [commitEdit, handleSubmit, isEditingQueuedPrompt]);
+    const blocks = await attachments.buildBlocks(promptText.trim());
+    await handleSubmit({ text: promptText, blocks });
+    attachments.clearAttachments();
+  }, [attachments, commitEdit, handleSubmit, isEditingQueuedPrompt, promptText]);
 
   const onCancel = useCallback(() => {
     if (isEditingQueuedPrompt) {
@@ -81,6 +109,28 @@ export function ChatInput() {
     isEditingQueuedPrompt,
     onCancelEdit: cancelEdit,
   });
+
+  const handleFileInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      attachments.addFiles(event.target.files);
+    }
+    event.target.value = "";
+  }, [attachments]);
+
+  const handlePaste = useCallback((event: ClipboardEvent<HTMLDivElement>) => {
+    if (!canAttach || event.clipboardData.files.length === 0) {
+      return;
+    }
+    attachments.addFiles(event.clipboardData.files);
+  }, [attachments, canAttach]);
+
+  const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!canAttach || event.dataTransfer.files.length === 0) {
+      return;
+    }
+    event.preventDefault();
+    attachments.addFiles(event.dataTransfer.files);
+  }, [attachments, canAttach]);
 
   useEffect(() => {
     if ((!selectedWorkspaceId && !activeSessionId) || isDisabled) {
@@ -138,8 +188,23 @@ export function ChatInput() {
           }
           focusChatInput();
         }}
+        onPaste={handlePaste}
+        onDrop={handleDrop}
+        onDragOver={(event) => {
+          if (canAttach) {
+            event.preventDefault();
+          }
+        }}
       >
         <form className="relative flex flex-col">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleFileInputChange}
+            accept="image/*,text/*,.md,.json,.ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.css,.html,.xml,.yaml,.yml,.toml,.sql,.sh"
+          />
           {isEditingQueuedPrompt && (
             <div className="mx-5 mt-3 flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
               <span>Editing queued message</span>
@@ -158,6 +223,12 @@ export function ChatInput() {
               <SessionPowersSummary summaries={activeSlot?.mcpBindingSummaries ?? null} />
             </div>
           </div>
+          {!isEditingQueuedPrompt && (
+            <DraftAttachmentPreviewList
+              attachments={attachments.attachments}
+              onRemove={attachments.removeAttachment}
+            />
+          )}
           {isEditingQueuedPrompt ? (
             <div
               className="mb-2 flex-grow select-text overflow-y-auto px-3"
@@ -206,6 +277,17 @@ export function ChatInput() {
                 areRuntimeControlsDisabled ? "pointer-events-none opacity-55" : ""
               }`}
             >
+              {!isEditingQueuedPrompt && (
+                <ComposerControlButton
+                  iconOnly
+                  disabled={!canAttach}
+                  icon={<FilePlus className="size-3.5" />}
+                  label="Attach file"
+                  title={attachControlTitle}
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Attach file"
+                />
+              )}
               <ModelSelector {...modelSelectorProps} />
               <SessionConfigControls agentKind={agentKind} controls={sessionConfigControls} />
             </div>

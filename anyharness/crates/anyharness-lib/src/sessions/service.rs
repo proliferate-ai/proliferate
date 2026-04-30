@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use super::live_config::snapshot_from_record;
 use super::model::{
-    PendingConfigChangeRecord, PendingPromptRecord, SessionEventRecord,
+    PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord, SessionEventRecord,
     SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
 };
 use super::store::SessionStore;
@@ -289,6 +289,7 @@ impl SessionService {
         live_config_snapshot: Option<&SessionLiveConfigSnapshotRecord>,
         pending_config_changes: &[PendingConfigChangeRecord],
         pending_prompts: &[PendingPromptRecord],
+        prompt_attachments: &[PromptAttachmentRecord],
         events: &[SessionEventRecord],
         raw_notifications: &[SessionRawNotificationRecord],
     ) -> anyhow::Result<()> {
@@ -300,6 +301,7 @@ impl SessionService {
             live_config_snapshot,
             pending_config_changes,
             pending_prompts,
+            prompt_attachments,
             events,
             raw_notifications,
         )

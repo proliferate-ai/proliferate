@@ -143,6 +143,7 @@ export function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
     case "pending-prompts-single":
       return (
         <PendingPromptList
+          sessionId={null}
           entries={PENDING_PROMPTS_SINGLE}
           onBeginEdit={noop}
           onDelete={noop}
@@ -151,6 +152,7 @@ export function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
     case "pending-prompts-multi":
       return (
         <PendingPromptList
+          sessionId={null}
           entries={PENDING_PROMPTS_MULTI}
           onBeginEdit={noop}
           onDelete={noop}
@@ -159,6 +161,7 @@ export function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
     case "pending-prompts-editing":
       return (
         <PendingPromptList
+          sessionId={null}
           entries={PENDING_PROMPTS_WITH_EDITING}
           onBeginEdit={noop}
           onDelete={noop}
@@ -177,6 +180,7 @@ export function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
             />
           </div>
           <PendingPromptList
+            sessionId={null}
             entries={PENDING_PROMPTS_SINGLE}
             onBeginEdit={noop}
             onDelete={noop}

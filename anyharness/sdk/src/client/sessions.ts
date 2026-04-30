@@ -129,6 +129,17 @@ export class SessionsClient {
     }, options);
   }
 
+  async fetchPromptAttachment(
+    sessionId: string,
+    attachmentId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<Blob> {
+    return this.transport.getBlob(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/prompt-attachments/${encodeURIComponent(attachmentId)}`,
+      options,
+    );
+  }
+
   async editPendingPrompt(
     sessionId: string,
     seq: number,

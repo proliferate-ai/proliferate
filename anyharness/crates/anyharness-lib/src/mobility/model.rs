@@ -1,5 +1,5 @@
 use crate::sessions::model::{
-    PendingConfigChangeRecord, PendingPromptRecord, SessionEventRecord,
+    PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord, SessionEventRecord,
     SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
 };
 use crate::workspaces::access_model::WorkspaceAccessRecord;
@@ -31,6 +31,7 @@ pub struct WorkspaceMobilitySessionBundleData {
     pub live_config_snapshot: Option<SessionLiveConfigSnapshotRecord>,
     pub pending_config_changes: Vec<PendingConfigChangeRecord>,
     pub pending_prompts: Vec<PendingPromptRecord>,
+    pub prompt_attachments: Vec<PromptAttachmentRecord>,
     pub events: Vec<SessionEventRecord>,
     pub raw_notifications: Vec<SessionRawNotificationRecord>,
     pub agent_artifacts: Vec<MobilityFileData>,

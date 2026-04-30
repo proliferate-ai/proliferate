@@ -1,5 +1,7 @@
 use anyharness_contract::v1;
 
+use crate::sessions::prompt::{PromptPayload, StoredPromptBlock};
+
 #[derive(Debug, Clone)]
 pub struct SessionRecord {
     pub id: String,
@@ -80,12 +82,22 @@ fn parse_mcp_binding_summaries(value: Option<&str>) -> Option<Vec<v1::SessionMcp
 
 impl PendingPromptRecord {
     pub fn to_contract(&self) -> v1::PendingPromptSummary {
+        let payload = PromptPayload::from_persisted(self.blocks_json.as_deref(), &self.text);
         v1::PendingPromptSummary {
             seq: self.seq,
             prompt_id: self.prompt_id.clone(),
             text: self.text.clone(),
+            content_parts: payload.content_parts(),
             queued_at: self.queued_at.clone(),
         }
+    }
+
+    pub fn prompt_payload(&self) -> PromptPayload {
+        PromptPayload::from_persisted(self.blocks_json.as_deref(), &self.text)
+    }
+
+    pub fn attachment_ids(&self) -> Vec<String> {
+        self.prompt_payload().attachment_ids()
     }
 }
 
@@ -95,6 +107,7 @@ pub struct SessionLiveConfigSnapshotRecord {
     pub source_seq: i64,
     pub raw_config_options_json: String,
     pub normalized_controls_json: String,
+    pub prompt_capabilities_json: Option<String>,
     pub updated_at: String,
 }
 
@@ -112,7 +125,140 @@ pub struct PendingPromptRecord {
     pub seq: i64,
     pub prompt_id: Option<String>,
     pub text: String,
+    pub blocks_json: Option<String>,
     pub queued_at: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct PromptAttachmentRecord {
+    pub attachment_id: String,
+    pub session_id: String,
+    pub state: PromptAttachmentState,
+    pub kind: PromptAttachmentKind,
+    pub mime_type: Option<String>,
+    pub display_name: Option<String>,
+    pub source_uri: Option<String>,
+    pub size_bytes: i64,
+    pub sha256: String,
+    pub content: Vec<u8>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+impl PromptAttachmentRecord {
+    pub fn from_stored_block(
+        session_id: &str,
+        block: &StoredPromptBlock,
+    ) -> Option<PromptAttachmentRecord> {
+        match block {
+            StoredPromptBlock::Image {
+                attachment_id,
+                mime_type,
+                name,
+                uri,
+                size,
+            } => Some(PromptAttachmentRecord {
+                attachment_id: attachment_id.clone(),
+                session_id: session_id.to_string(),
+                state: PromptAttachmentState::Pending,
+                kind: PromptAttachmentKind::Image,
+                mime_type: Some(mime_type.clone()),
+                display_name: name.clone(),
+                source_uri: uri.clone(),
+                size_bytes: (*size).try_into().unwrap_or(i64::MAX),
+                sha256: String::new(),
+                content: Vec::new(),
+                created_at: String::new(),
+                updated_at: String::new(),
+            }),
+            StoredPromptBlock::Resource {
+                attachment_id: Some(attachment_id),
+                uri,
+                name,
+                mime_type,
+                size,
+                ..
+            } => Some(PromptAttachmentRecord {
+                attachment_id: attachment_id.clone(),
+                session_id: session_id.to_string(),
+                state: PromptAttachmentState::Pending,
+                kind: PromptAttachmentKind::TextResource,
+                mime_type: mime_type.clone(),
+                display_name: name.clone(),
+                source_uri: Some(uri.clone()),
+                size_bytes: (*size).try_into().unwrap_or(i64::MAX),
+                sha256: String::new(),
+                content: Vec::new(),
+                created_at: String::new(),
+                updated_at: String::new(),
+            }),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptAttachmentState {
+    Pending,
+    Transcript,
+    Orphaned,
+    Deleted,
+}
+
+impl PromptAttachmentState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Transcript => "transcript",
+            Self::Orphaned => "orphaned",
+            Self::Deleted => "deleted",
+        }
+    }
+
+    pub fn parse(value: &str) -> Self {
+        match value {
+            "pending" => Self::Pending,
+            "transcript" => Self::Transcript,
+            "orphaned" => Self::Orphaned,
+            "deleted" => Self::Deleted,
+            other => {
+                tracing::warn!(
+                    attachment_state = %other,
+                    "unknown prompt attachment state; defaulting to orphaned"
+                );
+                Self::Orphaned
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptAttachmentKind {
+    Image,
+    TextResource,
+}
+
+impl PromptAttachmentKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Image => "image",
+            Self::TextResource => "text_resource",
+        }
+    }
+
+    pub fn parse(value: &str) -> Self {
+        match value {
+            "image" => Self::Image,
+            "text_resource" => Self::TextResource,
+            other => {
+                tracing::warn!(
+                    attachment_kind = %other,
+                    "unknown prompt attachment kind; defaulting to text_resource"
+                );
+                Self::TextResource
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -284,6 +284,10 @@ pub fn build_router(state: AppState) -> Router {
             patch(sessions::edit_pending_prompt).delete(sessions::delete_pending_prompt),
         )
         .route(
+            "/sessions/{session_id}/prompt-attachments/{attachment_id}",
+            get(sessions::get_prompt_attachment),
+        )
+        .route(
             "/sessions/{session_id}/resume",
             post(sessions::resume_session),
         )

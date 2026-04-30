@@ -130,6 +130,7 @@ use anyharness_contract::v1::{
         super::http::sessions::prompt_session,
         super::http::sessions::edit_pending_prompt,
         super::http::sessions::delete_pending_prompt,
+        super::http::sessions::get_prompt_attachment,
         super::http::sessions::resume_session,
         super::http::sessions::cancel_session,
         super::http::sessions::close_session,

@@ -1,25 +1,43 @@
-import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import type { ContentPart } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
-import { FilePathLink } from "@/components/ui/content/FilePathLink";
-import { tokenizeSerializedFileLinks } from "@/lib/domain/chat/file-mention-links";
 import { CopyMessageButton } from "./CopyMessageButton";
+import { PromptContentRenderer } from "@/components/workspace/chat/content/PromptContentRenderer";
+import { normalizeContentParts } from "@/lib/domain/chat/prompt-content";
 
 export interface UserMessageProps {
+  sessionId: string | null;
   content: string;
+  contentParts?: ContentPart[];
   showCopyButton?: boolean;
 }
 
-export function UserMessage({ content, showCopyButton = false }: UserMessageProps) {
+export function UserMessage({
+  sessionId,
+  content,
+  contentParts = [],
+  showCopyButton = false,
+}: UserMessageProps) {
   const [expanded, setExpanded] = useState(false);
   const [needsToggle, setNeedsToggle] = useState(false);
   const textRef = useRef<HTMLDivElement>(null);
-  const tokens = tokenizeSerializedFileLinks(content);
+  const displayParts = normalizeContentParts(contentParts, content);
+  const hasAttachments = displayParts.some((part) => part.type !== "text");
+  const hasTextPart = displayParts.some((part) => (
+    part.type === "text" && part.text.trim().length > 0
+  ));
+  const shouldRenderTextBubble = hasTextPart || (!hasAttachments && content.trim().length > 0);
+  const textParts = hasTextPart ? contentParts : [];
 
   useLayoutEffect(() => {
+    if (!shouldRenderTextBubble) {
+      setNeedsToggle(false);
+      return;
+    }
     const el = textRef.current;
     if (!el) return;
     setNeedsToggle(el.scrollHeight > el.clientHeight);
-  }, [content]);
+  }, [content, contentParts, shouldRenderTextBubble]);
 
   return (
     <div
@@ -27,39 +45,49 @@ export function UserMessage({ content, showCopyButton = false }: UserMessageProp
       className={showCopyButton ? "group/msg flex justify-end" : "flex justify-end"}
     >
       <div className="flex w-full flex-col items-end justify-end gap-1">
-        <div className="max-w-[77%] break-words rounded-2xl bg-foreground/5 px-3 py-2 text-foreground">
-          <div
-            ref={textRef}
-            className={`text-chat break-words whitespace-pre-wrap select-text${
-              !expanded ? " line-clamp-5" : ""
-            }`}
-          >
-            {tokens.map((token, index) => {
-              if (token.type === "text") {
-                return <Fragment key={`text-${index}`}>{token.text}</Fragment>;
-              }
-              return (
-                <FilePathLink key={`${token.path}-${index}`} rawPath={token.path}>
-                  {token.label}
-                </FilePathLink>
-              );
-            })}
+        {hasAttachments && (
+          <div className="flex max-w-[77%] flex-wrap items-end justify-end gap-2 self-end">
+            <PromptContentRenderer
+              sessionId={sessionId}
+              parts={contentParts}
+              fallbackText=""
+              variant="transcript"
+              includeText={false}
+              layout="wrap"
+            />
           </div>
-          {needsToggle && (
-            <div className="mt-1 flex justify-end">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setExpanded((v) => !v)}
-                className="h-auto px-1 py-0 text-[11px] text-muted-foreground hover:bg-transparent hover:text-foreground"
-              >
-                {expanded ? "Show less" : "Show more"}
-              </Button>
+        )}
+        {shouldRenderTextBubble && (
+          <div className="max-w-[77%] break-words rounded-2xl bg-foreground/5 px-3 py-2 text-foreground">
+            <div
+              ref={textRef}
+              className={`break-words select-text${
+                !expanded ? " line-clamp-5" : ""
+              }`}
+            >
+              <PromptContentRenderer
+                sessionId={sessionId}
+                parts={textParts}
+                fallbackText={content}
+                includeAttachments={false}
+              />
             </div>
-          )}
-        </div>
-        {showCopyButton && content && (
+            {needsToggle && (
+              <div className="mt-1 flex justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setExpanded((v) => !v)}
+                  className="h-auto px-1 py-0 text-[11px] text-muted-foreground hover:bg-transparent hover:text-foreground"
+                >
+                  {expanded ? "Show less" : "Show more"}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+        {showCopyButton && content && shouldRenderTextBubble && (
           <div className="pr-1 pt-0.5">
             <CopyMessageButton
               content={content}

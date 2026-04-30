@@ -119,6 +119,17 @@ pub struct NormalizedSessionControls {
     pub extras: Vec<NormalizedSessionControl>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptCapabilities {
+    #[serde(default)]
+    pub image: bool,
+    #[serde(default)]
+    pub audio: bool,
+    #[serde(default)]
+    pub embedded_context: bool,
+}
+
 /// The current live session configuration snapshot persisted by AnyHarness.
 ///
 /// This contains both the exact raw ACP config state and AnyHarness's
@@ -130,6 +141,9 @@ pub struct SessionLiveConfigSnapshot {
     pub raw_config_options: Vec<RawSessionConfigOption>,
     /// Product-normalized view of the current live controls.
     pub normalized_controls: NormalizedSessionControls,
+    /// Content block capabilities advertised by the active ACP agent.
+    #[serde(default)]
+    pub prompt_capabilities: PromptCapabilities,
     /// Session event sequence number from which this snapshot was produced.
     pub source_seq: i64,
     /// Timestamp when this snapshot was last updated.

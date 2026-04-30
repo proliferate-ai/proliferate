@@ -58,6 +58,17 @@ export class AnyHarnessTransport {
     return this.handleResponse<T>(res);
   }
 
+  async getBlob(path: string, options?: AnyHarnessRequestOptions): Promise<Blob> {
+    const res = await this.fetch(`${this.baseUrl}${path}`, {
+      method: "GET",
+      headers: this.buildHeaders({}, options),
+    });
+    if (!res.ok) {
+      throw new AnyHarnessError(await toProblemDetails(res));
+    }
+    return res.blob();
+  }
+
   async post<T>(path: string, body: unknown, options?: AnyHarnessRequestOptions): Promise<T> {
     const res = await this.fetch(`${this.baseUrl}${path}`, {
       method: "POST",

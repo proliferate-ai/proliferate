@@ -235,7 +235,6 @@ pub async fn prompt_session(
     let latency = LatencyRequestContext::from_headers(&headers);
     let latency_fields = latency_trace_fields(latency.as_ref());
     let started = Instant::now();
-    let text = extract_prompt_text(&req.blocks);
     tracing::info!(
         session_id = %session_id,
         block_count = req.blocks.len(),
@@ -248,7 +247,7 @@ pub async fn prompt_session(
 
     let outcome = state
         .session_runtime
-        .send_prompt(&session_id, text, latency.as_ref())
+        .send_prompt(&session_id, req.blocks, latency.as_ref())
         .await
         .map_err(map_send_prompt_error)?;
 
@@ -309,9 +308,14 @@ pub async fn edit_pending_prompt(
     Path((session_id, seq)): Path<(String, i64)>,
     Json(req): Json<EditPendingPromptRequest>,
 ) -> Result<Json<Session>, ApiError> {
+    let blocks = req.blocks.unwrap_or_else(|| {
+        vec![PromptInputBlock::Text {
+            text: req.text.unwrap_or_default(),
+        }]
+    });
     let updated = state
         .session_runtime
-        .edit_pending_prompt(&session_id, seq, req.text)
+        .edit_pending_prompt(&session_id, seq, blocks)
         .await
         .map_err(map_pending_prompt_mutation_error)?;
     Ok(Json(session_to_contract(&state, &updated).await?))
@@ -340,6 +344,58 @@ pub async fn delete_pending_prompt(
         .await
         .map_err(map_pending_prompt_mutation_error)?;
     Ok(Json(session_to_contract(&state, &updated).await?))
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/sessions/{session_id}/prompt-attachments/{attachment_id}",
+    params(
+        ("session_id" = String, Path, description = "Session ID"),
+        ("attachment_id" = String, Path, description = "Prompt attachment ID"),
+    ),
+    responses(
+        (status = 200, description = "Prompt attachment bytes"),
+        (status = 404, description = "Session or attachment not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "sessions"
+)]
+pub async fn get_prompt_attachment(
+    State(state): State<AppState>,
+    Path((session_id, attachment_id)): Path<(String, String)>,
+) -> Result<(HeaderMap, Vec<u8>), ApiError> {
+    state
+        .session_service
+        .get_session(&session_id)
+        .map_err(|error| ApiError::internal(error.to_string()))?
+        .ok_or_else(|| {
+            ApiError::not_found(
+                format!("Session not found: {session_id}"),
+                "SESSION_NOT_FOUND",
+            )
+        })?;
+    let attachment = state
+        .session_service
+        .store()
+        .find_prompt_attachment(&session_id, &attachment_id)
+        .map_err(|error| ApiError::internal(error.to_string()))?
+        .ok_or_else(|| {
+            ApiError::not_found(
+                format!("Prompt attachment not found: {attachment_id}"),
+                "PROMPT_ATTACHMENT_NOT_FOUND",
+            )
+        })?;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        "cache-control",
+        HeaderValue::from_static("private, max-age=31536000, immutable"),
+    );
+    if let Some(mime_type) = attachment.mime_type.as_deref() {
+        if let Ok(value) = HeaderValue::from_str(mime_type) {
+            headers.insert("content-type", value);
+        }
+    }
+    Ok((headers, attachment.content))
 }
 
 // ---------------------------------------------------------------------------
@@ -761,16 +817,6 @@ pub async fn reveal_mcp_elicitation_url(
     Ok((headers, Json(response)))
 }
 
-fn extract_prompt_text(blocks: &[PromptInputBlock]) -> String {
-    blocks
-        .iter()
-        .filter_map(|block| match block {
-            PromptInputBlock::Text { text } => Some(text.as_str()),
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 fn raw_notification_record_to_envelope(
     record: crate::sessions::model::SessionRawNotificationRecord,
 ) -> Option<SessionRawNotificationEnvelope> {
@@ -931,6 +977,7 @@ fn map_send_prompt_error(error: SendPromptError) -> ApiError {
             "SESSION_NOT_FOUND",
         ),
         SendPromptError::EmptyPrompt => ApiError::bad_request("empty prompt", "EMPTY_PROMPT"),
+        SendPromptError::InvalidPrompt(error) => ApiError::bad_request(error.detail, error.code),
         SendPromptError::Internal(error) => ApiError::internal(error.to_string()),
     }
 }
@@ -943,6 +990,9 @@ fn map_pending_prompt_mutation_error(error: PendingPromptMutationError) -> ApiEr
         ),
         PendingPromptMutationError::NotFound => {
             ApiError::not_found("Pending prompt not found", "PENDING_PROMPT_NOT_FOUND")
+        }
+        PendingPromptMutationError::InvalidPrompt(error) => {
+            ApiError::bad_request(error.detail, error.code)
         }
         PendingPromptMutationError::Internal(error) => ApiError::internal(error.to_string()),
     }

@@ -4,6 +4,7 @@ import {
   selectPendingUserInputInteraction,
   type McpElicitationSubmittedField,
   type McpElicitationUrlRevealResponse,
+  type PromptInputBlock,
   type ResolveInteractionRequest,
   type UserInputSubmittedAnswer,
 } from "@anyharness/sdk";
@@ -42,6 +43,7 @@ interface LaunchPromptInput extends SessionLatencyFlowOptions {
   agentKind: string;
   modelId: string;
   text: string;
+  blocks?: PromptInputBlock[];
 }
 
 interface SessionConfigOptionUpdateOptions {
@@ -51,6 +53,7 @@ interface SessionConfigOptionUpdateOptions {
 interface SessionControlDeps {
   createSessionWithResolvedConfig: (options: {
     text: string;
+    blocks?: PromptInputBlock[];
     agentKind: string;
     modelId: string;
     workspaceId?: string;
@@ -257,7 +260,7 @@ export function useSessionControlActions({
 
   const promptActiveSession = useCallback(async (
     text: string,
-    options?: PromptLatencyFlowOptions,
+    options?: PromptLatencyFlowOptions & { blocks?: PromptInputBlock[] },
   ) => {
     const state = useHarnessStore.getState();
     const sessionId = state.activeSessionId;
@@ -282,6 +285,7 @@ export function useSessionControlActions({
     await promptSession({
       sessionId,
       text,
+      blocks: options?.blocks,
       workspaceId,
       latencyFlowId: options?.latencyFlowId,
       promptId: options?.promptId,
@@ -437,6 +441,7 @@ export function useSessionControlActions({
     agentKind: string,
     text: string,
     modelId?: string,
+    blocks?: PromptInputBlock[],
   ) => {
     const state = useHarnessStore.getState();
     const workspaceId = state.selectedWorkspaceId;
@@ -454,6 +459,7 @@ export function useSessionControlActions({
         await promptSession({
           sessionId: slot.sessionId,
           text,
+          blocks,
           workspaceId,
           onBeforePrompt: workspaceId
             ? () => maybeStartFirstSessionBranchRenameTracking(slot.sessionId, workspaceId)
@@ -471,6 +477,7 @@ export function useSessionControlActions({
         await promptSession({
           sessionId: backendSession.id,
           text,
+          blocks,
           workspaceId,
           onBeforePrompt: () =>
             maybeStartFirstSessionBranchRenameTracking(backendSession.id, workspaceId),
@@ -481,6 +488,7 @@ export function useSessionControlActions({
 
     await createSessionWithResolvedConfig({
       text,
+      blocks,
       agentKind,
       modelId: modelId ?? agentKind,
     });
@@ -499,6 +507,7 @@ export function useSessionControlActions({
     agentKind,
     modelId,
     text,
+    blocks,
     latencyFlowId,
   }: LaunchPromptInput) => {
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
@@ -517,6 +526,7 @@ export function useSessionControlActions({
         await promptSession({
           sessionId: slot.sessionId,
           text,
+          blocks,
           workspaceId,
           latencyFlowId,
           onBeforePrompt: () =>
@@ -535,6 +545,7 @@ export function useSessionControlActions({
       await promptSession({
         sessionId: backendSession.id,
         text,
+        blocks,
         workspaceId,
         latencyFlowId,
         onBeforePrompt: () =>
@@ -545,6 +556,7 @@ export function useSessionControlActions({
 
     await createSessionWithResolvedConfig({
       text,
+      blocks,
       agentKind,
       modelId,
       workspaceId,
