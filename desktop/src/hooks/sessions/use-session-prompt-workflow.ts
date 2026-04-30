@@ -23,6 +23,7 @@ interface PromptSessionInput {
   workspaceId?: string | null;
   latencyFlowId?: string | null;
   promptId?: string | null;
+  onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
   onBeforePrompt?: (workspaceId: string) => Promise<void> | void;
   onBeforePromptRequest?: (workspaceId: string) => Promise<void> | void;
 }
@@ -41,6 +42,7 @@ export function useSessionPromptWorkflow() {
     workspaceId,
     latencyFlowId,
     promptId,
+    onBeforeOptimisticPrompt,
     onBeforePrompt,
     onBeforePromptRequest,
   }: PromptSessionInput) => {
@@ -54,6 +56,10 @@ export function useSessionPromptWorkflow() {
     }
 
     try {
+      if (resolvedWorkspaceId && onBeforeOptimisticPrompt) {
+        await onBeforeOptimisticPrompt(resolvedWorkspaceId);
+      }
+
       useHarnessStore.getState().patchSessionSlot(sessionId, {
         optimisticPrompt:
           slot?.optimisticPrompt

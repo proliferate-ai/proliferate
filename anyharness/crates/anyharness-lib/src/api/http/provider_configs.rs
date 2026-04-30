@@ -1,9 +1,14 @@
 use anyharness_contract::v1::{
-    ModelCatalogStatus as ContractModelCatalogStatus, ModelEntry, ProviderConfig,
+    ModelCatalogStatus as ContractModelCatalogStatus, ModelEntry,
+    ModelLaunchRemediation as ContractModelLaunchRemediation,
+    ModelLaunchRemediationKind as ContractModelLaunchRemediationKind, ProviderConfig,
 };
 use axum::{extract::State, Json};
 
-use crate::agents::model::{ModelCatalogStatus, ModelRegistryMetadata, ModelRegistryModelMetadata};
+use crate::agents::model::{
+    ModelCatalogStatus, ModelLaunchRemediationKind, ModelLaunchRemediationMetadata,
+    ModelRegistryMetadata, ModelRegistryModelMetadata,
+};
 use crate::app::AppState;
 
 #[utoipa::path(
@@ -42,6 +47,26 @@ fn into_contract_model(model: ModelRegistryModelMetadata) -> ModelEntry {
         status: into_contract_status(model.status),
         aliases: model.aliases,
         min_runtime_version: model.min_runtime_version,
+        launch_remediation: model
+            .launch_remediation
+            .map(into_contract_launch_remediation),
+    }
+}
+
+fn into_contract_launch_remediation(
+    remediation: ModelLaunchRemediationMetadata,
+) -> ContractModelLaunchRemediation {
+    ContractModelLaunchRemediation {
+        kind: match remediation.kind {
+            ModelLaunchRemediationKind::ManagedReinstall => {
+                ContractModelLaunchRemediationKind::ManagedReinstall
+            }
+            ModelLaunchRemediationKind::ExternalUpdate => {
+                ContractModelLaunchRemediationKind::ExternalUpdate
+            }
+            ModelLaunchRemediationKind::Restart => ContractModelLaunchRemediationKind::Restart,
+        },
+        message: remediation.message,
     }
 }
 

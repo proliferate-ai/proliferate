@@ -391,6 +391,7 @@ pub struct ModelRegistryModelMetadata {
     pub status: ModelCatalogStatus,
     pub aliases: Vec<String>,
     pub min_runtime_version: Option<String>,
+    pub launch_remediation: Option<ModelLaunchRemediationMetadata>,
 }
 
 /// Runtime-owned lifecycle status for one model catalog row.
@@ -401,6 +402,22 @@ pub enum ModelCatalogStatus {
     Active,
     Deprecated,
     Hidden,
+}
+
+/// Product-owned remediation class for a launch-time live-apply mismatch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelLaunchRemediationKind {
+    ManagedReinstall,
+    ExternalUpdate,
+    Restart,
+}
+
+/// Runtime-owned catalog remediation metadata.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+pub struct ModelLaunchRemediationMetadata {
+    pub kind: ModelLaunchRemediationKind,
+    pub message: String,
 }
 
 /// Machine-local resolved state for one artifact (native or agent-process).

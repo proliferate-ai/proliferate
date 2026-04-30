@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import type { ModelSelectorSelection } from "@/lib/domain/chat/model-selection";
 import type { Workspace } from "@anyharness/sdk";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/use-cowork-thread-workflow";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -104,6 +105,9 @@ export function useChatLaunchActions() {
         setWorkspaceArrivalEvent(null);
       })
       .catch((error) => {
+        if (isSessionModelAvailabilityInterruption(error)) {
+          return;
+        }
         failLatencyFlow(latencyFlowId, "session_create_failed");
         const message = error instanceof Error ? error.message : String(error);
         showToast(`Failed to open chat: ${message}`);

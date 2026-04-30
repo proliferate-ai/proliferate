@@ -30,6 +30,9 @@ export interface AgentsPaneRowState {
   detailText: string;
   actionLabel: string;
   actionDisabled: boolean;
+  installActionLabel: string;
+  installActionDisabled: boolean;
+  installActionLoading: boolean;
   reconcileResult?: ReconcileAgentResult;
 }
 
@@ -47,6 +50,7 @@ interface AgentsPaneState {
   agentsLoading: boolean;
   agentError: string | null;
   reconcileError: string | null;
+  installError: string | null;
   needsSetupRows: AgentsPaneRowState[];
   configuredRows: AgentsPaneRowState[];
   unavailableRows: AgentsPaneRowState[];
@@ -54,11 +58,13 @@ interface AgentsPaneState {
   selectedAgentReconcileResult?: ReconcileAgentResult;
   reconcileState: AgentReconcileState;
   isReconciling: boolean;
+  isAgentOperationActive: boolean;
   isAgentSeedHydrating: boolean;
   isEmpty: boolean;
   openAgent: (agent: AgentSummary) => void;
   closeAgent: () => void;
   handleReconcile: () => Promise<void>;
+  handleInstallAgent: (agent: AgentSummary) => Promise<void>;
 }
 
 export function useAgentsPaneState(): AgentsPaneState {
@@ -78,10 +84,14 @@ export function useAgentsPaneState(): AgentsPaneState {
     error: agentsError,
   } = useAgentCatalog();
   const {
+    installAgent,
+    refreshAgentResources,
     reconcileAgents,
   } = useAgentInstallationActions();
 
   const [selectedAgentKind, setSelectedAgentKind] = useState<string | null>(null);
+  const [installingAgentKind, setInstallingAgentKind] = useState<string | null>(null);
+  const [installError, setInstallError] = useState<string | null>(null);
 
   const selectedAgent = useMemo(
     () => (selectedAgentKind ? agentsByKind.get(selectedAgentKind) ?? null : null),
@@ -99,6 +109,7 @@ export function useAgentsPaneState(): AgentsPaneState {
   const reconcileError = reconcileStatus === "failed"
     ? reconcileSnapshot?.message ?? AGENTS_PAGE_COPY.reconcileError
     : null;
+  const isAgentOperationActive = reconcileState === "reconciling" || installingAgentKind !== null;
 
   const runtimeStatus: AgentsPaneRuntimeStatus = connectionState === "healthy"
     ? {
@@ -128,18 +139,34 @@ export function useAgentsPaneState(): AgentsPaneState {
 
     for (const agent of agents) {
       const isReconcilingInstall = agent.installState === "installing";
+      const isInstallingThisAgent = installingAgentKind === agent.kind;
       const reconcileResult = reconcileResultsByKind.get(agent.kind);
       const group = classifyAgent(agent, reconcileResult);
       const row: AgentsPaneRowState = {
         agent,
         status: getAgentStatusDisplay(agent, {
           reconcileResult,
-          isReconciling: isReconcilingInstall,
+          isReconciling: isReconcilingInstall || isInstallingThisAgent,
         }),
         group,
         detailText: getAgentDetailText(agent, reconcileResult),
-        actionLabel: getAgentRowActionLabel(agent, isReconcilingInstall),
-        actionDisabled: isReconcilingInstall,
+        actionLabel: getAgentRowActionLabel(
+          agent,
+          isReconcilingInstall || isInstallingThisAgent,
+        ),
+        actionDisabled: isReconcilingInstall || isInstallingThisAgent,
+        installActionLabel: getAgentInstallActionLabel(
+          agent,
+          isReconcilingInstall || isInstallingThisAgent,
+        ),
+        installActionDisabled:
+          connectionState !== "healthy"
+          || isAgentSeedHydrating
+          || reconcileState === "reconciling"
+          || installingAgentKind !== null
+          || isReconcilingInstall
+          || agent.readiness === "unsupported",
+        installActionLoading: isInstallingThisAgent,
         reconcileResult,
       };
 
@@ -160,18 +187,42 @@ export function useAgentsPaneState(): AgentsPaneState {
       unavailableRows,
       rowsByKind,
     };
-  }, [agents, reconcileResultsByKind]);
+  }, [
+    agents,
+    connectionState,
+    installingAgentKind,
+    isAgentSeedHydrating,
+    reconcileResultsByKind,
+    reconcileState,
+  ]);
 
   const agentError =
     agentsError instanceof Error ? agentsError.message : null;
 
   const handleReconcile = useCallback(async () => {
     try {
+      setInstallError(null);
       await reconcileAgents({ reinstall: true });
     } catch {
       // Shared mutation state exposes the latest error to all consumers.
     }
   }, [reconcileAgents]);
+
+  const handleInstallAgent = useCallback(async (agent: AgentSummary) => {
+    setInstallError(null);
+    setInstallingAgentKind(agent.kind);
+
+    try {
+      await installAgent(agent.kind, {
+        reinstall: agent.installState !== "install_required",
+      });
+      await refreshAgentResources();
+    } catch {
+      setInstallError(`Could not install ${agent.displayName}.`);
+    } finally {
+      setInstallingAgentKind(null);
+    }
+  }, [installAgent, refreshAgentResources]);
 
   const openAgent = useCallback((agent: AgentSummary) => {
     setSelectedAgentKind(agent.kind);
@@ -191,6 +242,7 @@ export function useAgentsPaneState(): AgentsPaneState {
     agentsLoading,
     agentError,
     reconcileError,
+    installError,
     needsSetupRows: groupedRows.needsSetupRows,
     configuredRows: groupedRows.configuredRows,
     unavailableRows: groupedRows.unavailableRows,
@@ -200,6 +252,7 @@ export function useAgentsPaneState(): AgentsPaneState {
       : undefined,
     reconcileState,
     isReconciling: reconcileState === "reconciling",
+    isAgentOperationActive,
     isAgentSeedHydrating,
     isEmpty:
       groupedRows.needsSetupRows.length === 0
@@ -208,6 +261,7 @@ export function useAgentsPaneState(): AgentsPaneState {
     openAgent,
     closeAgent,
     handleReconcile,
+    handleInstallAgent,
   };
 }
 
@@ -225,4 +279,20 @@ function getAgentRowActionLabel(
     return AGENTS_PAGE_COPY.detailsAction;
   }
   return AGENTS_PAGE_COPY.setupAction;
+}
+
+function getAgentInstallActionLabel(
+  agent: AgentSummary,
+  isInstalling: boolean,
+): string {
+  if (isInstalling) {
+    return AGENTS_PAGE_COPY.installLoadingAction;
+  }
+  if (agent.installState === "install_required") {
+    return AGENTS_PAGE_COPY.installAction;
+  }
+  if (agent.installState === "failed") {
+    return AGENTS_PAGE_COPY.retryInstallAction;
+  }
+  return AGENTS_PAGE_COPY.reinstallAction;
 }

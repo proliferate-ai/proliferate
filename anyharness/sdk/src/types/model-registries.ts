@@ -1,18 +1,9 @@
-export type ModelCatalogStatus = "candidate" | "active" | "deprecated" | "hidden";
+import type { components } from "../generated/openapi.js";
 
-export interface ModelRegistryModel {
-  id: string;
-  displayName: string;
-  description?: string | null;
-  isDefault: boolean;
-  status?: ModelCatalogStatus;
-  aliases?: string[];
-  minRuntimeVersion?: string | null;
-}
-
-export interface ModelRegistry {
-  kind: string;
-  displayName: string;
-  defaultModelId?: string | null;
-  models: ModelRegistryModel[];
-}
+export type ModelCatalogStatus = components["schemas"]["ModelCatalogStatus"];
+export type ModelLaunchRemediationKind =
+  components["schemas"]["ModelLaunchRemediationKind"];
+export type ModelLaunchRemediation =
+  components["schemas"]["ModelLaunchRemediation"];
+export type ModelRegistryModel = components["schemas"]["ModelRegistryModel"];
+export type ModelRegistry = components["schemas"]["ModelRegistry"];

@@ -42,6 +42,8 @@ export type {
 
 export type {
   ModelCatalogStatus,
+  ModelLaunchRemediation,
+  ModelLaunchRemediationKind,
   ModelRegistry,
   ModelRegistryModel,
 } from "./types/model-registries.js";

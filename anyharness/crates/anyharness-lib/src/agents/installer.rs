@@ -556,6 +556,10 @@ fn install_managed_npm_package(
 
     generate_launcher_script(launcher_path, &exec_path, &[], launcher_env, path_prefixes)?;
 
+    let versioned_package = apply_npm_version_override(package, version_override);
+    let version = installed_npm_package_version(&versioned_package, managed_dir)
+        .or_else(|| npm_package_version(&versioned_package));
+
     Ok(Some(InstalledArtifactResult {
         role: ArtifactRole::AgentProcess,
         path: launcher_path.to_path_buf(),
@@ -564,7 +568,7 @@ fn install_managed_npm_package(
         } else {
             source.into()
         },
-        version: npm_package_version(&apply_npm_version_override(package, version_override)),
+        version,
     }))
 }
 
@@ -931,6 +935,39 @@ fn npm_package_version(package: &str) -> Option<String> {
         .map(|(_, version)| version.to_string())
 }
 
+fn installed_npm_package_version(package: &str, managed_dir: &Path) -> Option<String> {
+    let package_name = npm_package_name(package)?;
+    let package_json = managed_dir
+        .join("node_modules")
+        .join(PathBuf::from(package_name))
+        .join("package.json");
+    let text = std::fs::read_to_string(package_json).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&text).ok()?;
+    json.get("version")?.as_str().map(ToString::to_string)
+}
+
+fn npm_package_name(package: &str) -> Option<&str> {
+    if is_npm_non_registry_spec(package) {
+        return None;
+    }
+
+    let package = package.split_once('#').map_or(package, |(name, _)| name);
+    if package.starts_with('@') {
+        let mut at_positions = package.match_indices('@').map(|(index, _)| index);
+        at_positions.next();
+        return at_positions.next().map_or(Some(package), |index| {
+            let candidate = &package[..index];
+            if candidate.contains('/') {
+                Some(candidate)
+            } else {
+                Some(package)
+            }
+        });
+    }
+
+    Some(package.split_once('@').map_or(package, |(name, _)| name))
+}
+
 fn is_npm_non_registry_spec(package: &str) -> bool {
     package.starts_with("git+")
         || package.starts_with("github:")
@@ -1282,6 +1319,24 @@ mod tests {
                 "git+https://github.com/proliferate-ai/claude-agent-acp.git#48cc672"
             ),
             Some("48cc672".into())
+        );
+    }
+
+    #[test]
+    fn extracts_registry_package_names() {
+        assert_eq!(
+            npm_package_name("@proliferateai/codex-acp@latest"),
+            Some("@proliferateai/codex-acp")
+        );
+        assert_eq!(
+            npm_package_name("@proliferateai/codex-acp"),
+            Some("@proliferateai/codex-acp")
+        );
+        assert_eq!(npm_package_name("amp-acp@1.2.3"), Some("amp-acp"));
+        assert_eq!(npm_package_name("amp-acp"), Some("amp-acp"));
+        assert_eq!(
+            npm_package_name("git+https://github.com/proliferate-ai/codex-acp.git#main"),
+            None
         );
     }
 

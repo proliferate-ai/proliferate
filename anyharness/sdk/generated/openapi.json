@@ -8081,6 +8081,17 @@
             "type": "boolean",
             "description": "Whether this is the default model for the provider"
           },
+          "launchRemediation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelLaunchRemediation",
+                "description": "Optional app-owned remediation hint for launch-time live-apply mismatch"
+              }
+            ]
+          },
           "minRuntimeVersion": {
             "type": [
               "string",
@@ -8093,6 +8104,33 @@
             "description": "Runtime-owned lifecycle status for this model"
           }
         }
+      },
+      "ModelLaunchRemediation": {
+        "type": "object",
+        "description": "Catalog metadata for the app-owned action shown after live-apply mismatch.",
+        "required": [
+          "kind",
+          "message"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ModelLaunchRemediationKind",
+            "description": "App-owned action class for remediation."
+          },
+          "message": {
+            "type": "string",
+            "description": "Short detail text from the catalog. Button labels remain app-owned."
+          }
+        }
+      },
+      "ModelLaunchRemediationKind": {
+        "type": "string",
+        "description": "Product-owned remediation hint shown when a live harness cannot apply a\nselected catalog model at launch.",
+        "enum": [
+          "managed_reinstall",
+          "external_update",
+          "restart"
+        ]
       },
       "ModelRegistry": {
         "type": "object",
@@ -8162,6 +8200,17 @@
           "isDefault": {
             "type": "boolean",
             "description": "Whether this is the default model for the registry"
+          },
+          "launchRemediation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelLaunchRemediation",
+                "description": "Optional app-owned remediation hint for launch-time live-apply mismatch"
+              }
+            ]
           },
           "minRuntimeVersion": {
             "type": [

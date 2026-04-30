@@ -48,9 +48,13 @@
         {
           "id": "gpt-5.5",
           "displayName": "GPT 5.5",
-          "description": "Candidate pending live Codex launch smoke.",
+          "description": "Latest OpenAI coding model",
           "isDefault": false,
-          "status": "candidate"
+          "status": "active",
+          "launchRemediation": {
+            "kind": "managed_reinstall",
+            "message": "Update Codex tools and retry."
+          }
         },
         {
           "id": "gpt-5.4",
@@ -185,6 +189,16 @@
           "displayName": "Sonnet 4.6",
           "isDefault": false,
           "status": "active"
+        },
+        {
+          "id": "gpt-5.5[reasoning=medium,fast=false]",
+          "displayName": "GPT 5.5",
+          "isDefault": false,
+          "status": "active",
+          "launchRemediation": {
+            "kind": "external_update",
+            "message": "Update Cursor tools from Agent Settings, then retry."
+          }
         },
         {
           "id": "gpt-5.4[reasoning=medium,context=272k,fast=false]",

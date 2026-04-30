@@ -8,6 +8,7 @@ import {
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -101,11 +102,17 @@ export function useChatPromptActions() {
       })
       : null;
 
-    // Optimistically clear the draft immediately so the input empties at the
-    // same instant the pending user bubble appears in the transcript.
-    // If the send fails, the error toast below covers the failure path.
-    if (draftKey) {
+    const clearDraftIfNeeded = () => {
+      if (!draftKey) {
+        return;
+      }
       clearDraft(draftKey);
+    };
+
+    // Existing-session sends can still clear immediately because there is no
+    // launch validation gate. New-session sends clear only after validation.
+    if (targetSessionId) {
+      clearDraftIfNeeded();
     }
 
     try {
@@ -123,6 +130,7 @@ export function useChatPromptActions() {
           launchSelection.modelId,
           blocks,
           input?.optimisticContentParts,
+          clearDraftIfNeeded,
         );
       } else {
         showToast("Choose a ready model before sending a message.");
@@ -140,6 +148,10 @@ export function useChatPromptActions() {
         reuse_session: targetSessionId !== null,
       });
     } catch (error) {
+      if (isSessionModelAvailabilityInterruption(error)) {
+        return;
+      }
+
       if (latencyFlowId) {
         failLatencyFlow(latencyFlowId, "prompt_submit_failed");
       }

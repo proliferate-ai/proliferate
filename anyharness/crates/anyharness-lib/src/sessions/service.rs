@@ -521,6 +521,7 @@ mod tests {
             status: ModelCatalogStatus::Active,
             aliases: vec![],
             min_runtime_version: None,
+            launch_remediation: None,
         }
     }
 

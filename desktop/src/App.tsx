@@ -7,6 +7,7 @@ import { ToastContainer } from "@/components/feedback/Toast"
 import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { MacWindowControlsSafeArea } from "@/components/ui/MacWindowControlsSafeArea"
+import { SessionModelAvailabilityDialog } from "@/components/workspace/chat/launch/SessionModelAvailabilityDialog"
 import { applyThemePreference, initializeTheme } from "@/config/theme"
 import { useExportRunningAgentCount } from "@/hooks/app/use-export-running-agent-count"
 import { useAppShortcuts } from "@/hooks/app/use-app-shortcuts"
@@ -223,6 +224,7 @@ function AppRuntime() {
     <>
       <MacWindowControlsSafeArea />
       <UpdateRestartDialog />
+      <SessionModelAvailabilityDialog />
       <RuntimeInputSyncGate />
       <InstrumentedRoutes>
         <Route path="/index.html" element={<Navigate to="/" replace />} />

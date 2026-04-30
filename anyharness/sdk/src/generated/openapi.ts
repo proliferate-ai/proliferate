@@ -2216,11 +2216,25 @@ export interface components {
             id: string;
             /** @description Whether this is the default model for the provider */
             isDefault: boolean;
+            launchRemediation?: null | components["schemas"]["ModelLaunchRemediation"];
             /** @description Minimum AnyHarness runtime version required for this model, if any */
             minRuntimeVersion?: string | null;
             /** @description Runtime-owned lifecycle status for this model */
             status: components["schemas"]["ModelCatalogStatus"];
         };
+        /** @description Catalog metadata for the app-owned action shown after live-apply mismatch. */
+        ModelLaunchRemediation: {
+            /** @description App-owned action class for remediation. */
+            kind: components["schemas"]["ModelLaunchRemediationKind"];
+            /** @description Short detail text from the catalog. Button labels remain app-owned. */
+            message: string;
+        };
+        /**
+         * @description Product-owned remediation hint shown when a live harness cannot apply a
+         *     selected catalog model at launch.
+         * @enum {string}
+         */
+        ModelLaunchRemediationKind: "managed_reinstall" | "external_update" | "restart";
         /** @description Backend-owned model registry for a harness. */
         ModelRegistry: {
             /** @description Default session-level model selector ID for this harness */
@@ -2244,6 +2258,7 @@ export interface components {
             id: string;
             /** @description Whether this is the default model for the registry */
             isDefault: boolean;
+            launchRemediation?: null | components["schemas"]["ModelLaunchRemediation"];
             /** @description Minimum AnyHarness runtime version required for this model, if any */
             minRuntimeVersion?: string | null;
             /** @description Runtime-owned lifecycle status for this model */

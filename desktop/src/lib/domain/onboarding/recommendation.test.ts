@@ -14,6 +14,7 @@ function registry(kind: string, models: string[] = ["default-model"]): ModelRegi
       id,
       displayName: id,
       isDefault: index === 0,
+      status: "active",
     })),
   };
 }

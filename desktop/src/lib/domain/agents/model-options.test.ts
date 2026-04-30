@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentSummary, ModelRegistry } from "@anyharness/sdk";
+import type { AgentSummary, ModelRegistry, ModelRegistryModel } from "@anyharness/sdk";
 import {
   buildAgentModelGroups,
   resolveEffectiveAgentModelSelection,
@@ -29,12 +29,17 @@ function registry(overrides: Partial<ModelRegistry> & { kind: string }): ModelRe
     displayName: overrides.displayName ?? overrides.kind,
     defaultModelId: overrides.defaultModelId ?? "default-model",
     models: overrides.models ?? [
-      {
-        id: "default-model",
-        displayName: "Default Model",
-        isDefault: true,
-      },
+      model("default-model", "Default Model", true),
     ],
+  };
+}
+
+function model(id: string, displayName: string, isDefault: boolean): ModelRegistryModel {
+  return {
+    id,
+    displayName,
+    isDefault,
+    status: "active",
   };
 }
 
@@ -87,8 +92,8 @@ describe("resolveEffectiveAgentModelSelection", () => {
           kind: "codex",
           defaultModelId: "gpt-5.4",
           models: [
-            { id: "gpt-5.4", displayName: "GPT-5.4", isDefault: true },
-            { id: "gpt-5.4-mini", displayName: "Mini", isDefault: false },
+            model("gpt-5.4", "GPT-5.4", true),
+            model("gpt-5.4-mini", "Mini", false),
           ],
         }),
       ],
@@ -109,8 +114,8 @@ describe("resolveEffectiveAgentModelSelection", () => {
           kind: "codex",
           defaultModelId: "second",
           models: [
-            { id: "first", displayName: "First", isDefault: false },
-            { id: "second", displayName: "Second", isDefault: true },
+            model("first", "First", false),
+            model("second", "Second", true),
           ],
         }),
       ],
@@ -129,8 +134,8 @@ describe("resolveEffectiveAgentModelSelection", () => {
           kind: "codex",
           defaultModelId: null,
           models: [
-            { id: "first", displayName: "First", isDefault: false },
-            { id: "second", displayName: "Second", isDefault: false },
+            model("first", "First", false),
+            model("second", "Second", false),
           ],
         }),
       ],

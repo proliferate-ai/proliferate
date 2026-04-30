@@ -5,6 +5,7 @@ import { useCloseActiveWorkspaceTab } from "@/hooks/workspaces/use-close-active-
 import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
 import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import {
   fileWorkspaceShellTabKey,
   resolveRelativeWorkspaceShellTab,
@@ -105,6 +106,9 @@ export function useWorkspaceTabActions() {
       latencyFlowId,
       reuseInFlightEmptySession: false,
     }).catch((error) => {
+      if (isSessionModelAvailabilityInterruption(error)) {
+        return;
+      }
       failLatencyFlow(latencyFlowId, "session_create_failed");
       const message = error instanceof Error ? error.message : String(error);
       showToast(message);

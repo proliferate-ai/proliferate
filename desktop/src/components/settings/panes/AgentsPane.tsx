@@ -36,6 +36,12 @@ export function AgentsPane() {
         </div>
       )}
 
+      {state.installError && (
+        <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          {state.installError}
+        </div>
+      )}
+
       <AgentsSection
         title={AGENTS_PAGE_COPY.runtimeSectionTitle}
         description={AGENTS_PAGE_COPY.runtimeSectionDescription}
@@ -63,7 +69,7 @@ export function AgentsPane() {
               }}
               disabled={
                 state.connectionState !== "healthy"
-                || state.isReconciling
+                || state.isAgentOperationActive
                 || state.isAgentSeedHydrating
               }
             >
@@ -123,18 +129,21 @@ export function AgentsPane() {
                 description={AGENTS_PAGE_COPY.needsSetupSectionDescription}
                 rows={state.needsSetupRows}
                 onOpen={state.openAgent}
+                onInstall={state.handleInstallAgent}
               />
               <AgentRowsSection
                 title={AGENTS_PAGE_COPY.configuredSectionTitle}
                 description={AGENTS_PAGE_COPY.configuredSectionDescription}
                 rows={state.configuredRows}
                 onOpen={state.openAgent}
+                onInstall={state.handleInstallAgent}
               />
               <AgentRowsSection
                 title={AGENTS_PAGE_COPY.unavailableSectionTitle}
                 description={AGENTS_PAGE_COPY.unavailableSectionDescription}
                 rows={state.unavailableRows}
                 onOpen={state.openAgent}
+                onInstall={state.handleInstallAgent}
               />
             </>
           )}
@@ -181,11 +190,13 @@ function AgentRowsSection({
   description,
   rows,
   onOpen,
+  onInstall,
 }: {
   title: string;
   description: string;
   rows: AgentsPaneRowState[];
   onOpen: (agent: AgentSummary) => void;
+  onInstall: (agent: AgentSummary) => void;
 }) {
   if (rows.length === 0) {
     return null;
@@ -199,6 +210,7 @@ function AgentRowsSection({
             key={row.agent.kind}
             row={row}
             onOpen={() => onOpen(row.agent)}
+            onInstall={() => onInstall(row.agent)}
           />
         ))}
       </SettingsCard>
@@ -209,9 +221,11 @@ function AgentRowsSection({
 function AgentRow({
   row,
   onOpen,
+  onInstall,
 }: {
   row: AgentsPaneRowState;
   onOpen: () => void;
+  onInstall: () => void;
 }) {
   const badgeTone = getAgentGroupBadgeTone(row.group, row.status.tone);
 
@@ -236,14 +250,25 @@ function AgentRow({
         </div>
       </div>
 
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onOpen}
-        disabled={row.actionDisabled}
-      >
-        {row.actionLabel}
-      </Button>
+      <div className="flex shrink-0 items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onInstall}
+          disabled={row.installActionDisabled}
+          loading={row.installActionLoading}
+        >
+          {row.installActionLabel}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onOpen}
+          disabled={row.actionDisabled}
+        >
+          {row.actionLabel}
+        </Button>
+      </div>
     </div>
   );
 }

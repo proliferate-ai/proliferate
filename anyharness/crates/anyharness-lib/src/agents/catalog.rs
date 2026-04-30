@@ -8,7 +8,8 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::agents::model::{
-    AgentKind, ModelCatalogStatus, ModelRegistryMetadata, ModelRegistryModelMetadata,
+    AgentKind, ModelCatalogStatus, ModelLaunchRemediationKind, ModelLaunchRemediationMetadata,
+    ModelRegistryMetadata, ModelRegistryModelMetadata,
 };
 
 const DEFAULT_REMOTE_MODEL_CATALOG_URL: &str =
@@ -17,6 +18,7 @@ const MODEL_CATALOG_URL_ENV: &str = "ANYHARNESS_MODEL_CATALOG_URL";
 const DISABLE_REMOTE_MODEL_CATALOG_ENV: &str = "ANYHARNESS_DISABLE_REMOTE_MODEL_CATALOG";
 const ENABLE_CANDIDATE_MODELS_ENV: &str = "ANYHARNESS_MODEL_CATALOG_CANDIDATES";
 const CACHE_MAX_AGE_HOURS: i64 = 24;
+const LAUNCH_REMEDIATION_MESSAGE_MAX_CHARS: usize = 160;
 
 /// Returns the runtime-owned model registry catalog exposed by AnyHarness.
 ///
@@ -112,7 +114,8 @@ impl ModelCatalogService {
             .json::<ModelCatalogDocument>()
             .await?;
 
-        let registries = effective_registries_from_document(&catalog, self.allow_candidates)?;
+        let registries =
+            effective_remote_registries_from_document(&catalog, self.allow_candidates)?;
         if registries.is_empty() {
             anyhow::bail!("remote model catalog has no selectable registries");
         }
@@ -134,8 +137,11 @@ impl ModelCatalogService {
             anyhow::bail!("cached remote model catalog is stale");
         }
 
-        let registries =
-            effective_registries_from_document(&cached.catalog, self.allow_candidates)?;
+        let remote_registries = raw_registries_from_document(&cached.catalog)?;
+        let registries = effective_registries(
+            merge_catalog_registries(remote_registries, bundled_model_registries()),
+            self.allow_candidates,
+        );
         if registries.is_empty() {
             anyhow::bail!("cached remote model catalog has no selectable registries");
         }
@@ -178,6 +184,7 @@ struct ModelCatalogModel {
     #[serde(default)]
     aliases: Vec<String>,
     min_runtime_version: Option<String>,
+    launch_remediation: Option<ModelLaunchRemediationMetadata>,
 }
 
 fn configured_remote_url() -> Option<String> {
@@ -219,9 +226,30 @@ fn write_cache_file(path: &Path, cached: &CachedModelCatalog) -> anyhow::Result<
     Ok(())
 }
 
+#[cfg(test)]
 fn effective_registries_from_document(
     catalog: &ModelCatalogDocument,
     allow_candidates: bool,
+) -> anyhow::Result<Vec<ModelRegistryMetadata>> {
+    Ok(effective_registries(
+        raw_registries_from_document(catalog)?,
+        allow_candidates,
+    ))
+}
+
+fn effective_remote_registries_from_document(
+    catalog: &ModelCatalogDocument,
+    allow_candidates: bool,
+) -> anyhow::Result<Vec<ModelRegistryMetadata>> {
+    let remote_registries = raw_registries_from_document(catalog)?;
+    Ok(effective_registries(
+        merge_catalog_registries(remote_registries, bundled_model_registries()),
+        allow_candidates,
+    ))
+}
+
+fn raw_registries_from_document(
+    catalog: &ModelCatalogDocument,
 ) -> anyhow::Result<Vec<ModelRegistryMetadata>> {
     if catalog.catalog_version.trim().is_empty() {
         anyhow::bail!("model catalog version is empty");
@@ -233,9 +261,7 @@ fn effective_registries_from_document(
     for provider in &catalog.providers {
         validate_provider(provider, &mut seen_provider_kinds)?;
         let registry = provider_to_registry(provider)?;
-        if let Some(registry) = effective_registry(registry, allow_candidates) {
-            registries.push(registry);
-        }
+        registries.push(registry);
     }
     Ok(registries)
 }
@@ -296,6 +322,30 @@ fn validate_provider(
                 );
             }
         }
+        if let Some(remediation) = &model.launch_remediation {
+            if model.status != ModelCatalogStatus::Active {
+                anyhow::bail!(
+                    "model catalog provider '{}' model '{}' has launch remediation but is not active",
+                    provider.kind,
+                    model.id
+                );
+            }
+            let message = remediation.message.trim();
+            if message.is_empty() {
+                anyhow::bail!(
+                    "model catalog provider '{}' model '{}' launch remediation message is empty",
+                    provider.kind,
+                    model.id
+                );
+            }
+            if message.chars().count() > LAUNCH_REMEDIATION_MESSAGE_MAX_CHARS {
+                anyhow::bail!(
+                    "model catalog provider '{}' model '{}' launch remediation message is too long",
+                    provider.kind,
+                    model.id
+                );
+            }
+        }
     }
     Ok(())
 }
@@ -313,6 +363,7 @@ fn provider_to_registry(provider: &ModelCatalogProvider) -> anyhow::Result<Model
                 status: model.status,
                 aliases: model.aliases.clone(),
                 min_runtime_version: model.min_runtime_version.clone(),
+                launch_remediation: model.launch_remediation.clone(),
             })
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
@@ -333,6 +384,67 @@ fn effective_registries(
         .into_iter()
         .filter_map(|registry| effective_registry(registry, allow_candidates))
         .collect()
+}
+
+fn merge_catalog_registries(
+    remote_registries: Vec<ModelRegistryMetadata>,
+    bundled_registries: Vec<ModelRegistryMetadata>,
+) -> Vec<ModelRegistryMetadata> {
+    let mut remaining_bundled = bundled_registries;
+    let mut merged = Vec::new();
+
+    for remote_registry in remote_registries {
+        let bundled_index = remaining_bundled
+            .iter()
+            .position(|registry| registry.kind == remote_registry.kind);
+        let registry = if let Some(index) = bundled_index {
+            merge_catalog_registry(remote_registry, remaining_bundled.remove(index))
+        } else {
+            remote_registry
+        };
+        merged.push(registry);
+    }
+
+    merged.extend(remaining_bundled);
+    merged
+}
+
+fn merge_catalog_registry(
+    remote_registry: ModelRegistryMetadata,
+    bundled_registry: ModelRegistryMetadata,
+) -> ModelRegistryMetadata {
+    let mut remaining_bundled_models = bundled_registry.models;
+    let mut models = Vec::new();
+
+    for remote_model in remote_registry.models {
+        let bundled_index = remaining_bundled_models
+            .iter()
+            .position(|model| model.id == remote_model.id);
+        let model = if let Some(index) = bundled_index {
+            let bundled_model = remaining_bundled_models.remove(index);
+            if remote_model.status == ModelCatalogStatus::Candidate
+                && bundled_model.status == ModelCatalogStatus::Active
+            {
+                bundled_model
+            } else {
+                remote_model
+            }
+        } else {
+            remote_model
+        };
+        models.push(model);
+    }
+
+    models.extend(remaining_bundled_models);
+
+    ModelRegistryMetadata {
+        kind: remote_registry.kind,
+        display_name: remote_registry.display_name,
+        default_model_id: remote_registry
+            .default_model_id
+            .or(bundled_registry.default_model_id),
+        models,
+    }
 }
 
 fn effective_registry(
@@ -473,6 +585,30 @@ fn model_with_status(
         status,
         aliases: aliases.into_iter().map(str::to_string).collect(),
         min_runtime_version: min_runtime_version.map(str::to_string),
+        launch_remediation: None,
+    }
+}
+
+fn model_with_launch_remediation(
+    id: &str,
+    name: &str,
+    description: Option<&str>,
+    is_default: bool,
+    remediation_kind: ModelLaunchRemediationKind,
+    remediation_message: &str,
+) -> ModelRegistryModelMetadata {
+    ModelRegistryModelMetadata {
+        id: id.into(),
+        display_name: name.into(),
+        description: description.map(str::to_string),
+        is_default,
+        status: ModelCatalogStatus::Active,
+        aliases: vec![],
+        min_runtime_version: None,
+        launch_remediation: Some(ModelLaunchRemediationMetadata {
+            kind: remediation_kind,
+            message: remediation_message.into(),
+        }),
     }
 }
 
@@ -528,14 +664,13 @@ fn codex_registry() -> ModelRegistryMetadata {
         "codex",
         "Codex",
         vec![
-            model_with_status(
+            model_with_launch_remediation(
                 "gpt-5.5",
                 "GPT 5.5",
-                Some("Candidate pending live Codex launch smoke"),
+                Some("Latest OpenAI coding model"),
                 false,
-                ModelCatalogStatus::Candidate,
-                vec![],
-                None,
+                ModelLaunchRemediationKind::ManagedReinstall,
+                "Update Codex tools and retry.",
             ),
             model("gpt-5.4", "GPT 5.4", None, true),
             model("gpt-5.4-mini", "GPT 5.4 Mini", None, false),
@@ -589,6 +724,14 @@ fn cursor_registry() -> ModelRegistryMetadata {
                 "Sonnet 4.6",
                 None,
                 false,
+            ),
+            model_with_launch_remediation(
+                "gpt-5.5[reasoning=medium,fast=false]",
+                "GPT 5.5",
+                None,
+                false,
+                ModelLaunchRemediationKind::ExternalUpdate,
+                "Update Cursor tools from Agent Settings, then retry.",
             ),
             model(
                 "gpt-5.4[reasoning=medium,context=272k,fast=false]",
@@ -695,6 +838,7 @@ mod tests {
             status,
             aliases: vec![],
             min_runtime_version: None,
+            launch_remediation: None,
         }
     }
 
@@ -738,31 +882,52 @@ mod tests {
     }
 
     #[test]
-    fn candidate_models_are_hidden_by_default() {
+    fn bundled_codex_gpt_5_5_is_active_with_remediation() {
         let codex = model_registries()
             .into_iter()
             .find(|config| config.kind == "codex")
             .expect("codex registry");
 
         assert_eq!(codex.default_model_id.as_deref(), Some("gpt-5.4"));
-        assert!(!codex.models.iter().any(|model| model.id == "gpt-5.5"));
+        let gpt_55 = codex
+            .models
+            .iter()
+            .find(|model| model.id == "gpt-5.5")
+            .expect("gpt 5.5 model");
+        assert_eq!(
+            gpt_55
+                .launch_remediation
+                .as_ref()
+                .map(|remediation| remediation.kind),
+            Some(ModelLaunchRemediationKind::ManagedReinstall)
+        );
     }
 
     #[test]
-    fn candidate_models_can_be_enabled_explicitly() {
+    fn cursor_gpt_5_5_uses_external_update_remediation() {
         let service = service_for_cache(temp_cache_path(), true);
-        let codex = service
+        let cursor = service
             .bundled_registries()
             .into_iter()
-            .find(|config| config.kind == "codex")
-            .expect("codex registry");
+            .find(|config| config.kind == "cursor")
+            .expect("cursor registry");
 
-        assert!(codex.models.iter().any(|model| model.id == "gpt-5.5"));
-        assert_eq!(codex.default_model_id.as_deref(), Some("gpt-5.4"));
+        let gpt_55 = cursor
+            .models
+            .iter()
+            .find(|model| model.id == "gpt-5.5[reasoning=medium,fast=false]")
+            .expect("cursor gpt 5.5 model");
+        assert_eq!(
+            gpt_55
+                .launch_remediation
+                .as_ref()
+                .map(|remediation| remediation.kind),
+            Some(ModelLaunchRemediationKind::ExternalUpdate)
+        );
     }
 
     #[test]
-    fn fresh_cached_remote_catalog_takes_precedence() {
+    fn fresh_cached_remote_catalog_overlays_bundled_catalog() {
         let cache_path = temp_cache_path();
         write_cache(
             &cache_path,
@@ -778,9 +943,80 @@ mod tests {
         let codex = service.registry("codex").expect("codex registry");
 
         assert_eq!(codex.default_model_id.as_deref(), Some("gpt-remote"));
-        assert_eq!(codex.models.len(), 1);
         assert_eq!(codex.models[0].display_name, "Remote gpt-remote");
+        assert!(codex.models.iter().any(|model| model.id == "gpt-5.5"));
         let _ = fs::remove_file(cache_path);
+    }
+
+    #[test]
+    fn remote_candidate_does_not_hide_bundled_active_model() {
+        let cache_path = temp_cache_path();
+        write_cache(
+            &cache_path,
+            Utc::now().to_rfc3339(),
+            remote_catalog_with_models(
+                "codex",
+                Some("gpt-5.4"),
+                vec![
+                    remote_model("gpt-5.5", ModelCatalogStatus::Candidate, false),
+                    remote_model("gpt-5.4", ModelCatalogStatus::Active, true),
+                ],
+            ),
+        );
+        let service = service_for_cache(cache_path.clone(), false);
+
+        let codex = service.registry("codex").expect("codex registry");
+        let gpt_55 = codex
+            .models
+            .iter()
+            .find(|model| model.id == "gpt-5.5")
+            .expect("bundled active gpt 5.5 remains selectable");
+
+        assert_eq!(gpt_55.status, ModelCatalogStatus::Active);
+        assert_eq!(gpt_55.display_name, "GPT 5.5");
+        let _ = fs::remove_file(cache_path);
+    }
+
+    #[test]
+    fn remote_hidden_model_suppresses_bundled_active_model() {
+        let cache_path = temp_cache_path();
+        write_cache(
+            &cache_path,
+            Utc::now().to_rfc3339(),
+            remote_catalog_with_models(
+                "codex",
+                Some("gpt-5.4"),
+                vec![
+                    remote_model("gpt-5.5", ModelCatalogStatus::Hidden, false),
+                    remote_model("gpt-5.4", ModelCatalogStatus::Active, true),
+                ],
+            ),
+        );
+        let service = service_for_cache(cache_path.clone(), false);
+
+        let codex = service.registry("codex").expect("codex registry");
+
+        assert!(!codex.models.iter().any(|model| model.id == "gpt-5.5"));
+        let _ = fs::remove_file(cache_path);
+    }
+
+    #[test]
+    fn remote_hidden_overlay_is_cacheable_when_merged_catalog_remains_selectable() {
+        let catalog = remote_catalog_with_models(
+            "codex",
+            Some("gpt-5.4"),
+            vec![remote_model("gpt-5.5", ModelCatalogStatus::Hidden, false)],
+        );
+
+        let registries = effective_remote_registries_from_document(&catalog, false)
+            .expect("hidden overlay should be valid against merged catalog");
+        let codex = registries
+            .into_iter()
+            .find(|registry| registry.kind == "codex")
+            .expect("codex registry");
+
+        assert!(!codex.models.iter().any(|model| model.id == "gpt-5.5"));
+        assert!(codex.models.iter().any(|model| model.id == "gpt-5.4"));
     }
 
     #[test]
@@ -841,5 +1077,76 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(ids, vec!["active"]);
+    }
+
+    #[test]
+    fn validates_launch_remediation_metadata() {
+        let catalog = remote_catalog_with_models(
+            "codex",
+            Some("active"),
+            vec![ModelCatalogModel {
+                launch_remediation: Some(ModelLaunchRemediationMetadata {
+                    kind: ModelLaunchRemediationKind::ManagedReinstall,
+                    message: "Update Codex tools and retry.".to_string(),
+                }),
+                ..remote_model("active", ModelCatalogStatus::Active, true)
+            }],
+        );
+
+        let registries =
+            effective_registries_from_document(&catalog, false).expect("valid remediation");
+
+        assert_eq!(
+            registries[0].models[0]
+                .launch_remediation
+                .as_ref()
+                .map(|remediation| remediation.kind),
+            Some(ModelLaunchRemediationKind::ManagedReinstall)
+        );
+    }
+
+    #[test]
+    fn rejects_launch_remediation_on_non_active_model() {
+        let catalog = remote_catalog_with_models(
+            "codex",
+            Some("active"),
+            vec![
+                remote_model("active", ModelCatalogStatus::Active, true),
+                ModelCatalogModel {
+                    launch_remediation: Some(ModelLaunchRemediationMetadata {
+                        kind: ModelLaunchRemediationKind::ExternalUpdate,
+                        message: "Update externally.".to_string(),
+                    }),
+                    ..remote_model("candidate", ModelCatalogStatus::Candidate, false)
+                },
+            ],
+        );
+
+        let error =
+            effective_registries_from_document(&catalog, false).expect_err("invalid remediation");
+
+        assert!(error
+            .to_string()
+            .contains("has launch remediation but is not active"));
+    }
+
+    #[test]
+    fn rejects_overlong_launch_remediation_message() {
+        let catalog = remote_catalog_with_models(
+            "codex",
+            Some("active"),
+            vec![ModelCatalogModel {
+                launch_remediation: Some(ModelLaunchRemediationMetadata {
+                    kind: ModelLaunchRemediationKind::Restart,
+                    message: "x".repeat(LAUNCH_REMEDIATION_MESSAGE_MAX_CHARS + 1),
+                }),
+                ..remote_model("active", ModelCatalogStatus::Active, true)
+            }],
+        );
+
+        let error =
+            effective_registries_from_document(&catalog, false).expect_err("invalid remediation");
+
+        assert!(error.to_string().contains("message is too long"));
     }
 }

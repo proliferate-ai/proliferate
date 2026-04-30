@@ -5,6 +5,12 @@ import path from "node:path";
 
 const CATALOG_PATH = path.resolve("model-catalog/v1/catalog.json");
 const VALID_STATUSES = new Set(["candidate", "active", "deprecated", "hidden"]);
+const VALID_LAUNCH_REMEDIATION_KINDS = new Set([
+  "managed_reinstall",
+  "external_update",
+  "restart",
+]);
+const LAUNCH_REMEDIATION_MESSAGE_MAX_CHARS = 160;
 const SUPPORTED_PROVIDER_KINDS = new Set([
   "claude",
   "codex",
@@ -89,6 +95,36 @@ function validateCatalog(catalog) {
         && !/^\d+\.\d+\.\d+/.test(model.minRuntimeVersion)
       ) {
         fail(`${provider.kind}.${model.id}.minRuntimeVersion must start with semver`);
+      }
+      if (model.launchRemediation !== undefined) {
+        if (model.status !== "active") {
+          fail(`${provider.kind}.${model.id}.launchRemediation is only allowed on active models`);
+        }
+        if (
+          !model.launchRemediation
+          || typeof model.launchRemediation !== "object"
+          || Array.isArray(model.launchRemediation)
+        ) {
+          fail(`${provider.kind}.${model.id}.launchRemediation must be an object`);
+          continue;
+        }
+        if (!VALID_LAUNCH_REMEDIATION_KINDS.has(model.launchRemediation.kind)) {
+          fail(`${provider.kind}.${model.id}.launchRemediation.kind is invalid`);
+        }
+        if (!assertString(
+          model.launchRemediation.message,
+          `${provider.kind}.${model.id}.launchRemediation.message`,
+        )) {
+          continue;
+        }
+        if (
+          [...model.launchRemediation.message.trim()].length
+            > LAUNCH_REMEDIATION_MESSAGE_MAX_CHARS
+        ) {
+          fail(
+            `${provider.kind}.${model.id}.launchRemediation.message must be ${LAUNCH_REMEDIATION_MESSAGE_MAX_CHARS} characters or fewer`,
+          );
+        }
       }
     }
 

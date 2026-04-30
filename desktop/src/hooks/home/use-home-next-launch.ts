@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/use-create-cloud-workspace";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/use-cowork-thread-workflow";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import {
+  isSessionModelAvailabilityCancelled,
+  isSessionModelAvailabilityRoutedToSettings,
+} from "@/hooks/sessions/use-session-model-availability-workflow";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-workflow";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
@@ -294,6 +298,18 @@ export function useHomeNextLaunch() {
       showToast("Prompt queued. It will send when the cloud workspace is ready.", "info");
       return true;
     } catch (error) {
+      if (isSessionModelAvailabilityCancelled(error)) {
+        clearLaunchIntentIfActive(launchIntentId);
+        return false;
+      }
+      if (isSessionModelAvailabilityRoutedToSettings(error)) {
+        markLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
+        failLaunchIntentIfActive(launchIntentId, {
+          message: error.message,
+          retryMode: launchFailureRetryMode(launchIntentId),
+        });
+        return false;
+      }
       markLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
       failLaunchIntentIfActive(launchIntentId, {
         message: errorMessage(error),

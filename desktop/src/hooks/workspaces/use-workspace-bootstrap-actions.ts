@@ -13,6 +13,7 @@ import { orderChatLaunchAgents, shouldExposeChatLaunchAgent } from "@/config/cha
 import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
+import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
 import type { WorkspaceSession } from "@/hooks/sessions/use-session-selection-actions";
 import {
   choosePreferredWorkspaceSession,
@@ -223,13 +224,20 @@ export function useWorkspaceBootstrapActions() {
           totalElapsedMs: elapsedMs(startedAt),
         });
         const sessionDispatchStartedAt = startLatencyTimer();
-        await createEmptySessionWithResolvedConfig({
-          workspaceId,
-          agentKind: defaultLaunch.kind,
-          modelId: defaultLaunch.modelId,
-          latencyFlowId,
-          reuseInFlightEmptySession: true,
-        });
+        try {
+          await createEmptySessionWithResolvedConfig({
+            workspaceId,
+            agentKind: defaultLaunch.kind,
+            modelId: defaultLaunch.modelId,
+            latencyFlowId,
+            reuseInFlightEmptySession: true,
+          });
+        } catch (error) {
+          if (isSessionModelAvailabilityInterruption(error)) {
+            return { sessions };
+          }
+          throw error;
+        }
         logLatency("workspace.select.initial_session_open.dispatched", {
           workspaceId,
           agentKind: defaultLaunch.kind,

@@ -46,6 +46,7 @@ interface LaunchPromptInput extends SessionLatencyFlowOptions {
   text: string;
   blocks?: PromptInputBlock[];
   optimisticContentParts?: ContentPart[];
+  onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
 }
 
 interface SessionConfigOptionUpdateOptions {
@@ -62,6 +63,7 @@ interface SessionControlDeps {
     modeId?: string;
     workspaceId?: string;
     latencyFlowId?: string | null;
+    onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
   }) => Promise<string>;
   ensureWorkspaceSessions: (workspaceId: string) => Promise<Array<{
     id: string;
@@ -451,6 +453,7 @@ export function useSessionControlActions({
     modelId?: string,
     blocks?: PromptInputBlock[],
     optimisticContentParts?: ContentPart[],
+    onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void,
   ) => {
     const state = useHarnessStore.getState();
     const workspaceId = state.selectedWorkspaceId;
@@ -471,6 +474,7 @@ export function useSessionControlActions({
           blocks,
           optimisticContentParts,
           workspaceId,
+          onBeforeOptimisticPrompt,
           onBeforePrompt: workspaceId
             ? () => maybeStartFirstSessionBranchRenameTracking(slot.sessionId, workspaceId)
             : undefined,
@@ -490,6 +494,7 @@ export function useSessionControlActions({
           blocks,
           optimisticContentParts,
           workspaceId,
+          onBeforeOptimisticPrompt,
           onBeforePrompt: () =>
             maybeStartFirstSessionBranchRenameTracking(backendSession.id, workspaceId),
         });
@@ -503,6 +508,7 @@ export function useSessionControlActions({
       optimisticContentParts,
       agentKind,
       modelId: modelId ?? agentKind,
+      onBeforeOptimisticPrompt,
     });
   }, [
     activateSession,
@@ -522,6 +528,7 @@ export function useSessionControlActions({
     blocks,
     optimisticContentParts,
     latencyFlowId,
+    onBeforeOptimisticPrompt,
   }: LaunchPromptInput) => {
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
     if (blockedReason) {
@@ -543,6 +550,7 @@ export function useSessionControlActions({
           optimisticContentParts,
           workspaceId,
           latencyFlowId,
+          onBeforeOptimisticPrompt,
           onBeforePrompt: () =>
             maybeStartFirstSessionBranchRenameTracking(slot.sessionId, workspaceId),
         });
@@ -563,6 +571,7 @@ export function useSessionControlActions({
         optimisticContentParts,
         workspaceId,
         latencyFlowId,
+        onBeforeOptimisticPrompt,
         onBeforePrompt: () =>
           maybeStartFirstSessionBranchRenameTracking(backendSession.id, workspaceId),
       });
@@ -577,6 +586,7 @@ export function useSessionControlActions({
       modelId,
       workspaceId,
       latencyFlowId,
+      onBeforeOptimisticPrompt,
     });
   }, [
     activateSession,
