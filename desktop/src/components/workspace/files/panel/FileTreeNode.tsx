@@ -2,6 +2,7 @@ import type { WorkspaceFileEntry } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { useFileTreeNativeContextMenu } from "@/hooks/editor/use-file-tree-native-context-menu";
 import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
 import { ChevronRight } from "@/components/ui/icons";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
@@ -42,6 +43,14 @@ export function FileTreeNode({ entry, level, targets }: FileTreeNodeProps) {
       openFile(entry.path);
     }
   };
+  const handleOpenTarget = (targetId: string) => {
+    void execOpenTarget(targetId, entry.path);
+  };
+  const { onContextMenuCapture } = useFileTreeNativeContextMenu({
+    targets,
+    onOpenInProliferate: handleClick,
+    onOpenTarget: handleOpenTarget,
+  });
 
   const treeRow = (
     <div
@@ -52,6 +61,7 @@ export function FileTreeNode({ entry, level, targets }: FileTreeNodeProps) {
       tabIndex={0}
       onClick={handleClick}
       onKeyDown={(e) => e.key === "Enter" && handleClick()}
+      onContextMenuCapture={onContextMenuCapture}
       className={`flex h-7 items-center gap-2 px-3 mx-2 rounded cursor-pointer text-[0.5rem] transition-colors group ${
         isActive
           ? "bg-sidebar-accent text-sidebar-foreground"
@@ -122,7 +132,7 @@ export function FileTreeNode({ entry, level, targets }: FileTreeNodeProps) {
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  void execOpenTarget(target.id, entry.path);
+                  handleOpenTarget(target.id);
                   close();
                 }}
                 className="h-auto w-full justify-start gap-2 rounded-md px-2 py-1.5 text-[0.5rem] text-foreground/80 hover:bg-accent/40 hover:text-foreground"

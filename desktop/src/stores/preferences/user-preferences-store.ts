@@ -120,7 +120,6 @@ const LEGACY_CLAUDE_MODEL_IDS: Record<string, string> = {
   "claude-sonnet-4-6-1m": "sonnet[1m]",
   "claude-opus-4-5": "opus[1m]",
   "claude-opus-4-5-1m": "opus[1m]",
-  "claude-opus-4-6": "opus[1m]",
   "claude-opus-4-6-1m": "opus[1m]",
   "claude-haiku-4-5": "haiku",
   opus: "opus[1m]",

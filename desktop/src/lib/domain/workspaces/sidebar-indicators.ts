@@ -188,8 +188,10 @@ export function activeWorkspaceActivity(
     return "idle";
   }
 
-  return workspaceActivities[localWorkspace.id]
-    ?? resolveWorkspaceExecutionSidebarActivityState(localWorkspace.executionSummary ?? null);
+  return mergeLocalWorkspaceActivity(
+    workspaceActivities[localWorkspace.id],
+    localWorkspace.executionSummary ?? null,
+  );
 }
 
 export function detailIndicatorsForWorkspace(
@@ -212,6 +214,30 @@ function higherPrioritySidebarActivity(
   b: SidebarSessionActivityState,
 ): SidebarSessionActivityState {
   return sidebarActivityPriority(a) >= sidebarActivityPriority(b) ? a : b;
+}
+
+function mergeLocalWorkspaceActivity(
+  mountedActivity: SidebarSessionActivityState | undefined,
+  executionSummary: Workspace["executionSummary"] | null,
+): SidebarSessionActivityState {
+  if (mountedActivity === undefined) {
+    return resolveWorkspaceExecutionSidebarActivityState(executionSummary);
+  }
+
+  if (
+    (mountedActivity === "idle" || mountedActivity === "closed")
+    && workspaceSummaryHasRunningSession(executionSummary)
+  ) {
+    return "iterating";
+  }
+
+  return mountedActivity;
+}
+
+function workspaceSummaryHasRunningSession(
+  summary: Workspace["executionSummary"] | null,
+): boolean {
+  return (summary?.runningCount ?? 0) > 0 || summary?.phase === "running";
 }
 
 function sidebarActivityPriority(activity: SidebarSessionActivityState): number {

@@ -196,6 +196,7 @@ function PromptAttachmentCard({
           type="button"
           variant="ghost"
           size="icon-sm"
+          data-chat-transcript-ignore
           onClick={() => onRemove(part.id)}
           className="pointer-events-none absolute inset-y-0 right-0 h-full w-7 rounded-full bg-card/95 px-0 opacity-0 transition-opacity hover:bg-accent group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
           aria-label={`Remove ${part.name}`}

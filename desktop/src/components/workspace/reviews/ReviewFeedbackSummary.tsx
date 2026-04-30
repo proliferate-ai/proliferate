@@ -104,6 +104,7 @@ function ReviewFeedbackAssignmentRow({
     : assignment.status === "submitted"
       || assignment.status === "system_failed"
       || assignment.status === "timed_out"
+      || assignment.status === "retryable_failed"
         ? "text-destructive"
         : "text-muted-foreground";
 
@@ -115,6 +116,7 @@ function ReviewFeedbackAssignmentRow({
             type="button"
             variant="ghost"
             size="icon-sm"
+            data-chat-transcript-ignore
             aria-label={`Open ${assignment.personaLabel} session`}
             title={`Open ${assignment.personaLabel} session`}
             onClick={() => onOpenSession(assignment.reviewerSessionId!)}
@@ -136,6 +138,7 @@ function ReviewFeedbackAssignmentRow({
             type="button"
             variant="ghost"
             size="icon-sm"
+            data-chat-transcript-ignore
             aria-label={`Open ${assignment.personaLabel} critique`}
             title={`Open ${assignment.personaLabel} critique`}
             onClick={onOpenCritique}
@@ -186,6 +189,9 @@ function reviewAssignmentVerdict(assignment: ReviewAssignmentDetail): {
   }
   if (assignment.status === "system_failed") {
     return { label: "failed", tone: "changes" };
+  }
+  if (assignment.status === "retryable_failed") {
+    return { label: "needs retry", tone: "changes" };
   }
   return { label: "reviewing", tone: "pending" };
 }

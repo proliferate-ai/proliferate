@@ -17,6 +17,8 @@ export type StartCodeReviewRequest =
   components["schemas"]["StartCodeReviewRequest"];
 export type MarkReviewRevisionReadyRequest =
   components["schemas"]["MarkReviewRevisionReadyRequest"];
+export type RetryReviewAssignmentRequest =
+  components["schemas"]["RetryReviewAssignmentRequest"];
 export type ReviewAssignmentDetail =
   components["schemas"]["ReviewAssignmentDetail"];
 export type ReviewCritiqueResponse =

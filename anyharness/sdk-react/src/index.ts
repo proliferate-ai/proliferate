@@ -146,6 +146,7 @@ export {
   useStartPlanReviewMutation,
   useStartCodeReviewMutation,
   useStopReviewMutation,
+  useRetryReviewAssignmentMutation,
   useSendReviewFeedbackMutation,
   useMarkReviewRevisionReadyMutation,
 } from "./hooks/reviews.js";

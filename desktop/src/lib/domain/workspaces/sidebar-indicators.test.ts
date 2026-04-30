@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { WorkspaceExecutionSummary } from "@anyharness/sdk";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
 import { cloudWorkspaceSyntheticId } from "./cloud-ids";
 import {
@@ -8,6 +9,22 @@ import {
   makeLocalLogicalWorkspace,
   makeWorkspace,
 } from "./sidebar-test-fixtures";
+
+function workspaceExecutionSummary(
+  phase: WorkspaceExecutionSummary["phase"],
+  overrides: Partial<WorkspaceExecutionSummary> = {},
+): WorkspaceExecutionSummary {
+  return {
+    phase,
+    totalSessionCount: 1,
+    liveSessionCount: phase === "idle" || phase === "errored" ? 0 : 1,
+    runningCount: phase === "running" ? 1 : 0,
+    awaitingInteractionCount: phase === "awaiting_interaction" ? 1 : 0,
+    idleCount: phase === "idle" ? 1 : 0,
+    erroredCount: phase === "errored" ? 1 : 0,
+    ...overrides,
+  };
+}
 
 describe("sidebar indicators", () => {
   it("uses legacy local automation provenance when creator context is missing", () => {
@@ -313,6 +330,128 @@ describe("sidebar indicators", () => {
     });
 
     expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("waiting_input");
+  });
+
+  it("uses a running workspace summary when mounted local activity is idle", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "running-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          executionSummary: workspaceExecutionSummary("running"),
+        }),
+      ],
+      workspaceActivities: {
+        "running-local-materialization": "idle",
+      },
+    });
+
+    expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("iterating");
+  });
+
+  it("uses running counts from mixed workspace summaries when mounted local activity is idle", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "mixed-running-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          executionSummary: workspaceExecutionSummary("awaiting_interaction", {
+            runningCount: 1,
+          }),
+        }),
+      ],
+      workspaceActivities: {
+        "mixed-running-local-materialization": "idle",
+      },
+    });
+
+    expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("iterating");
+  });
+
+  it("keeps mounted waiting input when the local workspace summary is running", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "input-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          executionSummary: workspaceExecutionSummary("running"),
+        }),
+      ],
+      workspaceActivities: {
+        "input-local-materialization": "waiting_input",
+      },
+    });
+
+    expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("waiting_input");
+  });
+
+  it("keeps mounted waiting plan when the local workspace summary is awaiting interaction", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "plan-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          executionSummary: workspaceExecutionSummary("awaiting_interaction"),
+        }),
+      ],
+      workspaceActivities: {
+        "plan-local-materialization": "waiting_plan",
+      },
+    });
+
+    expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("waiting_plan");
+  });
+
+  it("does not re-show an acknowledged local error from a coarse errored summary", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "acknowledged-error-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          executionSummary: workspaceExecutionSummary("errored"),
+        }),
+      ],
+      workspaceActivities: {
+        "acknowledged-error-local-materialization": "idle",
+      },
+    });
+
+    expect(groups[0]?.items[0]?.statusIndicator).toBeNull();
+  });
+
+  it("uses a running local workspace summary when no mounted activity exists", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "summary-running-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          executionSummary: workspaceExecutionSummary("running"),
+        }),
+      ],
+    });
+
+    expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("iterating");
+  });
+
+  it("uses an errored local workspace summary when no mounted activity exists", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "summary-error-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          executionSummary: workspaceExecutionSummary("errored"),
+        }),
+      ],
+    });
+
+    expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("error");
   });
 
   it("shows needs review for completed materialized work that is newer than the logical workspace view", () => {

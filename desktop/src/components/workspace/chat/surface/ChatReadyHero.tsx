@@ -1,4 +1,6 @@
 import { CHAT_PRE_MESSAGE_LABELS } from "@/config/chat";
+import { useChatReadyContext } from "@/hooks/chat/use-chat-ready-context";
+import { formatChatReadyContextLine } from "@/lib/domain/chat/chat-ready-context";
 
 /**
  * Hero variant shown when a session is hydrated but has no turns yet. The
@@ -12,11 +14,19 @@ import { CHAT_PRE_MESSAGE_LABELS } from "@/config/chat";
  * the composer for attention.
  */
 export function ChatReadyHero() {
+  const context = useChatReadyContext();
+  const contextLine = formatChatReadyContextLine(context);
+
   return (
     <div className="flex flex-col items-center text-center">
       <h2 className="mt-6 text-2xl font-semibold tracking-[-0.02em] text-foreground">
         {CHAT_PRE_MESSAGE_LABELS.readyTitle}
       </h2>
+      {contextLine && (
+        <p className="mt-2 text-sm text-muted-foreground" data-telemetry-mask>
+          {contextLine}
+        </p>
+      )}
     </div>
   );
 }

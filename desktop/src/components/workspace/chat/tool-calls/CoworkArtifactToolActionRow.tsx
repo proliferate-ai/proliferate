@@ -104,6 +104,7 @@ function ArtifactChip({
       type="button"
       variant="ghost"
       size="sm"
+      data-chat-transcript-ignore
       title={pathLabel}
       onClick={(event) => {
         event.stopPropagation();

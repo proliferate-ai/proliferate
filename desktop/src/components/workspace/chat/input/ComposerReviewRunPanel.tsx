@@ -109,6 +109,9 @@ function ConnectedComposerReviewRunSurface({ panel = false }: { panel?: boolean 
               handleOpenReviewerSession(sessionId);
               close();
             }}
+            onRetryAssignment={(assignmentId) => {
+              actions.retryReviewAssignment(run.id, assignmentId);
+            }}
             onDismiss={() => {
               dismissTerminalRun(run.id);
               close();
@@ -116,6 +119,7 @@ function ConnectedComposerReviewRunSurface({ panel = false }: { panel?: boolean 
             isStopping={actions.isStoppingReview}
             isSendingFeedback={actions.isSendingReviewFeedback}
             isReviewingRevision={actions.isMarkingReviewRevisionReady}
+            isRetryingAssignment={actions.isRetryingReviewAssignment}
           />
         )}
       </ReviewComposerControl>
@@ -153,10 +157,12 @@ function RunReviewPopoverContent({
   onFinishReview,
   onOpenCritique,
   onOpenReviewerSession,
+  onRetryAssignment,
   onDismiss,
   isStopping,
   isSendingFeedback,
   isReviewingRevision,
+  isRetryingAssignment,
 }: {
   run: ReviewRunDetail;
   onStop: () => void;
@@ -165,10 +171,12 @@ function RunReviewPopoverContent({
   onFinishReview: () => void;
   onOpenCritique: (assignment: ReviewAssignmentDetail) => void;
   onOpenReviewerSession: (sessionId: string) => void;
+  onRetryAssignment: (assignmentId: string) => void;
   onDismiss: () => void;
   isStopping: boolean;
   isSendingFeedback: boolean;
   isReviewingRevision: boolean;
+  isRetryingAssignment: boolean;
 }) {
   const summary = summaryForRun(run);
   const round = latestReviewRound(run);
@@ -200,6 +208,8 @@ function RunReviewPopoverContent({
             assignment={assignment}
             onOpenCritique={() => onOpenCritique(assignment)}
             onOpenReviewerSession={onOpenReviewerSession}
+            onRetryAssignment={() => onRetryAssignment(assignment.id)}
+            isRetrying={isRetryingAssignment}
           />
         ))}
       </div>
@@ -285,14 +295,20 @@ function ReviewAssignmentPopoverRow({
   assignment,
   onOpenCritique,
   onOpenReviewerSession,
+  onRetryAssignment,
+  isRetrying,
 }: {
   assignment: ReviewAssignmentDetail;
   onOpenCritique: () => void;
   onOpenReviewerSession: (sessionId: string) => void;
+  onRetryAssignment: () => void;
+  isRetrying: boolean;
 }) {
   const color = resolveSubagentColor(assignment.sessionLinkId ?? assignment.id);
   const secondaryText = assignmentSecondaryText(assignment) ?? formatAssignmentHarness(assignment);
   const canOpenSession = !!assignment.reviewerSessionId;
+  const canRetry = assignment.status === "retryable_failed"
+    && assignment.failureReason === "provider_rate_limit";
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
@@ -314,7 +330,19 @@ function ReviewAssignmentPopoverRow({
           <AssignmentRowText assignment={assignment} secondaryText={secondaryText} />
         </div>
       )}
-      {assignment.hasCritique && (
+      {canRetry ? (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          loading={isRetrying}
+          onClick={onRetryAssignment}
+          className="px-2.5 text-sm"
+        >
+          <RefreshCw className="size-3.5" />
+          Retry with Opus 4.6
+        </Button>
+      ) : assignment.hasCritique && (
         <Button
           type="button"
           variant="ghost"
@@ -403,7 +431,8 @@ function ComposerAssignmentStatus({ assignment }: { assignment: ReviewAssignment
         <CheckCircleFilled className="size-3.5" />
       ) : assignment.status === "submitted"
         || assignment.status === "system_failed"
-        || assignment.status === "timed_out" ? (
+        || assignment.status === "timed_out"
+        || assignment.status === "retryable_failed" ? (
           <CircleAlert className="size-3.5" />
         ) : (
           <RefreshCw className="size-3.5" />
@@ -543,6 +572,7 @@ function assignmentStatusClassName(assignment: ReviewAssignmentDetail): string {
     assignment.status === "submitted"
     || assignment.status === "system_failed"
     || assignment.status === "timed_out"
+    || assignment.status === "retryable_failed"
   ) {
     return "text-destructive";
   }

@@ -21,6 +21,7 @@ import {
 } from "@/lib/domain/chat/transcript-presentation";
 import { describeToolCallDisplay } from "@/lib/domain/chat/tool-call-display";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
+import { normalizeToolResultText } from "@/lib/domain/chat/tool-result-text";
 
 const CHAT_BUTTON_TEXT_CLASS = "text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)]";
 
@@ -194,6 +195,7 @@ function EditActionRow({
       <div
         role={hasDetails ? "button" : undefined}
         tabIndex={hasDetails ? 0 : undefined}
+        {...(hasDetails ? { "data-chat-transcript-ignore": true } : {})}
         className="group/action-row flex min-w-0 items-center gap-1 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground/80"
         onClick={() => {
           if (hasDetails) setExpanded((value) => !value);
@@ -279,6 +281,7 @@ function ActionDisclosureRow({
       type="button"
       variant="ghost"
       size="sm"
+      data-chat-transcript-ignore
       className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal hover:bg-transparent focus-visible:ring-0 ${
         failed ? "text-destructive/80 hover:text-destructive" : "text-muted-foreground/80 hover:text-foreground"
       }`}
@@ -375,6 +378,7 @@ function ActionFileLink({
       type="button"
       variant="ghost"
       size="sm"
+      data-chat-transcript-ignore
       title={pathLabel}
       className={`h-auto min-w-0 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-link-foreground hover:bg-transparent hover:underline focus-visible:ring-0 focus-visible:underline`}
       onClick={(event) => {
@@ -538,12 +542,6 @@ function formatEditVerb(operation: FileChangeContentPart["operation"]): string {
     default:
       return "Edited";
   }
-}
-
-function normalizeToolResultText(text: string): string {
-  const trimmed = text.trim();
-  const match = trimmed.match(/^```(?:console|text|bash|sh)?\n([\s\S]*?)\n```$/);
-  return match ? match[1] : text;
 }
 
 function basename(path: string): string {

@@ -172,6 +172,7 @@ function CoworkCodingHint({
           type="button"
           variant="ghost"
           size="icon"
+          data-chat-transcript-ignore
           title={action === "create_workspace" ? "Open coding workspace session" : "Open coding session"}
           aria-label={action === "create_workspace" ? "Open coding workspace session" : "Open coding session"}
           onClick={(event) => {
@@ -262,6 +263,7 @@ function CodingWorkspaceActionRow({
       type="button"
       variant="ghost"
       size="sm"
+      data-chat-transcript-ignore
       className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/80 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
       onClick={onOpen}
     >
@@ -286,6 +288,7 @@ function PromptActionRow({
         type="button"
         variant="ghost"
         size="sm"
+        data-chat-transcript-ignore
         className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/80 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
         aria-expanded={expanded}
         onClick={() => setExpanded((next) => !next)}
@@ -341,6 +344,7 @@ function CodingSessionActionRow({
       type="button"
       variant="ghost"
       size="sm"
+      data-chat-transcript-ignore
       className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/80 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
       onClick={onOpen}
     >

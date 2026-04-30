@@ -10,8 +10,10 @@ import {
   ChevronRight,
 } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
+import { Button } from "@/components/ui/Button";
 import { SessionTitleRenamePopover } from "@/components/workspace/shell/SessionTitleRenamePopover";
 import { SidebarRowSurface } from "@/components/workspace/shell/sidebar/SidebarRowSurface";
+import { useCoworkSessionNativeContextMenu } from "@/hooks/cowork/use-cowork-session-native-context-menu";
 import { useCoworkSessionActions } from "@/hooks/cowork/use-cowork-session-actions";
 import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
 import { CoworkSessionActionsMenu } from "./CoworkSessionActionsMenu";
@@ -106,6 +108,18 @@ function CoworkCodingSessionRow({
 }) {
   const [renaming, setRenaming] = useState(false);
   const { renameCodingSession, archiveCodingSession } = useCoworkSessionActions();
+  const handleRename = () => setRenaming(true);
+  const handleArchive = () => {
+    void archiveCodingSession({
+      sessionId: session.codingSessionId,
+      workspaceId,
+      parentSessionId,
+    });
+  };
+  const { onContextMenuCapture } = useCoworkSessionNativeContextMenu({
+    onRename: handleRename,
+    onArchive: handleArchive,
+  });
 
   const rowSurface = (
     <CoworkCodingSessionRowSurface
@@ -122,7 +136,7 @@ function CoworkCodingSessionRow({
       triggerMode="contextMenu"
       className="w-44 rounded-lg border border-border bg-popover p-1 shadow-floating"
       trigger={
-        <div className="min-w-0" data-telemetry-mask="true">
+        <div className="min-w-0" data-telemetry-mask="true" onContextMenuCapture={onContextMenuCapture}>
           <SessionTitleRenamePopover
             currentTitle={sessionLabel(session, index)}
             trigger={<div className="min-w-0">{rowSurface}</div>}
@@ -143,15 +157,11 @@ function CoworkCodingSessionRow({
         <CoworkSessionActionsMenu
           onRename={() => {
             close();
-            setRenaming(true);
+            handleRename();
           }}
           onArchive={() => {
             close();
-            void archiveCodingSession({
-              sessionId: session.codingSessionId,
-              workspaceId,
-              parentSessionId,
-            });
+            handleArchive();
           }}
         />
       )}
@@ -204,20 +214,22 @@ function CoworkManagedWorkspaceBlock({
               </span>
             )}
             {hasSessions && (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
                 aria-label={expanded ? "Hide coding sessions" : "Show coding sessions"}
                 aria-expanded={expanded}
                 onClick={(event) => {
                   event.stopPropagation();
                   onToggleExpanded();
                 }}
-                className="inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-foreground focus-visible:outline-offset-[-2px]"
+                className="size-5 shrink-0 rounded text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-offset-[-2px]"
               >
                 {expanded
                   ? <ChevronDown className="size-3" />
                   : <ChevronRight className="size-3" />}
-              </button>
+              </Button>
             )}
           </div>
         </div>

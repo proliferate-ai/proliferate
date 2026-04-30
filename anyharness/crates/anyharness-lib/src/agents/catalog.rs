@@ -641,13 +641,14 @@ fn claude_registry() -> ModelRegistryMetadata {
                 Some("Most capable for complex work · 1M context"),
                 false,
                 ModelCatalogStatus::Active,
-                vec![
-                    "claude-opus-4-5",
-                    "claude-opus-4-6",
-                    "claude-opus-4-6-1m",
-                    "opus",
-                ],
+                vec!["claude-opus-4-5", "claude-opus-4-6-1m", "opus"],
                 None,
+            ),
+            model(
+                "claude-opus-4-6",
+                "Opus 4.6",
+                Some("Pinned previous Opus model"),
+                false,
             ),
             model(
                 "haiku",
@@ -879,6 +880,20 @@ mod tests {
                 && *name == "Opus 4.7"
                 && description.unwrap_or("").contains("1M context")
         }));
+        let opus_47 = claude
+            .models
+            .iter()
+            .find(|model| model.id == "opus[1m]")
+            .expect("opus 4.7 model");
+        assert!(!opus_47
+            .aliases
+            .iter()
+            .any(|alias| alias == "claude-opus-4-6"));
+        assert!(labels.contains(&(
+            "claude-opus-4-6",
+            "Opus 4.6",
+            Some("Pinned previous Opus model"),
+        )));
     }
 
     #[test]

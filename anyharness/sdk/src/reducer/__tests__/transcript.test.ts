@@ -754,6 +754,14 @@ describe("transcript reducer", () => {
             type: "error",
             message: "server shut down unexpectedly",
             code: null,
+            details: {
+              kind: "provider_rate_limit",
+              provider: "anthropic",
+              providerModel: "claude-opus-4-7",
+              limit: 30000,
+              unit: "input_tokens_per_minute",
+              fallbackModelId: "claude-opus-4-6",
+            },
           },
         },
       ],
@@ -762,6 +770,14 @@ describe("transcript reducer", () => {
 
     expect(selectPendingApprovalInteraction(state)).toBeNull();
     expect((state.itemsById["tool-1"] as ToolCallItem).approvalState).toBe("none");
+    expect(state.itemsById["error-1"]).toMatchObject({
+      kind: "error",
+      code: null,
+      details: {
+        kind: "provider_rate_limit",
+        fallbackModelId: "claude-opus-4-6",
+      },
+    });
   });
 
   it("clears pending approval on session_ended fallback replay", () => {

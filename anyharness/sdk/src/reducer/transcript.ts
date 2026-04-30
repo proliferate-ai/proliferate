@@ -291,6 +291,7 @@ export function reduceEvent(
         completedAt: ts,
         message: evt.message,
         code: evt.code ?? null,
+        details: evt.details ?? null,
       };
       s.itemsById[itemId] = item;
       addItemToTurn(s, turnId, itemId);
@@ -480,6 +481,7 @@ function createItemFromPayload(
           ...base,
           message: "Malformed proposed plan",
           code: "MALFORMED_PROPOSED_PLAN",
+          details: null,
         };
       }
       return {
@@ -496,6 +498,7 @@ function createItemFromPayload(
         ...base,
         message: extractText(base.contentParts) || base.title || "Error",
         code: null,
+        details: null,
       };
   }
 }
