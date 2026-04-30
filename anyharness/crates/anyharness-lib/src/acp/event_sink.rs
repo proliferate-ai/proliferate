@@ -50,6 +50,12 @@ struct StreamingItemState {
 }
 
 #[derive(Debug, Clone)]
+pub struct CompletedAssistantMessage {
+    pub message_id: Option<String>,
+    pub text: String,
+}
+
+#[derive(Debug, Clone)]
 struct PlanItemState {
     item_id: String,
     entries: Vec<PlanEntry>,
@@ -347,15 +353,17 @@ impl SessionEventSink {
         self.current_turn_id.clone().unwrap_or_default()
     }
 
-    pub fn agent_message_chunk(&mut self, payload: AcpChunkPayload) {
+    pub fn agent_message_chunk(
+        &mut self,
+        payload: AcpChunkPayload,
+    ) -> Option<CompletedAssistantMessage> {
         if is_assistant_message_completed_marker(payload.meta.as_ref()) {
-            self.close_assistant_item_by_message_id(payload.message_id.as_deref());
-            return;
+            return self.close_assistant_item_by_message_id(payload.message_id.as_deref());
         }
 
         let text = extract_text(&payload.content);
         if text.is_empty() {
-            return;
+            return None;
         }
         let parent_tool_call_id = self.meta_parent_tool_call_id(payload.meta.as_ref());
         let message_id = payload.message_id.clone();
@@ -372,7 +380,7 @@ impl SessionEventSink {
             .unwrap_or(true);
 
         if should_open_new {
-            self.close_assistant_item();
+            let _ = self.close_assistant_item();
             let item_id = uuid::Uuid::new_v4().to_string();
             let item = TranscriptItemPayload {
                 kind: TranscriptItemKind::AssistantMessage,
@@ -401,7 +409,7 @@ impl SessionEventSink {
                 text,
                 is_transient: false,
             });
-            return;
+            return None;
         }
 
         if self.open_assistant_item.is_some() {
@@ -430,6 +438,7 @@ impl SessionEventSink {
                 Some(item_id),
             );
         }
+        None
     }
 
     pub fn agent_thought_chunk(&mut self, payload: AcpChunkPayload) {
@@ -954,11 +963,11 @@ impl SessionEventSink {
     }
 
     fn close_open_items(&mut self) {
-        self.close_assistant_item();
+        let _ = self.close_assistant_item();
         self.close_reasoning_item();
     }
 
-    fn close_assistant_item(&mut self) {
+    fn close_assistant_item(&mut self) -> Option<CompletedAssistantMessage> {
         if let Some(item) = self.open_assistant_item.take() {
             let StreamingItemState {
                 item_id,
@@ -967,6 +976,10 @@ impl SessionEventSink {
                 text,
                 is_transient: _,
             } = item;
+            let completed = CompletedAssistantMessage {
+                message_id: message_id.clone(),
+                text: text.clone(),
+            };
             let payload = TranscriptItemPayload {
                 kind: TranscriptItemKind::AssistantMessage,
                 status: TranscriptItemStatus::Completed,
@@ -987,12 +1000,17 @@ impl SessionEventSink {
                 self.current_turn_id.clone(),
                 Some(item_id),
             );
+            return Some(completed);
         }
+        None
     }
 
-    fn close_assistant_item_by_message_id(&mut self, message_id: Option<&str>) {
+    fn close_assistant_item_by_message_id(
+        &mut self,
+        message_id: Option<&str>,
+    ) -> Option<CompletedAssistantMessage> {
         let Some(message_id) = message_id else {
-            return;
+            return None;
         };
         let is_current_message = self
             .open_assistant_item
@@ -1001,8 +1019,9 @@ impl SessionEventSink {
             .is_some_and(|open_message_id| open_message_id == message_id);
 
         if is_current_message {
-            self.close_assistant_item();
+            return self.close_assistant_item();
         }
+        None
     }
 
     fn close_reasoning_item(&mut self) {
@@ -2940,6 +2959,8 @@ mod tests {
                 dismissed_at: None,
                 mcp_bindings_ciphertext: None,
                 mcp_binding_summaries_json: None,
+                mcp_binding_policy:
+                    crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
                 system_prompt_append: None,
                 subagents_enabled: true,
                 origin: None,

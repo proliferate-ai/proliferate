@@ -3,6 +3,35 @@ use anyharness_contract::v1;
 use crate::origin::OriginContext;
 use crate::sessions::prompt::{PromptPayload, StoredPromptBlock};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionMcpBindingPolicy {
+    InheritWorkspace,
+    InternalOnly,
+}
+
+impl SessionMcpBindingPolicy {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::InheritWorkspace => "inherit_workspace",
+            Self::InternalOnly => "internal_only",
+        }
+    }
+
+    pub fn parse(value: &str) -> Self {
+        match value {
+            "internal_only" => Self::InternalOnly,
+            "inherit_workspace" => Self::InheritWorkspace,
+            other => {
+                tracing::warn!(
+                    mcp_binding_policy = %other,
+                    "unknown MCP binding policy; defaulting to inherit_workspace"
+                );
+                Self::InheritWorkspace
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SessionRecord {
     pub id: String,
@@ -24,6 +53,7 @@ pub struct SessionRecord {
     pub dismissed_at: Option<String>,
     pub mcp_bindings_ciphertext: Option<String>,
     pub mcp_binding_summaries_json: Option<String>,
+    pub mcp_binding_policy: SessionMcpBindingPolicy,
     pub system_prompt_append: Option<String>,
     pub subagents_enabled: bool,
     pub origin: Option<OriginContext>,

@@ -69,7 +69,7 @@ Always do so at the start of the task, not halfway through implementation.
    tokens, or theme usage
 3. `docs/frontend/chat-composer.md` when the change touches the chat composer,
    the panels above it (todo tracker, approval card, workspace/cloud status),
-   or the Claude plan card in the transcript
+   workspace review panels/defaults, or the Claude plan card in the transcript
 
 ### SDK (`anyharness/sdk/**`, `anyharness/sdk-react/**`)
 

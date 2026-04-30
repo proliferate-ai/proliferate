@@ -12,7 +12,7 @@ use url::form_urlencoded;
 
 use super::http::{
     agents, cowork, files, git, health, hosting, mobility, model_registries, plans, processes,
-    provider_configs, replay, repo_roots, sessions, subagents, terminals, workspaces,
+    provider_configs, replay, repo_roots, reviews, sessions, subagents, terminals, workspaces,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -103,6 +103,10 @@ pub fn build_router(state: AppState) -> Router {
             get(subagents::get_subagents_mcp_endpoint).post(subagents::post_subagents_mcp_endpoint),
         )
         .route(
+            "/workspaces/{workspace_id}/sessions/{session_id}/reviews/mcp",
+            get(reviews::get_reviews_mcp_endpoint).post(reviews::post_reviews_mcp_endpoint),
+        )
+        .route(
             "/workspaces/{workspace_id}/display-name",
             patch(workspaces::update_workspace_display_name),
         )
@@ -153,6 +157,14 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}/plans/{plan_id}/handoff",
             post(plans::handoff_plan),
+        )
+        .route(
+            "/workspaces/{workspace_id}/plans/{plan_id}/review",
+            post(reviews::start_plan_review),
+        )
+        .route(
+            "/workspaces/{workspace_id}/reviews/code",
+            post(reviews::start_code_review),
         )
         .route(
             "/workspaces/{workspace_id}/mobility/preflight",
@@ -278,6 +290,23 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/sessions/{session_id}/subagents",
             get(subagents::get_session_subagents),
+        )
+        .route(
+            "/sessions/{session_id}/reviews",
+            get(reviews::get_session_reviews),
+        )
+        .route(
+            "/reviews/{review_run_id}/assignments/{assignment_id}/critique",
+            get(reviews::get_review_assignment_critique),
+        )
+        .route("/reviews/{review_run_id}/stop", post(reviews::stop_review))
+        .route(
+            "/reviews/{review_run_id}/send-feedback",
+            post(reviews::send_review_feedback),
+        )
+        .route(
+            "/reviews/{review_run_id}/revision-ready",
+            post(reviews::mark_review_revision_ready),
         )
         .route(
             "/sessions/{session_id}/title",

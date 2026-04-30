@@ -1012,6 +1012,189 @@
         }
       }
     },
+    "/v1/reviews/{review_run_id}/assignments/{assignment_id}/critique": {
+      "get": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "get_review_assignment_critique",
+        "parameters": [
+          {
+            "name": "review_run_id",
+            "in": "path",
+            "description": "Review run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "description": "Review assignment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Review assignment critique",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewCritiqueResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Review or assignment not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reviews/{review_run_id}/revision-ready": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "mark_review_revision_ready",
+        "parameters": [
+          {
+            "name": "review_run_id",
+            "in": "path",
+            "description": "Review run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReviewRevisionReadyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Started next review round",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Revision is not ready or max rounds reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reviews/{review_run_id}/send-feedback": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "send_review_feedback",
+        "parameters": [
+          {
+            "name": "review_run_id",
+            "in": "path",
+            "description": "Review run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sent review feedback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Review feedback is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reviews/{review_run_id}/stop": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "stop_review",
+        "parameters": [
+          {
+            "name": "review_run_id",
+            "in": "path",
+            "description": "Review run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stopped review run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRunResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Review run not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions": {
       "get": {
         "tags": [
@@ -1825,6 +2008,47 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/reviews": {
+      "get": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "get_session_reviews",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session review runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionReviewsResponse"
                 }
               }
             }
@@ -3456,6 +3680,76 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}/review": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "start_plan_review",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "plan_id",
+            "in": "path",
+            "description": "Plan ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartPlanReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Started plan review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid review request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Plan or session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/processes/run": {
       "post": {
         "tags": [
@@ -3516,6 +3810,57 @@
           },
           "500": {
             "description": "Command execution failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/reviews/code": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "start_code_review",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartCodeReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Started code review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid review request",
             "content": {
               "application/json": {
                 "schema": {
@@ -6577,6 +6922,17 @@
           }
         }
       },
+      "MarkReviewRevisionReadyRequest": {
+        "type": "object",
+        "properties": {
+          "revisedPlanId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "McpElicitationBooleanField": {
         "allOf": [
           {
@@ -8640,6 +8996,38 @@
           {
             "type": "object",
             "required": [
+              "reviewRunId",
+              "reviewRoundId",
+              "feedbackJobId",
+              "type"
+            ],
+            "properties": {
+              "feedbackJobId": {
+                "type": "string"
+              },
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reviewRoundId": {
+                "type": "string"
+              },
+              "reviewRunId": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "reviewFeedback"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
               "type"
             ],
             "properties": {
@@ -9503,6 +9891,511 @@
             }
           }
         }
+      },
+      "ReviewAssignmentDetail": {
+        "type": "object",
+        "required": [
+          "id",
+          "reviewRunId",
+          "reviewRoundId",
+          "personaId",
+          "personaLabel",
+          "agentKind",
+          "modeVerificationStatus",
+          "status",
+          "hasCritique",
+          "deadlineAt",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "actualModeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "agentKind": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "critiqueArtifactPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deadlineAt": {
+            "type": "string"
+          },
+          "failureDetail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failureReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hasCritique": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "modeVerificationStatus": {
+            "$ref": "#/components/schemas/ReviewModeVerificationStatus"
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pass": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "personaId": {
+            "type": "string"
+          },
+          "personaLabel": {
+            "type": "string"
+          },
+          "requestedModeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reviewRoundId": {
+            "type": "string"
+          },
+          "reviewRunId": {
+            "type": "string"
+          },
+          "reviewerSessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessionLinkId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReviewAssignmentStatus"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "ReviewAssignmentStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "launching",
+          "reviewing",
+          "reminded",
+          "submitted",
+          "cancelled",
+          "timed_out",
+          "system_failed"
+        ]
+      },
+      "ReviewCritiqueResponse": {
+        "type": "object",
+        "required": [
+          "assignmentId",
+          "reviewRunId",
+          "reviewRoundId",
+          "personaId",
+          "personaLabel"
+        ],
+        "properties": {
+          "assignmentId": {
+            "type": "string"
+          },
+          "critiqueArtifactPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "critiqueMarkdown": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pass": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "personaId": {
+            "type": "string"
+          },
+          "personaLabel": {
+            "type": "string"
+          },
+          "reviewRoundId": {
+            "type": "string"
+          },
+          "reviewRunId": {
+            "type": "string"
+          },
+          "submittedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReviewFeedbackDeliveryDetail": {
+        "type": "object",
+        "required": [
+          "state",
+          "attemptCount"
+        ],
+        "properties": {
+          "attemptCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "failureDetail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failureReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "nextAttemptAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/ReviewFeedbackDeliveryState"
+          }
+        }
+      },
+      "ReviewFeedbackDeliveryState": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "sending",
+          "sent",
+          "failed"
+        ]
+      },
+      "ReviewKind": {
+        "type": "string",
+        "enum": [
+          "plan",
+          "code"
+        ]
+      },
+      "ReviewModeVerificationStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "verified",
+          "mismatch",
+          "not_checked"
+        ]
+      },
+      "ReviewPersonaRequest": {
+        "type": "object",
+        "required": [
+          "personaId",
+          "label",
+          "prompt",
+          "agentKind"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "modeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "personaId": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          }
+        }
+      },
+      "ReviewRoundDetail": {
+        "type": "object",
+        "required": [
+          "id",
+          "reviewRunId",
+          "roundNumber",
+          "status",
+          "assignments",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewAssignmentDetail"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "failureDetail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failureReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "feedbackDelivery": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReviewFeedbackDeliveryDetail"
+              }
+            ]
+          },
+          "feedbackJobId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "feedbackPromptSentAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "reviewRunId": {
+            "type": "string"
+          },
+          "roundNumber": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReviewRoundStatus"
+          },
+          "targetPlanId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "targetPlanSnapshotHash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "ReviewRoundStatus": {
+        "type": "string",
+        "enum": [
+          "reviewing",
+          "completing",
+          "passed",
+          "feedback_pending",
+          "feedback_sent",
+          "completed_with_drift",
+          "cancelled",
+          "system_failed"
+        ]
+      },
+      "ReviewRunDetail": {
+        "type": "object",
+        "required": [
+          "id",
+          "workspaceId",
+          "parentSessionId",
+          "kind",
+          "status",
+          "title",
+          "maxRounds",
+          "currentRoundNumber",
+          "autoSendFeedback",
+          "parentCanSignalRevisionViaMcp",
+          "childSessionIds",
+          "rounds",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "activeRoundId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "autoSendFeedback": {
+            "type": "boolean"
+          },
+          "childSessionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "currentRoundNumber": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "failureDetail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failureReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ReviewKind"
+          },
+          "maxRounds": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "parentCanSignalRevisionViaMcp": {
+            "type": "boolean"
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "rounds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewRoundDetail"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReviewRunStatus"
+          },
+          "targetPlanId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "targetPlanSnapshotHash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "ReviewRunResponse": {
+        "type": "object",
+        "required": [
+          "run"
+        ],
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/ReviewRunDetail"
+          }
+        }
+      },
+      "ReviewRunStatus": {
+        "type": "string",
+        "enum": [
+          "reviewing",
+          "feedback_ready",
+          "parent_revising",
+          "waiting_for_revision",
+          "passed",
+          "stopped",
+          "system_failed"
+        ]
       },
       "RunCommandRequest": {
         "type": "object",
@@ -10575,6 +11468,20 @@
           }
         }
       },
+      "SessionReviewsResponse": {
+        "type": "object",
+        "required": [
+          "reviews"
+        ],
+        "properties": {
+          "reviews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewRunDetail"
+            }
+          }
+        }
+      },
       "SessionStartedEvent": {
         "type": "object",
         "required": [
@@ -10825,6 +11732,58 @@
           },
           "reusesUserState": {
             "type": "boolean"
+          }
+        }
+      },
+      "StartCodeReviewRequest": {
+        "type": "object",
+        "required": [
+          "parentSessionId",
+          "reviewers"
+        ],
+        "properties": {
+          "autoSendFeedback": {
+            "type": "boolean"
+          },
+          "maxRounds": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "reviewers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewPersonaRequest"
+            }
+          }
+        }
+      },
+      "StartPlanReviewRequest": {
+        "type": "object",
+        "required": [
+          "parentSessionId",
+          "reviewers"
+        ],
+        "properties": {
+          "autoSendFeedback": {
+            "type": "boolean"
+          },
+          "maxRounds": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "reviewers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewPersonaRequest"
+            }
           }
         }
       },

@@ -22,6 +22,7 @@ export function ConnectedProposedPlanItem({
     approvePlan,
     rejectPlan,
     implementPlanHere,
+    reviewPlan,
     isApprovingPlan,
     isRejectingPlan,
     isPreparingPlanReference,
@@ -51,6 +52,7 @@ export function ConnectedProposedPlanItem({
               : undefined
           }
           onImplementHere={() => implementPlanHere(plan)}
+          onReview={(anchorRect) => reviewPlan(plan, anchorRect)}
           onHandOffToNewSession={
             onHandOffToNewSession ? () => onHandOffToNewSession(plan) : undefined
           }

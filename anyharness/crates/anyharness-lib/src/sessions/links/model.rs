@@ -4,6 +4,7 @@ use std::fmt;
 pub enum SessionLinkRelation {
     Subagent,
     CoworkCodingSession,
+    ReviewAgent,
 }
 
 impl SessionLinkRelation {
@@ -11,6 +12,7 @@ impl SessionLinkRelation {
         match self {
             Self::Subagent => "subagent",
             Self::CoworkCodingSession => "cowork_coding_session",
+            Self::ReviewAgent => "review_agent",
         }
     }
 
@@ -18,6 +20,7 @@ impl SessionLinkRelation {
         match value {
             "subagent" => Ok(Self::Subagent),
             "cowork_coding_session" => Ok(Self::CoworkCodingSession),
+            "review_agent" => Ok(Self::ReviewAgent),
             other => Err(SessionLinkParseError::UnknownRelation(other.to_string())),
         }
     }
@@ -95,6 +98,10 @@ mod tests {
         assert_eq!(
             SessionLinkRelation::parse("cowork_coding_session").expect("parse relation"),
             SessionLinkRelation::CoworkCodingSession
+        );
+        assert_eq!(
+            SessionLinkRelation::parse("review_agent").expect("parse relation"),
+            SessionLinkRelation::ReviewAgent
         );
     }
 

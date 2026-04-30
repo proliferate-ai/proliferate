@@ -81,9 +81,14 @@ import {
   resolveSubagentColor,
   resolveSubagentBrailleColor,
 } from "@/lib/domain/chat/subagent-braille-color";
-import { isAgentSessionProvenance, isSubagentWakeProvenance } from "@/lib/domain/chat/subagents/provenance";
+import {
+  isAgentSessionProvenance,
+  resolveReviewFeedbackPromptReference,
+  isSubagentWakeProvenance,
+} from "@/lib/domain/chat/subagents/provenance";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { SubagentWakeBadge } from "@/components/workspace/chat/transcript/SubagentWakeBadge";
+import { ReviewFeedbackSummary } from "@/components/workspace/reviews/ReviewFeedbackSummary";
 import { SubagentLaunchLedger } from "@/components/workspace/chat/transcript/SubagentLaunchLedger";
 import { UserMessageProvenanceChrome } from "@/components/workspace/chat/transcript/UserMessageProvenanceChrome";
 import {
@@ -357,21 +362,40 @@ export function MessageList({
               {visibleOptimisticPrompt && (
                 <TurnShell key="pending-prompt" isFirst={visibleTurnIds.length === 0}>
                   <div className="flex flex-col gap-2">
-                    {isSubagentWakeProvenance(visibleOptimisticPrompt.promptProvenance) ? (
-                      <div className="flex justify-end">
-                        <SubagentWakeBadge
-                          label={visibleOptimisticPrompt.promptProvenance.label ?? null}
-                          color={resolveSubagentColor(visibleOptimisticPrompt.promptProvenance.sessionLinkId)}
+                    {(() => {
+                      const reviewFeedbackReference = resolveReviewFeedbackPromptReference(
+                        visibleOptimisticPrompt.promptProvenance,
+                        visibleOptimisticPrompt.text,
+                      );
+                      if (isSubagentWakeProvenance(visibleOptimisticPrompt.promptProvenance)) {
+                        return (
+                          <div className="flex justify-end">
+                            <SubagentWakeBadge
+                              label={visibleOptimisticPrompt.promptProvenance.label ?? null}
+                              color={resolveSubagentColor(visibleOptimisticPrompt.promptProvenance.sessionLinkId)}
+                            />
+                          </div>
+                        );
+                      }
+                      if (reviewFeedbackReference) {
+                        return (
+                          <ReviewFeedbackSummary
+                            reference={reviewFeedbackReference}
+                            sessionId={activeSessionId}
+                            state="queued"
+                            onOpenSession={onOpenSession}
+                          />
+                        );
+                      }
+                      return (
+                        <UserMessage
+                          sessionId={activeSessionId}
+                          content={visibleOptimisticPrompt.text}
+                          contentParts={visibleOptimisticPrompt.contentParts}
+                          showCopyButton
                         />
-                      </div>
-                    ) : (
-                      <UserMessage
-                        sessionId={activeSessionId}
-                        content={visibleOptimisticPrompt.text}
-                        contentParts={visibleOptimisticPrompt.contentParts}
-                        showCopyButton
-                      />
-                    )}
+                      );
+                    })()}
                     {optimisticPromptTrailingStatus && (
                       <div className={TRAILING_STATUS_MIN_HEIGHT}>{optimisticPromptTrailingStatus}</div>
                     )}
@@ -868,6 +892,20 @@ function TranscriptItemBlock({
               onOpenChild={openSession ?? undefined}
             />
           </div>
+        );
+      }
+
+      const reviewFeedbackReference = resolveReviewFeedbackPromptReference(
+        item.promptProvenance,
+        item.text,
+      );
+      if (reviewFeedbackReference) {
+        return (
+          <ReviewFeedbackSummary
+            reference={reviewFeedbackReference}
+            sessionId={sessionId}
+            onOpenSession={openSession ?? undefined}
+          />
         );
       }
 

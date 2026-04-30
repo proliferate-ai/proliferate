@@ -9,6 +9,7 @@ import {
 } from "@/lib/domain/chat/chat-input";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useConfiguredLaunchReadiness } from "./use-configured-launch-readiness";
+import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
 
 export interface ChatAvailabilityState extends ChatInputAvailability {
   selectedWorkspaceKind: "cloud" | "local";
@@ -28,6 +29,7 @@ export function useChatAvailabilityState(): ChatAvailabilityState {
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const mobility = useWorkspaceMobilityState();
   const configuredLaunch = useConfiguredLaunchReadiness();
+  const activeReviewRun = useActiveReviewRun();
 
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
   const selectedCloudWorkspace =
@@ -91,6 +93,15 @@ export function useChatAvailabilityState(): ChatAvailabilityState {
       selectedWorkspaceKind: mobility.selectedLogicalWorkspace?.effectiveOwner === "cloud"
         ? "cloud"
         : "local",
+    };
+  }
+
+  if (activeReviewRun.hasBusyReview) {
+    return {
+      isDisabled: true,
+      disabledReason: "Review automation is running.",
+      areRuntimeControlsDisabled: true,
+      selectedWorkspaceKind: selectedCloudWorkspaceId !== null ? "cloud" : "local",
     };
   }
 

@@ -323,6 +323,8 @@ mod tests {
                 dismissed_at: None,
                 mcp_bindings_ciphertext: None,
                 mcp_binding_summaries_json: None,
+                mcp_binding_policy:
+                    crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
                 system_prompt_append: None,
                 subagents_enabled: true,
                 origin: None,

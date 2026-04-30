@@ -171,6 +171,29 @@ export function anyHarnessSessionSubagentsKey(
   return [...anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId), "subagents"] as const;
 }
 
+export function anyHarnessSessionReviewsKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+  sessionId: string | null | undefined,
+) {
+  return [...anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId), "reviews"] as const;
+}
+
+export function anyHarnessReviewAssignmentCritiqueKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+  reviewRunId: string | null | undefined,
+  assignmentId: string | null | undefined,
+) {
+  return [
+    ...anyHarnessRuntimeKey(runtimeUrl),
+    "review-critique",
+    workspaceId ?? null,
+    reviewRunId ?? null,
+    assignmentId ?? null,
+  ] as const;
+}
+
 export function anyHarnessPlansKey(
   runtimeUrl: string | null | undefined,
   workspaceId: string | null | undefined,

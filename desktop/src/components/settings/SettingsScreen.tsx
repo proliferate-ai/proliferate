@@ -11,6 +11,7 @@ import { AdvancedPane } from "./panes/AdvancedPane";
 import { AppearancePane } from "./panes/AppearancePane";
 import { DefaultsPane } from "./panes/DefaultsPane";
 import { KeyboardShortcutsPane } from "./panes/KeyboardShortcutsPane";
+import { ReviewSettingsPane } from "./panes/ReviewSettingsPane";
 import { CloudAuthUnavailablePane } from "./panes/CloudAuthUnavailablePane";
 import { CloudPane } from "./panes/CloudPane";
 import { CloudSignInRequiredPane } from "./panes/CloudSignInRequiredPane";
@@ -46,6 +47,9 @@ function renderSettingsSection(
   }
   if (activeSection === "defaults") {
     return <DefaultsPane />;
+  }
+  if (activeSection === "review") {
+    return <ReviewSettingsPane />;
   }
   if (activeSection === "appearance") {
     return <AppearancePane />;

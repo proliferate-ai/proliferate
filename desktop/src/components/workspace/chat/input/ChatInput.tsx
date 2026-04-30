@@ -25,12 +25,14 @@ import { usePromptAttachments } from "@/hooks/chat/use-prompt-attachments";
 import { usePlanDraftAttachments } from "@/hooks/plans/use-plan-draft-attachments";
 import { useChatSessionControls } from "@/hooks/chat/use-chat-session-controls";
 import { useQueuedPromptEdit } from "@/hooks/chat/use-queued-prompt-edit";
+import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
+import { useReviewActions } from "@/hooks/reviews/use-review-actions";
 import { focusChatInput } from "@/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "@/lib/domain/chat/file-mentions";
 import { canAttachPromptContent } from "@/lib/domain/chat/prompt-content";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { Button } from "@/components/ui/Button";
-import { AddMessage } from "@/components/ui/icons";
+import { AddMessage, Shield } from "@/components/ui/icons";
 import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerMentionEditor } from "./ComposerMentionEditor";
 import { ModelSelector } from "./ModelSelector";
@@ -63,6 +65,8 @@ export function ChatInput() {
   const modelSelectorProps = useChatModelSelectorState();
   const { agentKind, controls: sessionConfigControls, modeControl } = useChatSessionControls();
   const { handleSubmit, handleCancel } = useChatPromptActions();
+  const reviewActions = useReviewActions();
+  const activeReview = useActiveReviewRun();
   const {
     isEditing: isEditingQueuedPrompt,
     editDraft,
@@ -83,6 +87,11 @@ export function ChatInput() {
     : activeSessionId
       ? "Attachments are not supported by this agent"
       : "Attachments are available after a session starts";
+  const reviewControlTitle = activeReview.run || activeReview.startingReview
+    ? "A review is already active for this session"
+    : activeSessionId
+      ? "Review current implementation"
+      : "Review is available after a session starts";
   const promptText = serializeChatDraftToPrompt(draft);
   const effectiveIsEmpty = isEditingQueuedPrompt
     ? editDraft.trim().length === 0
@@ -357,6 +366,21 @@ export function ChatInput() {
                     draftWorkspaceId={selectedWorkspaceId}
                     disabled={!canAttachPlan}
                   />
+                  <ComposerControlButton
+                    iconOnly
+                    disabled={
+                      !reviewActions.canStartCodeReview
+                      || !!activeReview.run
+                      || !!activeReview.startingReview
+                    }
+                    icon={<Shield className="size-4" />}
+                    label="Review implementation"
+                    title={reviewControlTitle}
+                    onClick={(event) => {
+                      reviewActions.startCodeReview(rectToReviewAnchor(event.currentTarget.getBoundingClientRect()));
+                    }}
+                    aria-label="Review implementation"
+                  />
                 </div>
               )}
               <ChatComposerActions
@@ -373,4 +397,15 @@ export function ChatInput() {
       </ChatComposerSurface>
     </div>
   );
+}
+
+function rectToReviewAnchor(rect: DOMRect) {
+  return {
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+    left: rect.left,
+    width: rect.width,
+    height: rect.height,
+  };
 }

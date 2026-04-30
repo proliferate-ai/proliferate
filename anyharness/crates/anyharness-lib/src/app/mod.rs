@@ -20,6 +20,11 @@ use crate::plans::store::PlanStore;
 use crate::processes::ProcessService;
 use crate::repo_roots::service::RepoRootService;
 use crate::repo_roots::store::RepoRootStore;
+use crate::reviews::hooks::ReviewSessionHooks;
+use crate::reviews::mcp_auth::ReviewMcpAuth;
+use crate::reviews::runtime::ReviewRuntime;
+use crate::reviews::service::ReviewService;
+use crate::reviews::store::ReviewStore;
 use crate::sessions::links::completions::LinkCompletionStore;
 use crate::sessions::links::service::SessionLinkService;
 use crate::sessions::links::store::SessionLinkStore;
@@ -68,6 +73,9 @@ pub struct AppState {
     pub cowork_runtime: Arc<CoworkRuntime>,
     pub subagent_service: Arc<SubagentService>,
     pub subagent_session_hooks: Arc<SubagentSessionHooks>,
+    pub review_service: Arc<ReviewService>,
+    pub review_session_hooks: Arc<ReviewSessionHooks>,
+    pub review_runtime: Arc<ReviewRuntime>,
     pub session_service: Arc<SessionService>,
     pub session_runtime: Arc<SessionRuntime>,
     pub workspace_access_gate: Arc<WorkspaceAccessGate>,
@@ -147,11 +155,19 @@ impl AppState {
         ));
         let subagent_service = Arc::new(SubagentService::new(
             SessionStore::new(db.clone()),
-            session_link_service,
+            session_link_service.clone(),
             SubagentStore::new(db.clone()),
             workspace_runtime.clone(),
             workspace_access_gate.clone(),
         ));
+        let review_service = Arc::new(ReviewService::new(
+            ReviewStore::new(db.clone()),
+            SessionStore::new(db.clone()),
+            session_link_service,
+            plan_service.clone(),
+        ));
+        acp_manager.set_review_service(review_service.clone());
+        let (review_hook_event_tx, review_hook_event_rx) = tokio::sync::mpsc::channel(256);
         let subagent_mcp_auth = Arc::new(SubagentMcpAuth::new(runtime_home.clone()));
         let subagent_session_hooks = Arc::new(SubagentSessionHooks::new(
             runtime_base_url.clone(),
@@ -161,8 +177,18 @@ impl AppState {
             acp_manager.clone(),
             SessionStore::new(db.clone()),
         ));
-        let session_extensions: Vec<Arc<dyn crate::sessions::extensions::SessionExtension>> =
-            vec![cowork_session_hooks.clone(), subagent_session_hooks.clone()];
+        let review_mcp_auth = Arc::new(ReviewMcpAuth::new(runtime_home.clone()));
+        let review_session_hooks = Arc::new(ReviewSessionHooks::new(
+            runtime_base_url.clone(),
+            bearer_token.clone(),
+            review_mcp_auth,
+            review_hook_event_tx,
+        ));
+        let session_extensions: Vec<Arc<dyn crate::sessions::extensions::SessionExtension>> = vec![
+            cowork_session_hooks.clone(),
+            subagent_session_hooks.clone(),
+            review_session_hooks.clone(),
+        ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
             workspace_runtime.clone(),
@@ -200,6 +226,15 @@ impl AppState {
             session_service.clone(),
             runtime_home.clone(),
         ));
+        let review_runtime = Arc::new(ReviewRuntime::new(
+            review_service.clone(),
+            session_runtime.clone(),
+            workspace_runtime.clone(),
+            runtime_home.clone(),
+        ));
+        review_runtime
+            .clone()
+            .spawn_background_tasks(review_hook_event_rx);
         Ok(Self {
             runtime_home,
             runtime_base_url,
@@ -217,6 +252,9 @@ impl AppState {
             cowork_runtime,
             subagent_service,
             subagent_session_hooks,
+            review_service,
+            review_session_hooks,
+            review_runtime,
             session_service,
             session_runtime,
             workspace_access_gate,

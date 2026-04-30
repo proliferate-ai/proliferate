@@ -40,6 +40,7 @@ export {
   anyHarnessSessionLiveConfigKey,
   anyHarnessSessionEventsKey,
   anyHarnessSessionSubagentsKey,
+  anyHarnessSessionReviewsKey,
   anyHarnessPlansKey,
   anyHarnessPlanKey,
   anyHarnessPlanDocumentKey,
@@ -138,6 +139,15 @@ export {
   useRejectPlanMutation,
   useHandoffPlanMutation,
 } from "./hooks/plans.js";
+export {
+  useSessionReviewsQuery,
+  useReviewAssignmentCritiqueQuery,
+  useStartPlanReviewMutation,
+  useStartCodeReviewMutation,
+  useStopReviewMutation,
+  useSendReviewFeedbackMutation,
+  useMarkReviewRevisionReadyMutation,
+} from "./hooks/reviews.js";
 export {
   useGitStatusQuery,
   useGitDiffQuery,

@@ -120,6 +120,14 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0033_workspace_creator_context",
         include_str!("sql/0033_workspace_creator_context.sql"),
     ),
+    (
+        "0034_review_agent_loops",
+        include_str!("sql/0034_review_agent_loops.sql"),
+    ),
+    (
+        "0035_review_assignments_active_reviewer_index",
+        include_str!("sql/0035_review_assignments_active_reviewer_index.sql"),
+    ),
 ];
 
 const CUSTOM_MIGRATIONS: &[(&str, fn(&Transaction<'_>) -> rusqlite::Result<()>)] = &[(
@@ -150,14 +158,25 @@ fn run_named_migration<F>(conn: &mut Connection, name: &str, apply: F) -> rusqli
 where
     F: FnOnce(&Transaction<'_>) -> rusqlite::Result<()>,
 {
-    let already_applied: bool = conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM _migrations WHERE name = ?1)",
-        [name],
-        |row| row.get(0),
-    )?;
+    let already_applied = migration_applied(conn, name)?;
 
     if already_applied {
         return Ok(());
+    }
+
+    for alias in migration_aliases(name) {
+        if migration_applied(conn, alias)? {
+            tracing::info!(
+                migration = name,
+                alias,
+                "marking migration applied through legacy alias"
+            );
+            conn.execute(
+                "INSERT OR IGNORE INTO _migrations (name) VALUES (?1)",
+                [name],
+            )?;
+            return Ok(());
+        }
     }
 
     tracing::info!(migration = name, "applying migration");
@@ -166,6 +185,24 @@ where
     tx.execute("INSERT INTO _migrations (name) VALUES (?1)", [name])?;
     tx.commit()?;
     Ok(())
+}
+
+fn migration_applied(conn: &Connection, name: &str) -> rusqlite::Result<bool> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM _migrations WHERE name = ?1)",
+        [name],
+        |row| row.get(0),
+    )
+}
+
+fn migration_aliases(name: &str) -> &'static [&'static str] {
+    match name {
+        // The review-loop migration was originally 0033 before main added
+        // 0033_workspace_creator_context. Local dev profiles may have applied
+        // that old name already; do not rerun the same schema changes as 0034.
+        "0034_review_agent_loops" => &["0033_review_agent_loops"],
+        _ => &[],
+    }
 }
 
 fn migrate_session_background_work_timestamps(tx: &Transaction<'_>) -> rusqlite::Result<()> {
@@ -330,9 +367,41 @@ fn pending_background_work_from_completed_event(
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+
     use rusqlite::Connection;
 
-    use super::{run_migrations, MIGRATIONS};
+    use super::{run_migrations, run_named_migration, MIGRATIONS};
+
+    #[test]
+    fn review_loop_migration_accepts_legacy_0033_alias() {
+        let mut conn = Connection::open_in_memory().expect("open in-memory db");
+        conn.execute_batch(
+            "CREATE TABLE _migrations (
+                name TEXT PRIMARY KEY,
+                applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            INSERT INTO _migrations (name) VALUES ('0033_review_agent_loops');",
+        )
+        .expect("seed legacy migration");
+        let called = Cell::new(false);
+
+        run_named_migration(&mut conn, "0034_review_agent_loops", |_tx| {
+            called.set(true);
+            Ok(())
+        })
+        .expect("run alias migration");
+
+        assert!(!called.get());
+        let marked: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM _migrations WHERE name = '0034_review_agent_loops')",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query migration marker");
+        assert!(marked);
+    }
 
     #[test]
     fn background_work_timestamp_migration_upgrades_old_schema_and_backfills_rows() {

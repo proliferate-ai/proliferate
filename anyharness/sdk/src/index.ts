@@ -183,6 +183,26 @@ export type {
 } from "./types/plans.js";
 
 export type {
+  ReviewKind,
+  ReviewRunStatus,
+  ReviewRoundStatus,
+  ReviewAssignmentStatus,
+  ReviewFeedbackDeliveryState,
+  ReviewModeVerificationStatus,
+  ReviewPersonaRequest,
+  StartPlanReviewRequest,
+  StartCodeReviewRequest,
+  MarkReviewRevisionReadyRequest,
+  ReviewAssignmentDetail,
+  ReviewCritiqueResponse,
+  ReviewFeedbackDeliveryDetail,
+  ReviewRoundDetail,
+  ReviewRunDetail,
+  ReviewRunResponse,
+  SessionReviewsResponse,
+} from "./types/reviews.js";
+
+export type {
   SessionEventEnvelope,
   SessionRawNotificationEnvelope,
   SessionEvent,

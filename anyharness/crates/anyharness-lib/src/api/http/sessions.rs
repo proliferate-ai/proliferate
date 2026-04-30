@@ -266,7 +266,7 @@ pub async fn prompt_session(
     );
 
     let (record, status, queued_seq) = match outcome {
-        SendPromptOutcome::Running { session } => (
+        SendPromptOutcome::Running { session, .. } => (
             session,
             anyharness_contract::v1::PromptSessionStatus::Running,
             None,

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock as StdRwLock};
 use std::time::Instant;
 
 use tokio::sync::{broadcast, oneshot, watch, RwLock};
@@ -14,6 +14,7 @@ use super::session_actor::{
 use crate::agents::model::ResolvedAgent;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::plans::service::PlanService;
+use crate::reviews::service::ReviewService;
 use crate::sessions::mcp::SessionMcpServer;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::runtime_event::{
@@ -29,6 +30,7 @@ pub struct AcpManager {
     pending_startups: Arc<RwLock<HashMap<String, watch::Receiver<StartupReadinessState>>>>,
     interaction_broker: Arc<InteractionBroker>,
     plan_service: Arc<PlanService>,
+    review_service: Arc<StdRwLock<Option<Arc<ReviewService>>>>,
 }
 
 impl AcpManager {
@@ -39,11 +41,18 @@ impl AcpManager {
             pending_startups: Arc::new(RwLock::new(HashMap::new())),
             interaction_broker,
             plan_service,
+            review_service: Arc::new(StdRwLock::new(None)),
         }
     }
 
     pub fn interaction_broker(&self) -> &Arc<InteractionBroker> {
         &self.interaction_broker
+    }
+
+    pub fn set_review_service(&self, review_service: Arc<ReviewService>) {
+        if let Ok(mut guard) = self.review_service.write() {
+            *guard = Some(review_service);
+        }
     }
 
     pub async fn start_session(
@@ -140,6 +149,11 @@ impl AcpManager {
             session_launch_env,
             interaction_broker: self.interaction_broker.clone(),
             plan_service: self.plan_service.clone(),
+            review_service: self
+                .review_service
+                .read()
+                .ok()
+                .and_then(|guard| guard.clone()),
             event_tx,
             session_store,
             mcp_servers,
@@ -315,6 +329,7 @@ impl Clone for AcpManager {
             pending_startups: self.pending_startups.clone(),
             interaction_broker: self.interaction_broker.clone(),
             plan_service: self.plan_service.clone(),
+            review_service: self.review_service.clone(),
         }
     }
 }
@@ -463,6 +478,7 @@ mod tests {
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
+            mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
             origin: None,

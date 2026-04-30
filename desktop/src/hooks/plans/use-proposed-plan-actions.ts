@@ -4,6 +4,7 @@ import {
   useApprovePlanMutation,
   useRejectPlanMutation,
 } from "@anyharness/sdk-react";
+import { useReviewActions } from "@/hooks/reviews/use-review-actions";
 import { PLAN_ATTACHMENT_LIMIT } from "@/config/plans";
 import { PLAN_IMPLEMENT_HERE_PROMPT } from "@/config/plan-prompts";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
@@ -35,6 +36,7 @@ export function useProposedPlanActions() {
   const isPreparingPlanReferenceRef = useRef(false);
   const approveMutation = useApprovePlanMutation({ workspaceId: selectedWorkspaceId });
   const rejectMutation = useRejectPlanMutation({ workspaceId: selectedWorkspaceId });
+  const reviewActions = useReviewActions();
   const { setActiveSessionConfigOption } = useSessionActions();
   const approvePlanMutation = approveMutation.mutateAsync;
   const rejectPlanMutation = rejectMutation.mutateAsync;
@@ -135,6 +137,7 @@ export function useProposedPlanActions() {
     approvePlan,
     rejectPlan,
     implementPlanHere,
+    reviewPlan: reviewActions.startPlanReview,
     isApprovingPlan: approveMutation.isPending,
     isRejectingPlan: rejectMutation.isPending,
     isPreparingPlanReference,

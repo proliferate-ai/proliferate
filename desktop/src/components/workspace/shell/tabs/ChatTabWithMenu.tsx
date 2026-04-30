@@ -59,10 +59,11 @@ export function ChatTabWithMenu({
   onCloseRight: () => void;
   onDismiss: () => void;
 }) {
+  const isReviewAgentChild = tab.isReviewAgentChild;
   const menuItems = buildChatTabContextMenuItems({
-    canRename: true,
-    canDismiss: true,
-    canCreateGroup,
+    canRename: !isReviewAgentChild,
+    canDismiss: !isReviewAgentChild,
+    canCreateGroup: !isReviewAgentChild && canCreateGroup,
     isChild: tab.isChild,
   });
   const { onContextMenuCapture } = useWorkspaceTabNativeContextMenu({

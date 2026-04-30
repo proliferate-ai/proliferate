@@ -145,4 +145,68 @@ describe("user preference migration", () => {
     expect(result.changed).toBe(true);
     expect(result.preferences.transparentChromeEnabled).toBe(true);
   });
+
+  it("sanitizes partially present review defaults", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      reviewDefaultsByKind: {
+        plan: {
+          maxRounds: 9,
+          autoSendFeedback: true,
+          reviewers: [
+            {
+              id: "skeptic",
+              label: "Skeptic",
+              prompt: "Find planning gaps.",
+              agentKind: "codex",
+              modelId: "gpt-5.4",
+              modeId: "read-only",
+            },
+          ],
+        },
+        code: null,
+      },
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.reviewDefaultsByKind.plan?.maxRounds).toBe(5);
+    expect(result.preferences.reviewDefaultsByKind.plan?.reviewers).toHaveLength(1);
+    expect(result.preferences.reviewDefaultsByKind.code).toBeNull();
+  });
+
+  it("sanitizes reusable review personalities by kind", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      reviewPersonalitiesByKind: {
+        plan: [
+          {
+            id: " plan-skeptic ",
+            label: " Strict plan reviewer ",
+            prompt: " Find hidden plan gaps. ",
+          },
+          {
+            id: "plan-skeptic",
+            label: "Duplicate",
+            prompt: "Drop duplicate.",
+          },
+          {
+            id: "",
+            label: "Missing id",
+            prompt: "Drop invalid.",
+          },
+        ],
+        code: null as unknown as [],
+      },
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.reviewPersonalitiesByKind.plan).toEqual([
+      {
+        id: "plan-skeptic",
+        label: "Strict plan reviewer",
+        prompt: "Find hidden plan gaps.",
+      },
+    ]);
+    expect(result.preferences.reviewPersonalitiesByKind.code).toEqual([]);
+  });
 });

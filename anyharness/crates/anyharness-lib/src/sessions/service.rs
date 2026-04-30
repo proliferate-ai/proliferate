@@ -5,7 +5,8 @@ use uuid::Uuid;
 use super::live_config::snapshot_from_record;
 use super::model::{
     PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord, SessionEventRecord,
-    SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
+    SessionLiveConfigSnapshotRecord, SessionMcpBindingPolicy, SessionRawNotificationRecord,
+    SessionRecord,
 };
 use super::store::SessionStore;
 use crate::agents::catalog::model_registries;
@@ -88,6 +89,7 @@ impl SessionService {
         mode_id: Option<&str>,
         mcp_bindings_ciphertext: Option<String>,
         mcp_binding_summaries_json: Option<String>,
+        mcp_binding_policy: SessionMcpBindingPolicy,
         system_prompt_append: Option<String>,
         subagents_enabled: bool,
         origin: OriginContext,
@@ -210,6 +212,7 @@ impl SessionService {
             dismissed_at: None,
             mcp_bindings_ciphertext,
             mcp_binding_summaries_json,
+            mcp_binding_policy,
             system_prompt_append,
             subagents_enabled,
             origin: Some(origin),

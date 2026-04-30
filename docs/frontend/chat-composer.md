@@ -8,11 +8,15 @@ Scope:
 - `desktop/src/components/workspace/chat/transcript/ProposedPlanCard.tsx`
 - `desktop/src/components/workspace/chat/content/PlanReferenceAttachmentCard.tsx`
 - `desktop/src/components/workspace/chat/plans/**`
+- `desktop/src/components/workspace/reviews/**`
 - `desktop/src/hooks/chat/use-composer-dock-slots.tsx`
 - `desktop/src/hooks/chat/use-composer-top-slot.tsx`
 - `desktop/src/hooks/chat/use-active-todo-tracker.ts`
+- `desktop/src/hooks/reviews/**`
 - `desktop/src/lib/domain/chat/active-todo-tracker.ts`
 - `desktop/src/lib/domain/chat/claude-plan-tool-call.ts`
+- `desktop/src/lib/domain/reviews/**`
+- `desktop/src/stores/reviews/**`
 
 Read this doc before changing the composer, the panels that sit above it (todo tracker, approval card, workspace status, cloud runtime), or where the Claude plan body renders. The structure below was chosen to mirror Codex's reference (`references/codex_todo.html`, `references/codex_plan.html`) and is load-bearing for several visual decisions that are not obvious from the code alone.
 
@@ -29,6 +33,7 @@ ChatView
     │     ├── WorkspaceArrivalAttachedPanel (workspace arrival/setup/pending/cloud-status)
     │     └── CloudRuntimeAttachedPanel     (cloud runtime connecting/resuming/error)
     ├── subagentSlot
+    │     ├── ComposerReviewRunPanel        (summary control + popover list/actions for review agents)
     │     └── SubagentComposerStrip         (summary control + popover list for linked child sessions)
     ├── queueSlot
     │     └── PendingPromptList             (queued prompts, closest to composer)
@@ -58,16 +63,24 @@ gating/status panel at a time, with this precedence:
 3. **`WorkspaceArrivalAttachedPanel`** — workspace arrival / setup / pending / cloud-status
 4. **`CloudRuntimeAttachedPanel`** — cloud runtime in any non-ready phase
 
-If you need to introduce a fifth upper-panel inhabitant, add it to the
+Review status lives in `subagentSlot`, not `upperSlot`. `ComposerReviewRunPanel`
+uses the same compact summary-control + popover pattern as subagents/cowork.
+The popover owns reviewer rows, critique links, stop, send-feedback, and
+review-revision actions. Review automation can still make the composer
+unavailable through chat availability state, but it should not displace the
+todo tracker or workspace/cloud panels with a full card.
+
+If you need to introduce another upper-panel inhabitant, add it to the
 precedence chain in `use-composer-dock-slots.tsx` — do not compute it inline in
 `ChatView` and do not introduce a parallel arbiter elsewhere.
 
-Below the upper region, `subagentSlot` renders one compact summary control for
-linked same-workspace child sessions. It opens a popover list with the full
-child-session set; individual child chips should not be rendered directly above
-the composer. Below that, `queueSlot` renders queued prompts closest to the
-composer. Do not move queued prompts above the subagent summary; the queue
-remains the next prompt the active session will process.
+Below the upper region, `subagentSlot` renders compact summary controls for
+review agents, linked same-workspace child sessions, and cowork sessions. Each
+control opens a popover list with the full child-session/action set; individual
+child chips should not be rendered directly above the composer. Below that,
+`queueSlot` renders queued prompts closest to the composer. Do not move queued
+prompts above the delegated-work summaries; the queue remains the next prompt
+the active session will process.
 
 ## 2.1 Composer footer semantics
 

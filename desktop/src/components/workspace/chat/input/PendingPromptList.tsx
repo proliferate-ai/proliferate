@@ -7,8 +7,14 @@ import { useQueuedPromptEditReader } from "@/hooks/chat/use-queued-prompt-edit";
 import { useDeletePendingPrompt } from "@/hooks/sessions/use-delete-pending-prompt";
 import { PromptContentRenderer } from "@/components/workspace/chat/content/PromptContentRenderer";
 import { SubagentWakeBadge } from "@/components/workspace/chat/transcript/SubagentWakeBadge";
-import { isSubagentWakeProvenance } from "@/lib/domain/chat/subagents/provenance";
+import { ReviewFeedbackSummary } from "@/components/workspace/reviews/ReviewFeedbackSummary";
+import {
+  resolveReviewFeedbackPromptReference,
+  isSubagentWakeProvenance,
+} from "@/lib/domain/chat/subagents/provenance";
 import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
+import { useSessionSelectionActions } from "@/hooks/sessions/use-session-selection-actions";
+import { useToastStore } from "@/stores/toast/toast-store";
 
 export interface PendingPromptListEntry {
   seq: number;
@@ -23,6 +29,7 @@ export interface PendingPromptListProps {
   entries: PendingPromptListEntry[];
   onBeginEdit: (args: { seq: number; text: string }) => void;
   onDelete: (seq: number) => void;
+  onOpenSession?: (sessionId: string) => void;
 }
 
 /**
@@ -36,6 +43,7 @@ export function PendingPromptList({
   entries,
   onBeginEdit,
   onDelete,
+  onOpenSession,
 }: PendingPromptListProps) {
   if (entries.length === 0) {
     return null;
@@ -54,6 +62,7 @@ export function PendingPromptList({
           entry={entry}
           onBeginEdit={onBeginEdit}
           onDelete={onDelete}
+          onOpenSession={onOpenSession}
         />
       ))}
     </div>
@@ -64,6 +73,8 @@ export function ConnectedPendingPromptList() {
   const { activeSessionId } = useActiveChatSessionState();
   const { visiblePendingPrompts, beginEdit } = useQueuedPromptEditReader();
   const deletePendingPrompt = useDeletePendingPrompt();
+  const { selectSession } = useSessionSelectionActions();
+  const showToast = useToastStore((state) => state.show);
 
   const handleDelete = useCallback(
     (seq: number) => {
@@ -72,6 +83,11 @@ export function ConnectedPendingPromptList() {
     },
     [activeSessionId, deletePendingPrompt],
   );
+  const handleOpenSession = useCallback((sessionId: string) => {
+    void selectSession(sessionId).catch((error) => {
+      showToast(`Failed to open reviewer session: ${errorMessage(error)}`);
+    });
+  }, [selectSession, showToast]);
 
   if (!activeSessionId) {
     return null;
@@ -83,6 +99,7 @@ export function ConnectedPendingPromptList() {
       sessionId={activeSessionId}
       onBeginEdit={beginEdit}
       onDelete={handleDelete}
+      onOpenSession={handleOpenSession}
     />
   );
 }
@@ -92,14 +109,25 @@ interface PendingPromptRowProps {
   sessionId: string | null;
   onBeginEdit: (args: { seq: number; text: string }) => void;
   onDelete: (seq: number) => void;
+  onOpenSession?: (sessionId: string) => void;
 }
 
-function PendingPromptRow({ entry, sessionId, onBeginEdit, onDelete }: PendingPromptRowProps) {
+function PendingPromptRow({
+  entry,
+  sessionId,
+  onBeginEdit,
+  onDelete,
+  onOpenSession,
+}: PendingPromptRowProps) {
   const { seq, text, isBeingEdited } = entry;
   const hasStructuredAttachments = entry.contentParts.some((part) => part.type !== "text");
   const wakeProvenance = isSubagentWakeProvenance(entry.promptProvenance)
     ? entry.promptProvenance
     : null;
+  const reviewFeedbackReference = resolveReviewFeedbackPromptReference(
+    entry.promptProvenance,
+    entry.text,
+  );
 
   const handleBeginEdit = useCallback(() => {
     if (hasStructuredAttachments) {
@@ -126,6 +154,17 @@ function PendingPromptRow({ entry, sessionId, onBeginEdit, onDelete }: PendingPr
           }
         />
       </div>
+    );
+  }
+
+  if (reviewFeedbackReference) {
+    return (
+      <ReviewFeedbackSummary
+        reference={reviewFeedbackReference}
+        sessionId={sessionId}
+        state="queued"
+        onOpenSession={onOpenSession}
+      />
     );
   }
 
@@ -175,4 +214,8 @@ function PendingPromptRow({ entry, sessionId, onBeginEdit, onDelete }: PendingPr
       </Button>
     </div>
   );
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

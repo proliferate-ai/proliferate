@@ -2,7 +2,7 @@ import { type ReactNode } from "react";
 import { ChevronDown } from "@/components/ui/icons";
 
 interface ComposerAttachedPanelProps {
-  header: ReactNode;
+  header?: ReactNode;
   children?: ReactNode;
   expanded?: boolean;
   onToggleExpanded?: () => void;
@@ -16,24 +16,26 @@ export function ComposerAttachedPanel({
 }: ComposerAttachedPanelProps) {
   return (
     <div className="relative overflow-clip rounded-t-2xl border-x border-t border-border/80 bg-card/70 backdrop-blur-sm transition-colors">
-      <div className="flex w-full items-center justify-between gap-1.5 py-1.5 pr-2 pl-3 text-sm">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          {header}
-        </div>
-        {onToggleExpanded && (
-          <div className="flex min-w-fit shrink-0 items-center gap-1.5 select-none">
-            <button
-              type="button"
-              onClick={onToggleExpanded}
-              className="text-muted-foreground hover:text-foreground focus-visible:outline-none"
-            >
-              <ChevronDown
-                className={`size-3.5 transition-transform ${expanded ? "" : "-rotate-90"}`}
-              />
-            </button>
+      {header && (
+        <div className="flex w-full items-center justify-between gap-1.5 py-1.5 pr-2 pl-3 text-sm">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            {header}
           </div>
-        )}
-      </div>
+          {onToggleExpanded && (
+            <div className="flex min-w-fit shrink-0 items-center gap-1.5 select-none">
+              <button
+                type="button"
+                onClick={onToggleExpanded}
+                className="text-muted-foreground hover:text-foreground focus-visible:outline-none"
+              >
+                <ChevronDown
+                  className={`size-3.5 transition-transform ${expanded ? "" : "-rotate-90"}`}
+                />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {expanded && children && (
         <div className="overflow-visible">
           {children}

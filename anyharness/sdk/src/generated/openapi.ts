@@ -372,6 +372,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/reviews/{review_run_id}/assignments/{assignment_id}/critique": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_review_assignment_critique"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reviews/{review_run_id}/revision-ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mark_review_revision_ready"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reviews/{review_run_id}/send-feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["send_review_feedback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reviews/{review_run_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["stop_review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions": {
         parameters: {
             query?: never;
@@ -606,6 +670,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["resume_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_session_reviews"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1124,6 +1204,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/plans/{plan_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["start_plan_review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/processes/run": {
         parameters: {
             query?: never;
@@ -1134,6 +1230,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["run_command"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/reviews/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["start_code_review"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1843,6 +1955,9 @@ export interface components {
             args: string[];
             program: string;
         };
+        MarkReviewRevisionReadyRequest: {
+            revisedPlanId?: string | null;
+        };
         McpElicitationBooleanField: components["schemas"]["McpElicitationFieldBase"];
         McpElicitationField: (components["schemas"]["McpElicitationTextField"] & {
             /** @enum {string} */
@@ -2336,6 +2451,13 @@ export interface components {
             /** @enum {string} */
             type: "linkWake";
         } | {
+            feedbackJobId: string;
+            label?: string | null;
+            reviewRoundId: string;
+            reviewRunId: string;
+            /** @enum {string} */
+            type: "reviewFeedback";
+        } | {
             label?: string | null;
             /** @enum {string} */
             type: "system";
@@ -2552,6 +2674,113 @@ export interface components {
             mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][] | null;
             mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
         };
+        ReviewAssignmentDetail: {
+            actualModeId?: string | null;
+            agentKind: string;
+            createdAt: string;
+            critiqueArtifactPath?: string | null;
+            deadlineAt: string;
+            failureDetail?: string | null;
+            failureReason?: string | null;
+            hasCritique: boolean;
+            id: string;
+            modeVerificationStatus: components["schemas"]["ReviewModeVerificationStatus"];
+            modelId?: string | null;
+            pass?: boolean | null;
+            personaId: string;
+            personaLabel: string;
+            requestedModeId?: string | null;
+            reviewRoundId: string;
+            reviewRunId: string;
+            reviewerSessionId?: string | null;
+            sessionLinkId?: string | null;
+            status: components["schemas"]["ReviewAssignmentStatus"];
+            summary?: string | null;
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        ReviewAssignmentStatus: "queued" | "launching" | "reviewing" | "reminded" | "submitted" | "cancelled" | "timed_out" | "system_failed";
+        ReviewCritiqueResponse: {
+            assignmentId: string;
+            critiqueArtifactPath?: string | null;
+            critiqueMarkdown?: string | null;
+            pass?: boolean | null;
+            personaId: string;
+            personaLabel: string;
+            reviewRoundId: string;
+            reviewRunId: string;
+            submittedAt?: string | null;
+            summary?: string | null;
+        };
+        ReviewFeedbackDeliveryDetail: {
+            /** Format: int32 */
+            attemptCount: number;
+            failureDetail?: string | null;
+            failureReason?: string | null;
+            nextAttemptAt?: string | null;
+            state: components["schemas"]["ReviewFeedbackDeliveryState"];
+        };
+        /** @enum {string} */
+        ReviewFeedbackDeliveryState: "pending" | "sending" | "sent" | "failed";
+        /** @enum {string} */
+        ReviewKind: "plan" | "code";
+        /** @enum {string} */
+        ReviewModeVerificationStatus: "pending" | "verified" | "mismatch" | "not_checked";
+        ReviewPersonaRequest: {
+            agentKind: string;
+            label: string;
+            modeId?: string | null;
+            modelId?: string | null;
+            personaId: string;
+            prompt: string;
+        };
+        ReviewRoundDetail: {
+            assignments: components["schemas"]["ReviewAssignmentDetail"][];
+            createdAt: string;
+            failureDetail?: string | null;
+            failureReason?: string | null;
+            feedbackDelivery?: null | components["schemas"]["ReviewFeedbackDeliveryDetail"];
+            feedbackJobId?: string | null;
+            feedbackPromptSentAt?: string | null;
+            id: string;
+            reviewRunId: string;
+            /** Format: int32 */
+            roundNumber: number;
+            status: components["schemas"]["ReviewRoundStatus"];
+            targetPlanId?: string | null;
+            targetPlanSnapshotHash?: string | null;
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        ReviewRoundStatus: "reviewing" | "completing" | "passed" | "feedback_pending" | "feedback_sent" | "completed_with_drift" | "cancelled" | "system_failed";
+        ReviewRunDetail: {
+            activeRoundId?: string | null;
+            autoSendFeedback: boolean;
+            childSessionIds: string[];
+            createdAt: string;
+            /** Format: int32 */
+            currentRoundNumber: number;
+            failureDetail?: string | null;
+            failureReason?: string | null;
+            id: string;
+            kind: components["schemas"]["ReviewKind"];
+            /** Format: int32 */
+            maxRounds: number;
+            parentCanSignalRevisionViaMcp: boolean;
+            parentSessionId: string;
+            rounds: components["schemas"]["ReviewRoundDetail"][];
+            status: components["schemas"]["ReviewRunStatus"];
+            targetPlanId?: string | null;
+            targetPlanSnapshotHash?: string | null;
+            title: string;
+            updatedAt: string;
+            workspaceId: string;
+        };
+        ReviewRunResponse: {
+            run: components["schemas"]["ReviewRunDetail"];
+        };
+        /** @enum {string} */
+        ReviewRunStatus: "reviewing" | "feedback_ready" | "parent_revising" | "waiting_for_revision" | "passed" | "stopped" | "system_failed";
         RunCommandRequest: {
             command: string[];
             cwd?: string | null;
@@ -2770,6 +2999,9 @@ export interface components {
             sessionId: string;
             timestamp: string;
         };
+        SessionReviewsResponse: {
+            reviews: components["schemas"]["ReviewRunDetail"][];
+        };
         SessionStartedEvent: {
             nativeSessionId: string;
             sourceAgentKind: string;
@@ -2833,6 +3065,20 @@ export interface components {
             message?: string | null;
             mode: string;
             reusesUserState: boolean;
+        };
+        StartCodeReviewRequest: {
+            autoSendFeedback?: boolean;
+            /** Format: int32 */
+            maxRounds?: number;
+            parentSessionId: string;
+            reviewers: components["schemas"]["ReviewPersonaRequest"][];
+        };
+        StartPlanReviewRequest: {
+            autoSendFeedback?: boolean;
+            /** Format: int32 */
+            maxRounds?: number;
+            parentSessionId: string;
+            reviewers: components["schemas"]["ReviewPersonaRequest"][];
         };
         StartWorkspaceSetupRequest: {
             baseRef?: string | null;
@@ -3924,6 +4170,140 @@ export interface operations {
             };
         };
     };
+    get_review_assignment_critique: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Review run ID */
+                review_run_id: string;
+                /** @description Review assignment ID */
+                assignment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Review assignment critique */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewCritiqueResponse"];
+                };
+            };
+            /** @description Review or assignment not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    mark_review_revision_ready: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Review run ID */
+                review_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkReviewRevisionReadyRequest"];
+            };
+        };
+        responses: {
+            /** @description Started next review round */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRunResponse"];
+                };
+            };
+            /** @description Revision is not ready or max rounds reached */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    send_review_feedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Review run ID */
+                review_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sent review feedback */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRunResponse"];
+                };
+            };
+            /** @description Review feedback is not ready */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    stop_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Review run ID */
+                review_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stopped review run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRunResponse"];
+                };
+            };
+            /** @description Review run not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     list_sessions: {
         parameters: {
             query?: {
@@ -4506,6 +4886,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_session_reviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session review runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionReviewsResponse"];
                 };
             };
             /** @description Session not found */
@@ -5712,6 +6124,53 @@ export interface operations {
             };
         };
     };
+    start_plan_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+                /** @description Plan ID */
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartPlanReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Started plan review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRunResponse"];
+                };
+            };
+            /** @description Invalid review request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Plan or session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     run_command: {
         parameters: {
             query?: never;
@@ -5757,6 +6216,42 @@ export interface operations {
             };
             /** @description Command execution failed */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    start_code_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartCodeReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Started code review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRunResponse"];
+                };
+            };
+            /** @description Invalid review request */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

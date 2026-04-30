@@ -1,10 +1,35 @@
 import { create } from "zustand";
 import type { ColorMode, ThemePreset } from "@/config/theme";
 import type { OnboardingGoalId } from "@/config/onboarding";
+import {
+  clampRounds,
+  MAX_REVIEWERS_PER_RUN,
+  type ReviewPersonalityPreference,
+  type StoredReviewPersonalitiesByKind,
+} from "@/lib/domain/reviews/review-config";
 import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persistence";
 
 export type BranchPrefixType = "none" | "proliferate" | "github_username";
 export type TurnEndSoundId = "ding" | "gong";
+export type ReviewDefaultKind = "plan" | "code";
+
+export interface ReviewPersonaPreference {
+  id: string;
+  label: string;
+  prompt: string;
+  agentKind: string;
+  modelId: string;
+  modeId: string;
+}
+
+export interface ReviewKindPreference {
+  maxRounds: number;
+  autoSendFeedback: boolean;
+  reviewers: ReviewPersonaPreference[];
+}
+
+export type ReviewDefaultsByKind = Record<ReviewDefaultKind, ReviewKindPreference | null>;
+export type ReviewPersonalitiesByKind = StoredReviewPersonalitiesByKind;
 
 export interface UserPreferences {
   themePreset: ThemePreset;
@@ -21,6 +46,8 @@ export interface UserPreferences {
   subagentsEnabled: boolean;
   coworkWorkspaceDelegationEnabled: boolean;
   cloudRuntimeInputSyncEnabled: boolean;
+  reviewDefaultsByKind: ReviewDefaultsByKind;
+  reviewPersonalitiesByKind: ReviewPersonalitiesByKind;
   onboardingCompletedVersion: number;
   onboardingPrimaryGoalId: OnboardingGoalId | "";
 }
@@ -44,6 +71,14 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
+  reviewDefaultsByKind: {
+    plan: null,
+    code: null,
+  },
+  reviewPersonalitiesByKind: {
+    plan: [],
+    code: [],
+  },
   onboardingCompletedVersion: 0,
   onboardingPrimaryGoalId: "",
 };
@@ -65,6 +100,14 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
+  reviewDefaultsByKind: {
+    plan: null,
+    code: null,
+  },
+  reviewPersonalitiesByKind: {
+    plan: [],
+    code: [],
+  },
   onboardingCompletedVersion: 0,
   onboardingPrimaryGoalId: "",
 };
@@ -142,6 +185,8 @@ async function readLegacyUserPreferences(): Promise<UserPreferences> {
     subagentsEnabled: defaults.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: defaults.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: defaults.cloudRuntimeInputSyncEnabled,
+    reviewDefaultsByKind: defaults.reviewDefaultsByKind,
+    reviewPersonalitiesByKind: defaults.reviewPersonalitiesByKind,
     onboardingCompletedVersion: defaults.onboardingCompletedVersion,
     onboardingPrimaryGoalId: defaults.onboardingPrimaryGoalId,
   };
@@ -161,6 +206,127 @@ function sanitizeDefaultSessionModeByAgentKind(
         : []
     )),
   );
+}
+
+function sanitizeReviewDefaultsByKind(value: unknown): ReviewDefaultsByKind {
+  const defaults: ReviewDefaultsByKind = { plan: null, code: null };
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return defaults;
+  }
+
+  return {
+    plan: sanitizeReviewKindPreference((value as Partial<ReviewDefaultsByKind>).plan),
+    code: sanitizeReviewKindPreference((value as Partial<ReviewDefaultsByKind>).code),
+  };
+}
+
+function sanitizeReviewPersonalitiesByKind(value: unknown): ReviewPersonalitiesByKind {
+  const defaults: ReviewPersonalitiesByKind = { plan: [], code: [] };
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return defaults;
+  }
+
+  const raw = value as Partial<Record<ReviewDefaultKind, unknown>>;
+  return {
+    plan: sanitizeReviewPersonalityPreferences(raw.plan),
+    code: sanitizeReviewPersonalityPreferences(raw.code),
+  };
+}
+
+function sanitizeReviewPersonalityPreferences(value: unknown): ReviewPersonalityPreference[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return dedupeReviewPersonalityPreferences(
+    value.flatMap(sanitizeReviewPersonalityPreference),
+  );
+}
+
+function sanitizeReviewPersonalityPreference(value: unknown): ReviewPersonalityPreference[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return [];
+  }
+  const raw = value as Partial<ReviewPersonalityPreference>;
+  const id = typeof raw.id === "string" ? raw.id.trim() : "";
+  const label = typeof raw.label === "string" ? raw.label.trim() : "";
+  const prompt = typeof raw.prompt === "string" ? raw.prompt.trim() : "";
+  if (!id || !label || !prompt) {
+    return [];
+  }
+  return [{ id, label, prompt }];
+}
+
+function sanitizeReviewKindPreference(value: unknown): ReviewKindPreference | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const raw = value as Partial<ReviewKindPreference>;
+  const maxRounds = typeof raw.maxRounds === "number"
+    && Number.isFinite(raw.maxRounds)
+    ? clampRounds(raw.maxRounds)
+    : 2;
+  const reviewers = Array.isArray(raw.reviewers)
+    ? raw.reviewers.flatMap(sanitizeReviewPersonaPreference)
+    : [];
+  return {
+    maxRounds,
+    autoSendFeedback: typeof raw.autoSendFeedback === "boolean"
+      ? raw.autoSendFeedback
+      : true,
+    reviewers: dedupeReviewPersonaPreferences(reviewers).slice(0, MAX_REVIEWERS_PER_RUN),
+  };
+}
+
+function sanitizeReviewPersonaPreference(value: unknown): ReviewPersonaPreference[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return [];
+  }
+  const raw = value as Partial<ReviewPersonaPreference>;
+  const id = typeof raw.id === "string" && raw.id.trim()
+    ? raw.id.trim()
+    : typeof raw.label === "string" && raw.label.trim()
+      ? raw.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+      : "";
+  const label = typeof raw.label === "string" ? raw.label.trim() : "";
+  const prompt = typeof raw.prompt === "string" ? raw.prompt.trim() : "";
+  if (!id || !label || !prompt) {
+    return [];
+  }
+  return [{
+    id,
+    label,
+    prompt,
+    agentKind: typeof raw.agentKind === "string" ? raw.agentKind.trim() : "",
+    modelId: typeof raw.modelId === "string" ? raw.modelId.trim() : "",
+    modeId: typeof raw.modeId === "string" ? raw.modeId.trim() : "",
+  }];
+}
+
+function dedupeReviewPersonaPreferences(
+  reviewers: ReviewPersonaPreference[],
+): ReviewPersonaPreference[] {
+  const seen = new Set<string>();
+  return reviewers.filter((reviewer) => {
+    if (seen.has(reviewer.id)) {
+      return false;
+    }
+    seen.add(reviewer.id);
+    return true;
+  });
+}
+
+function dedupeReviewPersonalityPreferences(
+  personalities: ReviewPersonalityPreference[],
+): ReviewPersonalityPreference[] {
+  const seen = new Set<string>();
+  return personalities.filter((personality) => {
+    if (seen.has(personality.id)) {
+      return false;
+    }
+    seen.add(personality.id);
+    return true;
+  });
 }
 
 async function readAll(): Promise<UserPreferences> {
@@ -224,6 +390,23 @@ export function migrateUserPreferences(preferences: UserPreferences): {
     changed = true;
   }
 
+  const sanitizedReviewDefaultsByKind = sanitizeReviewDefaultsByKind(next.reviewDefaultsByKind);
+  if (JSON.stringify(sanitizedReviewDefaultsByKind) !== JSON.stringify(next.reviewDefaultsByKind)) {
+    next.reviewDefaultsByKind = sanitizedReviewDefaultsByKind;
+    changed = true;
+  }
+
+  const sanitizedReviewPersonalitiesByKind = sanitizeReviewPersonalitiesByKind(
+    next.reviewPersonalitiesByKind,
+  );
+  if (
+    JSON.stringify(sanitizedReviewPersonalitiesByKind)
+    !== JSON.stringify(next.reviewPersonalitiesByKind)
+  ) {
+    next.reviewPersonalitiesByKind = sanitizedReviewPersonalitiesByKind;
+    changed = true;
+  }
+
   const sanitizedDefaultSessionModeByAgentKind = sanitizeDefaultSessionModeByAgentKind(
     next.defaultSessionModeByAgentKind,
   );
@@ -260,6 +443,8 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
     subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: state.cloudRuntimeInputSyncEnabled,
+    reviewDefaultsByKind: state.reviewDefaultsByKind,
+    reviewPersonalitiesByKind: state.reviewPersonalitiesByKind,
     onboardingCompletedVersion: state.onboardingCompletedVersion,
     onboardingPrimaryGoalId: state.onboardingPrimaryGoalId,
   };

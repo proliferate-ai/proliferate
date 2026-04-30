@@ -93,6 +93,34 @@ export function resolveVisibleChatSessionIds(args: {
   };
 }
 
+export function includeVisibleLinkedChildSessionIds(args: {
+  visibleSessionIds: string[];
+  linkedChildrenByParentSessionId: ReadonlyMap<string, readonly string[]>;
+  recentlyHiddenIds?: readonly string[];
+}): string[] {
+  const hiddenSet = new Set(args.recentlyHiddenIds ?? []);
+  const next: string[] = [];
+  const nextSet = new Set<string>();
+
+  function push(sessionId: string) {
+    if (!nextSet.has(sessionId)) {
+      next.push(sessionId);
+      nextSet.add(sessionId);
+    }
+  }
+
+  for (const sessionId of args.visibleSessionIds) {
+    push(sessionId);
+    for (const childSessionId of args.linkedChildrenByParentSessionId.get(sessionId) ?? []) {
+      if (!hiddenSet.has(childSessionId)) {
+        push(childSessionId);
+      }
+    }
+  }
+
+  return next;
+}
+
 export function enforceParentAnchors(args: {
   visibleIds: string[];
   childToParent: Map<string, string>;

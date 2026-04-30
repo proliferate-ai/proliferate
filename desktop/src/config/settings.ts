@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import {
   Blocks,
+  Brain,
   CircleQuestion,
   CircleUser,
   CloudIcon,
@@ -15,6 +16,7 @@ import type { IconProps } from "@/components/ui/icons";
 export const SETTINGS_CONTENT_SECTIONS = [
   "agents",
   "defaults",
+  "review",
   "appearance",
   "account",
   "keyboard",
@@ -47,6 +49,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     items: [
       { kind: "section", id: "agents", label: "Agents", icon: Blocks },
       { kind: "section", id: "defaults", label: "Defaults", icon: Shield },
+      { kind: "section", id: "review", label: "Review", icon: Brain },
     ],
   },
   {

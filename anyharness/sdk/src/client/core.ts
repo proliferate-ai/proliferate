@@ -11,6 +11,7 @@ import { ProvidersClient } from "./providers.js";
 import { PullRequestsClient } from "./pull-requests.js";
 import { RepoRootsClient } from "./repo-roots.js";
 import { ReplayClient } from "./replay.js";
+import { ReviewsClient } from "./reviews.js";
 import { RuntimeClient } from "./runtime.js";
 import { SessionsClient } from "./sessions.js";
 import { TerminalsClient } from "./terminals.js";
@@ -154,6 +155,7 @@ export class AnyHarnessClient {
   readonly providers: ProvidersClient;
   readonly repoRoots: RepoRootsClient;
   readonly replay: ReplayClient;
+  readonly reviews: ReviewsClient;
   readonly workspaces: WorkspacesClient;
   readonly cowork: CoworkClient;
   readonly files: FilesClient;
@@ -173,6 +175,7 @@ export class AnyHarnessClient {
     this.providers = new ProvidersClient(transport);
     this.repoRoots = new RepoRootsClient(transport);
     this.replay = new ReplayClient(transport);
+    this.reviews = new ReviewsClient(transport);
     this.workspaces = new WorkspacesClient(transport);
     this.cowork = new CoworkClient(transport);
     this.files = new FilesClient(transport);

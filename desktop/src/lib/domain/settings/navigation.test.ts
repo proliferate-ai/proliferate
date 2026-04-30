@@ -40,6 +40,16 @@ describe("settings navigation", () => {
     });
   });
 
+  it("resolves the review settings section", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "review",
+      repositories: [],
+    })).toEqual({
+      activeSection: "review",
+      activeRepoSourceRoot: null,
+    });
+  });
+
   it("redirects legacy cloudRepo links when exactly one local repo matches", () => {
     expect(resolveSettingsSelection({
       rawSection: "cloudRepo",

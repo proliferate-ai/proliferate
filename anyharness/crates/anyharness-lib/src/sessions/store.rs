@@ -4,7 +4,7 @@ use super::model::{
     PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentKind, PromptAttachmentRecord,
     PromptAttachmentState, SessionBackgroundWorkRecord, SessionBackgroundWorkState,
     SessionBackgroundWorkTrackerKind, SessionEventRecord, SessionLiveConfigSnapshotRecord,
-    SessionRawNotificationRecord, SessionRecord,
+    SessionMcpBindingPolicy, SessionRawNotificationRecord, SessionRecord,
 };
 use crate::origin::{decode_origin_json, encode_origin_json};
 use crate::persistence::Db;
@@ -41,6 +41,39 @@ impl SessionStore {
                 "DELETE FROM session_background_work WHERE session_id = ?1",
                 [id],
             )?;
+            conn.execute(
+                "DELETE FROM review_feedback_jobs
+                 WHERE review_run_id IN (
+                    SELECT id FROM review_runs
+                    WHERE parent_session_id = ?1
+                 )",
+                [id],
+            )?;
+            conn.execute(
+                "DELETE FROM review_run_candidate_plans
+                 WHERE review_run_id IN (
+                    SELECT id FROM review_runs
+                    WHERE parent_session_id = ?1
+                 )",
+                [id],
+            )?;
+            conn.execute(
+                "DELETE FROM review_assignments
+                 WHERE review_run_id IN (
+                    SELECT id FROM review_runs
+                    WHERE parent_session_id = ?1
+                 ) OR reviewer_session_id = ?1",
+                [id],
+            )?;
+            conn.execute(
+                "DELETE FROM review_rounds
+                 WHERE review_run_id IN (
+                    SELECT id FROM review_runs
+                    WHERE parent_session_id = ?1
+                 )",
+                [id],
+            )?;
+            conn.execute("DELETE FROM review_runs WHERE parent_session_id = ?1", [id])?;
             conn.execute(
                 "DELETE FROM session_link_wake_schedules
                  WHERE session_link_id IN (
@@ -1093,6 +1126,9 @@ fn map_session(row: &rusqlite::Row) -> rusqlite::Result<SessionRecord> {
         dismissed_at: row.get("dismissed_at")?,
         mcp_bindings_ciphertext: row.get("mcp_bindings_ciphertext")?,
         mcp_binding_summaries_json: row.get("mcp_binding_summaries_json")?,
+        mcp_binding_policy: SessionMcpBindingPolicy::parse(
+            &row.get::<_, String>("mcp_binding_policy")?,
+        ),
         system_prompt_append: row.get("system_prompt_append")?,
         subagents_enabled: row.get::<_, i64>("subagents_enabled")? != 0,
         origin: decode_origin_json("sessions", &id, origin_json),
@@ -1183,8 +1219,9 @@ fn insert_session_row(conn: &rusqlite::Connection, record: &SessionRecord) -> ru
          requested_model_id, current_model_id, requested_mode_id, current_mode_id,
          title, thinking_level_id, thinking_budget_tokens, status, created_at,
          updated_at, last_prompt_at, closed_at, dismissed_at, mcp_bindings_ciphertext,
-         mcp_binding_summaries_json, system_prompt_append, subagents_enabled, origin_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
+         mcp_binding_summaries_json, mcp_binding_policy, system_prompt_append,
+         subagents_enabled, origin_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
         params![
             record.id,
             record.workspace_id,
@@ -1205,6 +1242,7 @@ fn insert_session_row(conn: &rusqlite::Connection, record: &SessionRecord) -> ru
             record.dismissed_at,
             record.mcp_bindings_ciphertext,
             record.mcp_binding_summaries_json,
+            record.mcp_binding_policy.as_str(),
             record.system_prompt_append,
             if record.subagents_enabled { 1 } else { 0 },
             origin_json,
@@ -1430,6 +1468,7 @@ mod tests {
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
+            mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
             origin: None,

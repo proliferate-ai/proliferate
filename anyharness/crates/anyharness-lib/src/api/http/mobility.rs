@@ -695,6 +695,7 @@ fn from_contract_session_record(
         // MCP bindings are workspace-local encrypted state; sessions rebind after handoff.
         mcp_bindings_ciphertext: None,
         mcp_binding_summaries_json: None,
+        mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
         system_prompt_append: record.system_prompt_append,
         subagents_enabled: record.subagents_enabled,
         origin: record

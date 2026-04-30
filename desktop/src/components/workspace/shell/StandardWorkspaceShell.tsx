@@ -2,6 +2,8 @@ import { HomeNextScreen } from "@/components/home/HomeNextScreen";
 import { CommitDialog } from "@/components/workspace/git/CommitDialog";
 import { PullRequestDialog } from "@/components/workspace/git/PullRequestDialog";
 import { PushDialog } from "@/components/workspace/git/PushDialog";
+import { ConnectedReviewCritiqueDialog } from "@/components/workspace/reviews/ConnectedReviewCritiqueDialog";
+import { ConnectedReviewSetupDialog } from "@/components/workspace/reviews/ConnectedReviewSetupDialog";
 import { WorkspaceFilePalette } from "@/components/workspace/files/palette/WorkspaceFilePalette";
 import { GlobalHeader } from "@/components/workspace/shell/GlobalHeader";
 import { WorkspaceContentView } from "@/components/workspace/shell/WorkspaceContentView";
@@ -224,6 +226,8 @@ export function StandardWorkspaceShell() {
                       open={prOpen}
                       onClose={actions.onPrClose}
                     />
+                    <ConnectedReviewSetupDialog />
+                    <ConnectedReviewCritiqueDialog />
                     <WorkspaceFilePalette
                       open={filePaletteOpen}
                       onClose={actions.onFilePaletteClose}

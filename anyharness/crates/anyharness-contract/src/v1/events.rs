@@ -210,6 +210,16 @@ pub enum PromptProvenance {
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
+    ReviewFeedback {
+        #[serde(rename = "reviewRunId")]
+        review_run_id: String,
+        #[serde(rename = "reviewRoundId")]
+        review_round_id: String,
+        #[serde(rename = "feedbackJobId")]
+        feedback_job_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
     System {
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,

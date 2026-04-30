@@ -551,6 +551,7 @@ impl CoworkRuntime {
             None,
             mcp_servers,
             mcp_binding_summaries,
+            crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             false,
             OriginContext::cowork(),
         ) {
@@ -1161,6 +1162,7 @@ impl CoworkRuntime {
             None,
             Vec::new(),
             None,
+            crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             false,
             OriginContext::cowork(),
         )
