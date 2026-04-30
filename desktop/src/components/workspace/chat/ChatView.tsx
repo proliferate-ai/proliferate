@@ -10,6 +10,7 @@ import { NoWorkspaceState } from "@/components/workspace/chat/surface/NoWorkspac
 import { SessionTranscriptPane } from "@/components/workspace/chat/surface/SessionTranscriptPane";
 import { WorkspaceMobilityOverlay } from "@/components/workspace/chat/surface/WorkspaceMobilityOverlay";
 import { type ChatSurfaceState, useChatSurfaceState } from "@/hooks/chat/use-chat-surface-state";
+import { useChatDockInset } from "@/hooks/chat/use-chat-dock-inset";
 import { useChatSelectionBoundary } from "@/hooks/chat/use-chat-selection-boundary";
 import { useCloudWorkspacePolling } from "@/hooks/chat/use-cloud-workspace-polling";
 import { useComposerDockSlots } from "@/hooks/chat/use-composer-dock-slots";
@@ -18,12 +19,22 @@ import { useSelectedCloudRuntimeRehydration } from "@/hooks/workspaces/use-selec
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useWorkspaceMobilityLifecycle } from "@/hooks/workspaces/mobility/use-workspace-mobility-lifecycle";
 
-function ChatContent({ mode }: { mode: ChatSurfaceState }): JSX.Element | null {
+function ChatContent({
+  dockSafeAreaPx,
+  mode,
+  scrollBottomInsetPx,
+  stickyBottomInsetPx,
+}: {
+  dockSafeAreaPx: number;
+  mode: ChatSurfaceState;
+  scrollBottomInsetPx: number;
+  stickyBottomInsetPx: number;
+}): JSX.Element | null {
   switch (mode.kind) {
     case "no-workspace":
-      return <NoWorkspaceState />;
+      return <NoWorkspaceState bottomInsetPx={dockSafeAreaPx} />;
     case "launch-intent":
-      return <ChatLaunchIntentPane />;
+      return <ChatLaunchIntentPane bottomInsetPx={scrollBottomInsetPx} />;
     // workspace-status and session-loading share the same canvas — both
     // render ChatLoadingHero so the loading → resolve handoff plays even
     // when the user enters via the workspace-status path (cloud runtime
@@ -37,18 +48,18 @@ function ChatContent({ mode }: { mode: ChatSurfaceState }): JSX.Element | null {
     case "workspace-status":
     case "session-loading":
       return (
-        <ChatPreMessageCanvas>
+        <ChatPreMessageCanvas bottomInsetPx={dockSafeAreaPx}>
           <ChatLoadingHero />
         </ChatPreMessageCanvas>
       );
     case "session-empty":
       return (
-        <ChatPreMessageCanvas>
+        <ChatPreMessageCanvas bottomInsetPx={dockSafeAreaPx}>
           <ChatReadyHero />
         </ChatPreMessageCanvas>
       );
     case "session-transcript":
-      return <SessionTranscriptPane />;
+      return <SessionTranscriptPane bottomInsetPx={stickyBottomInsetPx} />;
   }
 }
 
@@ -71,6 +82,13 @@ export function ChatView() {
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const isSessionMode = shouldShowSessionInputChrome(mode);
   const composerDockSlots = useComposerDockSlots();
+  const {
+    dockRef,
+    dockSafeAreaPx,
+    lowerBackdropTopPx,
+    scrollBottomInsetPx,
+    stickyBottomInsetPx,
+  } = useChatDockInset();
 
   useCloudWorkspacePolling();
   useSelectedCloudRuntimeRehydration(selectedCloudRuntime);
@@ -92,16 +110,24 @@ export function ChatView() {
   return (
     <div className="chat-selection-root relative flex h-full min-h-0 flex-1 flex-col select-none overflow-hidden">
       <div className="flex flex-1 min-h-0 flex-col">
-        <ChatContent mode={mode} />
+        <ChatContent
+          dockSafeAreaPx={dockSafeAreaPx}
+          mode={mode}
+          scrollBottomInsetPx={scrollBottomInsetPx}
+          stickyBottomInsetPx={stickyBottomInsetPx}
+        />
       </div>
       <WorkspaceMobilityOverlay />
       <ChatComposerDock
+        ref={dockRef}
         backdrop={isSessionMode}
         contextSlot={composerDockSlots.contextSlot}
         queueSlot={composerDockSlots.queueSlot}
         interactionSlot={composerDockSlots.interactionSlot}
         delegationSlot={composerDockSlots.delegationSlot}
         footerSlot={<WorkspaceMobilityFooterRow />}
+        lowerBackdropTopPx={lowerBackdropTopPx}
+        shellClassName="pointer-events-none absolute inset-x-0 bottom-0"
         data-telemetry-block
         data-focus-zone="chat"
       >

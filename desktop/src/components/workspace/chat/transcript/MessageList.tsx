@@ -41,6 +41,11 @@ import {
   Sparkles,
   Terminal,
 } from "@/components/ui/icons";
+import {
+  CHAT_COLUMN_CLASSNAME,
+  CHAT_SCROLL_BASE_BOTTOM_PADDING_PX,
+  CHAT_SURFACE_GUTTER_CLASSNAME,
+} from "@/config/chat-layout";
 import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
 import { useMessageListScroll } from "@/hooks/chat/use-message-list-scroll";
 import { useOpenCoworkArtifact } from "@/hooks/cowork/use-open-cowork-artifact";
@@ -144,6 +149,7 @@ interface MessageListProps {
   optimisticPrompt: PendingPromptEntry | null;
   transcript: TranscriptState;
   sessionViewState: SessionViewState;
+  bottomInsetPx?: number;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
   onOpenSession?: (sessionId: string) => void;
 }
@@ -154,6 +160,7 @@ export function MessageList({
   optimisticPrompt,
   transcript,
   sessionViewState,
+  bottomInsetPx = CHAT_SCROLL_BASE_BOTTOM_PADDING_PX,
   onHandOffPlanToNewSession,
   onOpenSession,
 }: MessageListProps) {
@@ -273,6 +280,7 @@ export function MessageList({
         )
       : null;
   const { scrollRef, contentRef } = useMessageListScroll({
+    bottomInsetPx,
     totalItems,
     pendingPromptText: visibleOptimisticPrompt?.text ?? null,
     isSessionBusy: sessionViewState === "working" || sessionViewState === "needs_input",
@@ -285,129 +293,135 @@ export function MessageList({
         <TranscriptSessionIdContext.Provider value={activeSessionId}>
           <TranscriptOpenSessionContext.Provider value={onOpenSession ?? null}>
             <AutoHideScrollArea className="h-full" ref={scrollRef}>
-            <div ref={contentRef} className="max-w-3xl mx-auto pt-4 pb-10">
-              {visibleTurnIds.map((turnId, turnIdx) => {
-                const turn = transcript.turnsById[turnId];
-                if (!turn) return null;
-                const isLatestTurn = turnId === latestTurnId;
-                const isLatestTurnInProgress =
-                  isLatestTurn && !turn.completedAt;
-                const hasFileBadges = turn.fileBadges.length > 0;
-                const presentation = isLatestTurn && latestTurnPresentation
-                  ? latestTurnPresentation
-                  : buildTurnPresentation(turn, transcript);
-                const liveExplorationBlock = isLatestTurn ? latestLiveExplorationBlock : null;
-                const tailAssistantProseRootId = findTailAssistantProseRootId(
-                  presentation,
-                  transcript,
-                );
-                const tailAssistantCopyContent = getAssistantProseContent(
-                  tailAssistantProseRootId,
-                  transcript,
-                );
-                // Hide the trailing indicator only while the assistant prose item
-                // itself is actively streaming. If Codex closes the prose item but
-                // keeps working internally, the trailing indicator should return.
-                const trailingStatus = isLatestTurn
-                  ? latestLiveStatus
-                  : shouldAllowTurnTrailingStatus({
-                      turn,
+              <div
+                ref={contentRef}
+                className={`${CHAT_SURFACE_GUTTER_CLASSNAME} pt-4`}
+                style={{ paddingBottom: bottomInsetPx }}
+              >
+                <div className={CHAT_COLUMN_CLASSNAME}>
+                  {visibleTurnIds.map((turnId, turnIdx) => {
+                    const turn = transcript.turnsById[turnId];
+                    if (!turn) return null;
+                    const isLatestTurn = turnId === latestTurnId;
+                    const isLatestTurnInProgress =
+                      isLatestTurn && !turn.completedAt;
+                    const hasFileBadges = turn.fileBadges.length > 0;
+                    const presentation = isLatestTurn && latestTurnPresentation
+                      ? latestTurnPresentation
+                      : buildTurnPresentation(turn, transcript);
+                    const liveExplorationBlock = isLatestTurn ? latestLiveExplorationBlock : null;
+                    const tailAssistantProseRootId = findTailAssistantProseRootId(
+                      presentation,
                       transcript,
-                      isLatestTurnInProgress,
-                    })
-                      ? resolveTurnTrailingStatus(
-                          turn.startedAt,
-                          sessionViewState,
-                          latestTransientStatusText(turn, transcript),
-                        )
-                      : null;
-                const shouldReserveTurnAssistantActionSlot =
-                  isLatestTurnInProgress
-                  && !!tailAssistantCopyContent
-                  && !trailingStatus
-                  && lastTopLevelItemIsAssistantProseWithText(turn, transcript);
-                const trailingStatusClassName = tailAssistantCopyContent
-                  ? undefined
-                  : TRAILING_STATUS_MIN_HEIGHT;
+                    );
+                    const tailAssistantCopyContent = getAssistantProseContent(
+                      tailAssistantProseRootId,
+                      transcript,
+                    );
+                    // Hide the trailing indicator only while the assistant prose item
+                    // itself is actively streaming. If Codex closes the prose item but
+                    // keeps working internally, the trailing indicator should return.
+                    const trailingStatus = isLatestTurn
+                      ? latestLiveStatus
+                      : shouldAllowTurnTrailingStatus({
+                          turn,
+                          transcript,
+                          isLatestTurnInProgress,
+                        })
+                          ? resolveTurnTrailingStatus(
+                              turn.startedAt,
+                              sessionViewState,
+                              latestTransientStatusText(turn, transcript),
+                            )
+                          : null;
+                    const shouldReserveTurnAssistantActionSlot =
+                      isLatestTurnInProgress
+                      && !!tailAssistantCopyContent
+                      && !trailingStatus
+                      && lastTopLevelItemIsAssistantProseWithText(turn, transcript);
+                    const trailingStatusClassName = tailAssistantCopyContent
+                      ? undefined
+                      : TRAILING_STATUS_MIN_HEIGHT;
 
-                return (
-                  <TurnShell key={turnId} isFirst={turnIdx === 0}>
-                    <div className={`flex flex-col gap-2 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
-                      <TurnItemSequence
-                        turn={turn}
-                        transcript={transcript}
-                        isTurnComplete={!!turn.completedAt}
-                        presentation={presentation}
-                        forceExpandedCollapsedActionBlockId={liveExplorationBlock?.blockId ?? null}
-                        tailAssistantProseRootId={tailAssistantProseRootId}
-                        workspaceId={selectedWorkspaceId}
-                        onOpenArtifact={openArtifact}
-                        subagentBrailleColors={subagentBrailleColors}
-                        onHandOffPlanToNewSession={onHandOffPlanToNewSession}
-                      />
-                      {turn.completedAt && hasFileBadges && (
-                        <TurnDiffPanel
-                          turn={turn}
-                          transcript={transcript}
-                          onOpenFile={(filePath) => void openFileDiff(filePath)}
-                        />
-                      )}
-                      <TurnAssistantActionRow
-                        content={tailAssistantCopyContent}
-                        showCopyButton={!!turn.completedAt}
-                        reserveSlot={shouldReserveTurnAssistantActionSlot}
-                      />
-                      {trailingStatus && (
-                        <div className={trailingStatusClassName}>{trailingStatus}</div>
-                      )}
-                    </div>
-                  </TurnShell>
-                );
-              })}
-              {visibleOptimisticPrompt && (
-                <TurnShell key="pending-prompt" isFirst={visibleTurnIds.length === 0}>
-                  <div className="flex flex-col gap-2">
-                    {(() => {
-                      const reviewFeedbackReference = resolveReviewFeedbackPromptReference(
-                        visibleOptimisticPrompt.promptProvenance,
-                        visibleOptimisticPrompt.text,
-                      );
-                      if (isSubagentWakeProvenance(visibleOptimisticPrompt.promptProvenance)) {
-                        return (
-                          <div className="flex justify-end">
-                            <SubagentWakeBadge
-                              label={visibleOptimisticPrompt.promptProvenance.label ?? null}
-                              color={resolveSubagentColor(visibleOptimisticPrompt.promptProvenance.sessionLinkId)}
-                            />
-                          </div>
-                        );
-                      }
-                      if (reviewFeedbackReference) {
-                        return (
-                          <ReviewFeedbackSummary
-                            reference={reviewFeedbackReference}
-                            sessionId={activeSessionId}
-                            state="queued"
-                            onOpenSession={onOpenSession}
+                    return (
+                      <TurnShell key={turnId} isFirst={turnIdx === 0}>
+                        <div className={`flex flex-col gap-2 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
+                          <TurnItemSequence
+                            turn={turn}
+                            transcript={transcript}
+                            isTurnComplete={!!turn.completedAt}
+                            presentation={presentation}
+                            forceExpandedCollapsedActionBlockId={liveExplorationBlock?.blockId ?? null}
+                            tailAssistantProseRootId={tailAssistantProseRootId}
+                            workspaceId={selectedWorkspaceId}
+                            onOpenArtifact={openArtifact}
+                            subagentBrailleColors={subagentBrailleColors}
+                            onHandOffPlanToNewSession={onHandOffPlanToNewSession}
                           />
-                        );
-                      }
-                      return (
-                        <UserMessage
-                          sessionId={activeSessionId}
-                          content={visibleOptimisticPrompt.text}
-                          contentParts={visibleOptimisticPrompt.contentParts}
-                          showCopyButton
-                        />
-                      );
-                    })()}
-                    {optimisticPromptTrailingStatus && (
-                      <div className={TRAILING_STATUS_MIN_HEIGHT}>{optimisticPromptTrailingStatus}</div>
-                    )}
-                  </div>
-                </TurnShell>
-              )}
-            </div>
+                          {turn.completedAt && hasFileBadges && (
+                            <TurnDiffPanel
+                              turn={turn}
+                              transcript={transcript}
+                              onOpenFile={(filePath) => void openFileDiff(filePath)}
+                            />
+                          )}
+                          <TurnAssistantActionRow
+                            content={tailAssistantCopyContent}
+                            showCopyButton={!!turn.completedAt}
+                            reserveSlot={shouldReserveTurnAssistantActionSlot}
+                          />
+                          {trailingStatus && (
+                            <div className={trailingStatusClassName}>{trailingStatus}</div>
+                          )}
+                        </div>
+                      </TurnShell>
+                    );
+                  })}
+                  {visibleOptimisticPrompt && (
+                    <TurnShell key="pending-prompt" isFirst={visibleTurnIds.length === 0}>
+                      <div className="flex flex-col gap-2">
+                        {(() => {
+                          const reviewFeedbackReference = resolveReviewFeedbackPromptReference(
+                            visibleOptimisticPrompt.promptProvenance,
+                            visibleOptimisticPrompt.text,
+                          );
+                          if (isSubagentWakeProvenance(visibleOptimisticPrompt.promptProvenance)) {
+                            return (
+                              <div className="flex justify-end">
+                                <SubagentWakeBadge
+                                  label={visibleOptimisticPrompt.promptProvenance.label ?? null}
+                                  color={resolveSubagentColor(visibleOptimisticPrompt.promptProvenance.sessionLinkId)}
+                                />
+                              </div>
+                            );
+                          }
+                          if (reviewFeedbackReference) {
+                            return (
+                              <ReviewFeedbackSummary
+                                reference={reviewFeedbackReference}
+                                sessionId={activeSessionId}
+                                state="queued"
+                                onOpenSession={onOpenSession}
+                              />
+                            );
+                          }
+                          return (
+                            <UserMessage
+                              sessionId={activeSessionId}
+                              content={visibleOptimisticPrompt.text}
+                              contentParts={visibleOptimisticPrompt.contentParts}
+                              showCopyButton
+                            />
+                          );
+                        })()}
+                        {optimisticPromptTrailingStatus && (
+                          <div className={TRAILING_STATUS_MIN_HEIGHT}>{optimisticPromptTrailingStatus}</div>
+                        )}
+                      </div>
+                    </TurnShell>
+                  )}
+                </div>
+              </div>
             </AutoHideScrollArea>
           </TranscriptOpenSessionContext.Provider>
         </TranscriptSessionIdContext.Provider>
