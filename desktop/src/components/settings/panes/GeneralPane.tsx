@@ -12,6 +12,7 @@ import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { ProviderIcon } from "@/components/ui/icons";
 import { Switch } from "@/components/ui/Switch";
 import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
+import { APP_ROUTES } from "@/config/app-routes";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
 import { useAvailableEditors } from "@/hooks/settings/use-available-editors";
 import { resolveEffectiveChatDefaults } from "@/lib/domain/chat/preference-resolvers";
@@ -52,7 +53,7 @@ export function GeneralPane() {
     defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
     defaultOpenInTargetId: state.defaultOpenInTargetId,
     branchPrefixType: state.branchPrefixType,
-    powersInCodingSessionsEnabled: state.powersInCodingSessionsEnabled,
+    pluginsInCodingSessionsEnabled: state.pluginsInCodingSessionsEnabled,
     subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
     set: state.set,
@@ -262,24 +263,24 @@ export function GeneralPane() {
 
         <SettingsCard>
           <SettingsCardRow
-            label="Use Powers in coding sessions"
-            description="New coding sessions receive enabled compatible Powers at launch. Existing live sessions need a restart."
+            label="Use plugins in coding sessions"
+            description="New coding sessions receive enabled compatible plugins at launch. Existing live sessions need a restart."
           >
             <Switch
-              checked={preferences.powersInCodingSessionsEnabled}
-              onChange={(value) => preferences.set("powersInCodingSessionsEnabled", value)}
+              checked={preferences.pluginsInCodingSessionsEnabled}
+              onChange={(value) => preferences.set("pluginsInCodingSessionsEnabled", value)}
             />
           </SettingsCardRow>
           <SettingsCardRow
-            label="Powers setup"
-            description="Connector setup, auth, and enablement stay on the Powers page."
+            label="Plugins setup"
+            description="Connector setup, auth, and enablement stay on the Plugins page."
           >
             <Button
               type="button"
               variant="outline"
-              onClick={() => navigate("/powers")}
+              onClick={() => navigate(APP_ROUTES.plugins)}
             >
-              Open Powers
+              Open Plugins
             </Button>
           </SettingsCardRow>
         </SettingsCard>

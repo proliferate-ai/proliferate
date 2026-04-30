@@ -16,7 +16,7 @@ export interface SessionModePresentation {
 }
 
 const FALLBACK_PRESENTATION: SessionModePresentation = {
-  icon: "circleQuestion",
+  icon: "unknown",
   tone: "neutral",
   shortLabel: null,
 };

@@ -78,8 +78,8 @@ export function useSessionRuntimeActions() {
     mountSubagentChildSession,
     mountSubagentChildrenFromEvents,
   } = useLinkedSessionMounting();
-  const powersInCodingSessionsEnabled = useUserPreferencesStore(
-    (state) => state.powersInCodingSessionsEnabled,
+  const pluginsInCodingSessionsEnabled = useUserPreferencesStore(
+    (state) => state.pluginsInCodingSessionsEnabled,
   );
 
   const persistReconciledModePreferences = useCallback((
@@ -300,7 +300,7 @@ export function useSessionRuntimeActions() {
         }) === "running"
       ) {
         session = await resumeSession(sessionId, {
-          powersInCodingSessionsEnabled,
+          pluginsInCodingSessionsEnabled,
           requestHeaders: options?.requestHeaders,
         });
         applySessionSummary(sessionId, session, workspaceId);
@@ -308,7 +308,7 @@ export function useSessionRuntimeActions() {
     } catch {
       // Session fetch failed.
     }
-  }, [applySessionSummary, powersInCodingSessionsEnabled]);
+  }, [applySessionSummary, pluginsInCodingSessionsEnabled]);
 
   const closeSessionSlotStream = useCallback((sessionId: string) => {
     clearSessionReconnectTimer(sessionId);

@@ -42,7 +42,7 @@ export interface UserPreferences {
   turnEndSoundEnabled: boolean;
   turnEndSoundId: TurnEndSoundId;
   transparentChromeEnabled: boolean;
-  powersInCodingSessionsEnabled: boolean;
+  pluginsInCodingSessionsEnabled: boolean;
   subagentsEnabled: boolean;
   coworkWorkspaceDelegationEnabled: boolean;
   cloudRuntimeInputSyncEnabled: boolean;
@@ -67,7 +67,7 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   turnEndSoundEnabled: false,
   turnEndSoundId: "ding",
   transparentChromeEnabled: false,
-  powersInCodingSessionsEnabled: false,
+  pluginsInCodingSessionsEnabled: false,
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
@@ -96,7 +96,7 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   // Existing persisted records keep the legacy transparent chrome default;
   // only fresh installs use the opaque NEW_USER_DEFAULTS value.
   transparentChromeEnabled: true,
-  powersInCodingSessionsEnabled: false,
+  pluginsInCodingSessionsEnabled: false,
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
@@ -130,6 +130,10 @@ const LEGACY_CLAUDE_MODEL_IDS: Record<string, string> = {
 type LegacyThemeRecord = {
   themePreset?: ThemePreset;
   colorMode?: ColorMode;
+};
+
+type LegacyUserPreferencesRecord = Partial<UserPreferences> & {
+  powersInCodingSessionsEnabled?: unknown;
 };
 
 function readLegacyThemeRecord(): LegacyThemeRecord {
@@ -181,7 +185,7 @@ async function readLegacyUserPreferences(): Promise<UserPreferences> {
     turnEndSoundEnabled: defaults.turnEndSoundEnabled,
     turnEndSoundId: defaults.turnEndSoundId,
     transparentChromeEnabled: defaults.transparentChromeEnabled,
-    powersInCodingSessionsEnabled: defaults.powersInCodingSessionsEnabled,
+    pluginsInCodingSessionsEnabled: defaults.pluginsInCodingSessionsEnabled,
     subagentsEnabled: defaults.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: defaults.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: defaults.cloudRuntimeInputSyncEnabled,
@@ -329,23 +333,29 @@ function dedupeReviewPersonalityPreferences(
   });
 }
 
-async function readAll(): Promise<UserPreferences> {
-  const persisted = await readPersistedValue<UserPreferences>(USER_PREFERENCES_KEY);
+async function readAll(): Promise<UserPreferences | LegacyUserPreferencesRecord> {
+  const persisted = await readPersistedValue<LegacyUserPreferencesRecord>(USER_PREFERENCES_KEY);
   if (persisted) {
-    return {
-      ...PERSISTED_RECORD_BACKFILL,
-      ...persisted,
-    };
+    return persisted;
   }
 
   return readLegacyUserPreferences();
 }
 
-export function migrateUserPreferences(preferences: UserPreferences): {
+export function migrateUserPreferences(preferences: UserPreferences | LegacyUserPreferencesRecord): {
   preferences: UserPreferences;
   changed: boolean;
 } {
-  const next = { ...preferences };
+  const rawPreferences = preferences as LegacyUserPreferencesRecord;
+  const legacyPowersPreference = rawPreferences.powersInCodingSessionsEnabled;
+  const hasCurrentPluginsPreference =
+    typeof rawPreferences.pluginsInCodingSessionsEnabled === "boolean";
+  const hasLegacyPowersPreference =
+    typeof legacyPowersPreference === "boolean";
+  const next = {
+    ...PERSISTED_RECORD_BACKFILL,
+    ...preferences,
+  } as UserPreferences & LegacyUserPreferencesRecord;
   let changed = false;
 
   if (next.defaultChatAgentKind === "claude") {
@@ -370,8 +380,17 @@ export function migrateUserPreferences(preferences: UserPreferences): {
     changed = true;
   }
 
-  if (typeof next.powersInCodingSessionsEnabled !== "boolean") {
-    next.powersInCodingSessionsEnabled = PERSISTED_RECORD_BACKFILL.powersInCodingSessionsEnabled;
+  if (!hasCurrentPluginsPreference) {
+    // "Powers" was the old product name. Read the legacy persisted key once,
+    // then write future records with the current "plugins" store field.
+    next.pluginsInCodingSessionsEnabled =
+      hasLegacyPowersPreference
+        ? legacyPowersPreference
+        : PERSISTED_RECORD_BACKFILL.pluginsInCodingSessionsEnabled;
+    changed = true;
+  }
+  if ("powersInCodingSessionsEnabled" in rawPreferences) {
+    delete next.powersInCodingSessionsEnabled;
     changed = true;
   }
 
@@ -439,7 +458,7 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
     turnEndSoundEnabled: state.turnEndSoundEnabled,
     turnEndSoundId: state.turnEndSoundId,
     transparentChromeEnabled: state.transparentChromeEnabled,
-    powersInCodingSessionsEnabled: state.powersInCodingSessionsEnabled,
+    pluginsInCodingSessionsEnabled: state.pluginsInCodingSessionsEnabled,
     subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: state.cloudRuntimeInputSyncEnabled,

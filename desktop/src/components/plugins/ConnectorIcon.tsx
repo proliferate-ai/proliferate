@@ -11,7 +11,9 @@ import notionIcon from "@/assets/connector-icons/notion.png";
 import playwrightIcon from "@/assets/connector-icons/playwright.svg";
 import posthogIcon from "@/assets/connector-icons/posthog.svg";
 import renderIcon from "@/assets/connector-icons/render.svg";
+import renderDarkIcon from "@/assets/connector-icons/render-dark.svg";
 import supabaseIcon from "@/assets/connector-icons/supabase.png";
+import { useResolvedMode } from "@/hooks/theme/use-theme";
 import {
   Calendar,
   Folder,
@@ -68,19 +70,32 @@ const CONNECTOR_ICONS = {
   terminal: Terminal,
 } as const;
 
+interface ConnectorIconImageConfig {
+  lightSrc: string;
+  darkSrc?: string;
+  tileClassName?: string;
+  darkTileClassName?: string;
+}
+
+const DEFAULT_IMAGE_TILE_CLASS = "bg-brand-logo-tile";
+
 const CONNECTOR_ICON_IMAGES = {
-  cloudflare: cloudflareIcon,
-  context7: context7Icon,
-  exa: exaIcon,
-  filesystem: filesystemIcon,
-  gitlab: gitlabIcon,
-  huggingface: huggingfaceIcon,
-  neon: neonIcon,
-  notion: notionIcon,
-  playwright: playwrightIcon,
-  posthog: posthogIcon,
-  render: renderIcon,
-  supabase: supabaseIcon,
+  cloudflare: { lightSrc: cloudflareIcon },
+  context7: { lightSrc: context7Icon },
+  exa: { lightSrc: exaIcon },
+  filesystem: { lightSrc: filesystemIcon },
+  gitlab: { lightSrc: gitlabIcon },
+  huggingface: { lightSrc: huggingfaceIcon },
+  neon: { lightSrc: neonIcon },
+  notion: { lightSrc: notionIcon },
+  playwright: { lightSrc: playwrightIcon },
+  posthog: { lightSrc: posthogIcon },
+  render: {
+    lightSrc: renderIcon,
+    darkSrc: renderDarkIcon,
+    darkTileClassName: "bg-background",
+  },
+  supabase: { lightSrc: supabaseIcon },
 } as const;
 
 type ConnectorIconSize = "sm" | "md" | "lg";
@@ -98,17 +113,19 @@ export function ConnectorIcon({
   entry: ConnectorCatalogEntry;
   size?: ConnectorIconSize;
 }) {
+  const resolvedMode = useResolvedMode();
   const tileClass = TILE_SIZE[size];
-  const iconImage = entry.iconId in CONNECTOR_ICON_IMAGES
+  const iconImageConfig = entry.iconId in CONNECTOR_ICON_IMAGES
     ? CONNECTOR_ICON_IMAGES[entry.iconId as keyof typeof CONNECTOR_ICON_IMAGES]
     : null;
 
-  if (iconImage) {
-    // Brand logos are rendered as raster/SVG assets with their own colors,
-    // so we give them a theme-stable light tile so dark/transparent marks
-    // stay legible in dark mode.
+  if (iconImageConfig) {
+    const iconImage = selectConnectorIconImage(iconImageConfig, resolvedMode);
+    const tileToneClass = selectConnectorIconTileClass(iconImageConfig, resolvedMode);
+    // Brand logos default to a stable logo tile; individual connectors can
+    // override source and tile treatment when their dark asset needs it.
     return (
-      <div className={`flex shrink-0 items-center justify-center overflow-hidden bg-white ${tileClass}`}>
+      <div className={`flex shrink-0 items-center justify-center overflow-hidden ${tileToneClass} ${tileClass}`}>
         <img
           src={iconImage}
           alt=""
@@ -127,4 +144,21 @@ export function ConnectorIcon({
       <Icon className="size-[72%] shrink-0" />
     </div>
   );
+}
+
+function selectConnectorIconImage(
+  config: ConnectorIconImageConfig,
+  resolvedMode: "dark" | "light",
+): string {
+  return resolvedMode === "dark" && config.darkSrc ? config.darkSrc : config.lightSrc;
+}
+
+function selectConnectorIconTileClass(
+  config: ConnectorIconImageConfig,
+  resolvedMode: "dark" | "light",
+): string {
+  if (resolvedMode === "dark" && config.darkTileClassName) {
+    return config.darkTileClassName;
+  }
+  return config.tileClassName ?? DEFAULT_IMAGE_TILE_CLASS;
 }

@@ -13,17 +13,19 @@ from proliferate.constants.auth import (
 
 def make_mcp_oauth_callback_page(*, ok: bool) -> HTMLResponse:
     status = "completed" if ok else "failed"
-    deep_link_url = f"{DESKTOP_REDIRECT_SCHEME}://powers?source=mcp_oauth_callback&status={status}"
+    deep_link_url = (
+        f"{DESKTOP_REDIRECT_SCHEME}://plugins?source=mcp_oauth_callback&status={status}"
+    )
     escaped_href = escape(deep_link_url, quote=True)
     deep_link_json = json.dumps(deep_link_url)
     title = "Authorization complete" if ok else "Authorization failed"
     message = (
-        "Return to Proliferate to finish using this Power."
+        "Return to Proliferate to finish using this plugin."
         if ok
-        else "Return to Proliferate and try connecting this Power again."
+        else "Return to Proliferate and try connecting this plugin again."
     )
     detail = (
-        "Your connection is saved. Proliferate will refresh the Powers list automatically."
+        "Your connection is saved. Proliferate will refresh the Plugins list automatically."
         if ok
         else (
             "No tokens were exposed in this browser page. The desktop app will show "
@@ -160,7 +162,7 @@ def make_mcp_oauth_callback_page(*, ok: bool) -> HTMLResponse:
         </svg>
         <span class="brand-name">PROLIFERATE</span>
       </div>
-      <p class="eyebrow">Powers</p>
+      <p class="eyebrow">Plugins</p>
       <h1>{title}</h1>
       <p id="status-text">{message}</p>
       <p class="detail">{detail}</p>

@@ -138,7 +138,7 @@ describe("resumeSession", () => {
     mocks.resume.mockResolvedValue({ id: "session-1" });
 
     await resumeSession("session-1", {
-      powersInCodingSessionsEnabled: false,
+      pluginsInCodingSessionsEnabled: false,
     });
 
     expect(mocks.resolveSessionMcpServersForLaunch).not.toHaveBeenCalled();
@@ -152,7 +152,7 @@ describe("resumeSession", () => {
     );
   });
 
-  it("resolves cowork launch MCP even when user Powers are disabled", async () => {
+  it("resolves cowork launch MCP even when user Plugins are disabled", async () => {
     mocks.resolveRuntimeTargetForWorkspace.mockResolvedValue({
       anyharnessWorkspaceId: "runtime-workspace-1",
       baseUrl: "http://runtime.local",
@@ -171,7 +171,7 @@ describe("resumeSession", () => {
     mocks.resume.mockResolvedValue({ id: "session-1" });
 
     await resumeSession("session-1", {
-      powersInCodingSessionsEnabled: false,
+      pluginsInCodingSessionsEnabled: false,
     });
 
     expect(mocks.resolveSessionMcpServersForLaunch).toHaveBeenCalledWith({
@@ -185,7 +185,7 @@ describe("resumeSession", () => {
     });
   });
 
-  it("resolves launch MCP when Powers are enabled for resume", async () => {
+  it("resolves launch MCP when Plugins are enabled for resume", async () => {
     mocks.resolveRuntimeTargetForWorkspace.mockResolvedValue({
       anyharnessWorkspaceId: "runtime-workspace-1",
       baseUrl: "http://runtime.local",
@@ -204,7 +204,7 @@ describe("resumeSession", () => {
     mocks.resume.mockResolvedValue({ id: "session-1" });
 
     await resumeSession("session-1", {
-      powersInCodingSessionsEnabled: true,
+      pluginsInCodingSessionsEnabled: true,
     });
 
     expect(mocks.resolveSessionMcpServersForLaunch).toHaveBeenCalledWith({
