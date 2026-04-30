@@ -8,17 +8,25 @@ from datetime import datetime
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.billing import ACTIVE_SANDBOX_STATUSES
-from proliferate.constants.cloud import WORKSPACE_REPO_APPLY_LOCK_SALT, WorkspaceStatus
+from proliferate.constants.cloud import (
+    WORKSPACE_REPO_APPLY_LOCK_SALT,
+    CloudWorkspaceCleanupState,
+    CloudWorkspaceStatus,
+    WorkspaceStatus,
+)
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud import (
     CloudSandbox,
     CloudWorkspace,
 )
 from proliferate.db.store.billing import ensure_personal_billing_subject
+from proliferate.db.store.cloud_runtime_environments import (
+    ensure_runtime_environment_for_repo,
+)
 from proliferate.utils.time import utcnow
 
 _UNSET: Final = object()
@@ -34,7 +42,7 @@ async def list_cloud_workspaces(db: AsyncSession, user_id: UUID) -> list[CloudWo
         (
             await db.execute(
                 select(CloudWorkspace)
-                .where(CloudWorkspace.user_id == user_id)
+                .where(CloudWorkspace.user_id == user_id, CloudWorkspace.archived_at.is_(None))
                 .order_by(CloudWorkspace.updated_at.desc())
             )
         )
@@ -84,6 +92,7 @@ async def get_existing_cloud_workspace(
                 CloudWorkspace.git_owner == git_owner,
                 CloudWorkspace.git_repo_name == git_repo_name,
                 CloudWorkspace.git_branch == git_branch,
+                CloudWorkspace.archived_at.is_(None),
             )
         )
     ).scalar_one_or_none()
@@ -105,9 +114,18 @@ async def create_cloud_workspace_record(
 ) -> CloudWorkspace:
     now = utcnow()
     billing_subject = await ensure_personal_billing_subject(db, user_id)
+    runtime_environment = await ensure_runtime_environment_for_repo(
+        db,
+        user_id=user_id,
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        created_by_user_id=user_id,
+    )
     workspace = CloudWorkspace(
         user_id=user_id,
-        billing_subject_id=billing_subject.id,
+        billing_subject_id=runtime_environment.billing_subject_id or billing_subject.id,
+        runtime_environment_id=runtime_environment.id,
         display_name=display_name,
         git_provider=git_provider,
         git_owner=git_owner,
@@ -115,18 +133,20 @@ async def create_cloud_workspace_record(
         git_branch=git_branch,
         git_base_branch=git_base_branch,
         origin_json=origin_json,
-        status=WorkspaceStatus.queued,
-        status_detail="Queued",
+        status=CloudWorkspaceStatus.pending.value,
+        status_detail="Pending",
         last_error=None,
         template_version=template_version,
         runtime_generation=0,
         repo_env_vars_ciphertext=repo_env_vars_ciphertext,
         repo_files_applied_version=0,
+        repo_setup_applied_version=0,
         repo_post_ready_phase="idle",
         repo_post_ready_files_total=0,
         repo_post_ready_files_applied=0,
         repo_files_last_failed_path=None,
         repo_files_last_error=None,
+        cleanup_state=CloudWorkspaceCleanupState.none.value,
         created_at=now,
         updated_at=now,
     )
@@ -140,8 +160,12 @@ async def delete_cloud_workspace_records(
     db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> None:
-    await db.execute(delete(CloudSandbox).where(CloudSandbox.cloud_workspace_id == workspace.id))
-    await db.delete(workspace)
+    workspace.archive_requested_at = workspace.archive_requested_at or utcnow()
+    workspace.archived_at = utcnow()
+    workspace.status = CloudWorkspaceStatus.archived.value
+    workspace.status_detail = "Archived"
+    workspace.cleanup_state = CloudWorkspaceCleanupState.pending.value
+    workspace.updated_at = utcnow()
     await db.commit()
 
 
@@ -401,7 +425,7 @@ async def persist_workspace_status(
 async def update_workspace_status(
     db: AsyncSession,
     workspace_id: UUID,
-    status: WorkspaceStatus,
+    status: CloudWorkspaceStatus | WorkspaceStatus | str,
     status_detail: str,
 ) -> None:
     """Update workspace status by ID without requiring an attached ORM object."""
@@ -410,7 +434,7 @@ async def update_workspace_status(
     ).scalar_one_or_none()
     if workspace is None:
         return
-    workspace.status = status
+    workspace.status = status.value if hasattr(status, "value") else str(status)
     workspace.status_detail = status_detail
     workspace.updated_at = utcnow()
     await db.commit()
@@ -487,7 +511,7 @@ async def update_workspace_repo_apply_status(
 
 async def update_workspace_status_by_id(
     workspace_id: UUID,
-    status: WorkspaceStatus,
+    status: CloudWorkspaceStatus | WorkspaceStatus | str,
     status_detail: str,
 ) -> None:
     async with db_engine.async_session_factory() as db:

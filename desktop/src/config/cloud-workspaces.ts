@@ -8,29 +8,14 @@ export interface CloudWorkspaceStepDefinition {
 
 export const CLOUD_WORKSPACE_PROVISIONING_STEPS: CloudWorkspaceStepDefinition[] = [
   {
-    status: "queued",
+    status: "pending",
     label: "Queued",
     description: "Waiting to prepare the cloud workspace.",
   },
   {
-    status: "provisioning",
-    label: "Preparing workspace",
-    description: "Allocating the cloud runtime and preparing the base environment.",
-  },
-  {
-    status: "syncing_credentials",
-    label: "Syncing credentials",
-    description: "Making configured agent credentials available in the cloud workspace.",
-  },
-  {
-    status: "cloning_repo",
-    label: "Cloning repository",
-    description: "Checking out the repository and preparing the cloud branch.",
-  },
-  {
-    status: "starting_runtime",
-    label: "Starting runtime",
-    description: "Launching AnyHarness and reconciling the cloud agents.",
+    status: "materializing",
+    label: "Preparing runtime",
+    description: "Preparing the repo runtime and materializing the cloud worktree.",
   },
   {
     status: "ready",

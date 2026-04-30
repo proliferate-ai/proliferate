@@ -26,6 +26,10 @@ import { ensureRepoGroupExpanded } from "@/stores/preferences/workspace-ui-store
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { workspaceCollectionsScopeKey, getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/query-keys";
+import {
+  type WorkspaceCollections,
+  upsertCloudWorkspaceCollections,
+} from "@/lib/domain/workspaces/collections";
 import { cloudBillingKey, cloudCredentialsKey } from "./query-keys";
 import { useCloudCredentialActions } from "./use-cloud-credential-actions";
 import { autoSyncDetectedCloudCredentialsIfNeeded } from "./cloud-credential-recovery";
@@ -92,6 +96,10 @@ export function useCreateCloudWorkspace() {
     },
     onSuccess: async (workspace) => {
       await clearCachedCloudConnections(workspace.id);
+      queryClient.setQueriesData<WorkspaceCollections | undefined>(
+        { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
+        (collections) => upsertCloudWorkspaceCollections(collections, workspace),
+      );
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: workspaceCollectionsScopeKey(runtimeUrl),

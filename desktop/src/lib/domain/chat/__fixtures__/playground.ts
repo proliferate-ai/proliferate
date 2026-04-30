@@ -97,11 +97,18 @@ function cloudWorkspaceFixture(
     postReadyFilesTotal: 0,
     postReadyStartedAt: null,
     postReadyCompletedAt: null,
-    status: "queued",
+    status: "pending",
+    workspaceStatus: "pending",
+    runtime: {
+      environmentId: null,
+      status: "pending",
+      generation: 1,
+      actionBlockKind: null,
+      actionBlockReason: null,
+    },
     statusDetail: null,
     lastError: null,
     templateVersion: null,
-    runtimeGeneration: 1,
     createdAt: "2026-04-14T00:00:00Z",
     updatedAt: "2026-04-14T00:01:00Z",
     repo: {
@@ -122,7 +129,18 @@ function cloudStatusFixture(
 }
 
 export const CLOUD_STATUS_PROVISIONING = cloudStatusFixture({
-  status: "starting_runtime",
+  status: "materializing",
+});
+
+export const CLOUD_STATUS_FIRST_RUNTIME = cloudStatusFixture({
+  status: "materializing",
+  runtime: {
+    environmentId: "runtime-playground",
+    status: "provisioning",
+    generation: 0,
+    actionBlockKind: null,
+    actionBlockReason: null,
+  },
 });
 
 export const CLOUD_STATUS_APPLYING_FILES = cloudStatusFixture({

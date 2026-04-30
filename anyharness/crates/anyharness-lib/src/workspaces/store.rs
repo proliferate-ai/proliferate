@@ -160,8 +160,8 @@ fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<
         "INSERT INTO workspaces (
             id, kind, repo_root_id, path, surface, source_repo_root_path, source_workspace_id,
             git_provider, git_owner, git_repo_name, original_branch, current_branch, display_name,
-            origin_json, created_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            origin_json, lifecycle_state, cleanup_state, created_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
         params![
             r.id,
             r.kind,
@@ -177,6 +177,8 @@ fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<
             r.current_branch,
             r.display_name,
             origin_json,
+            r.lifecycle_state,
+            r.cleanup_state,
             r.created_at,
             r.updated_at,
         ],
@@ -202,6 +204,8 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceRecord> {
         current_branch: row.get("current_branch")?,
         display_name: row.get("display_name")?,
         origin: decode_origin_json("workspaces", &id, origin_json),
+        lifecycle_state: row.get("lifecycle_state")?,
+        cleanup_state: row.get("cleanup_state")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
@@ -231,6 +235,8 @@ mod tests {
             current_branch: Some("main".to_string()),
             display_name: None,
             origin: None,
+            lifecycle_state: "active".to_string(),
+            cleanup_state: "none".to_string(),
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         }

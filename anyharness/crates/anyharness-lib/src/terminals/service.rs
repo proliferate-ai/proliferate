@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::ffi::OsStr;
+use std::fs;
 use std::io::{Read as IoRead, Write as IoWrite};
 use std::path::Path;
 use std::sync::Arc;
@@ -109,6 +110,7 @@ impl TerminalService {
         let mut cmd = CommandBuilder::new(&shell);
         cmd.cwd(&cwd);
         cmd.env("TERM", "xterm-256color");
+        configure_compact_prompt(&mut cmd, &shell, workspace_path);
 
         let child = pair
             .slave
@@ -269,6 +271,92 @@ fn detect_default_shell() -> String {
     detect_default_shell_with_env(shell_env.as_deref(), path_env.as_deref())
 }
 
+fn configure_compact_prompt(cmd: &mut CommandBuilder, shell: &str, workspace_path: &str) {
+    cmd.env("ANYHARNESS_WORKSPACE_ROOT", workspace_path);
+    cmd.env("PROMPT_DIRTRIM", "1");
+
+    match prompt_shell_kind(shell) {
+        PromptShellKind::Bash => {
+            if let Some(rcfile) = ensure_bash_prompt_rcfile() {
+                cmd.arg("--rcfile");
+                cmd.arg(rcfile);
+                cmd.arg("-i");
+            } else {
+                cmd.env("PS1", r"\u@\h:\W\$ ");
+            }
+        }
+        PromptShellKind::Zsh => {
+            cmd.env("PROMPT", "%n@%m:workspace%# ");
+        }
+        PromptShellKind::Sh => {
+            cmd.env("PS1", "$ ");
+        }
+        PromptShellKind::Other => {}
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PromptShellKind {
+    Bash,
+    Zsh,
+    Sh,
+    Other,
+}
+
+fn prompt_shell_kind(shell: &str) -> PromptShellKind {
+    let name = Path::new(shell)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(shell);
+    if name.ends_with("bash") {
+        PromptShellKind::Bash
+    } else if name.ends_with("zsh") {
+        PromptShellKind::Zsh
+    } else if name == "sh" {
+        PromptShellKind::Sh
+    } else {
+        PromptShellKind::Other
+    }
+}
+
+fn ensure_bash_prompt_rcfile() -> Option<String> {
+    let home = std::env::var_os("HOME")?;
+    let rcfile = Path::new(&home)
+        .join(".proliferate")
+        .join("anyharness")
+        .join("terminal")
+        .join("bashrc");
+    let parent = rcfile.parent()?;
+    fs::create_dir_all(parent).ok()?;
+    fs::write(&rcfile, bash_prompt_rcfile_contents()).ok()?;
+    Some(rcfile.to_string_lossy().to_string())
+}
+
+fn bash_prompt_rcfile_contents() -> &'static str {
+    concat!(
+        "# Managed by AnyHarness. Keeps workspace terminal prompts compact.\n",
+        "if [ -f \"$HOME/.bashrc\" ]; then . \"$HOME/.bashrc\"; fi\n",
+        "export PROMPT_DIRTRIM=1\n",
+        "__anyharness_compact_prompt() {\n",
+        "  local root=\"${ANYHARNESS_WORKSPACE_ROOT:-}\"\n",
+        "  local label=\"${PWD##*/}\"\n",
+        "  if [ -n \"$root\" ]; then\n",
+        "    case \"$PWD\" in\n",
+        "      \"$root\") label=\"workspace\" ;;\n",
+        "      \"$root\"/*) label=\"workspace/${PWD#\"$root\"/}\" ;;\n",
+        "    esac\n",
+        "  fi\n",
+        "  PS1=\"\\u@\\h:${label}\\$ \"\n",
+        "}\n",
+        "case \"${PROMPT_COMMAND:-}\" in\n",
+        "  *__anyharness_compact_prompt*) ;;\n",
+        "  '') PROMPT_COMMAND='__anyharness_compact_prompt' ;;\n",
+        "  *) PROMPT_COMMAND=\"${PROMPT_COMMAND};__anyharness_compact_prompt\" ;;\n",
+        "esac\n",
+        "__anyharness_compact_prompt\n",
+    )
+}
+
 fn detect_default_shell_with_env(shell_env: Option<&str>, path_env: Option<&OsStr>) -> String {
     let mut candidates: Vec<&str> = Vec::new();
 
@@ -424,5 +512,25 @@ mod tests {
             shell.as_str(),
             "/bin/bash" | "/usr/bin/bash" | "/bin/sh" | "/usr/bin/sh"
         ));
+    }
+
+    #[test]
+    fn prompt_shell_kind_detects_common_shells() {
+        assert_eq!(
+            super::prompt_shell_kind("/bin/bash"),
+            super::PromptShellKind::Bash
+        );
+        assert_eq!(
+            super::prompt_shell_kind("/usr/bin/zsh"),
+            super::PromptShellKind::Zsh
+        );
+        assert_eq!(
+            super::prompt_shell_kind("/bin/sh"),
+            super::PromptShellKind::Sh
+        );
+        assert_eq!(
+            super::prompt_shell_kind("/usr/bin/fish"),
+            super::PromptShellKind::Other
+        );
     }
 }

@@ -3,7 +3,9 @@ import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
 import {
   buildWorkspaceCollections,
+  cloudWorkspaceGroupKey,
   workspaceFileTreeStateKey,
+  upsertCloudWorkspaceCollections,
   upsertLocalWorkspaceCollections,
 } from "./collections";
 
@@ -22,6 +24,8 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
     originalBranch: "originalBranch" in overrides ? overrides.originalBranch : "main",
     currentBranch: "currentBranch" in overrides ? overrides.currentBranch : "feature/workspace-1",
     executionSummary: overrides.executionSummary,
+    lifecycleState: overrides.lifecycleState ?? "active",
+    cleanupState: overrides.cleanupState ?? "none",
     createdAt: overrides.createdAt ?? "2026-04-06T10:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-04-06T10:00:00.000Z",
   };
@@ -43,25 +47,32 @@ function makeRepoRoot(overrides: Partial<RepoRoot> = {}): RepoRoot {
   };
 }
 
-function makeCloudWorkspace(): CloudWorkspaceSummary {
+function makeCloudWorkspace(overrides: Partial<CloudWorkspaceSummary> = {}): CloudWorkspaceSummary {
   return {
-    id: "cloud-1",
-    displayName: null,
+    id: overrides.id ?? "cloud-1",
+    displayName: overrides.displayName ?? null,
     repo: {
       provider: "github",
       owner: "proliferate-ai",
       name: "proliferate",
-      branch: "main",
+      branch: overrides.repo?.branch ?? "main",
       baseBranch: "main",
     },
-    status: "ready",
-    statusDetail: null,
-    lastError: null,
-    templateVersion: null,
-    runtimeGeneration: 0,
-    actionBlockKind: null,
-    createdAt: "2026-04-06T09:00:00.000Z",
-    updatedAt: "2026-04-06T09:00:00.000Z",
+    status: overrides.status ?? "ready",
+    workspaceStatus: overrides.workspaceStatus ?? overrides.status ?? "ready",
+    runtime: overrides.runtime ?? {
+      environmentId: null,
+      status: "running",
+      generation: 0,
+      actionBlockKind: null,
+      actionBlockReason: null,
+    },
+    statusDetail: overrides.statusDetail ?? null,
+    lastError: overrides.lastError ?? null,
+    templateVersion: overrides.templateVersion ?? null,
+    actionBlockKind: overrides.actionBlockKind ?? null,
+    createdAt: overrides.createdAt ?? "2026-04-06T09:00:00.000Z",
+    updatedAt: overrides.updatedAt ?? "2026-04-06T09:00:00.000Z",
     postReadyPhase: "idle",
     postReadyFilesTotal: 0,
     postReadyFilesApplied: 0,
@@ -94,7 +105,6 @@ describe("upsertLocalWorkspaceCollections", () => {
     expect(next?.workspaces.map((workspace) => workspace.id)).toEqual([
       "workspace-2",
       "workspace-1",
-      "cloud:cloud-1",
     ]);
   });
 
@@ -124,24 +134,74 @@ describe("upsertLocalWorkspaceCollections", () => {
   });
 });
 
+describe("upsertCloudWorkspaceCollections", () => {
+  it("inserts a new cloud workspace and preserves local workspaces", () => {
+    const existing = buildWorkspaceCollections(
+      [makeWorkspace({ id: "workspace-1" })],
+      [makeRepoRoot()],
+      [makeCloudWorkspace({ id: "cloud-1", updatedAt: "2026-04-06T09:00:00.000Z" })],
+    );
+    const inserted = makeCloudWorkspace({
+      id: "cloud-2",
+      repo: {
+        provider: "github",
+        owner: "proliferate-ai",
+        name: "proliferate",
+        branch: "feature/cloud-2",
+        baseBranch: "main",
+      },
+      status: "pending",
+      workspaceStatus: "pending",
+      updatedAt: "2026-04-06T11:00:00.000Z",
+    });
+
+    const next = upsertCloudWorkspaceCollections(existing, inserted);
+
+    expect(next?.localWorkspaces.map((workspace) => workspace.id)).toEqual(["workspace-1"]);
+    expect(next?.cloudWorkspaces.map((workspace) => workspace.id)).toEqual([
+      "cloud-2",
+      "cloud-1",
+    ]);
+    expect(next?.workspaces.map((workspace) => workspace.id)).toEqual(["workspace-1"]);
+  });
+
+  it("replaces an existing cloud workspace snapshot", () => {
+    const existing = buildWorkspaceCollections(
+      [makeWorkspace({ id: "workspace-1" })],
+      [makeRepoRoot()],
+      [makeCloudWorkspace({ id: "cloud-1", status: "pending", workspaceStatus: "pending" })],
+    );
+    const updated = makeCloudWorkspace({
+      id: "cloud-1",
+      status: "ready",
+      workspaceStatus: "ready",
+      updatedAt: "2026-04-06T12:00:00.000Z",
+    });
+
+    const next = upsertCloudWorkspaceCollections(existing, updated);
+
+    expect(next?.cloudWorkspaces).toHaveLength(1);
+    expect(next?.cloudWorkspaces[0]?.status).toBe("ready");
+    expect(next?.cloudWorkspaces[0]?.updatedAt).toBe("2026-04-06T12:00:00.000Z");
+  });
+
+  it("returns undefined when the workspace collections cache is not populated", () => {
+    expect(
+      upsertCloudWorkspaceCollections(undefined, makeCloudWorkspace()),
+    ).toBeUndefined();
+  });
+});
+
 describe("workspaceFileTreeStateKey", () => {
-  it("shares one tree key across local and synthetic cloud workspaces for the same repo", () => {
+  it("uses the same repo grouping inputs as cloud workspace grouping", () => {
     const localWorkspace = makeWorkspace({
       id: "workspace-local",
       kind: "worktree",
       path: "/tmp/proliferate-feature",
     });
-    const collections = buildWorkspaceCollections(
-      [localWorkspace],
-      [makeRepoRoot()],
-      [makeCloudWorkspace()],
-    );
-    const cloudWorkspace = collections.workspaces.find((workspace) => workspace.id === "cloud:cloud-1");
+    const cloudWorkspace = makeCloudWorkspace();
 
-    expect(cloudWorkspace).toBeDefined();
-    expect(workspaceFileTreeStateKey(localWorkspace)).toBe(
-      workspaceFileTreeStateKey(cloudWorkspace!),
-    );
+    expect(workspaceFileTreeStateKey(localWorkspace)).toBe(cloudWorkspaceGroupKey(cloudWorkspace));
   });
 
   it("falls back to the local repo root when remote metadata is missing", () => {

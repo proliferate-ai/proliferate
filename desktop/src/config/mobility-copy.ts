@@ -49,6 +49,12 @@ export function mobilityLocationLabel(
   }
 }
 
+export function mobilityDetailCopyLabel(
+  kind: WorkspaceMobilityLocationKind,
+): "Path" | "Repository" {
+  return kind === "cloud_workspace" ? "Repository" : "Path";
+}
+
 export function mobilityActionableCopy(
   kind: WorkspaceMobilityLocationKind,
 ): {

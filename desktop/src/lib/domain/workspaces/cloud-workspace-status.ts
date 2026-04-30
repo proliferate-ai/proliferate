@@ -11,18 +11,15 @@ import {
 } from "@/config/cloud-status-copy";
 
 const PENDING_STATUSES = new Set<CloudWorkspaceStatus>([
-  "queued",
-  "provisioning",
-  "syncing_credentials",
-  "cloning_repo",
-  "starting_runtime",
+  "pending",
+  "materializing",
 ]);
 
 const GENERIC_PREPARING_DESCRIPTION = "Preparing the cloud workspace.";
 const GENERIC_FAILURE_DESCRIPTION = "Provisioning hit an error before the workspace became ready.";
-const GENERIC_STOPPED_DESCRIPTION = "This cloud workspace is currently stopped. Start it to resume work.";
+const GENERIC_ARCHIVED_DESCRIPTION = "This cloud workspace has been archived.";
 const GENERIC_BLOCKED_DESCRIPTION = "Cloud usage is unavailable for this workspace right now.";
-const CONCURRENCY_BLOCK_DESCRIPTION = "Stop another cloud workspace before starting this one.";
+const CONCURRENCY_BLOCK_DESCRIPTION = "Archive or delete another cloud workspace before starting this one.";
 const CREDITS_EXHAUSTED_DESCRIPTION = "Cloud usage is paused because your included sandbox hours are exhausted.";
 const PAYMENT_HOLD_DESCRIPTION = "Cloud usage is paused because billing needs attention.";
 const ADMIN_HOLD_DESCRIPTION = "Cloud usage is paused for this account.";
@@ -30,7 +27,6 @@ const AUTO_REFRESH_MESSAGE = "This view refreshes automatically and will switch 
 const READY_MESSAGE = "The workspace is ready.";
 const REPO_CONFIG_MESSAGE = "The runtime is ready. Applying repo files and cloud setup now.";
 const RETRY_HELPER_TEXT = "The workspace record is kept and we will retry setup from there.";
-const START_HELPER_TEXT = "The workspace record is kept and we will start the runtime again from there.";
 
 const START_BLOCK_REASONS = [
   "concurrency_limit",
@@ -44,7 +40,7 @@ export type CloudStartBlockReason = (typeof START_BLOCK_REASONS)[number];
 
 const START_BLOCK_REASON_SET: ReadonlySet<string> = new Set(START_BLOCK_REASONS);
 
-export type CloudWorkspaceStatusScreenMode = "pending" | "error" | "stopped" | "blocked";
+export type CloudWorkspaceStatusScreenMode = "pending" | "error" | "archived" | "blocked";
 
 export interface CloudWorkspaceStatusScreenModel {
   mode: CloudWorkspaceStatusScreenMode;
@@ -56,7 +52,7 @@ export interface CloudWorkspaceStatusScreenModel {
   branchLabel: string;
   footer:
     | { kind: "auto-refresh"; message: string }
-    | { kind: "action"; action: "retry" | "start"; label: string; helperText: string }
+    | { kind: "action"; action: "retry"; label: string; helperText: string }
     | { kind: "status"; message: string };
 }
 
@@ -114,6 +110,10 @@ function isPostReadyPending(phase: string | null | undefined): boolean {
   return phase === "applying_files" || phase === "starting_setup";
 }
 
+function isFirstRuntimeSetupPending(workspace: CloudWorkspaceSummary): boolean {
+  return isCloudWorkspacePending(workspace.status) && workspace.runtime?.generation === 0;
+}
+
 export function shouldShowCloudWorkspaceStatusScreen(
   workspace: CloudWorkspaceSummary,
 ): boolean {
@@ -121,7 +121,7 @@ export function shouldShowCloudWorkspaceStatusScreen(
     workspace.actionBlockKind != null
     || isCloudWorkspacePending(workspace.status)
     || workspace.status === "error"
-    || workspace.status === "stopped"
+    || workspace.status === "archived"
     || (workspace.status === "ready" && isPostReadyPending(workspace.postReadyPhase))
   );
 }
@@ -171,20 +171,18 @@ export function buildCloudWorkspaceStatusScreenModel(
     };
   }
 
-  if (workspace.status === "stopped") {
+  if (workspace.status === "archived") {
     return {
-      mode: "stopped",
+      mode: "archived",
       pendingStage: null,
       eyebrowTone: "pending",
-      title: "Workspace stopped",
-      description: workspace.statusDetail || GENERIC_STOPPED_DESCRIPTION,
+      title: "Workspace archived",
+      description: workspace.statusDetail || GENERIC_ARCHIVED_DESCRIPTION,
       repoLabel,
       branchLabel,
       footer: {
-        kind: "action",
-        action: "start",
-        label: "Start workspace",
-        helperText: START_HELPER_TEXT,
+        kind: "status",
+        message: GENERIC_ARCHIVED_DESCRIPTION,
       },
     };
   }
@@ -233,7 +231,11 @@ export function buildCloudWorkspaceStatusScreenModel(
     branchLabel,
     footer: {
       kind: "auto-refresh",
-      message: isReady ? READY_MESSAGE : AUTO_REFRESH_MESSAGE,
+      message: isReady
+        ? READY_MESSAGE
+        : isFirstRuntimeSetupPending(workspace)
+          ? CLOUD_STATUS_COMPACT_COPY.firstRuntimeFooterMessage
+          : AUTO_REFRESH_MESSAGE,
     },
   };
 }
@@ -263,9 +265,9 @@ export function buildCloudWorkspaceCompactStatusView(
         tone: "warning",
         primaryAction,
       };
-    case "stopped":
+    case "archived":
       return {
-        title: CLOUD_STATUS_COMPACT_COPY.stoppedTitle,
+        title: CLOUD_STATUS_COMPACT_COPY.attentionTitle,
         phaseLabel: model.title,
         tone: "warning",
         primaryAction,

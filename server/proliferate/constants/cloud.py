@@ -64,19 +64,55 @@ GEMINI_ALLOWED_AUTH_FILES: frozenset[str] = frozenset(
 )
 
 # ---------------------------------------------------------------------------
-# Cloud workspace lifecycle status
+# Cloud runtime/workspace lifecycle status
 # ---------------------------------------------------------------------------
 
 
-class WorkspaceStatus(StrEnum):
-    queued = "queued"
+class CloudRuntimeEnvironmentStatus(StrEnum):
+    pending = "pending"
     provisioning = "provisioning"
-    syncing_credentials = "syncing_credentials"
-    cloning_repo = "cloning_repo"
-    starting_runtime = "starting_runtime"
-    ready = "ready"
-    stopped = "stopped"
+    running = "running"
+    paused = "paused"
     error = "error"
+    disabled = "disabled"
+
+
+class CloudWorkspaceStatus(StrEnum):
+    pending = "pending"
+    materializing = "materializing"
+    ready = "ready"
+    archived = "archived"
+    error = "error"
+
+
+class CloudWorkspaceCleanupState(StrEnum):
+    none = "none"
+    pending = "pending"
+    complete = "complete"
+    failed = "failed"
+
+
+class CloudRuntimeIsolationPolicy(StrEnum):
+    repo_shared = "repo_shared"
+
+
+class WorkspaceStatus(StrEnum):
+    """Deprecated compatibility alias for older call sites.
+
+    New cloud workspace code should use ``CloudWorkspaceStatus`` for visible
+    worktree materialization state and ``CloudRuntimeEnvironmentStatus`` for
+    runtime availability. The compatibility values keep transitional code
+    import-safe while the service layer is migrated.
+    """
+
+    queued = CloudWorkspaceStatus.pending.value
+    provisioning = CloudWorkspaceStatus.materializing.value
+    syncing_credentials = CloudWorkspaceStatus.materializing.value
+    cloning_repo = CloudWorkspaceStatus.materializing.value
+    starting_runtime = CloudWorkspaceStatus.materializing.value
+    ready = CloudWorkspaceStatus.ready.value
+    stopped = CloudWorkspaceStatus.archived.value
+    error = CloudWorkspaceStatus.error.value
 
 
 class WorkspacePostReadyPhase(StrEnum):

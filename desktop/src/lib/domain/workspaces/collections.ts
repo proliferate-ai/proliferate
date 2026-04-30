@@ -148,6 +148,26 @@ export function upsertLocalWorkspaceCollections(
   return buildWorkspaceCollections(localWorkspaces, repoRoots, collections.cloudWorkspaces);
 }
 
+export function upsertCloudWorkspaceCollections(
+  collections: WorkspaceCollections | undefined,
+  workspace: CloudWorkspaceSummary,
+): WorkspaceCollections | undefined {
+  if (!collections) {
+    return collections;
+  }
+
+  const cloudWorkspaces = [
+    workspace,
+    ...collections.cloudWorkspaces.filter((existing) => existing.id !== workspace.id),
+  ];
+
+  return buildWorkspaceCollections(
+    collections.localWorkspaces,
+    collections.repoRoots,
+    cloudWorkspaces,
+  );
+}
+
 export function upsertRepoRootCollections(
   collections: WorkspaceCollections | undefined,
   repoRoot: RepoRoot,

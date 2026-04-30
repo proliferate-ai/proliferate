@@ -18,7 +18,7 @@ export function useCloudWorkspaceStatusScreenActions({
     void startCloudWorkspace(workspaceId);
   }, [startCloudWorkspace, workspaceId]);
 
-  if (mode === "pending" || mode === "blocked") {
+  if (mode === "pending" || mode === "blocked" || mode === "archived") {
     return {
       isPrimaryActionPending: false,
       handlePrimaryAction: null,

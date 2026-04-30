@@ -55,6 +55,29 @@ function makeLogicalWorkspace(overrides: Partial<LogicalWorkspace> = {}): Logica
   };
 }
 
+function makeMobilityWorkspace(): NonNullable<LogicalWorkspace["mobilityWorkspace"]> {
+  return {
+    id: "mobility-1",
+    displayName: "Mobility Display",
+    repo: {
+      provider: "github",
+      owner: "proliferate-ai",
+      name: "proliferate",
+      branch: "feature/workspace-mobility",
+    },
+    owner: "cloud",
+    lifecycleState: "cloud_active",
+    statusDetail: null,
+    lastError: null,
+    cloudWorkspaceId: "cloud-1",
+    cloudLostAt: null,
+    cloudLostReason: null,
+    activeHandoff: null,
+    updatedAt: "2026-04-14T00:00:00Z",
+    createdAt: "2026-04-14T00:00:00Z",
+  };
+}
+
 describe("buildMobilityFooterContext", () => {
   it("labels local workspaces with their local path and branch", () => {
     const context = buildMobilityFooterContext({
@@ -64,7 +87,9 @@ describe("buildMobilityFooterContext", () => {
 
     expect(context).toMatchObject({
       locationLabel: "Local workspace",
-      pathLabel: "/Users/pablo/proliferate",
+      detailKind: "path",
+      detailValue: "/Users/pablo/proliferate",
+      detailCopyLabel: "Path",
       branchLabel: "feature/workspace-mobility",
     });
   });
@@ -85,12 +110,48 @@ describe("buildMobilityFooterContext", () => {
     });
 
     expect(context?.locationLabel).toBe("Local worktree");
-    expect(context?.pathLabel).toBe("/Users/pablo/proliferate-worktree");
+    expect(context).toMatchObject({
+      detailKind: "path",
+      detailValue: "/Users/pablo/proliferate-worktree",
+      detailCopyLabel: "Path",
+    });
   });
 
-  it("falls back to repo root context for cloud workspaces", () => {
+  it("uses repository identity for cloud workspaces even when a local repo root exists", () => {
     const context = buildMobilityFooterContext({
       logicalWorkspace: makeLogicalWorkspace({
+        cloudWorkspace: {
+          id: "cloud-1",
+          displayName: null,
+          actionBlockKind: null,
+          actionBlockReason: null,
+          postReadyPhase: "idle",
+          postReadyFilesApplied: 0,
+          postReadyFilesTotal: 0,
+          postReadyStartedAt: null,
+          postReadyCompletedAt: null,
+          status: "ready",
+          workspaceStatus: "ready",
+          runtime: {
+            environmentId: "runtime-1",
+            status: "running",
+            generation: 1,
+            actionBlockKind: null,
+            actionBlockReason: null,
+          },
+          statusDetail: null,
+          lastError: null,
+          templateVersion: "v1",
+          createdAt: "2026-04-14T00:00:00Z",
+          updatedAt: "2026-04-14T00:00:00Z",
+          repo: {
+            provider: "github",
+            owner: "openai",
+            name: "proliferate",
+            baseBranch: "main",
+            branch: "feature/workspace-mobility",
+          },
+        },
         effectiveOwner: "cloud",
         lifecycle: "cloud_active",
         localWorkspace: null,
@@ -103,7 +164,31 @@ describe("buildMobilityFooterContext", () => {
 
     expect(context).toMatchObject({
       locationLabel: "Cloud workspace",
-      pathLabel: "/Users/pablo/proliferate",
+      detailKind: "repository",
+      detailValue: "openai/proliferate",
+      detailCopyLabel: "Repository",
+    });
+  });
+
+  it("uses mobility workspace repo metadata for cloud workspace identity", () => {
+    const context = buildMobilityFooterContext({
+      logicalWorkspace: makeLogicalWorkspace({
+        cloudWorkspace: null,
+        effectiveOwner: "cloud",
+        lifecycle: "cloud_active",
+        localWorkspace: null,
+        mobilityWorkspace: makeMobilityWorkspace(),
+        owner: null,
+        repoName: null,
+      }),
+      status: makeStatus(),
+    });
+
+    expect(context).toMatchObject({
+      locationLabel: "Cloud workspace",
+      detailKind: "repository",
+      detailValue: "proliferate-ai/proliferate",
+      detailCopyLabel: "Repository",
     });
   });
 

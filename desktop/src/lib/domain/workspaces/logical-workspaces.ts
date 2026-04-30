@@ -112,6 +112,32 @@ export function parseLogicalWorkspaceId(
   };
 }
 
+export function replaceLogicalWorkspaceBranch(
+  logicalWorkspaceId: string | null | undefined,
+  branchKey: string,
+): string | null {
+  const parsed = parseLogicalWorkspaceId(logicalWorkspaceId);
+  if (!parsed) {
+    return null;
+  }
+
+  const nextBranchKey = normalizeBranchKey(branchKey);
+  if (parsed.kind === "remote" && parsed.segments.length === 4) {
+    const [provider, owner, repo] = parsed.segments;
+    return buildRemoteLogicalWorkspaceId(provider!, owner!, repo!, nextBranchKey);
+  }
+
+  if (parsed.kind === "repo-root" && parsed.segments.length === 2) {
+    return buildRepoRootLogicalWorkspaceId(parsed.segments[0]!, nextBranchKey);
+  }
+
+  if (parsed.kind === "path" && parsed.segments.length === 2) {
+    return buildPathLogicalWorkspaceId(parsed.segments[0]!, nextBranchKey);
+  }
+
+  return null;
+}
+
 function workspaceBranchKey(workspace: Workspace): string {
   return normalizeBranchKey(workspace.currentBranch ?? workspace.originalBranch ?? null);
 }

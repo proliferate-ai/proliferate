@@ -13,6 +13,7 @@ export type ScenarioKey =
   | "pending-prompts-with-approval"
   | "file-mention-search"
   | "workspace-arrival-created"
+  | "cloud-first-runtime"
   | "cloud-provisioning"
   | "cloud-applying-files"
   | "cloud-blocked"
@@ -58,6 +59,7 @@ export type ScenarioKey =
   | "mobility-unpublished-branch"
   | "mobility-unpushed-commits"
   | "mobility-out-of-sync-branch"
+  | "mobility-cloud-active"
   | "mobility-in-flight"
   | "mobility-failed";
 
@@ -80,6 +82,7 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "pending-prompts-with-approval": { label: "Queue + approval" },
   "file-mention-search": { label: "File mention search" },
   "workspace-arrival-created": { label: "Workspace arrival" },
+  "cloud-first-runtime": { label: "Cloud first runtime" },
   "cloud-provisioning": { label: "Cloud provisioning" },
   "cloud-applying-files": { label: "Cloud applying files" },
   "cloud-blocked": { label: "Cloud blocked" },
@@ -125,6 +128,7 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "mobility-unpublished-branch": { label: "Mobility (publish branch)" },
   "mobility-unpushed-commits": { label: "Mobility (push commits)" },
   "mobility-out-of-sync-branch": { label: "Mobility (out of sync)" },
+  "mobility-cloud-active": { label: "Mobility (cloud footer)" },
   "mobility-in-flight": { label: "Mobility (in flight)" },
   "mobility-failed": { label: "Mobility (failed)" },
 };

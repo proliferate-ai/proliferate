@@ -25,6 +25,8 @@ function workspace(overrides: Partial<Workspace>): Workspace {
     repoRootId: "repo-root-1",
     path: "/tmp/repo/workspace-1",
     surface: "standard",
+    lifecycleState: "active",
+    cleanupState: "none",
     createdAt: "2026-04-01T00:00:00.000Z",
     updatedAt: "2026-04-01T00:00:00.000Z",
     ...overrides,

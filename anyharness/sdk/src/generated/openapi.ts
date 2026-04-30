@@ -1596,6 +1596,7 @@ export interface components {
         };
         InstallWorkspaceMobilityArchiveRequest: {
             archive: components["schemas"]["WorkspaceMobilityArchive"];
+            operationId?: string | null;
         };
         InstallWorkspaceMobilityArchiveResponse: {
             appliedFileCount: number;
@@ -2053,6 +2054,7 @@ export interface components {
         /** @enum {string} */
         PlanHandoffPromptStatus: "queued" | "sent" | "failed";
         PrepareRepoRootMobilityDestinationRequest: {
+            destinationId?: string | null;
             preferredWorkspaceName?: string | null;
             requestedBaseSha: string;
             requestedBranch: string;
@@ -2653,12 +2655,14 @@ export interface components {
             text?: string | null;
         };
         Workspace: {
+            cleanupState: components["schemas"]["WorkspaceCleanupState"];
             createdAt: string;
             currentBranch?: string | null;
             displayName?: string | null;
             executionSummary?: null | components["schemas"]["WorkspaceExecutionSummary"];
             id: string;
             kind: components["schemas"]["WorkspaceKind"];
+            lifecycleState: components["schemas"]["WorkspaceLifecycleState"];
             origin?: null | components["schemas"]["OriginContext"];
             originalBranch?: string | null;
             path: string;
@@ -2666,6 +2670,8 @@ export interface components {
             surface: components["schemas"]["WorkspaceSurface"];
             updatedAt: string;
         };
+        /** @enum {string} */
+        WorkspaceCleanupState: "none" | "pending" | "complete" | "failed";
         /** @enum {string} */
         WorkspaceExecutionPhase: "running" | "awaiting_interaction" | "idle" | "errored";
         WorkspaceExecutionSummary: {
@@ -2679,6 +2685,8 @@ export interface components {
         };
         /** @enum {string} */
         WorkspaceKind: "worktree" | "local";
+        /** @enum {string} */
+        WorkspaceLifecycleState: "active" | "retired";
         WorkspaceMobilityArchive: {
             baseCommitSha: string;
             branchName?: string | null;
@@ -3491,6 +3499,15 @@ export interface operations {
             };
             /** @description Repo root not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Destination conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

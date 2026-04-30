@@ -81,6 +81,8 @@ pub struct ExportWorkspaceMobilityArchiveRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallWorkspaceMobilityArchiveRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
     pub archive: WorkspaceMobilityArchive,
 }
 

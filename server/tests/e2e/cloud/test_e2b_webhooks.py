@@ -24,6 +24,7 @@ from tests.e2e.cloud.helpers import (
     list_e2b_webhooks,
     list_ngrok_requests,
     load_active_sandbox_record,
+    load_runtime_environment_record,
     load_workspace_record,
     port_from_base_url,
     provision_workspace_with_credentials,
@@ -120,8 +121,10 @@ async def test_e2b_webhook_duplicate_ignored(
     assert await event_receipt_count(db_session, event_id=event_id) == 1
 
     refreshed_workspace = await load_workspace_record(db_session, str(workspace.id))
+    refreshed_environment = await load_runtime_environment_record(db_session, str(workspace.id))
     refreshed_sandbox = await load_active_sandbox_record(db_session, str(workspace.id))
-    assert refreshed_workspace.status == "stopped"
+    assert refreshed_workspace.status == "ready"
+    assert refreshed_environment.status == "paused"
     assert refreshed_sandbox.status == "paused"
 
 
@@ -139,7 +142,7 @@ async def test_e2b_webhook_stale_event_ignored(
         db_session,
         user_id=auth.user_id,
         provider="e2b",
-        workspace_status="stopped",
+        workspace_status="ready",
         sandbox_status="paused",
     )
     sandbox.last_provider_event_at = utcnow()
@@ -167,8 +170,10 @@ async def test_e2b_webhook_stale_event_ignored(
     assert await event_receipt_count(db_session, event_id=event_id) == 1
 
     refreshed_workspace = await load_workspace_record(db_session, str(workspace.id))
+    refreshed_environment = await load_runtime_environment_record(db_session, str(workspace.id))
     refreshed_sandbox = await load_active_sandbox_record(db_session, str(workspace.id))
-    assert refreshed_workspace.status == "stopped"
+    assert refreshed_workspace.status == "ready"
+    assert refreshed_environment.status == "paused"
     assert refreshed_sandbox.status == "paused"
 
 
@@ -186,7 +191,7 @@ async def test_e2b_webhook_created_updates_state(
         db_session,
         user_id=auth.user_id,
         provider="e2b",
-        workspace_status="provisioning",
+        workspace_status="materializing",
         sandbox_status="provisioning",
         with_runtime_metadata=False,
     )
@@ -206,9 +211,11 @@ async def test_e2b_webhook_created_updates_state(
     )
     assert response.status_code == 200
     refreshed_sandbox = await load_active_sandbox_record(db_session, str(workspace.id))
+    refreshed_environment = await load_runtime_environment_record(db_session, str(workspace.id))
     refreshed_workspace = await load_workspace_record(db_session, str(workspace.id))
     assert refreshed_sandbox.status == "running"
-    assert refreshed_workspace.status == "provisioning"
+    assert refreshed_environment.status == "running"
+    assert refreshed_workspace.status == "materializing"
     assert await usage_segment_count(db_session, sandbox_id=sandbox.id) == 1
 
 
@@ -218,15 +225,15 @@ async def test_e2b_webhook_resumed_updates_state(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Seed a stopped workspace whose sandbox is paused so the resume event has a
-    # clean transition to apply.
+    # Seed a ready worktree whose sandbox is paused so the resume event has a
+    # clean runtime transition to apply.
     monkeypatch.setattr(settings, "e2b_webhook_signature_secret", "test-secret")
     auth = await create_user_and_login(client, db_session, email_prefix="webhook-resumed")
     workspace, sandbox = await create_seeded_workspace_and_sandbox(
         db_session,
         user_id=auth.user_id,
         provider="e2b",
-        workspace_status="stopped",
+        workspace_status="ready",
         sandbox_status="paused",
     )
     body, signature = build_signed_e2b_webhook(
@@ -245,9 +252,11 @@ async def test_e2b_webhook_resumed_updates_state(
     )
     assert response.status_code == 200
     refreshed_sandbox = await load_active_sandbox_record(db_session, str(workspace.id))
+    refreshed_environment = await load_runtime_environment_record(db_session, str(workspace.id))
     refreshed_workspace = await load_workspace_record(db_session, str(workspace.id))
     assert refreshed_sandbox.status == "running"
-    assert refreshed_workspace.status == "stopped"
+    assert refreshed_environment.status == "running"
+    assert refreshed_workspace.status == "ready"
     assert await usage_segment_count(db_session, sandbox_id=sandbox.id) == 1
 
 
@@ -284,8 +293,8 @@ async def test_e2b_webhook_paused_updates_state(
         metadata={"cloud_sandbox_id": str(sandbox.id)},
     )
 
-    # Pause should stop the workspace, pause the sandbox, and close the active
-    # usage segment for that sandbox.
+    # Pause should mark the runtime unavailable, pause the sandbox, and close
+    # the active usage segment for that sandbox.
     response = await client.post(
         "/v1/cloud/webhooks/e2b",
         content=body,
@@ -293,8 +302,10 @@ async def test_e2b_webhook_paused_updates_state(
     )
     assert response.status_code == 200
     refreshed_workspace = await load_workspace_record(db_session, str(workspace.id))
+    refreshed_environment = await load_runtime_environment_record(db_session, str(workspace.id))
     refreshed_sandbox = await load_active_sandbox_record(db_session, str(workspace.id))
-    assert refreshed_workspace.status == "stopped"
+    assert refreshed_workspace.status == "ready"
+    assert refreshed_environment.status == "paused"
     assert refreshed_sandbox.status == "paused"
 
     segment = (
@@ -337,8 +348,8 @@ async def test_e2b_webhook_killed_updates_state(
         metadata={"cloud_sandbox_id": str(sandbox.id)},
     )
 
-    # Kill should clear reconnect metadata and sever the workspace's link to the
-    # destroyed sandbox record.
+    # Kill should clear runtime reconnect metadata and sever the environment's
+    # link to the destroyed sandbox record.
     response = await client.post(
         "/v1/cloud/webhooks/e2b",
         content=body,
@@ -346,14 +357,15 @@ async def test_e2b_webhook_killed_updates_state(
     )
     assert response.status_code == 200
     refreshed_workspace = await load_workspace_record(db_session, str(workspace.id))
+    refreshed_environment = await load_runtime_environment_record(db_session, str(workspace.id))
     refreshed_sandbox = await db_session.get(type(sandbox), sandbox.id)
     assert refreshed_sandbox is not None
     await db_session.refresh(refreshed_sandbox)
-    assert refreshed_workspace.status == "stopped"
-    assert refreshed_workspace.runtime_url is None
-    assert refreshed_workspace.runtime_token_ciphertext is None
-    assert refreshed_workspace.anyharness_workspace_id is None
-    assert refreshed_workspace.active_sandbox_id is None
+    assert refreshed_workspace.status == "ready"
+    assert refreshed_environment.status == "error"
+    assert refreshed_environment.runtime_url is None
+    assert refreshed_environment.runtime_token_ciphertext is None
+    assert refreshed_environment.active_sandbox_id is None
     assert refreshed_sandbox.status == "destroyed"
 
 

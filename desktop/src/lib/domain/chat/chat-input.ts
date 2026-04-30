@@ -75,8 +75,8 @@ export function resolveChatInputAvailability({
       isDisabled: true,
       disabledReason: selectedCloudWorkspaceActionBlockReason
         ?? (
-          selectedCloudWorkspaceStatus === "stopped"
-            ? "Cloud workspace is currently stopped. Start it to resume work."
+          selectedCloudWorkspaceStatus === "archived"
+            ? "Cloud workspace is archived."
             : selectedCloudWorkspaceStatus === "error"
               ? "Cloud workspace hit an error. Retry provisioning to continue."
               : "Cloud workspace is still preparing."

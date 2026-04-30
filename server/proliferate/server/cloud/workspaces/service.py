@@ -8,20 +8,22 @@ from proliferate.constants.billing import (
     BILLING_MODE_ENFORCE,
     USAGE_SEGMENT_CLOSED_BY_DESTROY,
     USAGE_SEGMENT_CLOSED_BY_MANUAL_STOP,
-    USAGE_SEGMENT_OPENED_BY_RESUME,
     WORKSPACE_ACTION_BLOCK_KIND_ADMIN_HOLD,
     WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT,
     WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
     WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD,
     WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED,
 )
-from proliferate.constants.cloud import SUPPORTED_GIT_PROVIDER, WorkspaceStatus
+from proliferate.constants.cloud import (
+    SUPPORTED_GIT_PROVIDER,
+    CloudWorkspaceStatus,
+)
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud import CloudWorkspace
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
-    open_usage_segment_for_sandbox,
 )
+from proliferate.db.store.cloud_runtime_environments import load_runtime_environment_for_workspace
 from proliferate.db.store.cloud_workspaces import (
     create_cloud_workspace_for_user,
     delete_cloud_workspace_records_for_workspace,
@@ -62,7 +64,6 @@ from proliferate.server.cloud.repos.service import (
     get_repo_branches_for_user as get_github_repo_branches,
 )
 from proliferate.server.cloud.runtime.anyharness_api import CloudRuntimeReconnectError
-from proliferate.server.cloud.runtime.ensure_running import ensure_workspace_runtime_ready
 from proliferate.server.cloud.runtime.scheduler import schedule_workspace_provision
 from proliferate.server.cloud.runtime.service import (
     get_workspace_connection,
@@ -75,54 +76,53 @@ from proliferate.server.cloud.workspaces.models import (
     workspace_detail_payload,
     workspace_summary_payload,
 )
-from proliferate.utils.crypto import decrypt_text, encrypt_json
 from proliferate.utils.time import duration_ms, utcnow
 
 MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 CLOUD_HUMAN_ORIGIN_JSON = '{"kind":"human","entrypoint":"cloud"}'
 
-PROVISIONING_STATUSES: frozenset[WorkspaceStatus] = frozenset(
+PROVISIONING_STATUSES: frozenset[str] = frozenset(
     {
-        WorkspaceStatus.queued,
-        WorkspaceStatus.provisioning,
-        WorkspaceStatus.syncing_credentials,
-        WorkspaceStatus.cloning_repo,
-        WorkspaceStatus.starting_runtime,
+        CloudWorkspaceStatus.pending.value,
+        CloudWorkspaceStatus.materializing.value,
     }
 )
 
 # Valid status transitions.  Each key lists the statuses that may follow it.
 # Every active or terminal state allows ``stopped`` so that workspace deletion
 # (destroy) is always permitted, and ``error`` is reachable from any state.
-VALID_TRANSITIONS: dict[WorkspaceStatus, frozenset[WorkspaceStatus]] = {
-    WorkspaceStatus.queued: frozenset(
-        {WorkspaceStatus.provisioning, WorkspaceStatus.stopped, WorkspaceStatus.error}
+VALID_TRANSITIONS: dict[str, frozenset[str]] = {
+    CloudWorkspaceStatus.pending.value: frozenset(
+        {
+            CloudWorkspaceStatus.materializing.value,
+            CloudWorkspaceStatus.archived.value,
+            CloudWorkspaceStatus.error.value,
+        }
     ),
-    WorkspaceStatus.provisioning: frozenset(
-        {WorkspaceStatus.syncing_credentials, WorkspaceStatus.stopped, WorkspaceStatus.error}
+    CloudWorkspaceStatus.materializing.value: frozenset(
+        {
+            CloudWorkspaceStatus.ready.value,
+            CloudWorkspaceStatus.archived.value,
+            CloudWorkspaceStatus.error.value,
+        }
     ),
-    WorkspaceStatus.syncing_credentials: frozenset(
-        {WorkspaceStatus.cloning_repo, WorkspaceStatus.stopped, WorkspaceStatus.error}
+    CloudWorkspaceStatus.ready.value: frozenset(
+        {
+            CloudWorkspaceStatus.materializing.value,
+            CloudWorkspaceStatus.archived.value,
+            CloudWorkspaceStatus.error.value,
+        }
     ),
-    WorkspaceStatus.cloning_repo: frozenset(
-        {WorkspaceStatus.starting_runtime, WorkspaceStatus.stopped, WorkspaceStatus.error}
+    CloudWorkspaceStatus.archived.value: frozenset({CloudWorkspaceStatus.error.value}),
+    CloudWorkspaceStatus.error.value: frozenset(
+        {CloudWorkspaceStatus.materializing.value, CloudWorkspaceStatus.archived.value}
     ),
-    WorkspaceStatus.starting_runtime: frozenset(
-        {WorkspaceStatus.ready, WorkspaceStatus.stopped, WorkspaceStatus.error}
-    ),
-    WorkspaceStatus.ready: frozenset(
-        {WorkspaceStatus.queued, WorkspaceStatus.stopped, WorkspaceStatus.error}
-    ),
-    WorkspaceStatus.stopped: frozenset(
-        {WorkspaceStatus.queued, WorkspaceStatus.ready, WorkspaceStatus.error}
-    ),
-    WorkspaceStatus.error: frozenset({WorkspaceStatus.queued, WorkspaceStatus.stopped}),
 }
 
 
 def transition_workspace_status(
     workspace: CloudWorkspace,
-    target: WorkspaceStatus,
+    target: CloudWorkspaceStatus,
     *,
     status_detail: str | None = None,
 ) -> None:
@@ -132,19 +132,18 @@ def transition_workspace_status(
     ``status_detail`` overrides the human-readable detail; when *None* the
     detail is derived from the target status.
     """
-    try:
-        current = WorkspaceStatus(workspace.status)
-    except ValueError:
-        current = WorkspaceStatus.error
+    current = workspace.status
+    if current not in VALID_TRANSITIONS:
+        current = CloudWorkspaceStatus.error.value
     allowed = VALID_TRANSITIONS.get(current)
-    if allowed is None or target not in allowed:
+    if allowed is None or target.value not in allowed:
         raise CloudApiError(
             "invalid_status_transition",
             f"Cannot transition workspace from '{workspace.status}' to '{target}'.",
             status_code=409,
         )
-    workspace.status = target
-    workspace.status_detail = status_detail or target.replace("_", " ").title()
+    workspace.status = target.value
+    workspace.status_detail = status_detail or target.value.replace("_", " ").title()
     workspace.updated_at = utcnow()
 
 
@@ -155,14 +154,21 @@ async def list_cloud_workspaces_for_user(
     snapshots_by_subject: dict[UUID, BillingSnapshot] = {}
     summaries: list[WorkspaceSummary] = []
     for workspace in workspaces:
-        billing = snapshots_by_subject.get(workspace.billing_subject_id)
+        runtime_environment = await load_runtime_environment_for_workspace(workspace)
+        billing_subject_id = (
+            runtime_environment.billing_subject_id
+            if runtime_environment is not None
+            else workspace.billing_subject_id
+        )
+        billing = snapshots_by_subject.get(billing_subject_id)
         if billing is None:
-            billing = await get_billing_snapshot_for_subject(workspace.billing_subject_id)
-            snapshots_by_subject[workspace.billing_subject_id] = billing
+            billing = await get_billing_snapshot_for_subject(billing_subject_id)
+            snapshots_by_subject[billing_subject_id] = billing
         action_block_kind, action_block_reason = _workspace_action_block(workspace, billing)
         summaries.append(
             workspace_summary_payload(
                 workspace,
+                runtime_environment=runtime_environment,
                 action_block_kind=action_block_kind,
                 action_block_reason=action_block_reason,
             )
@@ -193,7 +199,10 @@ def _prefer_fresher_workspace_state(
 
 def _cloud_workspace_block_message(blocked_reason: str | None) -> str:
     if blocked_reason == WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT:
-        return "Sandbox limit reached. Stop another cloud workspace before starting a new one."
+        return (
+            "Sandbox limit reached. Archive or delete another cloud workspace before "
+            "starting a new one."
+        )
     if blocked_reason == WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED:
         return "Cloud usage is paused because your included sandbox hours are exhausted."
     if blocked_reason == WORKSPACE_ACTION_BLOCK_KIND_PAYMENT_FAILED:
@@ -221,7 +230,7 @@ def _workspace_action_block(
 ) -> tuple[str | None, str | None]:
     if billing.billing_mode != BILLING_MODE_ENFORCE or not billing.start_blocked:
         return None, None
-    if workspace.status == WorkspaceStatus.ready:
+    if workspace.status == CloudWorkspaceStatus.ready.value:
         return None, None
     return (
         billing.start_block_reason,
@@ -244,12 +253,18 @@ async def get_cloud_workspace_detail(
 async def _build_workspace_detail(
     workspace: CloudWorkspace,
 ) -> WorkspaceDetail:
+    runtime_environment = await load_runtime_environment_for_workspace(workspace)
     statuses = await load_cloud_credential_statuses(workspace.user_id)
-    billing = await get_billing_snapshot_for_subject(workspace.billing_subject_id)
+    billing = await get_billing_snapshot_for_subject(
+        runtime_environment.billing_subject_id
+        if runtime_environment is not None
+        else workspace.billing_subject_id
+    )
     action_block_kind, action_block_reason = _workspace_action_block(workspace, billing)
     return workspace_detail_payload(
         workspace,
         statuses,
+        runtime_environment=runtime_environment,
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
     )
@@ -404,7 +419,6 @@ async def create_cloud_workspace(
         git_base_branch=resolved_base_branch,
         origin_json=CLOUD_HUMAN_ORIGIN_JSON,
         template_version=get_configured_sandbox_provider().template_version,
-        repo_env_vars_ciphertext=encrypt_json(repo_config.env_vars),
     )
     log_cloud_event(
         "cloud workspace queued",
@@ -485,7 +499,6 @@ async def ensure_cloud_workspace_for_existing_branch(
         git_base_branch=cleaned_branch_name,
         origin_json=CLOUD_HUMAN_ORIGIN_JSON,
         template_version=get_configured_sandbox_provider().template_version,
-        repo_env_vars_ciphertext=encrypt_json(repo_config.env_vars),
     )
     log_cloud_event(
         "cloud workspace ensured for mobility",
@@ -515,7 +528,6 @@ async def _refresh_repo_env_snapshot_for_workspace(
             user_id=workspace.user_id,
             repo=f"{workspace.git_owner}/{workspace.git_repo_name}",
         )
-    workspace.repo_env_vars_ciphertext = encrypt_json(repo_config.env_vars)
     return await save_workspace(workspace)
 
 
@@ -526,7 +538,10 @@ async def start_cloud_workspace(
     requested_base_sha: str | None = None,
 ) -> WorkspaceDetail:
     workspace = await _require_cloud_workspace_for_user(user.id, workspace_id)
-    if workspace.status in PROVISIONING_STATUSES and workspace.status != WorkspaceStatus.queued:
+    if (
+        workspace.status in PROVISIONING_STATUSES
+        and workspace.status != CloudWorkspaceStatus.pending.value
+    ):
         return await _build_workspace_detail(workspace)
 
     repo_branches = await get_github_repo_branches(
@@ -572,7 +587,7 @@ async def start_cloud_workspace(
     if workspace.ready_at is None:
         workspace = await _refresh_repo_env_snapshot_for_workspace(workspace)
 
-    if workspace.status == WorkspaceStatus.queued:
+    if workspace.status == CloudWorkspaceStatus.pending.value:
         workspace.last_error = None
         await save_workspace(workspace)
         log_cloud_event(
@@ -589,80 +604,14 @@ async def start_cloud_workspace(
         )
         return await _build_workspace_detail(workspace)
 
-    sandbox = await load_active_sandbox_for_workspace(workspace)
-    if (
-        sandbox is not None
-        and sandbox.external_sandbox_id
-        and workspace.runtime_url
-        and workspace.runtime_token_ciphertext
-        and workspace.anyharness_workspace_id
-    ):
-        try:
-            provider = get_sandbox_provider(sandbox.provider)
-            sandbox_state = await provider.get_sandbox_state(sandbox.external_sandbox_id)
-            if sandbox_state is None or sandbox_state.state in {
-                "killed",
-                "destroyed",
-                "terminated",
-            }:
-                raise CloudRuntimeReconnectError("Cloud sandbox is no longer available.")
-            if not _provider_state_is_running(sandbox_state.state):
-                await provider.resume_sandbox(sandbox.external_sandbox_id)
-                resumed_at = utcnow()
-                await update_sandbox_status(sandbox, "running", started_at=resumed_at)
-                await open_usage_segment_for_sandbox(
-                    user_id=workspace.user_id,
-                    workspace_id=workspace.id,
-                    sandbox_id=sandbox.id,
-                    external_sandbox_id=sandbox.external_sandbox_id,
-                    sandbox_execution_id=None,
-                    started_at=resumed_at,
-                    opened_by=USAGE_SEGMENT_OPENED_BY_RESUME,
-                )
-            access_token = decrypt_text(workspace.runtime_token_ciphertext)
-            await ensure_workspace_runtime_ready(
-                workspace,
-                allow_launcher_restart=True,
-                access_token=access_token,
-            )
-            workspace = _prefer_fresher_workspace_state(
-                workspace,
-                await load_cloud_workspace_by_id(workspace.id),
-            )
-            if workspace.status != WorkspaceStatus.ready:
-                transition_workspace_status(
-                    workspace,
-                    WorkspaceStatus.ready,
-                    status_detail="Ready",
-                )
-                await save_workspace(workspace)
-                workspace = _prefer_fresher_workspace_state(
-                    workspace,
-                    await load_cloud_workspace_by_id(workspace.id),
-                )
-            return await _build_workspace_detail(workspace)
-        except Exception as exc:
-            reconnect_error = (
-                exc
-                if isinstance(exc, CloudRuntimeReconnectError)
-                else CloudRuntimeReconnectError(format_exception_message(exc))
-            )
-            await mark_workspace_error_by_id(
-                workspace.id,
-                str(reconnect_error),
-                status_detail="Reconnect failed",
-                clear_runtime_metadata=True,
-            )
-            log_cloud_event(
-                "cloud workspace reconnect failed",
-                level=logging.WARNING,
-                workspace_id=workspace.id,
-                error=format_exception_message(exc),
-                error_type=exc.__class__.__name__,
-            )
-            workspace = await _require_cloud_workspace_for_user(user.id, workspace_id)
+    if workspace.status == CloudWorkspaceStatus.ready.value:
+        return await _build_workspace_detail(workspace)
 
-    transition_workspace_status(workspace, WorkspaceStatus.queued, status_detail="Queued")
+    transition_workspace_status(
+        workspace,
+        CloudWorkspaceStatus.materializing,
+        status_detail="Preparing runtime",
+    )
     workspace.last_error = None
     await save_workspace(workspace)
     log_cloud_event(
@@ -766,7 +715,6 @@ async def delete_cloud_workspace(
     workspace_id: UUID,
 ) -> None:
     workspace = await _require_cloud_workspace_for_user(user_id, workspace_id)
-    await _destroy_workspace_runtime(workspace)
     await delete_cloud_workspace_records_for_workspace(workspace)
 
 
@@ -815,8 +763,12 @@ async def _stop_workspace_runtime(workspace: CloudWorkspace) -> None:
                 external_sandbox_id=sandbox.external_sandbox_id,
             )
 
-    if workspace.status != WorkspaceStatus.stopped:
-        transition_workspace_status(workspace, WorkspaceStatus.stopped, status_detail="Stopped")
+    if workspace.status != CloudWorkspaceStatus.archived.value:
+        transition_workspace_status(
+            workspace,
+            CloudWorkspaceStatus.archived,
+            status_detail="Archived",
+        )
     else:
         workspace.updated_at = utcnow()
     await persist_workspace_stop_state(workspace)
@@ -858,7 +810,7 @@ async def _destroy_workspace_runtime(workspace: CloudWorkspace) -> None:
                 external_sandbox_id=sandbox.external_sandbox_id,
             )
 
-    transition_workspace_status(workspace, WorkspaceStatus.stopped, status_detail="Stopped")
+    transition_workspace_status(workspace, CloudWorkspaceStatus.archived, status_detail="Archived")
     await persist_workspace_destroy_state(workspace)
     log_cloud_event(
         "cloud workspace destroyed",

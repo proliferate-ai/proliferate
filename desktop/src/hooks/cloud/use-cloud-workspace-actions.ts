@@ -6,9 +6,12 @@ import {
   deleteCloudWorkspace,
   getCloudWorkspace,
   startCloudWorkspace,
-  stopCloudWorkspace,
   updateCloudWorkspaceBranch,
 } from "@/lib/integrations/cloud/workspaces";
+import {
+  type WorkspaceCollections,
+  upsertCloudWorkspaceCollections,
+} from "@/lib/domain/workspaces/collections";
 import { autoSyncDetectedCloudCredentialsIfNeeded } from "./cloud-credential-recovery";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { clearCachedCloudConnections } from "@/lib/integrations/anyharness/runtime-target";
@@ -40,6 +43,13 @@ export function useCloudWorkspaceActions() {
     ]);
   }
 
+  function primeCloudWorkspace(workspace: CloudWorkspaceDetail) {
+    queryClient.setQueriesData<WorkspaceCollections | undefined>(
+      { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
+      (collections) => upsertCloudWorkspaceCollections(collections, workspace),
+    );
+  }
+
   const refreshMutation = useMutation<CloudWorkspaceDetail, Error, string>({
     mutationFn: async (workspaceId) => {
       const cloudWorkspaceId = workspaceId.startsWith("cloud:")
@@ -49,7 +59,8 @@ export function useCloudWorkspaceActions() {
       if (!workspace) throw new Error("Cloud workspace not found.");
       return workspace;
     },
-    onSuccess: async () => {
+    onSuccess: async (workspace) => {
+      primeCloudWorkspace(workspace);
       await queryClient.invalidateQueries({
         queryKey: workspaceCollectionsScopeKey(runtimeUrl),
       });
@@ -79,6 +90,7 @@ export function useCloudWorkspaceActions() {
     },
     onSuccess: async (workspace) => {
       await clearCachedCloudConnections(workspace.id);
+      primeCloudWorkspace(workspace);
       await invalidateCloudResources();
       const syntheticWorkspaceId = cloudWorkspaceSyntheticId(workspace.id);
       const pendingWorkspaceEntry = useHarnessStore.getState().pendingWorkspaceEntry;
@@ -100,37 +112,6 @@ export function useCloudWorkspaceActions() {
       captureTelemetryException(error, {
         tags: {
           action: "start_cloud_workspace",
-          domain: "cloud_workspace",
-          workspace_kind: "cloud",
-        },
-      });
-    },
-  });
-
-  const stopMutation = useMutation<CloudWorkspaceDetail, Error, string>({
-    meta: {
-      telemetryHandled: true,
-    },
-    mutationFn: async (workspaceId) => {
-      const cloudWorkspaceId = workspaceId.startsWith("cloud:")
-        ? workspaceId.slice("cloud:".length)
-        : workspaceId;
-      return await stopCloudWorkspace(cloudWorkspaceId);
-    },
-    onSuccess: async (workspace) => {
-      await clearCachedCloudConnections(workspace.id);
-      clearWorkspaceRuntimeState(cloudWorkspaceSyntheticId(workspace.id));
-      await invalidateCloudResources();
-      trackProductEvent("cloud_workspace_stopped", {
-        workspace_kind: "cloud",
-        status: workspace.status,
-        git_provider: workspace.repo.provider,
-      });
-    },
-    onError: (error) => {
-      captureTelemetryException(error, {
-        tags: {
-          action: "stop_cloud_workspace",
           domain: "cloud_workspace",
           workspace_kind: "cloud",
         },
@@ -177,7 +158,8 @@ export function useCloudWorkspaceActions() {
         : workspaceId;
       return updateCloudWorkspaceBranch(cloudWorkspaceId, branchName);
     },
-    onSuccess: async () => {
+    onSuccess: async (workspace) => {
+      primeCloudWorkspace(workspace);
       await invalidateCloudResources();
     },
   });
@@ -187,8 +169,6 @@ export function useCloudWorkspaceActions() {
     isRefreshingCloudWorkspace: refreshMutation.isPending,
     startCloudWorkspace: startMutation.mutateAsync,
     isStartingCloudWorkspace: startMutation.isPending,
-    stopCloudWorkspace: stopMutation.mutateAsync,
-    isStoppingCloudWorkspace: stopMutation.isPending,
     syncCloudWorkspaceBranch: syncBranchMutation.mutateAsync,
     isSyncingCloudWorkspaceBranch: syncBranchMutation.isPending,
     deleteCloudWorkspace: deleteMutation.mutateAsync,

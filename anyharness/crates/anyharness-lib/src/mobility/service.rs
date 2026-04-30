@@ -16,6 +16,7 @@ use crate::mobility::model::{
     WorkspaceMobilityPreflightResult, WorkspaceMobilitySessionBundleData,
     MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES,
 };
+use crate::mobility::store::MobilityStore;
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
 use crate::terminals::model::{TerminalRecord, TerminalStatus};
@@ -43,6 +44,8 @@ pub enum MobilityError {
     SessionAlreadyExists(String),
     #[error("mobility archive exceeds size limits: {0}")]
     SizeLimitExceeded(String),
+    #[error("mobility destination conflict: {0}")]
+    DestinationConflict(String),
     #[error("{0}")]
     Invalid(String),
     #[error(transparent)]
@@ -53,6 +56,7 @@ pub enum MobilityError {
 pub struct MobilityService {
     workspace_service: Arc<WorkspaceService>,
     workspace_runtime: Arc<WorkspaceRuntime>,
+    mobility_store: MobilityStore,
     session_service: Arc<SessionService>,
     session_runtime: Arc<SessionRuntime>,
     access_gate: Arc<WorkspaceAccessGate>,
@@ -64,6 +68,7 @@ impl MobilityService {
     pub fn new(
         workspace_service: Arc<WorkspaceService>,
         workspace_runtime: Arc<WorkspaceRuntime>,
+        mobility_store: MobilityStore,
         session_service: Arc<SessionService>,
         session_runtime: Arc<SessionRuntime>,
         access_gate: Arc<WorkspaceAccessGate>,
@@ -73,6 +78,7 @@ impl MobilityService {
         Self {
             workspace_service,
             workspace_runtime,
+            mobility_store,
             session_service,
             session_runtime,
             access_gate,
@@ -86,12 +92,17 @@ impl MobilityService {
         repo_root_id: &str,
         requested_branch: &str,
         requested_base_sha: &str,
+        destination_id: Option<&str>,
         preferred_workspace_name: Option<&str>,
     ) -> Result<WorkspaceRecord, MobilityError> {
         let repo_root_id = repo_root_id.trim().to_string();
         let requested_branch = requested_branch.trim().to_string();
         let requested_base_sha = requested_base_sha.trim().to_string();
         let preferred_workspace_name = preferred_workspace_name
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        let destination_id = destination_id
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(str::to_string);
@@ -113,12 +124,20 @@ impl MobilityService {
                 &repo_root_id,
                 &requested_branch,
                 &requested_base_sha,
+                destination_id.as_deref(),
                 preferred_workspace_name.as_deref(),
             )
         })
         .await
         .map_err(|error| MobilityError::Internal(anyhow::anyhow!(error.to_string())))?
-        .map_err(MobilityError::Internal)?;
+        .map_err(|error| {
+            let message = error.to_string();
+            if message.contains("mobility destination conflict") {
+                MobilityError::DestinationConflict(message)
+            } else {
+                MobilityError::Internal(error)
+            }
+        })?;
 
         Ok(created)
     }
@@ -394,8 +413,22 @@ impl MobilityService {
         &self,
         workspace_id: &str,
         archive: &WorkspaceMobilityArchiveData,
+        operation_id: Option<&str>,
     ) -> Result<ImportedWorkspaceArchiveSummary, MobilityError> {
         validate_archive_size(archive)?;
+        let operation_id = operation_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        if let Some(operation_id) = operation_id.as_deref() {
+            if let Some(summary) = self
+                .mobility_store
+                .find_completed_install(workspace_id, operation_id)
+                .map_err(MobilityError::Internal)?
+            {
+                return Ok(summary);
+            }
+        }
         let workspace = self.load_workspace(workspace_id)?;
         let workspace_path = PathBuf::from(&workspace.path);
         let repo_root = GitService::resolve_repo_root(&workspace_path)
@@ -450,7 +483,7 @@ impl MobilityService {
             imported_session_ids.push(session.id);
         }
 
-        Ok(ImportedWorkspaceArchiveSummary {
+        let summary = ImportedWorkspaceArchiveSummary {
             workspace_id: workspace.id,
             source_workspace_path: archive.source_workspace_path.clone(),
             base_commit_sha: archive.base_commit_sha.clone(),
@@ -458,7 +491,13 @@ impl MobilityService {
             applied_file_count: archive.files.len(),
             deleted_file_count: archive.deleted_paths.len(),
             imported_agent_artifact_count,
-        })
+        };
+        if let Some(operation_id) = operation_id.as_deref() {
+            self.mobility_store
+                .record_completed_install(workspace_id, operation_id, &summary)
+                .map_err(MobilityError::Internal)?;
+        }
+        Ok(summary)
     }
 
     pub fn destroy_source_workspace(

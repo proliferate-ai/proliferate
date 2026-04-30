@@ -14,14 +14,27 @@ import { isSessionExpiring, refreshDesktopUserSession } from "@/lib/integrations
 // Narrow string unions — kept hand-written because the server declares these as `str`
 // and the generated types would be too loose (`string`) for UI switch/display logic.
 export type CloudWorkspaceStatus =
-  | "queued"
-  | "provisioning"
-  | "syncing_credentials"
-  | "cloning_repo"
-  | "starting_runtime"
+  | "pending"
+  | "materializing"
   | "ready"
-  | "stopped"
+  | "archived"
   | "error";
+
+export type CloudRuntimeStatus =
+  | "pending"
+  | "provisioning"
+  | "running"
+  | "paused"
+  | "error"
+  | "disabled";
+
+export interface CloudWorkspaceRuntimeSummary {
+  environmentId: string | null;
+  status: CloudRuntimeStatus;
+  generation: number;
+  actionBlockKind?: string | null;
+  actionBlockReason?: string | null;
+}
 
 export type CloudAgentKind = "claude" | "codex" | "gemini";
 
@@ -35,8 +48,26 @@ export type CloudCredentialStatus     = components["schemas"]["CredentialStatus"
 export type BillingPlanInfo           = components["schemas"]["CloudPlanInfo"];
 export type BillingUrlResponse        = components["schemas"]["BillingUrlResponse"];
 export type OverageSettingsResponse   = components["schemas"]["OverageSettingsResponse"];
-export type CloudWorkspaceSummary     = components["schemas"]["WorkspaceSummary"];
-export type CloudWorkspaceDetail      = components["schemas"]["WorkspaceDetail"];
+export type CloudWorkspaceSummary = Omit<
+  components["schemas"]["WorkspaceSummary"],
+  "status" | "runtime" | "actionBlockKind" | "actionBlockReason"
+> & {
+  status: CloudWorkspaceStatus;
+  workspaceStatus?: CloudWorkspaceStatus;
+  runtime?: CloudWorkspaceRuntimeSummary;
+  actionBlockKind?: string | null;
+  actionBlockReason?: string | null;
+};
+export type CloudWorkspaceDetail = Omit<
+  components["schemas"]["WorkspaceDetail"],
+  "status" | "runtime" | "actionBlockKind" | "actionBlockReason"
+> & {
+  status: CloudWorkspaceStatus;
+  workspaceStatus?: CloudWorkspaceStatus;
+  runtime?: CloudWorkspaceRuntimeSummary;
+  actionBlockKind?: string | null;
+  actionBlockReason?: string | null;
+};
 export type CloudOriginContext        = components["schemas"]["OriginContext"];
 export type CloudConnectionInfo       = components["schemas"]["WorkspaceConnection"];
 export type CloudRepoBranchesResponse = components["schemas"]["RepoBranchesResponse"];

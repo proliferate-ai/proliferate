@@ -179,6 +179,7 @@ impl WorkspaceRuntime {
         repo_root_id: &str,
         requested_branch: &str,
         requested_base_sha: &str,
+        destination_id: Option<&str>,
         preferred_workspace_name: Option<&str>,
     ) -> anyhow::Result<WorkspaceRecord> {
         let requested_branch = requested_branch.trim();
@@ -202,34 +203,53 @@ impl WorkspaceRuntime {
             .join(&repo_root.id);
         fs::create_dir_all(&base_dir)?;
 
-        let mut slug = sanitize_mobility_destination_name(
-            preferred_workspace_name.unwrap_or(requested_branch),
-        );
-        if slug.is_empty() {
-            slug = "workspace".to_string();
-        }
-        let short_sha = requested_base_sha.chars().take(8).collect::<String>();
+        let target_path = if let Some(destination_id) = destination_id {
+            validate_mobility_destination_id(destination_id)?;
+            let candidate = base_dir.join(destination_id);
+            let candidate_string = candidate.to_string_lossy().to_string();
+            if let Some(existing) = self.store.find_by_path(&candidate_string)? {
+                if existing.current_branch.as_deref() == Some(requested_branch) {
+                    return Ok(existing);
+                }
+                anyhow::bail!(
+                    "mobility destination conflict: destination id already belongs to branch {}",
+                    existing.current_branch.as_deref().unwrap_or("<unknown>")
+                );
+            }
+            if candidate.exists() {
+                anyhow::bail!("mobility destination conflict: destination path already exists");
+            }
+            candidate
+        } else {
+            let mut slug = sanitize_mobility_destination_name(
+                preferred_workspace_name.unwrap_or(requested_branch),
+            );
+            if slug.is_empty() {
+                slug = "workspace".to_string();
+            }
+            let short_sha = requested_base_sha.chars().take(8).collect::<String>();
 
-        let target_path = (0..100)
-            .map(|attempt| {
-                let suffix = if attempt == 0 {
-                    String::new()
-                } else {
-                    format!("-{}", attempt + 1)
-                };
-                base_dir.join(format!("{slug}-{short_sha}{suffix}"))
-            })
-            .find(|candidate| {
-                let candidate_string = candidate.to_string_lossy();
-                !candidate.exists()
-                    && self
-                        .store
-                        .find_by_path(&candidate_string)
-                        .ok()
-                        .flatten()
-                        .is_none()
-            })
-            .ok_or_else(|| anyhow::anyhow!("unable to allocate a mobility destination path"))?;
+            (0..100)
+                .map(|attempt| {
+                    let suffix = if attempt == 0 {
+                        String::new()
+                    } else {
+                        format!("-{}", attempt + 1)
+                    };
+                    base_dir.join(format!("{slug}-{short_sha}{suffix}"))
+                })
+                .find(|candidate| {
+                    let candidate_string = candidate.to_string_lossy();
+                    !candidate.exists()
+                        && self
+                            .store
+                            .find_by_path(&candidate_string)
+                            .ok()
+                            .flatten()
+                            .is_none()
+                })
+                .ok_or_else(|| anyhow::anyhow!("unable to allocate a mobility destination path"))?
+        };
 
         let target_path_string = target_path.display().to_string();
         resolver::create_mobility_git_worktree(
@@ -636,6 +656,8 @@ fn build_workspace_record(
         current_branch,
         display_name: None,
         origin: Some(origin),
+        lifecycle_state: "active".to_string(),
+        cleanup_state: "none".to_string(),
         created_at: now.clone(),
         updated_at: now,
     }
@@ -671,6 +693,22 @@ fn sanitize_mobility_destination_name(value: &str) -> String {
         .collect::<String>()
         .trim_matches('-')
         .to_string()
+}
+
+fn validate_mobility_destination_id(value: &str) -> anyhow::Result<()> {
+    if value.is_empty() || value.len() > 96 {
+        anyhow::bail!("invalid destination id");
+    }
+    if value == "." || value == ".." || value.contains('/') || value.contains('\\') {
+        anyhow::bail!("invalid destination id");
+    }
+    if !value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
+    {
+        anyhow::bail!("invalid destination id");
+    }
+    Ok(())
 }
 
 fn detect_repo_default_branch(repo_root: &Path) -> Option<String> {

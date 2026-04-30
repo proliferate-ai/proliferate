@@ -11,6 +11,7 @@ use crate::cowork::store::CoworkStore;
 use crate::files::runtime::WorkspaceFilesRuntime;
 use crate::git::WorkspaceFileSearchCache;
 use crate::mobility::service::MobilityService;
+use crate::mobility::store::MobilityStore;
 use crate::persistence::Db;
 use crate::plans::runtime::PlanRuntime;
 use crate::plans::service::PlanService;
@@ -141,6 +142,7 @@ impl AppState {
         let mobility_service = Arc::new(MobilityService::new(
             workspace_service.clone(),
             workspace_runtime.clone(),
+            MobilityStore::new(db.clone()),
             session_service.clone(),
             session_runtime.clone(),
             workspace_access_gate.clone(),

@@ -28,7 +28,8 @@ def _denied_start_authorization(*, blocked_reason: str) -> SandboxStartAuthoriza
             else blocked_reason
         ),
         message=(
-            "Sandbox limit reached. Stop another cloud workspace before starting a new one."
+            "Sandbox limit reached. Archive or delete another cloud workspace before starting "
+            "a new one."
             if blocked_reason == WORKSPACE_ACTION_BLOCK_KIND_CONCURRENCY_LIMIT
             else "Cloud usage is paused because your included sandbox hours are exhausted."
         ),
@@ -132,7 +133,6 @@ async def test_start_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(workspace_service, "load_cloud_credential_statuses", _unexpected)
-    monkeypatch.setattr(workspace_service, "ensure_workspace_runtime_ready", _unexpected)
     monkeypatch.setattr(workspace_service, "save_workspace", _unexpected)
 
     with pytest.raises(CloudApiError) as exc_info:
@@ -144,14 +144,14 @@ async def test_start_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
 
 
 @pytest.mark.asyncio
-async def test_start_cloud_workspace_requeues_when_persisted_sandbox_lookup_fails(
+async def test_start_cloud_workspace_requeues_error_workspace(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user = SimpleNamespace(id=uuid4())
     workspace = SimpleNamespace(
         id=uuid4(),
         user_id=user.id,
-        status="stopped",
+        status=workspace_service.CloudWorkspaceStatus.error.value,
         git_owner="acme",
         git_repo_name="rocket",
         git_branch="feature/cloud",
@@ -160,16 +160,12 @@ async def test_start_cloud_workspace_requeues_when_persisted_sandbox_lookup_fail
         runtime_token_ciphertext="ciphertext",
         anyharness_workspace_id="workspace-123",
         last_error="old error",
+        status_detail="Error",
         ready_at=datetime.now(UTC),
-    )
-    sandbox = SimpleNamespace(
-        id=uuid4(),
-        provider="e2b",
-        external_sandbox_id="missing-sandbox",
+        updated_at=datetime.now(UTC),
     )
     saved_statuses: list[tuple[object, object]] = []
     scheduled: list[object] = []
-    marked_errors: list[str] = []
 
     async def _require_workspace(_user_id, _workspace_id):
         return workspace
@@ -182,20 +178,6 @@ async def test_start_cloud_workspace_requeues_when_persisted_sandbox_lookup_fail
 
     async def _credential_statuses(_user_id):
         return [SimpleNamespace(provider="claude", synced=True)]
-
-    async def _load_active_sandbox(_workspace):
-        return sandbox
-
-    class _Provider:
-        async def get_sandbox_state(self, _sandbox_id: str):
-            raise RuntimeError("Sandbox missing from provider")
-
-    async def _mark_workspace_error_by_id(
-        _workspace_id,
-        message: str,
-        **_kwargs,
-    ) -> None:
-        marked_errors.append(message)
 
     async def _save_workspace(_workspace):
         saved_statuses.append((_workspace.status, _workspace.last_error))
@@ -215,17 +197,6 @@ async def test_start_cloud_workspace_requeues_when_persisted_sandbox_lookup_fail
         "load_cloud_credential_statuses",
         _credential_statuses,
     )
-    monkeypatch.setattr(
-        workspace_service,
-        "load_active_sandbox_for_workspace",
-        _load_active_sandbox,
-    )
-    monkeypatch.setattr(workspace_service, "get_sandbox_provider", lambda _kind: _Provider())
-    monkeypatch.setattr(
-        workspace_service,
-        "mark_workspace_error_by_id",
-        _mark_workspace_error_by_id,
-    )
     monkeypatch.setattr(workspace_service, "save_workspace", _save_workspace)
     monkeypatch.setattr(workspace_service, "_build_workspace_detail", _build_workspace_detail)
     monkeypatch.setattr(
@@ -236,11 +207,10 @@ async def test_start_cloud_workspace_requeues_when_persisted_sandbox_lookup_fail
 
     payload = await workspace_service.start_cloud_workspace(user, workspace.id)
 
-    assert payload.status == workspace_service.WorkspaceStatus.queued
-    assert workspace.status == workspace_service.WorkspaceStatus.queued
+    assert payload.status == workspace_service.CloudWorkspaceStatus.materializing.value
+    assert workspace.status == workspace_service.CloudWorkspaceStatus.materializing.value
     assert workspace.last_error is None
-    assert marked_errors and "Sandbox missing from provider" in marked_errors[0]
-    assert saved_statuses == [(workspace_service.WorkspaceStatus.queued, None)]
+    assert saved_statuses == [(workspace_service.CloudWorkspaceStatus.materializing.value, None)]
     assert scheduled == [workspace.id]
 
 
@@ -252,7 +222,7 @@ async def test_start_cloud_workspace_requeues_queued_workspace_for_mobility(
     workspace = SimpleNamespace(
         id=uuid4(),
         user_id=user.id,
-        status=workspace_service.WorkspaceStatus.queued,
+        status=workspace_service.CloudWorkspaceStatus.pending.value,
         git_owner="acme",
         git_repo_name="rocket",
         git_branch="feature/cloud",
@@ -320,21 +290,21 @@ async def test_start_cloud_workspace_requeues_queued_workspace_for_mobility(
         requested_base_sha="abc123",
     )
 
-    assert payload.status == workspace_service.WorkspaceStatus.queued
+    assert payload.status == workspace_service.CloudWorkspaceStatus.pending.value
     assert refreshed_env_snapshots == [workspace.id]
-    assert saved_statuses == [(workspace_service.WorkspaceStatus.queued, None)]
+    assert saved_statuses == [(workspace_service.CloudWorkspaceStatus.pending.value, None)]
     assert scheduled == [(workspace.id, "abc123")]
 
 
 @pytest.mark.asyncio
-async def test_start_cloud_workspace_marks_ready_when_reconnect_succeeds(
+async def test_start_cloud_workspace_returns_ready_workspace_without_requeue(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user = SimpleNamespace(id=uuid4())
     workspace = SimpleNamespace(
         id=uuid4(),
         user_id=user.id,
-        status="stopped",
+        status=workspace_service.CloudWorkspaceStatus.ready.value,
         git_owner="acme",
         git_repo_name="rocket",
         git_branch="feature/cloud",
@@ -347,12 +317,6 @@ async def test_start_cloud_workspace_marks_ready_when_reconnect_succeeds(
         updated_at=datetime.now(UTC),
         ready_at=datetime.now(UTC),
     )
-    sandbox = SimpleNamespace(
-        id=uuid4(),
-        provider="e2b",
-        external_sandbox_id="sandbox-123",
-    )
-    saved_statuses: list[tuple[object, object]] = []
 
     async def _require_workspace(_user_id, _workspace_id):
         return workspace
@@ -366,24 +330,11 @@ async def test_start_cloud_workspace_marks_ready_when_reconnect_succeeds(
     async def _credential_statuses(_user_id):
         return [SimpleNamespace(provider="claude", synced=True)]
 
-    async def _load_active_sandbox(_workspace):
-        return sandbox
-
-    class _Provider:
-        async def get_sandbox_state(self, _sandbox_id: str):
-            return SimpleNamespace(state="running")
-
-    async def _ensure_runtime_ready(*_args, **_kwargs) -> str:
-        return "https://runtime.invalid"
-
-    async def _save_workspace(_workspace):
-        saved_statuses.append((_workspace.status, _workspace.status_detail))
+    async def _unexpected(*_args, **_kwargs) -> None:
+        raise AssertionError("ready workspace should not schedule provisioning work")
 
     async def _build_workspace_detail(_workspace):
         return SimpleNamespace(status=_workspace.status)
-
-    async def _load_workspace_by_id(_workspace_id):
-        return workspace
 
     monkeypatch.setattr(
         workspace_service,
@@ -397,24 +348,11 @@ async def test_start_cloud_workspace_marks_ready_when_reconnect_succeeds(
         "load_cloud_credential_statuses",
         _credential_statuses,
     )
-    monkeypatch.setattr(
-        workspace_service,
-        "load_active_sandbox_for_workspace",
-        _load_active_sandbox,
-    )
-    monkeypatch.setattr(workspace_service, "get_sandbox_provider", lambda _kind: _Provider())
-    monkeypatch.setattr(workspace_service, "decrypt_text", lambda _ciphertext: "runtime-token")
-    monkeypatch.setattr(
-        workspace_service,
-        "ensure_workspace_runtime_ready",
-        _ensure_runtime_ready,
-    )
-    monkeypatch.setattr(workspace_service, "load_cloud_workspace_by_id", _load_workspace_by_id)
-    monkeypatch.setattr(workspace_service, "save_workspace", _save_workspace)
+    monkeypatch.setattr(workspace_service, "save_workspace", _unexpected)
+    monkeypatch.setattr(workspace_service, "schedule_workspace_provision", _unexpected)
     monkeypatch.setattr(workspace_service, "_build_workspace_detail", _build_workspace_detail)
 
     payload = await workspace_service.start_cloud_workspace(user, workspace.id)
 
-    assert payload.status == workspace_service.WorkspaceStatus.ready
-    assert workspace.status == workspace_service.WorkspaceStatus.ready
-    assert saved_statuses == [(workspace_service.WorkspaceStatus.ready, "Ready")]
+    assert payload.status == workspace_service.CloudWorkspaceStatus.ready.value
+    assert workspace.status == workspace_service.CloudWorkspaceStatus.ready.value

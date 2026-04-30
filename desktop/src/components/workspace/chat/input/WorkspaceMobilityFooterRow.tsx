@@ -20,7 +20,7 @@ import { ComposerControlButton } from "./ComposerControlButton";
 import { WorkspaceMobilityLocationPopover } from "./WorkspaceMobilityLocationPopover";
 import { WorkspaceMobilityConfirmDialog } from "./WorkspaceMobilityConfirmDialog";
 
-function FooterPathLabel({ value }: { value: string }) {
+function FooterDetailLabel({ value }: { value: string }) {
   return (
     <span title={value} className="[direction:ltr] [unicode-bidi:plaintext]">
       {value}
@@ -274,16 +274,18 @@ export function WorkspaceMobilityFooterRow() {
         <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
           {locationTrigger}
 
-          {footerContext.pathLabel && (
+          {footerContext.detailValue && (
             <ComposerControlButton
-              icon={<Folder className="size-3.5" />}
-              label={<FooterPathLabel value={footerContext.pathLabel} />}
-              labelClassName="[direction:rtl]"
+              icon={footerContext.detailKind === "repository"
+                ? <CloudIcon className="size-3.5" />
+                : <Folder className="size-3.5" />}
+              label={<FooterDetailLabel value={footerContext.detailValue} />}
+              labelClassName={footerContext.detailKind === "path" ? "[direction:rtl]" : undefined}
               trailing={<Copy className="size-3 text-muted-foreground/70" />}
               onClick={() => {
-                void handleCopy(footerContext.pathValue, "Path");
+                void handleCopy(footerContext.detailValue, footerContext.detailCopyLabel);
               }}
-              title={footerContext.pathValue ?? undefined}
+              title={footerContext.detailValue ?? undefined}
               data-telemetry-mask
             />
           )}

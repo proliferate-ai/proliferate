@@ -897,6 +897,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Destination conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -5496,6 +5506,12 @@
         "properties": {
           "archive": {
             "$ref": "#/components/schemas/WorkspaceMobilityArchive"
+          },
+          "operationId": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -7401,6 +7417,14 @@
           "requestedBaseSha"
         ],
         "properties": {
+          "destinationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 96,
+            "pattern": "^[A-Za-z0-9._-]{1,96}$"
+          },
           "preferredWorkspaceName": {
             "type": [
               "string",
@@ -10002,10 +10026,15 @@
           "repoRootId",
           "path",
           "surface",
+          "lifecycleState",
+          "cleanupState",
           "createdAt",
           "updatedAt"
         ],
         "properties": {
+          "cleanupState": {
+            "$ref": "#/components/schemas/WorkspaceCleanupState"
+          },
           "createdAt": {
             "type": "string"
           },
@@ -10037,6 +10066,9 @@
           "kind": {
             "$ref": "#/components/schemas/WorkspaceKind"
           },
+          "lifecycleState": {
+            "$ref": "#/components/schemas/WorkspaceLifecycleState"
+          },
           "origin": {
             "oneOf": [
               {
@@ -10066,6 +10098,15 @@
             "type": "string"
           }
         }
+      },
+      "WorkspaceCleanupState": {
+        "type": "string",
+        "enum": [
+          "none",
+          "pending",
+          "complete",
+          "failed"
+        ]
       },
       "WorkspaceExecutionPhase": {
         "type": "string",
@@ -10122,6 +10163,13 @@
         "enum": [
           "worktree",
           "local"
+        ]
+      },
+      "WorkspaceLifecycleState": {
+        "type": "string",
+        "enum": [
+          "active",
+          "retired"
         ]
       },
       "WorkspaceMobilityArchive": {

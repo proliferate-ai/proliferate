@@ -34,7 +34,6 @@ from proliferate.server.cloud.repo_config.validation import (
     validate_tracked_file_content,
 )
 from proliferate.server.cloud.repos.service import get_repo_branches_for_user
-from proliferate.server.cloud.runtime.anyharness_api import CloudRuntimeOperationError
 from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.runtime.repo_config_apply import (
     WorkspaceRepoApplyBusyError,
@@ -43,6 +42,7 @@ from proliferate.server.cloud.runtime.repo_config_apply import (
     run_workspace_saved_setup,
 )
 from proliferate.server.cloud.runtime.service import get_workspace_connection
+from proliferate.server.cloud.runtime.workspace_operations import CloudRuntimeOperationError
 
 
 def _default_repo_config_response() -> CloudRepoConfigResponse:

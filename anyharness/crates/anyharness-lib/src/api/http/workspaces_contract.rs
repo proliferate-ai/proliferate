@@ -1,7 +1,8 @@
 use anyharness_contract::v1::{
     DetectProjectSetupResponse, GetSetupStatusResponse, SetupHint, SetupHintCategory,
-    SetupScriptStatus, Workspace, WorkspaceKind, WorkspaceSessionLaunchAgent,
-    WorkspaceSessionLaunchCatalog, WorkspaceSessionLaunchModel, WorkspaceSurface,
+    SetupScriptStatus, Workspace, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
+    WorkspaceSessionLaunchAgent, WorkspaceSessionLaunchCatalog, WorkspaceSessionLaunchModel,
+    WorkspaceSurface,
 };
 
 use super::error::ApiError;
@@ -83,6 +84,16 @@ pub(super) fn workspace_to_contract_with_summary(
         original_branch: record.original_branch,
         current_branch: record.current_branch,
         display_name: record.display_name,
+        lifecycle_state: match record.lifecycle_state.as_str() {
+            "retired" => WorkspaceLifecycleState::Retired,
+            _ => WorkspaceLifecycleState::Active,
+        },
+        cleanup_state: match record.cleanup_state.as_str() {
+            "pending" => WorkspaceCleanupState::Pending,
+            "complete" => WorkspaceCleanupState::Complete,
+            "failed" => WorkspaceCleanupState::Failed,
+            _ => WorkspaceCleanupState::None,
+        },
         execution_summary: Some(execution_summary),
         origin: record
             .origin

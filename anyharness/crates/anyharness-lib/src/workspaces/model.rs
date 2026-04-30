@@ -16,6 +16,8 @@ pub struct WorkspaceRecord {
     pub current_branch: Option<String>,
     pub display_name: Option<String>,
     pub origin: Option<OriginContext>,
+    pub lifecycle_state: String,
+    pub cleanup_state: String,
     pub created_at: String,
     pub updated_at: String,
 }

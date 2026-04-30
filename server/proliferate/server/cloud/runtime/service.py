@@ -6,6 +6,7 @@ import logging
 
 from proliferate.constants.billing import BILLING_MODE_ENFORCE
 from proliferate.db.models.cloud import CloudWorkspace
+from proliferate.db.store.cloud_runtime_environments import load_runtime_environment_for_workspace
 from proliferate.db.store.cloud_workspaces import (
     load_active_sandbox_for_workspace,
     load_cloud_workspace_by_id,
@@ -23,7 +24,10 @@ from proliferate.server.cloud.runtime.credentials import (
     normalize_provision_credentials,
     write_credential_files,
 )
-from proliferate.server.cloud.runtime.ensure_running import ensure_workspace_runtime_ready
+from proliferate.server.cloud.runtime.ensure_running import (
+    ensure_environment_runtime_ready,
+    ensure_workspace_runtime_ready,
+)
 from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.runtime.provision import provision_workspace as _provision_workspace
 from proliferate.utils.crypto import decrypt_text
@@ -113,7 +117,13 @@ async def sync_workspace_credentials(workspace: CloudWorkspace) -> None:
 
 
 async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnectionTarget:
-    billing = await get_billing_snapshot_for_subject(workspace.billing_subject_id)
+    runtime_environment = await load_runtime_environment_for_workspace(workspace)
+    billing_subject_id = (
+        runtime_environment.billing_subject_id
+        if runtime_environment is not None
+        else workspace.billing_subject_id
+    )
+    billing = await get_billing_snapshot_for_subject(billing_subject_id)
     if billing.billing_mode == BILLING_MODE_ENFORCE and billing.active_spend_hold:
         raise CloudApiError(
             "workspace_not_ready",
@@ -130,27 +140,41 @@ async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnecti
             "Cloud workspace is not ready yet.",
             status_code=409,
         )
-    if not workspace.runtime_token_ciphertext:
+    if runtime_environment is None:
+        raise CloudApiError(
+            "workspace_not_ready",
+            "Cloud runtime environment is not ready yet.",
+            status_code=409,
+        )
+    if not runtime_environment.runtime_token_ciphertext:
         raise CloudApiError(
             "workspace_not_ready",
             "Cloud workspace runtime token is not available.",
             status_code=409,
         )
 
-    access_token = decrypt_text(workspace.runtime_token_ciphertext)
-    runtime_url = await ensure_workspace_runtime_ready(
-        workspace,
+    access_token = decrypt_text(runtime_environment.runtime_token_ciphertext)
+    runtime_url = await ensure_environment_runtime_ready(
+        runtime_environment,
+        workspace_id=workspace.id,
         allow_launcher_restart=True,
         access_token=access_token,
     )
     reloaded_workspace = await load_cloud_workspace_by_id(workspace.id)
-    if reloaded_workspace is None or not reloaded_workspace.runtime_token_ciphertext:
+    reloaded_environment = await load_runtime_environment_for_workspace(
+        reloaded_workspace or workspace,
+    )
+    if (
+        reloaded_workspace is None
+        or reloaded_environment is None
+        or not reloaded_environment.runtime_token_ciphertext
+    ):
         raise CloudApiError(
             "workspace_not_ready",
             "Cloud workspace runtime is not ready yet.",
             status_code=409,
         )
-    access_token = decrypt_text(reloaded_workspace.runtime_token_ciphertext)
+    access_token = decrypt_text(reloaded_environment.runtime_token_ciphertext)
     ready_agent_kinds = await get_runtime_ready_agent_kinds(
         runtime_url,
         access_token,
@@ -160,6 +184,6 @@ async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnecti
         runtime_url=runtime_url,
         access_token=access_token,
         anyharness_workspace_id=reloaded_workspace.anyharness_workspace_id,
-        runtime_generation=reloaded_workspace.runtime_generation,
+        runtime_generation=reloaded_environment.runtime_generation,
         ready_agent_kinds=ready_agent_kinds,
     )

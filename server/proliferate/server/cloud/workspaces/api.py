@@ -22,7 +22,6 @@ from proliferate.server.cloud.workspaces.service import (
     get_cloud_workspace_detail,
     list_cloud_workspaces_for_user,
     start_cloud_workspace,
-    stop_cloud_workspace,
     sync_cloud_workspace_branch,
     sync_cloud_workspace_credentials,
     sync_cloud_workspace_display_name,
@@ -133,18 +132,6 @@ async def sync_cloud_workspace_credentials_endpoint(
 ) -> WorkspaceDetail:
     try:
         payload = await sync_cloud_workspace_credentials(user.id, workspace_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return payload
-
-
-@router.post("/workspaces/{workspace_id}/stop", response_model=WorkspaceDetail)
-async def stop_cloud_workspace_endpoint(
-    workspace_id: UUID,
-    user: User = Depends(current_active_user),
-) -> WorkspaceDetail:
-    try:
-        payload = await stop_cloud_workspace(user.id, workspace_id)
     except CloudApiError as error:
         raise_cloud_error(error)
     return payload

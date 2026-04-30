@@ -27,7 +27,7 @@ function SectionRow({
 }
 
 function shouldExpandByDefault(mode: CloudWorkspaceStatusScreenMode): boolean {
-  return mode === "blocked" || mode === "error" || mode === "stopped";
+  return mode === "blocked" || mode === "error" || mode === "archived";
 }
 
 function cloudStatusIcon(model: CloudWorkspaceStatusScreenModel) {

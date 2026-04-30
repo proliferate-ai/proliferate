@@ -38,7 +38,6 @@ from proliferate.server.cloud.runtime.anyharness_api import CloudRuntimeReconnec
 from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.workspaces import service as cloud_service
 from proliferate.utils.crypto import decrypt_json, encrypt_json, encrypt_text
-from proliferate.utils.time import utcnow
 
 
 async def _billing_subject_for_user(db_session: AsyncSession, user_id: uuid.UUID):
@@ -1341,10 +1340,10 @@ class TestCloudWorkspaces:
             "branch": "pure-drift",
             "baseBranch": "main",
         }
-        assert payload["status"] == "queued"
+        assert payload["workspaceStatus"] == "pending"
         assert payload["allowedAgentKinds"] == ["claude", "codex", "gemini"]
         assert payload["readyAgentKinds"] == ["claude"]
-        assert payload["runtimeGeneration"] == 0
+        assert payload["runtime"]["generation"] == 0
         assert payload["origin"] == {"kind": "human", "entrypoint": "cloud"}
 
         list_response = await client.get("/v1/cloud/workspaces", headers=headers)
@@ -1773,11 +1772,12 @@ class TestCloudWorkspaces:
         )
 
         assert response.status_code == 200
-        assert response.json()["status"] == "ready"
-        assert response.json()["runtimeGeneration"] == 2
+        payload = response.json()
+        assert payload["workspaceStatus"] == "ready"
+        assert payload["runtime"]["generation"] == 2
 
     @pytest.mark.asyncio
-    async def test_start_workspace_from_error_reuses_persisted_sandbox(
+    async def test_start_workspace_from_error_requeues_materialization(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
@@ -1805,15 +1805,6 @@ class TestCloudWorkspaces:
                 branches=["main"],
             )
 
-        async def _ensure_runtime_ready(
-            workspace: CloudWorkspace,
-            **_kwargs,
-        ) -> None:
-            workspace.status = "ready"
-            workspace.status_detail = "Ready"
-            workspace.last_error = None
-            workspace.updated_at = utcnow()
-
         _patch_repo_branches_lookup(monkeypatch, _repo_branches)
         monkeypatch.setattr(
             cloud_service,
@@ -1821,7 +1812,6 @@ class TestCloudWorkspaces:
             lambda workspace_id, **_kwargs: scheduled.append(workspace_id),
         )
         monkeypatch.setattr(cloud_service, "get_sandbox_provider", lambda _kind: _FakeProvider())
-        monkeypatch.setattr(cloud_service, "ensure_workspace_runtime_ready", _ensure_runtime_ready)
 
         session = await _register_and_login(client, "cloud-start-reuse@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
@@ -1878,12 +1868,13 @@ class TestCloudWorkspaces:
         )
 
         assert response.status_code == 200
-        assert response.json()["status"] == "ready"
-        assert response.json()["runtimeGeneration"] == 3
-        assert scheduled == []
+        payload = response.json()
+        assert payload["workspaceStatus"] == "materializing"
+        assert payload["runtime"]["generation"] == 3
+        assert scheduled == [workspace.id]
 
     @pytest.mark.asyncio
-    async def test_start_workspace_from_error_requeues_provision_when_reconnect_fails(
+    async def test_start_workspace_from_error_requeues_materialization_with_error_sandbox(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
@@ -1908,9 +1899,6 @@ class TestCloudWorkspaces:
                 branches=["main"],
             )
 
-        async def _boom(*_args, **_kwargs) -> None:
-            raise CloudRuntimeReconnectError("sandbox missing")
-
         _patch_repo_branches_lookup(monkeypatch, _repo_branches)
         monkeypatch.setattr(
             cloud_service,
@@ -1918,7 +1906,6 @@ class TestCloudWorkspaces:
             lambda workspace_id, **_kwargs: scheduled.append(workspace_id),
         )
         monkeypatch.setattr(cloud_service, "get_sandbox_provider", lambda _kind: _FakeProvider())
-        monkeypatch.setattr(cloud_service, "ensure_workspace_runtime_ready", _boom)
 
         session = await _register_and_login(client, "cloud-start-reprovision@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
@@ -1975,7 +1962,7 @@ class TestCloudWorkspaces:
         )
 
         assert response.status_code == 200
-        assert response.json()["status"] == "queued"
+        assert response.json()["workspaceStatus"] == "materializing"
         assert scheduled == [workspace.id]
 
     @pytest.mark.asyncio

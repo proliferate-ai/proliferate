@@ -46,7 +46,7 @@ from proliferate.db.models.billing import (
     UsageSegment,
     WebhookEventReceipt,
 )
-from proliferate.db.models.cloud import CloudSandbox, CloudWorkspace
+from proliferate.db.models.cloud import CloudRuntimeEnvironment, CloudSandbox, CloudWorkspace
 from proliferate.server.billing.models import coerce_utc, utcnow
 
 T = TypeVar("T")
@@ -158,8 +158,11 @@ async def list_cloud_sandboxes_for_subject(
         (
             await db.execute(
                 select(CloudSandbox)
-                .join(CloudWorkspace, CloudSandbox.cloud_workspace_id == CloudWorkspace.id)
-                .where(CloudWorkspace.billing_subject_id == billing_subject_id)
+                .join(
+                    CloudRuntimeEnvironment,
+                    CloudSandbox.runtime_environment_id == CloudRuntimeEnvironment.id,
+                )
+                .where(CloudRuntimeEnvironment.billing_subject_id == billing_subject_id)
             )
         )
         .scalars()
@@ -682,6 +685,16 @@ async def _get_workspace_billing_subject(
     return workspace.billing_subject_id, workspace.user_id
 
 
+async def _get_runtime_environment_billing_subject(
+    db: AsyncSession,
+    runtime_environment_id: UUID,
+) -> tuple[UUID, UUID]:
+    environment = await db.get(CloudRuntimeEnvironment, runtime_environment_id)
+    if environment is None:
+        raise RuntimeError("Cloud runtime environment not found while opening usage segment.")
+    return environment.billing_subject_id, environment.user_id
+
+
 async def resolve_billing_subject_id_for_workspace(workspace_id: UUID) -> UUID:
     async with db_engine.async_session_factory() as db:
         billing_subject_id, _owner_user_id = await _get_workspace_billing_subject(
@@ -696,7 +709,8 @@ async def create_usage_segment(
     *,
     user_id: UUID,
     billing_subject_id: UUID,
-    workspace_id: UUID,
+    runtime_environment_id: UUID | None,
+    workspace_id: UUID | None,
     sandbox_id: UUID,
     external_sandbox_id: str | None,
     sandbox_execution_id: str | None,
@@ -710,6 +724,7 @@ async def create_usage_segment(
         .values(
             user_id=user_id,
             billing_subject_id=billing_subject_id,
+            runtime_environment_id=runtime_environment_id,
             workspace_id=workspace_id,
             sandbox_id=sandbox_id,
             external_sandbox_id=external_sandbox_id,
@@ -1428,7 +1443,8 @@ async def mark_usage_export_failed(
 async def ensure_sandbox_usage_started(
     db: AsyncSession,
     *,
-    workspace_id: UUID,
+    runtime_environment_id: UUID | None = None,
+    workspace_id: UUID | None = None,
     sandbox_id: UUID,
     actor_user_id: UUID | None,
     external_sandbox_id: str | None,
@@ -1445,11 +1461,20 @@ async def ensure_sandbox_usage_started(
         event_type=source,
         external_sandbox_id=external_sandbox_id,
     )
-    billing_subject_id, owner_user_id = await _get_workspace_billing_subject(db, workspace_id)
+    if runtime_environment_id is not None:
+        billing_subject_id, owner_user_id = await _get_runtime_environment_billing_subject(
+            db,
+            runtime_environment_id,
+        )
+    elif workspace_id is not None:
+        billing_subject_id, owner_user_id = await _get_workspace_billing_subject(db, workspace_id)
+    else:
+        raise RuntimeError("Usage segment requires a runtime environment or workspace.")
     return await create_usage_segment(
         db,
         user_id=actor_user_id or owner_user_id,
         billing_subject_id=billing_subject_id,
+        runtime_environment_id=runtime_environment_id,
         workspace_id=workspace_id,
         sandbox_id=sandbox_id,
         external_sandbox_id=external_sandbox_id,
@@ -1559,7 +1584,8 @@ async def load_billing_snapshot_state_for_subject(
 
 async def open_usage_segment_for_sandbox(
     *,
-    workspace_id: UUID,
+    runtime_environment_id: UUID | None = None,
+    workspace_id: UUID | None = None,
     sandbox_id: UUID,
     external_sandbox_id: str | None,
     sandbox_execution_id: str | None,
@@ -1572,6 +1598,7 @@ async def open_usage_segment_for_sandbox(
     async with db_engine.async_session_factory() as db:
         segment = await ensure_sandbox_usage_started(
             db,
+            runtime_environment_id=runtime_environment_id,
             workspace_id=workspace_id,
             sandbox_id=sandbox_id,
             actor_user_id=user_id,

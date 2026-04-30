@@ -12,6 +12,8 @@ function makeWorkspace(overrides: Partial<Workspace>): Workspace {
     kind: "repo",
     path: "/tmp/repo",
     sourceRepoRootPath: "/tmp/repo",
+    lifecycleState: "active",
+    cleanupState: "none",
     createdAt: "2025-01-01T00:00:00.000Z",
     updatedAt: "2025-01-01T00:00:00.000Z",
     ...overrides,

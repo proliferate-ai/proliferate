@@ -63,7 +63,7 @@ If you need to introduce a fifth inhabitant, add it to the precedence chain in `
 - It is rendered beneath `ChatInput` via `ChatComposerDock.footerSlot`.
 - It uses `ComposerControlButton`, not ad hoc button treatments.
 - The location control is the only footer control that opens UI, via `PopoverButton` + `ComposerPopoverSurface`.
-- Path and branch controls are direct utility actions that copy their full values.
+- The detail and branch controls are direct utility actions: local workspaces copy a filesystem path, cloud workspaces copy repository identity, and branch copies the branch name.
 - In-flight workspace mobility does **not** render in the top-slot path anymore. It uses the dedicated `ChatView` overlay instead.
 
 ## 3. The three composer-area components
@@ -213,8 +213,9 @@ Scenarios (selectable via `?s=<key>`):
 - `todos-short`, `todos-mid`, `todos-long` — TodoTrackerPanel at three sizes
 - `execute-approval`, `edit-approval` — ApprovalCard execute/edit variants
 - `workspace-arrival-created` — WorkspaceArrivalAttachedPanel above the composer
+- `cloud-first-runtime`, `cloud-provisioning`, `cloud-applying-files`, `cloud-blocked`, `cloud-error`, `cloud-reconnecting`, `cloud-reconnect-error` — cloud workspace/runtime composer states
 - `claude-plan-short`, `claude-plan-long` — ProposedPlanCard in transcript
-- `mobility-local-actionable`, `mobility-unpublished-branch`, `mobility-unpushed-commits`, `mobility-out-of-sync-branch`, `mobility-in-flight`, `mobility-failed` — composer footer row + mobility states
+- `mobility-local-actionable`, `mobility-local-blocked`, `mobility-unpublished-branch`, `mobility-unpushed-commits`, `mobility-out-of-sync-branch`, `mobility-cloud-active`, `mobility-in-flight`, `mobility-failed` — composer footer row + mobility states
 
 The playground is **dev-only**. It is lazy-loaded via `React.lazy()` gated on `import.meta.env.DEV` in `App.tsx`, so neither the page nor its fixtures land in production bundles.
 

@@ -10,9 +10,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus
 from proliferate.db.models.billing import SandboxEventReceipt, UsageSegment
 from proliferate.db.models.cloud import CloudSandbox, CloudWorkspace
 from proliferate.db.store.billing import ensure_personal_billing_subject
+from proliferate.db.store.cloud_runtime_environments import (
+    ensure_runtime_environment_for_workspace,
+)
 from proliferate.server.billing.models import utcnow
 from tests.e2e.cloud.helpers.shared import (
     DEFAULT_GITHUB_BASE_BRANCH,
@@ -84,7 +88,28 @@ async def create_seeded_workspace_and_sandbox(
     await db_session.commit()
     await db_session.refresh(workspace)
 
+    environment = await ensure_runtime_environment_for_workspace(db_session, workspace)
+    environment.status = (
+        CloudRuntimeEnvironmentStatus.running.value
+        if sandbox_status == "running"
+        else CloudRuntimeEnvironmentStatus.paused.value
+        if sandbox_status == "paused"
+        else CloudRuntimeEnvironmentStatus.provisioning.value
+        if sandbox_status == "provisioning"
+        else CloudRuntimeEnvironmentStatus.error.value
+    )
+    environment.runtime_generation = 1 if with_runtime_metadata else 0
+    environment.runtime_url = runtime_url
+    environment.runtime_token_ciphertext = encrypt_text(runtime_token) if runtime_token else None
+    environment.root_anyharness_workspace_id = (
+        "root-workspace-123" if with_runtime_metadata else None
+    )
+    environment.root_anyharness_repo_root_id = "repo-root-123" if with_runtime_metadata else None
+    await db_session.commit()
+    await db_session.refresh(environment)
+
     sandbox = CloudSandbox(
+        runtime_environment_id=environment.id,
         cloud_workspace_id=workspace.id,
         provider=provider,
         external_sandbox_id=f"{provider}-sandbox-{uuid.uuid4()}",
@@ -97,6 +122,7 @@ async def create_seeded_workspace_and_sandbox(
     await db_session.refresh(sandbox)
 
     workspace.active_sandbox_id = sandbox.id
+    environment.active_sandbox_id = sandbox.id
     await db_session.commit()
     await db_session.refresh(workspace)
     return workspace, sandbox

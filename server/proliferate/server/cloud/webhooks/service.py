@@ -19,17 +19,20 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_PROVISION,
     USAGE_SEGMENT_OPENED_BY_WEBHOOK_RESUMED,
 )
+from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
     open_usage_segment_for_sandbox,
     remember_sandbox_event_receipt,
 )
+from proliferate.db.store.cloud_runtime_environments import (
+    load_runtime_environment_by_id,
+    save_runtime_environment_state,
+)
 from proliferate.db.store.cloud_workspaces import (
     load_cloud_sandbox_by_external_id,
     load_cloud_sandbox_by_id,
     load_cloud_workspace_by_id,
-    persist_workspace_destroy_state,
-    persist_workspace_stop_state,
     save_sandbox_provider_state,
 )
 from proliferate.integrations.sandbox import get_sandbox_provider
@@ -137,8 +140,17 @@ async def handle_e2b_webhook(
     ):
         return E2BWebhookReceipt()
 
-    workspace = await load_cloud_workspace_by_id(sandbox.cloud_workspace_id)
-    if workspace is None:
+    runtime_environment = (
+        await load_runtime_environment_by_id(sandbox.runtime_environment_id)
+        if sandbox.runtime_environment_id is not None
+        else None
+    )
+    workspace = (
+        await load_cloud_workspace_by_id(sandbox.cloud_workspace_id)
+        if sandbox.cloud_workspace_id is not None
+        else None
+    )
+    if runtime_environment is None and workspace is None:
         return E2BWebhookReceipt()
 
     await save_sandbox_provider_state(
@@ -149,7 +161,12 @@ async def handle_e2b_webhook(
     )
 
     if event_kind in {PROVIDER_EVENT_KIND_CREATED, PROVIDER_EVENT_KIND_RESUMED}:
-        billing = await get_billing_snapshot_for_subject(workspace.billing_subject_id)
+        billing_subject_id = (
+            runtime_environment.billing_subject_id
+            if runtime_environment is not None
+            else workspace.billing_subject_id
+        )
+        billing = await get_billing_snapshot_for_subject(billing_subject_id)
         if billing.billing_mode == BILLING_MODE_ENFORCE and billing.active_spend_hold:
             if event.sandbox_id:
                 provider = get_sandbox_provider(sandbox.provider)
@@ -167,14 +184,23 @@ async def handle_e2b_webhook(
                 last_provider_event_at=event.timestamp,
                 last_provider_event_kind=PROVIDER_EVENT_KIND_PAUSED,
             )
-            workspace.status = "stopped"
-            workspace.status_detail = "Stopped"
-            await persist_workspace_stop_state(workspace)
+            if runtime_environment is not None:
+                await save_runtime_environment_state(
+                    runtime_environment.id,
+                    status=CloudRuntimeEnvironmentStatus.paused.value,
+                )
             return E2BWebhookReceipt()
 
+        user_id = (
+            runtime_environment.user_id if runtime_environment is not None else workspace.user_id
+        )
+        runtime_environment_id = (
+            runtime_environment.id if runtime_environment is not None else None
+        )
         await open_usage_segment_for_sandbox(
-            user_id=workspace.user_id,
-            workspace_id=workspace.id,
+            user_id=user_id,
+            runtime_environment_id=runtime_environment_id,
+            workspace_id=workspace.id if workspace is not None else None,
             sandbox_id=sandbox.id,
             external_sandbox_id=event.sandbox_id or sandbox.external_sandbox_id,
             sandbox_execution_id=None,
@@ -194,6 +220,11 @@ async def handle_e2b_webhook(
             last_provider_event_at=event.timestamp,
             last_provider_event_kind=event_kind,
         )
+        if runtime_environment is not None:
+            await save_runtime_environment_state(
+                runtime_environment.id,
+                status=CloudRuntimeEnvironmentStatus.running.value,
+            )
         return E2BWebhookReceipt()
 
     if event_kind == PROVIDER_EVENT_KIND_PAUSED:
@@ -210,9 +241,11 @@ async def handle_e2b_webhook(
             last_provider_event_at=event.timestamp,
             last_provider_event_kind=event_kind,
         )
-        workspace.status = "stopped"
-        workspace.status_detail = "Stopped"
-        await persist_workspace_stop_state(workspace)
+        if runtime_environment is not None:
+            await save_runtime_environment_state(
+                runtime_environment.id,
+                status=CloudRuntimeEnvironmentStatus.paused.value,
+            )
         return E2BWebhookReceipt()
 
     if event_kind == PROVIDER_EVENT_KIND_KILLED:
@@ -229,9 +262,16 @@ async def handle_e2b_webhook(
             last_provider_event_at=event.timestamp,
             last_provider_event_kind=event_kind,
         )
-        workspace.status = "stopped"
-        workspace.status_detail = "Stopped"
-        await persist_workspace_destroy_state(workspace)
+        if runtime_environment is not None:
+            await save_runtime_environment_state(
+                runtime_environment.id,
+                status=CloudRuntimeEnvironmentStatus.error.value,
+                runtime_url=None,
+                runtime_token_ciphertext=None,
+                active_sandbox_id=None,
+                increment_runtime_generation=True,
+                last_error="Provider reported sandbox killed.",
+            )
         return E2BWebhookReceipt()
 
     return E2BWebhookReceipt()

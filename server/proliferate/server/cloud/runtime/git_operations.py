@@ -90,24 +90,14 @@ async def checkout_cloud_branch(
     runtime_context: SandboxRuntimeContext,
 ) -> None:
     if ctx.requested_base_sha:
-        checkout_command = "sh -lc " + shlex.quote(
-            " && ".join(
-                [
-                    (
-                        f"git -C {shlex.quote(runtime_context.runtime_workdir)} "
-                        f"checkout --force {shlex.quote(ctx.requested_base_sha)}"
-                    ),
-                    (
-                        f"git -C {shlex.quote(runtime_context.runtime_workdir)} "
-                        f"checkout -B {shlex.quote(ctx.git_branch)}"
-                    ),
-                ]
-            )
+        checkout_command = (
+            f"git -C {shlex.quote(runtime_context.runtime_workdir)} "
+            f"checkout --force {shlex.quote(ctx.requested_base_sha)}"
         )
     else:
         checkout_command = (
-            f"git -C {shlex.quote(runtime_context.runtime_workdir)} checkout --no-track "
-            f"-b {shlex.quote(ctx.git_branch)} origin/{shlex.quote(ctx.git_base_branch)}"
+            f"git -C {shlex.quote(runtime_context.runtime_workdir)} checkout --force "
+            f"{shlex.quote(ctx.git_base_branch)}"
         )
     checkout_result = await run_sandbox_command_logged(
         provider,
@@ -158,3 +148,25 @@ async def configure_git_identity(
     if result_exit_code(config_result) != 0:
         stderr = result_stderr(config_result) or result_stdout(config_result)
         raise RuntimeError(f"Failed to configure git identity: {str(stderr).strip()[:400]}")
+
+
+async def resolve_runtime_root_head_sha(
+    provider: SandboxProvider,
+    sandbox: Any,
+    *,
+    ctx: CloudProvisionInput,
+    runtime_context: SandboxRuntimeContext,
+) -> str:
+    result = await run_sandbox_command_logged(
+        provider,
+        sandbox,
+        workspace_id=ctx.workspace_id,
+        label="resolve_runtime_root_head",
+        command=f"git -C {shlex.quote(runtime_context.runtime_workdir)} rev-parse HEAD",
+        runtime_context=runtime_context,
+        timeout_seconds=30,
+    )
+    if result_exit_code(result) != 0:
+        stderr = result_stderr(result) or result_stdout(result)
+        raise RuntimeError(f"Failed to resolve base commit: {str(stderr).strip()[:400]}")
+    return result_stdout(result).strip()

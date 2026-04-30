@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from proliferate.config import settings
 from proliferate.constants.billing import MONTHLY_CLOUD_GRANT_TYPE
+from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus
 from proliferate.db.models.auth import OAuthAccount
 from proliferate.db.models.billing import (
     BillingEntitlement,
@@ -26,6 +27,9 @@ from proliferate.db.store.billing import (
     ensure_billing_grant,
     ensure_free_included_grant,
     ensure_personal_billing_subject,
+)
+from proliferate.db.store.cloud_runtime_environments import (
+    ensure_runtime_environment_for_workspace,
 )
 from proliferate.integrations.github import GitHubRepoBranches
 from proliferate.server.cloud.workspaces import service as cloud_service
@@ -283,8 +287,11 @@ class TestBillingApi:
         )
         db_session.add(workspace)
         await db_session.flush()
+        environment = await ensure_runtime_environment_for_workspace(db_session, workspace)
+        environment.status = CloudRuntimeEnvironmentStatus.running.value
 
         sandbox = CloudSandbox(
+            runtime_environment_id=environment.id,
             cloud_workspace_id=workspace.id,
             provider="e2b",
             external_sandbox_id="sandbox-123",
@@ -294,12 +301,14 @@ class TestBillingApi:
         )
         db_session.add(sandbox)
         await db_session.flush()
+        environment.active_sandbox_id = sandbox.id
 
         now = datetime.now(UTC)
         db_session.add(
             UsageSegment(
                 user_id=user_id,
                 billing_subject_id=billing_subject.id,
+                runtime_environment_id=environment.id,
                 workspace_id=workspace.id,
                 sandbox_id=sandbox.id,
                 external_sandbox_id=sandbox.external_sandbox_id,

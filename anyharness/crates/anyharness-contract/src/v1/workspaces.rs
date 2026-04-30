@@ -38,6 +38,22 @@ pub enum WorkspaceSurface {
     Cowork,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceLifecycleState {
+    Active,
+    Retired,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceCleanupState {
+    None,
+    Pending,
+    Complete,
+    Failed,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
@@ -52,6 +68,8 @@ pub struct Workspace {
     pub current_branch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    pub lifecycle_state: WorkspaceLifecycleState,
+    pub cleanup_state: WorkspaceCleanupState,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_summary: Option<WorkspaceExecutionSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]

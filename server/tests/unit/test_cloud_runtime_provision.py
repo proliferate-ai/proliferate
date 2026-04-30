@@ -15,6 +15,7 @@ from proliferate.integrations.sandbox import SandboxProviderKind
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime import bootstrap as runtime_bootstrap
 from proliferate.server.cloud.runtime import provision as runtime_provision
+from proliferate.server.cloud.runtime.anyharness_api import ResolvedRemoteWorkspace
 from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
 from proliferate.server.cloud.runtime.credentials import (
     ClaudeProvisionCredential,
@@ -260,14 +261,14 @@ class TestWorkspaceStatusLogging:
 
         await runtime_provision._set_workspace_status(
             workspace_id,
-            runtime_provision.WorkspaceStatus.provisioning,
+            runtime_provision.CloudWorkspaceStatus.materializing,
             detail="Checking template readiness",
         )
 
         assert persisted == [
             (
                 workspace_id,
-                runtime_provision.WorkspaceStatus.provisioning,
+                runtime_provision.CloudWorkspaceStatus.materializing,
                 "Checking template readiness",
             )
         ]
@@ -276,7 +277,7 @@ class TestWorkspaceStatusLogging:
                 "cloud workspace status updated",
                 {
                     "workspace_id": workspace_id,
-                    "status": "provisioning",
+                    "status": "materializing",
                     "detail": "Checking template readiness",
                 },
             )
@@ -656,9 +657,24 @@ class TestLaunchAndConnectRuntime:
             calls.append("reconcile_remote_agents")
             return ["claude", "codex"]
 
-        async def _resolve_remote_workspace(*_args, **_kwargs) -> str:
+        async def _resolve_remote_workspace(*_args, **_kwargs) -> ResolvedRemoteWorkspace:
             calls.append("resolve_remote_workspace")
-            return "workspace-123"
+            return ResolvedRemoteWorkspace(workspace_id="workspace-123", repo_root_id="repo-1")
+
+        async def _resolve_runtime_root_head_sha(*_args, **_kwargs) -> str:
+            calls.append("resolve_runtime_root_head_sha")
+            return "base-sha"
+
+        async def _prepare_remote_mobility_destination(
+            *_args, **_kwargs
+        ) -> ResolvedRemoteWorkspace:
+            calls.append("prepare_remote_mobility_destination")
+            return ResolvedRemoteWorkspace(
+                workspace_id="visible-workspace-123", repo_root_id="repo-1"
+            )
+
+        async def _set_workspace_status(*_args, **_kwargs) -> None:
+            return None
 
         provider.write_file = _write_file
         provider.resolve_runtime_endpoint = _resolve_runtime_endpoint
@@ -679,6 +695,17 @@ class TestLaunchAndConnectRuntime:
         monkeypatch.setattr(
             runtime_provision, "resolve_remote_workspace", _resolve_remote_workspace
         )
+        monkeypatch.setattr(
+            runtime_provision,
+            "resolve_runtime_root_head_sha",
+            _resolve_runtime_root_head_sha,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "prepare_remote_mobility_destination",
+            _prepare_remote_mobility_destination,
+        )
+        monkeypatch.setattr(runtime_provision, "_set_workspace_status", _set_workspace_status)
 
         await runtime_provision._launch_and_connect_runtime(
             tracker,
@@ -696,6 +723,8 @@ class TestLaunchAndConnectRuntime:
             "verify_runtime_auth_enforced",
             "reconcile_remote_agents",
             "resolve_remote_workspace",
+            "resolve_runtime_root_head_sha",
+            "prepare_remote_mobility_destination",
         ]
         assert wait_kwargs["required_successes"] == 1
         assert wait_kwargs["delay_seconds"] == 0.5
@@ -769,6 +798,8 @@ class TestProvisionWorkspaceGitSetup:
             runtime_token="runtime-token",
             ready_agents=["claude", "codex"],
             anyharness_workspace_id="workspace-123",
+            root_anyharness_workspace_id="root-workspace-123",
+            anyharness_repo_root_id="repo-root-123",
         )
 
         async def _noop_status(*args, **kwargs) -> None:
@@ -780,10 +811,13 @@ class TestProvisionWorkspaceGitSetup:
         async def _create_and_connect_sandbox(*args, **kwargs):
             return connected
 
+        async def _connect_existing_environment_sandbox(*args, **kwargs):
+            return None
+
         async def _authorize_sandbox_start(*args, **kwargs):
             return SimpleNamespace(allowed=True, message=None)
 
-        async def _reserve_and_attach_sandbox_for_workspace(*args, **kwargs):
+        async def _reserve_and_attach_sandbox_for_environment(*args, **kwargs):
             return sandbox_record
 
         async def _prepare_runtime_template(*args, **kwargs) -> None:
@@ -808,6 +842,9 @@ class TestProvisionWorkspaceGitSetup:
         async def _finalize_workspace_provision_for_ids(*args, **kwargs) -> None:
             calls.append("finalize_workspace")
 
+        async def _save_runtime_environment_state(*args, **kwargs) -> None:
+            return None
+
         async def _load_cloud_workspace_by_id(*args, **kwargs):
             return None
 
@@ -824,13 +861,18 @@ class TestProvisionWorkspaceGitSetup:
         )
         monkeypatch.setattr(
             runtime_provision,
+            "_connect_existing_environment_sandbox",
+            _connect_existing_environment_sandbox,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
             "authorize_sandbox_start",
             _authorize_sandbox_start,
         )
         monkeypatch.setattr(
             runtime_provision,
-            "reserve_and_attach_sandbox_for_workspace",
-            _reserve_and_attach_sandbox_for_workspace,
+            "reserve_and_attach_sandbox_for_environment",
+            _reserve_and_attach_sandbox_for_environment,
         )
         monkeypatch.setattr(
             runtime_provision,
@@ -850,6 +892,11 @@ class TestProvisionWorkspaceGitSetup:
             runtime_provision,
             "finalize_workspace_provision_for_ids",
             _finalize_workspace_provision_for_ids,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "save_runtime_environment_state",
+            _save_runtime_environment_state,
         )
         monkeypatch.setattr(
             runtime_provision,
@@ -881,6 +928,130 @@ class TestProvisionWorkspaceGitSetup:
         ]
 
     @pytest.mark.asyncio
+    async def test_provision_workspace_reuses_existing_runtime_without_relaunch(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        calls: list[str] = []
+        runtime_state_kwargs: list[dict[str, object]] = []
+        ctx = _make_provision_input(codex_enabled=True)
+        provider = SimpleNamespace(
+            kind=SandboxProviderKind.daytona,
+            template_version="v1",
+        )
+        sandbox_record_id = uuid.uuid4()
+        connected = SimpleNamespace(
+            handle=SimpleNamespace(
+                sandbox_id="sandbox-123",
+                provider=SimpleNamespace(value="daytona"),
+                template_version="v1",
+            ),
+            sandbox=object(),
+            endpoint=SimpleNamespace(runtime_url="https://runtime.example"),
+            runtime_context=SimpleNamespace(runtime_workdir="/home/user/workspace"),
+        )
+        handshake = SimpleNamespace(
+            runtime_token="stored-runtime-token",
+            ready_agents=["claude", "codex"],
+            anyharness_workspace_id="workspace-123",
+            root_anyharness_workspace_id="root-workspace-123",
+            anyharness_repo_root_id="repo-root-123",
+        )
+
+        async def _noop_status(*args, **kwargs) -> None:
+            return None
+
+        async def _load_provision_input(_workspace_id, *, requested_base_sha=None):
+            return ctx
+
+        async def _connect_existing_environment_sandbox(*args, **kwargs):
+            calls.append("connect_existing_runtime")
+            return connected, sandbox_record_id, "stored-runtime-token"
+
+        async def _authorize_sandbox_start(*args, **kwargs):
+            return SimpleNamespace(allowed=True, message=None)
+
+        async def _unexpected(*args, **kwargs):
+            raise AssertionError("fresh sandbox/runtime path should not run")
+
+        async def _attach_workspace_to_running_runtime(*args, runtime_token: str, **kwargs):
+            calls.append(f"attach_workspace:{runtime_token}")
+            return handshake
+
+        async def _finalize_workspace_provision_for_ids(*args, **kwargs) -> None:
+            calls.append("finalize_workspace")
+
+        async def _save_runtime_environment_state(*args, **kwargs) -> None:
+            runtime_state_kwargs.append(kwargs)
+
+        async def _load_cloud_workspace_by_id(*args, **kwargs):
+            return None
+
+        async def _apply_workspace_repo_config_after_provision(*args, **kwargs) -> None:
+            return None
+
+        monkeypatch.setattr(runtime_provision, "_load_provision_input", _load_provision_input)
+        monkeypatch.setattr(runtime_provision, "get_configured_sandbox_provider", lambda: provider)
+        monkeypatch.setattr(runtime_provision, "_set_workspace_status", _noop_status)
+        monkeypatch.setattr(
+            runtime_provision,
+            "_connect_existing_environment_sandbox",
+            _connect_existing_environment_sandbox,
+        )
+        monkeypatch.setattr(runtime_provision, "authorize_sandbox_start", _authorize_sandbox_start)
+        monkeypatch.setattr(
+            runtime_provision,
+            "reserve_and_attach_sandbox_for_environment",
+            _unexpected,
+        )
+        monkeypatch.setattr(runtime_provision, "_prepare_runtime_template", _unexpected)
+        monkeypatch.setattr(runtime_provision, "write_credential_files", _unexpected)
+        monkeypatch.setattr(runtime_provision, "clone_repository", _unexpected)
+        monkeypatch.setattr(runtime_provision, "checkout_cloud_branch", _unexpected)
+        monkeypatch.setattr(runtime_provision, "configure_git_identity", _unexpected)
+        monkeypatch.setattr(runtime_provision, "_launch_and_connect_runtime", _unexpected)
+        monkeypatch.setattr(
+            runtime_provision,
+            "_attach_workspace_to_running_runtime",
+            _attach_workspace_to_running_runtime,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "finalize_workspace_provision_for_ids",
+            _finalize_workspace_provision_for_ids,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "save_runtime_environment_state",
+            _save_runtime_environment_state,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "load_cloud_workspace_by_id",
+            _load_cloud_workspace_by_id,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "apply_workspace_repo_config_after_provision",
+            _apply_workspace_repo_config_after_provision,
+        )
+        monkeypatch.setattr(runtime_provision, "log_cloud_event", lambda *args, **kwargs: None)
+        monkeypatch.setattr(
+            runtime_provision,
+            "_log_provision_summary",
+            lambda *args, **kwargs: None,
+        )
+
+        await runtime_provision.provision_workspace(ctx.workspace_id)
+
+        assert calls == [
+            "connect_existing_runtime",
+            "attach_workspace:stored-runtime-token",
+            "finalize_workspace",
+        ]
+        assert runtime_state_kwargs[-1]["increment_runtime_generation"] is False
+
+    @pytest.mark.asyncio
     async def test_provision_workspace_blocks_when_sandbox_reservation_limit_is_reached(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -894,7 +1065,15 @@ class TestProvisionWorkspaceGitSetup:
         async def _authorize_sandbox_start(*args, **kwargs):
             return SimpleNamespace(allowed=True, message=None)
 
-        async def _reserve_and_attach_sandbox_for_workspace(*args, **kwargs):
+        provider = SimpleNamespace(
+            kind=SandboxProviderKind.daytona,
+            template_version="v1",
+        )
+
+        async def _reserve_and_attach_sandbox_for_environment(*args, **kwargs):
+            return None
+
+        async def _connect_existing_environment_sandbox(*args, **kwargs):
             return None
 
         async def _set_workspace_status(*args, **kwargs) -> None:
@@ -908,11 +1087,17 @@ class TestProvisionWorkspaceGitSetup:
             errors.append(message)
 
         monkeypatch.setattr(runtime_provision, "_load_provision_input", _load_provision_input)
+        monkeypatch.setattr(runtime_provision, "get_configured_sandbox_provider", lambda: provider)
+        monkeypatch.setattr(
+            runtime_provision,
+            "_connect_existing_environment_sandbox",
+            _connect_existing_environment_sandbox,
+        )
         monkeypatch.setattr(runtime_provision, "authorize_sandbox_start", _authorize_sandbox_start)
         monkeypatch.setattr(
             runtime_provision,
-            "reserve_and_attach_sandbox_for_workspace",
-            _reserve_and_attach_sandbox_for_workspace,
+            "reserve_and_attach_sandbox_for_environment",
+            _reserve_and_attach_sandbox_for_environment,
         )
         monkeypatch.setattr(
             runtime_provision,
@@ -933,5 +1118,6 @@ class TestProvisionWorkspaceGitSetup:
         assert exc_info.value.code == "quota_exceeded"
         assert "Sandbox limit reached" in exc_info.value.message
         assert errors == [
-            "Sandbox limit reached. Stop another cloud workspace before starting a new one."
+            "Sandbox limit reached. Archive or delete another cloud workspace before "
+            "starting a new one."
         ]

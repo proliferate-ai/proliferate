@@ -41,6 +41,9 @@ pub struct ResolveRepoRootFromPathRequest {
 pub struct PrepareRepoRootMobilityDestinationRequest {
     pub requested_branch: String,
     pub requested_base_sha: String,
+    #[schema(pattern = "^[A-Za-z0-9._-]{1,96}$", max_length = 96)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preferred_workspace_name: Option<String>,
 }

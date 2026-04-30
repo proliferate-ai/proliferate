@@ -16,6 +16,7 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_CLOSED_BY_RECONCILER,
     USAGE_SEGMENT_OPENED_BY_RECONCILER_REPAIR,
 )
+from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus
 from proliferate.db.models.billing import UsageSegment
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
@@ -24,15 +25,21 @@ from proliferate.db.store.billing import (
     record_billing_decision_event,
     with_billing_reconciler_lock,
 )
+from proliferate.db.store.cloud_runtime_environments import (
+    load_runtime_environment_by_id,
+    save_runtime_environment_state,
+)
 from proliferate.db.store.cloud_workspaces import (
     load_cloud_sandbox_by_id,
     load_cloud_sandbox_placeholders,
     load_cloud_workspace_by_id,
-    persist_workspace_destroy_state,
-    persist_workspace_stop_state,
     save_sandbox_provider_state,
 )
-from proliferate.integrations.sandbox import ProviderSandboxState, get_configured_sandbox_provider
+from proliferate.integrations.sandbox import (
+    ProviderSandboxState,
+    SandboxProvider,
+    get_configured_sandbox_provider,
+)
 from proliferate.integrations.sentry import capture_server_sentry_exception
 from proliferate.server.billing.models import BillingSnapshot
 from proliferate.server.billing.service import (
@@ -50,16 +57,31 @@ def _is_running_state(state: str) -> bool:
     return state in {"running", "started"}
 
 
-async def _mark_workspace_stopped(workspace_id: UUID, *, destroyed: bool) -> None:
-    workspace = await load_cloud_workspace_by_id(workspace_id)
-    if workspace is None:
+async def _mark_environment_unavailable(
+    runtime_environment_id: UUID | None,
+    *,
+    destroyed: bool,
+) -> None:
+    if runtime_environment_id is None:
         return
-    workspace.status = "stopped"
-    workspace.status_detail = "Stopped"
+    environment = await load_runtime_environment_by_id(runtime_environment_id)
+    if environment is None:
+        return
     if destroyed:
-        await persist_workspace_destroy_state(workspace)
+        await save_runtime_environment_state(
+            environment.id,
+            status=CloudRuntimeEnvironmentStatus.error.value,
+            runtime_url=None,
+            runtime_token_ciphertext=None,
+            active_sandbox_id=None,
+            increment_runtime_generation=True,
+            last_error="Provider sandbox was destroyed.",
+        )
     else:
-        await persist_workspace_stop_state(workspace)
+        await save_runtime_environment_state(
+            environment.id,
+            status=CloudRuntimeEnvironmentStatus.paused.value,
+        )
 
 
 async def _repair_placeholders(
@@ -71,8 +93,17 @@ async def _repair_placeholders(
         state = states_by_placeholder_id.get(str(placeholder.id))
         if state is None:
             continue
-        workspace = await load_cloud_workspace_by_id(placeholder.cloud_workspace_id)
-        if workspace is None:
+        environment = (
+            await load_runtime_environment_by_id(placeholder.runtime_environment_id)
+            if placeholder.runtime_environment_id is not None
+            else None
+        )
+        workspace = (
+            await load_cloud_workspace_by_id(placeholder.cloud_workspace_id)
+            if placeholder.cloud_workspace_id is not None
+            else None
+        )
+        if environment is None and workspace is None:
             continue
         await save_sandbox_provider_state(
             placeholder.id,
@@ -82,8 +113,9 @@ async def _repair_placeholders(
         )
         if _is_running_state(state.state):
             await open_usage_segment_for_sandbox(
-                user_id=workspace.user_id,
-                workspace_id=placeholder.cloud_workspace_id,
+                user_id=environment.user_id if environment is not None else workspace.user_id,
+                runtime_environment_id=environment.id if environment is not None else None,
+                workspace_id=workspace.id if workspace is not None else None,
                 sandbox_id=placeholder.id,
                 external_sandbox_id=state.external_sandbox_id,
                 sandbox_execution_id=None,
@@ -95,6 +127,7 @@ async def _repair_placeholders(
 async def _enforce_or_reconcile_segment(
     *,
     segment: UsageSegment,
+    provider: SandboxProvider,
     state: ProviderSandboxState | None,
     billing_snapshot: BillingSnapshot,
 ) -> None:
@@ -102,18 +135,41 @@ async def _enforce_or_reconcile_segment(
     if sandbox is None:
         return
 
-    if state is None or state.state in {"paused", "stopped"}:
+    if state is None and sandbox.external_sandbox_id:
+        try:
+            state = await provider.get_sandbox_state(sandbox.external_sandbox_id)
+        except Exception:
+            logger.exception(
+                "billing reconciler failed to directly observe sandbox",
+                extra={
+                    "sandbox_id": str(sandbox.id),
+                    "external_sandbox_id": sandbox.external_sandbox_id,
+                },
+            )
+            return
+
+    if state is None:
+        logger.warning(
+            "billing reconciler skipped sandbox with unknown provider state",
+            extra={
+                "sandbox_id": str(sandbox.id),
+                "external_sandbox_id": sandbox.external_sandbox_id,
+            },
+        )
+        return
+
+    if state.state in {"paused", "stopped"}:
         await close_usage_segment_for_sandbox(
             sandbox_id=sandbox.id,
-            ended_at=(state.end_at or state.observed_at) if state is not None else utcnow(),
+            ended_at=state.end_at or state.observed_at,
             closed_by=USAGE_SEGMENT_CLOSED_BY_RECONCILER,
         )
         await save_sandbox_provider_state(
             sandbox.id,
             status="paused",
-            stopped_at=(state.end_at or state.observed_at) if state is not None else utcnow(),
+            stopped_at=state.end_at or state.observed_at,
         )
-        await _mark_workspace_stopped(sandbox.cloud_workspace_id, destroyed=False)
+        await _mark_environment_unavailable(sandbox.runtime_environment_id, destroyed=False)
         return
 
     if state.state in {"killed", "destroyed", "terminated"}:
@@ -127,7 +183,7 @@ async def _enforce_or_reconcile_segment(
             status="destroyed",
             stopped_at=state.end_at or state.observed_at,
         )
-        await _mark_workspace_stopped(sandbox.cloud_workspace_id, destroyed=True)
+        await _mark_environment_unavailable(sandbox.runtime_environment_id, destroyed=True)
         return
 
     if settings.cloud_billing_mode == BILLING_MODE_ENFORCE and billing_snapshot.active_spend_hold:
@@ -155,7 +211,7 @@ async def _enforce_or_reconcile_segment(
             status="paused",
             stopped_at=ended_at,
         )
-        await _mark_workspace_stopped(sandbox.cloud_workspace_id, destroyed=False)
+        await _mark_environment_unavailable(sandbox.runtime_environment_id, destroyed=False)
 
 
 async def run_billing_reconcile_pass() -> None:
@@ -202,6 +258,7 @@ async def run_billing_reconcile_pass() -> None:
                 recorded_hold_decision_subjects.add(segment.billing_subject_id)
             await _enforce_or_reconcile_segment(
                 segment=segment,
+                provider=provider,
                 state=(
                     states_by_external_id.get(segment.external_sandbox_id)
                     if segment.external_sandbox_id

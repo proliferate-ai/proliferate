@@ -92,6 +92,14 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0026_workspace_session_origin",
         include_str!("sql/0026_workspace_session_origin.sql"),
     ),
+    (
+        "0027_workspace_lifecycle_state",
+        include_str!("sql/0027_workspace_lifecycle_state.sql"),
+    ),
+    (
+        "0028_mobility_archive_installs",
+        include_str!("sql/0028_mobility_archive_installs.sql"),
+    ),
 ];
 
 const CUSTOM_MIGRATIONS: &[(&str, fn(&Transaction<'_>) -> rusqlite::Result<()>)] = &[(

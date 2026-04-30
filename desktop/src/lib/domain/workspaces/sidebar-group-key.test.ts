@@ -28,6 +28,8 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
     currentBranch: overrides.currentBranch ?? "feature/workspace-1",
     displayName: overrides.displayName,
     executionSummary: overrides.executionSummary,
+    lifecycleState: overrides.lifecycleState ?? "active",
+    cleanupState: overrides.cleanupState ?? "none",
     createdAt: overrides.createdAt ?? "2026-04-13T10:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-04-13T10:00:00.000Z",
   };

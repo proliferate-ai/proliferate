@@ -295,49 +295,6 @@ export function useSessionCreationActions({
       }
     }
 
-    const requestOptions = buildLatencyRequestOptions(options.latencyFlowId);
-    const runtimeUrl = await ensureRuntimeReadyForSessions();
-    const existingSessions = await ensureWorkspaceSessions(workspaceId).catch(() => []);
-
-    const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
-    const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId);
-    const client = getAnyHarnessClient({
-      runtimeUrl: target.baseUrl,
-      authToken: target.authToken,
-    });
-    const targetWorkspace = await client.workspaces.get(
-      target.anyharnessWorkspaceId,
-      requestOptions,
-    ).catch(() => null);
-    const powersInCodingSessionsEnabled = useUserPreferencesStore.getState()
-      .powersInCodingSessionsEnabled;
-    const {
-      mcpServers,
-      mcpBindingSummaries,
-      warnings: connectorWarnings,
-    } = await resolveSessionMcpServersForLaunch({
-      targetLocation: target.location,
-      workspacePath: targetWorkspace?.path ?? null,
-      policy: {
-        workspaceSurface: "coding",
-        lifecycle: "create",
-        enabled: powersInCodingSessionsEnabled,
-      },
-    });
-    const localWorkspace = cloudWorkspaceId ? null : targetWorkspace;
-    const cloudWorkspace = cloudWorkspaceId
-      ? await getCloudWorkspace(cloudWorkspaceId).catch(() => undefined)
-      : undefined;
-
-    const placeholderBranch = cloudWorkspaceId
-      ? cloudWorkspace?.repo.branch?.trim() || null
-      : localWorkspace?.originalBranch?.trim()
-        || localWorkspace?.currentBranch?.trim()
-        || null;
-    const isBranchBackedWorkspace =
-      cloudWorkspaceId !== null || localWorkspace?.kind === "worktree";
-    const shouldInjectBranchNaming =
-      existingSessions.length === 0 && isBranchBackedWorkspace && !!placeholderBranch;
     const branchPrefixType = useUserPreferencesStore.getState().branchPrefixType;
     const preferredModeId = useUserPreferencesStore.getState()
       .defaultSessionModeByAgentKind[options.agentKind]
@@ -350,15 +307,6 @@ export function useSessionCreationActions({
       preferredModeId,
     });
     const authUser = useAuthStore.getState().user;
-    const systemPromptAppend = shouldInjectBranchNaming
-      ? [
-        buildFirstSessionBranchNamingPrompt({
-          placeholderBranch,
-          prefixType: branchPrefixType,
-          user: authUser,
-        }),
-      ]
-      : undefined;
     const pendingSessionId = createPendingSessionId(options.agentKind);
     const optimisticPendingPrompt = hasPrompt
       ? createOptimisticPendingPrompt(
@@ -388,87 +336,143 @@ export function useSessionCreationActions({
     activateSession(pendingSessionId);
     pruneInactiveSessionStreams();
 
-    if (shouldInjectBranchNaming && placeholderBranch && hasPrompt) {
-      beginPendingBranchRenameTracking({
-        workspaceId,
-        placeholderBranch,
-        cloudWorkspaceId,
+    let didStartBranchRenameTracking = false;
+
+    const createPromise = (async () => {
+      const requestOptions = buildLatencyRequestOptions(options.latencyFlowId);
+      const runtimeUrl = await ensureRuntimeReadyForSessions();
+      const existingSessions = await ensureWorkspaceSessions(workspaceId).catch(() => []);
+
+      const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
+      const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId);
+      const client = getAnyHarnessClient({
+        runtimeUrl: target.baseUrl,
+        authToken: target.authToken,
+      });
+      const targetWorkspace = await client.workspaces.get(
+        target.anyharnessWorkspaceId,
+        requestOptions,
+      ).catch(() => null);
+      const powersInCodingSessionsEnabled = useUserPreferencesStore.getState()
+        .powersInCodingSessionsEnabled;
+      const {
+        mcpServers,
+        mcpBindingSummaries,
+        warnings: connectorWarnings,
+      } = await resolveSessionMcpServersForLaunch({
+        targetLocation: target.location,
+        workspacePath: targetWorkspace?.path ?? null,
+        policy: {
+          workspaceSurface: "coding",
+          lifecycle: "create",
+          enabled: powersInCodingSessionsEnabled,
+        },
+      });
+      const localWorkspace = cloudWorkspaceId ? null : targetWorkspace;
+      const cloudWorkspace = cloudWorkspaceId
+        ? await getCloudWorkspace(cloudWorkspaceId).catch(() => undefined)
+        : undefined;
+
+      const placeholderBranch = cloudWorkspaceId
+        ? cloudWorkspace?.repo.branch?.trim() || null
+        : localWorkspace?.originalBranch?.trim()
+          || localWorkspace?.currentBranch?.trim()
+          || null;
+      const isBranchBackedWorkspace =
+        cloudWorkspaceId !== null || localWorkspace?.kind === "worktree";
+      const shouldInjectBranchNaming =
+        existingSessions.length === 0 && isBranchBackedWorkspace && !!placeholderBranch;
+      const systemPromptAppend = shouldInjectBranchNaming
+        ? [
+          buildFirstSessionBranchNamingPrompt({
+            placeholderBranch,
+            prefixType: branchPrefixType,
+            user: authUser,
+          }),
+        ]
+        : undefined;
+
+      if (shouldInjectBranchNaming && placeholderBranch && hasPrompt) {
+        beginPendingBranchRenameTracking({
+          workspaceId,
+          placeholderBranch,
+          cloudWorkspaceId,
+        });
+        didStartBranchRenameTracking = true;
+      }
+
+      const session = await client.sessions.create({
+        workspaceId: target.anyharnessWorkspaceId,
+        agentKind: options.agentKind,
+        modelId: options.modelId,
+        ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
+        mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
+        mcpBindingSummaries: mcpBindingSummaries.length > 0
+          ? mcpBindingSummaries
+          : undefined,
+        systemPromptAppend,
+        origin: DESKTOP_ORIGIN,
+      }, requestOptions);
+
+      annotateLatencyFlow(options.latencyFlowId, {
+        targetSessionId: session.id,
+      });
+      const realSlot: SessionSlot = {
+        ...createEmptySessionSlot(session.id, options.agentKind, {
+          workspaceId,
+          modelId: session.modelId ?? options.modelId,
+          modeId: session.modeId ?? resolvedModeId ?? null,
+          title: session.title ?? null,
+          liveConfig: session.liveConfig ?? null,
+          executionSummary: session.executionSummary ?? null,
+          mcpBindingSummaries: session.mcpBindingSummaries ?? null,
+          lastPromptAt: session.lastPromptAt ?? null,
+          optimisticPrompt: optimisticPendingPrompt,
+        }),
+        status: hasPrompt
+          ? "running"
+          : resolveStatusFromExecutionSummary(session.executionSummary, session.status ?? "idle"),
+        transcriptHydrated: true,
+      };
+
+      replacePendingSessionSlot(pendingSessionId, session.id, realSlot);
+      activateSession(session.id);
+      upsertWorkspaceSessionRecord(workspaceId, session);
+      trackProductEvent("chat_session_created", {
+        workspace_kind: cloudWorkspaceId ? "cloud" : "local",
+        agent_kind: options.agentKind,
+      });
+      reportConnectorLaunchWarnings(connectorWarnings, showToast);
+
+      if (hasPrompt) {
+        await promptSession({
+          sessionId: session.id,
+          text: options.text,
+          blocks: options.blocks,
+          optimisticContentParts: options.optimisticContentParts,
+          workspaceId,
+          latencyFlowId: options.latencyFlowId,
+        });
+      } else {
+        void ensureSessionStreamConnected(session.id, {
+          resumeIfActive: false,
+          requestHeaders: requestOptions?.headers,
+        });
+      }
+
+      return session.id;
+    })();
+
+    if (!hasPrompt && shouldReuseInFlightEmptySession) {
+      inFlightSessionCreatesByWorkspace.set(workspaceId, {
+        sessionId: pendingSessionId,
+        agentKind: options.agentKind,
+        modelId: options.modelId,
+        promise: createPromise,
       });
     }
 
     try {
-      const createPromise = (async () => {
-        const session = await client.sessions.create({
-          workspaceId: target.anyharnessWorkspaceId,
-          agentKind: options.agentKind,
-          modelId: options.modelId,
-          ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
-          mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
-          mcpBindingSummaries: mcpBindingSummaries.length > 0
-            ? mcpBindingSummaries
-            : undefined,
-          systemPromptAppend,
-          origin: DESKTOP_ORIGIN,
-        }, requestOptions);
-
-        annotateLatencyFlow(options.latencyFlowId, {
-          targetSessionId: session.id,
-        });
-        const realSlot: SessionSlot = {
-          ...createEmptySessionSlot(session.id, options.agentKind, {
-            workspaceId,
-            modelId: session.modelId ?? options.modelId,
-            modeId: session.modeId ?? resolvedModeId ?? null,
-            title: session.title ?? null,
-            liveConfig: session.liveConfig ?? null,
-            executionSummary: session.executionSummary ?? null,
-            mcpBindingSummaries: session.mcpBindingSummaries ?? null,
-            lastPromptAt: session.lastPromptAt ?? null,
-            optimisticPrompt: optimisticPendingPrompt,
-          }),
-          status: hasPrompt
-            ? "running"
-            : resolveStatusFromExecutionSummary(session.executionSummary, session.status ?? "idle"),
-          transcriptHydrated: true,
-        };
-
-        replacePendingSessionSlot(pendingSessionId, session.id, realSlot);
-        activateSession(session.id);
-        upsertWorkspaceSessionRecord(workspaceId, session);
-        trackProductEvent("chat_session_created", {
-          workspace_kind: cloudWorkspaceId ? "cloud" : "local",
-          agent_kind: options.agentKind,
-        });
-        reportConnectorLaunchWarnings(connectorWarnings, showToast);
-
-        if (hasPrompt) {
-          await promptSession({
-            sessionId: session.id,
-            text: options.text,
-            blocks: options.blocks,
-            optimisticContentParts: options.optimisticContentParts,
-            workspaceId,
-            latencyFlowId: options.latencyFlowId,
-          });
-        } else {
-          void ensureSessionStreamConnected(session.id, {
-            resumeIfActive: false,
-            requestHeaders: requestOptions?.headers,
-          });
-        }
-
-        return session.id;
-      })();
-
-      if (!hasPrompt && shouldReuseInFlightEmptySession) {
-        inFlightSessionCreatesByWorkspace.set(workspaceId, {
-          sessionId: pendingSessionId,
-          agentKind: options.agentKind,
-          modelId: options.modelId,
-          promise: createPromise,
-        });
-      }
-
       return await createPromise;
     } catch (error) {
       removeSessionSlot(pendingSessionId);
@@ -477,7 +481,7 @@ export function useSessionCreationActions({
       } else {
         useHarnessStore.getState().setActiveSessionId(null);
       }
-      if (shouldInjectBranchNaming) {
+      if (didStartBranchRenameTracking) {
         useBranchRenameStore.getState().clearPendingRename(workspaceId);
       }
       throw error;

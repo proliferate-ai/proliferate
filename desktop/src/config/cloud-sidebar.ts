@@ -3,8 +3,7 @@ import type { CloudWorkspaceStatus } from "@/lib/integrations/cloud/client";
 export type CloudSidebarStatusTone =
   | "ready"
   | "pending"
-  | "error"
-  | "stopped";
+  | "error";
 
 export type CloudSidebarStatus = CloudWorkspaceStatus;
 
@@ -15,28 +14,13 @@ export interface CloudSidebarStatusDefinition {
 }
 
 export const CLOUD_SIDEBAR_STATUS_DEFINITIONS = {
-  queued: {
-    label: "queued",
+  pending: {
+    label: "pending",
     tone: "pending",
     className: "border-warning-border bg-warning text-warning-foreground",
   },
-  provisioning: {
-    label: "provisioning",
-    tone: "pending",
-    className: "border-warning-border bg-warning text-warning-foreground",
-  },
-  syncing_credentials: {
-    label: "syncing",
-    tone: "pending",
-    className: "border-warning-border bg-warning text-warning-foreground",
-  },
-  cloning_repo: {
-    label: "cloning",
-    tone: "pending",
-    className: "border-warning-border bg-warning text-warning-foreground",
-  },
-  starting_runtime: {
-    label: "starting",
+  materializing: {
+    label: "preparing",
     tone: "pending",
     className: "border-warning-border bg-warning text-warning-foreground",
   },
@@ -46,9 +30,9 @@ export const CLOUD_SIDEBAR_STATUS_DEFINITIONS = {
     className:
       "border-sidebar-border/65 bg-sidebar-accent/30 text-sidebar-muted-foreground/64",
   },
-  stopped: {
-    label: "stopped",
-    tone: "stopped",
+  archived: {
+    label: "archived",
+    tone: "pending",
     className:
       "border-sidebar-border/65 bg-sidebar/70 text-sidebar-muted-foreground/72",
   },

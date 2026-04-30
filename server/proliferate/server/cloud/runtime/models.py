@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from proliferate.integrations.sandbox import RuntimeEndpoint, SandboxHandle, SandboxRuntimeContext
 
@@ -54,6 +55,8 @@ class CloudProvisionInput:
     credentials: ProvisionCredentials
     repo_env_vars: dict[str, str]
     requested_base_sha: str | None = None
+    runtime_environment_id: UUID = dataclass_field(default_factory=uuid4)
+    repo_env_version: int = 0
 
     @property
     def repo_label(self) -> str:
@@ -73,6 +76,8 @@ class RuntimeHandshake:
     runtime_token: str
     ready_agents: list[str]
     anyharness_workspace_id: str
+    root_anyharness_workspace_id: str
+    anyharness_repo_root_id: str
 
 
 @dataclass(frozen=True)

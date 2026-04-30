@@ -4,7 +4,9 @@ import {
   buildCloudWorkspaceStatusScreenModel,
   descriptionForStartBlockReason,
   shouldShowCloudWorkspaceStatusScreen,
+  type CloudWorkspaceStatusScreenModel,
 } from "@/lib/domain/workspaces/cloud-workspace-status";
+import { CLOUD_STATUS_COMPACT_COPY } from "@/config/cloud-status-copy";
 import type { CloudWorkspaceStatus, CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
 
 function makeCloudWorkspace(
@@ -20,11 +22,18 @@ function makeCloudWorkspace(
     postReadyFilesTotal: 0,
     postReadyStartedAt: null,
     postReadyCompletedAt: null,
-    status: "queued",
+    status: "pending",
+    workspaceStatus: "pending",
+    runtime: {
+      environmentId: null,
+      status: "pending",
+      generation: 0,
+      actionBlockKind: null,
+      actionBlockReason: null,
+    },
     statusDetail: null,
     lastError: null,
     templateVersion: null,
-    runtimeGeneration: 0,
     createdAt: "2026-04-14T00:00:00Z",
     updatedAt: "2026-04-14T00:00:00Z",
     repo: {
@@ -38,10 +47,14 @@ function makeCloudWorkspace(
   };
 }
 
+function footerMessage(model: CloudWorkspaceStatusScreenModel): string | null {
+  return "message" in model.footer ? model.footer.message : null;
+}
+
 describe("buildCloudWorkspaceStatusScreenModel", () => {
   it("keeps provisioning progress to the current phase instead of row steps", () => {
     const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
-      status: "syncing_credentials",
+      status: "materializing",
     }));
 
     expect(model.title).toBe("Preparing cloud workspace");
@@ -64,6 +77,102 @@ describe("buildCloudWorkspaceStatusScreenModel", () => {
       "Cloud usage is paused because your included sandbox hours are exhausted.",
     );
   });
+
+  it.each<CloudWorkspaceStatus>(["pending", "materializing"])(
+    "shows first-runtime setup copy for %s with generation zero",
+    (status) => {
+      const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
+        status,
+        runtime: {
+          environmentId: "runtime-1",
+          status: "provisioning",
+          generation: 0,
+          actionBlockKind: null,
+          actionBlockReason: null,
+        },
+      }));
+
+      expect(model.footer).toMatchObject({
+        kind: "auto-refresh",
+        message: CLOUD_STATUS_COMPACT_COPY.firstRuntimeFooterMessage,
+      });
+    },
+  );
+
+  it("keeps generic provisioning copy when runtime generation is non-zero", () => {
+    const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
+      status: "materializing",
+      runtime: {
+        environmentId: "runtime-1",
+        status: "running",
+        generation: 2,
+        actionBlockKind: null,
+        actionBlockReason: null,
+      },
+    }));
+
+    expect(model.footer.kind).toBe("auto-refresh");
+    expect(footerMessage(model)).not.toBe(CLOUD_STATUS_COMPACT_COPY.firstRuntimeFooterMessage);
+  });
+
+  it("keeps generic provisioning copy when runtime summary is missing", () => {
+    const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
+      runtime: undefined,
+      status: "materializing",
+    }));
+
+    expect(model.footer.kind).toBe("auto-refresh");
+    expect(footerMessage(model)).not.toBe(CLOUD_STATUS_COMPACT_COPY.firstRuntimeFooterMessage);
+  });
+
+  it.each<"applying_files" | "starting_setup">([
+    "applying_files",
+    "starting_setup",
+  ])("keeps repo-config copy during post-ready %s", (postReadyPhase) => {
+    const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
+      postReadyFilesApplied: 2,
+      postReadyFilesTotal: 4,
+      postReadyPhase,
+      status: "ready",
+      runtime: {
+        environmentId: "runtime-1",
+        status: "running",
+        generation: 0,
+        actionBlockKind: null,
+        actionBlockReason: null,
+      },
+    }));
+
+    expect(model.footer.kind).toBe("auto-refresh");
+    expect(footerMessage(model)).not.toBe(CLOUD_STATUS_COMPACT_COPY.firstRuntimeFooterMessage);
+    expect(footerMessage(model)).toContain("runtime is ready");
+    if (postReadyPhase === "applying_files") {
+      expect(model.description).toContain("Applying 2/4 tracked files");
+    } else {
+      expect(model.description).toContain("runtime is ready");
+    }
+  });
+
+  it.each<Partial<CloudWorkspaceSummary>>([
+    { status: "error" },
+    { status: "archived" },
+    { actionBlockKind: "credits_exhausted" },
+  ])("does not show first-runtime copy for non-provisioning states", (overrides) => {
+    const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({
+      ...overrides,
+      runtime: {
+        environmentId: "runtime-1",
+        status: "provisioning",
+        generation: 0,
+        actionBlockKind: null,
+        actionBlockReason: null,
+      },
+    }));
+
+    expect(JSON.stringify(model.footer)).not.toContain(
+      CLOUD_STATUS_COMPACT_COPY.firstRuntimeFooterMessage,
+    );
+  });
 });
 
 describe("shouldShowCloudWorkspaceStatusScreen", () => {
@@ -82,27 +191,12 @@ describe("buildCloudWorkspaceCompactStatusView", () => {
     status: CloudWorkspaceStatus;
   }>([
     {
-      status: "queued",
+      status: "pending",
       expectedTitle: "Preparing cloud workspace",
       expectedPhaseLabel: "Opening automatically when ready",
     },
     {
-      status: "provisioning",
-      expectedTitle: "Preparing cloud workspace",
-      expectedPhaseLabel: "Opening automatically when ready",
-    },
-    {
-      status: "syncing_credentials",
-      expectedTitle: "Preparing cloud workspace",
-      expectedPhaseLabel: "Opening automatically when ready",
-    },
-    {
-      status: "cloning_repo",
-      expectedTitle: "Preparing cloud workspace",
-      expectedPhaseLabel: "Opening automatically when ready",
-    },
-    {
-      status: "starting_runtime",
+      status: "materializing",
       expectedTitle: "Preparing cloud workspace",
       expectedPhaseLabel: "Opening automatically when ready",
     },
@@ -124,12 +218,6 @@ describe("buildCloudWorkspaceCompactStatusView", () => {
       expectedTitle: "Cloud workspace needs attention",
       status: "error" as const,
       tone: "destructive" as const,
-    },
-    {
-      expectedAction: { action: "start", label: "Start" },
-      expectedTitle: "Cloud workspace stopped",
-      status: "stopped" as const,
-      tone: "warning" as const,
     },
   ])("maps $status to a compact action view", ({ expectedAction, expectedTitle, status, tone }) => {
     const model = buildCloudWorkspaceStatusScreenModel(makeCloudWorkspace({ status }));
@@ -159,13 +247,10 @@ describe("buildCloudWorkspaceCompactStatusView", () => {
 
   it("keeps compact tones constrained to non-green semantic states", () => {
     const models = [
-      makeCloudWorkspace({ status: "queued" }),
-      makeCloudWorkspace({ status: "provisioning" }),
-      makeCloudWorkspace({ status: "syncing_credentials" }),
-      makeCloudWorkspace({ status: "cloning_repo" }),
-      makeCloudWorkspace({ status: "starting_runtime" }),
+      makeCloudWorkspace({ status: "pending" }),
+      makeCloudWorkspace({ status: "materializing" }),
       makeCloudWorkspace({ status: "ready", postReadyPhase: "applying_files" }),
-      makeCloudWorkspace({ status: "stopped" }),
+      makeCloudWorkspace({ status: "archived" }),
       makeCloudWorkspace({ status: "error" }),
       makeCloudWorkspace({ actionBlockKind: "billing_quota" }),
     ].map((workspace) => buildCloudWorkspaceStatusScreenModel(workspace));
@@ -184,7 +269,7 @@ describe("descriptionForStartBlockReason", () => {
   it.each([
     {
       reason: "concurrency_limit",
-      description: "Stop another cloud workspace before starting this one.",
+      description: "Archive or delete another cloud workspace before starting this one.",
     },
     {
       reason: "credits_exhausted",

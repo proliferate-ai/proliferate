@@ -26,6 +26,7 @@ import {
   ArrowRight,
   ArrowUp,
   ChevronDown,
+  CloudIcon,
   Copy,
   Folder,
   FolderOpen,
@@ -39,6 +40,7 @@ import {
   CLOUD_STATUS_APPLYING_FILES,
   CLOUD_STATUS_BLOCKED,
   CLOUD_STATUS_ERROR,
+  CLOUD_STATUS_FIRST_RUNTIME,
   CLOUD_STATUS_PROVISIONING,
   EDIT_OPTIONS,
   EXECUTE_OPTIONS,
@@ -195,6 +197,14 @@ export function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
           onToggleExpanded={noop}
           onDismiss={noop}
           onSetupAction={noop}
+        />
+      );
+    case "cloud-first-runtime":
+      return (
+        <WorkspaceArrivalCloudPanel
+          model={CLOUD_STATUS_FIRST_RUNTIME}
+          isPrimaryActionPending={false}
+          onPrimaryAction={noop}
         />
       );
     case "cloud-provisioning":
@@ -512,25 +522,33 @@ function ReplayComposerSurface({ replay }: { replay: PlaygroundReplayState }) {
 
 function PlaygroundMobilityFooterRow({ scenario }: { scenario: ScenarioKey }) {
   const prompt = mobilityPromptForScenario(scenario);
-  const isCloudScenario = scenario === "mobility-in-flight" || scenario.startsWith("cloud-");
+  const isCloudScenario = scenario === "mobility-cloud-active"
+    || scenario === "mobility-in-flight"
+    || scenario.startsWith("cloud-");
   const locationLabel = isCloudScenario
     ? "Cloud workspace"
     : "Local worktree";
+  const detailLabel = isCloudScenario
+    ? "proliferate-ai/proliferate"
+    : "/Users/pablo/proliferate";
+  const detailIcon = isCloudScenario
+    ? <CloudIcon className="size-3.5" />
+    : <Folder className="size-3.5" />;
 
   return (
     <div className="relative rounded-[var(--radius-composer)] border border-border bg-card px-2 py-2 shadow-xs">
       <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
         <ComposerControlButton
-          icon={(isCloudScenario ? <Folder className="size-3.5" /> : <FolderOpen className="size-3.5" />)}
+          icon={(isCloudScenario ? <CloudIcon className="size-3.5" /> : <FolderOpen className="size-3.5" />)}
           label={locationLabel}
           active={Boolean(prompt) || scenario === "mobility-in-flight"}
           trailing={<ChevronDown className="size-3 text-muted-foreground/70" />}
           disabled
         />
         <ComposerControlButton
-          icon={<Folder className="size-3.5" />}
-          label="/Users/pablo/proliferate"
-          labelClassName="[direction:rtl]"
+          icon={detailIcon}
+          label={detailLabel}
+          labelClassName={isCloudScenario ? undefined : "[direction:rtl]"}
           trailing={<Copy className="size-3 text-muted-foreground/70" />}
           disabled
         />

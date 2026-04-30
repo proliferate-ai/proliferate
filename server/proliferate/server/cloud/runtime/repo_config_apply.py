@@ -20,7 +20,7 @@ from proliferate.db.store.cloud_workspaces import (
 )
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.runtime.anyharness_api import (
+from proliferate.server.cloud.runtime.workspace_operations import (
     CloudRuntimeOperationError,
     read_remote_workspace_file_state,
     start_remote_workspace_setup,

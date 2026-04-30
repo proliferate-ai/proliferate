@@ -31,6 +31,7 @@ const TOOL_CALL_SCENARIOS: ScenarioKey[] = [
 ];
 
 const CLOUD_COMPOSER_SCENARIOS: ScenarioKey[] = [
+  "cloud-first-runtime",
   "cloud-provisioning",
   "cloud-applying-files",
   "cloud-blocked",
@@ -55,6 +56,7 @@ describe("playground scenarios", () => {
   });
 
   it("renders mobility overlay playground scenarios through the production view", () => {
+    expect(Object.keys(SCENARIOS)).toContain("mobility-cloud-active");
     expect(isValidElement(renderMobilityOverlayPreview("mobility-in-flight"))).toBe(true);
     expect(isValidElement(renderMobilityOverlayPreview("mobility-failed"))).toBe(true);
   });

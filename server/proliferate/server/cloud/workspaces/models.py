@@ -9,7 +9,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from proliferate.db.models.cloud import CloudWorkspace
+from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus, CloudWorkspaceStatus
+from proliferate.db.models.cloud import CloudRuntimeEnvironment, CloudWorkspace
 from proliferate.server.cloud.credentials.models import (
     CloudAgentKind,
     CredentialStatusRecord,
@@ -70,11 +71,13 @@ class WorkspaceSummary(BaseModel):
     id: str
     display_name: str | None = Field(serialization_alias="displayName")
     repo: RepoRef
-    status: str
+    workspace_status: Literal["pending", "materializing", "ready", "archived", "error"] = Field(
+        serialization_alias="workspaceStatus",
+    )
+    runtime: WorkspaceRuntimeSummary
     status_detail: str | None = Field(serialization_alias="statusDetail")
     last_error: str | None = Field(serialization_alias="lastError")
     template_version: str | None = Field(serialization_alias="templateVersion")
-    runtime_generation: int = Field(serialization_alias="runtimeGeneration")
     updated_at: str | None = Field(serialization_alias="updatedAt")
     created_at: str | None = Field(serialization_alias="createdAt")
     action_block_kind: str | None = Field(default=None, serialization_alias="actionBlockKind")
@@ -106,6 +109,14 @@ class WorkspaceConnection(BaseModel):
     ready_agent_kinds: list[str] = Field(serialization_alias="readyAgentKinds")
 
 
+class WorkspaceRuntimeSummary(BaseModel):
+    environment_id: str | None = Field(serialization_alias="environmentId")
+    status: Literal["pending", "provisioning", "running", "paused", "error", "disabled"]
+    generation: int
+    action_block_kind: str | None = Field(default=None, serialization_alias="actionBlockKind")
+    action_block_reason: str | None = Field(default=None, serialization_alias="actionBlockReason")
+
+
 def _repo_ref(workspace: CloudWorkspace) -> RepoRef:
     return RepoRef(
         provider=workspace.git_provider,
@@ -135,18 +146,41 @@ def _origin_payload(workspace: CloudWorkspace) -> OriginContext | None:
 def workspace_summary_payload(
     workspace: CloudWorkspace,
     *,
+    runtime_environment: CloudRuntimeEnvironment | None = None,
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,
 ) -> WorkspaceSummary:
+    runtime_status = (
+        runtime_environment.status
+        if runtime_environment is not None
+        else CloudRuntimeEnvironmentStatus.pending.value
+    )
+    if runtime_status not in {"pending", "provisioning", "running", "paused", "error", "disabled"}:
+        runtime_status = CloudRuntimeEnvironmentStatus.error.value
+    workspace_status = workspace.status
+    if workspace_status not in {"pending", "materializing", "ready", "archived", "error"}:
+        workspace_status = CloudWorkspaceStatus.error.value
     return WorkspaceSummary(
         id=str(workspace.id),
         display_name=workspace.display_name,
         repo=_repo_ref(workspace),
-        status=workspace.status,
+        workspace_status=workspace_status,  # type: ignore[arg-type]
+        runtime=WorkspaceRuntimeSummary(
+            environment_id=(
+                str(runtime_environment.id) if runtime_environment is not None else None
+            ),
+            status=runtime_status,  # type: ignore[arg-type]
+            generation=(
+                runtime_environment.runtime_generation
+                if runtime_environment is not None
+                else workspace.runtime_generation
+            ),
+            action_block_kind=action_block_kind,
+            action_block_reason=action_block_reason,
+        ),
         status_detail=workspace.status_detail,
         last_error=workspace.last_error,
         template_version=workspace.template_version,
-        runtime_generation=workspace.runtime_generation,
         updated_at=_to_iso(workspace.updated_at),
         created_at=_to_iso(workspace.created_at),
         action_block_kind=action_block_kind,
@@ -165,29 +199,18 @@ def workspace_detail_payload(
     workspace: CloudWorkspace,
     credential_statuses: list[CredentialStatusRecord],
     *,
+    runtime_environment: CloudRuntimeEnvironment | None = None,
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,
 ) -> WorkspaceDetail:
-    return WorkspaceDetail(
-        id=str(workspace.id),
-        display_name=workspace.display_name,
-        repo=_repo_ref(workspace),
-        status=workspace.status,
-        status_detail=workspace.status_detail,
-        last_error=workspace.last_error,
-        template_version=workspace.template_version,
-        runtime_generation=workspace.runtime_generation,
-        updated_at=_to_iso(workspace.updated_at),
-        created_at=_to_iso(workspace.created_at),
+    summary = workspace_summary_payload(
+        workspace,
+        runtime_environment=runtime_environment,
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
-        post_ready_phase=workspace.repo_post_ready_phase,
-        post_ready_files_total=workspace.repo_post_ready_files_total,
-        post_ready_files_applied=workspace.repo_post_ready_files_applied,
-        post_ready_started_at=_to_iso(workspace.repo_post_ready_started_at),
-        post_ready_completed_at=_to_iso(workspace.repo_post_ready_completed_at),
-        repo_files_last_failed_path=workspace.repo_files_last_failed_path,
-        origin=_origin_payload(workspace),
+    )
+    return WorkspaceDetail(
+        **summary.model_dump(),
         allowed_agent_kinds=allowed_agent_kinds(),
         ready_agent_kinds=ready_agent_kinds(credential_statuses),
         anyharness_workspace_id=workspace.anyharness_workspace_id,

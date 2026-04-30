@@ -38,7 +38,9 @@ class CloudRepoConfigValue:
     configured_at: datetime | None
     default_branch: str | None
     env_vars: dict[str, str]
+    env_vars_version: int
     setup_script: str
+    setup_script_version: int
     files_version: int
     tracked_files: tuple[CloudRepoFileValue, ...]
     created_at: datetime
@@ -89,7 +91,9 @@ def _repo_config_value(
         configured_at=record.configured_at,
         default_branch=record.default_branch,
         env_vars=decrypt_json(record.env_vars_ciphertext) if record.env_vars_ciphertext else {},
+        env_vars_version=record.env_vars_version,
         setup_script=record.setup_script,
+        setup_script_version=record.setup_script_version,
         files_version=record.files_version,
         tracked_files=tuple(
             sorted(
@@ -179,7 +183,9 @@ async def _get_or_create_repo_config_record(
             configured_at=None,
             default_branch=None,
             env_vars_ciphertext=encrypt_json({}),
+            env_vars_version=0,
             setup_script="",
+            setup_script_version=0,
             files_version=0,
             created_at=now,
             updated_at=now,
@@ -249,8 +255,15 @@ async def save_cloud_repo_config(
         existing_hashes.get(path) != incoming_hashes[path] for path in incoming_by_path
     )
 
-    record.env_vars_ciphertext = encrypt_json(env_vars)
-    record.setup_script = setup_script
+    existing_env_vars = (
+        decrypt_json(record.env_vars_ciphertext) if record.env_vars_ciphertext else {}
+    )
+    if existing_env_vars != env_vars:
+        record.env_vars_version += 1
+        record.env_vars_ciphertext = encrypt_json(env_vars)
+    if record.setup_script != setup_script:
+        record.setup_script_version += 1
+        record.setup_script = setup_script
     record.configured = configured
     record.configured_at = now if configured else None
     record.default_branch = (

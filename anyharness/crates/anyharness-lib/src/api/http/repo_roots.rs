@@ -165,6 +165,7 @@ pub async fn detect_repo_root_setup(
     responses(
         (status = 200, description = "Prepared repo root mobility destination", body = PrepareRepoRootMobilityDestinationResponse),
         (status = 400, description = "Invalid request", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Destination conflict", body = anyharness_contract::v1::ProblemDetails),
         (status = 404, description = "Repo root not found", body = anyharness_contract::v1::ProblemDetails),
     ),
     tag = "repo-roots"
@@ -182,6 +183,7 @@ pub async fn prepare_repo_root_mobility_destination(
     let mobility_service = state.mobility_service.clone();
     let requested_branch = req.requested_branch;
     let requested_base_sha = req.requested_base_sha;
+    let destination_id = req.destination_id;
     let preferred_workspace_name = req.preferred_workspace_name;
 
     let record = mobility_service
@@ -189,6 +191,7 @@ pub async fn prepare_repo_root_mobility_destination(
             &repo_root_id,
             &requested_branch,
             &requested_base_sha,
+            destination_id.as_deref(),
             preferred_workspace_name.as_deref(),
         )
         .await
@@ -204,6 +207,9 @@ pub async fn prepare_repo_root_mobility_destination(
             | crate::mobility::service::MobilityError::SessionAlreadyExists(_)
             | crate::mobility::service::MobilityError::SizeLimitExceeded(_) => {
                 ApiError::bad_request(error.to_string(), "MOBILITY_DESTINATION_PREPARE_FAILED")
+            }
+            crate::mobility::service::MobilityError::DestinationConflict(_) => {
+                ApiError::conflict(error.to_string(), "MOBILITY_DESTINATION_CONFLICT")
             }
             crate::mobility::service::MobilityError::Internal(inner) => {
                 if inner.to_string().contains("repo root not found") {

@@ -252,13 +252,14 @@ async def test_resolve_remote_workspace_accepts_current_contract_shape(
     )
     monkeypatch.setattr(anyharness_api.httpx, "AsyncClient", lambda **_kwargs: client)
 
-    workspace_id = await anyharness_api.resolve_remote_workspace(
+    workspace = await anyharness_api.resolve_remote_workspace(
         "https://runtime.invalid",
         "runtime-token",
         runtime_workdir="/workspace",
     )
 
-    assert workspace_id == "workspace-123"
+    assert workspace.workspace_id == "workspace-123"
+    assert workspace.repo_root_id == "repo-1"
 
 
 @pytest.mark.asyncio

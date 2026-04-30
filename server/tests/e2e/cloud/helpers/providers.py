@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from proliferate.db.models.cloud import CloudSandbox, CloudWorkspace
+from proliferate.db.models.cloud import CloudRuntimeEnvironment, CloudSandbox, CloudWorkspace
 from proliferate.integrations.sandbox import get_sandbox_provider
 from proliferate.integrations.sandbox.base import ProviderSandboxState
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,6 +33,22 @@ async def load_active_sandbox_record(
         raise CloudE2ETestError(f"Sandbox {workspace.active_sandbox_id} was not found.")
     await db_session.refresh(sandbox)
     return sandbox
+
+
+async def load_runtime_environment_record(
+    db_session: AsyncSession,
+    workspace_id: str,
+) -> CloudRuntimeEnvironment:
+    workspace = await load_workspace_record(db_session, workspace_id)
+    if workspace.runtime_environment_id is None:
+        raise CloudE2ETestError(f"Workspace {workspace_id} does not have a runtime environment.")
+    environment = await db_session.get(CloudRuntimeEnvironment, workspace.runtime_environment_id)
+    if environment is None:
+        raise CloudE2ETestError(
+            f"Runtime environment {workspace.runtime_environment_id} was not found."
+        )
+    await db_session.refresh(environment)
+    return environment
 
 
 async def provider_pause_native(provider_kind: str, external_sandbox_id: str) -> None:

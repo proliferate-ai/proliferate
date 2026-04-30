@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from proliferate.db.models.cloud import CloudWorkspace
+from proliferate.db.models.cloud import CloudRuntimeEnvironment, CloudWorkspace
+from proliferate.db.store.cloud_runtime_environments import save_runtime_environment_state
 from proliferate.db.store.cloud_workspaces import (
     load_active_sandbox_for_workspace,
+    load_cloud_sandbox_by_id,
     persist_runtime_reconnect_state_for_workspace,
 )
 from proliferate.integrations.sandbox import (
@@ -45,12 +47,12 @@ async def _relaunch_runtime(
     provider: SandboxProvider,
     sandbox: object,
     runtime_context: SandboxRuntimeContext,
-    workspace: CloudWorkspace,
+    workspace_id: UUID,
 ) -> None:
     start_result = await run_sandbox_command_logged(
         provider,
         sandbox,
-        workspace_id=workspace.id,
+        workspace_id=workspace_id,
         label="relaunch_runtime_nohup",
         command=build_detached_runtime_launch_command(runtime_context),
         runtime_context=runtime_context,
@@ -199,7 +201,7 @@ async def ensure_workspace_runtime_ready(
     # sandbox. We do this after both the cached URL and the fresh provider URL
     # failed health checks.
     runtime_context = await provider.resolve_runtime_context(sandbox)
-    await _relaunch_runtime(provider, sandbox, runtime_context, workspace)
+    await _relaunch_runtime(provider, sandbox, runtime_context, workspace.id)
     restart_probe_attempts, restart_probe_delay_seconds = _restart_health_wait_config(
         sandbox_record.provider,
     )
@@ -234,5 +236,103 @@ async def ensure_workspace_runtime_ready(
         sandbox_record,
         restarted_runtime=True,
         runtime_url=endpoint.runtime_url,
+    )
+    return endpoint.runtime_url
+
+
+async def ensure_environment_runtime_ready(
+    environment: CloudRuntimeEnvironment,
+    *,
+    workspace_id: UUID,
+    allow_launcher_restart: bool,
+    access_token: str,
+) -> str:
+    if not environment.active_sandbox_id:
+        raise CloudRuntimeReconnectError("Cloud runtime environment does not have a sandbox.")
+
+    if environment.runtime_url and await _runtime_is_ready(
+        environment.runtime_url,
+        workspace_id=workspace_id,
+        access_token=access_token,
+        total_attempts=2,
+    ):
+        return environment.runtime_url
+
+    sandbox_record = await load_cloud_sandbox_by_id(environment.active_sandbox_id)
+    if sandbox_record is None:
+        raise CloudRuntimeReconnectError("Cloud runtime environment sandbox record was not found.")
+
+    provider = get_sandbox_provider(sandbox_record.provider)
+    if not sandbox_record.external_sandbox_id:
+        raise CloudRuntimeReconnectError(
+            "Cloud runtime environment sandbox does not have a provider id yet."
+        )
+    sandbox_state = await provider.get_sandbox_state(sandbox_record.external_sandbox_id)
+    if sandbox_state is None:
+        raise CloudRuntimeReconnectError(
+            "Cloud runtime environment sandbox could not be observed."
+        )
+    sandbox = await _connect_or_resume_sandbox(
+        provider,
+        sandbox_record.external_sandbox_id,
+        sandbox_state.state,
+    )
+
+    endpoint = await provider.resolve_runtime_endpoint(sandbox)
+    endpoint_probe_attempts, endpoint_probe_delay_seconds = _endpoint_health_wait_config(
+        sandbox_record.provider,
+    )
+    if await _runtime_is_ready(
+        endpoint.runtime_url,
+        workspace_id=workspace_id,
+        access_token=access_token,
+        total_attempts=endpoint_probe_attempts,
+        delay_seconds=endpoint_probe_delay_seconds,
+    ):
+        if endpoint.runtime_url != environment.runtime_url:
+            await save_runtime_environment_state(
+                environment.id,
+                runtime_url=endpoint.runtime_url,
+            )
+        return endpoint.runtime_url
+
+    if not allow_launcher_restart:
+        raise CloudRuntimeReconnectError("Cloud runtime is unavailable in the existing sandbox.")
+
+    runtime_context = await provider.resolve_runtime_context(sandbox)
+    await _relaunch_runtime(provider, sandbox, runtime_context, workspace_id)
+    restart_probe_attempts, restart_probe_delay_seconds = _restart_health_wait_config(
+        sandbox_record.provider,
+    )
+    try:
+        await wait_for_runtime_health(
+            endpoint.runtime_url,
+            workspace_id=workspace_id,
+            required_successes=1,
+            total_attempts=restart_probe_attempts,
+            delay_seconds=restart_probe_delay_seconds,
+        )
+    except CloudRuntimeReconnectError:
+        debug_report = await collect_runtime_debug_report(
+            provider,
+            sandbox,
+            workspace_id=workspace_id,
+            runtime_context=runtime_context,
+        )
+        raise CloudRuntimeReconnectError(
+            "Cloud runtime relaunch did not become healthy. "
+            f"launcher={debug_report.get('launcher')} "
+            f"log={debug_report.get('log')} "
+            f"processes={debug_report.get('processes')}"
+        ) from None
+    await verify_runtime_auth_enforced(
+        endpoint.runtime_url,
+        access_token,
+        workspace_id=workspace_id,
+    )
+    await save_runtime_environment_state(
+        environment.id,
+        runtime_url=endpoint.runtime_url,
+        increment_runtime_generation=True,
     )
     return endpoint.runtime_url

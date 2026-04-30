@@ -14,30 +14,48 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
     USAGE_SEGMENT_OPENED_BY_PROVISION,
 )
-from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS, WorkspaceStatus
+from proliferate.constants.cloud import (
+    SUPPORTED_CLOUD_AGENTS,
+    CloudRuntimeEnvironmentStatus,
+    CloudWorkspaceStatus,
+)
+from proliferate.constants.cloud import (
+    WorkspaceStatus as LegacyWorkspaceStatus,
+)
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
     open_usage_segment_for_sandbox,
 )
 from proliferate.db.store.cloud_credentials import load_cloud_credentials_for_user
+from proliferate.db.store.cloud_repo_config import load_cloud_repo_config_for_user
+from proliferate.db.store.cloud_runtime_environments import (
+    ensure_runtime_environment_for_workspace_id,
+    load_runtime_environment_with_sandbox,
+    reserve_and_attach_sandbox_for_environment,
+    save_runtime_environment_state,
+)
 from proliferate.db.store.cloud_workspaces import (
     bind_allocated_sandbox,
     finalize_workspace_provision_for_ids,
     load_cloud_sandbox_by_id,
     load_cloud_workspace_by_id,
     mark_workspace_error_by_id,
-    reserve_and_attach_sandbox_for_workspace,
-    save_workspace,
+    save_sandbox_provider_state,
     update_sandbox_status,
     update_workspace_status_by_id,
 )
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
-from proliferate.integrations.sandbox import SandboxProvider, get_configured_sandbox_provider
+from proliferate.integrations.sandbox import (
+    SandboxHandle,
+    SandboxProvider,
+    get_configured_sandbox_provider,
+)
 from proliferate.server.billing.service import authorize_sandbox_start
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repos.service import get_linked_github_account
 from proliferate.server.cloud.runtime.anyharness_api import (
+    prepare_remote_mobility_destination,
     reconcile_remote_agents,
     resolve_remote_workspace,
     verify_runtime_auth_enforced,
@@ -60,6 +78,7 @@ from proliferate.server.cloud.runtime.git_operations import (
     checkout_cloud_branch,
     clone_repository,
     configure_git_identity,
+    resolve_runtime_root_head_sha,
 )
 from proliferate.server.cloud.runtime.models import (
     CloudProvisionInput,
@@ -81,6 +100,8 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
 )
 from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_text
 from proliferate.utils.time import duration_ms, utcnow
+
+WorkspaceStatus = LegacyWorkspaceStatus
 
 
 @dataclass
@@ -147,9 +168,14 @@ async def _load_provision_input(
     if workspace is None:
         return None
 
-    if not workspace.anyharness_data_key_ciphertext:
-        workspace.anyharness_data_key_ciphertext = encrypt_text(generate_anyharness_data_key())
-        workspace = await save_workspace(workspace)
+    runtime_environment = await ensure_runtime_environment_for_workspace_id(workspace_id)
+    if runtime_environment is None:
+        return None
+    if not runtime_environment.anyharness_data_key_ciphertext:
+        runtime_environment = await save_runtime_environment_state(
+            runtime_environment.id,
+            anyharness_data_key_ciphertext=encrypt_text(generate_anyharness_data_key()),
+        )
 
     user = await load_user_with_oauth_accounts_by_id(workspace.user_id)
     if user is None:
@@ -178,8 +204,16 @@ async def _load_provision_input(
             status_code=400,
         )
 
+    repo_config = await load_cloud_repo_config_for_user(
+        user_id=workspace.user_id,
+        git_owner=workspace.git_owner,
+        git_repo_name=workspace.git_repo_name,
+    )
+
+    repo_configured = repo_config is not None and repo_config.configured
     return CloudProvisionInput(
         workspace_id=workspace.id,
+        runtime_environment_id=runtime_environment.id,
         user_id=workspace.user_id,
         git_owner=workspace.git_owner,
         git_repo_name=workspace.git_repo_name,
@@ -188,13 +222,10 @@ async def _load_provision_input(
         github_token=str(github_token),
         git_user_name=git_user_name,
         git_user_email=git_user_email,
-        anyharness_data_key=decrypt_text(workspace.anyharness_data_key_ciphertext),
+        anyharness_data_key=decrypt_text(runtime_environment.anyharness_data_key_ciphertext),
         credentials=normalize_provision_credentials(credential_payloads),
-        repo_env_vars=(
-            decrypt_json(workspace.repo_env_vars_ciphertext)
-            if workspace.repo_env_vars_ciphertext
-            else {}
-        ),
+        repo_env_vars=repo_config.env_vars if repo_configured else {},
+        repo_env_version=repo_config.env_vars_version if repo_configured else 0,
         requested_base_sha=requested_base_sha,
     )
 
@@ -205,7 +236,7 @@ def _emit_cloud_event(message: str, payload: dict[str, object]) -> None:
 
 async def _set_workspace_status(
     workspace_id: UUID,
-    status: WorkspaceStatus,
+    status: CloudWorkspaceStatus,
     detail: str | None = None,
 ) -> None:
     resolved_detail = detail or str(status).replace("_", " ").title()
@@ -259,6 +290,7 @@ async def _create_and_connect_sandbox(
         metadata={
             "user_id": str(ctx.user_id),
             "workspace_id": str(ctx.workspace_id),
+            "runtime_environment_id": str(ctx.runtime_environment_id),
             "cloud_sandbox_id": str(sandbox_record_id),
         }
     )
@@ -272,6 +304,7 @@ async def _create_and_connect_sandbox(
     )
     await open_usage_segment_for_sandbox(
         user_id=ctx.user_id,
+        runtime_environment_id=ctx.runtime_environment_id,
         workspace_id=ctx.workspace_id,
         sandbox_id=sandbox_record_id,
         external_sandbox_id=handle.sandbox_id,
@@ -282,7 +315,7 @@ async def _create_and_connect_sandbox(
 
     await _set_workspace_status(
         ctx.workspace_id,
-        WorkspaceStatus.provisioning,
+        CloudWorkspaceStatus.materializing,
         detail="Connecting to sandbox",
     )
     tracker.begin(ProvisionStep.connect_sandbox, sandbox_id=handle.sandbox_id)
@@ -296,6 +329,85 @@ async def _create_and_connect_sandbox(
         sandbox=sandbox,
         endpoint=endpoint,
         runtime_context=runtime_context,
+    )
+
+
+async def _connect_existing_environment_sandbox(
+    tracker: _StepTracker,
+    ctx: CloudProvisionInput,
+    provider: SandboxProvider,
+) -> tuple[ConnectedSandbox, UUID, str] | None:
+    runtime = await load_runtime_environment_with_sandbox(ctx.runtime_environment_id)
+    sandbox_record = runtime.sandbox if runtime is not None else None
+    if sandbox_record is None or not sandbox_record.external_sandbox_id:
+        return None
+    if runtime is None or not runtime.environment.runtime_token_ciphertext:
+        return None
+    if sandbox_record.provider != provider.kind.value:
+        return None
+
+    tracker.begin(
+        ProvisionStep.connect_sandbox,
+        sandbox_id=sandbox_record.external_sandbox_id,
+        reused_sandbox=True,
+    )
+    try:
+        provider_state = await provider.get_sandbox_state(sandbox_record.external_sandbox_id)
+        if provider_state is None:
+            tracker.complete(reused_sandbox=False, reason="provider_state_missing")
+            return None
+
+        state = provider_state.state.strip().lower()
+        if state in {"running", "started"}:
+            sandbox = await provider.connect_running_sandbox(sandbox_record.external_sandbox_id)
+        elif state in {"paused", "stopped"}:
+            sandbox = await provider.resume_sandbox(sandbox_record.external_sandbox_id)
+        else:
+            tracker.complete(reused_sandbox=False, provider_state=state)
+            return None
+
+        runtime_context = await provider.resolve_runtime_context(sandbox)
+        endpoint = await provider.resolve_runtime_endpoint(sandbox)
+    except Exception:
+        log_cloud_event(
+            "cloud runtime environment sandbox reuse failed",
+            level=logging.WARNING,
+            workspace_id=ctx.workspace_id,
+            runtime_environment_id=ctx.runtime_environment_id,
+            sandbox_id=sandbox_record.id,
+            external_sandbox_id=sandbox_record.external_sandbox_id,
+        )
+        tracker.complete(reused_sandbox=False, reason="connect_failed")
+        return None
+
+    await save_sandbox_provider_state(
+        sandbox_record.id,
+        status="running",
+        started_at=provider_state.started_at or utcnow(),
+        stopped_at=None,
+    )
+    await save_runtime_environment_state(
+        ctx.runtime_environment_id,
+        status=CloudRuntimeEnvironmentStatus.running.value,
+        runtime_url=endpoint.runtime_url,
+        active_sandbox_id=sandbox_record.id,
+        last_error=None,
+    )
+    tracker.complete(runtime_url=endpoint.runtime_url, reused_sandbox=True)
+
+    return (
+        ConnectedSandbox(
+            handle=SandboxHandle(
+                provider=provider.kind,
+                sandbox_id=sandbox_record.external_sandbox_id,
+                template_version=sandbox_record.template_version or provider.template_version,
+            ),
+            sandbox=sandbox,
+            endpoint=endpoint,
+            runtime_context=runtime_context,
+        ),
+        sandbox_record.id,
+        decrypt_text(runtime.environment.runtime_token_ciphertext),
     )
 
 
@@ -317,7 +429,7 @@ async def _prepare_runtime_template(
     if binary_preinstalled:
         await _set_workspace_status(
             ctx.workspace_id,
-            WorkspaceStatus.provisioning,
+            CloudWorkspaceStatus.materializing,
             detail="Using prebuilt AnyHarness binary",
         )
         tracker.begin(ProvisionStep.stage_runtime_binary)
@@ -325,7 +437,7 @@ async def _prepare_runtime_template(
 
         await _set_workspace_status(
             ctx.workspace_id,
-            WorkspaceStatus.provisioning,
+            CloudWorkspaceStatus.materializing,
             detail="Using prebuilt Node.js runtime",
         )
         tracker.begin(ProvisionStep.check_node_runtime)
@@ -334,7 +446,7 @@ async def _prepare_runtime_template(
 
     await _set_workspace_status(
         ctx.workspace_id,
-        WorkspaceStatus.provisioning,
+        CloudWorkspaceStatus.materializing,
         detail="Uploading AnyHarness binary",
     )
     tracker.begin(ProvisionStep.stage_runtime_binary)
@@ -348,7 +460,7 @@ async def _prepare_runtime_template(
 
     await _set_workspace_status(
         ctx.workspace_id,
-        WorkspaceStatus.provisioning,
+        CloudWorkspaceStatus.materializing,
         detail="Checking Node.js runtime",
     )
     tracker.begin(ProvisionStep.check_node_runtime)
@@ -363,7 +475,7 @@ async def _prepare_runtime_template(
     if node_version is None:
         await _set_workspace_status(
             ctx.workspace_id,
-            WorkspaceStatus.provisioning,
+            CloudWorkspaceStatus.materializing,
             detail="Installing Node.js",
         )
         tracker.begin(ProvisionStep.install_node_runtime)
@@ -460,7 +572,7 @@ async def _launch_and_connect_runtime(
 
     await _set_workspace_status(
         ctx.workspace_id,
-        WorkspaceStatus.starting_runtime,
+        CloudWorkspaceStatus.materializing,
         detail="Waiting for AnyHarness health",
     )
     tracker.begin(
@@ -501,10 +613,69 @@ async def _launch_and_connect_runtime(
         workspace_id=ctx.workspace_id,
     )
 
+    handshake = await _prepare_workspace_in_runtime(
+        tracker,
+        ctx,
+        provider,
+        connected,
+        runtime_token=runtime_token,
+    )
+
+    return connected, handshake
+
+
+async def _attach_workspace_to_running_runtime(
+    tracker: _StepTracker,
+    ctx: CloudProvisionInput,
+    provider: SandboxProvider,
+    connected: ConnectedSandbox,
+    *,
+    runtime_token: str,
+) -> RuntimeHandshake:
+    await _set_workspace_status(
+        ctx.workspace_id,
+        CloudWorkspaceStatus.materializing,
+        detail="Waiting for AnyHarness health",
+    )
+    tracker.begin(
+        ProvisionStep.wait_for_runtime_health,
+        runtime_url=connected.endpoint.runtime_url,
+        reused_runtime=True,
+    )
+    await wait_for_runtime_health(
+        connected.endpoint.runtime_url,
+        workspace_id=ctx.workspace_id,
+        required_successes=1,
+        total_attempts=10,
+        delay_seconds=0.5,
+    )
+    tracker.complete(runtime_url=connected.endpoint.runtime_url, reused_runtime=True)
+    await verify_runtime_auth_enforced(
+        connected.endpoint.runtime_url,
+        runtime_token,
+        workspace_id=ctx.workspace_id,
+    )
+    return await _prepare_workspace_in_runtime(
+        tracker,
+        ctx,
+        provider,
+        connected,
+        runtime_token=runtime_token,
+    )
+
+
+async def _prepare_workspace_in_runtime(
+    tracker: _StepTracker,
+    ctx: CloudProvisionInput,
+    provider: SandboxProvider,
+    connected: ConnectedSandbox,
+    *,
+    runtime_token: str,
+) -> RuntimeHandshake:
     synced_providers = ctx.credentials.synced_providers
     await _set_workspace_status(
         ctx.workspace_id,
-        WorkspaceStatus.starting_runtime,
+        CloudWorkspaceStatus.materializing,
         detail="Preparing cloud agents",
     )
     tracker.begin(
@@ -521,25 +692,47 @@ async def _launch_and_connect_runtime(
 
     await _set_workspace_status(
         ctx.workspace_id,
-        WorkspaceStatus.starting_runtime,
+        CloudWorkspaceStatus.materializing,
         detail="Resolving workspace",
     )
     tracker.begin(
         ProvisionStep.resolve_remote_workspace,
         runtime_url=connected.endpoint.runtime_url,
     )
-    anyharness_workspace_id = await resolve_remote_workspace(
+    root_workspace = await resolve_remote_workspace(
         connected.endpoint.runtime_url,
         runtime_token,
         runtime_workdir=connected.runtime_context.runtime_workdir,
         workspace_id=ctx.workspace_id,
     )
-    tracker.complete(anyharness_workspace_id=anyharness_workspace_id)
+    base_sha = ctx.requested_base_sha or await resolve_runtime_root_head_sha(
+        provider,
+        connected.sandbox,
+        ctx=ctx,
+        runtime_context=connected.runtime_context,
+    )
+    visible_workspace = await prepare_remote_mobility_destination(
+        connected.endpoint.runtime_url,
+        runtime_token,
+        repo_root_id=root_workspace.repo_root_id,
+        requested_branch=ctx.git_branch,
+        requested_base_sha=base_sha,
+        destination_id=str(ctx.workspace_id),
+        preferred_workspace_name=ctx.git_branch,
+        workspace_id=ctx.workspace_id,
+    )
+    tracker.complete(
+        root_anyharness_workspace_id=root_workspace.workspace_id,
+        anyharness_workspace_id=visible_workspace.workspace_id,
+        anyharness_repo_root_id=root_workspace.repo_root_id,
+    )
 
-    return connected, RuntimeHandshake(
+    return RuntimeHandshake(
         runtime_token=runtime_token,
         ready_agents=ready_agents,
-        anyharness_workspace_id=anyharness_workspace_id,
+        anyharness_workspace_id=visible_workspace.workspace_id,
+        root_anyharness_workspace_id=root_workspace.workspace_id,
+        anyharness_repo_root_id=root_workspace.repo_root_id,
     )
 
 
@@ -554,6 +747,8 @@ async def provision_workspace(
     provider: SandboxProvider | None = None
     connected: ConnectedSandbox | None = None
     sandbox_record_id: UUID | None = None
+    allocated_sandbox_this_attempt = False
+    launched_runtime_this_attempt = False
 
     try:
         ctx = await _load_provision_input(
@@ -585,114 +780,159 @@ async def provision_workspace(
         )
         await _set_workspace_status(
             workspace_id,
-            WorkspaceStatus.provisioning,
-            detail="Allocating sandbox",
+            CloudWorkspaceStatus.materializing,
+            detail="Connecting to repo runtime",
         )
-        sandbox_record = await reserve_and_attach_sandbox_for_workspace(
-            workspace_id,
-            external_sandbox_id=None,
-            provider=provider.kind.value,
-            template_version=provider.template_version,
-            status="allocating",
-            started_at=None,
-            concurrent_sandbox_limit=(
-                settings.cloud_concurrent_sandbox_limit
-                if settings.cloud_billing_mode == BILLING_MODE_ENFORCE
-                else None
-            ),
-        )
-        if sandbox_record is None:
-            raise CloudApiError(
-                "quota_exceeded",
-                "Sandbox limit reached. Stop another cloud workspace before starting a new one.",
-                status_code=403,
+
+        reused_runtime = await _connect_existing_environment_sandbox(tracker, ctx, provider)
+        if reused_runtime is not None:
+            connected, sandbox_record_id, runtime_token = reused_runtime
+        else:
+            await _set_workspace_status(
+                workspace_id,
+                CloudWorkspaceStatus.materializing,
+                detail="Allocating sandbox",
             )
-        sandbox_record_id = sandbox_record.id
-        connected = await _create_and_connect_sandbox(
-            tracker,
-            ctx,
-            provider,
-            sandbox_record_id=sandbox_record.id,
-        )
+            sandbox_record = await reserve_and_attach_sandbox_for_environment(
+                ctx.runtime_environment_id,
+                external_sandbox_id=None,
+                provider=provider.kind.value,
+                template_version=provider.template_version,
+                status="allocating",
+                started_at=None,
+                concurrent_sandbox_limit=(
+                    settings.cloud_concurrent_sandbox_limit
+                    if settings.cloud_billing_mode == BILLING_MODE_ENFORCE
+                    else None
+                ),
+            )
+            if sandbox_record is None:
+                raise CloudApiError(
+                    "quota_exceeded",
+                    (
+                        "Sandbox limit reached. Archive or delete another cloud workspace before "
+                        "starting a new one."
+                    ),
+                    status_code=403,
+                )
+            sandbox_record_id = sandbox_record.id
+            allocated_sandbox_this_attempt = True
+            connected = await _create_and_connect_sandbox(
+                tracker,
+                ctx,
+                provider,
+                sandbox_record_id=sandbox_record.id,
+            )
 
-        await _set_workspace_status(
-            workspace_id,
-            WorkspaceStatus.provisioning,
-            detail="Checking prebuilt runtime template",
-        )
-        await _prepare_runtime_template(tracker, ctx, provider, connected)
+            await _set_workspace_status(
+                workspace_id,
+                CloudWorkspaceStatus.materializing,
+                detail="Checking prebuilt runtime template",
+            )
+            await _prepare_runtime_template(tracker, ctx, provider, connected)
 
-        await _set_workspace_status(
-            workspace_id,
-            WorkspaceStatus.syncing_credentials,
-            detail="Syncing cloud credentials",
-        )
-        tracker.begin(ProvisionStep.sync_credentials)
-        await write_credential_files(
-            provider,
-            connected.sandbox,
-            workspace_id=ctx.workspace_id,
-            credentials=ctx.credentials,
-            runtime_context=connected.runtime_context,
-        )
-        tracker.complete()
+            await _set_workspace_status(
+                workspace_id,
+                CloudWorkspaceStatus.materializing,
+                detail="Syncing cloud credentials",
+            )
+            tracker.begin(ProvisionStep.sync_credentials)
+            await write_credential_files(
+                provider,
+                connected.sandbox,
+                workspace_id=ctx.workspace_id,
+                credentials=ctx.credentials,
+                runtime_context=connected.runtime_context,
+            )
+            tracker.complete()
 
-        await _set_workspace_status(
-            workspace_id,
-            WorkspaceStatus.cloning_repo,
-            detail="Cloning repository",
-        )
-        tracker.begin(ProvisionStep.clone_repository)
-        await clone_repository(
-            provider,
-            connected.sandbox,
-            ctx=ctx,
-            runtime_context=connected.runtime_context,
-        )
-        tracker.complete()
+            await _set_workspace_status(
+                workspace_id,
+                CloudWorkspaceStatus.materializing,
+                detail="Cloning repository",
+            )
+            tracker.begin(ProvisionStep.clone_repository)
+            await clone_repository(
+                provider,
+                connected.sandbox,
+                ctx=ctx,
+                runtime_context=connected.runtime_context,
+            )
+            tracker.complete()
 
-        await _set_workspace_status(
-            workspace_id,
-            WorkspaceStatus.cloning_repo,
-            detail="Checking out cloud branch",
-        )
-        tracker.begin(ProvisionStep.checkout_cloud_branch)
-        await checkout_cloud_branch(
-            provider,
-            connected.sandbox,
-            ctx=ctx,
-            runtime_context=connected.runtime_context,
-        )
-        tracker.complete()
+            await _set_workspace_status(
+                workspace_id,
+                CloudWorkspaceStatus.materializing,
+                detail="Checking out cloud branch",
+            )
+            tracker.begin(ProvisionStep.checkout_cloud_branch)
+            await checkout_cloud_branch(
+                provider,
+                connected.sandbox,
+                ctx=ctx,
+                runtime_context=connected.runtime_context,
+            )
+            tracker.complete()
 
-        await _set_workspace_status(
-            workspace_id,
-            WorkspaceStatus.cloning_repo,
-            detail="Configuring git identity",
-        )
-        tracker.begin(ProvisionStep.configure_git_identity)
-        await configure_git_identity(
-            provider,
-            connected.sandbox,
-            ctx=ctx,
-            runtime_context=connected.runtime_context,
-        )
-        tracker.complete()
+            await _set_workspace_status(
+                workspace_id,
+                CloudWorkspaceStatus.materializing,
+                detail="Configuring git identity",
+            )
+            tracker.begin(ProvisionStep.configure_git_identity)
+            await configure_git_identity(
+                provider,
+                connected.sandbox,
+                ctx=ctx,
+                runtime_context=connected.runtime_context,
+            )
+            tracker.complete()
 
-        await _set_workspace_status(
-            workspace_id,
-            WorkspaceStatus.starting_runtime,
-            detail="Starting AnyHarness",
-        )
-        connected, handshake = await _launch_and_connect_runtime(tracker, ctx, provider, connected)
+        if reused_runtime is not None:
+            await _set_workspace_status(
+                workspace_id,
+                CloudWorkspaceStatus.materializing,
+                detail="Preparing workspace in shared runtime",
+            )
+            handshake = await _attach_workspace_to_running_runtime(
+                tracker,
+                ctx,
+                provider,
+                connected,
+                runtime_token=runtime_token,
+            )
+        else:
+            await _set_workspace_status(
+                workspace_id,
+                CloudWorkspaceStatus.materializing,
+                detail="Starting AnyHarness",
+            )
+            connected, handshake = await _launch_and_connect_runtime(
+                tracker,
+                ctx,
+                provider,
+                connected,
+            )
+            launched_runtime_this_attempt = True
 
         await finalize_workspace_provision_for_ids(
             workspace_id,
-            sandbox_record.id,
+            sandbox_record_id,
             runtime_url=connected.endpoint.runtime_url,
             runtime_token_ciphertext=encrypt_text(handshake.runtime_token),
             anyharness_workspace_id=handshake.anyharness_workspace_id,
             template_version=connected.handle.template_version,
+        )
+        await save_runtime_environment_state(
+            ctx.runtime_environment_id,
+            status=CloudRuntimeEnvironmentStatus.running.value,
+            runtime_url=connected.endpoint.runtime_url,
+            runtime_token_ciphertext=encrypt_text(handshake.runtime_token),
+            root_anyharness_workspace_id=handshake.root_anyharness_workspace_id,
+            root_anyharness_repo_root_id=handshake.anyharness_repo_root_id,
+            increment_runtime_generation=launched_runtime_this_attempt,
+            repo_env_applied_version=ctx.repo_env_version,
+            last_error=None,
         )
         provisioned_workspace = await load_cloud_workspace_by_id(workspace_id)
         if provisioned_workspace is not None:
@@ -734,7 +974,7 @@ async def provision_workspace(
             if sandbox_record is not None
             else None
         )
-        if provider is not None and external_sandbox_id:
+        if provider is not None and external_sandbox_id and allocated_sandbox_this_attempt:
             try:
                 await provider.destroy_sandbox(external_sandbox_id)
             except Exception:
@@ -744,7 +984,7 @@ async def provision_workspace(
                     workspace_id=workspace_id,
                     external_sandbox_id=external_sandbox_id,
                 )
-        if sandbox_record is not None:
+        if sandbox_record is not None and allocated_sandbox_this_attempt:
             await close_usage_segment_for_sandbox(
                 sandbox_id=sandbox_record.id,
                 ended_at=utcnow(),

@@ -163,9 +163,10 @@ pub async fn install_workspace_mobility_archive(
         .assert_can_mutate_for_workspace(&workspace_id)
         .map_err(map_access_error)?;
     let mobility_service = state.mobility_service.clone();
+    let operation_id = req.operation_id;
     let archive = from_contract_archive(req.archive, &workspace_id)?;
     let summary = run_blocking("mobility_install", move || {
-        mobility_service.install_workspace_archive(&workspace_id, &archive)
+        mobility_service.install_workspace_archive(&workspace_id, &archive, operation_id.as_deref())
     })
     .await?
     .map_err(map_mobility_error)?;
@@ -276,6 +277,9 @@ fn map_mobility_error(error: MobilityError) -> ApiError {
         | MobilityError::Invalid(detail)
         | MobilityError::SizeLimitExceeded(detail) => {
             ApiError::bad_request(detail, "MOBILITY_INVALID")
+        }
+        MobilityError::DestinationConflict(detail) => {
+            ApiError::conflict(detail, "MOBILITY_DESTINATION_CONFLICT")
         }
         MobilityError::Internal(error) => ApiError::internal(error.to_string()),
     }
