@@ -27,6 +27,18 @@ describe("shortcut dispatch policy", () => {
     } as KeyboardEvent)).toBe(true);
   });
 
+  it("allows the reload-blocked close-tabs-to-right shortcut through", () => {
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.closeTabsToRight, {
+      key: "r",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+      defaultPrevented: true,
+      target: null,
+    } as KeyboardEvent)).toBe(true);
+  });
+
   it("still blocks rename in disallowed text-entry targets", () => {
     expect(shouldDispatchKeyboardShortcut({
       ...SHORTCUTS.addRepository,

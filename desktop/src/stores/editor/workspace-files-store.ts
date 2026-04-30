@@ -54,6 +54,7 @@ interface WorkspaceFilesState {
   focusFileTab: (filePath: string) => void;
   setDiffTab: (filePath: string, patch: string | null) => void;
   closeTab: (filePath: string) => void;
+  reorderOpenTabs: (orderedPaths: string[]) => void;
   setActiveTab: (filePath: string) => void;
   setTabMode: (filePath: string, mode: "edit" | "diff") => void;
   activateChatTab: () => void;
@@ -225,6 +226,17 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesState>((set, get) => 
       tabModes: nextModes,
       tabPatches: nextPatches,
     });
+  },
+
+  reorderOpenTabs: (orderedPaths) => {
+    const currentSet = new Set(get().openTabs);
+    const next = orderedPaths.filter((path) => currentSet.has(path));
+    for (const path of get().openTabs) {
+      if (!next.includes(path)) {
+        next.push(path);
+      }
+    }
+    set({ openTabs: next });
   },
 
   setDiffTab: (filePath, patch) => {

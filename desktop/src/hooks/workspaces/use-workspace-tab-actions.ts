@@ -2,6 +2,8 @@ import { useMemo, useCallback } from "react";
 import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/use-configured-launch-readiness";
 import { useCloseActiveWorkspaceTab } from "@/hooks/workspaces/use-close-active-workspace-tab";
+import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
+import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import {
   buildWorkspaceShellTabs,
@@ -9,9 +11,8 @@ import {
   resolveRelativeWorkspaceShellTab,
   resolveWorkspaceShellTabByShortcutIndex,
   type WorkspaceShellTab,
-} from "@/lib/domain/workspaces/tabs";
+} from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   failLatencyFlow,
@@ -21,60 +22,59 @@ import {
 export function useWorkspaceTabActions() {
   const activeMainTab = useWorkspaceFilesStore((state) => state.activeMainTab);
   const openTabs = useWorkspaceFilesStore((state) => state.openTabs);
-  const activateChatTab = useWorkspaceFilesStore((state) => state.activateChatTab);
   const setActiveTab = useWorkspaceFilesStore((state) => state.setActiveTab);
 
-  const activeSessionId = useHarnessStore((state) => state.activeSessionId);
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const sessionSlots = useHarnessStore((state) => state.sessionSlots);
+  const headerTabs = useWorkspaceHeaderTabsViewModel();
   const showToast = useToastStore((state) => state.show);
   const closeActiveWorkspaceTab = useCloseActiveWorkspaceTab();
+  const chatVisibilityActions = useChatTabVisibilityActions({
+    visibleIds: headerTabs.visibleChatSessionIds,
+    liveIds: headerTabs.liveChatSessionIds,
+    childToParent: headerTabs.childToParent,
+  });
 
   const { currentLaunchIdentity } = useActiveChatSessionState();
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
   const {
     createEmptySessionWithResolvedConfig,
-    restoreLastDismissedSession,
-    selectSession,
   } = useSessionActions();
 
   const orderedTabs = useMemo(
     () => buildWorkspaceShellTabs({
-      selectedWorkspaceId,
-      sessionSlots,
+      selectedWorkspaceId: headerTabs.selectedWorkspaceId,
+      sessionSlots: Object.fromEntries(
+        headerTabs.liveChatSessionIds.map((sessionId) => [
+          sessionId,
+          { sessionId, workspaceId: headerTabs.selectedWorkspaceId },
+        ]),
+      ),
+      visibleChatSessionIds: headerTabs.stripChatSessionIds,
       openTabs,
     }),
-    [openTabs, selectedWorkspaceId, sessionSlots],
+    [
+      headerTabs.liveChatSessionIds,
+      headerTabs.selectedWorkspaceId,
+      headerTabs.stripChatSessionIds,
+      openTabs,
+    ],
   );
 
   const activeTab = useMemo(
     () => resolveActiveWorkspaceShellTab({
       activeMainTab,
-      activeSessionId,
+      activeSessionId: headerTabs.activeSessionId,
     }),
-    [activeMainTab, activeSessionId],
+    [activeMainTab, headerTabs.activeSessionId],
   );
 
   const activateWorkspaceTab = useCallback((tab: WorkspaceShellTab) => {
     if (tab.kind === "chat") {
-      activateChatTab();
-      const latencyFlowId = startLatencyFlow({
-        flowKind: "session_switch",
-        source: "workspace_tab",
-        targetWorkspaceId: selectedWorkspaceId,
-        targetSessionId: tab.sessionId,
-      });
-      void selectSession(tab.sessionId, { latencyFlowId }).catch((error) => {
-        failLatencyFlow(latencyFlowId, "session_switch_failed");
-        const message = error instanceof Error ? error.message : String(error);
-        showToast(message);
-      });
-      return true;
+      return chatVisibilityActions.showChatSessionTab(tab.sessionId, { select: true });
     }
 
     setActiveTab(tab.path);
     return true;
-  }, [activateChatTab, selectSession, selectedWorkspaceId, setActiveTab, showToast]);
+  }, [chatVisibilityActions, setActiveTab]);
 
   const activateRelativeTab = useCallback((delta: number) => {
     const nextTab = resolveRelativeWorkspaceShellTab({
@@ -98,23 +98,10 @@ export function useWorkspaceTabActions() {
     return activateWorkspaceTab(nextTab);
   }, [activateWorkspaceTab, orderedTabs]);
 
-  const restoreLastDismissedTab = useCallback(() => {
-    if (!selectedWorkspaceId) {
-      return false;
-    }
-
-    const latencyFlowId = startLatencyFlow({
-      flowKind: "session_restore",
-      source: "workspace_tab",
-      targetWorkspaceId: selectedWorkspaceId,
-    });
-    void restoreLastDismissedSession({ latencyFlowId }).catch((error) => {
-      failLatencyFlow(latencyFlowId, "session_restore_failed");
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(message);
-    });
-    return true;
-  }, [restoreLastDismissedSession, selectedWorkspaceId, showToast]);
+  const restoreLastDismissedTab = useCallback(
+    () => chatVisibilityActions.restoreHiddenOrDismissedChatTab(),
+    [chatVisibilityActions],
+  );
 
   const openNewSessionTab = useCallback(() => {
     const selection = currentLaunchIdentity ?? configuredLaunch.selection;
@@ -125,7 +112,7 @@ export function useWorkspaceTabActions() {
     const latencyFlowId = startLatencyFlow({
       flowKind: "session_create",
       source: "workspace_tab",
-      targetWorkspaceId: selectedWorkspaceId,
+      targetWorkspaceId: headerTabs.selectedWorkspaceId,
     });
     void createEmptySessionWithResolvedConfig({
       agentKind: selection.kind,
@@ -142,7 +129,7 @@ export function useWorkspaceTabActions() {
     configuredLaunch.selection,
     currentLaunchIdentity,
     createEmptySessionWithResolvedConfig,
-    selectedWorkspaceId,
+    headerTabs.selectedWorkspaceId,
     showToast,
   ]);
 

@@ -8,10 +8,11 @@ describe("deriveCoworkCodingToolPresentation", () => {
       nativeToolName: "mcp__cowork__create_coding_workspace",
       rawInput: {
         sourceWorkspaceId: "source-1",
-        label: "runtime sweep",
+        workspaceName: "runtime-sweep",
       },
       rawOutput: {
         workspaceId: "workspace-1",
+        workspaceName: "runtime-sweep",
         status: "ready",
         ready: true,
       },
@@ -20,6 +21,7 @@ describe("deriveCoworkCodingToolPresentation", () => {
     expect(presentation).toMatchObject({
       action: "create_workspace",
       label: "Created coding workspace",
+      displayName: "runtime-sweep",
       prompt: null,
       sourceWorkspaceId: "source-1",
       workspaceId: "workspace-1",

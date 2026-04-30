@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/Button";
-import { ProliferateIcon } from "@/components/ui/icons";
+import { AgentGlyph } from "@/components/ui/icons";
 
 interface SubagentWakeBadgeProps {
   label?: string | null;
@@ -7,6 +7,7 @@ interface SubagentWakeBadgeProps {
   outcome?: string | null;
   color?: string;
   titleFallback?: string;
+  agentKind?: string | null;
   onOpenChild?: (childSessionId: string) => void;
 }
 
@@ -16,6 +17,7 @@ export function SubagentWakeBadge({
   outcome,
   color,
   titleFallback = "Subagent",
+  agentKind,
   onOpenChild,
 }: SubagentWakeBadgeProps) {
   const title = label?.trim() || titleFallback;
@@ -25,10 +27,9 @@ export function SubagentWakeBadge({
     <>
       <span
         className="flex size-4 shrink-0 items-center justify-center rounded-full"
-        style={{ color }}
         aria-hidden="true"
       >
-        <ProliferateIcon className="size-4" />
+        <AgentGlyph agentKind={agentKind} color={color} className="size-4" />
       </span>
       <span className="min-w-0 truncate">"{title}"</span>
       <span className="min-w-0 shrink-0">{status}</span>

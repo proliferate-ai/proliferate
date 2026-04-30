@@ -12,23 +12,37 @@ type KeyboardShortcutEventLike = Pick<
   | "target"
 >;
 
-function isReloadBlockedRenameShortcut(
+function isReloadBlockedRShortcut(
   shortcut: Pick<ShortcutDef, "id">,
   event: KeyboardShortcutEventLike,
 ): boolean {
-  return shortcut.id === SHORTCUTS.renameSession.id
-    && event.defaultPrevented
-    && (event.metaKey || event.ctrlKey)
-    && !event.shiftKey
-    && !event.altKey
-    && event.key.toLowerCase() === "r";
+  // Tauri/browser shells reserve reload shortcuts before our app shortcut
+  // dispatcher sees them, so the two intentional R commands need this bypass.
+  if (
+    !event.defaultPrevented
+    || !(event.metaKey || event.ctrlKey)
+    || event.altKey
+    || event.key.toLowerCase() !== "r"
+  ) {
+    return false;
+  }
+
+  if (shortcut.id === SHORTCUTS.renameSession.id) {
+    return !event.shiftKey;
+  }
+
+  if (shortcut.id === SHORTCUTS.closeTabsToRight.id) {
+    return event.shiftKey;
+  }
+
+  return false;
 }
 
 export function shouldDispatchKeyboardShortcut(
   shortcut: Pick<ShortcutDef, "allowInInputs" | "id">,
   event: KeyboardShortcutEventLike,
 ): boolean {
-  if (event.defaultPrevented && !isReloadBlockedRenameShortcut(shortcut, event)) {
+  if (event.defaultPrevented && !isReloadBlockedRShortcut(shortcut, event)) {
     return false;
   }
 

@@ -15,6 +15,10 @@ struct CreateCodingWorkspaceArgs {
     source_workspace_id: String,
     #[serde(default)]
     label: Option<String>,
+    #[serde(default)]
+    workspace_name: Option<String>,
+    #[serde(default)]
+    branch_name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -151,9 +155,10 @@ fn get_coding_workspace_launch_options(
         "notes": [
             "create_coding_workspace creates only a standard worktree workspace. Use create_coding_session to start agent work inside it.",
             "sourceWorkspaceId selects the repo/source context; the new worktree branches from baseBranch, usually the repo default branch.",
+            "Pass workspaceName for a concise workspace/path slug, or branchName for an explicit full Git branch name.",
             "create_coding_session adds another linked coding session to an owned managed coding workspace.",
             "For fast autonomous coding sessions, use the recommended modeId. Claude uses bypassPermissions when no explicit modeId is provided.",
-            "Labels are display-only; runtime-generated ids are used for paths and branches.",
+            "When workspaceName and branchName are omitted, the runtime derives a readable workspace name from label or falls back to a short default with numeric suffixes.",
             "Cowork-created coding sessions cannot create their own subagents in this version."
         ]
     }))
@@ -170,14 +175,31 @@ async fn create_coding_workspace(
             CreateCodingWorkspaceInput {
                 source_workspace_id: args.source_workspace_id,
                 label: args.label,
+                workspace_name: args.workspace_name,
+                branch_name: args.branch_name,
             },
         )
         .await?;
+    let branch_name = result
+        .workspace
+        .current_branch
+        .clone()
+        .or(result.workspace.original_branch.clone());
+    let workspace_name = result
+        .workspace
+        .path
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .next_back()
+        .map(str::to_string);
     Ok(json!({
         "ownershipId": result.managed_workspace.id,
         "workspaceId": result.workspace.id,
         "sourceWorkspaceId": result.managed_workspace.source_workspace_id,
         "label": result.managed_workspace.label,
+        "workspaceName": workspace_name,
+        "branchName": branch_name,
+        "path": result.workspace.path,
         "status": result.status,
         "ready": result.ready,
     }))
@@ -420,7 +442,15 @@ pub fn tool_definitions() -> Vec<Value> {
                 "type": "object",
                 "properties": {
                     "sourceWorkspaceId": { "type": "string" },
-                    "label": { "type": "string" }
+                    "label": { "type": "string" },
+                    "workspaceName": {
+                        "type": "string",
+                        "description": "Optional concise workspace/path slug. The runtime normalizes it to kebab-case."
+                    },
+                    "branchName": {
+                        "type": "string",
+                        "description": "Optional full Git branch name. If omitted, the runtime uses cowork/coding/<workspaceName>."
+                    }
                 },
                 "required": ["sourceWorkspaceId"]
             }),

@@ -56,7 +56,12 @@ export function deriveCoworkCodingToolPresentation(
 
   const input = isRecord(item.rawInput) ? item.rawInput : {};
   const output = isRecord(item.rawOutput) ? item.rawOutput : parseToolResultJsonObject(item);
-  const label = readString(input, "label") ?? readString(output, "label");
+  const label = readString(input, "label")
+    ?? readString(output, "label")
+    ?? readString(input, "workspaceName")
+    ?? readString(output, "workspaceName")
+    ?? readString(input, "branchName")
+    ?? readString(output, "branchName");
   const promptStatus = readString(output, "promptStatus") ?? readString(output, "status");
   const agentKind = readString(input, "agentKind");
   const modelId = readString(input, "modelId");

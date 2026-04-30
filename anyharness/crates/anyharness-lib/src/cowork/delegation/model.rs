@@ -13,6 +13,8 @@ pub struct CodingWorkspaceLaunchOption {
 pub struct CreateCodingWorkspaceInput {
     pub source_workspace_id: String,
     pub label: Option<String>,
+    pub workspace_name: Option<String>,
+    pub branch_name: Option<String>,
 }
 
 #[derive(Debug, Clone)]

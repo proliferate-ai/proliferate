@@ -1,6 +1,19 @@
 import type { SetStateAction } from "react";
 import { create } from "zustand";
 import {
+  clearHiddenChatSessionIds,
+  rememberHiddenChatSessionId,
+  uniqueIds,
+} from "@/lib/domain/workspaces/tabs/visibility";
+import {
+  deleteManualChatGroup,
+  removeSessionsFromManualChatGroups,
+  sanitizeManualChatGroupsByWorkspace,
+  updateManualChatGroup,
+  upsertManualChatGroup,
+  type ManualChatGroup,
+} from "@/lib/domain/workspaces/tabs/manual-groups";
+import {
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,
   resolveSidebarWorkspaceTypes,
   toggleSidebarWorkspaceTypeSelection,
@@ -21,6 +34,10 @@ export interface WorkspaceUiState {
   lastViewedSessionByWorkspace: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
   dismissedSetupFailures: Record<string, boolean>;
+  visibleChatSessionIdsByWorkspace: Record<string, string[]>;
+  recentlyHiddenChatSessionIdsByWorkspace: Record<string, string[]>;
+  collapsedChatGroupsByWorkspace: Record<string, string[]>;
+  manualChatGroupsByWorkspace: Record<string, ManualChatGroup[]>;
   archiveWorkspace: (id: string) => void;
   archiveWorkspaces: (ids: string[]) => void;
   unarchiveWorkspace: (id: string) => void;
@@ -40,6 +57,24 @@ export interface WorkspaceUiState {
   updateWorkspaceLastInteracted: (workspaceId: string, timestamp: string) => void;
   dismissSetupFailure: (workspaceId: string) => void;
   clearSetupFailureDismissal: (workspaceId: string) => void;
+  setVisibleChatSessionIdsForWorkspace: (workspaceId: string, sessionIds: string[]) => void;
+  rememberHiddenChatSessionForWorkspace: (workspaceId: string, sessionId: string) => void;
+  clearHiddenChatSessionsForWorkspace: (workspaceId: string, sessionIds: string[]) => void;
+  toggleChatGroupCollapsedForWorkspace: (workspaceId: string, parentSessionId: string) => void;
+  clearChatGroupCollapsedForWorkspace: (workspaceId: string, parentSessionIds: string[]) => void;
+  setManualChatGroupsForWorkspace: (workspaceId: string, groups: ManualChatGroup[]) => void;
+  upsertManualChatGroupForWorkspace: (workspaceId: string, group: ManualChatGroup) => void;
+  updateManualChatGroupForWorkspace: (
+    workspaceId: string,
+    groupId: string,
+    updates: Partial<Pick<ManualChatGroup, "label" | "colorId">>,
+  ) => void;
+  deleteManualChatGroupForWorkspace: (workspaceId: string, groupId: string) => void;
+  removeSessionsFromManualChatGroupsForWorkspace: (
+    workspaceId: string,
+    sessionIds: string[],
+  ) => void;
+  clearWorkspaceChatTabState: (workspaceId: string) => void;
 }
 
 /**
@@ -55,7 +90,7 @@ export const WORKSPACE_SIDEBAR_DEFAULT_WIDTH = 280;
 export const WORKSPACE_SIDEBAR_MIN_WIDTH = 220;
 export const WORKSPACE_SIDEBAR_MAX_WIDTH = 420;
 
-interface PersistedWorkspaceUiState {
+export interface PersistedWorkspaceUiState {
   migrationVersion?: number;
   archivedWorkspaceIds: string[];
   hiddenRepoRootIds: string[];
@@ -68,10 +103,14 @@ interface PersistedWorkspaceUiState {
   lastViewedSessionByWorkspace: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
   dismissedSetupFailures: Record<string, boolean>;
+  visibleChatSessionIdsByWorkspace: Record<string, string[]>;
+  recentlyHiddenChatSessionIdsByWorkspace: Record<string, string[]>;
+  collapsedChatGroupsByWorkspace: Record<string, string[]>;
+  manualChatGroupsByWorkspace: Record<string, ManualChatGroup[]>;
 }
 
 const WORKSPACE_UI_KEY = "workspace_ui";
-const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
+export const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
   archivedWorkspaceIds: [],
   hiddenRepoRootIds: [],
   collapsedRepoGroups: [],
@@ -83,6 +122,10 @@ const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
   lastViewedSessionByWorkspace: {},
   workspaceLastInteracted: {},
   dismissedSetupFailures: {},
+  visibleChatSessionIdsByWorkspace: {},
+  recentlyHiddenChatSessionIdsByWorkspace: {},
+  collapsedChatGroupsByWorkspace: {},
+  manualChatGroupsByWorkspace: {},
 };
 
 function clampSidebarWidth(width: number): number {
@@ -125,17 +168,37 @@ async function readAll(): Promise<{ state: PersistedWorkspaceUiState; didMigrate
       collapsedRepoGroups: WORKSPACE_UI_DEFAULTS.collapsedRepoGroups,
       threadsCollapsed: WORKSPACE_UI_DEFAULTS.threadsCollapsed,
       dismissedSetupFailures: WORKSPACE_UI_DEFAULTS.dismissedSetupFailures,
+      visibleChatSessionIdsByWorkspace: WORKSPACE_UI_DEFAULTS.visibleChatSessionIdsByWorkspace,
+      recentlyHiddenChatSessionIdsByWorkspace:
+        WORKSPACE_UI_DEFAULTS.recentlyHiddenChatSessionIdsByWorkspace,
+      collapsedChatGroupsByWorkspace: WORKSPACE_UI_DEFAULTS.collapsedChatGroupsByWorkspace,
+      manualChatGroupsByWorkspace: WORKSPACE_UI_DEFAULTS.manualChatGroupsByWorkspace,
     };
   }
 
+  return migrateWorkspaceUiState(state);
+}
+
+export function migrateWorkspaceUiState(
+  input: PersistedWorkspaceUiState,
+): { state: PersistedWorkspaceUiState; didMigrate: boolean } {
+  const state = {
+    ...WORKSPACE_UI_DEFAULTS,
+    ...input,
+  };
   let didMigrate = false;
-  if ((state.migrationVersion ?? 0) < WORKSPACE_UI_MIGRATION_VERSION) {
+  const previousMigrationVersion = state.migrationVersion ?? 0;
+  if (previousMigrationVersion < 3) {
     state.archivedWorkspaceIds = [];
-    if ((state.migrationVersion ?? 0) < 2) {
-      state.lastViewedAt = {};
-      state.lastViewedSessionByWorkspace = {};
-      state.workspaceLastInteracted = {};
-    }
+    didMigrate = true;
+  }
+  if (previousMigrationVersion < 2) {
+    state.lastViewedAt = {};
+    state.lastViewedSessionByWorkspace = {};
+    state.workspaceLastInteracted = {};
+    didMigrate = true;
+  }
+  if (previousMigrationVersion < WORKSPACE_UI_MIGRATION_VERSION) {
     state.migrationVersion = WORKSPACE_UI_MIGRATION_VERSION;
     didMigrate = true;
   }
@@ -154,6 +217,30 @@ async function readAll(): Promise<{ state: PersistedWorkspaceUiState; didMigrate
 
   if (typeof state.sidebarWidth !== "number" || Number.isNaN(state.sidebarWidth)) {
     state.sidebarWidth = WORKSPACE_UI_DEFAULTS.sidebarWidth;
+    didMigrate = true;
+  }
+
+  if (!isStringArrayRecord(state.visibleChatSessionIdsByWorkspace)) {
+    state.visibleChatSessionIdsByWorkspace = WORKSPACE_UI_DEFAULTS.visibleChatSessionIdsByWorkspace;
+    didMigrate = true;
+  }
+
+  if (!isStringArrayRecord(state.recentlyHiddenChatSessionIdsByWorkspace)) {
+    state.recentlyHiddenChatSessionIdsByWorkspace =
+      WORKSPACE_UI_DEFAULTS.recentlyHiddenChatSessionIdsByWorkspace;
+    didMigrate = true;
+  }
+
+  if (!isStringArrayRecord(state.collapsedChatGroupsByWorkspace)) {
+    state.collapsedChatGroupsByWorkspace = WORKSPACE_UI_DEFAULTS.collapsedChatGroupsByWorkspace;
+    didMigrate = true;
+  }
+
+  const sanitizedManualGroups = sanitizeManualChatGroupsByWorkspace(
+    state.manualChatGroupsByWorkspace,
+  );
+  if (JSON.stringify(sanitizedManualGroups) !== JSON.stringify(state.manualChatGroupsByWorkspace)) {
+    state.manualChatGroupsByWorkspace = sanitizedManualGroups;
     didMigrate = true;
   }
 
@@ -189,7 +276,19 @@ function selectPersistedSlice(state: WorkspaceUiState): PersistedWorkspaceUiStat
     lastViewedSessionByWorkspace: state.lastViewedSessionByWorkspace,
     workspaceLastInteracted: state.workspaceLastInteracted,
     dismissedSetupFailures: state.dismissedSetupFailures,
+    visibleChatSessionIdsByWorkspace: state.visibleChatSessionIdsByWorkspace,
+    recentlyHiddenChatSessionIdsByWorkspace: state.recentlyHiddenChatSessionIdsByWorkspace,
+    collapsedChatGroupsByWorkspace: state.collapsedChatGroupsByWorkspace,
+    manualChatGroupsByWorkspace: state.manualChatGroupsByWorkspace,
   };
+}
+
+function isStringArrayRecord(value: unknown): value is Record<string, string[]> {
+  return typeof value === "object"
+    && value !== null
+    && Object.values(value).every((entry) =>
+      Array.isArray(entry) && entry.every((item) => typeof item === "string")
+    );
 }
 
 export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
@@ -352,6 +451,154 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
     const current = { ...get().dismissedSetupFailures };
     delete current[workspaceId];
     set({ dismissedSetupFailures: current });
+  },
+
+  setVisibleChatSessionIdsForWorkspace: (workspaceId, sessionIds) => {
+    set({
+      visibleChatSessionIdsByWorkspace: {
+        ...get().visibleChatSessionIdsByWorkspace,
+        [workspaceId]: uniqueIds(sessionIds),
+      },
+    });
+  },
+
+  rememberHiddenChatSessionForWorkspace: (workspaceId, sessionId) => {
+    const current =
+      get().recentlyHiddenChatSessionIdsByWorkspace[workspaceId] ?? [];
+    set({
+      recentlyHiddenChatSessionIdsByWorkspace: {
+        ...get().recentlyHiddenChatSessionIdsByWorkspace,
+        [workspaceId]: rememberHiddenChatSessionId(current, sessionId),
+      },
+    });
+  },
+
+  clearHiddenChatSessionsForWorkspace: (workspaceId, sessionIds) => {
+    const current =
+      get().recentlyHiddenChatSessionIdsByWorkspace[workspaceId] ?? [];
+    const next = clearHiddenChatSessionIds(current, sessionIds);
+    if (next.length === current.length) {
+      return;
+    }
+    set({
+      recentlyHiddenChatSessionIdsByWorkspace: {
+        ...get().recentlyHiddenChatSessionIdsByWorkspace,
+        [workspaceId]: next,
+      },
+    });
+  },
+
+  toggleChatGroupCollapsedForWorkspace: (workspaceId, parentSessionId) => {
+    const current =
+      get().collapsedChatGroupsByWorkspace[workspaceId] ?? [];
+    const next = current.includes(parentSessionId)
+      ? current.filter((id) => id !== parentSessionId)
+      : uniqueIds([...current, parentSessionId]);
+    const collapsed = { ...get().collapsedChatGroupsByWorkspace };
+    if (next.length > 0) {
+      collapsed[workspaceId] = next;
+    } else {
+      delete collapsed[workspaceId];
+    }
+    set({ collapsedChatGroupsByWorkspace: collapsed });
+  },
+
+  clearChatGroupCollapsedForWorkspace: (workspaceId, parentSessionIds) => {
+    const current =
+      get().collapsedChatGroupsByWorkspace[workspaceId] ?? [];
+    if (current.length === 0 || parentSessionIds.length === 0) {
+      return;
+    }
+    const clearSet = new Set(parentSessionIds);
+    const next = current.filter((id) => !clearSet.has(id));
+    if (next.length === current.length) {
+      return;
+    }
+    const collapsed = { ...get().collapsedChatGroupsByWorkspace };
+    if (next.length > 0) {
+      collapsed[workspaceId] = next;
+    } else {
+      delete collapsed[workspaceId];
+    }
+    set({ collapsedChatGroupsByWorkspace: collapsed });
+  },
+
+  setManualChatGroupsForWorkspace: (workspaceId, groups) => {
+    const current = get().manualChatGroupsByWorkspace;
+    const nextGroupsByWorkspace = { ...current };
+    if (groups.length > 0) {
+      nextGroupsByWorkspace[workspaceId] = groups;
+    } else {
+      delete nextGroupsByWorkspace[workspaceId];
+    }
+    set({ manualChatGroupsByWorkspace: nextGroupsByWorkspace });
+  },
+
+  upsertManualChatGroupForWorkspace: (workspaceId, group) => {
+    const current = get().manualChatGroupsByWorkspace[workspaceId] ?? [];
+    const nextGroups = upsertManualChatGroup(current, group);
+    const nextGroupsByWorkspace = { ...get().manualChatGroupsByWorkspace };
+    if (nextGroups.length > 0) {
+      nextGroupsByWorkspace[workspaceId] = nextGroups;
+    } else {
+      delete nextGroupsByWorkspace[workspaceId];
+    }
+    set({ manualChatGroupsByWorkspace: nextGroupsByWorkspace });
+  },
+
+  updateManualChatGroupForWorkspace: (workspaceId, groupId, updates) => {
+    const current = get().manualChatGroupsByWorkspace[workspaceId] ?? [];
+    const nextGroups = updateManualChatGroup(current, groupId, updates);
+    const nextGroupsByWorkspace = { ...get().manualChatGroupsByWorkspace };
+    if (nextGroups.length > 0) {
+      nextGroupsByWorkspace[workspaceId] = nextGroups;
+    } else {
+      delete nextGroupsByWorkspace[workspaceId];
+    }
+    set({ manualChatGroupsByWorkspace: nextGroupsByWorkspace });
+  },
+
+  deleteManualChatGroupForWorkspace: (workspaceId, groupId) => {
+    const currentGroups = get().manualChatGroupsByWorkspace[workspaceId] ?? [];
+    const nextGroups = deleteManualChatGroup(currentGroups, groupId);
+    const nextGroupsByWorkspace = { ...get().manualChatGroupsByWorkspace };
+
+    if (nextGroups.length > 0) {
+      nextGroupsByWorkspace[workspaceId] = nextGroups;
+    } else {
+      delete nextGroupsByWorkspace[workspaceId];
+    }
+    set({ manualChatGroupsByWorkspace: nextGroupsByWorkspace });
+  },
+
+  removeSessionsFromManualChatGroupsForWorkspace: (workspaceId, sessionIds) => {
+    const currentGroups = get().manualChatGroupsByWorkspace[workspaceId] ?? [];
+    const nextGroups = removeSessionsFromManualChatGroups(currentGroups, sessionIds);
+    const nextGroupsByWorkspace = { ...get().manualChatGroupsByWorkspace };
+
+    if (nextGroups.length > 0) {
+      nextGroupsByWorkspace[workspaceId] = nextGroups;
+    } else {
+      delete nextGroupsByWorkspace[workspaceId];
+    }
+    set({ manualChatGroupsByWorkspace: nextGroupsByWorkspace });
+  },
+
+  clearWorkspaceChatTabState: (workspaceId) => {
+    const visible = { ...get().visibleChatSessionIdsByWorkspace };
+    const hidden = { ...get().recentlyHiddenChatSessionIdsByWorkspace };
+    const collapsed = { ...get().collapsedChatGroupsByWorkspace };
+    const manualGroups = { ...get().manualChatGroupsByWorkspace };
+    delete visible[workspaceId];
+    delete hidden[workspaceId];
+    delete collapsed[workspaceId];
+    delete manualGroups[workspaceId];
+    set({
+      visibleChatSessionIdsByWorkspace: visible,
+      recentlyHiddenChatSessionIdsByWorkspace: hidden,
+      collapsedChatGroupsByWorkspace: collapsed,
+      manualChatGroupsByWorkspace: manualGroups,
+    });
   },
 }));
 

@@ -10,8 +10,7 @@ import { collectWorkspaceSessionViewStates } from "@/lib/domain/sessions/activit
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { SidebarActionButton } from "@/components/workspace/shell/sidebar/SidebarActionButton";
-import { CoworkManagedWorkspaceTree } from "./CoworkManagedWorkspaceTree";
-import { CoworkThreadRow } from "./CoworkThreadRow";
+import { CoworkThreadItem } from "./CoworkThreadItem";
 
 const DEFAULT_VISIBLE_THREAD_COUNT = 5;
 
@@ -31,6 +30,25 @@ export function CoworkThreadsSection() {
   const handleToggleCollapsed = useCallback(() => {
     setThreadsCollapsed(!threadsCollapsed);
   }, [setThreadsCollapsed, threadsCollapsed]);
+
+  const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
+  const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState<Set<string>>(new Set());
+  const toggleThreadExpanded = useCallback((threadId: string) => {
+    setExpandedThreadIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(threadId)) next.delete(threadId);
+      else next.add(threadId);
+      return next;
+    });
+  }, []);
+  const toggleWorkspaceExpanded = useCallback((ownershipId: string) => {
+    setExpandedWorkspaceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(ownershipId)) next.delete(ownershipId);
+      else next.add(ownershipId);
+      return next;
+    });
+  }, []);
 
   const overLimit = threads.length > DEFAULT_VISIBLE_THREAD_COUNT;
   const selectedThreadIndex = useMemo(() => (
@@ -97,21 +115,21 @@ export function CoworkThreadsSection() {
           ) : (
             <>
               {visibleThreads.map((thread) => (
-                <div key={thread.id} className="min-w-0">
-                  <CoworkThreadRow
-                    thread={thread}
-                    active={selectedWorkspaceId === thread.workspaceId}
-                    activity={workspaceActivities[thread.workspaceId]}
-                    onSelect={() => { void openThread(thread.workspaceId); }}
-                  />
-                  <CoworkManagedWorkspaceTree
-                    parentSessionId={thread.sessionId}
-                    enabled={thread.workspaceDelegationEnabled}
-                    selectedWorkspaceId={selectedWorkspaceId}
-                    activeSessionId={activeSessionId}
-                    onOpenSession={(input) => { void openCodingSession(input); }}
-                  />
-                </div>
+                <CoworkThreadItem
+                  key={thread.id}
+                  thread={thread}
+                  active={selectedWorkspaceId === thread.workspaceId}
+                  activity={workspaceActivities[thread.workspaceId]}
+                  expanded={expandedThreadIds.has(thread.id)}
+                  onToggleExpanded={() => toggleThreadExpanded(thread.id)}
+                  onSelect={() => { void openThread(thread.workspaceId); }}
+                  selectedWorkspaceId={selectedWorkspaceId}
+                  activeSessionId={activeSessionId}
+                  expandedWorkspaceIds={expandedWorkspaceIds}
+                  onToggleWorkspaceExpanded={toggleWorkspaceExpanded}
+                  onOpenWorkspace={(workspaceId) => { void openThread(workspaceId); }}
+                  onOpenSession={(input) => { void openCodingSession(input); }}
+                />
               ))}
               {toggleLabel && (
                 <SidebarShowToggleRow

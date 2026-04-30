@@ -1200,6 +1200,31 @@ export function ProviderIcon({
   return <Icon className={className} />;
 }
 
+export function AgentGlyph({
+  agentKind,
+  color,
+  className = "size-4",
+}: {
+  agentKind?: string | null;
+  color?: string | null;
+  className?: string;
+}) {
+  const Icon = agentKind ? PROVIDER_ICON_MAP[agentKind] : undefined;
+  const style = color ? { color } : undefined;
+  if (Icon) {
+    return (
+      <span className="inline-flex" style={style}>
+        <Icon className={className} />
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex" style={style}>
+      <ProliferateIcon className={className} />
+    </span>
+  );
+}
+
 export function FinderIcon({ className }: IconProps) {
   return <AppIcon id="finder" className={className} />;
 }

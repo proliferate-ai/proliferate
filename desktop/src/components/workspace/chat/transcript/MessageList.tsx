@@ -82,6 +82,7 @@ import {
   resolveSubagentBrailleColor,
 } from "@/lib/domain/chat/subagent-braille-color";
 import { isAgentSessionProvenance, isSubagentWakeProvenance } from "@/lib/domain/chat/subagents/provenance";
+import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { SubagentWakeBadge } from "@/components/workspace/chat/transcript/SubagentWakeBadge";
 import { SubagentLaunchLedger } from "@/components/workspace/chat/transcript/SubagentLaunchLedger";
 import { UserMessageProvenanceChrome } from "@/components/workspace/chat/transcript/UserMessageProvenanceChrome";
@@ -838,12 +839,16 @@ function TranscriptItemBlock({
   const toolCallIdsWithProposedPlan = useContext(ProposedPlanToolCallIdsContext);
   const sessionId = useContext(TranscriptSessionIdContext);
   const openSession = useContext(TranscriptOpenSessionContext);
+  const sessionSlots = useHarnessStore((s) => s.sessionSlots);
 
   switch (item.kind) {
     case "user_message": {
       if (isSubagentWakeProvenance(item.promptProvenance)) {
         const completion =
           transcript.linkCompletionsByCompletionId[item.promptProvenance.completionId] ?? null;
+        const childAgentKind = completion?.childSessionId
+          ? sessionSlots[completion.childSessionId]?.agentKind ?? null
+          : null;
         return (
           <div className="flex justify-end">
             <SubagentWakeBadge
@@ -851,6 +856,7 @@ function TranscriptItemBlock({
               childSessionId={completion?.childSessionId ?? null}
               outcome={completion?.outcome ?? null}
               color={resolveSubagentColor(item.promptProvenance.sessionLinkId)}
+              agentKind={childAgentKind}
               titleFallback={
                 item.promptProvenance.type === "linkWake"
                 && item.promptProvenance.relation === "cowork_coding_session"

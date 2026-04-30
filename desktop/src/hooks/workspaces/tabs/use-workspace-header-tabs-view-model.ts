@@ -1,0 +1,425 @@
+import { useEffect, useMemo } from "react";
+import type { Session } from "@anyharness/sdk";
+import { useWorkspaceSessionsQuery } from "@anyharness/sdk-react";
+import { getProviderDisplayName } from "@/config/providers";
+import { useWorkspaceHeaderSubagentHierarchy } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
+import {
+  buildGroupedChatTabs,
+  type GroupedChatTab,
+} from "@/lib/domain/workspaces/tabs/grouping";
+import {
+  buildHeaderStripRows,
+  type HeaderStripRow,
+} from "@/lib/domain/workspaces/tabs/group-rows";
+import {
+  deriveManualChatGroupsForDisplay,
+  isManualChatGroupId,
+  normalizeManualChatGroupsForMutation,
+  resolveManualChatGroupColor,
+  type ManualChatGroupId,
+} from "@/lib/domain/workspaces/tabs/manual-groups";
+import {
+  resolveVisibleChatSessionIds,
+  type ChatVisibilityCandidate,
+} from "@/lib/domain/workspaces/tabs/visibility";
+import {
+  resolveSessionViewState,
+  type SessionViewState,
+  sessionSlotBelongsToWorkspace,
+} from "@/lib/domain/sessions/activity";
+import { getEffectiveSessionTitle } from "@/lib/domain/sessions/title";
+import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
+import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useHarnessStore, type SessionSlot } from "@/stores/sessions/harness-store";
+
+export interface HeaderChatTabEntry extends GroupedChatTab {
+  id: string;
+  title: string;
+  agentKind: string;
+  viewState: SessionViewState;
+  isActive: boolean;
+  groupColor: string | null;
+  visualGroupId: string | null;
+  manualGroupId: ManualChatGroupId | null;
+  isHierarchyResolved: boolean;
+}
+
+export interface HeaderChatMenuEntry {
+  id: string;
+  title: string;
+  agentKind: string;
+  viewState: SessionViewState;
+  isActive: boolean;
+  isVisible: boolean;
+}
+
+export type HeaderChatStripRow = HeaderStripRow<HeaderChatTabEntry>;
+
+export function useWorkspaceHeaderTabsViewModel() {
+  const activeMainTab = useWorkspaceFilesStore((s) => s.activeMainTab);
+  const openTabs = useWorkspaceFilesStore((s) => s.openTabs);
+  const buffersByPath = useWorkspaceFilesStore((s) => s.buffersByPath);
+  const tabModes = useWorkspaceFilesStore((s) => s.tabModes);
+
+  const selectedWorkspaceId = useHarnessStore((s) => s.selectedWorkspaceId);
+  const activeSessionId = useHarnessStore((s) => s.activeSessionId);
+  const sessionSlots = useHarnessStore((s) => s.sessionSlots);
+
+  const visibleByWorkspace = useWorkspaceUiStore((s) => s.visibleChatSessionIdsByWorkspace);
+  const hiddenByWorkspace = useWorkspaceUiStore((s) => s.recentlyHiddenChatSessionIdsByWorkspace);
+  const collapsedGroupsByWorkspace = useWorkspaceUiStore((s) => s.collapsedChatGroupsByWorkspace);
+  const manualGroupsByWorkspace = useWorkspaceUiStore((s) => s.manualChatGroupsByWorkspace);
+  const setVisibleChatSessionIdsForWorkspace = useWorkspaceUiStore(
+    (s) => s.setVisibleChatSessionIdsForWorkspace,
+  );
+  const clearHiddenChatSessionsForWorkspace = useWorkspaceUiStore(
+    (s) => s.clearHiddenChatSessionsForWorkspace,
+  );
+  const clearChatGroupCollapsedForWorkspace = useWorkspaceUiStore(
+    (s) => s.clearChatGroupCollapsedForWorkspace,
+  );
+  const setManualChatGroupsForWorkspace = useWorkspaceUiStore(
+    (s) => s.setManualChatGroupsForWorkspace,
+  );
+
+  const workspaceSessionsQuery = useWorkspaceSessionsQuery({
+    workspaceId: selectedWorkspaceId,
+    enabled: !!selectedWorkspaceId,
+  });
+
+  const liveSlots = useMemo(
+    () => Object.values(sessionSlots)
+      .filter((slot) => sessionSlotBelongsToWorkspace(slot, selectedWorkspaceId)),
+    [selectedWorkspaceId, sessionSlots],
+  );
+  const knownSessions = useMemo<Map<string, KnownSession>>(() => {
+    const map = new Map<string, KnownSession>();
+    for (const session of workspaceSessionsQuery.data ?? []) {
+      if (session.dismissedAt) continue;
+      if (!selectedWorkspaceId || session.workspaceId !== selectedWorkspaceId) continue;
+      map.set(session.id, { kind: "session", session });
+    }
+    for (const slot of liveSlots) {
+      map.set(slot.sessionId, { kind: "slot", slot });
+    }
+    return map;
+  }, [liveSlots, selectedWorkspaceId, workspaceSessionsQuery.data]);
+  const knownSessionIds = useMemo(() => Array.from(knownSessions.keys()), [knownSessions]);
+  const hierarchy = useWorkspaceHeaderSubagentHierarchy({
+    workspaceId: selectedWorkspaceId,
+    sessionIds: knownSessionIds,
+    activeSessionId,
+  });
+
+  const liveVisibilityCandidates = useMemo<ChatVisibilityCandidate[]>(
+    () => knownSessionIds.map((sessionId) => ({
+      sessionId,
+      parentSessionId: hierarchy.childToParent.get(sessionId) ?? null,
+    })),
+    [hierarchy.childToParent, knownSessionIds],
+  );
+
+  const persistedVisibleIds = selectedWorkspaceId
+    ? visibleByWorkspace[selectedWorkspaceId]
+    : undefined;
+  const recentlyHiddenIds = selectedWorkspaceId
+    ? hiddenByWorkspace[selectedWorkspaceId] ?? []
+    : [];
+  const collapsedParentIds = selectedWorkspaceId
+    ? collapsedGroupsByWorkspace[selectedWorkspaceId] ?? []
+    : [];
+  const persistedManualGroups = selectedWorkspaceId
+    ? manualGroupsByWorkspace[selectedWorkspaceId] ?? []
+    : [];
+
+  const visibleResolution = useMemo(
+    () => resolveVisibleChatSessionIds({
+      liveSessions: liveVisibilityCandidates,
+      persistedVisibleIds,
+      recentlyHiddenIds,
+      activeSessionId,
+    }),
+    [activeSessionId, liveVisibilityCandidates, persistedVisibleIds, recentlyHiddenIds],
+  );
+
+  const workspaceSessionsLoaded = workspaceSessionsQuery.data !== undefined;
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+    if (!sameStringArray(persistedVisibleIds ?? [], visibleResolution.visibleSessionIds)) {
+      // Only write back if we're adding, or if the workspace sessions list has
+      // loaded (so we're confident any "removed" ids were truly dismissed and
+      // not just not-yet-hydrated). This keeps a partial in-memory view from
+      // overwriting good persisted state during startup.
+      const previousIds = persistedVisibleIds ?? [];
+      const isSuperset = previousIds.every((id) =>
+        visibleResolution.visibleSessionIds.includes(id)
+      );
+      if (isSuperset || workspaceSessionsLoaded) {
+        setVisibleChatSessionIdsForWorkspace(
+          selectedWorkspaceId,
+          visibleResolution.visibleSessionIds,
+        );
+      }
+    }
+    if (!sameStringArray(recentlyHiddenIds, visibleResolution.prunedRecentlyHiddenIds)) {
+      const staleHiddenIds = recentlyHiddenIds.filter(
+        (id) => !visibleResolution.prunedRecentlyHiddenIds.includes(id),
+      );
+      if (staleHiddenIds.length > 0 && workspaceSessionsLoaded) {
+        clearHiddenChatSessionsForWorkspace(selectedWorkspaceId, staleHiddenIds);
+      }
+    }
+  }, [
+    clearHiddenChatSessionsForWorkspace,
+    persistedVisibleIds,
+    recentlyHiddenIds,
+    selectedWorkspaceId,
+    setVisibleChatSessionIdsForWorkspace,
+    visibleResolution.prunedRecentlyHiddenIds,
+    visibleResolution.visibleSessionIds,
+    workspaceSessionsLoaded,
+  ]);
+
+  const groupedTabs = useMemo(
+    () => buildGroupedChatTabs({
+      visibleSessionIds: visibleResolution.visibleSessionIds,
+      childToParent: hierarchy.childToParent,
+    }),
+    [hierarchy.childToParent, visibleResolution.visibleSessionIds],
+  );
+  const displayManualGroups = useMemo(
+    () => deriveManualChatGroupsForDisplay({
+      groups: persistedManualGroups,
+      visibleSessionIds: visibleResolution.visibleSessionIds,
+      childToParent: hierarchy.childToParent,
+      resolvedHierarchySessionIds: hierarchy.resolvedSessionIds,
+    }),
+    [
+      hierarchy.childToParent,
+      hierarchy.resolvedSessionIds,
+      persistedManualGroups,
+      visibleResolution.visibleSessionIds,
+    ],
+  );
+  const manualGroupByTopLevelSessionId = useMemo(() => {
+    const map = new Map<string, (typeof displayManualGroups)[number]>();
+    for (const group of displayManualGroups) {
+      for (const sessionId of group.sessionIds) {
+        map.set(sessionId, group);
+      }
+    }
+    return map;
+  }, [displayManualGroups]);
+  const isChatActive = activeMainTab.kind === "chat";
+  const chatTabs = useMemo<HeaderChatTabEntry[]>(
+    () => groupedTabs
+      .map((grouped) => {
+        const known = knownSessions.get(grouped.sessionId);
+        if (!known) {
+          return null;
+        }
+        const manualGroup = manualGroupByTopLevelSessionId.get(
+          grouped.isChild ? grouped.groupRootSessionId : grouped.sessionId,
+        ) ?? null;
+        const subagentGroupColor = grouped.isChild || hierarchy.childrenByParentSessionId.has(grouped.sessionId)
+          ? resolveSubagentColor(grouped.groupRootSessionId)
+          : null;
+        const groupColor = manualGroup
+          ? resolveManualChatGroupColor(manualGroup.colorId)
+          : subagentGroupColor;
+        return {
+          ...grouped,
+          id: grouped.sessionId,
+          title: getKnownSessionTitle(known),
+          agentKind: getKnownSessionAgentKind(known),
+          viewState: getKnownSessionViewState(known),
+          isActive: isChatActive && grouped.sessionId === activeSessionId,
+          groupColor,
+          visualGroupId: manualGroup?.id ?? (subagentGroupColor ? grouped.groupRootSessionId : null),
+          manualGroupId: manualGroup?.id ?? null,
+          isHierarchyResolved: hierarchy.resolvedSessionIds.has(grouped.sessionId),
+        } satisfies HeaderChatTabEntry;
+      })
+      .filter((tab): tab is HeaderChatTabEntry => !!tab),
+    [
+      activeSessionId,
+      groupedTabs,
+      hierarchy.childrenByParentSessionId,
+      hierarchy.resolvedSessionIds,
+      isChatActive,
+      knownSessions,
+      manualGroupByTopLevelSessionId,
+    ],
+  );
+
+  const stripRows = useMemo(
+    () => buildHeaderStripRows({
+      groupedTabs: chatTabs,
+      childrenByParentSessionId: hierarchy.childrenByParentSessionId,
+      collapsedGroupIds: collapsedParentIds,
+      resolveSubagentColor,
+      resolveManualGroupColor: (group) => resolveManualChatGroupColor(group.colorId),
+      manualGroups: displayManualGroups,
+      activeSessionId,
+      subagentLabel: "Agents",
+    }),
+    [
+      activeSessionId,
+      chatTabs,
+      collapsedParentIds,
+      displayManualGroups,
+      hierarchy.childrenByParentSessionId,
+    ],
+  );
+  const stripChatSessionIds = useMemo(
+    () => stripRows
+      .filter((row): row is Extract<HeaderChatStripRow, { kind: "tab" }> => row.kind === "tab")
+      .map((row) => row.tab.sessionId),
+    [stripRows],
+  );
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || collapsedParentIds.length === 0) {
+      return;
+    }
+    const manualGroupIds = new Set(persistedManualGroups.map((group) => group.id));
+    const activeParentId = activeSessionId
+      ? hierarchy.childToParent.get(activeSessionId) ?? activeSessionId
+      : null;
+    const staleOrActiveIds = collapsedParentIds.filter((groupId) => {
+      if (isManualChatGroupId(groupId)) {
+        const group = persistedManualGroups.find((candidate) => candidate.id === groupId);
+        return !manualGroupIds.has(groupId)
+          || (!!activeParentId && !!group && group.sessionIds.includes(activeParentId));
+      }
+      return !hierarchy.childrenByParentSessionId.has(groupId)
+        || (!!activeParentId && groupId === activeParentId);
+    });
+    if (staleOrActiveIds.length > 0) {
+      clearChatGroupCollapsedForWorkspace(selectedWorkspaceId, staleOrActiveIds);
+    }
+  }, [
+    activeSessionId,
+    clearChatGroupCollapsedForWorkspace,
+    collapsedParentIds,
+    hierarchy.childToParent,
+    hierarchy.childrenByParentSessionId,
+    persistedManualGroups,
+    selectedWorkspaceId,
+  ]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || !workspaceSessionsLoaded || persistedManualGroups.length === 0) {
+      return;
+    }
+    const knownSessionIdSet = new Set(knownSessionIds);
+    const canCleanup = persistedManualGroups.every((group) =>
+      group.sessionIds.every((sessionId) =>
+        !knownSessionIdSet.has(sessionId) || hierarchy.resolvedSessionIds.has(sessionId)
+      )
+    );
+    if (!canCleanup) {
+      return;
+    }
+    const normalized = normalizeManualChatGroupsForMutation({
+      groups: persistedManualGroups,
+      liveSessionIds: knownSessionIds,
+      childToParent: hierarchy.childToParent,
+      resolvedHierarchySessionIds: hierarchy.resolvedSessionIds,
+    });
+    if (JSON.stringify(normalized) !== JSON.stringify(persistedManualGroups)) {
+      setManualChatGroupsForWorkspace(selectedWorkspaceId, normalized);
+    }
+  }, [
+    hierarchy.childToParent,
+    hierarchy.resolvedSessionIds,
+    knownSessionIds,
+    persistedManualGroups,
+    selectedWorkspaceId,
+    setManualChatGroupsForWorkspace,
+    workspaceSessionsLoaded,
+  ]);
+
+  const menuChatTabs = useMemo<HeaderChatMenuEntry[]>(
+    () => Array.from(knownSessions.values())
+      .filter((known) => !hierarchy.childToParent.has(getKnownSessionId(known)))
+      .map((known) => {
+        const id = getKnownSessionId(known);
+        return {
+          id,
+          title: getKnownSessionTitle(known),
+          agentKind: getKnownSessionAgentKind(known),
+          viewState: getKnownSessionViewState(known),
+          isActive: isChatActive && id === activeSessionId,
+          isVisible: visibleResolution.visibleSessionIds.includes(id),
+        };
+      }),
+    [
+      activeSessionId,
+      hierarchy.childToParent,
+      isChatActive,
+      knownSessions,
+      visibleResolution.visibleSessionIds,
+    ],
+  );
+
+  return {
+    activeMainTab,
+    activeSessionId,
+    selectedWorkspaceId,
+    openTabs,
+    buffersByPath,
+    tabModes,
+    chatTabs,
+    stripRows,
+    stripChatSessionIds,
+    menuChatTabs,
+    visibleChatSessionIds: visibleResolution.visibleSessionIds,
+    liveChatSessionIds: knownSessionIds,
+    childToParent: hierarchy.childToParent,
+    childrenByParentSessionId: hierarchy.childrenByParentSessionId,
+    hierarchyResolvedSessionIds: hierarchy.resolvedSessionIds,
+    displayManualGroups,
+  };
+}
+
+type KnownSession =
+  | { kind: "slot"; slot: SessionSlot }
+  | { kind: "session"; session: Session };
+
+function getKnownSessionId(known: KnownSession): string {
+  return known.kind === "slot" ? known.slot.sessionId : known.session.id;
+}
+
+function getKnownSessionAgentKind(known: KnownSession): string {
+  return known.kind === "slot" ? known.slot.agentKind : known.session.agentKind;
+}
+
+function getKnownSessionTitle(known: KnownSession): string {
+  if (known.kind === "slot") {
+    return getEffectiveSessionTitle(known.slot)
+      ?? getProviderDisplayName(known.slot.agentKind);
+  }
+  return known.session.title?.trim()
+    || getProviderDisplayName(known.session.agentKind);
+}
+
+function getKnownSessionViewState(known: KnownSession): SessionViewState {
+  if (known.kind === "slot") {
+    return resolveSessionViewState(known.slot);
+  }
+  return resolveSessionViewState({
+    status: known.session.status,
+    executionSummary: known.session.executionSummary ?? null,
+    streamConnectionState: "disconnected",
+    transcript: { isStreaming: false, pendingInteractions: [] },
+  });
+}
+
+function sameStringArray(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}

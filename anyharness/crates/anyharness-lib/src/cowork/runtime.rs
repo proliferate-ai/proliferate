@@ -104,6 +104,16 @@ pub struct CoworkCodingStatusResult {
 }
 
 const COWORK_WORKSPACE_PATH_PLACEHOLDER: &str = "__PROLIFERATE_COWORK_WORKSPACE_PATH__";
+const DEFAULT_CODING_WORKSPACE_NAME: &str = "coding-workspace";
+const MAX_CODING_WORKSPACE_NAME_LEN: usize = 64;
+const MAX_CODING_WORKSPACE_NAME_ATTEMPTS: usize = 100;
+
+#[derive(Debug, Clone)]
+struct CodingWorkspaceNamePlan {
+    workspace_name: String,
+    branch_name: String,
+    target_path: PathBuf,
+}
 
 fn materialize_cowork_workspace_path(mcp_servers: &mut [SessionMcpServer], workspace_path: &str) {
     for server in mcp_servers {
@@ -741,17 +751,6 @@ impl CoworkRuntime {
             .repo_root_service
             .get_repo_root(&repo_root_id)?
             .ok_or_else(|| anyhow::anyhow!("repo root not found: {repo_root_id}"))?;
-        let workspace_id = Uuid::new_v4().to_string();
-        let branch_name = format!("cowork/coding/{workspace_id}");
-        let target_path = self
-            .runtime_home
-            .join("cowork")
-            .join("coding-workspaces")
-            .join(&workspace_id);
-        if let Some(parent) = target_path.parent() {
-            fs::create_dir_all(parent).map_err(anyhow::Error::from)?;
-        }
-        let target_path_string = target_path.display().to_string();
         let base_branch = repo_root
             .default_branch
             .as_deref()
@@ -759,17 +758,29 @@ impl CoworkRuntime {
             .or(source_workspace.current_branch.as_deref())
             .unwrap_or("main")
             .to_string();
+        let label = normalize_optional_text(input.label);
+        let name_plan = allocate_coding_workspace_name(
+            &repo_root.path,
+            &self.runtime_home,
+            label.as_deref(),
+            input.workspace_name.as_deref(),
+            input.branch_name.as_deref(),
+        )?;
+        if let Some(parent) = name_plan.target_path.parent() {
+            fs::create_dir_all(parent).map_err(anyhow::Error::from)?;
+        }
+        let target_path_string = name_plan.target_path.display().to_string();
 
         let worktree = self.workspace_runtime.create_worktree_with_surface(
             &repo_root_id,
             &target_path_string,
-            &branch_name,
+            &name_plan.branch_name,
             Some(&base_branch),
             None,
             "standard",
             OriginContext::cowork(),
         )?;
-        let label = normalize_optional_text(input.label);
+        let label = label.or_else(|| Some(coding_workspace_label(&name_plan.workspace_name)));
         let managed_workspace = CoworkManagedWorkspaceRecord {
             id: Uuid::new_v4().to_string(),
             parent_session_id: parent_session_id.to_string(),
@@ -782,7 +793,11 @@ impl CoworkRuntime {
             .delegation_service
             .insert_managed_workspace(&managed_workspace)
         {
-            self.cleanup_failed_coding_workspace(&repo_root, &worktree.workspace, &target_path);
+            self.cleanup_failed_coding_workspace(
+                &repo_root,
+                &worktree.workspace,
+                &name_plan.target_path,
+            );
             return Err(error);
         }
 
@@ -1261,9 +1276,186 @@ fn run_git<const N: usize>(cwd: Option<&PathBuf>, args: [&str; N]) -> anyhow::Re
     );
 }
 
+fn allocate_coding_workspace_name(
+    repo_root_path: &str,
+    runtime_home: &PathBuf,
+    label: Option<&str>,
+    workspace_name: Option<&str>,
+    branch_name: Option<&str>,
+) -> Result<CodingWorkspaceNamePlan, CoworkDelegationError> {
+    let explicit_workspace_name = normalize_optional_ref(workspace_name);
+    let explicit_branch_name = normalize_optional_ref(branch_name);
+    let explicit_workspace_slug = match explicit_workspace_name {
+        Some(value) => Some(coding_workspace_slug(value).ok_or_else(|| {
+            CoworkDelegationError::InvalidCodingWorkspaceRequest(
+                "workspaceName must contain at least one letter or number".to_string(),
+            )
+        })?),
+        None => None,
+    };
+    let explicit_branch_name = match explicit_branch_name {
+        Some(value) => {
+            validate_coding_workspace_branch_name(value)?;
+            Some(value.to_string())
+        }
+        None => None,
+    };
+    let base_workspace_name = explicit_workspace_slug
+        .clone()
+        .or_else(|| label.and_then(coding_workspace_slug))
+        .or_else(|| {
+            explicit_branch_name
+                .as_deref()
+                .and_then(coding_workspace_name_from_branch)
+        })
+        .unwrap_or_else(|| DEFAULT_CODING_WORKSPACE_NAME.to_string());
+    let target_base_dir = runtime_home.join("cowork").join("coding-workspaces");
+    let workspace_name_is_explicit = explicit_workspace_slug.is_some();
+    let branch_name_is_explicit = explicit_branch_name.is_some();
+
+    for attempt in 0..MAX_CODING_WORKSPACE_NAME_ATTEMPTS {
+        let workspace_name = workspace_name_with_suffix(&base_workspace_name, attempt);
+        let branch_name = explicit_branch_name
+            .clone()
+            .unwrap_or_else(|| format!("cowork/coding/{workspace_name}"));
+        validate_coding_workspace_branch_name(&branch_name)?;
+        let target_path = target_base_dir.join(&workspace_name);
+        let target_exists = target_path.exists();
+        let branch_exists = git_branch_exists(repo_root_path, &branch_name);
+
+        if !target_exists && !branch_exists {
+            return Ok(CodingWorkspaceNamePlan {
+                workspace_name,
+                branch_name,
+                target_path,
+            });
+        }
+
+        if workspace_name_is_explicit && target_exists {
+            return Err(CoworkDelegationError::InvalidCodingWorkspaceRequest(
+                format!("coding workspace name already exists: {workspace_name}"),
+            ));
+        }
+        if branch_name_is_explicit && branch_exists {
+            return Err(CoworkDelegationError::InvalidCodingWorkspaceRequest(
+                format!("coding workspace branch already exists: {branch_name}"),
+            ));
+        }
+        if workspace_name_is_explicit && branch_exists {
+            return Err(CoworkDelegationError::InvalidCodingWorkspaceRequest(
+                format!("coding workspace branch already exists: {branch_name}"),
+            ));
+        }
+    }
+
+    Err(CoworkDelegationError::InvalidCodingWorkspaceRequest(
+        "unable to allocate a coding workspace name".to_string(),
+    ))
+}
+
+fn coding_workspace_slug(value: &str) -> Option<String> {
+    let mut slug = String::new();
+    let mut last_was_separator = false;
+    for ch in value.trim().chars() {
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch.to_ascii_lowercase());
+            last_was_separator = false;
+        } else if !last_was_separator {
+            slug.push('-');
+            last_was_separator = true;
+        }
+    }
+
+    let mut slug = slug.trim_matches('-').to_string();
+    if slug.len() > MAX_CODING_WORKSPACE_NAME_LEN {
+        slug.truncate(MAX_CODING_WORKSPACE_NAME_LEN);
+        slug = slug.trim_matches('-').to_string();
+    }
+
+    if slug.is_empty() {
+        None
+    } else {
+        Some(slug)
+    }
+}
+
+fn coding_workspace_name_from_branch(branch_name: &str) -> Option<String> {
+    branch_name
+        .split('/')
+        .filter(|segment| !segment.trim().is_empty())
+        .next_back()
+        .and_then(coding_workspace_slug)
+}
+
+fn workspace_name_with_suffix(base: &str, attempt: usize) -> String {
+    if attempt == 0 {
+        return base.to_string();
+    }
+
+    let suffix = format!("-{}", attempt + 1);
+    if base.len() + suffix.len() <= MAX_CODING_WORKSPACE_NAME_LEN {
+        return format!("{base}{suffix}");
+    }
+
+    let keep_len = MAX_CODING_WORKSPACE_NAME_LEN.saturating_sub(suffix.len());
+    let mut prefix = base.chars().take(keep_len).collect::<String>();
+    prefix = prefix.trim_matches('-').to_string();
+    format!("{prefix}{suffix}")
+}
+
+fn coding_workspace_label(workspace_name: &str) -> String {
+    let label = workspace_name
+        .split('-')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut chars = label.chars();
+    match chars.next() {
+        Some(first) => format!("{}{}", first.to_ascii_uppercase(), chars.as_str()),
+        None => DEFAULT_CODING_WORKSPACE_NAME.to_string(),
+    }
+}
+
+fn validate_coding_workspace_branch_name(branch_name: &str) -> Result<(), CoworkDelegationError> {
+    let output = Command::new("git")
+        .args(["check-ref-format", "--branch", branch_name])
+        .output()
+        .map_err(|error| {
+            CoworkDelegationError::Internal(anyhow::anyhow!(
+                "failed to validate branch name: {error}"
+            ))
+        })?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    Err(CoworkDelegationError::InvalidCodingWorkspaceRequest(
+        format!("invalid branchName: {branch_name}"),
+    ))
+}
+
+fn git_branch_exists(repo_root_path: &str, branch_name: &str) -> bool {
+    Command::new("git")
+        .args([
+            "-C",
+            repo_root_path,
+            "show-ref",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch_name}"),
+        ])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{materialize_cowork_workspace_path, COWORK_WORKSPACE_PATH_PLACEHOLDER};
+    use super::{
+        coding_workspace_label, coding_workspace_name_from_branch, coding_workspace_slug,
+        materialize_cowork_workspace_path, workspace_name_with_suffix,
+        COWORK_WORKSPACE_PATH_PLACEHOLDER,
+    };
     use crate::sessions::mcp::{SessionMcpServer, SessionMcpStdioServer};
 
     #[test]
@@ -1283,5 +1475,28 @@ mod tests {
             panic!("expected stdio server");
         };
         assert_eq!(server.args, vec!["/tmp/cowork/thread-1"]);
+    }
+
+    #[test]
+    fn normalizes_coding_workspace_names() {
+        assert_eq!(
+            coding_workspace_slug("Runtime sweep!"),
+            Some("runtime-sweep".to_string()),
+        );
+        assert_eq!(coding_workspace_slug("***"), None);
+        assert_eq!(
+            coding_workspace_name_from_branch("feature/runtime-sweep"),
+            Some("runtime-sweep".to_string()),
+        );
+        assert_eq!(coding_workspace_label("runtime-sweep"), "Runtime sweep");
+    }
+
+    #[test]
+    fn suffixes_long_coding_workspace_names_inside_limit() {
+        let base = "a".repeat(super::MAX_CODING_WORKSPACE_NAME_LEN);
+        let suffixed = workspace_name_with_suffix(&base, 1);
+
+        assert_eq!(suffixed.len(), super::MAX_CODING_WORKSPACE_NAME_LEN);
+        assert!(suffixed.ends_with("-2"));
     }
 }

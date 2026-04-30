@@ -122,7 +122,7 @@ export const SHORTCUTS = {
   restoreTab: {
     id: "workspace.restore-tab",
     label: "⌘⇧T",
-    description: "Restore last dismissed tab",
+    description: "Restore closed tab",
     owner: "js",
     match: { kind: "fixed", key: "t", meta: true, shift: true, alt: false },
     allowInInputs: true,
@@ -134,6 +134,24 @@ export const SHORTCUTS = {
     owner: "native-menu",
     match: { kind: "fixed", key: "w", meta: true, shift: false, alt: false },
     allowInInputs: true,
+  },
+  closeOtherTabs: {
+    id: "workspace.close-other-tabs",
+    label: "⌘⇧O",
+    nonMacLabel: "Ctrl+Shift+O",
+    description: "Close other tabs",
+    owner: "js",
+    match: { kind: "fixed", key: "o", meta: true, shift: true, alt: false },
+    allowInInputs: false,
+  },
+  closeTabsToRight: {
+    id: "workspace.close-tabs-to-right",
+    label: "⌘⇧R",
+    nonMacLabel: "Ctrl+Shift+R",
+    description: "Close tabs to the right",
+    owner: "js",
+    match: { kind: "fixed", key: "r", meta: true, shift: true, alt: false },
+    allowInInputs: false,
   },
   focusChat: {
     id: "workspace.focus-chat",
@@ -228,6 +246,8 @@ export const SHORTCUT_GROUPS = [
       "newSessionTab",
       "restoreTab",
       "closeActiveTab",
+      "closeOtherTabs",
+      "closeTabsToRight",
     ],
   },
   {

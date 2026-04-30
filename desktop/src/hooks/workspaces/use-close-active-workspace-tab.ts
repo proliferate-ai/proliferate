@@ -1,9 +1,7 @@
 import { useCallback } from "react";
-import { useSessionActions } from "@/hooks/sessions/use-session-actions";
-import { sessionSlotBelongsToWorkspace } from "@/lib/domain/sessions/activity";
+import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
+import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useToastStore } from "@/stores/toast/toast-store";
 
 export type CloseActiveWorkspaceTabResult = "closed" | "blocked" | "noop";
 
@@ -19,13 +17,12 @@ export function useCloseActiveWorkspaceTab() {
   const activeMainTab = useWorkspaceFilesStore((state) => state.activeMainTab);
   const buffersByPath = useWorkspaceFilesStore((state) => state.buffersByPath);
   const closeTab = useWorkspaceFilesStore((state) => state.closeTab);
-
-  const activeSessionId = useHarnessStore((state) => state.activeSessionId);
-  const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
-  const sessionSlots = useHarnessStore((state) => state.sessionSlots);
-  const showToast = useToastStore((state) => state.show);
-
-  const { dismissSession } = useSessionActions();
+  const headerTabs = useWorkspaceHeaderTabsViewModel();
+  const chatVisibilityActions = useChatTabVisibilityActions({
+    visibleIds: headerTabs.visibleChatSessionIds,
+    liveIds: headerTabs.liveChatSessionIds,
+    childToParent: headerTabs.childToParent,
+  });
 
   return useCallback((): CloseActiveWorkspaceTabResult => {
     if (activeMainTab.kind === "file") {
@@ -39,26 +36,20 @@ export function useCloseActiveWorkspaceTab() {
       return "closed";
     }
 
-    if (
-      activeSessionId
-      && sessionSlotBelongsToWorkspace(sessionSlots[activeSessionId], selectedWorkspaceId)
-    ) {
-      void dismissSession(activeSessionId).catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        showToast(message);
-      });
-      return "closed";
+    if (headerTabs.activeSessionId) {
+      const hidden = chatVisibilityActions.hideChatSessionTabs(
+        [headerTabs.activeSessionId],
+        { selectFallback: true },
+      );
+      return hidden ? "closed" : "noop";
     }
 
     return "noop";
   }, [
     activeMainTab,
-    activeSessionId,
     buffersByPath,
+    chatVisibilityActions,
     closeTab,
-    dismissSession,
-    selectedWorkspaceId,
-    sessionSlots,
-    showToast,
+    headerTabs.activeSessionId,
   ]);
 }

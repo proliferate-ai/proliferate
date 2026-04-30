@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/Button";
-import { ProliferateIcon } from "@/components/ui/icons";
+import { AgentGlyph } from "@/components/ui/icons";
+import { useHarnessStore } from "@/stores/sessions/harness-store";
 
 interface UserMessageProvenanceChromeProps {
   sourceSessionId: string;
@@ -14,16 +15,18 @@ export function UserMessageProvenanceChrome({
   color,
   onOpenParent,
 }: UserMessageProvenanceChromeProps) {
+  const parentAgentKind = useHarnessStore(
+    (s) => s.sessionSlots[sourceSessionId]?.agentKind ?? null,
+  );
   const title = label?.trim() || "Parent agent";
   const content = (
     <>
       <span className="shrink-0 text-muted-foreground/70">Sent by</span>
       <span
         className="flex size-3.5 shrink-0 items-center justify-center"
-        style={{ color }}
         aria-hidden="true"
       >
-        <ProliferateIcon className="size-3.5" />
+        <AgentGlyph agentKind={parentAgentKind} color={color} className="size-3.5" />
       </span>
       <span className="min-w-0 truncate">{title}</span>
     </>

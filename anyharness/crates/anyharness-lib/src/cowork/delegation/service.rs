@@ -43,6 +43,8 @@ pub enum CoworkDelegationError {
     CodingSessionNotOwned,
     #[error("workspace mutation blocked: {0}")]
     MutationBlocked(String),
+    #[error("invalid coding workspace request: {0}")]
+    InvalidCodingWorkspaceRequest(String),
     #[error("cowork session already has the maximum number of managed coding workspaces")]
     WorkspaceLimit,
     #[error("managed workspace already has the maximum number of coding sessions")]

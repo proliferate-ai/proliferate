@@ -21,6 +21,7 @@ interface SessionTitleRenamePopoverProps {
   onRename: (title: string) => Promise<unknown>;
   externalOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
+  triggerMode?: "contextMenu" | "doubleClick";
 }
 
 export function SessionTitleRenamePopover({
@@ -29,11 +30,12 @@ export function SessionTitleRenamePopover({
   onRename,
   externalOpen,
   onOpenChange,
+  triggerMode = "contextMenu",
 }: SessionTitleRenamePopoverProps) {
   return (
     <PopoverButton
       trigger={trigger}
-      triggerMode="contextMenu"
+      triggerMode={triggerMode}
       align="start"
       side="bottom"
       offset={6}
@@ -102,7 +104,7 @@ function SessionTitleRenamePanel({
       <div>
         <div className="text-sm font-medium text-foreground">Rename chat</div>
         <div className="mt-1 text-xs text-muted-foreground">
-          Two-finger click chat tabs to edit their title.
+          Rename from the tab menu or with the keyboard shortcut.
         </div>
       </div>
       <Input
@@ -128,6 +130,7 @@ function SessionTitleRenamePanel({
         spellCheck={false}
         maxLength={160}
         className="h-9"
+        data-telemetry-mask="true"
       />
       {error && (
         <div className="text-xs text-destructive">

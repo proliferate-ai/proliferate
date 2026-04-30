@@ -4,21 +4,21 @@ export type WorkspaceShellTab =
   | { kind: "chat"; sessionId: string }
   | { kind: "file"; path: string };
 
-interface WorkspaceSessionTabCandidate {
+export interface WorkspaceSessionTabCandidate {
   sessionId: string;
   workspaceId: string | null;
 }
 
-interface MainTabState {
+export interface MainTabState {
   kind: "chat";
 }
 
-interface FileMainTabState {
+export interface FileMainTabState {
   kind: "file";
   path: string;
 }
 
-function isSameWorkspaceShellTab(
+export function isSameWorkspaceShellTab(
   left: WorkspaceShellTab,
   right: WorkspaceShellTab,
 ): boolean {
@@ -40,14 +40,28 @@ function isSameWorkspaceShellTab(
 export function buildWorkspaceShellTabs(args: {
   selectedWorkspaceId: string | null;
   sessionSlots: Record<string, WorkspaceSessionTabCandidate>;
+  visibleChatSessionIds?: string[];
   openTabs: string[];
 }): WorkspaceShellTab[] {
-  const chatTabs = Object.values(args.sessionSlots)
-    .filter((slot) => sessionSlotBelongsToWorkspace(slot, args.selectedWorkspaceId))
-    .map<WorkspaceShellTab>((slot) => ({
+  const visibleSet = args.visibleChatSessionIds
+    ? new Set(args.visibleChatSessionIds)
+    : null;
+  const liveChatTabs: Array<WorkspaceShellTab & { kind: "chat" }> = Object.values(args.sessionSlots)
+    .filter((slot) =>
+      sessionSlotBelongsToWorkspace(slot, args.selectedWorkspaceId)
+      && (!visibleSet || visibleSet.has(slot.sessionId))
+    )
+    .map((slot) => ({
       kind: "chat",
       sessionId: slot.sessionId,
     }));
+
+  const chatById = new Map(liveChatTabs.map((tab) => [tab.sessionId, tab]));
+  const chatTabs = args.visibleChatSessionIds
+    ? args.visibleChatSessionIds
+      .map((sessionId) => chatById.get(sessionId))
+      .filter((tab): tab is WorkspaceShellTab & { kind: "chat" } => !!tab)
+    : liveChatTabs;
 
   const fileTabs = args.openTabs.map<WorkspaceShellTab>((path) => ({
     kind: "file",
