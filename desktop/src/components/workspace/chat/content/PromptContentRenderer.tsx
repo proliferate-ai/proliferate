@@ -1,14 +1,27 @@
+import { Fragment } from "react";
 import type { ContentPart } from "@anyharness/sdk";
-import { FileText, Link2, X } from "@/components/ui/icons";
+import { FileIcon, FileText, Link2, LoaderCircle, X } from "@/components/ui/icons";
 import { Button } from "@/components/ui/Button";
+import { FilePathLink } from "@/components/ui/content/FilePathLink";
 import { usePromptAttachmentUrl } from "@/hooks/chat/use-prompt-attachment-url";
-import type { PromptAttachmentDescriptor } from "@/lib/domain/chat/prompt-content";
+import {
+  normalizeContentParts,
+  normalizeDraftAttachments,
+  type PromptAttachmentDescriptor,
+  type PromptDisplayAttachmentPart,
+  type PromptDisplayPart,
+} from "@/lib/domain/chat/prompt-content";
+import { tokenizeSerializedFileLinks } from "@/lib/domain/chat/file-mention-links";
+
+type PromptContentRendererVariant = "transcript" | "compact";
+type PromptAttachmentCardVariant = PromptContentRendererVariant | "draft";
 
 export interface PromptContentRendererProps {
   sessionId: string | null;
   parts: readonly ContentPart[];
   fallbackText?: string;
   compact?: boolean;
+  variant?: PromptContentRendererVariant;
 }
 
 export function PromptContentRenderer({
@@ -16,19 +29,23 @@ export function PromptContentRenderer({
   parts,
   fallbackText = "",
   compact = false,
+  variant,
 }: PromptContentRendererProps) {
-  const visibleParts = parts.length > 0 ? parts : (
-    fallbackText ? [{ type: "text" as const, text: fallbackText }] : []
-  );
+  const displayParts = normalizeContentParts(parts, fallbackText);
+  const resolvedVariant = variant ?? (compact ? "compact" : "transcript");
+
+  if (displayParts.length === 0) {
+    return null;
+  }
 
   return (
-    <div className={compact ? "flex min-w-0 flex-col gap-1" : "flex min-w-0 flex-col gap-2"}>
-      {visibleParts.map((part, index) => (
-        <PromptContentPartView
-          key={`${part.type}-${index}`}
+    <div className={resolvedVariant === "compact" ? "flex min-w-0 flex-col gap-1" : "flex min-w-0 flex-col gap-2"}>
+      {displayParts.map((part) => (
+        <PromptDisplayPartView
+          key={part.id}
           sessionId={sessionId}
           part={part}
-          compact={compact}
+          variant={resolvedVariant}
         />
       ))}
     </div>
@@ -44,133 +61,219 @@ export function DraftAttachmentPreviewList({
   attachments,
   onRemove,
 }: DraftAttachmentPreviewListProps) {
-  if (attachments.length === 0) {
+  const displayParts = normalizeDraftAttachments(attachments);
+
+  if (displayParts.length === 0) {
     return null;
   }
 
   return (
     <div className="flex flex-wrap gap-2 px-3 pb-2" data-telemetry-mask>
-      {attachments.map((attachment) => (
-        <div
-          key={attachment.id}
-          className="group flex max-w-full items-center gap-2 rounded-md border border-border/70 bg-muted/35 px-2 py-1 text-xs text-foreground"
-        >
-          {attachment.objectUrl ? (
-            <img
-              src={attachment.objectUrl}
-              alt=""
-              className="size-8 rounded object-cover"
-            />
-          ) : (
-            <FileText className="size-4 shrink-0 text-muted-foreground" />
-          )}
-          <span className="min-w-0 max-w-44 truncate">{attachment.name}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => onRemove(attachment.id)}
-            className="size-6 shrink-0 opacity-65 group-hover:opacity-100"
-            aria-label={`Remove ${attachment.name}`}
-          >
-            <X className="size-3" />
-          </Button>
-        </div>
+      {displayParts.map((part) => (
+        <PromptAttachmentCard
+          key={part.id}
+          sessionId={null}
+          part={part}
+          variant="draft"
+          onRemove={onRemove}
+        />
       ))}
     </div>
   );
 }
 
-function PromptContentPartView({
+function PromptDisplayPartView({
   sessionId,
   part,
-  compact,
+  variant,
 }: {
   sessionId: string | null;
-  part: ContentPart;
-  compact: boolean;
+  part: PromptDisplayPart;
+  variant: PromptContentRendererVariant;
 }) {
-  switch (part.type) {
-    case "text":
-      return (
-        <div className="whitespace-pre-wrap break-words text-chat">
-          {part.text}
-        </div>
-      );
-
-    case "image":
-      return (
-        <PromptImagePart
-          sessionId={sessionId}
-          attachmentId={part.attachmentId}
-          name={part.name ?? "attached image"}
-          compact={compact}
-        />
-      );
-
-    case "resource":
-      return (
-        <div className="flex min-w-0 items-start gap-2 rounded-md border border-border/70 bg-background/40 px-2 py-1.5 text-xs">
-          <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-          <div className="min-w-0 flex-1">
-            <div className="truncate font-medium text-foreground">
-              {part.name ?? part.uri}
-            </div>
-            {part.preview && !compact && (
-              <div className="mt-1 line-clamp-3 whitespace-pre-wrap text-muted-foreground">
-                {part.preview}
-              </div>
-            )}
-          </div>
-        </div>
-      );
-
-    case "resource_link":
-      return (
-        <div className="flex min-w-0 items-center gap-2 rounded-md border border-border/70 bg-background/40 px-2 py-1.5 text-xs">
-          <Link2 className="size-4 shrink-0 text-muted-foreground" />
-          <div className="min-w-0">
-            <div className="truncate font-medium text-foreground">{part.name}</div>
-            <div className="truncate text-muted-foreground">{part.uri}</div>
-          </div>
-        </div>
-      );
-
-    default:
-      return null;
-  }
-}
-
-function PromptImagePart({
-  sessionId,
-  attachmentId,
-  name,
-  compact,
-}: {
-  sessionId: string | null;
-  attachmentId: string;
-  name: string;
-  compact: boolean;
-}) {
-  const image = usePromptAttachmentUrl(sessionId, attachmentId);
-
-  if (!image.data) {
-    return (
-      <div className="rounded-md border border-border/70 bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
-        {image.isError ? "Image unavailable" : name}
+  if (part.type === "text") {
+    return part.isFallback ? (
+      <LegacyTextFallback text={part.text} />
+    ) : (
+      <div className="whitespace-pre-wrap break-words text-chat">
+        {part.text}
       </div>
     );
   }
 
   return (
-    <img
-      src={image.data}
-      alt={name}
-      className={
-        compact
-          ? "max-h-16 max-w-24 rounded object-cover"
-          : "max-h-80 max-w-full rounded-md object-contain"
-      }
+    <PromptAttachmentCard
+      sessionId={sessionId}
+      part={part}
+      variant={variant}
     />
   );
+}
+
+function LegacyTextFallback({ text }: { text: string }) {
+  const tokens = tokenizeSerializedFileLinks(text);
+
+  return (
+    <div className="whitespace-pre-wrap break-words text-chat">
+      {tokens.map((token, index) => {
+        if (token.type === "text") {
+          return <Fragment key={`text-${index}`}>{token.text}</Fragment>;
+        }
+        return (
+          <FilePathLink key={`${token.path}-${index}`} rawPath={token.path}>
+            {token.label}
+          </FilePathLink>
+        );
+      })}
+    </div>
+  );
+}
+
+function PromptAttachmentCard({
+  sessionId,
+  part,
+  variant,
+  onRemove,
+}: {
+  sessionId: string | null;
+  part: PromptDisplayAttachmentPart;
+  variant: PromptAttachmentCardVariant;
+  onRemove?: (id: string) => void;
+}) {
+  const metadata = [part.mimeType, part.sizeLabel].filter(Boolean).join(" - ");
+  const isDraft = variant === "draft";
+  const isCompact = variant === "compact";
+  const className = isDraft
+    ? "group flex max-w-full items-center gap-2 rounded-md border border-border/70 bg-muted/35 px-2 py-1 text-xs text-foreground"
+    : isCompact
+      ? "flex min-w-0 items-center gap-2 rounded-md border border-border/70 bg-background/40 px-2 py-1.5 text-xs text-foreground"
+      : "flex min-w-0 items-start gap-2 rounded-md border border-border/70 bg-background/40 px-2 py-1.5 text-xs text-foreground";
+
+  return (
+    <div className={className}>
+      <PromptAttachmentPreview
+        sessionId={sessionId}
+        part={part}
+        variant={variant}
+      />
+      <div className={isDraft ? "min-w-0 max-w-44" : "min-w-0 flex-1"}>
+        <div className="truncate font-medium text-foreground" title={part.name}>
+          {part.name}
+        </div>
+        {metadata && (
+          <div className="truncate text-muted-foreground">
+            {metadata}
+          </div>
+        )}
+        {part.type === "link" && !isDraft && (
+          <div className="truncate text-muted-foreground" title={part.uri}>
+            {part.uri}
+          </div>
+        )}
+        {part.preview && !isCompact && !isDraft && (
+          <div className="mt-1 line-clamp-3 whitespace-pre-wrap text-muted-foreground">
+            {part.preview}
+          </div>
+        )}
+      </div>
+      {isDraft && onRemove && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => onRemove(part.id)}
+          className="size-6 shrink-0 opacity-65 group-hover:opacity-100"
+          aria-label={`Remove ${part.name}`}
+        >
+          <X className="size-3" />
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function PromptAttachmentPreview({
+  sessionId,
+  part,
+  variant,
+}: {
+  sessionId: string | null;
+  part: PromptDisplayAttachmentPart;
+  variant: PromptAttachmentCardVariant;
+}) {
+  if (part.type === "image") {
+    return (
+      <PromptImagePreview
+        sessionId={sessionId}
+        attachmentId={part.attachmentId}
+        objectUrl={part.objectUrl}
+        name={part.name}
+        variant={variant}
+      />
+    );
+  }
+
+  const Icon = part.type === "link" ? Link2 : FileText;
+  return (
+    <div className={previewFrameClassName(variant)}>
+      <Icon className="size-4 text-muted-foreground" />
+    </div>
+  );
+}
+
+function PromptImagePreview({
+  sessionId,
+  attachmentId,
+  objectUrl,
+  name,
+  variant,
+}: {
+  sessionId: string | null;
+  attachmentId?: string;
+  objectUrl?: string | null;
+  name: string;
+  variant: PromptAttachmentCardVariant;
+}) {
+  const image = usePromptAttachmentUrl(
+    objectUrl ? null : sessionId,
+    objectUrl ? null : attachmentId,
+  );
+  const src = objectUrl ?? image.data ?? null;
+
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        className={imageClassName(variant)}
+      />
+    );
+  }
+
+  return (
+    <div className={previewFrameClassName(variant)} title={image.isError ? "Image unavailable" : "Loading image"}>
+      {image.isLoading ? (
+        <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+      ) : (
+        <FileIcon className="size-4 text-muted-foreground" />
+      )}
+    </div>
+  );
+}
+
+function previewFrameClassName(variant: PromptAttachmentCardVariant): string {
+  if (variant === "draft") {
+    return "flex size-8 shrink-0 items-center justify-center rounded bg-foreground/5";
+  }
+  if (variant === "compact") {
+    return "flex size-8 shrink-0 items-center justify-center rounded bg-foreground/5";
+  }
+  return "flex size-10 shrink-0 items-center justify-center rounded-md bg-foreground/5";
+}
+
+function imageClassName(variant: PromptAttachmentCardVariant): string {
+  if (variant === "draft" || variant === "compact") {
+    return "size-8 shrink-0 rounded object-cover";
+  }
+  return "size-10 shrink-0 rounded-md object-cover";
 }

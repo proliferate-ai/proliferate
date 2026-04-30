@@ -1,8 +1,6 @@
-import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ContentPart } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
-import { FilePathLink } from "@/components/ui/content/FilePathLink";
-import { tokenizeSerializedFileLinks } from "@/lib/domain/chat/file-mention-links";
 import { CopyMessageButton } from "./CopyMessageButton";
 import { PromptContentRenderer } from "@/components/workspace/chat/content/PromptContentRenderer";
 
@@ -22,7 +20,6 @@ export function UserMessage({
   const [expanded, setExpanded] = useState(false);
   const [needsToggle, setNeedsToggle] = useState(false);
   const textRef = useRef<HTMLDivElement>(null);
-  const tokens = tokenizeSerializedFileLinks(content);
 
   useLayoutEffect(() => {
     const el = textRef.current;
@@ -43,24 +40,11 @@ export function UserMessage({
               !expanded ? " line-clamp-5" : ""
             }`}
           >
-            {contentParts.length > 0 ? (
-              <PromptContentRenderer
-                sessionId={sessionId}
-                parts={contentParts}
-                fallbackText={content}
-              />
-            ) : (
-              tokens.map((token, index) => {
-                if (token.type === "text") {
-                  return <Fragment key={`text-${index}`}>{token.text}</Fragment>;
-                }
-                return (
-                  <FilePathLink key={`${token.path}-${index}`} rawPath={token.path}>
-                    {token.label}
-                  </FilePathLink>
-                );
-              })
-            )}
+            <PromptContentRenderer
+              sessionId={sessionId}
+              parts={contentParts}
+              fallbackText={content}
+            />
           </div>
           {needsToggle && (
             <div className="mt-1 flex justify-end">
