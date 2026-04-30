@@ -1822,6 +1822,20 @@ body {
   touch-action: none;
 }
 
+.right-panel-tab-system .right-panel-header-entry-shell[data-drop-before="true"]::before,
+.right-panel-tab-system .right-panel-tab-drop-target[data-drop-before="true"]::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: -1px;
+  z-index: 5;
+  width: 2px;
+  border-radius: 9999px;
+  background-color: var(--right-panel-tab-text-primary);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-sidebar-background) 80%, transparent);
+}
+
 .right-panel-tab-system .ui-tab-system-tab {
   appearance: none;
   background: none;
@@ -1857,11 +1871,16 @@ body {
   cursor: grab;
 }
 
+.right-panel-tab-system .right-panel-header-entry-shell[data-dragging="true"] {
+  z-index: 4;
+}
+
 .right-panel-tab-system .ui-tab-system-tab[aria-grabbed="true"],
 .right-panel-tab-system .ui-tab-system-tab[data-dragging],
 .right-panel-tab-system .right-panel-header-entry-shell[data-dragging="true"] .ui-tab-system-tab {
   cursor: grabbing;
-  opacity: 0.72;
+  opacity: 0.96;
+  box-shadow: 0 4px 14px color-mix(in oklab, var(--color-overlay) 34%, transparent);
 }
 
 .right-panel-tab-system .ui-tab-system-tabs__section > .right-panel-header-entry-shell:first-child .ui-tab-system-tab {
@@ -2097,9 +2116,14 @@ body {
 }
 
 .right-panel-tab-system .right-panel-tab-drop-target {
+  position: relative;
   width: 8px;
   height: 100%;
   flex-shrink: 0;
+}
+
+.right-panel-tab-system .right-panel-tab-drop-target[data-drop-before="true"]::before {
+  left: 2px;
 }
 
 .right-panel-tab-system .right-panel-tool-drop-target {
