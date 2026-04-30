@@ -112,7 +112,9 @@ export function useSessionEventsQuery(
   const runtimeUrl = useWorkspaceRuntimeUrl();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const afterSeq = options?.request?.afterSeq;
+  const beforeSeq = options?.request?.beforeSeq;
   const limit = options?.request?.limit;
+  const turnLimit = options?.request?.turnLimit;
   const enabled = (options?.enabled ?? true) && !!workspaceId && !!sessionId;
   const queryKey = anyHarnessSessionEventsKey(
     runtimeUrl,
@@ -120,6 +122,8 @@ export function useSessionEventsQuery(
     sessionId,
     afterSeq,
     limit,
+    beforeSeq,
+    turnLimit,
   );
   useReportAnyHarnessCacheDecision({
     category: "session.events.list",

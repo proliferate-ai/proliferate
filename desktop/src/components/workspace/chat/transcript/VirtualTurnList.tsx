@@ -29,10 +29,12 @@ const ESTIMATED_TURN_HEIGHT_PX = 360;
 const VIRTUALIZER_OVERSCAN = 8;
 const BLANK_VIEWPORT_MIN_SCROLLABLE_PX = 32;
 const HISTORY_PREFETCH_TOP_THRESHOLD_PX = 480;
-const DEBUG_DISABLE_VIRTUALIZATION_STORAGE_KEY =
-  "proliferate:disableTranscriptVirtualization";
 const DEBUG_ENABLE_VIRTUALIZATION_STORAGE_KEY =
   "proliferate:enableTranscriptVirtualization";
+
+// Dark launch only: production currently relies on bounded transcript history
+// plus full rendering. Enable this in dev with the localStorage key above when
+// profiling the virtualizer path without changing shipped behavior.
 
 interface VirtualScrollAnchor {
   key: TranscriptVirtualRow["key"];
@@ -82,8 +84,8 @@ export function VirtualTurnList({
   const pendingPrependAnchorRef = useRef<PrependScrollAnchor | null>(null);
   const lastBlankReportSignatureRef = useRef<string | null>(null);
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
-  const debugVirtualizationEnabled = isTranscriptVirtualizationEnabledForDebug();
-  const virtualizationDisabled = fallbackReason !== null || !debugVirtualizationEnabled;
+  const virtualizationEnabled = isTranscriptVirtualizationDarkLaunchEnabled();
+  const virtualizationDisabled = fallbackReason !== null || !virtualizationEnabled;
   const estimatedInitialBottomOffset =
     TRANSCRIPT_TOP_PADDING_PX
     + rows.length * ESTIMATED_TURN_HEIGHT_PX
@@ -431,16 +433,8 @@ function HistoryLoadingRow() {
   );
 }
 
-function isTranscriptVirtualizationDisabledForDebug(): boolean {
-  if (!import.meta.env.DEV || typeof window === "undefined") {
-    return true;
-  }
-  if (window.localStorage.getItem(DEBUG_DISABLE_VIRTUALIZATION_STORAGE_KEY) === "1") {
-    return true;
-  }
-  return window.localStorage.getItem(DEBUG_ENABLE_VIRTUALIZATION_STORAGE_KEY) !== "1";
-}
-
-function isTranscriptVirtualizationEnabledForDebug(): boolean {
-  return !isTranscriptVirtualizationDisabledForDebug();
+function isTranscriptVirtualizationDarkLaunchEnabled(): boolean {
+  return import.meta.env.DEV
+    && typeof window !== "undefined"
+    && window.localStorage.getItem(DEBUG_ENABLE_VIRTUALIZATION_STORAGE_KEY) === "1";
 }

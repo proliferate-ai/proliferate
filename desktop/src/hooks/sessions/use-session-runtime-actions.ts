@@ -454,7 +454,10 @@ export function useSessionRuntimeActions() {
         elapsedMs: Math.round(performance.now() - startedAt),
       });
       return true;
-    } catch {
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.debug("[session-runtime] session history rehydrate failed", error);
+      }
       logLatency("session.history.rehydrate.failed", {
         sessionId,
       });
@@ -502,8 +505,10 @@ export function useSessionRuntimeActions() {
         }
         applySessionSummary(sessionId, session, workspaceId);
       }
-    } catch {
-      // Session fetch failed.
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.debug("[session-runtime] session metadata refresh failed", error);
+      }
     }
   }, [applySessionSummary, pluginsInCodingSessionsEnabled]);
 

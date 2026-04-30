@@ -4,6 +4,11 @@ import {
   type AnyHarnessTimingCategory,
 } from "@anyharness/sdk";
 
+// Dev-only measurement plumbing. Collection is disabled unless the Vite dev
+// build sets VITE_PROLIFERATE_DEBUG_MAIN_THREAD=1 or
+// VITE_PROLIFERATE_DEBUG_ANYHARNESS_TIMING=1; emitted records are limited to
+// ids, counts, durations, categories, and hashed scopes.
+
 export type MeasurementOperationId = `mop_${string}`;
 
 export type MeasurementOperationKind =

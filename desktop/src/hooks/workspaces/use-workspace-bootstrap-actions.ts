@@ -112,10 +112,16 @@ async function loadWorkflowWorkspaceSessions(input: {
   workspaceConnection: AnyHarnessResolvedConnection;
   workspaceId: string;
   requestOptions?: AnyHarnessRequestOptions;
+  forceRefresh?: boolean;
 }): Promise<WorkspaceSession[]> {
   const cacheState = input.queryClient.getQueryState(input.queryKey);
   const cachedSessions = input.queryClient.getQueryData<WorkspaceSession[]>(input.queryKey);
-  if (cachedSessions && cacheState?.dataUpdatedAt && !cacheState.isInvalidated) {
+  if (
+    !input.forceRefresh
+    && cachedSessions
+    && cacheState?.dataUpdatedAt
+    && !cacheState.isInvalidated
+  ) {
     return cachedSessions;
   }
 
@@ -544,6 +550,7 @@ export function useWorkspaceBootstrapActions() {
           workspaceConnection,
           workspaceId,
           requestOptions: sessionRequestOptions ?? undefined,
+          forceRefresh: true,
         }).catch(() => [] as WorkspaceSession[]);
         recordMeasurementWorkflowStep({
           operationId: measurementOperationId,
@@ -656,7 +663,10 @@ export function useWorkspaceBootstrapActions() {
         markWorkspaceBootstrappedInSession(workspaceId);
         markWorkspaceBootstrappedInSession(logicalWorkspaceId);
         return "completed";
-      } catch {
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.debug("[workspace-bootstrap] hot reconcile failed", error);
+        }
         finishReason = "error_sanitized";
         return "stale";
       } finally {

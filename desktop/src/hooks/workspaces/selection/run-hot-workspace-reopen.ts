@@ -27,6 +27,9 @@ import type {
   WorkspaceSelectionRequest,
 } from "./types";
 
+const HOT_REOPEN_RECOVERY_SUPPRESSION_MS = 15_000;
+const recentHotReopenRecoveries = new Map<string, number>();
+
 export function runHotWorkspaceReopen(
   deps: WorkspaceSelectionDeps,
   request: WorkspaceSelectionRequest,
@@ -60,6 +63,9 @@ export function runHotWorkspaceReopen(
     isPendingSessionId,
   });
   if (!candidate) {
+    return false;
+  }
+  if (isHotReopenRecoverySuppressed(resolvedWorkspaceId, candidate.sessionId)) {
     return false;
   }
 
@@ -205,6 +211,7 @@ async function reconcileAfterHotPaint(input: {
     return;
   }
 
+  suppressHotReopenRecovery(resolvedWorkspaceId, sessionId);
   const state = useHarnessStore.getState();
   state.removeSessionSlot(sessionId);
   if (state.activeSessionId === sessionId) {
@@ -219,4 +226,25 @@ async function reconcileAfterHotPaint(input: {
       initialActiveSessionId: null,
     },
   });
+}
+
+function isHotReopenRecoverySuppressed(workspaceId: string, sessionId: string): boolean {
+  const key = hotReopenRecoveryKey(workspaceId, sessionId);
+  const suppressedUntil = recentHotReopenRecoveries.get(key) ?? 0;
+  if (suppressedUntil <= performance.now()) {
+    recentHotReopenRecoveries.delete(key);
+    return false;
+  }
+  return true;
+}
+
+function suppressHotReopenRecovery(workspaceId: string, sessionId: string): void {
+  recentHotReopenRecoveries.set(
+    hotReopenRecoveryKey(workspaceId, sessionId),
+    performance.now() + HOT_REOPEN_RECOVERY_SUPPRESSION_MS,
+  );
+}
+
+function hotReopenRecoveryKey(workspaceId: string, sessionId: string): string {
+  return `${workspaceId}:${sessionId}`;
 }
