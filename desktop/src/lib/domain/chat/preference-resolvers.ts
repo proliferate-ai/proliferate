@@ -1,6 +1,5 @@
 import type {
   AgentSummary,
-  ModelEntry,
   ModelRegistry,
   ModelRegistryModel,
   ProviderConfig,
@@ -40,7 +39,7 @@ export interface ConfiguredLaunchResolution {
   status: "missing" | "ready" | "unavailable";
 }
 
-function findModelById<T extends ModelEntry>(
+function findModelById<T extends { id: string }>(
   models: T[],
   modelId: string,
 ): T | null {

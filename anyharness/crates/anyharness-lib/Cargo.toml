@@ -39,3 +39,4 @@ sha2.workspace = true
 tar.workspace = true
 zstd.workspace = true
 fs2.workspace = true
+reqwest = { workspace = true, features = ["json"] }

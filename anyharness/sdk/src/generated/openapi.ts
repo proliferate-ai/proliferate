@@ -2199,14 +2199,27 @@ export interface components {
             title?: string | null;
             updatedAt: string;
         };
+        /**
+         * @description Runtime-owned lifecycle status for a model catalog row.
+         * @enum {string}
+         */
+        ModelCatalogStatus: "candidate" | "active" | "deprecated" | "hidden";
         /** @description A known model in the AnyHarness catalog for a given provider. */
         ModelEntry: {
+            /** @description Legacy or provider-native selectors that resolve to this model ID */
+            aliases?: string[];
+            /** @description Optional descriptive copy surfaced in launch/settings UIs */
+            description?: string | null;
             /** @description Human-readable name (e.g. "Claude Opus 4.6") */
             displayName: string;
             /** @description Session-level model ID exposed by the harness (e.g. "opus[1m]") */
             id: string;
             /** @description Whether this is the default model for the provider */
             isDefault: boolean;
+            /** @description Minimum AnyHarness runtime version required for this model, if any */
+            minRuntimeVersion?: string | null;
+            /** @description Runtime-owned lifecycle status for this model */
+            status: components["schemas"]["ModelCatalogStatus"];
         };
         /** @description Backend-owned model registry for a harness. */
         ModelRegistry: {
@@ -2221,6 +2234,8 @@ export interface components {
         };
         /** @description A model row in the backend-owned registry for a given harness. */
         ModelRegistryModel: {
+            /** @description Legacy or provider-native selectors that resolve to this model ID */
+            aliases?: string[];
             /** @description Optional descriptive copy surfaced in launch/settings UIs */
             description?: string | null;
             /** @description Human-readable name for the model */
@@ -2229,6 +2244,10 @@ export interface components {
             id: string;
             /** @description Whether this is the default model for the registry */
             isDefault: boolean;
+            /** @description Minimum AnyHarness runtime version required for this model, if any */
+            minRuntimeVersion?: string | null;
+            /** @description Runtime-owned lifecycle status for this model */
+            status: components["schemas"]["ModelCatalogStatus"];
         };
         /**
          * @description A product-normalized live session control derived from raw ACP config options.

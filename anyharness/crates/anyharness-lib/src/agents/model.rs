@@ -388,6 +388,19 @@ pub struct ModelRegistryModelMetadata {
     pub display_name: String,
     pub description: Option<String>,
     pub is_default: bool,
+    pub status: ModelCatalogStatus,
+    pub aliases: Vec<String>,
+    pub min_runtime_version: Option<String>,
+}
+
+/// Runtime-owned lifecycle status for one model catalog row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelCatalogStatus {
+    Candidate,
+    Active,
+    Deprecated,
+    Hidden,
 }
 
 /// Machine-local resolved state for one artifact (native or agent-process).

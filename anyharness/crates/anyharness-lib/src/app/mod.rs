@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::acp::manager::AcpManager;
+use crate::agents::catalog::ModelCatalogService;
 use crate::agents::reconcile_execution::AgentReconcileService;
 use crate::agents::seed::AgentSeedStore;
 use crate::cowork::artifacts::CoworkArtifactRuntime;
@@ -64,6 +65,7 @@ pub struct AppState {
     pub bearer_token: Option<String>,
     pub agent_seed_store: AgentSeedStore,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
+    pub model_catalog_service: Arc<ModelCatalogService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
     pub files_runtime: Arc<WorkspaceFilesRuntime>,
@@ -112,6 +114,9 @@ impl AppState {
             runtime_home.clone(),
         ));
         let agent_reconcile_service = Arc::new(AgentReconcileService::new());
+        let model_catalog_service = Arc::new(ModelCatalogService::new(runtime_home.clone()));
+        #[cfg(not(test))]
+        model_catalog_service.spawn_refresh();
         let process_service = Arc::new(ProcessService::new());
         let workspace_file_search_cache = Arc::new(WorkspaceFileSearchCache::new());
         let cowork_service = Arc::new(CoworkService::new(CoworkStore::new(db.clone())));
@@ -126,6 +131,7 @@ impl AppState {
             SessionStore::new(db.clone()),
             WorkspaceStore::new(db.clone()),
             runtime_home.clone(),
+            model_catalog_service.clone(),
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));
         let acp_manager = AcpManager::new(plan_service.clone());
@@ -245,6 +251,7 @@ impl AppState {
             bearer_token,
             agent_seed_store,
             agent_reconcile_service,
+            model_catalog_service,
             repo_root_service,
             workspace_runtime,
             files_runtime,
