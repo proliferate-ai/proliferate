@@ -202,6 +202,7 @@ export type {
   FileOpenTarget,
   PlanContentPart,
   ProposedPlanContentPart,
+  PlanReferenceContentPart,
   ProposedPlanDecisionContentPart,
   ToolInputTextContentPart,
   ToolResultTextContentPart,

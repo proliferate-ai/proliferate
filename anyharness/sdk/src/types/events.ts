@@ -185,6 +185,7 @@ export type FileReadContentPart = Extract<ContentPart, { type: "file_read" }>;
 export type FileChangeContentPart = Extract<ContentPart, { type: "file_change" }>;
 export type PlanContentPart = Extract<ContentPart, { type: "plan" }>;
 export type ProposedPlanContentPart = Extract<ContentPart, { type: "proposed_plan" }>;
+export type PlanReferenceContentPart = Extract<ContentPart, { type: "plan_reference" }>;
 export type ProposedPlanDecisionContentPart = Extract<ContentPart, { type: "proposed_plan_decision" }>;
 export type ToolInputTextContentPart = Extract<ContentPart, { type: "tool_input_text" }>;
 export type ToolResultTextContentPart = Extract<ContentPart, { type: "tool_result_text" }>;

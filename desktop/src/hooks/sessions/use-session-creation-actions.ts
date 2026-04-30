@@ -1,7 +1,8 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
-import type { PromptInputBlock } from "@anyharness/sdk";
+import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { createOptimisticPendingPrompt } from "@/lib/domain/chat/pending-prompts";
+import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
 import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
 import { getCloudWorkspace } from "@/lib/integrations/cloud/workspaces";
 import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
@@ -46,10 +47,49 @@ interface InFlightSessionCreate {
   sessionId: string;
   agentKind: string;
   modelId: string;
-  promise: Promise<void>;
+  promise: Promise<string>;
 }
 
 const inFlightSessionCreatesByWorkspace = new Map<string, InFlightSessionCreate>();
+
+interface CreateSessionWithResolvedConfigOptions {
+  text: string;
+  blocks?: PromptInputBlock[];
+  optimisticContentParts?: ContentPart[];
+  agentKind: string;
+  modelId: string;
+  modeId?: string;
+  workspaceId?: string;
+  latencyFlowId?: string | null;
+  reuseInFlightEmptySession?: boolean;
+}
+
+interface CreateEmptySessionWithResolvedConfigOptions {
+  agentKind: string;
+  modelId: string;
+  modeId?: string;
+  workspaceId?: string;
+  latencyFlowId?: string | null;
+  reuseInFlightEmptySession?: boolean;
+}
+
+export function resolveSessionCreationModeId(input: {
+  explicitModeId?: string | null;
+  workspaceSurface: string | null | undefined;
+  agentKind: string;
+  preferredModeId?: string | null;
+}): string | undefined {
+  const explicitModeId = input.explicitModeId?.trim() || undefined;
+  if (explicitModeId) {
+    return explicitModeId;
+  }
+
+  if (input.workspaceSurface === "cowork") {
+    return resolveCoworkDefaultSessionModeId(input.agentKind);
+  }
+
+  return input.preferredModeId?.trim() || undefined;
+}
 
 function buildLatencyRequestOptions(latencyFlowId?: string | null) {
   const headers = getLatencyFlowRequestHeaders(latencyFlowId);
@@ -218,15 +258,9 @@ export function useSessionCreationActions({
     });
   }, [ensureWorkspaceSessions]);
 
-  const createSessionWithResolvedConfig = useCallback(async (options: {
-    text: string;
-    blocks?: PromptInputBlock[];
-    agentKind: string;
-    modelId: string;
-    workspaceId?: string;
-    latencyFlowId?: string | null;
-    reuseInFlightEmptySession?: boolean;
-  }) => {
+  const createSessionWithResolvedConfig = useCallback(async (
+    options: CreateSessionWithResolvedConfigOptions,
+  ): Promise<string> => {
     const current = useHarnessStore.getState();
     const workspaceId = options.workspaceId ?? current.selectedWorkspaceId;
     if (!workspaceId) {
@@ -238,7 +272,7 @@ export function useSessionCreationActions({
       throw new Error(blockedReason);
     }
 
-    const hasPrompt = options.text.trim().length > 0;
+    const hasPrompt = hasPromptContent(options.text, options.blocks);
     const previousActiveSessionId = current.activeSessionId;
     const shouldReuseInFlightEmptySession = options.reuseInFlightEmptySession === true;
     if (!hasPrompt && shouldReuseInFlightEmptySession) {
@@ -308,9 +342,12 @@ export function useSessionCreationActions({
       .defaultSessionModeByAgentKind[options.agentKind]
       ?.trim() || undefined;
     const workspaceSurface = getWorkspaceSurface(workspaceId);
-    const resolvedModeId = workspaceSurface === "cowork"
-      ? resolveCoworkDefaultSessionModeId(options.agentKind)
-      : preferredModeId;
+    const resolvedModeId = resolveSessionCreationModeId({
+      explicitModeId: options.modeId,
+      workspaceSurface,
+      agentKind: options.agentKind,
+      preferredModeId,
+    });
     const authUser = useAuthStore.getState().user;
     const systemPromptAppend = shouldInjectBranchNaming
       ? [
@@ -323,7 +360,12 @@ export function useSessionCreationActions({
       : undefined;
     const pendingSessionId = createPendingSessionId(options.agentKind);
     const optimisticPendingPrompt = hasPrompt
-      ? createOptimisticPendingPrompt(options.text)
+      ? createOptimisticPendingPrompt(
+        options.text,
+        null,
+        undefined,
+        options.optimisticContentParts,
+      )
       : null;
     annotateLatencyFlow(options.latencyFlowId, {
       targetWorkspaceId: workspaceId,
@@ -402,6 +444,7 @@ export function useSessionCreationActions({
             sessionId: session.id,
             text: options.text,
             blocks: options.blocks,
+            optimisticContentParts: options.optimisticContentParts,
             workspaceId,
             latencyFlowId: options.latencyFlowId,
           });
@@ -411,6 +454,8 @@ export function useSessionCreationActions({
             requestHeaders: requestOptions?.headers,
           });
         }
+
+        return session.id;
       })();
 
       if (!hasPrompt && shouldReuseInFlightEmptySession) {
@@ -422,7 +467,7 @@ export function useSessionCreationActions({
         });
       }
 
-      await createPromise;
+      return await createPromise;
     } catch (error) {
       removeSessionSlot(pendingSessionId);
       if (previousActiveSessionId) {
@@ -451,17 +496,14 @@ export function useSessionCreationActions({
     upsertWorkspaceSessionRecord,
   ]);
 
-  const openWorkspaceSessionWithResolvedConfig = useCallback(async (options: {
-    agentKind: string;
-    modelId: string;
-    workspaceId?: string;
-    latencyFlowId?: string | null;
-    reuseInFlightEmptySession?: boolean;
-  }) => {
-    await createSessionWithResolvedConfig({
+  const createEmptySessionWithResolvedConfig = useCallback(async (
+    options: CreateEmptySessionWithResolvedConfigOptions,
+  ): Promise<string> => {
+    return createSessionWithResolvedConfig({
       text: "",
       agentKind: options.agentKind,
       modelId: options.modelId,
+      modeId: options.modeId,
       workspaceId: options.workspaceId,
       latencyFlowId: options.latencyFlowId,
       reuseInFlightEmptySession: options.reuseInFlightEmptySession,
@@ -469,8 +511,8 @@ export function useSessionCreationActions({
   }, [createSessionWithResolvedConfig]);
 
   return {
+    createEmptySessionWithResolvedConfig,
     createSessionWithResolvedConfig,
     maybeStartFirstSessionBranchRenameTracking,
-    openWorkspaceSessionWithResolvedConfig,
   };
 }

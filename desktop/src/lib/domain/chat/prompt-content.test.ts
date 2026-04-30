@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { ContentPart } from "@anyharness/sdk";
 import {
   formatPromptFileSize,
+  isResolvedPlanAttachment,
   normalizeContentParts,
   normalizeDraftAttachments,
+  planAttachmentPlaceholderFromPointer,
   promptPartSummary,
 } from "./prompt-content";
 
@@ -81,6 +83,39 @@ describe("prompt content normalization", () => {
     });
   });
 
+  it("normalizes plan references as prompt attachment parts", () => {
+    const parts: ContentPart[] = [{
+      type: "plan_reference",
+      planId: "plan-123",
+      title: "Implementation Plan",
+      bodyMarkdown: "# Implementation Plan\n\nDo the thing.",
+      snapshotHash: "hash-123",
+      sourceSessionId: "session-123",
+      sourceTurnId: "turn-123",
+      sourceItemId: "item-123",
+      sourceKind: "codex",
+      sourceToolCallId: "tool-123",
+    }];
+
+    const [part] = normalizeContentParts(parts);
+
+    expect(part).toMatchObject({
+      type: "plan_reference",
+      id: "plan:plan-123:hash-123",
+      name: "Implementation Plan",
+      planId: "plan-123",
+      title: "Implementation Plan",
+      bodyMarkdown: "# Implementation Plan\n\nDo the thing.",
+      snapshotHash: "hash-123",
+      sourceSessionId: "session-123",
+      sourceTurnId: "turn-123",
+      sourceItemId: "item-123",
+      sourceKind: "codex",
+      sourceToolCallId: "tool-123",
+    });
+    expect(part && promptPartSummary(part)).toBe("[plan: Implementation Plan]");
+  });
+
   it("falls back to legacy text when no content parts are present", () => {
     expect(normalizeContentParts([], "Read [README](file://README.md)")).toEqual([{
       type: "text",
@@ -108,6 +143,16 @@ describe("prompt content normalization", () => {
         kind: "text_resource",
         objectUrl: null,
       },
+      {
+        id: "plan:plan-123:hash-123",
+        kind: "plan_reference",
+        planId: "plan-123",
+        title: "Attached plan",
+        bodyMarkdown: "# Attached plan",
+        snapshotHash: "hash-123",
+        sourceSessionId: "session-123",
+        sourceKind: "codex",
+      },
     ]);
 
     expect(parts).toEqual([
@@ -129,9 +174,50 @@ describe("prompt content normalization", () => {
         sizeLabel: "42 B",
         objectUrl: null,
       },
+      {
+        type: "plan_reference",
+        id: "plan:plan-123:hash-123",
+        name: "Attached plan",
+        planId: "plan-123",
+        title: "Attached plan",
+        bodyMarkdown: "# Attached plan",
+        snapshotHash: "hash-123",
+        sourceSessionId: "session-123",
+        sourceTurnId: null,
+        sourceItemId: null,
+        sourceKind: "codex",
+        sourceToolCallId: null,
+      },
     ]);
     expect(parts[0]).not.toHaveProperty("file");
     expect(parts[1]).not.toHaveProperty("text");
+  });
+
+  it("normalizes unresolved draft plan pointers as visible non-sendable attachments", () => {
+    const placeholder = planAttachmentPlaceholderFromPointer({
+      id: "plan:plan-123:hash-123",
+      kind: "plan_reference",
+      planId: "plan-123",
+      snapshotHash: "hash-123",
+    }, "error", "Plan lookup failed.");
+
+    expect(isResolvedPlanAttachment(placeholder)).toBe(false);
+    expect(normalizeDraftAttachments([placeholder])).toEqual([{
+      type: "plan_reference",
+      id: "plan:plan-123:hash-123",
+      name: "Plan unavailable",
+      planId: "plan-123",
+      title: "Plan unavailable",
+      bodyMarkdown: "Plan lookup failed.",
+      snapshotHash: "hash-123",
+      sourceSessionId: "",
+      sourceTurnId: null,
+      sourceItemId: null,
+      sourceKind: "unknown",
+      sourceToolCallId: null,
+      resolutionState: "error",
+      resolutionMessage: "Plan lookup failed.",
+    }]);
   });
 
   it("formats prompt file sizes using compact binary units", () => {

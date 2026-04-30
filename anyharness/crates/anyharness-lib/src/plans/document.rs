@@ -22,8 +22,12 @@ pub fn projection_hash(markdown: &str) -> String {
 }
 
 pub fn render_markdown(plan: &PlanRecord) -> String {
-    let title = plan.title.trim();
-    let body = plan.body_markdown.trim_end();
+    render_markdown_snapshot(&plan.title, &plan.body_markdown)
+}
+
+pub fn render_markdown_snapshot(title: &str, body_markdown: &str) -> String {
+    let title = title.trim();
+    let body = body_markdown.trim_end();
     if body_starts_with_title_heading(body, title) {
         format!("{body}\n")
     } else {

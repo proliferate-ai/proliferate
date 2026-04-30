@@ -1,4 +1,4 @@
-import type { ContentPart, PromptCapabilities } from "@anyharness/sdk";
+import type { ContentPart, PromptCapabilities, ProposedPlanDetail } from "@anyharness/sdk";
 
 export const PROMPT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const PROMPT_TEXT_RESOURCE_MAX_BYTES = 256 * 1024;
@@ -12,16 +12,45 @@ export interface PromptAttachmentDescriptor {
   objectUrl: string | null;
 }
 
+export interface PromptPlanAttachmentDescriptor {
+  id: string;
+  kind: "plan_reference";
+  planId: string;
+  title: string;
+  bodyMarkdown: string;
+  snapshotHash: string;
+  sourceSessionId: string;
+  sourceTurnId?: string | null;
+  sourceItemId?: string | null;
+  sourceKind: string;
+  sourceToolCallId?: string | null;
+  resolutionState?: "ready" | "loading" | "error" | "stale";
+  resolutionMessage?: string;
+}
+
+export interface PromptPlanAttachmentPointer {
+  id: string;
+  kind: "plan_reference";
+  planId: string;
+  snapshotHash: string;
+}
+
+export type PromptDraftAttachmentDescriptor =
+  | PromptAttachmentDescriptor
+  | PromptPlanAttachmentDescriptor;
+
 export type PromptDisplayPart =
   | PromptDisplayTextPart
   | PromptDisplayImagePart
   | PromptDisplayFilePart
-  | PromptDisplayLinkPart;
+  | PromptDisplayLinkPart
+  | PromptDisplayPlanPart;
 
 export type PromptDisplayAttachmentPart =
   | PromptDisplayImagePart
   | PromptDisplayFilePart
-  | PromptDisplayLinkPart;
+  | PromptDisplayLinkPart
+  | PromptDisplayPlanPart;
 
 export interface PromptDisplayPartBase {
   id: string;
@@ -55,6 +84,21 @@ export interface PromptDisplayLinkPart extends PromptDisplayPartBase {
   type: "link";
   name: string;
   uri: string;
+}
+
+export interface PromptDisplayPlanPart extends PromptDisplayPartBase {
+  type: "plan_reference";
+  planId: string;
+  title: string;
+  bodyMarkdown: string;
+  snapshotHash: string;
+  sourceSessionId: string;
+  sourceTurnId?: string | null;
+  sourceItemId?: string | null;
+  sourceKind: string;
+  sourceToolCallId?: string | null;
+  resolutionState?: "ready" | "loading" | "error" | "stale";
+  resolutionMessage?: string;
 }
 
 export function defaultPromptCapabilities(): PromptCapabilities {
@@ -145,6 +189,22 @@ export function normalizeContentParts(
           uri: part.uri,
         }];
 
+      case "plan_reference":
+        return [{
+          type: "plan_reference",
+          id: planAttachmentId(part.planId, part.snapshotHash),
+          name: part.title || "Plan",
+          planId: part.planId,
+          title: part.title || "Plan",
+          bodyMarkdown: part.bodyMarkdown,
+          snapshotHash: part.snapshotHash,
+          sourceSessionId: part.sourceSessionId,
+          sourceTurnId: part.sourceTurnId ?? null,
+          sourceItemId: part.sourceItemId ?? null,
+          sourceKind: part.sourceKind,
+          sourceToolCallId: part.sourceToolCallId ?? null,
+        }];
+
       default:
         return [];
     }
@@ -152,9 +212,32 @@ export function normalizeContentParts(
 }
 
 export function normalizeDraftAttachments(
-  attachments: readonly PromptAttachmentDescriptor[],
+  attachments: readonly PromptDraftAttachmentDescriptor[],
 ): PromptDisplayAttachmentPart[] {
   return attachments.map((attachment) => {
+    if (attachment.kind === "plan_reference") {
+      return {
+        type: "plan_reference" as const,
+        id: attachment.id,
+        name: attachment.title,
+        planId: attachment.planId,
+        title: attachment.title,
+        bodyMarkdown: attachment.bodyMarkdown,
+        snapshotHash: attachment.snapshotHash,
+        sourceSessionId: attachment.sourceSessionId,
+        sourceTurnId: attachment.sourceTurnId ?? null,
+        sourceItemId: attachment.sourceItemId ?? null,
+        sourceKind: attachment.sourceKind,
+        sourceToolCallId: attachment.sourceToolCallId ?? null,
+        ...(attachment.resolutionState && attachment.resolutionState !== "ready"
+          ? { resolutionState: attachment.resolutionState }
+          : {}),
+        ...(attachment.resolutionMessage
+          ? { resolutionMessage: attachment.resolutionMessage }
+          : {}),
+      };
+    }
+
     const base = {
       id: attachment.id,
       name: attachment.name,
@@ -211,9 +294,90 @@ export function promptPartSummary(part: PromptDisplayPart): string {
       return `[file: ${part.name}]`;
     case "link":
       return `[link: ${part.name}]`;
+    case "plan_reference":
+      return `[plan: ${part.title}]`;
     default:
       return "";
   }
+}
+
+export function planAttachmentId(planId: string, snapshotHash: string): string {
+  return `plan:${planId}:${snapshotHash}`;
+}
+
+export function planAttachmentPointerFromDescriptor(
+  plan: PromptPlanAttachmentDescriptor,
+): PromptPlanAttachmentPointer {
+  return {
+    id: plan.id,
+    kind: "plan_reference",
+    planId: plan.planId,
+    snapshotHash: plan.snapshotHash,
+  };
+}
+
+export function planAttachmentDescriptorFromDetail(
+  plan: ProposedPlanDetail,
+): PromptPlanAttachmentDescriptor {
+  return {
+    id: planAttachmentId(plan.id, plan.snapshotHash),
+    kind: "plan_reference",
+    planId: plan.id,
+    title: plan.title,
+    bodyMarkdown: plan.bodyMarkdown,
+    snapshotHash: plan.snapshotHash,
+    sourceSessionId: plan.sourceSessionId,
+    sourceTurnId: plan.sourceTurnId ?? null,
+    sourceItemId: plan.sourceItemId ?? null,
+    sourceKind: plan.sourceKind,
+    sourceToolCallId: plan.sourceToolCallId ?? null,
+    resolutionState: "ready",
+  };
+}
+
+export function planAttachmentPlaceholderFromPointer(
+  pointer: PromptPlanAttachmentPointer,
+  resolutionState: "loading" | "error" | "stale",
+  resolutionMessage?: string,
+): PromptPlanAttachmentDescriptor {
+  return {
+    id: pointer.id,
+    kind: "plan_reference",
+    planId: pointer.planId,
+    title: placeholderTitleForPlanState(resolutionState),
+    bodyMarkdown: resolutionMessage ?? placeholderMessageForPlanState(resolutionState),
+    snapshotHash: pointer.snapshotHash,
+    sourceSessionId: "",
+    sourceTurnId: null,
+    sourceItemId: null,
+    sourceKind: "unknown",
+    sourceToolCallId: null,
+    resolutionState,
+    resolutionMessage,
+  };
+}
+
+export function isResolvedPlanAttachment(
+  plan: PromptPlanAttachmentDescriptor,
+): boolean {
+  return (plan.resolutionState ?? "ready") === "ready";
+}
+
+export function planReferenceContentPartFromDescriptor(
+  plan: PromptPlanAttachmentDescriptor,
+): Extract<ContentPart, { type: "plan_reference" }> {
+  return {
+    type: "plan_reference",
+    planId: plan.planId,
+    title: plan.title,
+    bodyMarkdown: plan.bodyMarkdown,
+    snapshotHash: plan.snapshotHash,
+    sourceSessionId: plan.sourceSessionId,
+    sourceTurnId: plan.sourceTurnId ?? null,
+    sourceItemId: plan.sourceItemId ?? null,
+    sourceKind: plan.sourceKind,
+    sourceToolCallId: plan.sourceToolCallId ?? null,
+  };
 }
 
 export function summarizeContentParts(parts: readonly ContentPart[], fallbackText = ""): string {
@@ -238,5 +402,31 @@ function displayNameForUri(uri: string | null | undefined): string | null {
     return decodeURIComponent(lastSegment);
   } catch {
     return lastSegment;
+  }
+}
+
+function placeholderTitleForPlanState(
+  resolutionState: "loading" | "error" | "stale",
+): string {
+  switch (resolutionState) {
+    case "loading":
+      return "Loading plan";
+    case "error":
+      return "Plan unavailable";
+    case "stale":
+      return "Plan snapshot changed";
+  }
+}
+
+function placeholderMessageForPlanState(
+  resolutionState: "loading" | "error" | "stale",
+): string {
+  switch (resolutionState) {
+    case "loading":
+      return "The attached plan is still loading.";
+    case "error":
+      return "The attached plan could not be loaded. Remove it and attach the plan again.";
+    case "stale":
+      return "This attached plan snapshot no longer matches the stored plan. Remove it and attach the latest plan.";
   }
 }

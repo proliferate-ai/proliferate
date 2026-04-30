@@ -373,6 +373,28 @@ pub enum ContentPart {
         #[serde(skip_serializing_if = "Option::is_none")]
         source_tool_call_id: Option<String>,
     },
+    PlanReference {
+        #[serde(rename = "planId")]
+        plan_id: String,
+        title: String,
+        #[serde(rename = "bodyMarkdown")]
+        body_markdown: String,
+        #[serde(rename = "snapshotHash")]
+        snapshot_hash: String,
+        #[serde(rename = "sourceSessionId")]
+        source_session_id: String,
+        #[serde(rename = "sourceTurnId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source_turn_id: Option<String>,
+        #[serde(rename = "sourceItemId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source_item_id: Option<String>,
+        #[serde(rename = "sourceKind")]
+        source_kind: String,
+        #[serde(rename = "sourceToolCallId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source_tool_call_id: Option<String>,
+    },
     ProposedPlanDecision {
         #[serde(rename = "planId")]
         plan_id: String,
@@ -578,5 +600,46 @@ impl std::fmt::Display for StopReason {
             Self::Refusal => write!(f, "refusal"),
             Self::Cancelled => write!(f, "cancelled"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn content_part_plan_reference_round_trips() {
+        let part = ContentPart::PlanReference {
+            plan_id: "plan-123".to_string(),
+            title: "Implementation plan".to_string(),
+            body_markdown: "# Implementation plan\n\nDo it.".to_string(),
+            snapshot_hash: "hash-123".to_string(),
+            source_session_id: "session-123".to_string(),
+            source_turn_id: Some("turn-123".to_string()),
+            source_item_id: Some("item-123".to_string()),
+            source_kind: "codex_turn_plan".to_string(),
+            source_tool_call_id: Some("tool-123".to_string()),
+        };
+
+        let json = serde_json::to_value(&part).expect("serialize plan reference content part");
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "type": "plan_reference",
+                "planId": "plan-123",
+                "title": "Implementation plan",
+                "bodyMarkdown": "# Implementation plan\n\nDo it.",
+                "snapshotHash": "hash-123",
+                "sourceSessionId": "session-123",
+                "sourceTurnId": "turn-123",
+                "sourceItemId": "item-123",
+                "sourceKind": "codex_turn_plan",
+                "sourceToolCallId": "tool-123"
+            })
+        );
+
+        let round_tripped: ContentPart =
+            serde_json::from_value(json).expect("deserialize plan reference content part");
+        assert_eq!(round_tripped, part);
     }
 }

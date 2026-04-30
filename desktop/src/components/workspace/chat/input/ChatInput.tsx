@@ -22,6 +22,7 @@ import { useChatDraftState } from "@/hooks/chat/use-chat-draft-state";
 import { useChatModelSelectorState } from "@/hooks/chat/use-chat-model-selector-state";
 import { useChatPromptActions } from "@/hooks/chat/use-chat-prompt-actions";
 import { usePromptAttachments } from "@/hooks/chat/use-prompt-attachments";
+import { usePlanDraftAttachments } from "@/hooks/plans/use-plan-draft-attachments";
 import { useChatSessionControls } from "@/hooks/chat/use-chat-session-controls";
 import { useQueuedPromptEdit } from "@/hooks/chat/use-queued-prompt-edit";
 import { focusChatInput } from "@/lib/domain/focus-zone";
@@ -38,6 +39,7 @@ import { ChatComposerSurface } from "./ChatComposerSurface";
 import { SessionPowersSummary } from "./SessionPowersSummary";
 import { DraftAttachmentPreviewList } from "@/components/workspace/chat/content/PromptContentRenderer";
 import { ComposerControlButton } from "./ComposerControlButton";
+import { PlanPickerPopover } from "./PlanPickerPopover";
 
 /**
  * The composer surface: mention-aware editor + model / session controls +
@@ -69,8 +71,12 @@ export function ChatInput() {
   } = useQueuedPromptEdit();
   const promptCapabilities = activeSlot?.liveConfig?.promptCapabilities ?? null;
   const attachments = usePromptAttachments(activeSessionId, promptCapabilities);
+  const planAttachments = usePlanDraftAttachments(selectedWorkspaceId);
   const supportsAttachments = canAttachPromptContent(promptCapabilities);
   const canAttach = !isEditingQueuedPrompt && !isDisabled && supportsAttachments;
+  // Plan references are resolved to markdown text by the runtime, so they do
+  // not depend on file/image attachment capabilities.
+  const canAttachPlan = !isEditingQueuedPrompt && !isDisabled && !!selectedWorkspaceId;
   const attachControlTitle = supportsAttachments
     ? "Attach file"
     : activeSessionId
@@ -79,18 +85,29 @@ export function ChatInput() {
   const promptText = serializeChatDraftToPrompt(draft);
   const effectiveIsEmpty = isEditingQueuedPrompt
     ? editDraft.trim().length === 0
-    : isEmpty && !attachments.hasAttachments;
-  const canSubmit = !effectiveIsEmpty && !isDisabled;
+    : isEmpty && !attachments.hasAttachments && !planAttachments.hasPlans;
+  const canSubmit = !effectiveIsEmpty && !isDisabled && !planAttachments.hasUnresolvedPlans;
 
   const onSubmit = useCallback(async () => {
     if (isEditingQueuedPrompt) {
       await commitEdit();
       return;
     }
-    const blocks = await attachments.buildBlocks(promptText.trim());
-    await handleSubmit({ text: promptText, blocks });
+    if (planAttachments.hasUnresolvedPlans) {
+      return;
+    }
+    const blocks = [
+      ...await attachments.buildBlocks(promptText.trim()),
+      ...planAttachments.blocks,
+    ];
+    const optimisticContentParts = [
+      ...(promptText.trim() ? [{ type: "text" as const, text: promptText.trim() }] : []),
+      ...planAttachments.contentParts,
+    ];
+    await handleSubmit({ text: promptText, blocks, optimisticContentParts });
     attachments.clearAttachments();
-  }, [attachments, commitEdit, handleSubmit, isEditingQueuedPrompt, promptText]);
+    planAttachments.clearPlans();
+  }, [attachments, commitEdit, handleSubmit, isEditingQueuedPrompt, planAttachments, promptText]);
 
   const onCancel = useCallback(() => {
     if (isEditingQueuedPrompt) {
@@ -116,6 +133,11 @@ export function ChatInput() {
     }
     event.target.value = "";
   }, [attachments]);
+
+  const handleRemoveDraftAttachment = useCallback((id: string) => {
+    attachments.removeAttachment(id);
+    planAttachments.removePlan(id);
+  }, [attachments, planAttachments]);
 
   const handlePaste = useCallback((event: ClipboardEvent<HTMLDivElement>) => {
     if (!canAttach || event.clipboardData.files.length === 0) {
@@ -225,8 +247,8 @@ export function ChatInput() {
           </div>
           {!isEditingQueuedPrompt && (
             <DraftAttachmentPreviewList
-              attachments={attachments.attachments}
-              onRemove={attachments.removeAttachment}
+              attachments={[...attachments.attachments, ...planAttachments.attachments]}
+              onRemove={handleRemoveDraftAttachment}
             />
           )}
           {isEditingQueuedPrompt ? (
@@ -278,15 +300,21 @@ export function ChatInput() {
               }`}
             >
               {!isEditingQueuedPrompt && (
-                <ComposerControlButton
-                  iconOnly
-                  disabled={!canAttach}
-                  icon={<FilePlus className="size-3.5" />}
-                  label="Attach file"
-                  title={attachControlTitle}
-                  onClick={() => fileInputRef.current?.click()}
-                  aria-label="Attach file"
-                />
+                <>
+                  <ComposerControlButton
+                    iconOnly
+                    disabled={!canAttach}
+                    icon={<FilePlus className="size-3.5" />}
+                    label="Attach file"
+                    title={attachControlTitle}
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="Attach file"
+                  />
+                  <PlanPickerPopover
+                    draftWorkspaceId={selectedWorkspaceId}
+                    disabled={!canAttachPlan}
+                  />
+                </>
               )}
               <ModelSelector {...modelSelectorProps} />
               <SessionConfigControls agentKind={agentKind} controls={sessionConfigControls} />
@@ -296,7 +324,7 @@ export function ChatInput() {
               <ChatComposerActions
                 isRunning={isRunning}
                 isEmpty={effectiveIsEmpty}
-                isDisabled={isDisabled}
+                isDisabled={isDisabled || planAttachments.hasUnresolvedPlans}
                 isEditingQueuedPrompt={isEditingQueuedPrompt}
                 onSubmit={onSubmit}
                 onCancel={onCancel}

@@ -21,11 +21,11 @@ export function useSessionActions() {
   return {
     cancelActiveSession: controlActions.cancelActiveSession,
     dismissSession: selectionActions.dismissSession,
+    createEmptySessionWithResolvedConfig:
+      creationActions.createEmptySessionWithResolvedConfig,
     createSessionWithResolvedConfig: creationActions.createSessionWithResolvedConfig,
     findOrCreateSession: controlActions.findOrCreateSession,
     findOrCreateSessionForLaunch: controlActions.findOrCreateSessionForLaunch,
-    openWorkspaceSessionWithResolvedConfig:
-      creationActions.openWorkspaceSessionWithResolvedConfig,
     promptActiveSession: controlActions.promptActiveSession,
     resolvePermission: controlActions.resolvePermission,
     resolveMcpElicitation: controlActions.resolveMcpElicitation,

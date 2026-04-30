@@ -1,5 +1,5 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
-import type { PromptInputBlock } from "@anyharness/sdk";
+import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { createOptimisticPendingPrompt } from "@/lib/domain/chat/pending-prompts";
 import { getSessionClientAndWorkspace, isPendingSessionId } from "@/lib/integrations/anyharness/session-runtime";
@@ -16,6 +16,7 @@ interface PromptSessionInput {
   sessionId: string;
   text: string;
   blocks?: PromptInputBlock[];
+  optimisticContentParts?: ContentPart[];
   workspaceId?: string | null;
   latencyFlowId?: string | null;
   promptId?: string | null;
@@ -32,6 +33,7 @@ export function useSessionPromptWorkflow() {
     sessionId,
     text,
     blocks,
+    optimisticContentParts,
     workspaceId,
     latencyFlowId,
     promptId,
@@ -49,7 +51,13 @@ export function useSessionPromptWorkflow() {
     try {
       useHarnessStore.getState().patchSessionSlot(sessionId, {
         optimisticPrompt:
-          slot?.optimisticPrompt ?? createOptimisticPendingPrompt(text, promptId ?? null),
+          slot?.optimisticPrompt
+          ?? createOptimisticPendingPrompt(
+            text,
+            promptId ?? null,
+            undefined,
+            optimisticContentParts,
+          ),
       });
       finishLatencyFlow(latencyFlowId, "optimistic_visible");
 

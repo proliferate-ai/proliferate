@@ -902,6 +902,20 @@ function normalizeContentPart(part: ContentPart): ContentPart {
         sourceToolCallId: coerceNullableString(raw.sourceToolCallId ?? raw.source_tool_call_id),
       };
 
+    case "plan_reference":
+      return {
+        type: "plan_reference",
+        planId: coerceString(raw.planId ?? raw.plan_id),
+        title: coerceString(raw.title) || "Plan",
+        bodyMarkdown: coerceString(raw.bodyMarkdown ?? raw.body_markdown),
+        snapshotHash: coerceString(raw.snapshotHash ?? raw.snapshot_hash),
+        sourceSessionId: coerceString(raw.sourceSessionId ?? raw.source_session_id),
+        sourceTurnId: coerceNullableString(raw.sourceTurnId ?? raw.source_turn_id),
+        sourceItemId: coerceNullableString(raw.sourceItemId ?? raw.source_item_id),
+        sourceKind: coerceString(raw.sourceKind ?? raw.source_kind),
+        sourceToolCallId: coerceNullableString(raw.sourceToolCallId ?? raw.source_tool_call_id),
+      };
+
     case "proposed_plan_decision":
       return {
         type: "proposed_plan_decision",
@@ -942,6 +956,7 @@ function mergeContentParts(existing: ContentPart[], incoming: ContentPart[]): Co
     "image",
     "resource",
     "resource_link",
+    "plan_reference",
     "reasoning",
     "file_read",
   ] as const;

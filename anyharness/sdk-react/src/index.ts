@@ -127,6 +127,7 @@ export {
 export {
   useWorkspacePlansQuery,
   usePlanDetailQuery,
+  usePlanDetailsQueries,
   usePlanDocumentQuery,
   useMaterializePlanDocumentMutation,
   useApprovePlanMutation,

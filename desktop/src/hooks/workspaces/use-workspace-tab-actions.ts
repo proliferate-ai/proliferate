@@ -33,7 +33,7 @@ export function useWorkspaceTabActions() {
   const { currentLaunchIdentity } = useActiveChatSessionState();
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
   const {
-    openWorkspaceSessionWithResolvedConfig,
+    createEmptySessionWithResolvedConfig,
     restoreLastDismissedSession,
     selectSession,
   } = useSessionActions();
@@ -127,7 +127,7 @@ export function useWorkspaceTabActions() {
       source: "workspace_tab",
       targetWorkspaceId: selectedWorkspaceId,
     });
-    void openWorkspaceSessionWithResolvedConfig({
+    void createEmptySessionWithResolvedConfig({
       agentKind: selection.kind,
       modelId: selection.modelId,
       latencyFlowId,
@@ -141,7 +141,7 @@ export function useWorkspaceTabActions() {
   }, [
     configuredLaunch.selection,
     currentLaunchIdentity,
-    openWorkspaceSessionWithResolvedConfig,
+    createEmptySessionWithResolvedConfig,
     selectedWorkspaceId,
     showToast,
   ]);

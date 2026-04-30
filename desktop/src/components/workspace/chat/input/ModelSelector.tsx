@@ -1,11 +1,10 @@
 import { createPortal } from "react-dom";
-import type { AgentSummary } from "@anyharness/sdk";
 import { CHAT_MODEL_SELECTOR_LABELS } from "@/config/chat";
 import type {
   ModelSelectorGroup as ModelSelectorGroupData,
+  ModelSelectorProps,
   ModelSelectorSelection,
 } from "@/lib/domain/chat/model-selection";
-import type { PendingSessionConfigChangeStatus } from "@/lib/domain/sessions/pending-config";
 import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
 import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
 import {
@@ -18,22 +17,6 @@ import {
 import { useModelSelectorMenu } from "@/hooks/chat/use-model-selector-menu";
 import { ComposerControlButton } from "./ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
-
-export interface ModelSelectorCurrentModel {
-  kind: string;
-  displayName: string;
-  pendingState: PendingSessionConfigChangeStatus | null;
-}
-
-interface ModelSelectorProps {
-  connectionState: string;
-  currentModel: ModelSelectorCurrentModel | null;
-  groups: ModelSelectorGroupData[];
-  hasAgents: boolean;
-  isLoading: boolean;
-  notReadyAgents: AgentSummary[];
-  onSelect: (selection: ModelSelectorSelection) => void;
-}
 
 export function ModelSelector({
   connectionState,

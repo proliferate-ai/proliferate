@@ -58,6 +58,18 @@ describe("transcript reducer", () => {
         mimeType: "application/pdf",
         size: 4096,
       },
+      {
+        type: "plan_reference",
+        planId: "plan-1",
+        title: "Migration plan",
+        bodyMarkdown: "# Migration plan\n\nDo it.",
+        snapshotHash: "hash-1",
+        sourceSessionId: "session-1",
+        sourceTurnId: "turn-1",
+        sourceItemId: "item-1",
+        sourceKind: "codex_turn_plan",
+        sourceToolCallId: null,
+      },
     ];
     const state = reduceEvents(
       [
@@ -79,11 +91,48 @@ describe("transcript reducer", () => {
       "image",
       "resource",
       "resource_link",
+      "plan_reference",
     ]);
     expect(item.contentParts.find((part) => part.type === "resource")).toMatchObject({
       attachmentId: "file-1",
       name: "README.md",
     });
+    expect(item.contentParts.find((part) => part.type === "plan_reference")).toMatchObject({
+      planId: "plan-1",
+      snapshotHash: "hash-1",
+    });
+  });
+
+  it("preserves plan reference content parts when later snapshots omit them", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        userMessageStarted(2, "user-1", [
+          { type: "text", text: "continue this" },
+          {
+            type: "plan_reference",
+            planId: "plan-1",
+            title: "Migration plan",
+            bodyMarkdown: "# Migration plan\n\nDo it.",
+            snapshotHash: "hash-1",
+            sourceSessionId: "session-1",
+            sourceTurnId: "turn-1",
+            sourceItemId: "item-1",
+            sourceKind: "codex_turn_plan",
+            sourceToolCallId: null,
+          },
+        ]),
+        userMessageCompleted(3, "user-1", [{ type: "text", text: "continue this" }]),
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["user-1"];
+    expect(item.kind).toBe("user_message");
+    if (item.kind !== "user_message") {
+      throw new Error("expected user message item");
+    }
+    expect(item.contentParts.map((part) => part.type)).toEqual(["text", "plan_reference"]);
   });
 
   it("closes orphaned assistant and reasoning streams when a turn ends", () => {

@@ -4,18 +4,24 @@ import { FileIcon, Link2, LoaderCircle, X } from "@/components/ui/icons";
 import { Button } from "@/components/ui/Button";
 import { FilePathLink } from "@/components/ui/content/FilePathLink";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
+import { PlanReferenceAttachmentCard } from "@/components/workspace/chat/content/PlanReferenceAttachmentCard";
 import { usePromptAttachmentUrl } from "@/hooks/chat/use-prompt-attachment-url";
 import {
   normalizeContentParts,
   normalizeDraftAttachments,
-  type PromptAttachmentDescriptor,
+  type PromptDraftAttachmentDescriptor,
   type PromptDisplayAttachmentPart,
   type PromptDisplayPart,
 } from "@/lib/domain/chat/prompt-content";
 import { tokenizeSerializedFileLinks } from "@/lib/domain/chat/file-mention-links";
 
 type PromptContentRendererVariant = "transcript" | "compact";
+type PromptContentRendererLayout = "stack" | "wrap" | "auto";
 type PromptAttachmentCardVariant = PromptContentRendererVariant | "draft";
+type NonPlanPromptAttachmentPart = Exclude<
+  PromptDisplayAttachmentPart,
+  { type: "plan_reference" }
+>;
 
 export interface PromptContentRendererProps {
   sessionId: string | null;
@@ -25,7 +31,7 @@ export interface PromptContentRendererProps {
   variant?: PromptContentRendererVariant;
   includeText?: boolean;
   includeAttachments?: boolean;
-  layout?: "stack" | "wrap";
+  layout?: PromptContentRendererLayout;
 }
 
 export function PromptContentRenderer({
@@ -43,13 +49,14 @@ export function PromptContentRenderer({
     part.type === "text" ? includeText : includeAttachments
   ));
   const resolvedVariant = variant ?? (compact ? "compact" : "transcript");
+  const resolvedLayout = resolvePromptContentLayout(layout, visibleParts);
 
   if (visibleParts.length === 0) {
     return null;
   }
 
   return (
-    <div className={promptContentContainerClassName(resolvedVariant, layout)}>
+    <div className={promptContentContainerClassName(resolvedVariant, resolvedLayout)}>
       {visibleParts.map((part) => (
         <PromptDisplayPartView
           key={part.id}
@@ -63,7 +70,7 @@ export function PromptContentRenderer({
 }
 
 export interface DraftAttachmentPreviewListProps {
-  attachments: readonly PromptAttachmentDescriptor[];
+  attachments: readonly PromptDraftAttachmentDescriptor[];
   onRemove: (id: string) => void;
 }
 
@@ -105,6 +112,10 @@ function PromptDisplayPartView({
     return <FileLinkedText text={part.text} />;
   }
 
+  if (part.type === "plan_reference") {
+    return <PlanReferenceAttachmentCard plan={part} variant={variant} />;
+  }
+
   return (
     <PromptAttachmentCard
       sessionId={sessionId}
@@ -144,6 +155,16 @@ function PromptAttachmentCard({
   variant: PromptAttachmentCardVariant;
   onRemove?: (id: string) => void;
 }) {
+  if (part.type === "plan_reference") {
+    return (
+      <PlanReferenceAttachmentCard
+        plan={part}
+        variant={variant}
+        onRemove={onRemove}
+      />
+    );
+  }
+
   const isDraft = variant === "draft";
   const isCompact = variant === "compact";
   const metadata = [attachmentKindLabel(part), part.mimeType, part.sizeLabel]
@@ -192,7 +213,7 @@ function PromptAttachmentPreview({
   variant,
 }: {
   sessionId: string | null;
-  part: PromptDisplayAttachmentPart;
+  part: NonPlanPromptAttachmentPart;
   variant: PromptAttachmentCardVariant;
 }) {
   if (part.type === "image") {
@@ -284,6 +305,8 @@ function attachmentKindLabel(part: PromptDisplayAttachmentPart): string {
       return "File";
     case "link":
       return "Link";
+    case "plan_reference":
+      return "Plan";
   }
 }
 
@@ -298,4 +321,14 @@ function promptContentContainerClassName(
   return variant === "compact"
     ? "flex min-w-0 flex-col gap-1"
     : "flex min-w-0 flex-col gap-2";
+}
+
+function resolvePromptContentLayout(
+  layout: PromptContentRendererLayout,
+  parts: readonly PromptDisplayPart[],
+): "stack" | "wrap" {
+  if (layout !== "auto") {
+    return layout;
+  }
+  return parts.some((part) => part.type === "plan_reference") ? "stack" : "wrap";
 }

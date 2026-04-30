@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnyHarnessError, type HandoffPlanRequest } from "@anyharness/sdk";
 import {
   useAnyHarnessWorkspaceContext,
@@ -55,6 +55,27 @@ export function usePlanDetailQuery(
       const client = getAnyHarnessClient(resolved.connection);
       return client.plans.get(resolved.connection.anyharnessWorkspaceId, planId!);
     },
+  });
+}
+
+export function usePlanDetailsQueries(
+  planIds: readonly (string | null | undefined)[],
+  options?: WorkspaceQueryOptions,
+) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useQueries({
+    queries: planIds.map((planId) => ({
+      queryKey: anyHarnessPlanKey(runtimeUrl, workspaceId, planId),
+      enabled: (options?.enabled ?? true) && !!workspaceId && !!planId,
+      queryFn: async () => {
+        const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+        const client = getAnyHarnessClient(resolved.connection);
+        return client.plans.get(resolved.connection.anyharnessWorkspaceId, planId!);
+      },
+    })),
   });
 }
 

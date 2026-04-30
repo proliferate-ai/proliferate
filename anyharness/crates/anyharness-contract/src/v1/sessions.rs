@@ -262,6 +262,13 @@ pub enum PromptInputBlock {
         #[serde(skip_serializing_if = "Option::is_none")]
         size: Option<u64>,
     },
+    #[serde(rename = "plan_reference")]
+    PlanReference {
+        #[serde(rename = "planId")]
+        plan_id: String,
+        #[serde(rename = "snapshotHash")]
+        snapshot_hash: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -545,6 +552,37 @@ mod tests {
             panic!("expected mcp servers");
         };
         assert_eq!(mcp_servers.len(), 2);
+    }
+
+    #[test]
+    fn prompt_input_block_plan_reference_round_trips() {
+        let block = PromptInputBlock::PlanReference {
+            plan_id: "plan-123".to_string(),
+            snapshot_hash: "hash-123".to_string(),
+        };
+
+        let json = serde_json::to_value(&block).expect("serialize plan reference prompt block");
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "type": "plan_reference",
+                "planId": "plan-123",
+                "snapshotHash": "hash-123"
+            })
+        );
+
+        let round_tripped: PromptInputBlock =
+            serde_json::from_value(json).expect("deserialize plan reference prompt block");
+        match round_tripped {
+            PromptInputBlock::PlanReference {
+                plan_id,
+                snapshot_hash,
+            } => {
+                assert_eq!(plan_id, "plan-123");
+                assert_eq!(snapshot_hash, "hash-123");
+            }
+            other => panic!("expected plan reference, got {other:?}"),
+        }
     }
 
     #[test]

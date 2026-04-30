@@ -4,6 +4,7 @@ import {
   selectPendingUserInputInteraction,
   type McpElicitationSubmittedField,
   type McpElicitationUrlRevealResponse,
+  type ContentPart,
   type PromptInputBlock,
   type ResolveInteractionRequest,
   type UserInputSubmittedAnswer,
@@ -44,6 +45,7 @@ interface LaunchPromptInput extends SessionLatencyFlowOptions {
   modelId: string;
   text: string;
   blocks?: PromptInputBlock[];
+  optimisticContentParts?: ContentPart[];
 }
 
 interface SessionConfigOptionUpdateOptions {
@@ -54,11 +56,13 @@ interface SessionControlDeps {
   createSessionWithResolvedConfig: (options: {
     text: string;
     blocks?: PromptInputBlock[];
+    optimisticContentParts?: ContentPart[];
     agentKind: string;
     modelId: string;
+    modeId?: string;
     workspaceId?: string;
     latencyFlowId?: string | null;
-  }) => Promise<void>;
+  }) => Promise<string>;
   ensureWorkspaceSessions: (workspaceId: string) => Promise<Array<{
     id: string;
     agentKind: string;
@@ -260,7 +264,10 @@ export function useSessionControlActions({
 
   const promptActiveSession = useCallback(async (
     text: string,
-    options?: PromptLatencyFlowOptions & { blocks?: PromptInputBlock[] },
+    options?: PromptLatencyFlowOptions & {
+      blocks?: PromptInputBlock[];
+      optimisticContentParts?: ContentPart[];
+    },
   ) => {
     const state = useHarnessStore.getState();
     const sessionId = state.activeSessionId;
@@ -286,6 +293,7 @@ export function useSessionControlActions({
       sessionId,
       text,
       blocks: options?.blocks,
+      optimisticContentParts: options?.optimisticContentParts,
       workspaceId,
       latencyFlowId: options?.latencyFlowId,
       promptId: options?.promptId,
@@ -442,6 +450,7 @@ export function useSessionControlActions({
     text: string,
     modelId?: string,
     blocks?: PromptInputBlock[],
+    optimisticContentParts?: ContentPart[],
   ) => {
     const state = useHarnessStore.getState();
     const workspaceId = state.selectedWorkspaceId;
@@ -460,6 +469,7 @@ export function useSessionControlActions({
           sessionId: slot.sessionId,
           text,
           blocks,
+          optimisticContentParts,
           workspaceId,
           onBeforePrompt: workspaceId
             ? () => maybeStartFirstSessionBranchRenameTracking(slot.sessionId, workspaceId)
@@ -478,6 +488,7 @@ export function useSessionControlActions({
           sessionId: backendSession.id,
           text,
           blocks,
+          optimisticContentParts,
           workspaceId,
           onBeforePrompt: () =>
             maybeStartFirstSessionBranchRenameTracking(backendSession.id, workspaceId),
@@ -489,6 +500,7 @@ export function useSessionControlActions({
     await createSessionWithResolvedConfig({
       text,
       blocks,
+      optimisticContentParts,
       agentKind,
       modelId: modelId ?? agentKind,
     });
@@ -508,6 +520,7 @@ export function useSessionControlActions({
     modelId,
     text,
     blocks,
+    optimisticContentParts,
     latencyFlowId,
   }: LaunchPromptInput) => {
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
@@ -527,6 +540,7 @@ export function useSessionControlActions({
           sessionId: slot.sessionId,
           text,
           blocks,
+          optimisticContentParts,
           workspaceId,
           latencyFlowId,
           onBeforePrompt: () =>
@@ -546,6 +560,7 @@ export function useSessionControlActions({
         sessionId: backendSession.id,
         text,
         blocks,
+        optimisticContentParts,
         workspaceId,
         latencyFlowId,
         onBeforePrompt: () =>
@@ -557,6 +572,7 @@ export function useSessionControlActions({
     await createSessionWithResolvedConfig({
       text,
       blocks,
+      optimisticContentParts,
       agentKind,
       modelId,
       workspaceId,

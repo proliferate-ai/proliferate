@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{
     ContentPart, PromptCapabilities, PromptInputBlock, SessionLiveConfigSnapshot,
@@ -6,15 +8,33 @@ use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::plans::{document, model::PlanRecord};
 use crate::sessions::model::{PromptAttachmentKind, PromptAttachmentRecord, PromptAttachmentState};
 use crate::sessions::store::SessionStore;
 
 pub const MAX_PROMPT_BLOCKS: usize = 32;
 pub const MAX_ATTACHMENTS_PER_PROMPT: usize = 10;
+// Plan references have their own count/byte budget because they resolve to
+// trusted markdown snapshots, not uploaded attachment payloads.
+pub const MAX_PLAN_REFERENCES_PER_PROMPT: usize = 4;
 pub const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
 pub const MAX_TEXT_RESOURCE_BYTES: usize = 256 * 1024;
 pub const MAX_TOTAL_ATTACHMENT_BYTES: usize = 8 * 1024 * 1024;
+pub const MAX_TOTAL_PLAN_REFERENCE_BYTES: usize = 512 * 1024;
 pub const MAX_RESOURCE_PREVIEW_CHARS: usize = 2_000;
+
+pub trait PlanReferenceResolver {
+    fn resolve_plan_reference(&self, plan_id: &str) -> anyhow::Result<Option<PlanRecord>>;
+}
+
+pub struct PromptPrepareContext<'a> {
+    pub store: &'a SessionStore,
+    pub session_id: &'a str,
+    pub workspace_id: &'a str,
+    pub capabilities: PromptCapabilities,
+    pub attachment_state: PromptAttachmentState,
+    pub plan_resolver: &'a dyn PlanReferenceResolver,
+}
 
 #[derive(Debug, Clone)]
 pub struct PromptPayload {
@@ -178,6 +198,26 @@ impl PromptPayload {
                         .size(size);
                     blocks.push(acp::ContentBlock::ResourceLink(link));
                 }
+                StoredPromptBlock::PlanReference {
+                    plan_id,
+                    title,
+                    body_markdown,
+                    snapshot_hash,
+                    as_resource,
+                    ..
+                } => {
+                    let markdown = document::render_markdown_snapshot(title, body_markdown);
+                    if *as_resource {
+                        let uri = format!("plan://{plan_id}?snapshot={snapshot_hash}");
+                        let resource = acp::TextResourceContents::new(markdown, uri)
+                            .mime_type(Some("text/markdown".to_string()));
+                        blocks.push(acp::ContentBlock::Resource(acp::EmbeddedResource::new(
+                            acp::EmbeddedResourceResource::TextResourceContents(resource),
+                        )));
+                    } else {
+                        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(markdown)));
+                    }
+                }
             }
         }
         Ok(blocks)
@@ -229,6 +269,31 @@ pub enum StoredPromptBlock {
         description: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         size: Option<u64>,
+    },
+    #[serde(rename = "plan_reference")]
+    PlanReference {
+        #[serde(rename = "planId")]
+        plan_id: String,
+        title: String,
+        #[serde(rename = "bodyMarkdown")]
+        body_markdown: String,
+        #[serde(rename = "snapshotHash")]
+        snapshot_hash: String,
+        #[serde(rename = "sourceSessionId")]
+        source_session_id: String,
+        #[serde(rename = "sourceTurnId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source_turn_id: Option<String>,
+        #[serde(rename = "sourceItemId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source_item_id: Option<String>,
+        #[serde(rename = "sourceKind")]
+        source_kind: String,
+        #[serde(rename = "sourceToolCallId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source_tool_call_id: Option<String>,
+        #[serde(rename = "asResource")]
+        as_resource: bool,
     },
 }
 
@@ -289,6 +354,28 @@ impl StoredPromptBlock {
                 title: title.clone(),
                 description: description.clone(),
                 size: *size,
+            },
+            Self::PlanReference {
+                plan_id,
+                title,
+                body_markdown,
+                snapshot_hash,
+                source_session_id,
+                source_turn_id,
+                source_item_id,
+                source_kind,
+                source_tool_call_id,
+                ..
+            } => ContentPart::PlanReference {
+                plan_id: plan_id.clone(),
+                title: title.clone(),
+                body_markdown: body_markdown.clone(),
+                snapshot_hash: snapshot_hash.clone(),
+                source_session_id: source_session_id.clone(),
+                source_turn_id: source_turn_id.clone(),
+                source_item_id: source_item_id.clone(),
+                source_kind: source_kind.clone(),
+                source_tool_call_id: source_tool_call_id.clone(),
             },
         }
     }
@@ -360,11 +447,8 @@ pub fn capabilities_from_live_config(
 }
 
 pub fn prepare_prompt(
-    store: &SessionStore,
-    session_id: &str,
+    context: PromptPrepareContext<'_>,
     blocks: Vec<PromptInputBlock>,
-    capabilities: PromptCapabilities,
-    state: PromptAttachmentState,
 ) -> Result<PreparedPrompt, PromptValidationError> {
     if blocks.is_empty() {
         return Err(PromptValidationError::new(
@@ -379,10 +463,19 @@ pub fn prepare_prompt(
         ));
     }
 
+    let store = context.store;
+    let session_id = context.session_id;
+    let workspace_id = context.workspace_id;
+    let capabilities = context.capabilities;
+    let state = context.attachment_state;
+    let plan_resolver = context.plan_resolver;
     let mut stored_blocks = Vec::with_capacity(blocks.len());
     let mut attachments = Vec::new();
     let mut total_attachment_bytes = 0usize;
     let mut attachment_count = 0usize;
+    let mut plan_reference_count = 0usize;
+    let mut total_plan_reference_bytes = 0usize;
+    let mut seen_plan_references = HashSet::new();
 
     for block in blocks {
         match block {
@@ -629,6 +722,60 @@ pub fn prepare_prompt(
                     size,
                 });
             }
+            PromptInputBlock::PlanReference {
+                plan_id,
+                snapshot_hash,
+            } => {
+                if plan_id.trim().is_empty() || snapshot_hash.trim().is_empty() {
+                    return Err(PromptValidationError::new(
+                        "PROMPT_INVALID_PLAN_REFERENCE",
+                        "plan references require planId and snapshotHash",
+                    ));
+                }
+                let key = format!("{plan_id}:{snapshot_hash}");
+                if !seen_plan_references.insert(key) {
+                    continue;
+                }
+                let plan = plan_resolver
+                    .resolve_plan_reference(&plan_id)
+                    .map_err(|error| {
+                        PromptValidationError::internal(format!(
+                            "failed to load plan reference: {error}"
+                        ))
+                    })?
+                    // Hide cross-workspace attempts behind the same response
+                    // as a missing plan so plan ids are not workspace-oracle data.
+                    .filter(|plan| plan.workspace_id == workspace_id)
+                    .ok_or_else(|| {
+                        PromptValidationError::new(
+                            "PROMPT_PLAN_NOT_FOUND",
+                            "plan reference not found",
+                        )
+                    })?;
+                if plan.snapshot_hash != snapshot_hash {
+                    return Err(PromptValidationError::new(
+                        "PROMPT_PLAN_SNAPSHOT_MISMATCH",
+                        "plan reference snapshot hash does not match",
+                    ));
+                }
+                plan_reference_count = checked_plan_reference_count(plan_reference_count + 1)?;
+                total_plan_reference_bytes = checked_plan_reference_total(
+                    total_plan_reference_bytes,
+                    plan.body_markdown.as_bytes().len(),
+                )?;
+                stored_blocks.push(StoredPromptBlock::PlanReference {
+                    plan_id: plan.id,
+                    title: plan.title,
+                    body_markdown: plan.body_markdown,
+                    snapshot_hash: plan.snapshot_hash,
+                    source_session_id: plan.source_session_id,
+                    source_turn_id: plan.source_turn_id,
+                    source_item_id: plan.source_item_id,
+                    source_kind: plan.source_kind,
+                    source_tool_call_id: plan.source_tool_call_id,
+                    as_resource: capabilities.embedded_context,
+                });
+            }
         }
     }
 
@@ -668,6 +815,34 @@ fn checked_attachment_count(count: usize) -> Result<usize, PromptValidationError
         ));
     }
     Ok(count)
+}
+
+fn checked_plan_reference_count(count: usize) -> Result<usize, PromptValidationError> {
+    if count > MAX_PLAN_REFERENCES_PER_PROMPT {
+        return Err(PromptValidationError::new(
+            "PROMPT_TOO_MANY_PLAN_REFERENCES",
+            format!(
+                "prompt cannot include more than {MAX_PLAN_REFERENCES_PER_PROMPT} plan references"
+            ),
+        ));
+    }
+    Ok(count)
+}
+
+fn checked_plan_reference_total(
+    current: usize,
+    next: usize,
+) -> Result<usize, PromptValidationError> {
+    let total = current.saturating_add(next);
+    if total > MAX_TOTAL_PLAN_REFERENCE_BYTES {
+        return Err(PromptValidationError::new(
+            "PROMPT_PLAN_REFERENCES_TOO_LARGE",
+            format!(
+                "prompt plan references must total {MAX_TOTAL_PLAN_REFERENCE_BYTES} bytes or less"
+            ),
+        ));
+    }
+    Ok(total)
 }
 
 fn validate_referenced_attachment(
@@ -749,6 +924,14 @@ fn summarize_blocks(blocks: &[StoredPromptBlock]) -> String {
                 _ => format!("[file: {uri}]"),
             }),
             StoredPromptBlock::ResourceLink { name, .. } => Some(format!("[link: {name}]")),
+            StoredPromptBlock::PlanReference { title, .. } => {
+                let title = title.trim();
+                Some(if title.is_empty() {
+                    "[plan]".to_string()
+                } else {
+                    format!("[plan: {title}]")
+                })
+            }
         })
         .collect::<Vec<_>>();
     parts.join("\n")
@@ -760,4 +943,201 @@ fn bounded_preview(text: &str) -> Option<String> {
         .take(MAX_RESOURCE_PREVIEW_CHARS)
         .collect::<String>();
     (!preview.is_empty()).then_some(preview)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use anyharness_contract::v1::{ProposedPlanDecisionState, ProposedPlanNativeResolutionState};
+
+    use super::*;
+    use crate::persistence::Db;
+    use crate::sessions::store::SessionStore;
+
+    struct TestPlanResolver {
+        plans: HashMap<String, PlanRecord>,
+    }
+
+    impl PlanReferenceResolver for TestPlanResolver {
+        fn resolve_plan_reference(&self, plan_id: &str) -> anyhow::Result<Option<PlanRecord>> {
+            Ok(self.plans.get(plan_id).cloned())
+        }
+    }
+
+    #[test]
+    fn prepares_plan_reference_snapshot() {
+        let (store, resolver) = fixture("workspace-1", "# Plan\n\nDo it.");
+        let prepared = prepare_prompt(
+            context(&store, &resolver, "workspace-1", true),
+            vec![PromptInputBlock::PlanReference {
+                plan_id: "plan-1".to_string(),
+                snapshot_hash: "hash-1".to_string(),
+            }],
+        )
+        .expect("prepare prompt");
+
+        assert!(prepared.payload.has_content());
+        assert_eq!(prepared.payload.text_summary, "[plan: Plan]");
+        assert!(matches!(
+            prepared.payload.blocks.as_slice(),
+            [StoredPromptBlock::PlanReference { plan_id, as_resource: true, .. }]
+                if plan_id == "plan-1"
+        ));
+        assert!(matches!(
+            prepared.payload.content_parts().as_slice(),
+            [ContentPart::PlanReference { plan_id, snapshot_hash, .. }]
+                if plan_id == "plan-1" && snapshot_hash == "hash-1"
+        ));
+    }
+
+    #[test]
+    fn rejects_missing_workspace_or_mismatched_snapshot() {
+        let (store, resolver) = fixture("workspace-1", "# Plan\n\nDo it.");
+        let missing = prepare_prompt(
+            context(&store, &resolver, "workspace-2", false),
+            vec![PromptInputBlock::PlanReference {
+                plan_id: "plan-1".to_string(),
+                snapshot_hash: "hash-1".to_string(),
+            }],
+        )
+        .expect_err("workspace mismatch should be hidden as not found");
+        assert_eq!(missing.code, "PROMPT_PLAN_NOT_FOUND");
+
+        let mismatch = prepare_prompt(
+            context(&store, &resolver, "workspace-1", false),
+            vec![PromptInputBlock::PlanReference {
+                plan_id: "plan-1".to_string(),
+                snapshot_hash: "different".to_string(),
+            }],
+        )
+        .expect_err("snapshot mismatch");
+        assert_eq!(mismatch.code, "PROMPT_PLAN_SNAPSHOT_MISMATCH");
+    }
+
+    #[test]
+    fn dedupes_duplicate_plan_references() {
+        let (store, resolver) = fixture("workspace-1", "# Plan\n\nDo it.");
+        let prepared = prepare_prompt(
+            context(&store, &resolver, "workspace-1", false),
+            vec![
+                PromptInputBlock::PlanReference {
+                    plan_id: "plan-1".to_string(),
+                    snapshot_hash: "hash-1".to_string(),
+                },
+                PromptInputBlock::PlanReference {
+                    plan_id: "plan-1".to_string(),
+                    snapshot_hash: "hash-1".to_string(),
+                },
+            ],
+        )
+        .expect("prepare prompt");
+
+        assert_eq!(prepared.payload.blocks.len(), 1);
+    }
+
+    #[test]
+    fn enforces_plan_reference_byte_budget() {
+        let (store, resolver) = fixture(
+            "workspace-1",
+            &"x".repeat(MAX_TOTAL_PLAN_REFERENCE_BYTES + 1),
+        );
+        let error = prepare_prompt(
+            context(&store, &resolver, "workspace-1", false),
+            vec![PromptInputBlock::PlanReference {
+                plan_id: "plan-1".to_string(),
+                snapshot_hash: "hash-1".to_string(),
+            }],
+        )
+        .expect_err("plan reference too large");
+
+        assert_eq!(error.code, "PROMPT_PLAN_REFERENCES_TOO_LARGE");
+    }
+
+    #[test]
+    fn converts_plan_reference_to_resource_or_text() {
+        let (store, resolver) = fixture("workspace-1", "Do it.");
+        let resource_payload = prepare_prompt(
+            context(&store, &resolver, "workspace-1", true),
+            vec![PromptInputBlock::PlanReference {
+                plan_id: "plan-1".to_string(),
+                snapshot_hash: "hash-1".to_string(),
+            }],
+        )
+        .expect("prepare resource")
+        .payload;
+        let resource_blocks = resource_payload
+            .to_acp_blocks(&store, "session-1")
+            .expect("to acp");
+        assert!(matches!(
+            resource_blocks.as_slice(),
+            [acp::ContentBlock::Resource(_)]
+        ));
+
+        let text_payload = prepare_prompt(
+            context(&store, &resolver, "workspace-1", false),
+            vec![PromptInputBlock::PlanReference {
+                plan_id: "plan-1".to_string(),
+                snapshot_hash: "hash-1".to_string(),
+            }],
+        )
+        .expect("prepare text")
+        .payload;
+        let text_blocks = text_payload
+            .to_acp_blocks(&store, "session-1")
+            .expect("to acp");
+        assert!(matches!(
+            text_blocks.as_slice(),
+            [acp::ContentBlock::Text(_)]
+        ));
+    }
+
+    fn context<'a>(
+        store: &'a SessionStore,
+        resolver: &'a TestPlanResolver,
+        workspace_id: &'a str,
+        embedded_context: bool,
+    ) -> PromptPrepareContext<'a> {
+        PromptPrepareContext {
+            store,
+            session_id: "session-1",
+            workspace_id,
+            capabilities: PromptCapabilities {
+                embedded_context,
+                ..PromptCapabilities::default()
+            },
+            attachment_state: PromptAttachmentState::Pending,
+            plan_resolver: resolver,
+        }
+    }
+
+    fn fixture(workspace_id: &str, body_markdown: &str) -> (SessionStore, TestPlanResolver) {
+        let store = SessionStore::new(Db::open_in_memory().expect("in-memory db"));
+        let mut plans = HashMap::new();
+        plans.insert(
+            "plan-1".to_string(),
+            PlanRecord {
+                id: "plan-1".to_string(),
+                workspace_id: workspace_id.to_string(),
+                session_id: "session-1".to_string(),
+                item_id: "item-1".to_string(),
+                title: "Plan".to_string(),
+                body_markdown: body_markdown.to_string(),
+                snapshot_hash: "hash-1".to_string(),
+                decision_state: ProposedPlanDecisionState::Pending,
+                native_resolution_state: ProposedPlanNativeResolutionState::None,
+                decision_version: 1,
+                source_agent_kind: "codex".to_string(),
+                source_kind: "codex_turn_plan".to_string(),
+                source_session_id: "session-1".to_string(),
+                source_turn_id: Some("turn-1".to_string()),
+                source_item_id: Some("item-1".to_string()),
+                source_tool_call_id: None,
+                superseded_by_plan_id: None,
+                created_at: "now".to_string(),
+                updated_at: "now".to_string(),
+            },
+        );
+        (store, TestPlanResolver { plans })
+    }
 }

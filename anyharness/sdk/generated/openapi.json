@@ -4195,6 +4195,62 @@
             "type": "object",
             "required": [
               "planId",
+              "title",
+              "bodyMarkdown",
+              "snapshotHash",
+              "sourceSessionId",
+              "sourceKind",
+              "type"
+            ],
+            "properties": {
+              "bodyMarkdown": {
+                "type": "string"
+              },
+              "planId": {
+                "type": "string"
+              },
+              "snapshotHash": {
+                "type": "string"
+              },
+              "sourceItemId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceKind": {
+                "type": "string"
+              },
+              "sourceSessionId": {
+                "type": "string"
+              },
+              "sourceToolCallId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceTurnId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "plan_reference"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "planId",
               "decisionState",
               "nativeResolutionState",
               "decisionVersion",
@@ -7498,6 +7554,28 @@
                 "type": "string"
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "planId",
+              "snapshotHash",
+              "type"
+            ],
+            "properties": {
+              "planId": {
+                "type": "string"
+              },
+              "snapshotHash": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "plan_reference"
+                ]
+              }
+            }
           }
         ]
       },
@@ -7621,6 +7699,7 @@
           "nativeResolutionState",
           "decisionVersion",
           "sourceAgentKind",
+          "sourceSessionId",
           "sourceKind",
           "createdAt",
           "updatedAt"
@@ -7661,6 +7740,9 @@
             ]
           },
           "sourceKind": {
+            "type": "string"
+          },
+          "sourceSessionId": {
             "type": "string"
           },
           "sourceToolCallId": {

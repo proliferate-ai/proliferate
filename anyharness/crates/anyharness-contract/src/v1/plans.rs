@@ -16,6 +16,7 @@ pub struct ProposedPlanSummary {
     pub native_resolution_state: ProposedPlanNativeResolutionState,
     pub decision_version: i64,
     pub source_agent_kind: String,
+    pub source_session_id: String,
     pub source_kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_turn_id: Option<String>,

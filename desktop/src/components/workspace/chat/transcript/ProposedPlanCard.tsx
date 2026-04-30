@@ -1,11 +1,9 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
+import { CollapsiblePlanCard } from "@/components/workspace/chat/content/CollapsiblePlanCard";
 import {
   Check,
-  ChevronDown,
-  Copy,
   FileText,
+  ArrowRight,
   X,
 } from "@/components/ui/icons";
 
@@ -33,14 +31,11 @@ interface ProposedPlanCardProps {
   onApprove?: () => void;
   onReject?: () => void;
   onImplementHere?: () => void;
+  onHandOffToNewSession?: () => void;
   isApproving?: boolean;
   isRejecting?: boolean;
   isImplementingHere?: boolean;
 }
-
-const COLLAPSED_MAX_HEIGHT = "min(20rem,45vh)";
-const COLLAPSED_FADE =
-  "linear-gradient(to bottom, black 0, black calc(100% - 5rem), transparent 100%)";
 
 export function ProposedPlanCard({
   content,
@@ -53,112 +48,34 @@ export function ProposedPlanCard({
   onApprove,
   onReject,
   onImplementHere,
+  onHandOffToNewSession,
   isApproving = false,
   isRejecting = false,
   isImplementingHere = false,
 }: ProposedPlanCardProps) {
-  const [expanded, setExpanded] = useState(true);
-  const [copied, setCopied] = useState(false);
-  const hasContent = content.length > 0;
   const canDecide =
     decisionState === "pending"
     && decisionVersion !== null
     && onApprove
     && onReject;
-
-  const handleCopy = () => {
-    if (!content) return;
-    void navigator.clipboard.writeText(content).then(() => {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    }).catch(() => {});
-  };
+  const hasFooterActions = !!decisionState || !!onHandOffToNewSession;
 
   return (
-    <div
-      data-chat-selection-unit
-      className="relative overflow-clip rounded-lg bg-foreground/5"
-    >
-      <div className="relative flex items-center justify-between gap-2 px-3 py-2">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-base font-semibold leading-tight text-foreground">
-            {title?.trim() || "Plan"}
-          </span>
-          {decisionState && (
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {formatDecisionState(decisionState, nativeResolutionState, errorMessage)}
-            </span>
-          )}
-        </div>
-        {hasContent && (
-          <div className="flex shrink-0 items-center gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={handleCopy}
-              aria-label="Copy plan"
-              className="size-6 text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setExpanded((v) => !v)}
-              aria-label={expanded ? "Collapse plan summary" : "Expand plan summary"}
-              className="size-6 text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <ChevronDown
-                className={`size-3.5 transition-transform ${expanded ? "" : "-rotate-90"}`}
-              />
-            </Button>
-          </div>
-        )}
-      </div>
-      {!hasContent ? (
-        <div className="px-4 py-3 text-sm text-muted-foreground">
-          {isStreaming ? "Preparing plan…" : "No plan content"}
-        </div>
-      ) : expanded ? (
-        <div className="px-4 py-3">
-          <MarkdownRenderer
-            content={content}
-            className="select-text [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-          />
-        </div>
-      ) : (
-        <div className="relative">
-          <div
-            className="overflow-hidden px-4 py-3"
-            style={{
-              maxHeight: COLLAPSED_MAX_HEIGHT,
-              maskImage: COLLAPSED_FADE,
-              WebkitMaskImage: COLLAPSED_FADE,
-            }}
-          >
-            <MarkdownRenderer
-              content={content}
-              className="select-text [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-            />
-          </div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
-            <Button
-              type="button"
-              variant="inverted"
-              size="pill"
-              onClick={() => setExpanded(true)}
-              className="pointer-events-auto px-3 py-0.5 text-sm"
-            >
-              Expand plan
-            </Button>
-          </div>
-        </div>
-      )}
-      {decisionState && (
+    <CollapsiblePlanCard
+      title={title?.trim() || "Plan"}
+      content={content}
+      subtitle={decisionState ? (
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {formatDecisionState(decisionState, nativeResolutionState, errorMessage)}
+        </span>
+      ) : undefined}
+      emptyContent={isStreaming ? "Preparing plan..." : "No plan content"}
+      copyLabel="Copy plan"
+      collapseLabel="Collapse plan summary"
+      expandLabel="Expand plan summary"
+      footer={hasFooterActions ? (
         <div className="flex flex-wrap items-center gap-2 border-t border-border/40 px-3 py-2">
-          {canDecide && (
+          {canDecide && decisionState && (
             <>
               <Button
                 type="button"
@@ -199,9 +116,22 @@ export function ProposedPlanCard({
               Carry out & exit plan mode
             </Button>
           )}
+          {onHandOffToNewSession && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={onHandOffToNewSession}
+              title="Starts a new session without approving or rejecting this plan."
+              className="rounded-xl px-2.5 text-sm"
+            >
+              <ArrowRight className="size-3.5" />
+              Hand off to new session
+            </Button>
+          )}
         </div>
-      )}
-    </div>
+      ) : undefined}
+    />
   );
 }
 

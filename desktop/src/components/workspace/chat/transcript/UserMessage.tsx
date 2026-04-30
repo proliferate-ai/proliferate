@@ -46,14 +46,14 @@ export function UserMessage({
     >
       <div className="flex w-full flex-col items-end justify-end gap-1">
         {hasAttachments && (
-          <div className="flex max-w-[77%] flex-wrap items-end justify-end gap-2 self-end">
+          <div className="w-full max-w-xl self-end lg:max-w-3xl">
             <PromptContentRenderer
               sessionId={sessionId}
               parts={contentParts}
               fallbackText=""
               variant="transcript"
               includeText={false}
-              layout="wrap"
+              layout="auto"
             />
           </div>
         )}

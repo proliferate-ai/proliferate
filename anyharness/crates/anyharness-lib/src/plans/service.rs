@@ -428,6 +428,7 @@ pub fn plan_to_summary(plan: &PlanRecord) -> ProposedPlanSummary {
         native_resolution_state: plan.native_resolution_state.clone(),
         decision_version: plan.decision_version,
         source_agent_kind: plan.source_agent_kind.clone(),
+        source_session_id: plan.source_session_id.clone(),
         source_kind: plan.source_kind.clone(),
         source_turn_id: plan.source_turn_id.clone(),
         source_item_id: plan.source_item_id.clone(),

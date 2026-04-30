@@ -1,4 +1,5 @@
-import type { WorkspaceSessionLaunchAgent } from "@anyharness/sdk";
+import type { AgentSummary, WorkspaceSessionLaunchAgent } from "@anyharness/sdk";
+import type { PendingSessionConfigChangeStatus } from "@/lib/domain/sessions/pending-config";
 
 export interface ModelSelectorSelection {
   kind: string;
@@ -27,6 +28,22 @@ export interface ModelSelectorGroup {
   kind: string;
   providerDisplayName: string;
   models: ModelSelectorItem[];
+}
+
+export interface ModelSelectorCurrentModel {
+  kind: string;
+  displayName: string;
+  pendingState: PendingSessionConfigChangeStatus | null;
+}
+
+export interface ModelSelectorProps {
+  connectionState: string;
+  currentModel: ModelSelectorCurrentModel | null;
+  groups: ModelSelectorGroup[];
+  hasAgents: boolean;
+  isLoading: boolean;
+  notReadyAgents: AgentSummary[];
+  onSelect: (selection: ModelSelectorSelection) => void;
 }
 
 export function resolveModelSelectionActionKind(

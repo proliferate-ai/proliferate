@@ -1,27 +1,27 @@
-import { useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 import { AnyHarnessError } from "@anyharness/sdk";
 import {
   useApprovePlanMutation,
-  useMaterializePlanDocumentMutation,
   useRejectPlanMutation,
 } from "@anyharness/sdk-react";
+import { PLAN_ATTACHMENT_LIMIT } from "@/config/plans";
+import { PLAN_IMPLEMENT_HERE_PROMPT } from "@/config/plan-prompts";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { resolveChatDraftWorkspaceId } from "@/lib/domain/chat/chat-input";
 import {
   EMPTY_CHAT_DRAFT,
   isChatDraftEmpty,
 } from "@/lib/domain/chat/file-mentions";
+import {
+  planAttachmentPointerFromDescriptor,
+  type PromptPlanAttachmentDescriptor,
+} from "@/lib/domain/chat/prompt-content";
 import { resolvePlanImplementationModeSwitch } from "@/lib/domain/plans/implementation-mode";
-import { formatImplementPlanDraft } from "@/lib/domain/plans/implementation-prompt";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
+import { useChatPlanAttachmentStore } from "@/stores/chat/chat-plan-attachment-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
-
-interface ImplementPlanDraftInput {
-  planId: string;
-  sessionId: string;
-}
 
 export function useProposedPlanActions() {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
@@ -29,16 +29,15 @@ export function useProposedPlanActions() {
     (state) => state.selectedLogicalWorkspaceId,
   );
   const appendDraftText = useChatInputStore((state) => state.appendDraftText);
+  const addPlanAttachment = useChatPlanAttachmentStore((state) => state.addPlanAttachment);
   const showToast = useToastStore((state) => state.show);
+  const [isPreparingPlanReference, setIsPreparingPlanReference] = useState(false);
+  const isPreparingPlanReferenceRef = useRef(false);
   const approveMutation = useApprovePlanMutation({ workspaceId: selectedWorkspaceId });
   const rejectMutation = useRejectPlanMutation({ workspaceId: selectedWorkspaceId });
-  const materializeDocumentMutation = useMaterializePlanDocumentMutation({
-    workspaceId: selectedWorkspaceId,
-  });
   const { setActiveSessionConfigOption } = useSessionActions();
   const approvePlanMutation = approveMutation.mutateAsync;
   const rejectPlanMutation = rejectMutation.mutateAsync;
-  const materializeDocument = materializeDocumentMutation.mutateAsync;
 
   const approvePlan = useCallback((planId: string, expectedDecisionVersion: number) => {
     void approvePlanMutation({ planId, expectedDecisionVersion }).catch((error) => {
@@ -62,15 +61,20 @@ export function useProposedPlanActions() {
     });
   }, [rejectPlanMutation, showToast]);
 
-  const implementPlanHere = useCallback((plan: ImplementPlanDraftInput) => {
+  const implementPlanHere = useCallback((plan: PromptPlanAttachmentDescriptor) => {
+    if (isPreparingPlanReferenceRef.current) {
+      return;
+    }
+    isPreparingPlanReferenceRef.current = true;
     void (async () => {
+      setIsPreparingPlanReference(true);
       const harnessState = useHarnessStore.getState();
-      const planSessionSlot = harnessState.sessionSlots[plan.sessionId] ?? null;
+      const planSessionSlot = harnessState.sessionSlots[plan.sourceSessionId] ?? null;
       if (!planSessionSlot) {
         showToast("Plan session is not available.");
         return;
       }
-      if (harnessState.activeSessionId !== plan.sessionId) {
+      if (harnessState.activeSessionId !== plan.sourceSessionId) {
         showToast("Select the plan's session before carrying it out.");
         return;
       }
@@ -94,28 +98,34 @@ export function useProposedPlanActions() {
         });
       }
 
-      const document = await materializeDocument({ planId: plan.planId });
-      const projectionPath = document.projectionPath?.trim();
-      if (!projectionPath) {
-        showToast("Plan document is not available yet.");
-        return;
-      }
-
-      const implementationDraft = formatImplementPlanDraft(projectionPath);
       const currentDraft =
         useChatInputStore.getState().draftByWorkspaceId[draftWorkspaceId] ?? EMPTY_CHAT_DRAFT;
+      const pointer = planAttachmentPointerFromDescriptor(plan);
+      const currentPlans =
+        useChatPlanAttachmentStore.getState().attachmentsByWorkspaceId[draftWorkspaceId] ?? [];
+      const alreadyAttached = currentPlans.some((candidate) => candidate.id === pointer.id);
+      if (!alreadyAttached && currentPlans.length >= PLAN_ATTACHMENT_LIMIT) {
+        showToast(`You can attach up to ${PLAN_ATTACHMENT_LIMIT} plans.`);
+        return;
+      }
+      addPlanAttachment(draftWorkspaceId, pointer);
       appendDraftText(
         draftWorkspaceId,
-        isChatDraftEmpty(currentDraft) ? implementationDraft : `\n\n${implementationDraft}`,
+        isChatDraftEmpty(currentDraft)
+          ? PLAN_IMPLEMENT_HERE_PROMPT
+          : `\n\n${PLAN_IMPLEMENT_HERE_PROMPT}`,
       );
     })().catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to prepare plan document: ${message}`);
+      showToast(`Failed to prepare plan reference: ${message}`);
+    }).finally(() => {
+      isPreparingPlanReferenceRef.current = false;
+      setIsPreparingPlanReference(false);
     });
   }, [
-    materializeDocument,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
+    addPlanAttachment,
     appendDraftText,
     setActiveSessionConfigOption,
     showToast,
@@ -127,7 +137,7 @@ export function useProposedPlanActions() {
     implementPlanHere,
     isApprovingPlan: approveMutation.isPending,
     isRejectingPlan: rejectMutation.isPending,
-    isMaterializingPlanDocument: materializeDocumentMutation.isPending,
+    isPreparingPlanReference,
   };
 }
 

@@ -1297,6 +1297,18 @@ export interface components {
             /** @enum {string} */
             type: "proposed_plan";
         } | {
+            bodyMarkdown: string;
+            planId: string;
+            snapshotHash: string;
+            sourceItemId?: string | null;
+            sourceKind: string;
+            sourceSessionId: string;
+            sourceToolCallId?: string | null;
+            sourceTurnId?: string | null;
+            title: string;
+            /** @enum {string} */
+            type: "plan_reference";
+        } | {
             decisionState: components["schemas"]["ProposedPlanDecisionState"];
             /** Format: int64 */
             decisionVersion: number;
@@ -2075,6 +2087,11 @@ export interface components {
             /** @enum {string} */
             type: "resource_link";
             uri: string;
+        } | {
+            planId: string;
+            snapshotHash: string;
+            /** @enum {string} */
+            type: "plan_reference";
         };
         PromptSessionRequest: {
             blocks: components["schemas"]["PromptInputBlock"][];
@@ -2113,6 +2130,7 @@ export interface components {
             sourceAgentKind: string;
             sourceItemId?: string | null;
             sourceKind: string;
+            sourceSessionId: string;
             sourceToolCallId?: string | null;
             sourceTurnId?: string | null;
             title: string;

@@ -101,6 +101,11 @@ Owns session-facing transport types:
 - prompt request and response
 - interaction resolution request
 
+`PromptInputBlock` is the client-to-runtime prompt shape. Plan handoff uses
+`PromptInputBlock::PlanReference` with only `planId` and `snapshotHash`; the
+runtime must resolve the trusted plan snapshot from its own store before any
+agent input is produced. Clients must not send plan markdown as authority.
+
 `Session.mcpBindingSummaries` is a non-secret launch-time read model. It may
 describe which MCP bindings were applied or not applied, but it must not carry
 URLs, headers, env vars, command args, absolute paths, tokens, or raw error
@@ -164,6 +169,12 @@ ACP metadata, currently `_meta.claudeCode.permissionContext` and
 that should read those keys; SDK and Desktop consumers must use the normalized
 typed `PermissionInteractionContext` carried by interaction events and pending
 interaction summaries.
+
+`ContentPart::ProposedPlan` and `ContentPart::PlanReference` intentionally
+represent different workflows even though they carry the same immutable plan
+snapshot fields. `ProposedPlan` is agent-emitted transcript content with
+decision UI. `PlanReference` is a user-prompt echo showing that a stored plan
+snapshot was attached to a prompt.
 
 ## Transport-Only Rule
 

@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { anyHarnessWorkspaceSetupStatusKey } from "@anyharness/sdk-react";
-import type { PromptInputBlock } from "@anyharness/sdk";
+import type { ContentPart, PromptInputBlock } from "@anyharness/sdk";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import {
   captureTelemetryException,
@@ -19,6 +19,7 @@ import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
 } from "@/lib/domain/chat/file-mentions";
+import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
 import {
   failLatencyFlow,
   startLatencyFlow,
@@ -68,7 +69,11 @@ export function useChatPromptActions() {
   const { isDisabled } = useChatAvailabilityState();
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
 
-  const handleSubmit = useCallback(async (input?: { text: string; blocks: PromptInputBlock[] }) => {
+  const handleSubmit = useCallback(async (input?: {
+    text: string;
+    blocks: PromptInputBlock[];
+    optimisticContentParts?: ContentPart[];
+  }) => {
     if (!selectedWorkspaceId) {
       return;
     }
@@ -79,7 +84,7 @@ export function useChatPromptActions() {
       : EMPTY_CHAT_DRAFT;
     const text = input?.text.trim() ?? serializeChatDraftToPrompt(currentDraft).trim();
     const blocks = input?.blocks ?? [{ type: "text" as const, text }];
-    if ((!text && blocks.length === 0) || isDisabled) {
+    if (!hasPromptContent(text, blocks) || isDisabled) {
       return;
     }
 
@@ -109,9 +114,16 @@ export function useChatPromptActions() {
           latencyFlowId: latencyFlowId ?? undefined,
           promptId,
           blocks,
+          optimisticContentParts: input?.optimisticContentParts,
         });
       } else if (launchSelection) {
-        await findOrCreateSession(launchSelection.kind, text, launchSelection.modelId, blocks);
+        await findOrCreateSession(
+          launchSelection.kind,
+          text,
+          launchSelection.modelId,
+          blocks,
+          input?.optimisticContentParts,
+        );
       } else {
         showToast("Choose a ready model before sending a message.");
         return;

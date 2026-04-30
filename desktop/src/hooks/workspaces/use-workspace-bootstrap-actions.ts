@@ -86,7 +86,7 @@ export function useWorkspaceBootstrapActions() {
     (state) => state.lastViewedSessionByWorkspace,
   );
   const { initForWorkspace } = useWorkspaceFileActions();
-  const { selectSession, openWorkspaceSessionWithResolvedConfig } = useSessionActions();
+  const { selectSession, createEmptySessionWithResolvedConfig } = useSessionActions();
 
   const bootstrapWorkspace = useCallback(async ({
     workspaceId,
@@ -223,7 +223,7 @@ export function useWorkspaceBootstrapActions() {
           totalElapsedMs: elapsedMs(startedAt),
         });
         const sessionDispatchStartedAt = startLatencyTimer();
-        await openWorkspaceSessionWithResolvedConfig({
+        await createEmptySessionWithResolvedConfig({
           workspaceId,
           agentKind: defaultLaunch.kind,
           modelId: defaultLaunch.modelId,
@@ -278,7 +278,7 @@ export function useWorkspaceBootstrapActions() {
   }, [
     initForWorkspace,
     lastViewedSessionByWorkspace,
-    openWorkspaceSessionWithResolvedConfig,
+    createEmptySessionWithResolvedConfig,
     preferences,
     queryClient,
     selectSession,

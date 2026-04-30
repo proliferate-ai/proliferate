@@ -41,7 +41,8 @@ use crate::plans::model::PlanRecord;
 use crate::plans::service::{PlanDecisionError, PlanService};
 use crate::sessions::model::PromptAttachmentState;
 use crate::sessions::prompt::{
-    capabilities_from_live_config, prepare_prompt, PromptValidationError,
+    capabilities_from_live_config, prepare_prompt, PlanReferenceResolver, PromptPrepareContext,
+    PromptValidationError,
 };
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::runtime::WorkspaceRuntime;
@@ -55,6 +56,12 @@ pub struct SessionRuntime {
     cowork_session_hooks: Arc<CoworkSessionHooks>,
     access_gate: Arc<WorkspaceAccessGate>,
     plan_service: Arc<PlanService>,
+}
+
+impl PlanReferenceResolver for PlanService {
+    fn resolve_plan_reference(&self, plan_id: &str) -> anyhow::Result<Option<PlanRecord>> {
+        self.get(plan_id)
+    }
 }
 
 #[derive(Debug)]
@@ -787,11 +794,15 @@ impl SessionRuntime {
             .get_live_config_snapshot(session_id)
             .map_err(SendPromptError::Internal)?;
         let prepared = prepare_prompt(
-            self.session_service.store(),
-            session_id,
+            PromptPrepareContext {
+                store: self.session_service.store(),
+                session_id,
+                workspace_id: &record.workspace_id,
+                capabilities: capabilities_from_live_config(live_config.as_ref()),
+                attachment_state: PromptAttachmentState::Pending,
+                plan_resolver: self.plan_service.as_ref(),
+            },
             blocks,
-            capabilities_from_live_config(live_config.as_ref()),
-            PromptAttachmentState::Pending,
         )
         .map_err(SendPromptError::InvalidPrompt)?;
         prepared
@@ -952,11 +963,15 @@ impl SessionRuntime {
             .get_live_config_snapshot(session_id)
             .map_err(PendingPromptMutationError::Internal)?;
         let prepared = prepare_prompt(
-            self.session_service.store(),
-            session_id,
+            PromptPrepareContext {
+                store: self.session_service.store(),
+                session_id,
+                workspace_id: &record.workspace_id,
+                capabilities: capabilities_from_live_config(live_config.as_ref()),
+                attachment_state: PromptAttachmentState::Pending,
+                plan_resolver: self.plan_service.as_ref(),
+            },
             blocks,
-            capabilities_from_live_config(live_config.as_ref()),
-            PromptAttachmentState::Pending,
         )
         .map_err(PendingPromptMutationError::InvalidPrompt)?;
         prepared

@@ -6,6 +6,8 @@ Scope:
 
 - `desktop/src/components/workspace/chat/input/**`
 - `desktop/src/components/workspace/chat/transcript/ProposedPlanCard.tsx`
+- `desktop/src/components/workspace/chat/content/PlanReferenceAttachmentCard.tsx`
+- `desktop/src/components/workspace/chat/plans/**`
 - `desktop/src/hooks/chat/use-composer-top-slot.tsx`
 - `desktop/src/hooks/chat/use-active-todo-tracker.ts`
 - `desktop/src/lib/domain/chat/active-todo-tracker.ts`
@@ -73,6 +75,7 @@ All three sit inside the composer area. They differ by lifecycle and role, and t
 | `TodoTrackerPanel` | Long-lived, non-gating (ambient status) | `PlanEntry[]` as a fade-masked list | tiny muted icon + muted status text |
 | `ApprovalCard` | Short-lived, gating (demands a decision) | options from `pendingApproval`, one variant for all three `toolKind`s | plain title only — NO icon, NO label chip, NO separator |
 | `ProposedPlanCard` | Lives in the **transcript**, not above composer | immutable markdown plan snapshot, decision state, and plan actions | bold plan title + icon-only Copy/Collapse buttons |
+| `PlanReferenceAttachmentCard` | Draft/user-prompt attachment | immutable markdown plan snapshot attached to a prompt | compact draft chip + preview action before send; full collapsible transcript card after send |
 
 ### 3.1 `ApprovalCard` covers all three approval kinds
 
@@ -103,7 +106,31 @@ signal carry markdown plan bodies. They render in the **transcript** as
   above the composer. The plan is a transcript artifact that persists after the
   approval resolves.
 
-### 3.3 Todo tracker is Codex/Gemini only
+### 3.3 Plan references are prompt attachments
+
+Users can attach an existing stored plan to a prompt or hand off a
+`ProposedPlanCard` into a new session. This is modeled as a prompt block with
+`planId + snapshotHash`; the runtime resolves the trusted markdown snapshot and
+echoes it back as a `plan_reference` content part.
+
+- The composer plan picker uses `PopoverButton` + `ComposerPopoverSurface`, the
+  same popover primitives as the workspace location control.
+- The picker list is summary-backed, so its search filters title, agent, source
+  kind, and decision status. It does not claim body search unless the runtime
+  exposes body snippets or a dedicated search endpoint.
+- `PlanReferenceAttachmentCard` renders attached plan refs as compact draft
+  chips with a preview dialog before send, and as full inline collapsible cards
+  when echoed back in user-message transcripts.
+- Do not gate plan references on file/image prompt capabilities. Plans have a
+  text fallback in the runtime, so the attach affordance only needs an active
+  workspace.
+- Plan title/body UI must be `data-telemetry-mask`, including picker rows,
+  draft previews, transcript echo cards, and handoff dialogs.
+- Attaching or handing off a plan does not approve, reject, or mutate the
+  source proposed plan. Approval state remains local to the session that
+  received the original proposed-plan item.
+
+### 3.4 Todo tracker is Codex/Gemini only
 
 `useActiveTodoTracker` narrows `deriveCanonicalPlan` to `sourceKind === "structured_plan"`. Claude's `plan` items are filtered out by the SDK (Claude's `TodoWrite` is internal bookkeeping, not a presented plan). Do not re-enable Claude's structured plans in the todo tracker — they belong elsewhere.
 

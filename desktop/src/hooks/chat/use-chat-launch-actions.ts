@@ -35,7 +35,7 @@ export function useChatLaunchActions() {
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId);
-  const { openWorkspaceSessionWithResolvedConfig, setActiveSessionConfigOption } = useSessionActions();
+  const { createEmptySessionWithResolvedConfig, setActiveSessionConfigOption } = useSessionActions();
   const { createThreadFromSelection } = useCoworkThreadWorkflow();
   const {
     activeSessionId,
@@ -95,7 +95,7 @@ export function useChatLaunchActions() {
       source: "model_selector",
       targetWorkspaceId: selectedWorkspaceId,
     });
-    void openWorkspaceSessionWithResolvedConfig({
+    void createEmptySessionWithResolvedConfig({
       agentKind: selection.kind,
       modelId: selection.modelId,
       latencyFlowId,
@@ -114,7 +114,7 @@ export function useChatLaunchActions() {
     createThreadFromSelection,
     currentDraft,
     currentModelConfigId,
-    openWorkspaceSessionWithResolvedConfig,
+    createEmptySessionWithResolvedConfig,
     selectedWorkspace?.surface,
     selectedWorkspaceId,
     setActiveSessionConfigOption,
