@@ -402,6 +402,9 @@ export function useLocalToCloudHandoff(args: {
             handoffOpId: null,
           },
         }).catch(() => undefined);
+      }
+
+      if (failureRecovery.shouldRefreshWorkspaceSelection) {
         await queryClient.invalidateQueries({
           queryKey: workspaceCollectionsScopeKey(runtimeUrl),
         });

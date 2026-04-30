@@ -2,72 +2,63 @@ import { useCallback } from "react";
 import { usePushGitMutation } from "@anyharness/sdk-react";
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { useCompleteCloudWorkspaceHandoffCleanup } from "@/hooks/cloud/use-complete-cloud-workspace-handoff-cleanup";
-import { useCloudWorkspaceHandoffHeartbeatLoop } from "@/hooks/workspaces/mobility/use-cloud-workspace-handoff-heartbeat-loop";
 import { useCloudToLocalHandoff } from "@/hooks/workspaces/mobility/use-cloud-to-local-handoff";
 import { useLocalToCloudHandoff } from "@/hooks/workspaces/mobility/use-local-to-cloud-handoff";
-import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
-import { isWorkspaceMobilityTransitionPhase } from "@/lib/domain/workspaces/mobility-state-machine";
 import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/debug-latency";
+import type { WorkspaceMobilityState } from "./use-workspace-mobility-state";
 
 const PROMPT_PREPARE_TIMEOUT_MS = 12_000;
 const PROMPT_PREPARE_TIMEOUT_MESSAGE = "Loading workspace move details took too long. Try again.";
 
-function isPromptPrepareTimeoutError(error: unknown): error is Error {
-  return error instanceof Error && error.message === PROMPT_PREPARE_TIMEOUT_MESSAGE;
-}
-
-async function withTimeout<T>(
+function notifyIfSlow<T>(
   promise: Promise<T>,
   timeoutMs: number,
-  timeoutMessage: string,
+  onSlow: () => void,
 ): Promise<T> {
-  let timeoutId: number | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timeoutId = window.setTimeout(() => {
-          reject(new Error(timeoutMessage));
-        }, timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timeoutId !== undefined) {
-      window.clearTimeout(timeoutId);
-    }
-  }
+  const timeoutId = window.setTimeout(onSlow, timeoutMs);
+  return promise.finally(() => {
+    window.clearTimeout(timeoutId);
+  });
 }
 
-export function useWorkspaceMobility() {
-  const state = useWorkspaceMobilityState();
+function isPromptRequestActive(
+  logicalWorkspaceId: string | null,
+  requestId: number | undefined,
+): boolean {
+  if (requestId === undefined || !logicalWorkspaceId) {
+    return true;
+  }
+
+  return useWorkspaceMobilityUiStore.getState()
+    .activePromptRequestIdByLogicalWorkspaceId[logicalWorkspaceId] === requestId;
+}
+
+export function useWorkspaceMobilityHandoffActions(state: WorkspaceMobilityState) {
   const clearConfirmSnapshot = useWorkspaceMobilityUiStore((store) => store.clearConfirmSnapshot);
   const setActivePromptRequestId = useWorkspaceMobilityUiStore((store) => store.setActivePromptRequestId);
   const clearActivePromptRequestId = useWorkspaceMobilityUiStore((store) => store.clearActivePromptRequestId);
-  const dismissMcpNotice = useWorkspaceMobilityUiStore((store) => store.dismissMcpNotice);
   const showToast = useToastStore((store) => store.show);
-  const localToCloud = useLocalToCloudHandoff({
+  const {
+    confirm: confirmLocalToCloud,
+    isPending: isLocalToCloudPending,
+    prepare: prepareLocalToCloud,
+  } = useLocalToCloudHandoff({
     logicalWorkspace: state.selectedLogicalWorkspace,
     logicalWorkspaceId: state.selectedLogicalWorkspaceId,
     localWorkspaceId: state.localWorkspaceId,
     mobilityWorkspaceId: state.mobilityWorkspaceId,
   });
-  const cloudToLocal = useCloudToLocalHandoff({
+  const {
+    confirm: confirmCloudToLocal,
+    isPending: isCloudToLocalPending,
+    prepare: prepareCloudToLocal,
+  } = useCloudToLocalHandoff({
     logicalWorkspace: state.selectedLogicalWorkspace,
     logicalWorkspaceId: state.selectedLogicalWorkspaceId,
     cloudMaterializationId: state.cloudMaterializationId,
     mobilityWorkspaceId: state.mobilityWorkspaceId,
   });
-  const retryCleanupMutation = useCompleteCloudWorkspaceHandoffCleanup();
   const pushMutation = usePushGitMutation({ workspaceId: state.localWorkspaceId });
-
-  useCloudWorkspaceHandoffHeartbeatLoop({
-    mobilityWorkspaceId: state.mobilityWorkspaceId,
-    handoffOpId: state.mobilityWorkspaceDetail?.activeHandoff?.id
-      ?? state.selectedLogicalWorkspace?.mobilityWorkspace?.activeHandoff?.id
-      ?? null,
-    enabled: isWorkspaceMobilityTransitionPhase(state.status.phase),
-  });
 
   const preparePrompt = useCallback(async (requestId?: number) => {
     const startedAt = startLatencyTimer();
@@ -84,10 +75,15 @@ export function useWorkspaceMobility() {
     });
     try {
       if (state.canMoveToCloud) {
-        await withTimeout(
-          localToCloud.prepare(requestId),
+        await notifyIfSlow(
+          prepareLocalToCloud(requestId),
           PROMPT_PREPARE_TIMEOUT_MS,
-          PROMPT_PREPARE_TIMEOUT_MESSAGE,
+          () => {
+            if (!isPromptRequestActive(state.selectedLogicalWorkspaceId, requestId)) {
+              return;
+            }
+            showToast(PROMPT_PREPARE_TIMEOUT_MESSAGE, "info");
+          },
         );
         logLatency("mobility.prepare.complete", {
           requestId,
@@ -98,10 +94,15 @@ export function useWorkspaceMobility() {
         return;
       }
       if (state.canBringBackLocal) {
-        await withTimeout(
-          cloudToLocal.prepare(requestId),
+        await notifyIfSlow(
+          prepareCloudToLocal(requestId),
           PROMPT_PREPARE_TIMEOUT_MS,
-          PROMPT_PREPARE_TIMEOUT_MESSAGE,
+          () => {
+            if (!isPromptRequestActive(state.selectedLogicalWorkspaceId, requestId)) {
+              return;
+            }
+            showToast(PROMPT_PREPARE_TIMEOUT_MESSAGE, "info");
+          },
         );
         logLatency("mobility.prepare.complete", {
           requestId,
@@ -117,13 +118,6 @@ export function useWorkspaceMobility() {
         elapsedMs: elapsedMs(startedAt),
       });
     } catch (error) {
-      if (
-        requestId !== undefined
-        && state.selectedLogicalWorkspaceId
-        && isPromptPrepareTimeoutError(error)
-      ) {
-        clearActivePromptRequestId(state.selectedLogicalWorkspaceId);
-      }
       logLatency("mobility.prepare.failed", {
         requestId,
         logicalWorkspaceId: state.selectedLogicalWorkspaceId,
@@ -139,13 +133,13 @@ export function useWorkspaceMobility() {
       throw error;
     }
   }, [
-    clearActivePromptRequestId,
-    cloudToLocal,
-    localToCloud,
+    prepareCloudToLocal,
+    prepareLocalToCloud,
     showToast,
     state.canBringBackLocal,
     state.canMoveToCloud,
     state.selectedLogicalWorkspaceId,
+    state.selectionLocked,
   ]);
 
   const activatePromptRequest = useCallback((requestId: number) => {
@@ -168,12 +162,12 @@ export function useWorkspaceMobility() {
     }
 
     if (state.confirmSnapshot.direction === "local_to_cloud") {
-      await localToCloud.confirm(state.confirmSnapshot);
+      await confirmLocalToCloud(state.confirmSnapshot);
       return;
     }
 
-    await cloudToLocal.confirm(state.confirmSnapshot);
-  }, [cloudToLocal, localToCloud, state.confirmSnapshot]);
+    await confirmCloudToLocal(state.confirmSnapshot);
+  }, [confirmCloudToLocal, confirmLocalToCloud, state.confirmSnapshot]);
 
   const clearPrompt = useCallback(() => {
     if (!state.selectedLogicalWorkspaceId) {
@@ -181,39 +175,6 @@ export function useWorkspaceMobility() {
     }
     clearConfirmSnapshot(state.selectedLogicalWorkspaceId);
   }, [clearConfirmSnapshot, state.selectedLogicalWorkspaceId]);
-
-  const dismissNotice = useCallback(() => {
-    if (!state.selectedLogicalWorkspaceId) {
-      return;
-    }
-    dismissMcpNotice(state.selectedLogicalWorkspaceId);
-  }, [dismissMcpNotice, state.selectedLogicalWorkspaceId]);
-
-  const retryCleanup = useCallback(async () => {
-    const handoffOpId = state.status.activeHandoff?.id;
-    if (!state.mobilityWorkspaceId || !handoffOpId) {
-      showToast("Cleanup can't be retried right now.");
-      return;
-    }
-
-    try {
-      await retryCleanupMutation.mutateAsync({
-        mobilityWorkspaceId: state.mobilityWorkspaceId,
-        handoffOpId,
-      });
-    } catch (error) {
-      showToast(
-        error instanceof Error
-          ? error.message
-          : "Cleanup retry failed.",
-      );
-    }
-  }, [
-    retryCleanupMutation,
-    showToast,
-    state.mobilityWorkspaceId,
-    state.status.activeHandoff?.id,
-  ]);
 
   const syncBranchForCloudMove = useCallback(async (): Promise<boolean> => {
     if (!state.localWorkspaceId) {
@@ -235,19 +196,13 @@ export function useWorkspaceMobility() {
   }, [pushMutation, showToast, state.localWorkspaceId]);
 
   return {
-    ...state,
-    isPending:
-      localToCloud.isPending
-      || cloudToLocal.isPending
-      || retryCleanupMutation.isPending,
+    isHandoffPending: isLocalToCloudPending || isCloudToLocalPending,
     isSyncingBranch: pushMutation.isPending,
     preparePrompt,
     activatePromptRequest,
     clearPromptRequest,
     confirmMove,
     clearPrompt,
-    dismissNotice,
-    retryCleanup,
     syncBranchForCloudMove,
   };
 }

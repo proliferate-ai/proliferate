@@ -7,6 +7,7 @@ export function deriveHandoffFailureRecovery(args: {
     return {
       shouldMarkHandoffFailed: false,
       shouldRestoreSourceRuntimeState: false,
+      shouldRefreshWorkspaceSelection: false,
     };
   }
 
@@ -14,18 +15,21 @@ export function deriveHandoffFailureRecovery(args: {
     return {
       shouldMarkHandoffFailed: true,
       shouldRestoreSourceRuntimeState: true,
+      shouldRefreshWorkspaceSelection: true,
     };
   }
 
   if (!args.cleanupCompleted) {
     return {
       shouldMarkHandoffFailed: false,
-      shouldRestoreSourceRuntimeState: true,
+      shouldRestoreSourceRuntimeState: false,
+      shouldRefreshWorkspaceSelection: true,
     };
   }
 
   return {
     shouldMarkHandoffFailed: false,
     shouldRestoreSourceRuntimeState: false,
+    shouldRefreshWorkspaceSelection: false,
   };
 }

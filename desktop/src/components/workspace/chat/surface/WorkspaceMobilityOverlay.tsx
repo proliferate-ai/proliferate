@@ -1,116 +1,34 @@
-import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { useWorkspaceMobility } from "@/hooks/workspaces/use-workspace-mobility";
-import { useMobilityFooterContext } from "@/hooks/workspaces/mobility/use-mobility-footer-context";
+import type { WorkspaceMobilityDirection } from "@/stores/workspaces/workspace-mobility-ui-store";
 import {
-  getMobilityOverlayTitle,
-  MOBILITY_SUCCESS_DWELL_MS,
-  mobilityReconnectCopy,
-  mobilityStatusCopy,
-} from "@/config/mobility-copy";
-import { CheckCircleFilled, CircleAlert, LoaderCircle } from "@/components/ui/icons";
-
-type WorkspaceMobilityOverlayMode = "progress" | "cleanup_failed" | "completion";
+  type WorkspaceMobilityOverlayMode,
+  useWorkspaceMobilityOverlayState,
+} from "@/hooks/workspaces/mobility/use-workspace-mobility-overlay-state";
+import {
+  CheckCircleFilled,
+  CircleAlert,
+  CloudIcon,
+  FolderOpen,
+  LoaderCircle,
+} from "@/components/ui/icons";
 
 export function WorkspaceMobilityOverlay() {
-  const mobility = useWorkspaceMobility();
-  const footerContext = useMobilityFooterContext();
-  const [completionVisible, setCompletionVisible] = useState(false);
-  const [cleanupFailureDismissed, setCleanupFailureDismissed] = useState(false);
+  const overlayState = useWorkspaceMobilityOverlayState();
 
-  useEffect(() => {
-    if (mobility.status.phase === "success") {
-      setCompletionVisible(true);
-      if (!mobility.showMcpNotice) {
-        const timer = window.setTimeout(() => {
-          setCompletionVisible(false);
-        }, MOBILITY_SUCCESS_DWELL_MS);
-        return () => window.clearTimeout(timer);
-      }
-      return;
-    }
-
-    if (
-      mobility.status.phase !== "cleanup_failed"
-      && mobility.status.phase !== "provisioning"
-      && mobility.status.phase !== "transferring"
-      && mobility.status.phase !== "finalizing"
-      && mobility.status.phase !== "cleanup_pending"
-      && !mobility.showMcpNotice
-    ) {
-      setCompletionVisible(false);
-    }
-  }, [mobility.showMcpNotice, mobility.status.phase]);
-
-  useEffect(() => {
-    if (mobility.status.phase !== "cleanup_failed") {
-      setCleanupFailureDismissed(false);
-    }
-  }, [mobility.status.phase]);
-
-  const mode = useMemo(() => {
-    if (
-      mobility.status.phase === "provisioning"
-      || mobility.status.phase === "transferring"
-      || mobility.status.phase === "finalizing"
-      || mobility.status.phase === "cleanup_pending"
-    ) {
-      return "progress" as const;
-    }
-    if (mobility.status.phase === "cleanup_failed") {
-      if (cleanupFailureDismissed) {
-        return "hidden" as const;
-      }
-      return "cleanup_failed" as const;
-    }
-    if (completionVisible || mobility.showMcpNotice) {
-      return "completion" as const;
-    }
-    return "hidden" as const;
-  }, [
-    cleanupFailureDismissed,
-    completionVisible,
-    mobility.showMcpNotice,
-    mobility.status.phase,
-  ]);
-
-  if (mode === "hidden") {
+  if (!overlayState) {
     return null;
   }
 
-  const phase = mode === "completion" ? "success" : mobility.status.phase;
-  const fallbackTitle = getMobilityOverlayTitle(mobility.status.direction, phase);
-  const title = mode === "progress"
-    ? fallbackTitle
-    : mobility.status.title ?? fallbackTitle;
-  const description =
-    mobility.status.description
-    ?? mobilityStatusCopy(phase, mobility.status.direction).description;
-  const statusLabel = mode === "progress"
-    ? mobilityStatusCopy(mobility.status.phase, mobility.status.direction).title
-    : null;
-
   return (
     <WorkspaceMobilityOverlayView
-      description={description}
-      locationLabel={footerContext?.locationLabel ?? null}
-      mcpNotice={mobility.showMcpNotice
-        ? mobilityReconnectCopy(mobility.status.direction)
-        : null}
-      mode={mode}
-      onContinueWorking={() => setCleanupFailureDismissed(true)}
-      onDismissNotice={mobility.dismissNotice}
-      onRetryCleanup={() => {
-        void mobility.retryCleanup();
-      }}
-      statusLabel={statusLabel}
-      title={title}
+      {...overlayState}
     />
   );
 }
 
 export function WorkspaceMobilityOverlayView({
   description,
+  direction,
   locationLabel,
   mcpNotice,
   mode,
@@ -121,6 +39,7 @@ export function WorkspaceMobilityOverlayView({
   title,
 }: {
   description: string | null;
+  direction?: WorkspaceMobilityDirection | null;
   locationLabel: string | null;
   mcpNotice?: string | null;
   mode: WorkspaceMobilityOverlayMode;
@@ -131,7 +50,9 @@ export function WorkspaceMobilityOverlayView({
   title: string;
 }) {
   const icon = mode === "progress"
-    ? <LoaderCircle className="size-4 animate-spin" />
+    ? direction === "cloud_to_local"
+      ? <FolderOpen className="size-4" />
+      : <CloudIcon className="size-4" />
     : mode === "cleanup_failed"
       ? <CircleAlert className="size-4" />
       : <CheckCircleFilled className="size-4" />;

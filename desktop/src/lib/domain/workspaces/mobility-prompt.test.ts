@@ -154,6 +154,54 @@ describe("buildMobilityPromptState", () => {
     expect(prompt.primaryActionKind).toBe("retry_prepare");
   });
 
+  it("shows loading instead of stale failure while retry preparation is running", () => {
+    const prompt = buildMobilityPromptState({
+      isPreparing: true,
+      hasResolvedPrompt: false,
+      locationKind: "local_workspace",
+      repoBacked: true,
+      canMoveToCloud: true,
+      canBringBackLocal: false,
+      hasLocalRepoRoot: true,
+      selectionLocked: false,
+      status: makeStatus({
+        direction: "local_to_cloud",
+        phase: "failed",
+        description: "Sync a supported cloud credential before starting a cloud workspace.",
+      }),
+      confirmSnapshot: null,
+      gitSync: null,
+      isGitSyncResolved: true,
+    });
+
+    expect(prompt.variant).toBe("loading");
+    expect(prompt.primaryActionKind).toBeNull();
+  });
+
+  it("lets a fresh confirmation snapshot override a previous handoff failure", () => {
+    const prompt = buildMobilityPromptState({
+      isPreparing: false,
+      hasResolvedPrompt: true,
+      locationKind: "local_workspace",
+      repoBacked: true,
+      canMoveToCloud: true,
+      canBringBackLocal: false,
+      hasLocalRepoRoot: true,
+      selectionLocked: false,
+      status: makeStatus({
+        direction: "local_to_cloud",
+        phase: "failed",
+        description: "Sync a supported cloud credential before starting a cloud workspace.",
+      }),
+      confirmSnapshot: makeSnapshot(),
+      gitSync: CLEAN_GIT_SYNC,
+      isGitSyncResolved: true,
+    });
+
+    expect(prompt.variant).toBe("actionable");
+    expect(prompt.primaryActionKind).toBe("confirm_move");
+  });
+
   it("keeps the prompt loading while local git sync state is still resolving", () => {
     const prompt = buildMobilityPromptState({
       isPreparing: false,
@@ -213,6 +261,63 @@ describe("buildMobilityPromptState", () => {
     expect(prompt.primaryActionKind).toBe("publish_branch");
     expect(prompt.actionLabel).toBe("Publish branch");
     expect(prompt.warning).toBe("Uncommitted changes will move with the workspace after this branch is synced.");
+  });
+
+  it("shows a GitHub connect CTA when no GitHub account is linked", () => {
+    const prompt = buildMobilityPromptState({
+      isPreparing: false,
+      hasResolvedPrompt: true,
+      locationKind: "local_worktree",
+      repoBacked: true,
+      canMoveToCloud: true,
+      canBringBackLocal: false,
+      hasLocalRepoRoot: true,
+      selectionLocked: false,
+      status: makeStatus(),
+      confirmSnapshot: makeSnapshot({
+        cloudPreflight: {
+          canStart: false,
+          blockers: ["Connect a GitHub account before moving this workspace to cloud."],
+          excludedPaths: [],
+          workspace: {} as never,
+        },
+      }),
+      gitSync: CLEAN_GIT_SYNC,
+      isGitSyncResolved: true,
+    });
+
+    expect(prompt.variant).toBe("blocked");
+    expect(prompt.primaryActionKind).toBe("connect_github");
+    expect(prompt.actionLabel).toBe("Connect GitHub");
+  });
+
+  it("shows a GitHub access CTA when repo authorization is missing", () => {
+    const prompt = buildMobilityPromptState({
+      isPreparing: false,
+      hasResolvedPrompt: true,
+      locationKind: "local_worktree",
+      repoBacked: true,
+      canMoveToCloud: true,
+      canBringBackLocal: false,
+      hasLocalRepoRoot: true,
+      selectionLocked: false,
+      status: makeStatus(),
+      confirmSnapshot: makeSnapshot({
+        cloudPreflight: {
+          canStart: false,
+          blockers: ["Reconnect GitHub and grant repository access before moving this workspace to cloud."],
+          excludedPaths: [],
+          workspace: {} as never,
+        },
+      }),
+      gitSync: CLEAN_GIT_SYNC,
+      isGitSyncResolved: true,
+    });
+
+    expect(prompt.variant).toBe("blocked");
+    expect(prompt.primaryActionKind).toBe("manage_github_access");
+    expect(prompt.actionLabel).toBe("Manage GitHub access");
+    expect(prompt.body).toBe("GitHub access for this repo is not authorized.");
   });
 
   it("shows a push CTA for ahead-only local commits", () => {

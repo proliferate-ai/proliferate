@@ -205,6 +205,35 @@ describe("buildMobilityFooterContext", () => {
     expect(context?.isInteractive).toBe(true);
   });
 
+  it("disables the location control while a workspace move is in progress", () => {
+    const context = buildMobilityFooterContext({
+      logicalWorkspace: makeLogicalWorkspace(),
+      status: makeStatus({
+        direction: "local_to_cloud",
+        phase: "transferring",
+        isBlocking: true,
+      }),
+    });
+
+    expect(context?.isInteractive).toBe(false);
+    expect(context?.isActive).toBe(true);
+  });
+
+  it("keeps cleanup failures interactive for retry", () => {
+    const context = buildMobilityFooterContext({
+      logicalWorkspace: makeLogicalWorkspace(),
+      status: makeStatus({
+        direction: "local_to_cloud",
+        phase: "cleanup_failed",
+        isFailure: true,
+        canRetryCleanup: true,
+      }),
+    });
+
+    expect(context?.isInteractive).toBe(true);
+    expect(context?.isActive).toBe(true);
+  });
+
   it.each<{
     effectiveOwner: LogicalWorkspace["effectiveOwner"];
     expected: string;

@@ -90,7 +90,11 @@ function normalizeCloudBlockerCode(message: string): WorkspaceMobilityNormalized
   }
   if (
     normalized.includes("connect a github account before moving this workspace to cloud")
-    || normalized.includes("grant repository access before moving this workspace to cloud")
+  ) {
+    return "github_account_required";
+  }
+  if (
+    normalized.includes("grant repository access before moving this workspace to cloud")
   ) {
     return "cloud_repo_access";
   }

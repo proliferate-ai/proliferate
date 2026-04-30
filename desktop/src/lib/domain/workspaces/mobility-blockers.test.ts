@@ -101,5 +101,23 @@ describe("pickPrimaryMobilityBlocker", () => {
     });
 
     expect(blocker?.code).toBe("cloud_repo_access");
+    expect(blocker?.body).toBe("GitHub access for this repo is not authorized.");
+    expect(blocker?.actionLabel).toBe("Manage GitHub access");
+  });
+
+  it("maps missing GitHub account blockers separately from repo authorization", () => {
+    const blocker = pickPrimaryMobilityBlocker({
+      sourcePreflight: null,
+      cloudPreflight: {
+        canStart: false,
+        blockers: ["Connect a GitHub account before moving this workspace to cloud."],
+        excludedPaths: [],
+        workspace: {} as never,
+      },
+      direction: "local_to_cloud",
+    });
+
+    expect(blocker?.code).toBe("github_account_required");
+    expect(blocker?.actionLabel).toBe("Connect GitHub");
   });
 });

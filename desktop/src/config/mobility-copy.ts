@@ -29,6 +29,7 @@ export type WorkspaceMobilityBlockerCode =
   | "user_handoff_in_progress"
   | "branch_mismatch"
   | "owner_mismatch"
+  | "github_account_required"
   | "cloud_lost"
   | "cloud_repo_access"
   | "cleanup_failed"
@@ -367,6 +368,13 @@ export function mobilityBlockerCopy(args: {
         helper: "Refresh the workspace list, then try again.",
         actionLabel: "Got it",
       };
+    case "github_account_required":
+      return {
+        headline: moveLabel,
+        body: "GitHub sign-in is required to validate this repo.",
+        helper: "Connect GitHub, then try the move again.",
+        actionLabel: "Connect GitHub",
+      };
     case "cloud_lost":
       return {
         headline: "Cloud workspace unavailable",
@@ -377,9 +385,9 @@ export function mobilityBlockerCopy(args: {
     case "cloud_repo_access":
       return {
         headline: moveLabel,
-        body: "Cloud couldn't validate the repo for this move.",
-        helper: args.rawMessage ?? "Check repo access and branch settings, then try again.",
-        actionLabel: "Got it",
+        body: "GitHub access for this repo is not authorized.",
+        helper: "You can be signed in while Proliferate is still missing access to this repository or organization.",
+        actionLabel: "Manage GitHub access",
       };
     case "cleanup_failed":
       return {

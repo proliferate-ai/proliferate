@@ -35,6 +35,8 @@ export type MobilityPromptVariant =
 
 export type MobilityPromptPrimaryActionKind =
   | "confirm_move"
+  | "connect_github"
+  | "manage_github_access"
   | "publish_branch"
   | "push_commits"
   | "retry_prepare"
@@ -171,15 +173,6 @@ export function buildMobilityPromptState(args: {
     });
   }
 
-  if (args.status.phase === "failed") {
-    return buildTerminalFailurePrompt({
-      direction: args.status.direction,
-      blockerCode: args.status.direction === null ? "cloud_lost" : "handoff_failed",
-      rawMessage: args.status.description,
-      primaryActionKind: "retry_prepare",
-    });
-  }
-
   if (!args.repoBacked) {
     const blocker = {
       code: "repo_required" as const,
@@ -207,6 +200,15 @@ export function buildMobilityPromptState(args: {
     return buildBlockedPrompt({
       direction,
       blocker,
+    });
+  }
+
+  if (args.status.phase === "failed" && !args.isPreparing && !args.confirmSnapshot) {
+    return buildTerminalFailurePrompt({
+      direction: args.status.direction,
+      blockerCode: args.status.direction === null ? "cloud_lost" : "handoff_failed",
+      rawMessage: args.status.description,
+      primaryActionKind: "retry_prepare",
     });
   }
 
@@ -295,7 +297,11 @@ export function buildMobilityPromptState(args: {
       ? "publish_branch"
       : blocker.code === "head_commit_not_published"
         ? "push_commits"
-        : null;
+        : blocker.code === "github_account_required"
+          ? "connect_github"
+          : blocker.code === "cloud_repo_access"
+            ? "manage_github_access"
+            : null;
     const warning = summarizeBranchSyncRecoveryWarning({
       preflight: args.confirmSnapshot?.sourcePreflight ?? null,
       blockerCode: isDisplayMobilityBlockerCode(blocker.code) ? blocker.code : null,

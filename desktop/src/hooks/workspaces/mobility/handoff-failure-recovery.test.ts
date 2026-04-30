@@ -10,10 +10,11 @@ describe("deriveHandoffFailureRecovery", () => {
     })).toEqual({
       shouldMarkHandoffFailed: false,
       shouldRestoreSourceRuntimeState: false,
+      shouldRefreshWorkspaceSelection: false,
     });
   });
 
-  it("marks the handoff failed and restores the source before finalize", () => {
+  it("marks the handoff failed, restores the source, and refreshes selection before finalize", () => {
     expect(deriveHandoffFailureRecovery({
       handoffStarted: true,
       finalized: false,
@@ -21,17 +22,19 @@ describe("deriveHandoffFailureRecovery", () => {
     })).toEqual({
       shouldMarkHandoffFailed: true,
       shouldRestoreSourceRuntimeState: true,
+      shouldRefreshWorkspaceSelection: true,
     });
   });
 
-  it("restores the source after finalize when cleanup did not complete", () => {
+  it("keeps the source remote-owned and refreshes selection after finalize when cleanup did not complete", () => {
     expect(deriveHandoffFailureRecovery({
       handoffStarted: true,
       finalized: true,
       cleanupCompleted: false,
     })).toEqual({
       shouldMarkHandoffFailed: false,
-      shouldRestoreSourceRuntimeState: true,
+      shouldRestoreSourceRuntimeState: false,
+      shouldRefreshWorkspaceSelection: true,
     });
   });
 
@@ -43,6 +46,7 @@ describe("deriveHandoffFailureRecovery", () => {
     })).toEqual({
       shouldMarkHandoffFailed: false,
       shouldRestoreSourceRuntimeState: false,
+      shouldRefreshWorkspaceSelection: false,
     });
   });
 });

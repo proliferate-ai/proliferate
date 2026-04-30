@@ -136,6 +136,25 @@ def _require_handoff_belongs_to_workspace(
     return mobility_workspace, handoff_op
 
 
+def _active_lifecycle_state(owner: str) -> str:
+    return "cloud_active" if owner == "cloud" else "local_active"
+
+
+def _clear_retryable_handoff_failure(
+    record: CloudWorkspaceMobility,
+    *,
+    owner_hint: str,
+) -> bool:
+    if record.lifecycle_state != "handoff_failed" or record.active_handoff_op_id is not None:
+        return False
+
+    record.owner = owner_hint
+    record.lifecycle_state = _active_lifecycle_state(owner_hint)
+    record.status_detail = None
+    record.last_error = None
+    return True
+
+
 async def get_cloud_workspace_mobility(
     db: AsyncSession,
     *,
@@ -290,7 +309,7 @@ async def ensure_cloud_workspace_mobility(
             git_repo_name=git_repo_name,
             git_branch=git_branch,
             owner=owner_hint,
-            lifecycle_state="cloud_active" if owner_hint == "cloud" else "local_active",
+            lifecycle_state=_active_lifecycle_state(owner_hint),
             status_detail=None,
             last_error=None,
             cloud_workspace_id=cloud_workspace_id,
@@ -306,7 +325,7 @@ async def ensure_cloud_workspace_mobility(
         await db.refresh(record)
         return _mobility_value(record)
 
-    changed = False
+    changed = _clear_retryable_handoff_failure(record, owner_hint=owner_hint)
     if display_name is not None and display_name != record.display_name:
         record.display_name = display_name
         changed = True

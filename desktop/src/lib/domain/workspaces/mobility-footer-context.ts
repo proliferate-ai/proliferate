@@ -1,5 +1,6 @@
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
 import {
+  isWorkspaceMobilityTransitionPhase,
   mobilityDestinationKind,
   type WorkspaceMobilityDestinationKind,
   type WorkspaceMobilityStatusModel,
@@ -116,7 +117,7 @@ export function buildMobilityFooterContext(args: {
     detailCopyLabel: mobilityDetailCopyLabel(locationKind),
     branchLabel: branchValue,
     branchValue,
-    isInteractive: true,
+    isInteractive: !isWorkspaceMobilityTransitionPhase(status.phase),
     isActive: status.phase !== "idle",
   };
 }

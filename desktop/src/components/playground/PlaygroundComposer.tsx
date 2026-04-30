@@ -651,6 +651,7 @@ export function renderMobilityOverlayPreview(scenario: ScenarioKey): ReactNode |
     return (
       <WorkspaceMobilityOverlayView
         description={mobilityStatusCopy(phase, direction).description}
+        direction={direction}
         locationLabel="Cloud workspace"
         mode="progress"
         statusLabel={mobilityStatusCopy(phase, direction).title}
@@ -665,6 +666,7 @@ export function renderMobilityOverlayPreview(scenario: ScenarioKey): ReactNode |
     return (
       <WorkspaceMobilityOverlayView
         description={mobilityStatusCopy(phase, direction).description}
+        direction={direction}
         locationLabel="Cloud workspace"
         mode="cleanup_failed"
         onContinueWorking={noop}

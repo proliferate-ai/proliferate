@@ -15,6 +15,7 @@ import { useCloudWorkspacePolling } from "@/hooks/chat/use-cloud-workspace-polli
 import { useComposerDockSlots } from "@/hooks/chat/use-composer-dock-slots";
 import { useSelectedCloudRuntimeRehydration } from "@/hooks/workspaces/use-selected-cloud-runtime-rehydration";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useWorkspaceMobilityLifecycle } from "@/hooks/workspaces/mobility/use-workspace-mobility-lifecycle";
 
 function ChatContent({ mode }: { mode: ChatSurfaceState }): JSX.Element | null {
   switch (mode.kind) {
@@ -73,6 +74,7 @@ export function ChatView() {
   useCloudWorkspacePolling();
   useSelectedCloudRuntimeRehydration(selectedCloudRuntime);
   useChatSelectionBoundary();
+  useWorkspaceMobilityLifecycle();
 
   useEffect(() => {
     if (!import.meta.env.DEV) {

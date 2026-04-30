@@ -197,19 +197,14 @@ function preferredMaterializationId(
   currentSelectionId: string | null,
   effectiveOwnerHint: "local" | "cloud" | null,
 ): { workspaceId: string | null; owner: "local" | "cloud" } {
-  if (localWorkspace && currentSelectionId === localWorkspace.id) {
-    return { workspaceId: localWorkspace.id, owner: "local" };
-  }
-
   const cloudId = cloudWorkspace
     ? cloudWorkspaceSyntheticId(cloudWorkspace.id)
     : mobilityWorkspace?.cloudWorkspaceId
       ? cloudWorkspaceSyntheticId(mobilityWorkspace.cloudWorkspaceId)
       : null;
-  if (cloudId) {
-    if (currentSelectionId === cloudId) {
-      return { workspaceId: cloudId, owner: "cloud" };
-    }
+
+  if (effectiveOwnerHint === "local" && localWorkspace) {
+    return { workspaceId: localWorkspace.id, owner: "local" };
   }
 
   if (effectiveOwnerHint === "cloud" && cloudId) {
@@ -217,6 +212,16 @@ function preferredMaterializationId(
       workspaceId: cloudId,
       owner: "cloud",
     };
+  }
+
+  if (localWorkspace && currentSelectionId === localWorkspace.id) {
+    return { workspaceId: localWorkspace.id, owner: "local" };
+  }
+
+  if (cloudId) {
+    if (currentSelectionId === cloudId) {
+      return { workspaceId: cloudId, owner: "cloud" };
+    }
   }
 
   if (localWorkspace) {

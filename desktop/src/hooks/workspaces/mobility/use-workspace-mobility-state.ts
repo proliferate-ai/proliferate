@@ -75,3 +75,5 @@ export function useWorkspaceMobilityState() {
     isLoading: isLoading || mobilityDetailQuery.isLoading,
   };
 }
+
+export type WorkspaceMobilityState = ReturnType<typeof useWorkspaceMobilityState>;
