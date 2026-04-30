@@ -8,6 +8,7 @@ import {
   buildAgentModelGroups,
   defaultAgentModelForGroup,
   findAgentModelSelection,
+  resolveEffectiveAgentModelSelection,
   type AgentModelGroup,
   type AgentModelOption,
   type AgentModelSelection,
@@ -22,7 +23,7 @@ export interface AutomationModelOverride {
 
 export interface AutomationModelPreferences {
   defaultChatAgentKind: string;
-  defaultChatModelId: string;
+  defaultChatModelIdByAgentKind: Record<string, string>;
 }
 
 export interface AutomationSavedModelValue {
@@ -128,10 +129,11 @@ export function resolveAutomationModelSelection({
     return resolveSavedModel(groups, saved);
   }
 
-  const preferredMatch = resolveConcreteSelection(groups, {
-    kind: preferences.defaultChatAgentKind,
-    modelId: preferences.defaultChatModelId,
+  const preferredSelection = resolveEffectiveAgentModelSelection(groups, null, {
+    defaultAgentKind: preferences.defaultChatAgentKind,
+    defaultModelIdByAgentKind: preferences.defaultChatModelIdByAgentKind,
   });
+  const preferredMatch = resolveConcreteSelection(groups, preferredSelection);
   if (preferredMatch) {
     return defaultResolution("create", preferredMatch.group, preferredMatch.model);
   }

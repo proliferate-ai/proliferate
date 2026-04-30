@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useModelRegistriesQuery } from "@anyharness/sdk-react";
 import type { ModelRegistry } from "@anyharness/sdk";
@@ -15,12 +15,12 @@ import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIco
 import { APP_ROUTES } from "@/config/app-routes";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
 import { useAvailableEditors } from "@/hooks/settings/use-available-editors";
-import { resolveEffectiveChatDefaults } from "@/lib/domain/chat/preference-resolvers";
+import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
+import { withUpdatedDefaultSessionModeByAgentKind } from "@/lib/domain/chat/session-mode-control";
 import {
-  listConfiguredSessionControlValues,
-  resolveEffectiveConfiguredSessionControlValue,
-  withUpdatedDefaultSessionModeByAgentKind,
-} from "@/lib/domain/chat/session-mode-control";
+  buildPrimaryHarnessPreferenceUpdate,
+  buildSettingsChatDefaultRows,
+} from "@/lib/domain/settings/chat-defaults";
 import type { EditorInfo, OpenTargetIconId } from "@/platform/tauri/shell";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -49,7 +49,7 @@ export function GeneralPane() {
   const { data: editors = EMPTY_EDITORS } = useAvailableEditors();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
-    defaultChatModelId: state.defaultChatModelId,
+    defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
     defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
     defaultOpenInTargetId: state.defaultOpenInTargetId,
     branchPrefixType: state.branchPrefixType,
@@ -60,29 +60,16 @@ export function GeneralPane() {
     setMultiple: state.setMultiple,
   })));
 
-  const defaults = useMemo(
-    () => resolveEffectiveChatDefaults(modelRegistries, agents, preferences, null),
-    [agents, modelRegistries, preferences],
+  const chatDefaultRows = useMemo(
+    () => buildSettingsChatDefaultRows({
+      modelRegistries,
+      readyAgentKinds,
+      preferences,
+    }),
+    [modelRegistries, preferences, readyAgentKinds],
   );
-
-  const readyRegistries = useMemo(
-    () => modelRegistries.filter((registry) => readyAgentKinds.has(registry.kind)),
-    [modelRegistries, readyAgentKinds],
-  );
-
-  const defaultPermissionOptions = useMemo(
-    () => listConfiguredSessionControlValues(defaults.agentKind, "mode"),
-    [defaults.agentKind],
-  );
-
-  const selectedDefaultPermission = useMemo(
-    () => resolveEffectiveConfiguredSessionControlValue(
-      defaults.agentKind,
-      "mode",
-      preferences.defaultSessionModeByAgentKind[defaults.agentKind] ?? null,
-    ),
-    [defaults.agentKind, preferences.defaultSessionModeByAgentKind],
-  );
+  const primaryHarnessLabel =
+    chatDefaultRows.find((row) => row.isPrimary)?.displayName ?? "Choose harness";
 
   const targets = useMemo(() => {
     const items: { id: string; label: string; iconId?: OpenTargetIconId }[] = editors.map((editor) => ({
@@ -136,76 +123,107 @@ export function GeneralPane() {
                 subtext="Fetching available agents and model registries..."
               />
             </div>
+          ) : chatDefaultRows.length === 0 ? (
+            <div className="space-y-1 p-3">
+              <p className="text-sm font-medium text-foreground">No chat defaults are available</p>
+              <p className="text-sm text-muted-foreground">
+                Install and configure a chat harness before editing defaults.
+              </p>
+            </div>
           ) : (
             <>
               <SettingsCardRow
-                label="Default model"
-                description="Model for new chats"
+                label="Primary harness"
+                description="Launch identity for new chats"
               >
                 <SettingsMenu
-                  label={defaults.modelDisplayName}
-                  className="w-60"
-                  menuClassName="w-72"
-                  groups={readyRegistries.map((registry) => ({
-                    id: registry.kind,
-                    label: registry.displayName,
-                    options: registry.models.map((model) => ({
-                      id: `${registry.kind}:${model.id}`,
-                      label: model.displayName,
-                      icon: <ProviderIcon kind={registry.kind} className="size-3.5" />,
-                      selected: defaults.agentKind === registry.kind && defaults.modelId === model.id,
+                  label={primaryHarnessLabel}
+                  className="w-56"
+                  menuClassName="w-64"
+                  groups={[{
+                    id: "harnesses",
+                    options: chatDefaultRows.map((row) => ({
+                      id: row.kind,
+                      label: row.displayName,
+                      icon: <ProviderIcon kind={row.kind} className="size-3.5" />,
+                      selected: row.isPrimary,
                       onSelect: () => {
-                        const nextDefaultModes = withUpdatedDefaultSessionModeByAgentKind(
-                          preferences.defaultSessionModeByAgentKind,
-                          registry.kind,
-                          resolveEffectiveConfiguredSessionControlValue(
-                            registry.kind,
-                            "mode",
-                            preferences.defaultSessionModeByAgentKind[registry.kind] ?? null,
-                          )?.value,
+                        const registry = modelRegistries.find((candidate) => candidate.kind === row.kind);
+                        if (!registry) return;
+                        preferences.setMultiple(
+                          buildPrimaryHarnessPreferenceUpdate(preferences, registry),
                         );
-                        preferences.setMultiple({
-                          defaultChatAgentKind: registry.kind,
-                          defaultChatModelId: model.id,
-                          defaultSessionModeByAgentKind: nextDefaultModes,
-                        });
                       },
                     })),
-                  }))}
+                  }]}
                 />
               </SettingsCardRow>
 
-              {defaultPermissionOptions.length > 0 && selectedDefaultPermission && (
-                <SettingsCardRow
-                  label="Default permissions"
-                  description="Permission mode for new chats on this harness"
-                >
-                  <SettingsMenu
-                    label={selectedDefaultPermission.shortLabel ?? selectedDefaultPermission.label}
-                    className="w-48"
-                    menuClassName="w-64"
-                    groups={[{
-                      id: "permissions",
-                      options: defaultPermissionOptions.map((option) => ({
-                        id: option.value,
-                        label: option.shortLabel ?? option.label,
-                        detail: option.description,
-                        selected: option.value === selectedDefaultPermission.value,
-                        onSelect: () => {
-                          preferences.set(
-                            "defaultSessionModeByAgentKind",
-                            withUpdatedDefaultSessionModeByAgentKind(
-                              preferences.defaultSessionModeByAgentKind,
-                              defaults.agentKind,
-                              option.value,
-                            ),
-                          );
-                        },
-                      })),
-                    }]}
-                  />
-                </SettingsCardRow>
-              )}
+              {chatDefaultRows.map((row) => (
+                <Fragment key={row.kind}>
+                  <SettingsCardRow
+                    label={`${row.displayName} model`}
+                    description={row.isPrimary ? "Model default for the primary harness" : "Model default for this harness"}
+                  >
+                    <SettingsMenu
+                      label={row.selectedModel.displayName}
+                      className="w-60"
+                      menuClassName="w-72"
+                      groups={[{
+                        id: `${row.kind}-models`,
+                        options: row.models.map((model) => ({
+                          id: model.id,
+                          label: model.displayName,
+                          icon: <ProviderIcon kind={row.kind} className="size-3.5" />,
+                          selected: model.id === row.selectedModel.id,
+                          onSelect: () => {
+                            preferences.set(
+                              "defaultChatModelIdByAgentKind",
+                              withUpdatedDefaultModelIdByAgentKind(
+                                preferences.defaultChatModelIdByAgentKind,
+                                row.kind,
+                                model.id,
+                              ),
+                            );
+                          },
+                        })),
+                      }]}
+                    />
+                  </SettingsCardRow>
+
+                  {row.modeOptions.length > 0 && row.selectedMode ? (
+                    <SettingsCardRow
+                      label={`${row.displayName} permissions`}
+                      description={row.isPrimary ? "Permission mode for the primary harness" : "Permission mode for this harness"}
+                    >
+                      <SettingsMenu
+                        label={row.selectedMode.shortLabel ?? row.selectedMode.label}
+                        className="w-48"
+                        menuClassName="w-64"
+                        groups={[{
+                          id: `${row.kind}-permissions`,
+                          options: row.modeOptions.map((option) => ({
+                            id: option.value,
+                            label: option.shortLabel ?? option.label,
+                            detail: option.description,
+                            selected: option.value === row.selectedMode?.value,
+                            onSelect: () => {
+                              preferences.set(
+                                "defaultSessionModeByAgentKind",
+                                withUpdatedDefaultSessionModeByAgentKind(
+                                  preferences.defaultSessionModeByAgentKind,
+                                  row.kind,
+                                  option.value,
+                                ),
+                              );
+                            },
+                          })),
+                        }]}
+                      />
+                    </SettingsCardRow>
+                  ) : null}
+                </Fragment>
+              ))}
             </>
           )}
         </SettingsCard>

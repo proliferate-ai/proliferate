@@ -28,6 +28,12 @@ vi.mock("@/platform/tauri/store", () => ({
   getPreferencesStore: storeMocks.getPreferencesStore,
 }));
 
+async function flushPersist(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 describe("user preference migration", () => {
   beforeEach(() => {
     storeMocks.values.clear();
@@ -60,6 +66,24 @@ describe("user preference migration", () => {
     expect(preferences.transparentChromeEnabled).toBe(true);
   });
 
+  it("migrates legacy per-key scalar models into the primary harness map", async () => {
+    storeMocks.values.set("defaultChatAgentKind", "claude");
+    storeMocks.values.set("defaultChatModelId", "claude-sonnet-4-5");
+
+    await bootstrapUserPreferences();
+    await flushPersist();
+
+    const preferences = useUserPreferencesStore.getState();
+    expect(preferences.defaultChatAgentKind).toBe("claude");
+    expect(preferences.defaultChatModelIdByAgentKind).toEqual({
+      claude: "sonnet",
+    });
+
+    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    expect(persisted.defaultChatModelIdByAgentKind).toEqual({ claude: "sonnet" });
+    expect(persisted).not.toHaveProperty("defaultChatModelId");
+  });
+
   it("backfills missing fields in existing unified preferences with old defaults", async () => {
     storeMocks.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
@@ -86,6 +110,78 @@ describe("user preference migration", () => {
     const preferences = useUserPreferencesStore.getState();
     expect(preferences.themePreset).toBe("ship");
     expect(preferences.transparentChromeEnabled).toBe(true);
+  });
+
+  it("migrates old unified scalar model preferences into the primary harness map", async () => {
+    storeMocks.values.set("user_preferences", {
+      ...USER_PREFERENCE_DEFAULTS,
+      defaultChatAgentKind: "codex",
+      defaultChatModelId: "gpt-5.4-mini",
+    });
+
+    await bootstrapUserPreferences();
+    await flushPersist();
+
+    const preferences = useUserPreferencesStore.getState();
+    expect(preferences.defaultChatModelIdByAgentKind).toEqual({
+      codex: "gpt-5.4-mini",
+    });
+
+    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    expect(persisted.defaultChatModelIdByAgentKind).toEqual({ codex: "gpt-5.4-mini" });
+    expect(persisted).not.toHaveProperty("defaultChatModelId");
+  });
+
+  it("sanitizes mixed scalar and map model preferences without overwriting valid map entries", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      defaultChatAgentKind: "claude",
+      defaultChatModelId: "claude-haiku-4-5",
+      defaultChatModelIdByAgentKind: {
+        claude: "sonnet",
+        codex: " gpt-5.4 ",
+        gemini: "",
+        cursor: null,
+      },
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
+      claude: "sonnet",
+      codex: "gpt-5.4",
+    });
+  });
+
+  it("uses the legacy scalar when the primary map entry is malformed", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      defaultChatAgentKind: "claude",
+      defaultChatModelId: "claude-haiku-4-5",
+      defaultChatModelIdByAgentKind: {
+        claude: "",
+      },
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
+      claude: "haiku",
+    });
+  });
+
+  it("normalizes Claude legacy model IDs in model maps", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      defaultChatModelIdByAgentKind: {
+        claude: "claude-opus-4-5",
+        codex: "gpt-5.4",
+      },
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
+      claude: "opus[1m]",
+      codex: "gpt-5.4",
+    });
   });
 
   it("orders Mono before Dominic in theme preset options", () => {

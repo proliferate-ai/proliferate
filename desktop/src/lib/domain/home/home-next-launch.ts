@@ -54,7 +54,7 @@ export type HomeNextModelInfo = AgentModelInfo;
 
 export interface HomeNextLaunchPreferences {
   defaultChatAgentKind: string;
-  defaultChatModelId: string;
+  defaultChatModelIdByAgentKind: Record<string, string>;
 }
 
 export type HomeLaunchTarget =
@@ -107,7 +107,7 @@ export function resolveEffectiveHomeModelSelection(
 ): HomeNextModelSelection | null {
   return resolveEffectiveAgentModelSelection(groups, override, {
     defaultAgentKind: preferences.defaultChatAgentKind,
-    defaultModelId: preferences.defaultChatModelId,
+    defaultModelIdByAgentKind: preferences.defaultChatModelIdByAgentKind,
   });
 }
 

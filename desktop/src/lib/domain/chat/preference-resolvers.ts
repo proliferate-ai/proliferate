@@ -1,17 +1,27 @@
 import type {
   AgentSummary,
   ModelRegistry,
-  ModelRegistryModel,
   ProviderConfig,
   WorkspaceSessionLaunchAgent,
 } from "@anyharness/sdk";
 import type { OpenTarget } from "@/platform/tauri/shell";
 import type { UserPreferences } from "@/stores/preferences/user-preferences-store";
-import { resolveModelForRegistry } from "./session-config";
+import {
+  buildAgentModelGroups,
+  defaultAgentModelForGroup,
+  findAgentModelSelection,
+  preferredAgentModelForGroup,
+  resolveEffectiveAgentModelSelection,
+  type AgentModelGroup,
+  type AgentModelOption,
+} from "@/lib/domain/agents/model-options";
+import {
+  resolveConfiguredLaunchAgentSelection,
+} from "@/lib/domain/chat/model-selection";
 
 export interface ChatDefaultPreferences {
   defaultChatAgentKind: string;
-  defaultChatModelId: string;
+  defaultChatModelIdByAgentKind: Record<string, string>;
 }
 
 export interface EffectiveChatDefaults {
@@ -40,7 +50,7 @@ export interface ConfiguredLaunchResolution {
 }
 
 function findModelById<T extends { id: string }>(
-  models: T[],
+  models: readonly T[],
   modelId: string,
 ): T | null {
   return models.find((model) => model.id === modelId) ?? null;
@@ -52,67 +62,38 @@ export function resolveEffectiveChatDefaults(
   prefs: ChatDefaultPreferences,
   explicit?: ExplicitSelection | null,
 ): EffectiveChatDefaults {
-  const readyKinds = new Set(
-    agents.filter((agent) => agent.readiness === "ready").map((agent) => agent.kind),
-  );
-  const readyRegistries = modelRegistries.filter((registry) => readyKinds.has(registry.kind));
+  const groups = buildAgentModelGroups({
+    agents,
+    modelRegistries,
+    selected: null,
+  });
 
-  if (explicit) {
-    const config = readyRegistries.find((entry) => entry.kind === explicit.kind);
-    const model = config?.models.find((entry) => entry.id === explicit.modelId);
-    if (config && model) {
-      return buildResult(config, model, false, null);
-    }
+  const explicitSelection = findAgentModelSelection(groups, explicit);
+  if (explicitSelection) {
+    return buildResult(explicitSelection.group, explicitSelection.model, false, null);
   }
 
-  const preferredConfig = readyRegistries.find((config) => config.kind === prefs.defaultChatAgentKind);
-  const preferredModel = preferredConfig?.models.find((model) => model.id === prefs.defaultChatModelId);
-  const resolvedPreferredModel = preferredConfig
-    ? resolveModelForRegistry(preferredConfig, prefs.defaultChatModelId)
-    : null;
-  if (preferredConfig && resolvedPreferredModel) {
+  const selection = resolveEffectiveAgentModelSelection(groups, null, {
+    defaultAgentKind: prefs.defaultChatAgentKind,
+    defaultModelIdByAgentKind: prefs.defaultChatModelIdByAgentKind,
+  });
+  if (selection) {
+    const group = groups.find((candidate) => candidate.kind === selection.kind) ?? null;
+    const model = group?.models.find((candidate) => candidate.modelId === selection.modelId) ?? null;
+    if (!group || !model) {
+      return emptyChatDefaults(prefs, "No ready agents found");
+    }
+
+    const degraded = resolveChatDefaultsDegradedState(groups, prefs, group, model);
     return buildResult(
-      preferredConfig,
-      resolvedPreferredModel,
-      preferredModel == null,
-      preferredModel == null
-        ? `Stored default model is no longer available for ${preferredConfig.kind}; using ${resolvedPreferredModel.displayName}`
-        : null,
+      group,
+      model,
+      degraded.degraded,
+      degraded.reason,
     );
   }
 
-  const storedConfig = modelRegistries.find((config) => config.kind === prefs.defaultChatAgentKind);
-  const storedModel = storedConfig?.models.find((model) => model.id === prefs.defaultChatModelId);
-  if (storedConfig && storedModel && !readyKinds.has(storedConfig.kind)) {
-    const fallback = findFirstReadyDefault(readyRegistries);
-    if (fallback) {
-      return buildResult(
-        fallback.config,
-        fallback.model,
-        true,
-        `${storedConfig.kind} is not ready; using ${fallback.config.kind} as fallback`,
-      );
-    }
-  }
-
-  const fallback = findFirstReadyDefault(readyRegistries);
-  if (fallback) {
-    const degraded = Boolean(prefs.defaultChatAgentKind && prefs.defaultChatModelId);
-    return buildResult(
-      fallback.config,
-      fallback.model,
-      degraded,
-      degraded ? "Stored default is no longer available" : null,
-    );
-  }
-
-  return {
-    agentKind: prefs.defaultChatAgentKind || "",
-    modelId: prefs.defaultChatModelId || "",
-    modelDisplayName: "No agents available",
-    degraded: true,
-    degradedReason: "No ready agents found",
-  };
+  return emptyChatDefaults(prefs, "No ready agents found");
 }
 
 export function resolveConfiguredLaunchSelection(
@@ -120,7 +101,7 @@ export function resolveConfiguredLaunchSelection(
   prefs: ChatDefaultPreferences,
   providerConfigs: ProviderConfig[],
 ): ConfiguredLaunchResolution {
-  if (!prefs.defaultChatAgentKind || !prefs.defaultChatModelId) {
+  if (!prefs.defaultChatAgentKind) {
     return {
       selection: null,
       displayName: null,
@@ -132,18 +113,20 @@ export function resolveConfiguredLaunchSelection(
   const configuredProvider = providerConfigs.find(
     (config) => config.kind === prefs.defaultChatAgentKind,
   ) ?? null;
+  const preferredModelId = prefs.defaultChatModelIdByAgentKind[prefs.defaultChatAgentKind] ?? "";
   const configuredProviderModel = configuredProvider
-    ? findModelById(configuredProvider.models, prefs.defaultChatModelId)
+    ? resolveProviderConfigModel(configuredProvider, preferredModelId)
     : null;
   const launchAgent = launchAgents.find(
     (agent) => agent.kind === prefs.defaultChatAgentKind,
   ) ?? null;
-  const launchModel = launchAgent
-    ? findModelById(launchAgent.models, prefs.defaultChatModelId)
+  const launchSelection = resolveConfiguredLaunchAgentSelection(launchAgents, prefs);
+  const launchModel = launchAgent && launchSelection
+    ? findModelById(launchAgent.models, launchSelection.modelId)
     : null;
   const displayName = launchModel?.displayName
     ?? configuredProviderModel?.displayName
-    ?? prefs.defaultChatModelId;
+    ?? (preferredModelId || null);
 
   if (launchAgent && launchModel) {
     return {
@@ -161,7 +144,7 @@ export function resolveConfiguredLaunchSelection(
     return {
       selection: null,
       displayName: null,
-      reason: `The stored default model is no longer available for ${configuredProvider.displayName}.`,
+      reason: `No launchable model is available for ${configuredProvider.displayName}.`,
       status: "unavailable",
     };
   }
@@ -175,32 +158,82 @@ export function resolveConfiguredLaunchSelection(
 }
 
 function buildResult(
-  config: ModelRegistry,
-  model: ModelRegistryModel,
+  group: AgentModelGroup,
+  model: AgentModelOption,
   degraded: boolean,
   degradedReason: string | null,
 ): EffectiveChatDefaults {
   return {
-    agentKind: config.kind,
-    modelId: model.id,
+    agentKind: group.kind,
+    modelId: model.modelId,
     modelDisplayName: model.displayName,
     degraded,
     degradedReason,
   };
 }
 
-function findFirstReadyDefault(
-  readyConfigs: ModelRegistry[],
-): { config: ModelRegistry; model: ModelRegistryModel } | null {
-  for (const config of readyConfigs) {
-    const model = config.models.find((entry) => entry.id === config.defaultModelId)
-      ?? config.models.find((entry) => entry.isDefault)
-      ?? config.models[0];
-    if (model) {
-      return { config, model };
-    }
+function resolveChatDefaultsDegradedState(
+  groups: AgentModelGroup[],
+  prefs: ChatDefaultPreferences,
+  selectedGroup: AgentModelGroup,
+  selectedModel: AgentModelOption,
+): { degraded: boolean; reason: string | null } {
+  if (!prefs.defaultChatAgentKind) {
+    return { degraded: false, reason: null };
   }
-  return null;
+
+  if (selectedGroup.kind !== prefs.defaultChatAgentKind) {
+    return {
+      degraded: true,
+      reason: `${prefs.defaultChatAgentKind} is not ready; using ${selectedGroup.kind} as fallback`,
+    };
+  }
+
+  const preferredModelId = prefs.defaultChatModelIdByAgentKind[selectedGroup.kind];
+  if (
+    preferredModelId
+    && preferredModelId !== selectedModel.modelId
+    && !preferredAgentModelForGroup(selectedGroup, prefs.defaultChatModelIdByAgentKind)
+  ) {
+    return {
+      degraded: true,
+      reason: `Stored default model is no longer available for ${selectedGroup.kind}; using ${selectedModel.displayName}`,
+    };
+  }
+
+  const preferredGroup = groups.find((group) => group.kind === prefs.defaultChatAgentKind) ?? null;
+  if (preferredGroup && !defaultAgentModelForGroup(preferredGroup)) {
+    return {
+      degraded: true,
+      reason: `No launchable model is available for ${preferredGroup.providerDisplayName}.`,
+    };
+  }
+
+  return { degraded: false, reason: null };
+}
+
+function emptyChatDefaults(
+  prefs: ChatDefaultPreferences,
+  degradedReason: string,
+): EffectiveChatDefaults {
+  const agentKind = prefs.defaultChatAgentKind || "";
+  return {
+    agentKind,
+    modelId: agentKind ? prefs.defaultChatModelIdByAgentKind[agentKind] ?? "" : "",
+    modelDisplayName: "No agents available",
+    degraded: true,
+    degradedReason,
+  };
+}
+
+function resolveProviderConfigModel(
+  providerConfig: ProviderConfig,
+  preferredModelId: string | null | undefined,
+) {
+  return (preferredModelId ? findModelById(providerConfig.models, preferredModelId) : null)
+    ?? providerConfig.models.find((model) => model.isDefault)
+    ?? providerConfig.models[0]
+    ?? null;
 }
 
 export function resolvePreferredOpenTarget(

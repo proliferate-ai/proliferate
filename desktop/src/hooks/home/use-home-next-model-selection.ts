@@ -25,7 +25,7 @@ export function useHomeNextModelSelection({
   const modelRegistries = modelRegistriesQuery.data ?? EMPTY_MODEL_REGISTRIES;
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
-    defaultChatModelId: state.defaultChatModelId,
+    defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
   })));
 
   const unselectedGroups = useMemo(
