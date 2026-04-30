@@ -34,7 +34,7 @@ export function ChatComposerDock({
   ...rest
 }: ChatComposerDockProps) {
   return (
-    <div className={`relative z-10 mt-auto shrink-0 ${backdrop ? "bg-background/88 pt-2 backdrop-blur-xl" : ""}`}>
+    <div className={`relative z-10 mt-auto shrink-0 ${backdrop ? "bg-background/88 backdrop-blur-xl" : ""}`}>
       {backdrop && (
         <div className="pointer-events-none absolute inset-x-0 -top-8 h-10 bg-gradient-to-b from-transparent via-background/45 to-background/95" />
       )}

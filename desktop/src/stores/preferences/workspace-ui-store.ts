@@ -32,6 +32,7 @@ export interface WorkspaceUiState {
   workspaceTypes: SidebarWorkspaceVariant[];
   lastViewedAt: Record<string, string>;
   lastViewedSessionByWorkspace: Record<string, string>;
+  lastViewedSessionErrorAtBySession: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
   dismissedSetupFailures: Record<string, boolean>;
   visibleChatSessionIdsByWorkspace: Record<string, string[]>;
@@ -54,6 +55,8 @@ export interface WorkspaceUiState {
   markWorkspaceViewed: (workspaceId: string) => void;
   setLastViewedSessionForWorkspace: (workspaceId: string, sessionId: string) => void;
   clearLastViewedSessionForWorkspace: (workspaceId: string, sessionId?: string) => void;
+  markSessionErrorViewed: (sessionId: string, errorAt: string) => void;
+  clearViewedSessionErrors: (sessionIds: string[]) => void;
   updateWorkspaceLastInteracted: (workspaceId: string, timestamp: string) => void;
   dismissSetupFailure: (workspaceId: string) => void;
   clearSetupFailureDismissal: (workspaceId: string) => void;
@@ -101,6 +104,7 @@ export interface PersistedWorkspaceUiState {
   workspaceTypes: SidebarWorkspaceVariant[];
   lastViewedAt: Record<string, string>;
   lastViewedSessionByWorkspace: Record<string, string>;
+  lastViewedSessionErrorAtBySession: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
   dismissedSetupFailures: Record<string, boolean>;
   visibleChatSessionIdsByWorkspace: Record<string, string[]>;
@@ -120,6 +124,7 @@ export const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
   workspaceTypes: DEFAULT_SIDEBAR_WORKSPACE_TYPES,
   lastViewedAt: {},
   lastViewedSessionByWorkspace: {},
+  lastViewedSessionErrorAtBySession: {},
   workspaceLastInteracted: {},
   dismissedSetupFailures: {},
   visibleChatSessionIdsByWorkspace: {},
@@ -162,6 +167,8 @@ async function readAll(): Promise<{ state: PersistedWorkspaceUiState; didMigrate
       lastViewedSessionByWorkspace:
         (await readPersistedValue<Record<string, string>>("lastViewedSessionByWorkspace"))
         ?? WORKSPACE_UI_DEFAULTS.lastViewedSessionByWorkspace,
+      lastViewedSessionErrorAtBySession:
+        WORKSPACE_UI_DEFAULTS.lastViewedSessionErrorAtBySession,
       workspaceLastInteracted:
         (await readPersistedValue<Record<string, string>>("workspaceLastInteracted"))
         ?? WORKSPACE_UI_DEFAULTS.workspaceLastInteracted,
@@ -225,6 +232,12 @@ export function migrateWorkspaceUiState(
     didMigrate = true;
   }
 
+  if (!isStringRecord(state.lastViewedSessionErrorAtBySession)) {
+    state.lastViewedSessionErrorAtBySession =
+      WORKSPACE_UI_DEFAULTS.lastViewedSessionErrorAtBySession;
+    didMigrate = true;
+  }
+
   if (!isStringArrayRecord(state.recentlyHiddenChatSessionIdsByWorkspace)) {
     state.recentlyHiddenChatSessionIdsByWorkspace =
       WORKSPACE_UI_DEFAULTS.recentlyHiddenChatSessionIdsByWorkspace;
@@ -274,6 +287,7 @@ function selectPersistedSlice(state: WorkspaceUiState): PersistedWorkspaceUiStat
     workspaceTypes: state.workspaceTypes,
     lastViewedAt: state.lastViewedAt,
     lastViewedSessionByWorkspace: state.lastViewedSessionByWorkspace,
+    lastViewedSessionErrorAtBySession: state.lastViewedSessionErrorAtBySession,
     workspaceLastInteracted: state.workspaceLastInteracted,
     dismissedSetupFailures: state.dismissedSetupFailures,
     visibleChatSessionIdsByWorkspace: state.visibleChatSessionIdsByWorkspace,
@@ -289,6 +303,12 @@ function isStringArrayRecord(value: unknown): value is Record<string, string[]> 
     && Object.values(value).every((entry) =>
       Array.isArray(entry) && entry.every((item) => typeof item === "string")
     );
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return typeof value === "object"
+    && value !== null
+    && Object.values(value).every((entry) => typeof entry === "string");
 }
 
 export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
@@ -423,6 +443,39 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
     const updated = { ...current };
     delete updated[workspaceId];
     set({ lastViewedSessionByWorkspace: updated });
+  },
+
+  markSessionErrorViewed: (sessionId, errorAt) => {
+    const current = get().lastViewedSessionErrorAtBySession;
+    if (current[sessionId] === errorAt) {
+      return;
+    }
+    set({
+      lastViewedSessionErrorAtBySession: {
+        ...current,
+        [sessionId]: errorAt,
+      },
+    });
+  },
+
+  clearViewedSessionErrors: (sessionIds) => {
+    if (sessionIds.length === 0) {
+      return;
+    }
+    const clearSet = new Set(sessionIds);
+    const current = get().lastViewedSessionErrorAtBySession;
+    const next = { ...current };
+    let didClear = false;
+    for (const sessionId of clearSet) {
+      if (sessionId in next) {
+        delete next[sessionId];
+        didClear = true;
+      }
+    }
+    if (!didClear) {
+      return;
+    }
+    set({ lastViewedSessionErrorAtBySession: next });
   },
 
   updateWorkspaceLastInteracted: (workspaceId, timestamp) => {
@@ -641,6 +694,14 @@ export function rememberLastViewedSession(workspaceId: string, sessionId: string
 
 export function clearLastViewedSession(workspaceId: string, sessionId?: string) {
   useWorkspaceUiStore.getState().clearLastViewedSessionForWorkspace(workspaceId, sessionId);
+}
+
+export function markSessionErrorViewed(sessionId: string, errorAt: string) {
+  useWorkspaceUiStore.getState().markSessionErrorViewed(sessionId, errorAt);
+}
+
+export function clearViewedSessionErrors(sessionIds: string[]) {
+  useWorkspaceUiStore.getState().clearViewedSessionErrors(sessionIds);
 }
 
 export function ensureRepoGroupExpanded(repoKey: string) {

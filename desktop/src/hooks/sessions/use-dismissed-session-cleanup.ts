@@ -2,7 +2,10 @@ import { useCallback } from "react";
 import { sessionSlotBelongsToWorkspace } from "@/lib/domain/sessions/activity";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
-import { clearLastViewedSession } from "@/stores/preferences/workspace-ui-store";
+import {
+  clearLastViewedSession,
+  clearViewedSessionErrors,
+} from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 
 export function useDismissedSessionCleanup() {
@@ -19,6 +22,7 @@ export function useDismissedSessionCleanup() {
 
     closeSessionSlotStream(sessionId);
     removeSessionSlot(sessionId);
+    clearViewedSessionErrors([sessionId]);
 
     if (initialState.activeSessionId === sessionId) {
       const nextActiveId = Object.values(useHarnessStore.getState().sessionSlots)

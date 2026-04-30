@@ -40,6 +40,21 @@ interface PendingInteractionLike {
   } | null;
 }
 
+interface SessionErrorAttentionSnapshot {
+  sessionId: string;
+  status: SessionStatus | null;
+  executionSummary?: SessionExecutionSummary | null;
+  transcript: {
+    itemsById: Record<string, ErrorAttentionTranscriptItem>;
+  };
+}
+
+interface ErrorAttentionTranscriptItem {
+  kind: string;
+  itemId: string;
+  startedSeq: number;
+}
+
 export function resolveStatusFromExecutionSummary(
   executionSummary: SessionExecutionSummary | null | undefined,
   fallbackStatus: SessionStatus | null | undefined,
@@ -122,6 +137,12 @@ export function isSessionEffectivelyStreaming(
 
 interface WorkspaceSessionActivitySnapshot extends SessionActivitySnapshot {
   workspaceId: string | null;
+}
+
+interface WorkspaceSessionSidebarAttentionSnapshot
+  extends WorkspaceSessionActivitySnapshot {
+  sessionId: string;
+  errorAttentionKey: string | null;
 }
 
 export function resolveSessionExecutionPhase(
@@ -220,6 +241,45 @@ export function resolveSessionSidebarActivityState(
     default:
       return "idle";
   }
+}
+
+export function resolveSessionErrorAttentionKey(
+  slot: SessionErrorAttentionSnapshot | null | undefined,
+): string | null {
+  if (!slot) {
+    return null;
+  }
+
+  const hasCurrentError =
+    slot.executionSummary?.phase === "errored" || slot.status === "errored";
+  if (!hasCurrentError) {
+    return null;
+  }
+
+  let latestErrorItem: ErrorAttentionTranscriptItem | null = null;
+  for (const item of Object.values(slot.transcript.itemsById)) {
+    if (item.kind !== "error") {
+      continue;
+    }
+    if (
+      !latestErrorItem
+      || item.startedSeq > latestErrorItem.startedSeq
+      || (item.startedSeq === latestErrorItem.startedSeq
+        && item.itemId > latestErrorItem.itemId)
+    ) {
+      latestErrorItem = item;
+    }
+  }
+
+  if (latestErrorItem) {
+    return `error-item:${latestErrorItem.itemId}`;
+  }
+
+  if (slot.executionSummary?.phase === "errored") {
+    return `summary-terminal:${slot.sessionId}`;
+  }
+
+  return null;
 }
 
 export function shouldSkipColdIdleSessionStream(
@@ -346,6 +406,36 @@ export function collectWorkspaceSidebarActivityStates(
       || sidebarSessionActivityPriority(nextState) > sidebarSessionActivityPriority(currentState)
     ) {
       states[slot.workspaceId] = nextState;
+    }
+  }
+
+  return states;
+}
+
+export function collectWorkspaceSidebarActivityStatesWithErrorAttention(
+  sessionSlots: Record<string, WorkspaceSessionSidebarAttentionSnapshot>,
+  lastViewedSessionErrorAtBySession: Record<string, string>,
+): Record<string, SidebarSessionActivityState> {
+  const states: Record<string, SidebarSessionActivityState> = {};
+
+  for (const slot of Object.values(sessionSlots)) {
+    if (!slot.workspaceId) {
+      continue;
+    }
+
+    const nextState = resolveSessionSidebarActivityState(slot);
+    const attentionState =
+      nextState === "error"
+        && slot.errorAttentionKey !== null
+        && lastViewedSessionErrorAtBySession[slot.sessionId] === slot.errorAttentionKey
+        ? "idle"
+        : nextState;
+    const currentState = states[slot.workspaceId];
+    if (
+      !currentState
+      || sidebarSessionActivityPriority(attentionState) > sidebarSessionActivityPriority(currentState)
+    ) {
+      states[slot.workspaceId] = attentionState;
     }
   }
 

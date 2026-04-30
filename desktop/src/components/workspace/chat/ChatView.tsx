@@ -13,6 +13,7 @@ import { type ChatSurfaceState, useChatSurfaceState } from "@/hooks/chat/use-cha
 import { useChatSelectionBoundary } from "@/hooks/chat/use-chat-selection-boundary";
 import { useCloudWorkspacePolling } from "@/hooks/chat/use-cloud-workspace-polling";
 import { useComposerDockSlots } from "@/hooks/chat/use-composer-dock-slots";
+import { useSessionErrorAcknowledgement } from "@/hooks/sessions/use-session-error-acknowledgement";
 import { useSelectedCloudRuntimeRehydration } from "@/hooks/workspaces/use-selected-cloud-runtime-rehydration";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import { useWorkspaceMobilityLifecycle } from "@/hooks/workspaces/mobility/use-workspace-mobility-lifecycle";
@@ -74,6 +75,7 @@ export function ChatView() {
   useCloudWorkspacePolling();
   useSelectedCloudRuntimeRehydration(selectedCloudRuntime);
   useChatSelectionBoundary();
+  useSessionErrorAcknowledgement();
   useWorkspaceMobilityLifecycle();
 
   useEffect(() => {

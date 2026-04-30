@@ -36,6 +36,22 @@ describe("workspace ui tab persistence", () => {
     expect(state.manualChatGroupsByWorkspace).toEqual({});
   });
 
+  it("defaults missing session error views without bumping migration", () => {
+    const legacyState = {
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: 3,
+    } as Partial<typeof WORKSPACE_UI_DEFAULTS> & { migrationVersion: number };
+    delete legacyState.lastViewedSessionErrorAtBySession;
+
+    const { state, didMigrate } = migrateWorkspaceUiState(
+      legacyState as typeof WORKSPACE_UI_DEFAULTS,
+    );
+
+    expect(didMigrate).toBe(false);
+    expect(state.migrationVersion).toBe(3);
+    expect(state.lastViewedSessionErrorAtBySession).toEqual({});
+  });
+
   it("sanitizes malformed manual chat groups without bumping migration", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
@@ -86,6 +102,28 @@ describe("workspace ui tab persistence", () => {
 
     expect(useWorkspaceUiStore.getState().visibleChatSessionIdsByWorkspace.w1).toEqual(["a", "b"]);
     expect(useWorkspaceUiStore.getState().recentlyHiddenChatSessionIdsByWorkspace.w1).toEqual(["b"]);
+  });
+
+  it("stores and clears viewed session error keys without eviction", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.markSessionErrorViewed("s1", "error-item:one");
+    store.markSessionErrorViewed("s1", "error-item:one");
+    for (let index = 0; index < 50; index += 1) {
+      store.markSessionErrorViewed(`s${index + 2}`, `error-item:${index + 2}`);
+    }
+    store.clearViewedSessionErrors(["s2", "missing"]);
+
+    expect(useWorkspaceUiStore.getState().lastViewedSessionErrorAtBySession.s1)
+      .toBe("error-item:one");
+    expect(useWorkspaceUiStore.getState().lastViewedSessionErrorAtBySession.s2)
+      .toBeUndefined();
+    expect(Object.keys(useWorkspaceUiStore.getState().lastViewedSessionErrorAtBySession))
+      .toHaveLength(50);
   });
 
   it("toggles collapsed chat groups per workspace", () => {

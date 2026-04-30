@@ -7,9 +7,8 @@ import {
 import { AgentsPane } from "./AgentsPane";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "./panes/AccountPane";
-import { AdvancedPane } from "./panes/AdvancedPane";
 import { AppearancePane } from "./panes/AppearancePane";
-import { DefaultsPane } from "./panes/DefaultsPane";
+import { GeneralPane } from "./panes/GeneralPane";
 import { KeyboardShortcutsPane } from "./panes/KeyboardShortcutsPane";
 import { ReviewSettingsPane } from "./panes/ReviewSettingsPane";
 import { CloudAuthUnavailablePane } from "./panes/CloudAuthUnavailablePane";
@@ -45,8 +44,8 @@ function renderSettingsSection(
   if (activeSection === "agents") {
     return <AgentsPane />;
   }
-  if (activeSection === "defaults") {
-    return <DefaultsPane />;
+  if (activeSection === "general") {
+    return <GeneralPane />;
   }
   if (activeSection === "review") {
     return <ReviewSettingsPane />;
@@ -74,9 +73,6 @@ function renderSettingsSection(
     }
 
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
-  }
-  if (activeSection === "advanced") {
-    return <AdvancedPane />;
   }
   return <RepositoryPane repository={repository} />;
 }

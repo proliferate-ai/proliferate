@@ -101,7 +101,7 @@ export function useHomeScreen() {
           navigate(`/settings?section=repo&repo=${encodeURIComponent(firstRepository.sourceRoot)}`);
           return;
         }
-        navigate("/settings?section=defaults");
+        navigate("/settings?section=general");
       }
     }
   }

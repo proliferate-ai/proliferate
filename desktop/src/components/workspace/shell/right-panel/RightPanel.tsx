@@ -118,11 +118,10 @@ export function RightPanel({
                     type="button"
                     onClick={() => onModeChange(id)}
                     aria-label={`Show ${panelMode.label.toLowerCase()} panel`}
-                    className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs transition-colors ${
-                      isActive
+                    className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs transition-colors ${isActive
                         ? "text-sidebar-foreground"
                         : "text-sidebar-muted-foreground hover:text-sidebar-foreground"
-                    }`}
+                      }`}
                   >
                     <Icon className="size-3.5 shrink-0" />
                     <span>{panelMode.label}</span>
@@ -193,12 +192,12 @@ export function RightPanel({
             onMouseDown={onTerminalSeparatorDown}
             className="relative flex items-center justify-center h-[3px] shrink-0 cursor-row-resize group hover:bg-primary/30 active:bg-primary/50 transition-colors after:absolute after:inset-x-0 after:top-0 after:h-px after:bg-separator"
           />
-            <SizedPanel
-              data-panel="true"
-              id="terminal-panel"
-              className="min-h-0 flex-none overflow-hidden"
-              height={terminalHeight}
-            >
+          <SizedPanel
+            data-panel="true"
+            id="terminal-panel"
+            className="min-h-0 flex-none overflow-hidden"
+            height={terminalHeight}
+          >
             {shouldRenderContent ? (
               <TerminalPanel
                 isRuntimeReady={isWorkspaceReady}

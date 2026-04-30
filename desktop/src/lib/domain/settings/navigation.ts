@@ -14,8 +14,8 @@ export function isSettingsSection(value: string | null): value is SettingsSectio
 }
 
 export function normalizeSettingsSection(value: string | null): SettingsSection {
-  if (value === "configuration") {
-    return "defaults";
+  if (value === "configuration" || value === "defaults" || value === "advanced") {
+    return "general";
   }
 
   return isSettingsSection(value) ? value : SETTINGS_DEFAULT_SECTION;

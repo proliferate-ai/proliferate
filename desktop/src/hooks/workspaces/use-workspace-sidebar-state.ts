@@ -2,7 +2,8 @@ import type { GitStatusSnapshot } from "@anyharness/sdk";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
-  collectWorkspaceSidebarActivityStates,
+  collectWorkspaceSidebarActivityStatesWithErrorAttention,
+  resolveSessionErrorAttentionKey,
   type SidebarSessionActivityState,
 } from "@/lib/domain/sessions/activity";
 import {
@@ -36,13 +37,38 @@ interface WorkspaceSidebarState {
   isLoading: boolean;
 }
 
+const EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION: Record<string, string> = {};
+
 export function useWorkspaceSidebarState({
   showArchived,
 }: UseWorkspaceSidebarStateArgs): WorkspaceSidebarState {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
+  const lastViewedSessionErrorAtBySession = useWorkspaceUiStore((state) =>
+    state.lastViewedSessionErrorAtBySession
+    ?? EMPTY_LAST_VIEWED_SESSION_ERROR_AT_BY_SESSION
+  );
   const workspaceActivities = useHarnessStore(useShallow((state) =>
-    collectWorkspaceSidebarActivityStates(state.sessionSlots)
+    collectWorkspaceSidebarActivityStatesWithErrorAttention(
+      Object.fromEntries(
+        Object.entries(state.sessionSlots).map(([sessionId, slot]) => [
+          sessionId,
+          {
+            sessionId: slot.sessionId,
+            workspaceId: slot.workspaceId,
+            status: slot.status,
+            executionSummary: slot.executionSummary,
+            streamConnectionState: slot.streamConnectionState,
+            transcript: {
+              isStreaming: slot.transcript.isStreaming,
+              pendingInteractions: slot.transcript.pendingInteractions,
+            },
+            errorAttentionKey: resolveSessionErrorAttentionKey(slot),
+          },
+        ]),
+      ),
+      lastViewedSessionErrorAtBySession,
+    )
   ));
   const deferredLaunchesById = useDeferredHomeLaunchStore((state) => state.launches);
   const activeSessionTitle = useHarnessStore((state) => {

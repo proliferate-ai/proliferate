@@ -8,27 +8,25 @@ import {
   Keyboard,
   RefreshCw,
   Settings,
-  Shield,
   Sparkles,
 } from "@/components/ui/icons";
 import type { IconProps } from "@/components/ui/icons";
 
 export const SETTINGS_CONTENT_SECTIONS = [
+  "general",
   "agents",
-  "defaults",
   "review",
   "appearance",
   "account",
   "keyboard",
   "cloud",
-  "advanced",
   "repo",
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_CONTENT_SECTIONS)[number];
 export type SettingsStaticSection = Exclude<SettingsSection, "repo">;
 
-export const SETTINGS_DEFAULT_SECTION: SettingsStaticSection = "agents";
+export const SETTINGS_DEFAULT_SECTION: SettingsStaticSection = "general";
 
 // ── Grouped sidebar nav ──────────────────────────────────────────────
 
@@ -45,20 +43,13 @@ export interface SettingsNavGroup {
 export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   {
     id: "configuration",
-    heading: "Configuration",
     items: [
-      { kind: "section", id: "agents", label: "Agents", icon: Blocks },
-      { kind: "section", id: "defaults", label: "Defaults", icon: Shield },
-      { kind: "section", id: "review", label: "Review", icon: Brain },
-    ],
-  },
-  {
-    id: "primary",
-    items: [
+      { kind: "section", id: "general", label: "General", icon: Settings },
       { kind: "section", id: "appearance", label: "Appearance", icon: Sparkles },
       { kind: "section", id: "account", label: "Account", icon: CircleUser },
+      { kind: "section", id: "agents", label: "Agents", icon: Blocks },
+      { kind: "section", id: "review", label: "Review", icon: Brain },
       { kind: "section", id: "keyboard", label: "Keyboard", icon: Keyboard },
-      { kind: "section", id: "advanced", label: "Advanced", icon: Settings },
       { kind: "action", id: "support", label: "Support", icon: CircleQuestion },
     ],
   },

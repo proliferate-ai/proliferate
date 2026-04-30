@@ -6,6 +6,7 @@ import {
   resolveMostRecentHiddenChatTab,
   uniqueIds,
 } from "@/lib/domain/workspaces/tabs/visibility";
+import { resolveSessionErrorAttentionKey } from "@/lib/domain/sessions/activity";
 import {
   failLatencyFlow,
   startLatencyFlow,
@@ -37,6 +38,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
   const setVisibleChatSessionIdsForWorkspace = useWorkspaceUiStore(
     (state) => state.setVisibleChatSessionIdsForWorkspace,
   );
+  const markSessionErrorViewed = useWorkspaceUiStore((state) => state.markSessionErrorViewed);
   const rememberHiddenChatSessionForWorkspace = useWorkspaceUiStore(
     (state) => state.rememberHiddenChatSessionForWorkspace,
   );
@@ -66,6 +68,22 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
       showToast(message);
     });
   }, [activateChatTab, selectSession, selectedWorkspaceId, showToast]);
+
+  const markErroredSessionsViewedBeforeHide = useCallback((idsToHide: string[]) => {
+    if (idsToHide.length === 0) {
+      return;
+    }
+
+    const { sessionSlots } = useHarnessStore.getState();
+    for (const sessionId of idsToHide) {
+      const errorAttentionKey = resolveSessionErrorAttentionKey(
+        sessionSlots[sessionId] ?? null,
+      );
+      if (errorAttentionKey) {
+        markSessionErrorViewed(sessionId, errorAttentionKey);
+      }
+    }
+  }, [markSessionErrorViewed]);
 
   const showChatSessionTab = useCallback((sessionId: string, options?: ShowOptions) => {
     if (!selectedWorkspaceId) {
@@ -107,6 +125,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     }
     const idsToHide = [...expandedHideSet];
     const nextVisible = context.visibleIds.filter((id) => !expandedHideSet.has(id));
+    markErroredSessionsViewedBeforeHide(idsToHide);
     setVisibleChatSessionIdsForWorkspace(selectedWorkspaceId, nextVisible);
     idsToHide.forEach((id) => rememberHiddenChatSessionForWorkspace(selectedWorkspaceId, id));
 
@@ -128,6 +147,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     activeSessionId,
     context.childToParent,
     context.visibleIds,
+    markErroredSessionsViewedBeforeHide,
     rememberHiddenChatSessionForWorkspace,
     selectSessionId,
     selectedWorkspaceId,
@@ -151,6 +171,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
       });
     const keepSet = new Set(keepIds);
     const idsToHide = context.visibleIds.filter((id) => !keepSet.has(id));
+    markErroredSessionsViewedBeforeHide(idsToHide);
     setVisibleChatSessionIdsForWorkspace(selectedWorkspaceId, keepIds);
     idsToHide.forEach((id) => rememberHiddenChatSessionForWorkspace(selectedWorkspaceId, id));
     if (activeSessionId && !keepSet.has(activeSessionId)) {
@@ -161,6 +182,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     activeSessionId,
     context.childToParent,
     context.visibleIds,
+    markErroredSessionsViewedBeforeHide,
     rememberHiddenChatSessionForWorkspace,
     selectSessionId,
     selectedWorkspaceId,
@@ -180,6 +202,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
     const idsToHide = context.visibleIds.slice(anchorIndex + 1);
     const hideSet = new Set(idsToHide);
     const nextVisible = context.visibleIds.filter((id) => !hideSet.has(id));
+    markErroredSessionsViewedBeforeHide(idsToHide);
     setVisibleChatSessionIdsForWorkspace(selectedWorkspaceId, nextVisible);
     idsToHide.forEach((id) => rememberHiddenChatSessionForWorkspace(selectedWorkspaceId, id));
     if (activeSessionId && hideSet.has(activeSessionId)) {
@@ -189,6 +212,7 @@ export function useChatTabVisibilityActions(context: ChatTabVisibilityContext) {
   }, [
     activeSessionId,
     context.visibleIds,
+    markErroredSessionsViewedBeforeHide,
     rememberHiddenChatSessionForWorkspace,
     selectSessionId,
     selectedWorkspaceId,

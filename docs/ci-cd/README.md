@@ -28,6 +28,7 @@ server/
   deploy/                    # self-hosted production compose + update scripts
 scripts/
   build-agent-seed.mjs
+  generate-desktop-installer-manifest.mjs
   generate-updater-manifest.mjs
 ```
 
@@ -46,11 +47,14 @@ scripts/
 - Do not change updater endpoints, publish paths, or signing behavior in only
   one place. Keep these aligned:
   - `.github/workflows/release-desktop.yml`
+  - `scripts/generate-desktop-installer-manifest.mjs`
   - `scripts/generate-updater-manifest.mjs`
   - `desktop/src-tauri/tauri.conf.json`
   - `desktop/infra/main.tf`
 - The desktop updater must continue to consume signed artifacts plus
   `latest.json`. Do not add parallel ad hoc install paths.
+- Public human download links must consume installer artifacts from
+  `installers.json`, not the Tauri updater `latest.json` feed.
 - Only packaged desktop builds should auto-check for updates. Development builds
   should remain updater-free.
 - `server-ci.yml` currently builds and pushes the cloud API image, but this repo
@@ -105,6 +109,7 @@ Source of truth:
 - `.github/workflows/release-desktop.yml`
 - `desktop/src-tauri/tauri.conf.json`
 - `desktop/infra/main.tf`
+- `scripts/generate-desktop-installer-manifest.mjs`
 - `scripts/generate-updater-manifest.mjs`
 
 Flow:
@@ -128,19 +133,25 @@ Flow:
    - builds and signs the Tauri desktop packages
    - on macOS, builds the DMG and updater-enabled app bundle separately
    - verifies updater artifacts before release creation
+   - normalizes macOS DMG names to stable arch-specific filenames
    - normalizes macOS updater archive names to stable arch-specific filenames
    - creates a draft GitHub release
 4. The updater publish job then:
    - generates `latest.json`
-   - uploads signed updater artifacts to `s3://.../desktop/stable/`
-   - uploads `latest.json`
-   - invalidates the CloudFront cache for `/desktop/stable/latest.json`
+   - generates `installers.json`
+   - uploads signed updater artifacts and public DMG installers to
+     `s3://.../desktop/stable/`
+   - uploads `latest.json` and `installers.json`
+   - invalidates the CloudFront cache for both manifests
 
 Note:
 
 - The current desktop release matrix is macOS-only. Windows packaging and
   updater entries are temporarily disabled until the SDK generation step is
   Windows-safe.
+- `latest.json` is reserved for Tauri updater clients and intentionally points
+  at `.app.tar.gz` archives plus signatures. Public download pages should use
+  `installers.json`, which points at the user-facing DMG installers.
 - Agent seeds are target-specific Tauri resources under
   `desktop/src-tauri/agent-seeds/`. The seed builder cleans previous generated
   seed files before writing the current target archive, and the workflow asserts
