@@ -1,12 +1,15 @@
 import { useRef, type ReactNode } from "react";
 import { ApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
+import { CoworkComposerControl } from "@/components/workspace/chat/input/CoworkComposerStrip";
 import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
 import { ComposerFileMentionBadge } from "@/components/workspace/chat/input/ComposerFileMentionBadge";
 import { ComposerFileMentionSearch } from "@/components/workspace/chat/input/ComposerFileMentionSearch";
 import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
+import { ReviewComposerControl } from "@/components/workspace/chat/input/ReviewComposerControl";
+import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
 import { PendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
-import { SubagentComposerStrip } from "@/components/workspace/chat/input/SubagentComposerStrip";
+import { SubagentComposerControl, SubagentComposerStrip } from "@/components/workspace/chat/input/SubagentComposerStrip";
 import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerPanel";
 import { UserInputCard } from "@/components/workspace/chat/input/UserInputCard";
 import { McpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
@@ -15,7 +18,7 @@ import { WorkspaceArrivalAttachedPanelView } from "@/components/workspace/chat/s
 import { CloudRuntimeAttachedPanelView } from "@/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
 import { WorkspaceArrivalCloudPanel } from "@/components/workspace/chat/surface/WorkspaceArrivalCloudPanel";
 import { WorkspaceMobilityOverlayView } from "@/components/workspace/chat/surface/WorkspaceMobilityOverlay";
-import { useComposerTopSlot } from "@/hooks/chat/use-composer-top-slot";
+import { useComposerDockSlots } from "@/hooks/chat/use-composer-dock-slots";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { type MobilityPromptState } from "@/lib/domain/workspaces/mobility-prompt";
@@ -26,6 +29,7 @@ import {
 import {
   ArrowRight,
   ArrowUp,
+  AgentGlyph,
   ChevronDown,
   CloudIcon,
   Copy,
@@ -34,7 +38,12 @@ import {
   GitBranch,
 } from "@/components/ui/icons";
 import type { PlaygroundScenarioSelection, ScenarioKey } from "@/config/playground";
+import type {
+  CoworkComposerStripSummary,
+  CoworkComposerWorkspaceRow,
+} from "@/hooks/cowork/use-cowork-composer-strip";
 import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-session";
+import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
 import {
   CLOUD_RUNTIME_RECONNECT_ERROR,
   CLOUD_RUNTIME_RECONNECTING,
@@ -77,18 +86,62 @@ const noop = () => {};
 const noopAsync = async () => {};
 const revealExampleUrl = async () => "https://accounts.example.com/oauth/authorize?client_id=redacted";
 
+const PLAYGROUND_COWORK_ROWS: CoworkComposerWorkspaceRow[] = [
+  {
+    ownershipId: "workspace-frontend-polish",
+    workspaceId: "workspace-frontend-polish",
+    label: "frontend-polish",
+    sessionCount: 2,
+    active: true,
+    sessions: [
+      {
+        sessionLinkId: "coding-link-composer-layout",
+        codingSessionId: "coding-session-composer-layout",
+        label: "composer layout cleanup",
+        agentKind: "codex",
+        statusLabel: "Working",
+        meta: "Codex · gpt-5.4 · implementation",
+        latestCompletionLabel: null,
+        wakeScheduled: false,
+        color: resolveSubagentColor("coding-link-composer-layout"),
+        active: true,
+      },
+      {
+        sessionLinkId: "coding-link-visual-regression",
+        codingSessionId: "coding-session-visual-regression",
+        label: "visual regression pass",
+        agentKind: "claude",
+        statusLabel: "Idle",
+        meta: "Claude · sonnet · verification",
+        latestCompletionLabel: "Turn completed",
+        wakeScheduled: true,
+        color: resolveSubagentColor("coding-link-visual-regression"),
+        active: false,
+      },
+    ],
+  },
+];
+
+const PLAYGROUND_COWORK_SUMMARY: CoworkComposerStripSummary = {
+  label: "1 coding workspace",
+  detail: "1 working · 1 wake scheduled",
+  active: true,
+};
+
 export function PlaygroundComposer({ selection, replay }: PlaygroundComposerProps) {
-  const replayTopSlot = useComposerTopSlot();
+  const replaySlots = useComposerDockSlots();
   const scenario = selection.kind === "fixture" ? selection.key : null;
-  const upperSlot = scenario ? renderTopSlot(scenario) : replayTopSlot;
-  const subagentSlot = scenario ? renderSubagentSlot(scenario) : null;
-  const queueSlot = scenario ? renderQueueSlot(scenario) : null;
+  const contextSlot = scenario ? renderContextSlot(scenario) : replaySlots.contextSlot;
+  const queueSlot = scenario ? renderQueueSlot(scenario) : replaySlots.queueSlot;
+  const interactionSlot = scenario ? renderInteractionSlot(scenario) : replaySlots.interactionSlot;
+  const delegationSlot = scenario ? renderDelegationSlot(scenario) : replaySlots.delegationSlot;
   return (
     <div className="relative">
       <ChatComposerDock
-        upperSlot={upperSlot ?? undefined}
-        subagentSlot={subagentSlot ?? undefined}
+        contextSlot={contextSlot ?? undefined}
         queueSlot={queueSlot ?? undefined}
+        interactionSlot={interactionSlot ?? undefined}
+        delegationSlot={delegationSlot ?? undefined}
         footerSlot={scenario ? <PlaygroundMobilityFooterRow scenario={scenario} /> : undefined}
       >
         {selection.kind === "recording"
@@ -102,7 +155,53 @@ export function PlaygroundComposer({ selection, replay }: PlaygroundComposerProp
   );
 }
 
-export function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
+export function renderContextSlot(scenario: ScenarioKey): ReactNode | null {
+  switch (scenario) {
+    case "todos-short":
+    case "todos-mid":
+    case "todos-long":
+    case "workspace-arrival-created":
+    case "cloud-first-runtime":
+    case "cloud-provisioning":
+    case "cloud-applying-files":
+    case "cloud-blocked":
+    case "cloud-error":
+    case "cloud-reconnecting":
+    case "cloud-reconnect-error":
+      return renderPanelSlotFixture(scenario);
+    default:
+      return null;
+  }
+}
+
+export function renderInteractionSlot(scenario: ScenarioKey): ReactNode | null {
+  switch (scenario) {
+    case "execute-approval":
+    case "edit-approval":
+    case "pending-prompts-with-approval":
+    case "subagents-queued-wake-with-approval":
+    case "subagents-coding-review-with-approval":
+    case "gemini-mcp-approval-options":
+    case "gemini-tool-before-approval":
+    case "user-input-single-option":
+    case "user-input-single-freeform":
+    case "user-input-option-plus-other":
+    case "user-input-secret":
+    case "user-input-multi-question":
+    case "mcp-elicitation-boolean":
+    case "mcp-elicitation-enum":
+    case "mcp-elicitation-multi-select":
+    case "mcp-elicitation-mixed-required":
+    case "mcp-elicitation-url":
+    case "mcp-elicitation-validation-error":
+    case "mcp-elicitation-cancel-decline":
+      return renderPanelSlotFixture(scenario);
+    default:
+      return null;
+  }
+}
+
+function renderPanelSlotFixture(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {
     case "clean":
     case "gemini-retry-status":
@@ -157,6 +256,8 @@ export function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
     case "pending-prompts-editing":
       return null;
     case "pending-prompts-with-approval":
+    case "subagents-queued-wake-with-approval":
+    case "subagents-coding-review-with-approval":
       return (
         <ApprovalCard
           title="wc -l /Users/pablo/proliferate/server/proliferate/**/*.py | tail -1"
@@ -362,7 +463,7 @@ export function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
   }
 }
 
-export function renderSubagentSlot(scenario: ScenarioKey): ReactNode | null {
+export function renderDelegationSlot(scenario: ScenarioKey): ReactNode | null {
   switch (scenario) {
     case "subagents-composer-few":
       return (
@@ -374,8 +475,11 @@ export function renderSubagentSlot(scenario: ScenarioKey): ReactNode | null {
           onOpenParent={noop}
         />
       );
+    case "subagents-coding-review-with-approval":
+      return <PlaygroundDelegationStack />;
     case "subagents-composer-many":
     case "subagents-queued-wake":
+    case "subagents-queued-wake-with-approval":
       return (
         <SubagentComposerStrip
           rows={PLAYGROUND_SUBAGENT_STRIP_ROWS}
@@ -388,6 +492,94 @@ export function renderSubagentSlot(scenario: ScenarioKey): ReactNode | null {
     default:
       return null;
   }
+}
+
+function PlaygroundDelegationStack() {
+  return (
+    <DelegatedWorkComposerPanel>
+      <ReviewComposerControl
+        summary={{
+          label: "2 review agents reviewing code",
+          detail: "Code review · 1/2",
+        }}
+        icon={(
+          <AgentGlyph
+            agentKind="codex"
+            color={resolveSubagentColor("review-link-security")}
+            className="size-4"
+          />
+        )}
+        active
+      >
+        {() => (
+          <>
+            <div className="border-b border-border px-3 py-2">
+              <div className="text-sm font-medium text-foreground">2 review agents reviewing code</div>
+              <div className="text-xs text-muted-foreground">Code review · 1/2</div>
+            </div>
+            <div className="max-h-80 overflow-y-auto p-1">
+              <PlaygroundReviewAgentRow
+                agentKind="codex"
+                color={resolveSubagentColor("review-link-security")}
+                label="Security reviewer"
+                detail="Codex · gpt-5.4 · reviewing"
+                status="Reviewing"
+              />
+              <PlaygroundReviewAgentRow
+                agentKind="gemini"
+                color={resolveSubagentColor("review-link-ux")}
+                label="UX reviewer"
+                detail="Gemini · gemini-3-flash-preview · critique ready"
+                status="Changes"
+              />
+            </div>
+          </>
+        )}
+      </ReviewComposerControl>
+      <CoworkComposerControl
+        rows={PLAYGROUND_COWORK_ROWS}
+        summary={PLAYGROUND_COWORK_SUMMARY}
+        onOpenWorkspace={noop}
+        onOpenSession={noop}
+      />
+      <SubagentComposerControl
+        rows={PLAYGROUND_SUBAGENT_STRIP_ROWS}
+        parent={null}
+        summary={buildPlaygroundSubagentSummary(PLAYGROUND_SUBAGENT_STRIP_ROWS)}
+        onOpenSubagent={noop}
+        onOpenParent={noop}
+      />
+    </DelegatedWorkComposerPanel>
+  );
+}
+
+function PlaygroundReviewAgentRow({
+  agentKind,
+  color,
+  label,
+  detail,
+  status,
+}: {
+  agentKind: string;
+  color: string;
+  label: string;
+  detail: string;
+  status: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left">
+      <AgentGlyph agentKind={agentKind} color={color} className="size-5 shrink-0" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium text-foreground">
+          {label}
+        </span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {detail}
+        </span>
+      </span>
+      <span className="shrink-0 text-xs text-muted-foreground">{status}</span>
+    </div>
+  );
 }
 
 function buildPlaygroundSubagentSummary(
@@ -439,6 +631,7 @@ export function renderQueueSlot(scenario: ScenarioKey): ReactNode | null {
         />
       );
     case "subagents-queued-wake":
+    case "subagents-queued-wake-with-approval":
       return (
         <PendingPromptList
           sessionId={null}

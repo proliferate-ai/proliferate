@@ -23,6 +23,19 @@ export function isSubagentWakeProvenance(
   return provenance?.type === "subagentWake" || provenance?.type === "linkWake";
 }
 
+export function formatWakePromptQueueText(
+  provenance: WakePromptProvenance,
+): string {
+  const label = provenance.label?.trim();
+  if (label && label.length > 0) {
+    return `${label} finished`;
+  }
+  if (provenance.type === "linkWake" && provenance.relation === "cowork_coding_session") {
+    return "Coding session finished";
+  }
+  return "Subagent finished";
+}
+
 export function isReviewFeedbackProvenance(
   provenance: PromptProvenance | null | undefined,
 ): provenance is ReviewFeedbackPromptProvenance {

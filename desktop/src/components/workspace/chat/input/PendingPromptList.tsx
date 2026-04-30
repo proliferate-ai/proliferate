@@ -6,13 +6,12 @@ import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-
 import { useQueuedPromptEditReader } from "@/hooks/chat/use-queued-prompt-edit";
 import { useDeletePendingPrompt } from "@/hooks/sessions/use-delete-pending-prompt";
 import { PromptContentRenderer } from "@/components/workspace/chat/content/PromptContentRenderer";
-import { SubagentWakeBadge } from "@/components/workspace/chat/transcript/SubagentWakeBadge";
 import { ReviewFeedbackSummary } from "@/components/workspace/reviews/ReviewFeedbackSummary";
 import {
+  formatWakePromptQueueText,
   resolveReviewFeedbackPromptReference,
   isSubagentWakeProvenance,
 } from "@/lib/domain/chat/subagents/provenance";
-import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
 import { useSessionSelectionActions } from "@/hooks/sessions/use-session-selection-actions";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -142,17 +141,10 @@ function PendingPromptRow({
 
   if (wakeProvenance) {
     return (
-      <div className="flex justify-end">
-        <SubagentWakeBadge
-          label={wakeProvenance.label ?? null}
-          color={resolveSubagentColor(wakeProvenance.sessionLinkId)}
-          titleFallback={
-            wakeProvenance.type === "linkWake"
-            && wakeProvenance.relation === "cowork_coding_session"
-              ? "Coding session"
-              : "Subagent"
-          }
-        />
+      <div className="flex items-center rounded-md px-2 py-1 text-sm text-foreground">
+        <div className="min-w-0 flex-1 truncate text-sm leading-snug text-foreground/90">
+          {formatWakePromptQueueText(wakeProvenance)}
+        </div>
       </div>
     );
   }

@@ -95,9 +95,10 @@ export function ChatView() {
       <WorkspaceMobilityOverlay />
       <ChatComposerDock
         backdrop={isSessionMode}
-        upperSlot={composerDockSlots.upperSlot}
-        subagentSlot={composerDockSlots.subagentSlot}
+        contextSlot={composerDockSlots.contextSlot}
         queueSlot={composerDockSlots.queueSlot}
+        interactionSlot={composerDockSlots.interactionSlot}
+        delegationSlot={composerDockSlots.delegationSlot}
         footerSlot={<WorkspaceMobilityFooterRow />}
         data-telemetry-block
         data-focus-zone="chat"

@@ -10,7 +10,6 @@ Scope:
 - `desktop/src/components/workspace/chat/plans/**`
 - `desktop/src/components/workspace/reviews/**`
 - `desktop/src/hooks/chat/use-composer-dock-slots.tsx`
-- `desktop/src/hooks/chat/use-composer-top-slot.tsx`
 - `desktop/src/hooks/chat/use-active-todo-tracker.ts`
 - `desktop/src/hooks/reviews/**`
 - `desktop/src/lib/domain/chat/active-todo-tracker.ts`
@@ -27,16 +26,20 @@ Three layers, top to bottom:
 ```text
 ChatView
 └── ChatComposerDock                        (backdrop + scrim + padded max-width column + inset dock regions)
-    ├── upperSlot: at most one of
-    │     ├── ConnectedApprovalCard         (pending tool approval)
-    │     ├── TodoTrackerPanel              (Codex/Gemini structured plan)
+    ├── contextSlot: at most one of
     │     ├── WorkspaceArrivalAttachedPanel (workspace arrival/setup/pending/cloud-status)
-    │     └── CloudRuntimeAttachedPanel     (cloud runtime connecting/resuming/error)
-    ├── subagentSlot
-    │     ├── ComposerReviewRunPanel        (summary control + popover list/actions for review agents)
-    │     └── SubagentComposerStrip         (summary control + popover list for linked child sessions)
+    │     ├── CloudRuntimeAttachedPanel     (cloud runtime connecting/resuming/error)
+    │     └── TodoTrackerPanel              (Codex/Gemini structured plan)
     ├── queueSlot
-    │     └── PendingPromptList             (queued prompts, closest to composer)
+    │     └── PendingPromptList             (queued prompts)
+    ├── interactionSlot
+    │     ├── ConnectedApprovalCard         (pending tool approval)
+    │     ├── ConnectedUserInputCard        (agent question/form)
+    │     └── ConnectedMcpElicitationCard   (MCP form)
+    ├── delegationSlot
+    │     ├── ComposerReviewRunPanel        (summary control + popover list/actions for review agents)
+    │     ├── CoworkComposerStrip           (summary control + popover list for coding workspaces)
+    │     └── SubagentComposerStrip         (summary control + popover list for linked child sessions)
     ├── ChatInput
     │   └── ChatComposerSurface
     │       └── form: ComposerMentionEditor + ModelSelector + SessionConfigControls + ChatComposerActions
@@ -46,7 +49,7 @@ ChatView
 
 Non-negotiable:
 
-- **`ChatComposerDock` owns the dock shell.** Background, scrim, padding, max-width column, and the inset `px-5` region wrappers all live in `ChatComposerDock.tsx`. The production app (`ChatView`) and the dev playground (`ChatPlaygroundPage`) both render `ChatComposerDock` directly. Do not reconstruct this backdrop in a third place — if you need it somewhere new, reuse the dock.
+- **`ChatComposerDock` owns the dock shell.** Background, scrim, padding, max-width column, slot ordering, and the inset region wrappers all live in `ChatComposerDock.tsx`. The production app (`ChatView`) and the dev playground (`ChatPlaygroundPage`) both render `ChatComposerDock` directly. Do not reconstruct this backdrop in a third place — if you need it somewhere new, reuse the dock.
 - **`ChatInput` is the composer surface only.** It does not own any of the outer wrapping. It takes no `topSlot` prop. Everything above and below the composer surface is the dock's responsibility, and the workspace footer row is rendered via the dock's dedicated footer slot rather than ad hoc workspace logic in `ChatInput.tsx`.
 - **Do not add in-composer read-only status badges.** Session MCP/Powers state belongs in settings, session details, or explicit action surfaces, not as a persistent strip inside `ChatInput`.
 - **The composer surface stays unchanged and paints the seam.** There is no `flatTop` mode. Dock-region panels are narrower attached trays that sit directly above the composer: rounded top corners, side/top borders, no bottom border, and no gap. The composer surface paints after the dock regions so its own top outline remains visible at the seam.
@@ -55,32 +58,39 @@ Non-negotiable:
 ## 2. Dock Regions
 
 `useComposerDockSlots` (`desktop/src/hooks/chat/use-composer-dock-slots.tsx`)
-derives the regions above the composer. The upper region holds **at most one**
-gating/status panel at a time, with this precedence:
+derives the named regions above the composer. They always render in this order:
 
-1. **`ConnectedApprovalCard`** — any `pendingApproval` on the active slot
-2. **`TodoTrackerPanel`** — an active structured plan (Codex/Gemini, non-empty entries, status `in_progress`)
-3. **`WorkspaceArrivalAttachedPanel`** — workspace arrival / setup / pending / cloud-status
-4. **`CloudRuntimeAttachedPanel`** — cloud runtime in any non-ready phase
+1. **`contextSlot`** — workspace/worktree/runtime context first. The slot holds at most one of `WorkspaceArrivalAttachedPanel`, `CloudRuntimeAttachedPanel`, or `TodoTrackerPanel`.
+2. **`queueSlot`** — queued prompts and queued wake prompts.
+3. **`interactionSlot`** — active questions/forms: permission approvals, user-input questions, and MCP elicitation forms.
+4. **`delegationSlot`** — composer-attached delegated work summaries: review agents, cowork coding sessions, and linked same-workspace subagents.
 
-Review status lives in `subagentSlot`, not `upperSlot`. `ComposerReviewRunPanel`
+Review status lives in `delegationSlot`, not `contextSlot`. `ComposerReviewRunPanel`
 uses the same compact summary-control + popover pattern as subagents/cowork.
 The popover owns reviewer rows, critique links, stop, send-feedback, and
 review-revision actions. Review automation can still make the composer
 unavailable through chat availability state, but it should not displace the
 todo tracker or workspace/cloud panels with a full card.
 
-If you need to introduce another upper-panel inhabitant, add it to the
-precedence chain in `use-composer-dock-slots.tsx` — do not compute it inline in
-`ChatView` and do not introduce a parallel arbiter elsewhere.
+If you need to introduce another dock-region inhabitant, classify it by state
+role first: context, delegated work, queued work, or active interaction. Add it
+to `use-composer-dock-slots.tsx` — do not compute it inline in `ChatView` and
+do not introduce a parallel arbiter elsewhere.
 
-Below the upper region, `subagentSlot` renders compact summary controls for
-review agents, linked same-workspace child sessions, and cowork sessions. Each
-control opens a popover list with the full child-session/action set; individual
-child chips should not be rendered directly above the composer. Below that,
-`queueSlot` renders queued prompts closest to the composer. Do not move queued
-prompts above the delegated-work summaries; the queue remains the next prompt
-the active session will process.
+`delegationSlot` renders one shared `DelegatedWorkComposerPanel` containing
+compact summary controls for review agents, cowork coding sessions, and linked
+same-workspace child sessions. Each control opens a popover list with the full
+child-session/action set; individual child chips should not be rendered directly
+above the composer. `delegationSlot` is the bottom dock pane and must remain
+directly attached to `ChatInput`; it is an indicator layer for adjacent work,
+not a blocking prompt panel. `queueSlot` must render before active questions,
+forms, and permission approvals in `interactionSlot`; both stack above
+delegated work when present. When multiple delegated-work controls are visible,
+they live in the same panel in review, cowork, subagent order.
+
+Dock panes are narrower than the composer. When several panes stack, higher
+context panes are slightly narrower than lower panes so each layer reads as
+attached to, but lighter than, the section below it.
 
 ## 2.1 Composer footer semantics
 
@@ -91,7 +101,7 @@ the active session will process.
 - It uses `ComposerControlButton`, not ad hoc button treatments.
 - The location control is the only footer control that opens UI, via `PopoverButton` + `ComposerPopoverSurface`.
 - The detail and branch controls are direct utility actions: local workspaces copy a filesystem path, cloud workspaces copy repository identity, and branch copies the branch name.
-- In-flight workspace mobility does **not** render in the top-slot path anymore. It uses the dedicated `ChatView` overlay instead.
+- In-flight workspace mobility does **not** render in the dock-slot path anymore. It uses the dedicated `ChatView` overlay instead.
 
 ## 3. The three composer-area components
 
@@ -109,7 +119,7 @@ All three sit inside the composer area. They differ by lifecycle and role, and t
 There is **one** `ApprovalCard` component with two exports:
 
 - `ApprovalCard` — pure presentational, takes `title / actions / onSelectOption / onAllow / onDeny` props. Usable from the dev playground.
-- `ConnectedApprovalCard` — wraps the above with `useActiveChatSessionState()` + `useChatPermissionActions()`. Used in production by `useComposerTopSlot`.
+- `ConnectedApprovalCard` — wraps the above with `useActiveChatSessionState()` + `useChatPermissionActions()`. Used in production by `useComposerDockSlots`.
 
 Do not split this into `ExecuteApprovalCard` / `EditApprovalCard` / `SwitchModeApprovalCard`. All three kinds use the same shell and the same button row. If a variant ever needs genuinely different rendering (e.g. a radio group with an inline rejection textarea for switch_mode), add a branch inside `ApprovalCard` on `pendingApproval.toolKind` — do not fork the component.
 
@@ -167,7 +177,7 @@ Borrowed directly from `references/codex_todo.html` and `references/codex_plan.h
 
 ### 4.1 Panels are narrower than the composer
 
-`ChatComposerDock` wraps the top-slot in `<div className="... px-5">` so the panel is inset 20px from the composer surface on each side. The slot has no bottom margin and no positive z-index: `ComposerAttachedPanel` is an attached cap above the composer, using `rounded-t-2xl border-x border-t border-border/80`, while the composer surface paints after it so the input's top outline stays visible. Do not add a `flatTop` mode, a detached gap, a full-perimeter top-slot card, or a `z-*` layer that lets the top slot cover the composer border.
+`ChatComposerDock` wraps dock panes in inset region wrappers so every pane is narrower than the composer surface. Delegated-work panes use `px-5` because they attach directly to `ChatInput`; interaction, queue, and context panes are progressively narrower as they stack upward. Slots have no bottom margin and no positive z-index: `ComposerAttachedPanel` is an attached cap above the composer, using `rounded-t-2xl border-x border-t border-border/80`, while the composer surface paints after the dock panes so the input's top outline remains visible at the seam. Do not add a `flatTop` mode, a detached gap, a full-perimeter dock card, or a `z-*` layer that lets a dock pane cover the composer border.
 
 ### 4.2 Headers are minimalist
 
@@ -201,7 +211,7 @@ Do **not** grow the scroll cap past `max-h-40` — the Codex reference is exactl
 - Body expanded: plain markdown at `px-4 py-3`.
 - Body collapsed: `max-height: min(20rem, 45vh)` with a bottom-only `mask-image` fade + a floating `Button size="pill" variant="inverted"` "Expand plan" pill centered near the bottom.
 - Pending decision actions render in the transcript card, not in the composer
-  top slot. Generic linked permission interactions are suppressed from
+  interaction slot. Generic linked permission interactions are suppressed from
   `ConnectedApprovalCard`.
 - Default: expanded. Collapse is via the header chevron.
 
@@ -242,6 +252,7 @@ Scenarios (selectable via `?s=<key>`):
 - `workspace-arrival-created` — WorkspaceArrivalAttachedPanel above the composer
 - `cloud-first-runtime`, `cloud-provisioning`, `cloud-applying-files`, `cloud-blocked`, `cloud-error`, `cloud-reconnecting`, `cloud-reconnect-error` — cloud workspace/runtime composer states
 - `claude-plan-short`, `claude-plan-long` — ProposedPlanCard in transcript
+- `subagents-composer-few`, `subagents-composer-many`, `subagents-queued-wake`, `subagents-queued-wake-with-approval`, `subagents-coding-review-with-approval` — delegated-work strip, queued wake prompt, coding/review agent, and approval stack coverage
 - `mobility-local-actionable`, `mobility-local-blocked`, `mobility-unpublished-branch`, `mobility-unpushed-commits`, `mobility-out-of-sync-branch`, `mobility-cloud-active`, `mobility-in-flight`, `mobility-failed` — composer footer row + mobility states
 
 The playground is **dev-only**. It is lazy-loaded via `React.lazy()` gated on `import.meta.env.DEV` in `App.tsx`, so neither the page nor its fixtures land in production bundles.
@@ -257,6 +268,6 @@ Thin page → fat components, per the `pages/**` orchestration-only rule:
 - `lib/domain/chat/__fixtures__/playground.ts` — fixture data (`TODOS_*`, `CLAUDE_PLAN_*`, `*_OPTIONS`)
 - `components/playground/PlaygroundScenarioBar.tsx` — top-bar scenario picker
 - `components/playground/PlaygroundTranscript.tsx` — transcript area (renders `ProposedPlanCard` when applicable)
-- `components/playground/PlaygroundComposer.tsx` — `ChatComposerDock` + scenario-driven top slot + read-only composer surface
+- `components/playground/PlaygroundComposer.tsx` — `ChatComposerDock` + scenario-driven dock slots + read-only composer surface
 
-Adding a new scenario: update `config/playground.ts` (add the key + label), optionally add fixture data in `__fixtures__/playground.ts`, then extend the switch in `PlaygroundComposer.renderTopSlot` and/or `PlaygroundTranscript`.
+Adding a new scenario: update `config/playground.ts` (add the key + label), optionally add fixture data in `__fixtures__/playground.ts`, then extend the relevant slot renderer in `PlaygroundComposer` and/or `PlaygroundTranscript`.

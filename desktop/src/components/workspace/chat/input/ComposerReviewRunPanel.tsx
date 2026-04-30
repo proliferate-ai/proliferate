@@ -2,19 +2,20 @@ import { useEffect, type ReactNode } from "react";
 import type { ReviewAssignmentDetail, ReviewRunDetail } from "@anyharness/sdk";
 import { getProviderDisplayName } from "@/config/providers";
 import { Button } from "@/components/ui/Button";
-import { PopoverButton } from "@/components/ui/PopoverButton";
 import {
   AgentGlyph,
   CheckCircleFilled,
-  ChevronDown,
   CircleAlert,
   FileText,
   RefreshCw,
   StopSquare,
   X,
 } from "@/components/ui/icons";
-import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
-import { ComposerPopoverSurface } from "@/components/workspace/chat/input/ComposerPopoverSurface";
+import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
+import {
+  ReviewComposerControl,
+  type ReviewComposerSummary,
+} from "@/components/workspace/chat/input/ReviewComposerControl";
 import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
 import { useReviewActions } from "@/hooks/reviews/use-review-actions";
 import { useSessionSelectionActions } from "@/hooks/sessions/use-session-selection-actions";
@@ -36,6 +37,14 @@ import {
 import { useToastStore } from "@/stores/toast/toast-store";
 
 export function ConnectedComposerReviewRunPanel() {
+  return <ConnectedComposerReviewRunSurface panel />;
+}
+
+export function ConnectedComposerReviewRunControl() {
+  return <ConnectedComposerReviewRunSurface />;
+}
+
+function ConnectedComposerReviewRunSurface({ panel = false }: { panel?: boolean }) {
   const { run, startingReview } = useActiveReviewRun();
   const actions = useReviewActions();
   const { selectSession } = useSessionSelectionActions();
@@ -67,8 +76,8 @@ export function ConnectedComposerReviewRunPanel() {
   };
 
   if (run) {
-    return (
-      <ReviewComposerStrip
+    const control = (
+      <ReviewComposerControl
         summary={summaryForRun(run)}
         icon={iconForRun(run)}
         active={run.status !== "passed" && run.status !== "stopped"}
@@ -109,71 +118,31 @@ export function ConnectedComposerReviewRunPanel() {
             isReviewingRevision={actions.isMarkingReviewRevisionReady}
           />
         )}
-      </ReviewComposerStrip>
+      </ReviewComposerControl>
     );
+    return renderReviewControl(control, panel);
   }
 
   if (startingReview) {
-    return (
-      <ReviewComposerStrip
+    const control = (
+      <ReviewComposerControl
         summary={summaryForStartingReview(startingReview)}
         icon={iconForStartingReview(startingReview)}
         active
       >
         {() => <StartingReviewPopoverContent startingReview={startingReview} />}
-      </ReviewComposerStrip>
+      </ReviewComposerControl>
     );
+    return renderReviewControl(control, panel);
   }
 
   return null;
 }
 
-interface ReviewComposerSummary {
-  label: string;
-  detail: string | null;
-}
-
-function ReviewComposerStrip({
-  summary,
-  icon,
-  active,
-  children,
-}: {
-  summary: ReviewComposerSummary;
-  icon: ReactNode;
-  active: boolean;
-  children: (close: () => void) => ReactNode;
-}) {
-  return (
-    <div
-      className="flex items-center rounded-t-2xl border-x border-t border-border/70 bg-card/70 px-2 py-1.5 backdrop-blur-sm"
-      data-telemetry-mask
-      aria-label="Review agents"
-    >
-      <PopoverButton
-        side="top"
-        align="start"
-        offset={6}
-        className="w-auto border-0 bg-transparent p-0 shadow-none"
-        trigger={(
-          <ComposerControlButton
-            icon={icon}
-            label={summary.label}
-            detail={summary.detail}
-            trailing={<ChevronDown className="size-3 text-[color:var(--color-composer-control-muted-foreground)]" />}
-            active={active}
-            className="max-w-full"
-          />
-        )}
-      >
-        {(close) => (
-          <ComposerPopoverSurface className="w-[min(30rem,calc(100vw-2rem))] p-0" data-telemetry-mask>
-            {children(close)}
-          </ComposerPopoverSurface>
-        )}
-      </PopoverButton>
-    </div>
-  );
+function renderReviewControl(control: ReactNode, panel: boolean) {
+  return panel ? (
+    <DelegatedWorkComposerPanel>{control}</DelegatedWorkComposerPanel>
+  ) : control;
 }
 
 function RunReviewPopoverContent({

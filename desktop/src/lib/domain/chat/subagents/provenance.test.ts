@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatWakePromptQueueText,
   formatSubagentLabel,
   isSubagentWakeProvenance,
   resolveReviewFeedbackPromptReference,
@@ -37,6 +38,26 @@ describe("isSubagentWakeProvenance", () => {
       sessionLinkId: "link-1",
       completionId: "completion-1",
     })).toBe(true);
+  });
+});
+
+describe("formatWakePromptQueueText", () => {
+  it("formats labeled subagent wake prompts as plain queue text", () => {
+    expect(formatWakePromptQueueText({
+      type: "subagentWake",
+      sessionLinkId: "link-1",
+      completionId: "completion-1",
+      label: "runtime-server-sdk-survey",
+    })).toBe("runtime-server-sdk-survey finished");
+  });
+
+  it("falls back for unlabeled cowork wake prompts", () => {
+    expect(formatWakePromptQueueText({
+      type: "linkWake",
+      relation: "cowork_coding_session",
+      sessionLinkId: "link-1",
+      completionId: "completion-1",
+    })).toBe("Coding session finished");
   });
 });
 

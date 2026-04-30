@@ -45,7 +45,7 @@ import { PlanPickerPopover } from "./PlanPickerPopover";
 
 /**
  * The composer surface: mention-aware editor + model / session controls +
- * send button. The outer dock shell (backdrop, padding, max-width, top-slot
+ * send button. The outer dock shell (backdrop, padding, max-width, dock-slot
  * area) is owned by ChatComposerDock so it can be shared with the dev
  * playground.
  */

@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { isValidElement } from "react";
+import { createElement, isValidElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
 import { SCENARIOS, type ScenarioKey } from "./playground";
 import {
+  renderContextSlot,
+  renderDelegationSlot,
+  renderInteractionSlot,
   renderMobilityOverlayPreview,
   renderQueueSlot,
-  renderSubagentSlot,
-  renderTopSlot,
 } from "@/components/playground/PlaygroundComposer";
 import {
   FILE_MENTION_SEARCH_RESULTS,
@@ -39,6 +42,8 @@ const SUBAGENT_PLAYGROUND_SCENARIOS: ScenarioKey[] = [
   "subagents-composer-few",
   "subagents-composer-many",
   "subagents-queued-wake",
+  "subagents-queued-wake-with-approval",
+  "subagents-coding-review-with-approval",
   "subagent-wake-card",
 ];
 
@@ -58,6 +63,7 @@ const QUEUE_COMPOSER_SCENARIOS: ScenarioKey[] = [
   "pending-prompts-editing",
   "pending-prompts-with-approval",
   "subagents-queued-wake",
+  "subagents-queued-wake-with-approval",
 ];
 
 describe("playground scenarios", () => {
@@ -72,15 +78,20 @@ describe("playground scenarios", () => {
   it("includes subagent composer and wake scenarios for visual iteration", () => {
     expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(SUBAGENT_PLAYGROUND_SCENARIOS));
     expect(PLAYGROUND_SUBAGENT_STRIP_ROWS.length).toBeGreaterThan(6);
-    expect(isValidElement(renderSubagentSlot("subagents-composer-few"))).toBe(true);
-    expect(isValidElement(renderSubagentSlot("subagents-composer-many"))).toBe(true);
-    expect(isValidElement(renderSubagentSlot("subagents-queued-wake"))).toBe(true);
+    expect(isValidElement(renderDelegationSlot("subagents-composer-few"))).toBe(true);
+    expect(isValidElement(renderDelegationSlot("subagents-composer-many"))).toBe(true);
+    expect(isValidElement(renderDelegationSlot("subagents-queued-wake"))).toBe(true);
+    expect(isValidElement(renderDelegationSlot("subagents-queued-wake-with-approval"))).toBe(true);
+    expect(isValidElement(renderDelegationSlot("subagents-coding-review-with-approval"))).toBe(true);
     expect(isValidElement(renderQueueSlot("subagents-queued-wake"))).toBe(true);
+    expect(isValidElement(renderQueueSlot("subagents-queued-wake-with-approval"))).toBe(true);
+    expect(isValidElement(renderInteractionSlot("subagents-queued-wake-with-approval"))).toBe(true);
+    expect(isValidElement(renderInteractionSlot("subagents-coding-review-with-approval"))).toBe(true);
   });
 
-  it("renders cloud composer top-slot scenarios", () => {
+  it("renders cloud composer context-slot scenarios", () => {
     for (const scenario of CLOUD_COMPOSER_SCENARIOS) {
-      expect(isValidElement(renderTopSlot(scenario))).toBe(true);
+      expect(isValidElement(renderContextSlot(scenario))).toBe(true);
     }
   });
 
@@ -88,8 +99,62 @@ describe("playground scenarios", () => {
     for (const scenario of QUEUE_COMPOSER_SCENARIOS) {
       expect(isValidElement(renderQueueSlot(scenario))).toBe(true);
     }
-    expect(renderTopSlot("pending-prompts-single")).toBeNull();
-    expect(isValidElement(renderTopSlot("pending-prompts-with-approval"))).toBe(true);
+    expect(renderInteractionSlot("pending-prompts-single")).toBeNull();
+    expect(isValidElement(renderInteractionSlot("pending-prompts-with-approval"))).toBe(true);
+  });
+
+  it("renders subagent wake prompts as plain queued text", () => {
+    const html = renderToStaticMarkup(renderQueueSlot("subagents-queued-wake"));
+    expect(html).toContain("runtime-server-sdk-survey finished");
+    expect(html).not.toContain("Turn Completed");
+  });
+
+  it("keeps queued prompts before active questions and permission approvals", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        ChatComposerDock,
+        {
+          backdrop: false,
+          queueSlot: renderQueueSlot("pending-prompts-with-approval"),
+          interactionSlot: renderInteractionSlot("pending-prompts-with-approval"),
+          children: createElement("div", { "data-slot": "composer" }),
+        },
+      ),
+    );
+    const queueIndex = html.indexOf("Queued messages");
+    const approvalIndex = html.indexOf("wc -l /Users/pablo/proliferate/server/proliferate/**/*.py | tail -1");
+    expect(queueIndex).toBeGreaterThanOrEqual(0);
+    expect(approvalIndex).toBeGreaterThanOrEqual(0);
+    expect(queueIndex).toBeLessThan(approvalIndex);
+  });
+
+  it("keeps delegated-work controls attached to the composer", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        ChatComposerDock,
+        {
+          backdrop: false,
+          contextSlot: createElement("div", { "data-slot": "context" }),
+          queueSlot: createElement("div", { "data-slot": "queue" }),
+          interactionSlot: createElement("div", { "data-slot": "interaction" }),
+          delegationSlot: createElement("div", { "data-slot": "delegation" }),
+          children: createElement("div", { "data-slot": "composer" }),
+        },
+      ),
+    );
+    const order = ["context", "queue", "interaction", "delegation", "composer"]
+      .map((slot) => html.indexOf(`data-slot="${slot}"`));
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((left, right) => left - right));
+  });
+
+  it("keeps subagents closest to the composer inside the delegation stack", () => {
+    const html = renderToStaticMarkup(renderDelegationSlot("subagents-coding-review-with-approval"));
+    const order = ["Review agents", "Cowork coding workspaces", "Subagents"]
+      .map((label) => html.indexOf(`aria-label="${label}"`));
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((left, right) => left - right));
+    expect(html.match(/aria-label="Delegated work"/g)).toHaveLength(1);
   });
 
   it("renders mobility overlay playground scenarios through the production view", () => {

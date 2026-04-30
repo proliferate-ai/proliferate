@@ -57,6 +57,8 @@ export type ScenarioKey =
   | "subagents-composer-few"
   | "subagents-composer-many"
   | "subagents-queued-wake"
+  | "subagents-queued-wake-with-approval"
+  | "subagents-coding-review-with-approval"
   | "subagent-wake-card"
   | "mobility-local-actionable"
   | "mobility-local-blocked"
@@ -130,6 +132,8 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "subagents-composer-few": { label: "Subagents composer (3)" },
   "subagents-composer-many": { label: "Subagents composer (10)" },
   "subagents-queued-wake": { label: "Subagent queued wake" },
+  "subagents-queued-wake-with-approval": { label: "Subagents + wake + approval" },
+  "subagents-coding-review-with-approval": { label: "Subagents + coding + review + approval" },
   "subagent-wake-card": { label: "Subagent wake card" },
   "mobility-local-actionable": { label: "Mobility (actionable)" },
   "mobility-local-blocked": { label: "Mobility (blocked)" },

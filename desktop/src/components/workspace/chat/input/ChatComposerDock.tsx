@@ -2,9 +2,10 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
   backdrop?: boolean;
-  upperSlot?: ReactNode;
-  subagentSlot?: ReactNode;
+  contextSlot?: ReactNode;
   queueSlot?: ReactNode;
+  interactionSlot?: ReactNode;
+  delegationSlot?: ReactNode;
   footerSlot?: ReactNode;
   children: ReactNode;
 }
@@ -14,17 +15,19 @@ interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
  *   1. optional backdrop wrapper (blur + scrim) so the composer looks
  *      layered over the transcript scroll
  *   2. a padded max-width column
- *   3. optional inset dock regions (narrower than the composer)
- *   4. children — usually `<ChatInput />` or a playground surface
+ *   3. optional inset dock regions, top to bottom:
+ *      context, queued prompts, active interactions, delegated work
+ *   4. children - usually `<ChatInput />` or a playground surface
  *
  * Consumed by `ChatView` (production) and `ChatPlaygroundPage` (dev) so
  * both surfaces stay in sync automatically.
  */
 export function ChatComposerDock({
   backdrop = true,
-  upperSlot,
-  subagentSlot,
+  contextSlot,
   queueSlot,
+  interactionSlot,
+  delegationSlot,
   footerSlot,
   children,
   className = "",
@@ -37,14 +40,17 @@ export function ChatComposerDock({
       )}
       <div className={`relative px-4 pb-4 ${className}`} {...rest}>
         <div className="relative mx-auto max-w-3xl @container">
-          {upperSlot && (
-            <div className="relative flex flex-col px-5">{upperSlot}</div>
-          )}
-          {subagentSlot && (
-            <div className="relative flex flex-col px-5">{subagentSlot}</div>
+          {contextSlot && (
+            <div className="relative flex flex-col px-8">{contextSlot}</div>
           )}
           {queueSlot && (
-            <div className="relative flex flex-col px-5">{queueSlot}</div>
+            <div className="relative flex flex-col px-7">{queueSlot}</div>
+          )}
+          {interactionSlot && (
+            <div className="relative flex flex-col px-6">{interactionSlot}</div>
+          )}
+          {delegationSlot && (
+            <div className="relative flex flex-col px-5">{delegationSlot}</div>
           )}
           {children}
           {footerSlot ? (
