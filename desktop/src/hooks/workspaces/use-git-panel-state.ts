@@ -13,6 +13,7 @@ import {
   buildGitPanelFiles,
   countVisibleStatusFiles,
   gitPanelModeLabel,
+  gitPanelRuntimeBlockWorkspaceId,
   repoRootDefaultBranch,
   resolveGitPanelBaseRef,
   sourceRootForGitPanel,
@@ -39,8 +40,12 @@ export function useGitPanelState(mode: GitPanelMode) {
     (state) => state.selectedLogicalWorkspaceId,
   );
   const activeWorkspaceId = selectedLogicalWorkspaceId ?? selectedWorkspaceId;
+  const runtimeBlockWorkspaceId = gitPanelRuntimeBlockWorkspaceId(
+    selectedWorkspaceId,
+    selectedLogicalWorkspaceId,
+  );
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
-  const runtimeBlockedReason = getWorkspaceRuntimeBlockReason(activeWorkspaceId);
+  const runtimeBlockedReason = getWorkspaceRuntimeBlockReason(runtimeBlockWorkspaceId);
   const isRuntimeReady = runtimeBlockedReason === null;
   const { data: workspaceCollections } = useWorkspaces();
 

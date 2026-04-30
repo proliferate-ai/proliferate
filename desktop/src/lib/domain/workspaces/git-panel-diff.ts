@@ -98,6 +98,13 @@ export function gitPanelDiffScope(mode: GitPanelMode): GitDiffScope {
   return "unstaged";
 }
 
+export function gitPanelRuntimeBlockWorkspaceId(
+  selectedWorkspaceId: string | null,
+  _selectedLogicalWorkspaceId: string | null,
+): string | null {
+  return selectedWorkspaceId;
+}
+
 export function gitPanelOpenAction(mode: GitPanelMode, file: GitPanelFile): GitPanelOpenAction {
   if (mode !== "branch") {
     return "diff";

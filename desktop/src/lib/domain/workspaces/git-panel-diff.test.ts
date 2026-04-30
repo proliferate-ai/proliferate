@@ -4,6 +4,7 @@ import {
   buildGitPanelFiles,
   gitPanelDiffScope,
   gitPanelOpenAction,
+  gitPanelRuntimeBlockWorkspaceId,
   resolveGitPanelBaseRef,
 } from "./git-panel-diff";
 
@@ -93,5 +94,24 @@ describe("git panel diff domain", () => {
     expect(gitPanelDiffScope("unstaged")).toBe("unstaged");
     expect(gitPanelDiffScope("staged")).toBe("staged");
     expect(gitPanelDiffScope("branch")).toBe("branch");
+  });
+
+  it("checks runtime blocking against the materialized workspace selection", () => {
+    const blockedCloudWorkspaceId = "cloud:workspace-1";
+    const runtimeBlockReason = (workspaceId: string | null) => (
+      workspaceId === blockedCloudWorkspaceId
+        ? "Cloud workspace is reconnecting."
+        : null
+    );
+
+    expect(runtimeBlockReason(gitPanelRuntimeBlockWorkspaceId(
+      blockedCloudWorkspaceId,
+      "remote:github:owner:repo:main",
+    ))).toBe("Cloud workspace is reconnecting.");
+    expect(gitPanelRuntimeBlockWorkspaceId(
+      blockedCloudWorkspaceId,
+      "remote:github:owner:repo:main",
+    )).toBe(blockedCloudWorkspaceId);
+    expect(gitPanelRuntimeBlockWorkspaceId(null, "remote:github:owner:repo:main")).toBeNull();
   });
 });
