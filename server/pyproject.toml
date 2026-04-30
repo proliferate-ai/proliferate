@@ -18,6 +18,7 @@ dependencies = [
     "cryptography>=44.0.0",
     "passlib[bcrypt]>=1.7.0",
     "python-multipart>=0.0.18",
+    "python-dateutil>=2.9.0",
     "e2b>=1.5.6",
     "daytona>=0.29.0",
     "sentry-sdk[fastapi]>=2.28.0",

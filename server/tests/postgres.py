@@ -8,6 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from alembic import command
 from proliferate.db.migrations import build_alembic_config
+import proliferate.db.models.anonymous_telemetry  # noqa: F401
+import proliferate.db.models.auth  # noqa: F401
+import proliferate.db.models.automations  # noqa: F401
+import proliferate.db.models.billing  # noqa: F401
+import proliferate.db.models.cloud  # noqa: F401
 from proliferate.db.models.base import Base
 
 POSTGRES_USER = "proliferate"

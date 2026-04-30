@@ -44,7 +44,7 @@ export function useWorkspaceSidebarActions() {
     }
   }, [location.pathname, navigate]);
 
-  const goToTopLevelRoute = useCallback((path: "/" | "/powers") => {
+  const goToTopLevelRoute = useCallback((path: "/" | "/powers" | "/automations") => {
     if (mobility.selectionLocked) {
       showToast("Finish the current workspace move before leaving this workspace.");
       return;
@@ -73,6 +73,10 @@ export function useWorkspaceSidebarActions() {
 
   const handleGoPowers = useCallback(() => {
     goToTopLevelRoute("/powers");
+  }, [goToTopLevelRoute]);
+
+  const handleGoAutomations = useCallback(() => {
+    goToTopLevelRoute("/automations");
   }, [goToTopLevelRoute]);
 
   const handleSelectWorkspace = useCallback((workspaceId: string) => {
@@ -183,6 +187,7 @@ export function useWorkspaceSidebarActions() {
     handleAddRepo,
     handleGoHome,
     handleGoPowers,
+    handleGoAutomations,
     handleSelectWorkspace,
     handleCreateLocalWorkspace,
     handleCreateWorktreeWorkspace,

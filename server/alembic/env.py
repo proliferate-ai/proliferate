@@ -8,6 +8,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
 import proliferate.db.models.anonymous_telemetry  # noqa: F401
+import proliferate.db.models.automations  # noqa: F401
+import proliferate.db.models.cloud  # noqa: F401
 from alembic import context
 from proliferate.config import settings
 from proliferate.db.models.base import Base

@@ -1072,6 +1072,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/automations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Automations Endpoint */
+        get: operations["list_automations_endpoint_v1_automations_get"];
+        put?: never;
+        /** Create Automation Endpoint */
+        post: operations["create_automation_endpoint_v1_automations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/automations/{automation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Automation Endpoint */
+        get: operations["get_automation_endpoint_v1_automations__automation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Automation Endpoint */
+        patch: operations["update_automation_endpoint_v1_automations__automation_id__patch"];
+        trace?: never;
+    };
+    "/v1/automations/{automation_id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause Automation Endpoint */
+        post: operations["pause_automation_endpoint_v1_automations__automation_id__pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/automations/{automation_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume Automation Endpoint */
+        post: operations["resume_automation_endpoint_v1_automations__automation_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/automations/{automation_id}/run-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run Automation Now Endpoint */
+        post: operations["run_automation_now_endpoint_v1_automations__automation_id__run_now_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/automations/{automation_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Automation Runs Endpoint */
+        get: operations["list_automation_runs_endpoint_v1_automations__automation_id__runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1141,6 +1245,103 @@ export interface components {
             redirect_uri: string;
             /** Prompt */
             prompt?: "select_account" | null;
+        };
+        /** AutomationListResponse */
+        AutomationListResponse: {
+            /** Automations */
+            automations: components["schemas"]["AutomationResponse"][];
+        };
+        /** AutomationResponse */
+        AutomationResponse: {
+            /** Id */
+            id: string;
+            /** Gitowner */
+            gitOwner: string;
+            /** Gitreponame */
+            gitRepoName: string;
+            /** Title */
+            title: string;
+            /** Prompt */
+            prompt: string;
+            schedule: components["schemas"]["AutomationScheduleResponse"];
+            /**
+             * Executiontarget
+             * @enum {string}
+             */
+            executionTarget: "cloud" | "local";
+            /** Agentkind */
+            agentKind: string | null;
+            /** Modelid */
+            modelId: string | null;
+            /** Modeid */
+            modeId: string | null;
+            /** Reasoningeffort */
+            reasoningEffort: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Pausedat */
+            pausedAt: string | null;
+            /** Lastscheduledat */
+            lastScheduledAt: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** AutomationRunListResponse */
+        AutomationRunListResponse: {
+            /** Runs */
+            runs: components["schemas"]["AutomationRunResponse"][];
+        };
+        /** AutomationRunResponse */
+        AutomationRunResponse: {
+            /** Id */
+            id: string;
+            /** Automationid */
+            automationId: string;
+            /**
+             * Triggerkind
+             * @enum {string}
+             */
+            triggerKind: "scheduled" | "manual";
+            /** Scheduledfor */
+            scheduledFor: string | null;
+            /**
+             * Executiontarget
+             * @enum {string}
+             */
+            executionTarget: "cloud" | "local";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "cancelled";
+            /** Cancelledat */
+            cancelledAt: string | null;
+            /** Lasterror */
+            lastError: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** AutomationScheduleRequest */
+        AutomationScheduleRequest: {
+            /** Rrule */
+            rrule: string;
+            /** Timezone */
+            timezone: string;
+        };
+        /** AutomationScheduleResponse */
+        AutomationScheduleResponse: {
+            /** Rrule */
+            rrule: string;
+            /** Timezone */
+            timezone: string;
+            /** Summary */
+            summary: string;
+            /** Nextrunat */
+            nextRunAt: string | null;
         };
         /** BillingOverview */
         BillingOverview: {
@@ -1539,6 +1740,31 @@ export interface components {
             value: string;
             /** Label */
             label: string;
+        };
+        /** CreateAutomationRequest */
+        CreateAutomationRequest: {
+            /** Title */
+            title: string;
+            /** Prompt */
+            prompt: string;
+            /** Gitowner */
+            gitOwner: string;
+            /** Gitreponame */
+            gitRepoName: string;
+            schedule: components["schemas"]["AutomationScheduleRequest"];
+            /**
+             * Executiontarget
+             * @enum {string}
+             */
+            executionTarget: "cloud" | "local";
+            /** Agentkind */
+            agentKind?: string | null;
+            /** Modelid */
+            modelId?: string | null;
+            /** Modeid */
+            modeId?: string | null;
+            /** Reasoningeffort */
+            reasoningEffort?: string | null;
         };
         /** CreateCloudMcpConnectionRequest */
         CreateCloudMcpConnectionRequest: {
@@ -2143,7 +2369,7 @@ export interface components {
             /** Workspacename */
             workspaceName?: string | null;
             /** Workspacelocation */
-            workspaceLocation?: ("local" | "cloud") | null;
+            workspaceLocation?: ("cloud" | "local") | null;
         };
         /** SupportMessageRequest */
         SupportMessageRequest: {
@@ -2281,6 +2507,28 @@ export interface components {
             email: string;
             /** Display Name */
             display_name?: string | null;
+        };
+        /** UpdateAutomationRequest */
+        UpdateAutomationRequest: {
+            /** Title */
+            title?: string | null;
+            /** Prompt */
+            prompt?: string | null;
+            /** Gitowner */
+            gitOwner?: string | null;
+            /** Gitreponame */
+            gitRepoName?: string | null;
+            schedule?: components["schemas"]["AutomationScheduleRequest"] | null;
+            /** Executiontarget */
+            executionTarget?: ("cloud" | "local") | null;
+            /** Agentkind */
+            agentKind?: string | null;
+            /** Modelid */
+            modelId?: string | null;
+            /** Modeid */
+            modeId?: string | null;
+            /** Reasoningeffort */
+            reasoningEffort?: string | null;
         };
         /** UpdateCloudWorkspaceBranchRequest */
         UpdateCloudWorkspaceBranchRequest: {
@@ -4775,6 +5023,251 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StripeWebhookAck"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_automations_endpoint_v1_automations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationListResponse"];
+                };
+            };
+        };
+    };
+    create_automation_endpoint_v1_automations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAutomationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_automation_endpoint_v1_automations__automation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                automation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_automation_endpoint_v1_automations__automation_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                automation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAutomationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pause_automation_endpoint_v1_automations__automation_id__pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                automation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_automation_endpoint_v1_automations__automation_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                automation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_automation_now_endpoint_v1_automations__automation_id__run_now_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                automation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_automation_runs_endpoint_v1_automations__automation_id__runs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                automation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationRunListResponse"];
                 };
             };
             /** @description Validation Error */

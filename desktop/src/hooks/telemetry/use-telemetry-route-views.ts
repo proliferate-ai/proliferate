@@ -11,6 +11,9 @@ function routeName(pathname: string): DesktopTelemetryRoute {
   if (pathname === "/login") return "login";
   if (pathname === "/setup") return "setup";
   if (pathname === "/settings") return "settings";
+  if (pathname === "/automations" || pathname.startsWith("/automations/")) {
+    return "automations";
+  }
   return "unknown";
 }
 

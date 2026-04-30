@@ -43,6 +43,7 @@ endif
 .PHONY: dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server server-db-up server-db-wait \
         server-db-down server-db-ready db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
+        dev-automation-worker \
         sdk-generate sdk-build sdk-react-build runtime-build desktop-build rebuild \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
         test-agent-runtime-cloud-e2b test-agent-runtime-cloud-daytona \
@@ -136,8 +137,12 @@ dev: sdk-build server-db-ready
 	echo "Starting profile $$PROLIFERATE_DEV_PROFILE: runtime :$$ANYHARNESS_PORT, backend :$$PROLIFERATE_API_PORT, web :$$PROLIFERATE_WEB_PORT"; \
 	RUST_LOG=info ANYHARNESS_DEV_CORS=1 $(CARGO) run --bin anyharness -- serve --port "$$ANYHARNESS_PORT" --runtime-home "$$ANYHARNESS_RUNTIME_HOME" & \
 	(cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port "$$PROLIFERATE_API_PORT") & \
+	if [ "$${AUTOMATIONS_ENABLED:-}" = "true" ] || [ "$${AUTOMATIONS_ENABLED:-}" = "1" ]; then \
+		echo "Starting automation scheduler worker..."; \
+		cd server && uv run python -m proliferate.server.automations.worker --role scheduler & \
+	fi; \
 	sleep 2; \
-	(cd desktop && pnpm tauri dev --runner "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri-runner.sh" --config "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri.dev.json")
+	(cd desktop && VITE_PROLIFERATE_AUTOMATIONS_ENABLED="$${AUTOMATIONS_ENABLED:-}" pnpm tauri dev --runner "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri-runner.sh" --config "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri.dev.json")
 
 dev-init:
 	@if [ -z "$(PROFILE)" ]; then \
@@ -179,6 +184,10 @@ serve:
 	@$(SERVER_ENV_SOURCE) \
 	$(LOCAL_CODEX_ACP_ENV) \
 	$(CARGO) run --bin anyharness -- serve
+
+dev-automation-worker:
+	@$(SERVER_ENV_SOURCE) \
+	cd server && uv run python -m proliferate.server.automations.worker --role scheduler
 
 # --- Server (Python control plane) ---
 
@@ -419,7 +428,7 @@ check-max-lines:
 	python3 scripts/check_max_lines.py
 
 check-server-boundaries:
-	python3 scripts/check_server_boundaries.py
+	cd server && uv run python ../scripts/check_server_boundaries.py
 
 test:
 	$(CARGO) test --workspace

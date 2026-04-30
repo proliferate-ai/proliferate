@@ -1,7 +1,13 @@
 import type { CloudAgentKind } from "@/lib/integrations/cloud/client";
 import type { TelemetryFailureKind } from "./failures";
 
-export type DesktopTelemetryRoute = "login" | "main" | "settings" | "setup" | "unknown";
+export type DesktopTelemetryRoute =
+  | "automations"
+  | "login"
+  | "main"
+  | "settings"
+  | "setup"
+  | "unknown";
 export type DesktopWorkspaceKind = "cloud" | "local";
 export type RuntimeConnectionTelemetryState = "connecting" | "failed" | "healthy";
 export type RuntimeInputSyncTelemetryTrigger =

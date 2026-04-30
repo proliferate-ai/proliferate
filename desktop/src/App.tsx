@@ -26,6 +26,8 @@ import { bootstrapHarnessRuntime } from "@/lib/integrations/anyharness/runtime-b
 import { AppErrorBoundary } from "@/components/ui/AppErrorBoundary"
 import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"
 import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
+import { AutomationDetailPage } from "@/pages/AutomationDetailPage"
+import { AutomationsPage } from "@/pages/AutomationsPage"
 import { LoginPage } from "@/pages/LoginPage"
 import { MainPage } from "@/pages/MainPage"
 import { OnboardingPage } from "@/pages/OnboardingPage"
@@ -211,6 +213,8 @@ function AppRuntime() {
             <Route element={<OnboardingGate />}>
               <Route path="/" element={<MainPage />} />
               <Route path="/powers" element={<PowersPage />} />
+              <Route path="/automations" element={<AutomationsPage />} />
+              <Route path="/automations/:automationId" element={<AutomationDetailPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Route>

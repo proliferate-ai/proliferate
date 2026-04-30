@@ -25,6 +25,7 @@ import {
 } from "@/lib/domain/workspaces/cloud-workspace-status";
 import {
   Archive,
+  Calendar,
   Check,
   CollapseAll,
   ExpandAll,
@@ -35,6 +36,7 @@ import {
   CircleQuestion,
 } from "@/components/ui/icons";
 import { CAPABILITY_COPY } from "@/config/capabilities";
+import { automationsUiEnabled } from "@/config/automations";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/cloud/use-cloud-repo-configs";
@@ -101,7 +103,9 @@ export function MainSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const isOnPowers = location.pathname === "/powers";
+  const isOnAutomations = location.pathname.startsWith("/automations");
   const isOnHome = location.pathname === "/";
+  const showAutomations = automationsUiEnabled();
   const archiveWorkspace = useWorkspaceUiStore((s) => s.archiveWorkspace);
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
   const unarchiveWorkspace = useWorkspaceUiStore((s) => s.unarchiveWorkspace);
@@ -256,6 +260,20 @@ export function MainSidebar() {
                 <span className="truncate">Powers</span>
               </div>
             </SidebarRowSurface>
+            {showAutomations && (
+              <SidebarRowSurface
+                active={isOnAutomations}
+                onPress={actions.handleGoAutomations}
+                className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
+              >
+                <div className="flex w-4 shrink-0 items-center justify-center">
+                  <Calendar className="size-4" />
+                </div>
+                <div className="flex min-w-0 flex-1 items-center text-base leading-5 text-foreground">
+                  <span className="truncate">Automations</span>
+                </div>
+              </SidebarRowSurface>
+            )}
             <SidebarRowSurface
               active={supportOpen}
               onPress={() => setSupportOpen(true)}
