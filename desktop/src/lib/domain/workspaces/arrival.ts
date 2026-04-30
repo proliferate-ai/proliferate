@@ -30,6 +30,7 @@ interface WorkspaceArrivalBaseViewModel {
   setupStatusLabel: string;
   setupTone: "default" | "success" | "destructive";
   setupDetail: string | null;
+  setupTerminalId: string | null;
 }
 
 export interface WorktreeArrivalViewModel extends WorkspaceArrivalBaseViewModel {
@@ -221,6 +222,7 @@ export function buildWorkspaceArrivalViewModel(args: {
   event: WorkspaceArrivalEvent;
   workspace: Workspace;
   configuredSetupScript: string;
+  setupTerminalId?: string | null;
 }): WorkspaceArrivalViewModel {
   const { event, workspace } = args;
   const workspaceName = workspace.kind === "worktree"
@@ -268,7 +270,7 @@ export function buildWorkspaceArrivalViewModel(args: {
               : WORKSPACE_ARRIVAL_LABELS.setupConfigured,
     setupCommand: hasSetupScript ? setupScriptCommand : null,
     setupActionLabel: setupStatus === "failed"
-      ? WORKSPACE_ARRIVAL_LABELS.rerunSetup
+      ? "Details"
       : hasSetupScript
         ? WORKSPACE_ARRIVAL_LABELS.repositorySettings
         : WORKSPACE_ARRIVAL_LABELS.addSetup,
@@ -293,6 +295,7 @@ export function buildWorkspaceArrivalViewModel(args: {
     setupDetail: setupStatus === "failed" && event.setupScript
       ? `${event.setupScript.stderr}\n${event.setupScript.stdout}`.trim() || null
       : null,
+    setupTerminalId: args.setupTerminalId ?? null,
   };
 
   if (isWorktree) {

@@ -155,6 +155,14 @@ impl WorkspaceStore {
                 "DELETE FROM cowork_managed_workspaces WHERE workspace_id = ?1",
                 [workspace_id],
             )?;
+            conn.execute(
+                "DELETE FROM workspace_setup_state WHERE workspace_id = ?1",
+                [workspace_id],
+            )?;
+            conn.execute(
+                "DELETE FROM terminal_command_runs WHERE workspace_id = ?1",
+                [workspace_id],
+            )?;
             conn.execute("DELETE FROM workspaces WHERE id = ?1", [workspace_id])?;
             Ok(())
         })

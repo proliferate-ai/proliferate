@@ -133,6 +133,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0036_review_assignments_retryable_failed",
         include_str!("sql/0036_review_assignments_retryable_failed.sql"),
     ),
+    (
+        "0037_terminal_command_runs",
+        include_str!("sql/0037_terminal_command_runs.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

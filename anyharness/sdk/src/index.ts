@@ -388,8 +388,14 @@ export type {
 export type {
   TerminalPurpose,
   TerminalStatus,
+  TerminalCommandRunStatus,
+  TerminalCommandOutputMode,
+  TerminalCommandRunSummary,
+  TerminalCommandRunDetail,
   TerminalRecord,
   CreateTerminalRequest,
+  StartTerminalCommandRequest,
+  StartTerminalCommandResponse,
   ResizeTerminalRequest,
   UpdateTerminalTitleRequest,
 } from "./types/terminals.js";
@@ -400,7 +406,13 @@ export type {
 } from "./types/processes.js";
 
 export { connectTerminal } from "./streams/terminals.js";
-export type { TerminalStreamOptions, TerminalStreamHandle } from "./streams/terminals.js";
+export type {
+  TerminalDataFrame,
+  TerminalExitFrame,
+  TerminalReplayGapFrame,
+  TerminalStreamOptions,
+  TerminalStreamHandle,
+} from "./streams/terminals.js";
 
 export { streamSession } from "./streams/sessions.js";
 export type { SessionStreamOptions, SessionStreamHandle } from "./streams/sessions.js";

@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
 import { useTerminalsQuery } from "@anyharness/sdk-react";
+import { useNavigate } from "react-router-dom";
 import { WorkspaceFilesPanel } from "@/components/workspace/files/panel/WorkspaceFilesPanel";
 import { GitPanel } from "@/components/workspace/git/GitPanel";
 import { TerminalPanel } from "@/components/workspace/terminals/TerminalPanel";
@@ -43,6 +44,7 @@ interface RightPanelProps {
   shouldKeepContentVisible?: boolean;
   isCloudWorkspaceSelected: boolean;
   state: RightPanelWorkspaceState;
+  repoSettingsHref: string;
   onStateChange: Dispatch<SetStateAction<RightPanelWorkspaceState>>;
   terminalActivationRequestToken: number;
 }
@@ -53,10 +55,12 @@ export function RightPanel({
   shouldKeepContentVisible = false,
   isCloudWorkspaceSelected,
   state,
+  repoSettingsHref,
   onStateChange,
   terminalActivationRequestToken,
 }: RightPanelProps) {
   const { createTab, closeTab, renameTab } = useTerminalActions();
+  const navigate = useNavigate();
   const setActiveTerminalForWorkspace = useTerminalStore(
     (store) => store.setActiveTerminalForWorkspace,
   );
@@ -71,9 +75,15 @@ export function RightPanel({
     enabled: Boolean(workspaceId && shouldRenderContent),
   });
   const terminals = terminalsQuery.data ?? EMPTY_TERMINALS;
+  const visibleTerminals = useMemo(
+    () => terminals.filter((terminal) =>
+      terminal.purpose !== "setup" || state.terminalOrder.includes(terminal.id)
+    ),
+    [state.terminalOrder, terminals],
+  );
   const liveTerminalIds = useMemo(
-    () => terminals.map((terminal) => terminal.id),
-    [terminals],
+    () => visibleTerminals.map((terminal) => terminal.id),
+    [visibleTerminals],
   );
   const availableTools = useMemo(
     () => availableRightPanelTools(isCloudWorkspaceSelected),
@@ -84,8 +94,8 @@ export function RightPanel({
     [availableTools, state.toolOrder],
   );
   const orderedTerminals = useMemo(
-    () => orderTerminals(terminals, state.terminalOrder),
-    [state.terminalOrder, terminals],
+    () => orderTerminals(visibleTerminals, state.terminalOrder),
+    [state.terminalOrder, visibleTerminals],
   );
   const terminalById = useMemo(
     () => new Map(orderedTerminals.map((terminal) => [terminal.id, terminal])),
@@ -242,7 +252,9 @@ export function RightPanel({
       showToast("Failed to load terminals.");
       return;
     }
-    const records = result.data;
+    const records = result.data.filter((terminal) =>
+      terminal.purpose !== "setup" || state.terminalOrder.includes(terminal.id)
+    );
 
     const next = reconcileRightPanelWorkspaceState({ ...state, activeTool: "terminal" }, {
       isCloudWorkspaceSelected,
@@ -418,6 +430,7 @@ export function RightPanel({
           void createTerminal();
         }}
         onReorderHeaderEntry={handleReorderHeaderEntry}
+        onOpenRepoSettings={() => navigate(repoSettingsHref)}
       />
 
       <div

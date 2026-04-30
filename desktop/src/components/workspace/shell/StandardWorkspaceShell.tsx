@@ -1,11 +1,12 @@
 import { HomeNextScreen } from "@/components/home/HomeNextScreen";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { PublishDialog } from "@/components/workspace/git/PublishDialog";
 import { ConnectedReviewCritiqueDialog } from "@/components/workspace/reviews/ConnectedReviewCritiqueDialog";
 import { ConnectedReviewSetupDialog } from "@/components/workspace/reviews/ConnectedReviewSetupDialog";
 import { WorkspaceFilePalette } from "@/components/workspace/files/palette/WorkspaceFilePalette";
 import { GlobalHeader } from "@/components/workspace/shell/GlobalHeader";
 import { WorkspaceContentView } from "@/components/workspace/shell/WorkspaceContentView";
+import { WorkspaceShellActionsProvider } from "@/components/workspace/shell/WorkspaceShellActionsContext";
 import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
 import { SidebarUpdatePill } from "@/components/workspace/shell/SidebarUpdatePill";
@@ -20,6 +21,10 @@ import { useRunWorkspaceCommand } from "@/hooks/workspaces/use-run-workspace-com
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
+import {
+  buildCloudRepoSettingsHref,
+  buildSettingsHref,
+} from "@/lib/domain/settings/navigation";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 
 export function StandardWorkspaceShell() {
@@ -73,6 +78,20 @@ export function StandardWorkspaceShell() {
   });
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const runtimeBlockedReason = getWorkspaceRuntimeBlockReason(selectedWorkspaceId);
+  const shellActions = useMemo(() => ({
+    openTerminalPanel: actions.openTerminalPanel,
+  }), [actions.openTerminalPanel]);
+  const repoSettingsHref = useMemo(() => {
+    const cloudOwner = selectedCloudWorkspace?.repo?.owner?.trim() ?? "";
+    const cloudName = selectedCloudWorkspace?.repo?.name?.trim() ?? "";
+    if (cloudOwner && cloudName) {
+      return buildCloudRepoSettingsHref(cloudOwner, cloudName);
+    }
+    return buildSettingsHref({
+      section: "repo",
+      repo: selectedWorkspace?.sourceRepoRootPath ?? selectedWorkspace?.path ?? null,
+    });
+  }, [selectedCloudWorkspace?.repo?.name, selectedCloudWorkspace?.repo?.owner, selectedWorkspace]);
 
   useMainScreenShortcuts({
     onOpenFilePalette: actions.handleFilePaletteOpen,
@@ -99,8 +118,9 @@ export function StandardWorkspaceShell() {
   ]);
 
   return (
-    <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? null}>
-      <div
+    <WorkspaceShellActionsProvider value={shellActions}>
+      <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? null}>
+        <div
         className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
         data-telemetry-block
       >
@@ -219,6 +239,7 @@ export function StandardWorkspaceShell() {
                       shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}
                       isCloudWorkspaceSelected={isCloudWorkspaceSelected}
                       state={rightPanelState}
+                      repoSettingsHref={repoSettingsHref}
                       onStateChange={layout.setRightPanelState}
                       terminalActivationRequestToken={terminalActivationRequestToken}
                     />
@@ -251,7 +272,8 @@ export function StandardWorkspaceShell() {
             )}
           </div>
         </div>
-      </div>
-    </WorkspacePathProvider>
+        </div>
+      </WorkspacePathProvider>
+    </WorkspaceShellActionsProvider>
   );
 }

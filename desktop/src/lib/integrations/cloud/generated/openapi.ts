@@ -2603,6 +2603,12 @@ export interface components {
             workspaceId: string;
             /** Command */
             command: string;
+            /** Terminalid */
+            terminalId?: string | null;
+            /** Commandrunid */
+            commandRunId?: string | null;
+            /** Status */
+            status: string;
         };
         /** SaveCloudRepoConfigFile */
         SaveCloudRepoConfigFile: {

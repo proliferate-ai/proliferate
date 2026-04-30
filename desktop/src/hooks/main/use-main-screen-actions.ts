@@ -9,7 +9,10 @@ import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
-import type { RightPanelTool } from "@/lib/domain/workspaces/right-panel";
+import {
+  rightPanelTerminalHeaderKey,
+  type RightPanelTool,
+} from "@/lib/domain/workspaces/right-panel";
 import type {
   MainScreenDataState,
   MainScreenLayoutState,
@@ -60,6 +63,24 @@ export function useMainScreenActions({
   const openTerminalPanel = useCallback((terminalId?: string) => {
     if (!selectedWorkspaceId) {
       return false;
+    }
+
+    if (terminalId) {
+      const terminalKey = rightPanelTerminalHeaderKey(terminalId);
+      setRightPanelState((previous) => ({
+        ...previous,
+        activeTool: "terminal",
+        terminalOrder: previous.terminalOrder.includes(terminalId)
+          ? previous.terminalOrder
+          : [...previous.terminalOrder, terminalId],
+        headerOrder: previous.headerOrder.includes(terminalKey)
+          ? previous.headerOrder
+          : [...previous.headerOrder, terminalKey],
+        activeTerminalId: terminalId,
+      }));
+      setRightPanelOpen(true);
+      setTerminalActivationRequestToken((token) => token + 1);
+      return true;
     }
 
     openRightPanelTool("terminal", terminalId);

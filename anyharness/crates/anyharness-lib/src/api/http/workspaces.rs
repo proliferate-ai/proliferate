@@ -17,8 +17,9 @@ use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
 use super::workspaces_contract::{
-    detection_result_to_contract, map_set_workspace_display_name_error, setup_snapshot_to_contract,
-    workspace_session_launch_catalog_to_contract, workspace_to_contract_with_summary,
+    detection_result_to_contract, map_set_workspace_display_name_error,
+    setup_command_run_to_contract, workspace_session_launch_catalog_to_contract,
+    workspace_to_contract_with_summary,
 };
 use crate::app::AppState;
 use crate::origin::OriginContext;
@@ -116,7 +117,6 @@ pub async fn create_worktree(
     let latency_fields = latency_trace_fields(latency.as_ref());
     let started = Instant::now();
     let workspace_runtime = state.workspace_runtime.clone();
-    let setup_execution_service = state.setup_execution_service.clone();
     let repo_root_id = req.repo_root_id;
     let target_path = req.target_path;
     let new_branch_name = req.new_branch_name;
@@ -180,14 +180,17 @@ pub async fn create_worktree(
         .map_err(|e| ApiError::internal(format!("env build task failed: {e}")))?
         .map_err(|e| ApiError::internal(e.to_string()))?;
 
-        setup_execution_service
-            .start(
-                result.workspace.id.clone(),
-                result.workspace.path.clone(),
+        state
+            .terminal_service
+            .start_setup_command(
+                &result.workspace.id,
+                &result.workspace.path,
                 script.to_string(),
                 env_vars,
+                None,
             )
-            .await;
+            .await
+            .map_err(|e| ApiError::internal(e.to_string()))?;
     }
 
     tracing::info!(
@@ -373,10 +376,10 @@ pub async fn get_setup_status(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<GetSetupStatusResponse>, ApiError> {
-    let snapshot = state
-        .setup_execution_service
-        .get_status(&workspace_id)
-        .await
+    let run = state
+        .terminal_service
+        .latest_setup_run(&workspace_id)
+        .map_err(|e| ApiError::internal(e.to_string()))?
         .ok_or_else(|| {
             ApiError::not_found(
                 "No setup execution found for this workspace".to_string(),
@@ -384,7 +387,7 @@ pub async fn get_setup_status(
             )
         })?;
 
-    Ok(Json(setup_snapshot_to_contract(snapshot)))
+    Ok(Json(setup_command_run_to_contract(run)))
 }
 
 #[utoipa::path(
@@ -404,9 +407,9 @@ pub async fn rerun_setup(
 ) -> Result<Json<GetSetupStatusResponse>, ApiError> {
     assert_workspace_mutable(&state, &workspace_id)?;
     let previous = state
-        .setup_execution_service
-        .get_status(&workspace_id)
-        .await
+        .terminal_service
+        .latest_setup_run(&workspace_id)
+        .map_err(|e| ApiError::internal(e.to_string()))?
         .ok_or_else(|| {
             ApiError::not_found(
                 "No previous setup execution found for this workspace".to_string(),
@@ -475,18 +478,13 @@ async fn start_setup_for_workspace(
         .map_err(|e| ApiError::internal(e.to_string()))?
     };
 
-    state
-        .setup_execution_service
-        .start(workspace_id.clone(), record.path, command, env_vars)
-        .await;
-
-    let snapshot = state
-        .setup_execution_service
-        .get_status(&workspace_id)
+    let run = state
+        .terminal_service
+        .start_setup_command(&workspace_id, &record.path, command, env_vars, None)
         .await
-        .ok_or_else(|| ApiError::internal("Setup job disappeared after start".to_string()))?;
+        .map_err(|e| ApiError::internal(e.to_string()))?;
 
-    Ok(setup_snapshot_to_contract(snapshot))
+    Ok(setup_command_run_to_contract(run))
 }
 
 async fn resolve_workspace_response_to_contract(

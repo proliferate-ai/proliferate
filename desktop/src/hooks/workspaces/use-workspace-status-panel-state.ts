@@ -35,6 +35,7 @@ export type WorkspaceStatusPanelState =
     viewModel: WorkspaceArrivalViewModel;
     workspacePath: string | null;
     sourceRepoRootPath: string | null;
+    setupTerminalId: string | null;
   }
   | {
     kind: "setup-failure";
@@ -42,6 +43,7 @@ export type WorkspaceStatusPanelState =
     command: string;
     summary: string;
     detail: string | null;
+    terminalId: string | null;
   };
 
 function buildPendingSubtitle(entry: PendingWorkspaceEntry): string {
@@ -156,6 +158,7 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
         viewModel: arrival.viewModel,
         workspacePath: arrival.workspacePath,
         sourceRepoRootPath: arrival.sourceRepoRootPath,
+        setupTerminalId: arrival.setupTerminalId,
       };
     }
 
@@ -181,6 +184,7 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
           durationMs: setupStatus.durationMs ?? 0,
         }),
         detail: fullOutput || null,
+        terminalId: setupStatus.terminalId ?? null,
       };
     }
 

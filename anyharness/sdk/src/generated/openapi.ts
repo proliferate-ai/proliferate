@@ -740,6 +740,22 @@ export interface paths {
         patch: operations["update_session_title"];
         trace?: never;
     };
+    "/v1/terminal-command-runs/{command_run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_terminal_command_run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/terminals/{terminal_id}": {
         parameters: {
             query?: never;
@@ -751,6 +767,22 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["delete_terminal"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/terminals/{terminal_id}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["start_terminal_command"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1761,6 +1793,12 @@ export interface components {
             /** Format: int32 */
             rows: number;
             shell?: string | null;
+            startupCommand?: string | null;
+            startupCommandEnv?: {
+                [key: string]: string;
+            } | null;
+            /** Format: int64 */
+            startupCommandTimeoutMs?: number | null;
             title?: string | null;
         };
         CreateWorkspaceRequest: {
@@ -1838,6 +1876,7 @@ export interface components {
         };
         GetSetupStatusResponse: {
             command: string;
+            commandRunId?: string | null;
             /** Format: int64 */
             durationMs?: number | null;
             /** Format: int32 */
@@ -1845,6 +1884,7 @@ export interface components {
             status: components["schemas"]["SetupScriptStatus"];
             stderr?: string | null;
             stdout?: string | null;
+            terminalId?: string | null;
         };
         GitActionAvailability: {
             canCommit: boolean;
@@ -3244,6 +3284,19 @@ export interface components {
             parentSessionId: string;
             reviewers: components["schemas"]["ReviewPersonaRequest"][];
         };
+        StartTerminalCommandRequest: {
+            command: string;
+            env?: {
+                [key: string]: string;
+            } | null;
+            interrupt?: boolean | null;
+            /** Format: int64 */
+            timeoutMs?: number | null;
+        };
+        StartTerminalCommandResponse: {
+            commandRun: components["schemas"]["TerminalCommandRunSummary"];
+            terminal: components["schemas"]["TerminalRecord"];
+        };
         StartWorkspaceSetupRequest: {
             baseRef?: string | null;
             command: string;
@@ -3276,10 +3329,36 @@ export interface components {
         /** @enum {string} */
         SubagentTurnOutcome: "completed" | "failed" | "cancelled";
         /** @enum {string} */
+        TerminalCommandOutputMode: "separate" | "combined";
+        TerminalCommandRunDetail: components["schemas"]["TerminalCommandRunSummary"] & {
+            combinedOutput?: string | null;
+            outputMode: components["schemas"]["TerminalCommandOutputMode"];
+            stderr?: string | null;
+            stdout?: string | null;
+        };
+        /** @enum {string} */
+        TerminalCommandRunStatus: "queued" | "running" | "succeeded" | "failed" | "interrupted" | "timed_out";
+        TerminalCommandRunSummary: {
+            command: string;
+            completedAt?: string | null;
+            /** Format: int64 */
+            durationMs?: number | null;
+            /** Format: int32 */
+            exitCode?: number | null;
+            id: string;
+            outputTruncated: boolean;
+            purpose: components["schemas"]["TerminalPurpose"];
+            startedAt?: string | null;
+            status: components["schemas"]["TerminalCommandRunStatus"];
+            terminalId?: string | null;
+            workspaceId: string;
+        };
+        /** @enum {string} */
         TerminalLifecycleEvent: "start" | "output" | "exit";
         /** @enum {string} */
-        TerminalPurpose: "general" | "run";
+        TerminalPurpose: "general" | "run" | "setup";
         TerminalRecord: {
+            commandRun?: null | components["schemas"]["TerminalCommandRunSummary"];
             createdAt: string;
             cwd: string;
             /** Format: int32 */
@@ -5225,6 +5304,38 @@ export interface operations {
             };
         };
     };
+    get_terminal_command_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Terminal command run ID */
+                command_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Terminal command run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalCommandRunDetail"];
+                };
+            };
+            /** @description Command run not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_terminal: {
         parameters: {
             query?: never;
@@ -5275,6 +5386,51 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Terminal not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    start_terminal_command: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Terminal ID */
+                terminal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartTerminalCommandRequest"];
+            };
+        };
+        responses: {
+            /** @description Terminal command started */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartTerminalCommandResponse"];
+                };
+            };
+            /** @description Invalid command */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
             };
             /** @description Terminal not found */
             404: {

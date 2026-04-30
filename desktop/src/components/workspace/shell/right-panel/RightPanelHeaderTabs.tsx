@@ -18,6 +18,7 @@ import {
   GitBranchIcon,
   Plus,
   Settings,
+  CloudIcon,
   Terminal as TerminalIcon,
   type IconProps,
 } from "@/components/ui/icons";
@@ -36,7 +37,7 @@ interface PanelToolConfig {
 const PANEL_TOOLS: Record<RightPanelTool, PanelToolConfig> = {
   files: { id: "files", label: "Files", icon: FileIcon },
   git: { id: "git", label: "Git", icon: GitBranchIcon },
-  settings: { id: "settings", label: "Cloud settings", icon: Settings },
+  settings: { id: "settings", label: "Cloud environment", icon: CloudIcon },
   terminal: { id: "terminal", label: "Terminal", icon: TerminalIcon },
 };
 
@@ -74,6 +75,7 @@ interface RightPanelHeaderTabsProps {
   onCloseTerminal: (terminalId: string) => void;
   onRenameTerminal: (terminalId: string, title: string) => Promise<void>;
   onCreateTerminal: () => void;
+  onOpenRepoSettings: () => void;
   onReorderHeaderEntry: (
     entryKey: RightPanelHeaderEntryKey,
     beforeEntryKey: RightPanelHeaderEntryKey | null,
@@ -92,6 +94,7 @@ export function RightPanelHeaderTabs({
   onCloseTerminal,
   onRenameTerminal,
   onCreateTerminal,
+  onOpenRepoSettings,
   onReorderHeaderEntry,
 }: RightPanelHeaderTabsProps) {
   const [headerDragPreview, setHeaderDragPreview] = useState<HeaderDragPreview | null>(null);
@@ -349,6 +352,22 @@ export function RightPanelHeaderTabs({
         </div>
 
         <div className="ui-tab-system-section ui-tab-system-section__trailing">
+          <div className="editor-panel-overflow-action">
+            <Tooltip
+              content="Repo's settings"
+              className="right-panel-repo-settings-tooltip"
+            >
+              <IconButton
+                size="xs"
+                tone="sidebar"
+                title="Repo's settings"
+                className="ui-icon-button glass-editor-panel-new-tab-menu-trigger"
+                onClick={onOpenRepoSettings}
+              >
+                <Settings className="ui-icon" />
+              </IconButton>
+            </Tooltip>
+          </div>
           <div className="editor-panel-overflow-action">
             <Tooltip
               content="Open new tab menu"

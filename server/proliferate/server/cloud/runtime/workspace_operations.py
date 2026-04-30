@@ -22,6 +22,24 @@ class RemoteWorkspaceFileState:
     version_token: str
 
 
+@dataclass(frozen=True)
+class RemoteWorkspaceSetupStart:
+    terminal_id: str | None
+    command_run_id: str | None
+    status: str
+
+
+@dataclass(frozen=True)
+class RemoteTerminalCommandRun:
+    id: str
+    status: str
+    exit_code: int | None
+    stdout: str | None
+    stderr: str | None
+    combined_output: str | None
+    output_truncated: bool
+
+
 def _auth_headers(access_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token}"}
 
@@ -125,7 +143,7 @@ async def start_remote_workspace_setup(
     command: str,
     base_ref: str | None,
     workspace_id: UUID | None = None,
-) -> None:
+) -> RemoteWorkspaceSetupStart:
     start_started = time.perf_counter()
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.post(
@@ -135,6 +153,16 @@ async def start_remote_workspace_setup(
         )
     if not response.is_success:
         _raise_runtime_operation_error("Remote setup start", response)
+    payload = response.json()
+    terminal_id = payload.get("terminalId")
+    command_run_id = payload.get("commandRunId")
+    status = payload.get("status")
+    if not isinstance(status, str):
+        raise CloudRuntimeOperationError("Remote setup start did not return a setup status.")
+    if terminal_id is not None and not isinstance(terminal_id, str):
+        terminal_id = None
+    if command_run_id is not None and not isinstance(command_run_id, str):
+        command_run_id = None
 
     log_cloud_event(
         "cloud runtime setup started",
@@ -142,4 +170,53 @@ async def start_remote_workspace_setup(
         runtime_url=runtime_url,
         remote_workspace_id=anyharness_workspace_id,
         elapsed_ms=duration_ms(start_started),
+    )
+    return RemoteWorkspaceSetupStart(
+        terminal_id=terminal_id,
+        command_run_id=command_run_id,
+        status=status,
+    )
+
+
+async def get_remote_terminal_command_run(
+    runtime_url: str,
+    access_token: str,
+    *,
+    command_run_id: str,
+    workspace_id: UUID | None = None,
+) -> RemoteTerminalCommandRun:
+    read_started = time.perf_counter()
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(
+            f"{runtime_url}/v1/terminal-command-runs/{command_run_id}",
+            headers=_auth_headers(access_token),
+        )
+    if not response.is_success:
+        _raise_runtime_operation_error("Remote command-run read", response)
+    payload = response.json()
+    run_id = payload.get("id")
+    status = payload.get("status")
+    if not isinstance(run_id, str) or not isinstance(status, str):
+        raise CloudRuntimeOperationError("Remote command-run detail was malformed.")
+    exit_code = payload.get("exitCode")
+    log_cloud_event(
+        "cloud runtime command-run loaded",
+        workspace_id=workspace_id,
+        runtime_url=runtime_url,
+        command_run_id=command_run_id,
+        status=status,
+        elapsed_ms=duration_ms(read_started),
+    )
+    return RemoteTerminalCommandRun(
+        id=run_id,
+        status=status,
+        exit_code=exit_code if isinstance(exit_code, int) else None,
+        stdout=payload.get("stdout") if isinstance(payload.get("stdout"), str) else None,
+        stderr=payload.get("stderr") if isinstance(payload.get("stderr"), str) else None,
+        combined_output=(
+            payload.get("combinedOutput")
+            if isinstance(payload.get("combinedOutput"), str)
+            else None
+        ),
+        output_truncated=bool(payload.get("outputTruncated")),
     )
