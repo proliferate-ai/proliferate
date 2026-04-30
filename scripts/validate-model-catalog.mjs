@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const CATALOG_PATH = path.resolve("model-catalog/v1/catalog.json");
+const CATALOG_PATH = path.resolve("server/model-catalog/v1/catalog.json");
 const VALID_STATUSES = new Set(["candidate", "active", "deprecated", "hidden"]);
 const VALID_LAUNCH_REMEDIATION_KINDS = new Set([
   "managed_reinstall",

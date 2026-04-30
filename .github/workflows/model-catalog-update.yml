@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - "model-catalog/v1/catalog.json"
+      - "server/model-catalog/v1/catalog.json"
   schedule:
     - cron: "23 15 * * 1"
   workflow_dispatch:
@@ -62,7 +62,7 @@ jobs:
 
       - name: Upload catalog to S3
         run: |
-          aws s3 cp model-catalog/v1/catalog.json \
+          aws s3 cp server/model-catalog/v1/catalog.json \
             "s3://${{ vars.DESKTOP_DOWNLOADS_S3_BUCKET }}/anyharness/model-catalog/v1/catalog.json" \
             --content-type "application/json" \
             --cache-control "max-age=300"
