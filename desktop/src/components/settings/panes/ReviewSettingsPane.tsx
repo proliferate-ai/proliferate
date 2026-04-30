@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import type { ReviewKind } from "@anyharness/sdk";
-import { SettingsCard } from "@/components/settings/SettingsCard";
+import {
+  EnvironmentField,
+  EnvironmentSection,
+} from "@/components/settings/EnvironmentSettingsLayout";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -8,8 +11,6 @@ import { Label } from "@/components/ui/Label";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Textarea } from "@/components/ui/Textarea";
 import {
-  Brain,
-  Pencil,
   Plus,
   RefreshCw,
   Trash,
@@ -23,39 +24,37 @@ import {
 } from "@/lib/domain/reviews/review-config";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
-const REVIEW_KINDS: { kind: ReviewKind; label: string; description: string }[] = [
+const REVIEW_SECTIONS: {
+  kind: ReviewKind;
+  title: string;
+  description: string;
+  createLabel: string;
+}[] = [
   {
     kind: "plan",
-    label: "Plan",
-    description: "Reviewers that critique proposed implementation plans.",
+    title: "Planning review personalities",
+    description: "Prompts used by reviewers that critique proposed implementation plans.",
+    createLabel: "New planning personality",
   },
   {
     kind: "code",
-    label: "Code",
-    description: "Reviewers that critique implementation changes.",
+    title: "Coding review personalities",
+    description: "Prompts used by reviewers that critique implementation changes.",
+    createLabel: "New coding personality",
   },
 ];
+
 const EMPTY_REVIEW_PERSONALITIES: ReviewPersonalityPreference[] = [];
 
-type PersonalityEditorState =
-  | { mode: "create"; kind: ReviewKind }
-  | { mode: "edit"; kind: ReviewKind; id: string; builtIn: boolean };
+type PersonalityEditorState = { kind: ReviewKind };
 
 export function ReviewSettingsPane() {
-  const [activeKind, setActiveKind] = useState<ReviewKind>("plan");
   const [editor, setEditor] = useState<PersonalityEditorState | null>(null);
   const [labelDraft, setLabelDraft] = useState("");
   const [promptDraft, setPromptDraft] = useState("");
   const [editorError, setEditorError] = useState<string | null>(null);
   const reviewPersonalitiesByKind = useUserPreferencesStore((state) => state.reviewPersonalitiesByKind);
   const setPreference = useUserPreferencesStore((state) => state.set);
-
-  const storedPersonalities = reviewPersonalitiesByKind[activeKind] ?? EMPTY_REVIEW_PERSONALITIES;
-  const resolvedPersonalities = useMemo(
-    () => resolveReviewPersonaTemplates(activeKind, storedPersonalities),
-    [activeKind, storedPersonalities],
-  );
-  const activeKindDescription = REVIEW_KINDS.find((item) => item.kind === activeKind)?.description ?? "";
 
   const updatePersonalities = (
     kind: ReviewKind,
@@ -68,22 +67,10 @@ export function ReviewSettingsPane() {
     });
   };
 
-  const openCreateEditor = () => {
-    setEditor({ mode: "create", kind: activeKind });
+  const openCreateEditor = (kind: ReviewKind) => {
+    setEditor({ kind });
     setLabelDraft("");
     setPromptDraft("");
-    setEditorError(null);
-  };
-
-  const openEditEditor = (personality: ReviewPersonaTemplate) => {
-    setEditor({
-      mode: "edit",
-      kind: activeKind,
-      id: personality.id,
-      builtIn: isBuiltInReviewPersonaId(activeKind, personality.id),
-    });
-    setLabelDraft(personality.label);
-    setPromptDraft(personality.prompt);
     setEditorError(null);
   };
 
@@ -105,138 +92,80 @@ export function ReviewSettingsPane() {
       return;
     }
 
-    if (editor.mode === "create") {
-      const usedIds = [
-        ...listBuiltInReviewPersonaTemplates(editor.kind).map((personality) => personality.id),
-        ...(reviewPersonalitiesByKind[editor.kind] ?? []).map((personality) => personality.id),
-      ];
-      const id = nextReviewPersonalityId(editor.kind, label, usedIds);
-      updatePersonalities(editor.kind, (items) => [...items, { id, label, prompt }]);
-    } else {
-      updatePersonalities(editor.kind, (items) => {
-        const nextEntry = { id: editor.id, label, prompt };
-        return items.some((item) => item.id === editor.id)
-          ? items.map((item) => item.id === editor.id ? nextEntry : item)
-          : [...items, nextEntry];
-      });
-    }
-
+    const usedIds = [
+      ...listBuiltInReviewPersonaTemplates(editor.kind).map((personality) => personality.id),
+      ...(reviewPersonalitiesByKind[editor.kind] ?? []).map((personality) => personality.id),
+    ];
+    const id = nextReviewPersonalityId(editor.kind, label, usedIds);
+    updatePersonalities(editor.kind, (items) => [...items, { id, label, prompt }]);
     closeEditor();
   };
 
-  const deleteCustomPersonality = (personality: ReviewPersonaTemplate) => {
-    if (isBuiltInReviewPersonaId(activeKind, personality.id)) {
-      return;
-    }
-    updatePersonalities(activeKind, (items) => items.filter((item) => item.id !== personality.id));
+  const updatePersonalityPrompt = (
+    kind: ReviewKind,
+    personality: ReviewPersonaTemplate,
+    prompt: string,
+  ) => {
+    updatePersonalities(kind, (items) => {
+      const builtInTemplate = listBuiltInReviewPersonaTemplates(kind)
+        .find((template) => template.id === personality.id);
+      if (
+        builtInTemplate
+        && prompt === builtInTemplate.prompt
+        && personality.label === builtInTemplate.label
+      ) {
+        return items.filter((item) => item.id !== personality.id);
+      }
+
+      const nextEntry = { id: personality.id, label: personality.label, prompt };
+      return items.some((item) => item.id === personality.id)
+        ? items.map((item) => item.id === personality.id ? nextEntry : item)
+        : [...items, nextEntry];
+    });
   };
 
-  const resetBuiltInOverride = (personality: ReviewPersonaTemplate) => {
-    if (!isBuiltInReviewPersonaId(activeKind, personality.id)) {
+  const deleteCustomPersonality = (
+    kind: ReviewKind,
+    personality: ReviewPersonaTemplate,
+  ) => {
+    if (isBuiltInReviewPersonaId(kind, personality.id)) {
       return;
     }
-    updatePersonalities(activeKind, (items) => items.filter((item) => item.id !== personality.id));
+    updatePersonalities(kind, (items) => items.filter((item) => item.id !== personality.id));
+  };
+
+  const resetBuiltInOverride = (
+    kind: ReviewKind,
+    personality: ReviewPersonaTemplate,
+  ) => {
+    if (!isBuiltInReviewPersonaId(kind, personality.id)) {
+      return;
+    }
+    updatePersonalities(kind, (items) => items.filter((item) => item.id !== personality.id));
   };
 
   return (
     <section className="space-y-6">
       <SettingsPageHeader
         title="Review"
-        description="Reusable review personalities for plan and code review loops."
-        action={(
-          <Button type="button" onClick={openCreateEditor}>
-            <Plus className="size-3.5" />
-            New personality
-          </Button>
-        )}
+        description="Reusable prompts for plan and code review loops."
       />
 
-      <div className="flex rounded-lg border border-border bg-card/50 p-1">
-        {REVIEW_KINDS.map((item) => (
-          <Button
-            key={item.kind}
-            type="button"
-            variant={activeKind === item.kind ? "secondary" : "ghost"}
-            className="flex-1"
-            onClick={() => setActiveKind(item.kind)}
-          >
-            {item.label}
-          </Button>
-        ))}
-      </div>
-
-      <SettingsCard>
-        <div className="flex items-center justify-between gap-4 p-3">
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-foreground">
-              {REVIEW_KINDS.find((item) => item.kind === activeKind)?.label} personalities
-            </div>
-            <div className="text-sm text-muted-foreground">{activeKindDescription}</div>
-          </div>
-          <div className="shrink-0 rounded-full border border-border bg-background/70 px-2.5 py-1 text-xs text-muted-foreground">
-            {resolvedPersonalities.length} available
-          </div>
-        </div>
-        <div className="divide-y divide-border/40">
-          {resolvedPersonalities.map((personality) => {
-            const builtIn = isBuiltInReviewPersonaId(activeKind, personality.id);
-            const overridden = builtIn && storedPersonalities.some((item) => item.id === personality.id);
-            return (
-              <div key={personality.id} className="flex gap-3 p-3">
-                <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground/5 text-muted-foreground">
-                  <Brain className="size-4" />
-                </div>
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <div className="truncate text-sm font-medium text-foreground">
-                      {personality.label}
-                    </div>
-                    <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-                      {builtIn ? (overridden ? "Built-in override" : "Built-in") : "Custom"}
-                    </span>
-                  </div>
-                  <div className="max-h-10 overflow-hidden text-sm leading-5 text-muted-foreground">
-                    {personality.prompt}
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-start gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Edit ${personality.label}`}
-                    onClick={() => openEditEditor(personality)}
-                  >
-                    <Pencil className="size-3.5" />
-                  </Button>
-                  {builtIn ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Reset ${personality.label}`}
-                      disabled={!overridden}
-                      onClick={() => resetBuiltInOverride(personality)}
-                    >
-                      <RefreshCw className="size-3.5" />
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Delete ${personality.label}`}
-                      onClick={() => deleteCustomPersonality(personality)}
-                    >
-                      <Trash className="size-3.5" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </SettingsCard>
+      {REVIEW_SECTIONS.map((section, index) => (
+        <ReviewPersonalitySection
+          key={section.kind}
+          kind={section.kind}
+          title={section.title}
+          description={section.description}
+          createLabel={section.createLabel}
+          separated={index > 0}
+          storedPersonalities={reviewPersonalitiesByKind[section.kind] ?? EMPTY_REVIEW_PERSONALITIES}
+          onCreate={() => openCreateEditor(section.kind)}
+          onPromptChange={updatePersonalityPrompt}
+          onReset={resetBuiltInOverride}
+          onDelete={deleteCustomPersonality}
+        />
+      ))}
 
       <PersonalityEditorDialog
         editor={editor}
@@ -249,6 +178,109 @@ export function ReviewSettingsPane() {
         onClose={closeEditor}
       />
     </section>
+  );
+}
+
+interface ReviewPersonalitySectionProps {
+  kind: ReviewKind;
+  title: string;
+  description: string;
+  createLabel: string;
+  separated: boolean;
+  storedPersonalities: ReviewPersonalityPreference[];
+  onCreate: () => void;
+  onPromptChange: (
+    kind: ReviewKind,
+    personality: ReviewPersonaTemplate,
+    prompt: string,
+  ) => void;
+  onReset: (kind: ReviewKind, personality: ReviewPersonaTemplate) => void;
+  onDelete: (kind: ReviewKind, personality: ReviewPersonaTemplate) => void;
+}
+
+function ReviewPersonalitySection({
+  kind,
+  title,
+  description,
+  createLabel,
+  separated,
+  storedPersonalities,
+  onCreate,
+  onPromptChange,
+  onReset,
+  onDelete,
+}: ReviewPersonalitySectionProps) {
+  const resolvedPersonalities = useMemo(
+    () => resolveReviewPersonaTemplates(kind, storedPersonalities),
+    [kind, storedPersonalities],
+  );
+
+  return (
+    <EnvironmentSection
+      title={title}
+      description={description}
+      separated={separated}
+      action={(
+        <Button type="button" variant="outline" size="sm" onClick={onCreate}>
+          <Plus className="size-3.5" />
+          {createLabel}
+        </Button>
+      )}
+    >
+      {resolvedPersonalities.map((personality) => {
+        const builtIn = isBuiltInReviewPersonaId(kind, personality.id);
+        const overridden = builtIn && storedPersonalities.some((item) => item.id === personality.id);
+        const descriptionText = builtIn
+          ? overridden ? "Built-in personality with custom prompt" : "Built-in personality"
+          : "Custom personality";
+
+        return (
+          <EnvironmentField
+            key={personality.id}
+            label={personality.label}
+            description={descriptionText}
+          >
+            <div className="space-y-2">
+              <Textarea
+                variant="code"
+                rows={6}
+                value={personality.prompt}
+                data-telemetry-mask
+                placeholder="Tell this reviewer what to focus on."
+                className="min-h-36 px-2.5 py-2 text-sm"
+                onChange={(event) => onPromptChange(kind, personality, event.target.value)}
+              />
+              {(overridden || !builtIn) ? (
+                <div className="flex justify-end gap-2">
+                  {overridden ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onReset(kind, personality)}
+                    >
+                      <RefreshCw className="size-3.5" />
+                      Reset
+                    </Button>
+                  ) : null}
+                  {!builtIn ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDelete(kind, personality)}
+                    >
+                      <Trash className="size-3.5" />
+                      Delete
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </EnvironmentField>
+        );
+      })}
+    </EnvironmentSection>
   );
 }
 
@@ -273,7 +305,9 @@ function PersonalityEditorDialog({
   onSave,
   onClose,
 }: PersonalityEditorDialogProps) {
-  const title = editor?.mode === "create" ? "New personality" : "Edit personality";
+  const title = editor?.kind === "code"
+    ? "New coding personality"
+    : "New planning personality";
   return (
     <ModalShell
       open={!!editor}
@@ -309,10 +343,12 @@ function PersonalityEditorDialog({
         <Label className="grid gap-1 text-xs text-muted-foreground">
           Prompt
           <Textarea
+            variant="code"
+            rows={6}
             value={promptDraft}
             data-telemetry-mask
             placeholder="Tell this reviewer what to focus on."
-            className="min-h-[12rem] leading-relaxed"
+            className="min-h-36 px-2.5 py-2 text-sm"
             onChange={(event) => onPromptChange(event.target.value)}
           />
         </Label>
