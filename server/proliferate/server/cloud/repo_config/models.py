@@ -91,6 +91,9 @@ class ResyncCloudWorkspaceFilesResponse(CloudWorkspaceRepoConfigStatusResponse):
 class RunCloudWorkspaceSetupResponse(BaseModel):
     workspace_id: str = Field(serialization_alias="workspaceId")
     command: str
+    terminal_id: str | None = Field(default=None, serialization_alias="terminalId")
+    command_run_id: str | None = Field(default=None, serialization_alias="commandRunId")
+    status: str
 
 
 def repo_config_summary_payload(value: CloudRepoConfigSummaryValue) -> CloudRepoConfigSummary:
@@ -181,8 +184,14 @@ def run_cloud_workspace_setup_payload(
     workspace: CloudWorkspace,
     *,
     command: str,
+    terminal_id: str | None,
+    command_run_id: str | None,
+    status: str,
 ) -> RunCloudWorkspaceSetupResponse:
     return RunCloudWorkspaceSetupResponse(
         workspace_id=str(workspace.id),
         command=command,
+        terminal_id=terminal_id,
+        command_run_id=command_run_id,
+        status=status,
     )

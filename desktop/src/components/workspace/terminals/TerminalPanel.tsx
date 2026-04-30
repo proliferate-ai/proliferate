@@ -8,11 +8,13 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "@/components/ui/Button";
-import { Terminal as TerminalIcon } from "@/components/ui/icons";
+import { RefreshCw, Terminal as TerminalIcon } from "@/components/ui/icons";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
 import { getTerminalWsHandle, onTerminalData } from "@/lib/integrations/anyharness/terminal-handles";
 import { useTerminalActions } from "@/hooks/terminals/use-terminal-actions";
 import { getTerminalTheme, onThemeChange } from "@/config/theme";
+import { useRerunSetupMutation } from "@anyharness/sdk-react";
+import { useToastStore } from "@/stores/toast/toast-store";
 
 interface TerminalPanelProps {
   workspaceId: string | null;
@@ -39,8 +41,16 @@ export function TerminalPanel({
   focusRequestToken = 0,
   onNewTerminal,
 }: TerminalPanelProps) {
+  const activeTerminal = terminals.find((terminal) => terminal.id === activeTerminalId) ?? null;
+
   return (
     <div className="flex h-full flex-col" data-telemetry-block data-focus-zone="terminal">
+      {activeTerminal && workspaceId && (
+        <TerminalCommandActionBar
+          terminal={activeTerminal}
+          workspaceId={workspaceId}
+        />
+      )}
       <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-background">
         {isLoading ? (
           <TerminalEmptyState label="Loading terminals" />
@@ -68,6 +78,54 @@ export function TerminalPanel({
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+function TerminalCommandActionBar({
+  terminal,
+  workspaceId,
+}: {
+  terminal: TerminalRecord;
+  workspaceId: string;
+}) {
+  const showToast = useToastStore((state) => state.show);
+  const rerunSetup = useRerunSetupMutation();
+  const { rerunCommand } = useTerminalActions();
+  const [isRerunning, setIsRerunning] = useState(false);
+  const command = terminal.commandRun?.command?.trim() ?? "";
+  const isSetup = terminal.purpose === "setup";
+  const isRun = terminal.purpose === "run";
+
+  if (!command || (!isSetup && !isRun)) {
+    return null;
+  }
+
+  const label = isSetup ? "Rerun setup command" : "Rerun run command";
+
+  return (
+    <div className="flex h-8 shrink-0 items-center justify-end border-b border-border/60 bg-background px-2">
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        disabled={isRerunning || rerunSetup.isPending}
+        onClick={() => {
+          setIsRerunning(true);
+          const operation = isSetup
+            ? rerunSetup.mutateAsync(workspaceId)
+            : rerunCommand(terminal.id, workspaceId, command);
+          void operation
+            .catch((error) => {
+              const message = error instanceof Error ? error.message : String(error);
+              showToast(`Failed to rerun command: ${message}`);
+            })
+            .finally(() => setIsRerunning(false));
+        }}
+      >
+        <RefreshCw className="size-3.5" />
+        {label}
+      </Button>
     </div>
   );
 }

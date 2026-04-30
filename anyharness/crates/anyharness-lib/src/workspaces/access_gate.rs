@@ -197,6 +197,7 @@ mod tests {
     use crate::persistence::Db;
     use crate::sessions::store::SessionStore;
     use crate::terminals::service::TerminalService;
+    use crate::terminals::store::TerminalStore;
     use crate::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
     use crate::workspaces::access_store::WorkspaceAccessStore;
     use crate::workspaces::model::WorkspaceRecord;
@@ -239,12 +240,16 @@ mod tests {
         let db = Db::open_in_memory().expect("open db");
         let workspace_store = WorkspaceStore::new(db.clone());
         let session_store = SessionStore::new(db.clone());
-        let access_store = WorkspaceAccessStore::new(db);
+        let access_store = WorkspaceAccessStore::new(db.clone());
+        let runtime_home = std::env::temp_dir().join(format!(
+            "anyharness-access-gate-test-{}",
+            uuid::Uuid::new_v4()
+        ));
         let gate = WorkspaceAccessGate::new(
             workspace_store.clone(),
             session_store,
             access_store.clone(),
-            Arc::new(TerminalService::new()),
+            Arc::new(TerminalService::new(TerminalStore::new(db), runtime_home)),
         );
         (gate, workspace_store, access_store)
     }

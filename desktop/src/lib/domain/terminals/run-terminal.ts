@@ -1,4 +1,4 @@
-export const RUN_TERMINAL_TITLE = "Run";
+export const RUN_TERMINAL_TITLE = "Run command";
 
 export interface RunTerminalCandidate {
   id: string;

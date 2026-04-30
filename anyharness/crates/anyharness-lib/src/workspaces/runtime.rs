@@ -13,7 +13,7 @@ use super::service::WorkspaceService;
 use super::store::WorkspaceStore;
 use super::types::{
     CreateWorktreeResult, ProjectSetupDetectionResult, ResolveRepoRootError,
-    SetWorkspaceDisplayNameError, SetupScriptExecutionResult, SetupScriptExecutionStatus,
+    SetWorkspaceDisplayNameError,
 };
 use crate::git::service::GitService;
 use crate::origin::OriginContext;
@@ -133,7 +133,7 @@ impl WorkspaceRuntime {
         target_path: &str,
         new_branch_name: &str,
         base_branch: Option<&str>,
-        setup_script: Option<&str>,
+        _setup_script: Option<&str>,
         surface: &str,
         origin: OriginContext,
         creator_context: Option<WorkspaceCreatorContext>,
@@ -216,13 +216,7 @@ impl WorkspaceRuntime {
             "[workspace-latency] workspace.worktree.runtime_create.record_inserted"
         );
 
-        let setup_script = setup_script
-            .map(str::trim)
-            .filter(|script| !script.is_empty())
-            .map(|script| {
-                self.run_setup_script(&record, Some(base_branch.unwrap_or("HEAD")), script)
-            })
-            .transpose()?;
+        let setup_script = None;
 
         tracing::info!(
             workspace_id = %record.id,
@@ -681,45 +675,6 @@ impl WorkspaceRuntime {
 
         Ok(repo_root)
     }
-
-    fn run_setup_script(
-        &self,
-        workspace: &WorkspaceRecord,
-        base_ref: Option<&str>,
-        script: &str,
-    ) -> anyhow::Result<SetupScriptExecutionResult> {
-        const MAX_OUTPUT_BYTES: usize = 64 * 1024;
-
-        let started = Instant::now();
-        let mut command = setup_shell_command(script);
-        command.current_dir(&workspace.path);
-        for (key, value) in self.build_workspace_env(workspace, base_ref)? {
-            command.env(key, value);
-        }
-
-        match command.output() {
-            Ok(output) => Ok(SetupScriptExecutionResult {
-                command: script.to_string(),
-                status: if output.status.success() {
-                    SetupScriptExecutionStatus::Succeeded
-                } else {
-                    SetupScriptExecutionStatus::Failed
-                },
-                exit_code: output.status.code().unwrap_or(-1),
-                stdout: truncate_output(&String::from_utf8_lossy(&output.stdout), MAX_OUTPUT_BYTES),
-                stderr: truncate_output(&String::from_utf8_lossy(&output.stderr), MAX_OUTPUT_BYTES),
-                duration_ms: started.elapsed().as_millis() as u64,
-            }),
-            Err(error) => Ok(SetupScriptExecutionResult {
-                command: script.to_string(),
-                status: SetupScriptExecutionStatus::Failed,
-                exit_code: -1,
-                stdout: String::new(),
-                stderr: format!("failed to run setup script: {error}"),
-                duration_ms: started.elapsed().as_millis() as u64,
-            }),
-        }
-    }
 }
 
 fn build_workspace_record(
@@ -896,36 +851,6 @@ fn git_ref_exists(repo_root: &Path, ref_name: &str) -> bool {
         .output()
         .map(|output| output.status.success())
         .unwrap_or(false)
-}
-
-fn truncate_output(output: &str, max_bytes: usize) -> String {
-    if output.len() <= max_bytes {
-        return output.to_string();
-    }
-
-    let mut end = max_bytes;
-    while end > 0 && !output.is_char_boundary(end) {
-        end -= 1;
-    }
-
-    let mut truncated = output[..end].to_string();
-    truncated.push_str("\n[output truncated]");
-    truncated
-}
-
-#[cfg(windows)]
-fn setup_shell_command(script: &str) -> Command {
-    let mut command = Command::new("cmd");
-    command.args(["/C", script]);
-    command
-}
-
-#[cfg(not(windows))]
-fn setup_shell_command(script: &str) -> Command {
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-    let mut command = Command::new(shell);
-    command.args(["-lc", script]);
-    command
 }
 
 #[cfg(test)]

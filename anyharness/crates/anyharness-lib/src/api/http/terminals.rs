@@ -6,14 +6,22 @@ use crate::api::http::access::{assert_terminal_mutable, assert_workspace_mutable
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
 use crate::terminals::model::{
-    CreateTerminalOptions, ResizeTerminalOptions, TerminalPurpose as InternalTerminalPurpose,
-    TerminalRecord as InternalTerminalRecord, TerminalStatus as InternalTerminalStatus,
+    CreateTerminalOptions, ResizeTerminalOptions, RunTerminalCommandOptions,
+    TerminalCommandOutputMode as InternalTerminalCommandOutputMode,
+    TerminalCommandRunRecord as InternalTerminalCommandRunRecord,
+    TerminalCommandRunStatus as InternalTerminalCommandRunStatus,
+    TerminalPurpose as InternalTerminalPurpose, TerminalRecord as InternalTerminalRecord,
+    TerminalStatus as InternalTerminalStatus,
 };
 use crate::workspaces::model::WorkspaceRecord;
 use anyharness_contract::v1::terminals::{
-    CreateTerminalRequest, ResizeTerminalRequest, TerminalPurpose as ContractTerminalPurpose,
-    TerminalRecord as ContractTerminalRecord, TerminalStatus as ContractTerminalStatus,
-    UpdateTerminalTitleRequest,
+    CreateTerminalRequest, ResizeTerminalRequest, StartTerminalCommandRequest,
+    StartTerminalCommandResponse, TerminalCommandOutputMode as ContractTerminalCommandOutputMode,
+    TerminalCommandRunDetail as ContractTerminalCommandRunDetail,
+    TerminalCommandRunStatus as ContractTerminalCommandRunStatus,
+    TerminalCommandRunSummary as ContractTerminalCommandRunSummary,
+    TerminalPurpose as ContractTerminalPurpose, TerminalRecord as ContractTerminalRecord,
+    TerminalStatus as ContractTerminalStatus, UpdateTerminalTitleRequest,
 };
 
 const MAX_TERMINAL_TITLE_CHARS: usize = 160;
@@ -114,6 +122,13 @@ pub async fn create_terminal(
                     .map(terminal_purpose_to_internal)
                     .unwrap_or(InternalTerminalPurpose::General),
                 env: env_vars,
+                startup_command: request.startup_command,
+                startup_command_env: request
+                    .startup_command_env
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+                startup_command_timeout_ms: request.startup_command_timeout_ms,
                 cols: request.cols,
                 rows: request.rows,
             },
@@ -121,6 +136,77 @@ pub async fn create_terminal(
         .await
         .map_err(|e| ApiError::internal(e.to_string()))?;
     Ok(Json(terminal_record_to_contract(record)))
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/terminals/{terminal_id}/commands",
+    params(("terminal_id" = String, Path, description = "Terminal ID")),
+    request_body = StartTerminalCommandRequest,
+    responses(
+        (status = 200, description = "Terminal command started", body = StartTerminalCommandResponse),
+        (status = 400, description = "Invalid command", body = anyharness_contract::v1::ProblemDetails),
+        (status = 404, description = "Terminal not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "terminals"
+)]
+pub async fn start_terminal_command(
+    State(state): State<AppState>,
+    Path(terminal_id): Path<String>,
+    Json(request): Json<StartTerminalCommandRequest>,
+) -> Result<Json<StartTerminalCommandResponse>, ApiError> {
+    assert_terminal_mutable(&state, &terminal_id).await?;
+    let command = request.command.trim().to_string();
+    if command.is_empty() {
+        return Err(ApiError::bad_request(
+            "command must not be empty",
+            "INVALID_TERMINAL_COMMAND",
+        ));
+    }
+    let run = state
+        .terminal_service
+        .run_terminal_command(
+            &terminal_id,
+            RunTerminalCommandOptions {
+                command,
+                env: request.env.unwrap_or_default().into_iter().collect(),
+                interrupt: request.interrupt.unwrap_or(false),
+                timeout_ms: request.timeout_ms,
+            },
+        )
+        .await
+        .map_err(map_terminal_command_error)?;
+    let terminal = state
+        .terminal_service
+        .get_terminal(&terminal_id)
+        .await
+        .ok_or_else(|| ApiError::not_found("terminal not found", "TERMINAL_NOT_FOUND"))?;
+    Ok(Json(StartTerminalCommandResponse {
+        terminal: terminal_record_to_contract(terminal),
+        command_run: terminal_command_run_summary_to_contract(run),
+    }))
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/terminal-command-runs/{command_run_id}",
+    params(("command_run_id" = String, Path, description = "Terminal command run ID")),
+    responses(
+        (status = 200, description = "Terminal command run", body = ContractTerminalCommandRunDetail),
+        (status = 404, description = "Command run not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "terminals"
+)]
+pub async fn get_terminal_command_run(
+    State(state): State<AppState>,
+    Path(command_run_id): Path<String>,
+) -> Result<Json<ContractTerminalCommandRunDetail>, ApiError> {
+    let run = state
+        .terminal_service
+        .get_command_run(&command_run_id)
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| ApiError::not_found("command run not found", "COMMAND_RUN_NOT_FOUND"))?;
+    Ok(Json(terminal_command_run_detail_to_contract(run)))
 }
 
 #[utoipa::path(
@@ -237,6 +323,9 @@ fn terminal_record_to_contract(record: InternalTerminalRecord) -> ContractTermin
         exit_code: record.exit_code,
         created_at: record.created_at,
         updated_at: record.updated_at,
+        command_run: record
+            .command_run
+            .map(terminal_command_run_summary_to_contract),
     }
 }
 
@@ -253,6 +342,7 @@ fn terminal_purpose_to_contract(purpose: InternalTerminalPurpose) -> ContractTer
     match purpose {
         InternalTerminalPurpose::General => ContractTerminalPurpose::General,
         InternalTerminalPurpose::Run => ContractTerminalPurpose::Run,
+        InternalTerminalPurpose::Setup => ContractTerminalPurpose::Setup,
     }
 }
 
@@ -260,6 +350,74 @@ fn terminal_purpose_to_internal(purpose: ContractTerminalPurpose) -> InternalTer
     match purpose {
         ContractTerminalPurpose::General => InternalTerminalPurpose::General,
         ContractTerminalPurpose::Run => InternalTerminalPurpose::Run,
+        ContractTerminalPurpose::Setup => InternalTerminalPurpose::Setup,
+    }
+}
+
+fn terminal_command_run_summary_to_contract(
+    record: InternalTerminalCommandRunRecord,
+) -> ContractTerminalCommandRunSummary {
+    ContractTerminalCommandRunSummary {
+        id: record.id,
+        terminal_id: record.terminal_id,
+        workspace_id: record.workspace_id,
+        purpose: terminal_purpose_to_contract(record.purpose),
+        command: record.command,
+        status: terminal_command_status_to_contract(record.status),
+        exit_code: record.exit_code,
+        started_at: record.started_at,
+        completed_at: record.completed_at,
+        duration_ms: record.duration_ms,
+        output_truncated: record.output_truncated,
+    }
+}
+
+fn terminal_command_run_detail_to_contract(
+    record: InternalTerminalCommandRunRecord,
+) -> ContractTerminalCommandRunDetail {
+    ContractTerminalCommandRunDetail {
+        summary: terminal_command_run_summary_to_contract(record.clone()),
+        output_mode: terminal_command_output_mode_to_contract(record.output_mode),
+        stdout: record.stdout,
+        stderr: record.stderr,
+        combined_output: record.combined_output,
+    }
+}
+
+fn terminal_command_status_to_contract(
+    status: InternalTerminalCommandRunStatus,
+) -> ContractTerminalCommandRunStatus {
+    match status {
+        InternalTerminalCommandRunStatus::Queued => ContractTerminalCommandRunStatus::Queued,
+        InternalTerminalCommandRunStatus::Running => ContractTerminalCommandRunStatus::Running,
+        InternalTerminalCommandRunStatus::Succeeded => ContractTerminalCommandRunStatus::Succeeded,
+        InternalTerminalCommandRunStatus::Failed => ContractTerminalCommandRunStatus::Failed,
+        InternalTerminalCommandRunStatus::Interrupted => {
+            ContractTerminalCommandRunStatus::Interrupted
+        }
+        InternalTerminalCommandRunStatus::TimedOut => ContractTerminalCommandRunStatus::TimedOut,
+    }
+}
+
+fn terminal_command_output_mode_to_contract(
+    mode: InternalTerminalCommandOutputMode,
+) -> ContractTerminalCommandOutputMode {
+    match mode {
+        InternalTerminalCommandOutputMode::Separate => ContractTerminalCommandOutputMode::Separate,
+        InternalTerminalCommandOutputMode::Combined => ContractTerminalCommandOutputMode::Combined,
+    }
+}
+
+fn map_terminal_command_error(error: anyhow::Error) -> ApiError {
+    let message = error.to_string();
+    if message.contains("terminal not found") {
+        ApiError::not_found(message, "TERMINAL_NOT_FOUND")
+    } else if message.contains("unsupported_terminal_shell") {
+        ApiError::bad_request("unsupported terminal shell", "UNSUPPORTED_TERMINAL_SHELL")
+    } else if message.contains("terminal command already running") {
+        ApiError::conflict(message, "TERMINAL_COMMAND_ALREADY_RUNNING")
+    } else {
+        ApiError::bad_request(message, "TERMINAL_COMMAND_FAILED")
     }
 }
 

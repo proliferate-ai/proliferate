@@ -1,5 +1,6 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
+import { shouldPollCloudWorkspaceForUpdates } from "@/lib/domain/workspaces/cloud-workspace-status";
 
 function sortWorkspacesByUpdatedAtDesc<T extends Pick<Workspace, "updatedAt">>(workspaces: T[]): T[] {
   return [...workspaces].sort((a, b) => {
@@ -131,10 +132,15 @@ export function workspaceCollectionsNeedActivityRefresh(
     return false;
   }
 
-  return collections.localWorkspaces.some((workspace) => {
+  const hasLocalActivity = collections.localWorkspaces.some((workspace) => {
     const phase = workspace.executionSummary?.phase;
     return phase === "running" || phase === "awaiting_interaction";
   });
+  if (hasLocalActivity) {
+    return true;
+  }
+
+  return collections.cloudWorkspaces.some(shouldPollCloudWorkspaceForUpdates);
 }
 
 export function upsertLocalWorkspaceCollections(

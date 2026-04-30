@@ -74,11 +74,11 @@ function makeCloudWorkspace(overrides: Partial<CloudWorkspaceSummary> = {}): Clo
     actionBlockKind: overrides.actionBlockKind ?? null,
     createdAt: overrides.createdAt ?? "2026-04-06T09:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-04-06T09:00:00.000Z",
-    postReadyPhase: "idle",
-    postReadyFilesTotal: 0,
-    postReadyFilesApplied: 0,
-    postReadyStartedAt: null,
-    postReadyCompletedAt: null,
+    postReadyPhase: overrides.postReadyPhase ?? "idle",
+    postReadyFilesTotal: overrides.postReadyFilesTotal ?? 0,
+    postReadyFilesApplied: overrides.postReadyFilesApplied ?? 0,
+    postReadyStartedAt: overrides.postReadyStartedAt ?? null,
+    postReadyCompletedAt: overrides.postReadyCompletedAt ?? null,
   };
 }
 
@@ -226,6 +226,26 @@ describe("workspaceCollectionsNeedActivityRefresh", () => {
         },
       }),
     ]);
+
+    expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(false);
+  });
+
+  it("requests refresh while cloud post-ready setup is still running", () => {
+    const collections = buildWorkspaceCollections(
+      [],
+      [],
+      [makeCloudWorkspace({ status: "ready", postReadyPhase: "starting_setup" })],
+    );
+
+    expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(true);
+  });
+
+  it("stops refreshing after cloud post-ready work completes", () => {
+    const collections = buildWorkspaceCollections(
+      [],
+      [],
+      [makeCloudWorkspace({ status: "ready", postReadyPhase: "completed" })],
+    );
 
     expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(false);
   });

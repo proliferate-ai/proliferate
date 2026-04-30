@@ -38,12 +38,12 @@ use crate::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::sessions::subagents::mcp_auth::SubagentMcpAuth;
 use crate::sessions::subagents::service::SubagentService;
 use crate::sessions::subagents::store::SubagentStore;
+use crate::terminals::store::TerminalStore;
 use crate::terminals::TerminalService;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::access_store::WorkspaceAccessStore;
 use crate::workspaces::runtime::WorkspaceRuntime;
 use crate::workspaces::service::WorkspaceService;
-use crate::workspaces::setup_execution::SetupExecutionService;
 use crate::workspaces::store::WorkspaceStore;
 
 #[derive(Debug, thiserror::Error)]
@@ -88,7 +88,6 @@ pub struct AppState {
     pub plan_runtime: Arc<PlanRuntime>,
     pub acp_manager: AcpManager,
     pub terminal_service: Arc<TerminalService>,
-    pub setup_execution_service: Arc<SetupExecutionService>,
 }
 
 impl AppState {
@@ -135,7 +134,10 @@ impl AppState {
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));
         let acp_manager = AcpManager::new(plan_service.clone());
-        let terminal_service = Arc::new(TerminalService::new());
+        let terminal_service = Arc::new(TerminalService::new(
+            TerminalStore::new(db.clone()),
+            runtime_home.clone(),
+        ));
         let workspace_access_gate = Arc::new(WorkspaceAccessGate::new(
             WorkspaceStore::new(db.clone()),
             SessionStore::new(db.clone()),
@@ -217,7 +219,6 @@ impl AppState {
             session_runtime.clone(),
             runtime_home.clone(),
         ));
-        let setup_execution_service = Arc::new(SetupExecutionService::new());
         let mobility_service = Arc::new(MobilityService::new(
             workspace_service.clone(),
             workspace_runtime.clone(),
@@ -226,7 +227,6 @@ impl AppState {
             session_runtime.clone(),
             subagent_service.clone(),
             workspace_access_gate.clone(),
-            setup_execution_service.clone(),
             terminal_service.clone(),
         ));
         let plan_runtime = Arc::new(PlanRuntime::new(
@@ -274,7 +274,6 @@ impl AppState {
             plan_runtime,
             acp_manager,
             terminal_service,
-            setup_execution_service,
         })
     }
 }

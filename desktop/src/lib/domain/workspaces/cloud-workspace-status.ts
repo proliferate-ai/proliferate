@@ -113,6 +113,18 @@ function isPostReadyPending(phase: string | null | undefined): boolean {
   return phase === "applying_files" || phase === "starting_setup";
 }
 
+export function isCloudWorkspacePostReadyPending(
+  workspace: CloudWorkspaceSummary,
+): boolean {
+  return workspace.status === "ready" && isPostReadyPending(workspace.postReadyPhase);
+}
+
+export function shouldPollCloudWorkspaceForUpdates(
+  workspace: CloudWorkspaceSummary,
+): boolean {
+  return isCloudWorkspacePending(workspace.status) || isCloudWorkspacePostReadyPending(workspace);
+}
+
 function isFirstRuntimeSetupPending(workspace: CloudWorkspaceSummary): boolean {
   return isCloudWorkspacePending(workspace.status) && workspace.runtime?.generation === 0;
 }
@@ -125,7 +137,7 @@ export function shouldShowCloudWorkspaceStatusScreen(
     || isCloudWorkspacePending(workspace.status)
     || workspace.status === "error"
     || workspace.status === "archived"
-    || (workspace.status === "ready" && isPostReadyPending(workspace.postReadyPhase))
+    || isCloudWorkspacePostReadyPending(workspace)
   );
 }
 
@@ -190,7 +202,7 @@ export function buildCloudWorkspaceStatusScreenModel(
     };
   }
 
-  if (workspace.status === "ready" && isPostReadyPending(workspace.postReadyPhase)) {
+  if (isCloudWorkspacePostReadyPending(workspace)) {
     const title = workspace.postReadyPhase === "applying_files"
       ? "Applying tracked files"
       : "Starting cloud setup";

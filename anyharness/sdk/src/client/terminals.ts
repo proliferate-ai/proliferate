@@ -1,6 +1,9 @@
 import type {
   CreateTerminalRequest,
   ResizeTerminalRequest,
+  StartTerminalCommandRequest,
+  StartTerminalCommandResponse,
+  TerminalCommandRunDetail,
   TerminalRecord,
   UpdateTerminalTitleRequest,
 } from "../types/terminals.js";
@@ -28,6 +31,22 @@ export class TerminalsClient {
   async get(terminalId: string): Promise<TerminalRecord> {
     return this.transport.get<TerminalRecord>(
       `/v1/terminals/${encodeURIComponent(terminalId)}`,
+    );
+  }
+
+  async runCommand(
+    terminalId: string,
+    input: StartTerminalCommandRequest,
+  ): Promise<StartTerminalCommandResponse> {
+    return this.transport.post<StartTerminalCommandResponse>(
+      `/v1/terminals/${encodeURIComponent(terminalId)}/commands`,
+      input,
+    );
+  }
+
+  async getCommandRun(commandRunId: string): Promise<TerminalCommandRunDetail> {
+    return this.transport.get<TerminalCommandRunDetail>(
+      `/v1/terminal-command-runs/${encodeURIComponent(commandRunId)}`,
     );
   }
 

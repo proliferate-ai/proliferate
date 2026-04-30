@@ -1,5 +1,5 @@
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
 use futures::stream::StreamExt;
 use futures::SinkExt;
@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use crate::app::AppState;
 use crate::terminals::model::ResizeTerminalOptions;
-use crate::terminals::service::TerminalOutputEvent;
+use crate::terminals::service::terminal_frame_to_json;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -18,18 +18,43 @@ enum TerminalControlMessage {
 pub async fn terminal_ws(
     ws: WebSocketUpgrade,
     Path(terminal_id): Path<String>,
+    Query(query): Query<TerminalWsQuery>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_terminal_ws(socket, terminal_id, state))
+    ws.on_upgrade(move |socket| handle_terminal_ws(socket, terminal_id, query.after_seq, state))
 }
 
-async fn handle_terminal_ws(socket: WebSocket, terminal_id: String, state: AppState) {
-    let output_rx = match state.terminal_service.subscribe_output(&terminal_id).await {
-        Some(rx) => rx,
+#[derive(Debug, Deserialize)]
+pub struct TerminalWsQuery {
+    after_seq: Option<u64>,
+}
+
+async fn handle_terminal_ws(
+    socket: WebSocket,
+    terminal_id: String,
+    after_seq: Option<u64>,
+    state: AppState,
+) {
+    let (replay, output_rx) = match state
+        .terminal_service
+        .subscribe_output(&terminal_id, after_seq)
+        .await
+    {
+        Some(value) => value,
         None => return,
     };
 
     let (mut ws_sink, mut ws_stream) = socket.split();
+    for event in replay {
+        let json = terminal_frame_to_json(&terminal_id, event);
+        if ws_sink
+            .send(Message::Text(json.to_string().into()))
+            .await
+            .is_err()
+        {
+            return;
+        }
+    }
     let mut output_rx = output_rx;
     loop {
         tokio::select! {
@@ -90,13 +115,8 @@ async fn handle_terminal_ws(socket: WebSocket, terminal_id: String, state: AppSt
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 };
-                let msg = match event {
-                    TerminalOutputEvent::Data(data) => Message::Binary(data.into()),
-                    TerminalOutputEvent::Exit { code } => {
-                        let json = serde_json::json!({ "type": "exit", "code": code });
-                        Message::Text(json.to_string().into())
-                    }
-                };
+                let json = terminal_frame_to_json(&terminal_id, event);
+                let msg = Message::Text(json.to_string().into());
                 if ws_sink.send(msg).await.is_err() {
                     break;
                 }

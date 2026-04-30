@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateTerminalRequest,
   ResizeTerminalRequest,
+  StartTerminalCommandRequest,
   UpdateTerminalTitleRequest,
 } from "@anyharness/sdk";
 import {
@@ -107,6 +108,29 @@ export function useCloseTerminalMutation(options?: { workspaceId?: string | null
     }) => {
       const client = getAnyHarnessClient(input.connection);
       await client.terminals.close(input.terminalId);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessTerminalsKey(runtimeUrl, workspaceId),
+      });
+    },
+  });
+}
+
+export function useRunTerminalCommandMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (input: {
+      connection: { runtimeUrl: string; authToken?: string | null };
+      terminalId: string;
+      request: StartTerminalCommandRequest;
+    }) => {
+      const client = getAnyHarnessClient(input.connection);
+      return client.terminals.runCommand(input.terminalId, input.request);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({

@@ -2168,6 +2168,47 @@
         }
       }
     },
+    "/v1/terminal-command-runs/{command_run_id}": {
+      "get": {
+        "tags": [
+          "terminals"
+        ],
+        "operationId": "get_terminal_command_run",
+        "parameters": [
+          {
+            "name": "command_run_id",
+            "in": "path",
+            "description": "Terminal command run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Terminal command run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalCommandRunDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Command run not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/terminals/{terminal_id}": {
       "get": {
         "tags": [
@@ -2227,6 +2268,67 @@
         "responses": {
           "204": {
             "description": "Terminal closed"
+          },
+          "404": {
+            "description": "Terminal not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/terminals/{terminal_id}/commands": {
+      "post": {
+        "tags": [
+          "terminals"
+        ],
+        "operationId": "start_terminal_command",
+        "parameters": [
+          {
+            "name": "terminal_id",
+            "in": "path",
+            "description": "Terminal ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartTerminalCommandRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Terminal command started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartTerminalCommandResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid command",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           },
           "404": {
             "description": "Terminal not found",
@@ -5923,6 +6025,32 @@
               "null"
             ]
           },
+          "startupCommand": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "startupCommandEnv": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "startupCommandTimeoutMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
           "title": {
             "type": [
               "string",
@@ -6232,6 +6360,12 @@
           "command": {
             "type": "string"
           },
+          "commandRunId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "durationMs": {
             "type": [
               "integer",
@@ -6257,6 +6391,12 @@
             ]
           },
           "stdout": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "terminalId": {
             "type": [
               "string",
               "null"
@@ -12154,6 +12294,58 @@
           }
         }
       },
+      "StartTerminalCommandRequest": {
+        "type": "object",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "env": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "interrupt": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "timeoutMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "StartTerminalCommandResponse": {
+        "type": "object",
+        "required": [
+          "terminal",
+          "commandRun"
+        ],
+        "properties": {
+          "commandRun": {
+            "$ref": "#/components/schemas/TerminalCommandRunSummary"
+          },
+          "terminal": {
+            "$ref": "#/components/schemas/TerminalRecord"
+          }
+        }
+      },
       "StartWorkspaceSetupRequest": {
         "type": "object",
         "required": [
@@ -12273,6 +12465,124 @@
           "cancelled"
         ]
       },
+      "TerminalCommandOutputMode": {
+        "type": "string",
+        "enum": [
+          "separate",
+          "combined"
+        ]
+      },
+      "TerminalCommandRunDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TerminalCommandRunSummary"
+          },
+          {
+            "type": "object",
+            "required": [
+              "outputMode"
+            ],
+            "properties": {
+              "combinedOutput": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "outputMode": {
+                "$ref": "#/components/schemas/TerminalCommandOutputMode"
+              },
+              "stderr": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "stdout": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "TerminalCommandRunStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "interrupted",
+          "timed_out"
+        ]
+      },
+      "TerminalCommandRunSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "workspaceId",
+          "purpose",
+          "command",
+          "status",
+          "outputTruncated"
+        ],
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "durationMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "exitCode": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "id": {
+            "type": "string"
+          },
+          "outputTruncated": {
+            "type": "boolean"
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/TerminalPurpose"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/TerminalCommandRunStatus"
+          },
+          "terminalId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
       "TerminalLifecycleEvent": {
         "type": "string",
         "enum": [
@@ -12285,7 +12595,8 @@
         "type": "string",
         "enum": [
           "general",
-          "run"
+          "run",
+          "setup"
         ]
       },
       "TerminalRecord": {
@@ -12301,6 +12612,16 @@
           "updatedAt"
         ],
         "properties": {
+          "commandRun": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TerminalCommandRunSummary"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string"
           },

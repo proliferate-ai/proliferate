@@ -264,6 +264,14 @@ pub fn build_router(state: AppState) -> Router {
             post(terminals::resize_terminal),
         )
         .route(
+            "/terminals/{terminal_id}/commands",
+            post(terminals::start_terminal_command),
+        )
+        .route(
+            "/terminal-command-runs/{command_run_id}",
+            get(terminals::get_terminal_command_run),
+        )
+        .route(
             "/terminals/{terminal_id}",
             delete(terminals::delete_terminal),
         )

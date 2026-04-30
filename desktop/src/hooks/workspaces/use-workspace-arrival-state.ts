@@ -11,6 +11,7 @@ const EMPTY_WORKSPACES: Workspace[] = [];
 export function useWorkspaceArrivalState(): {
   workspacePath: string | null;
   sourceRepoRootPath: string | null;
+  setupTerminalId: string | null;
   viewModel: ReturnType<typeof buildWorkspaceArrivalViewModel> | null;
 } {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
@@ -78,12 +79,14 @@ export function useWorkspaceArrivalState(): {
       event: effectiveEvent,
       workspace,
       configuredSetupScript,
+      setupTerminalId: liveSetupStatus?.terminalId ?? null,
     });
   }, [configuredSetupScript, liveSetupStatus, workspace, workspaceArrivalEvent]);
 
   return {
     workspacePath: workspace?.path ?? null,
     sourceRepoRootPath: workspace?.sourceRepoRootPath ?? null,
+    setupTerminalId: liveSetupStatus?.terminalId ?? null,
     viewModel,
   };
 }

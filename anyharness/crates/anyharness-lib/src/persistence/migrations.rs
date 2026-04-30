@@ -129,6 +129,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0035_review_assignments_active_reviewer_index",
         include_str!("sql/0035_review_assignments_active_reviewer_index.sql"),
     ),
+    (
+        "0036_terminal_command_runs",
+        include_str!("sql/0036_terminal_command_runs.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

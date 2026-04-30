@@ -81,6 +81,7 @@ export const WORKSPACE_ARRIVAL_CREATED: WorkspaceArrivalViewModel = {
   setupStatusLabel: "Optional",
   setupTone: "default",
   setupDetail: null,
+  setupTerminalId: null,
   branchName: "prism",
   baseBranchName: "main",
 };

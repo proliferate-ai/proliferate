@@ -192,6 +192,7 @@ async def create_cloud_workspace_record(
         repo_post_ready_phase="idle",
         repo_post_ready_files_total=0,
         repo_post_ready_files_applied=0,
+        repo_post_ready_apply_token=None,
         repo_files_last_failed_path=None,
         repo_files_last_error=None,
         cleanup_state=CloudWorkspaceCleanupState.none.value,
@@ -521,6 +522,7 @@ async def update_workspace_repo_apply_status(
     repo_post_ready_phase: str | object = _UNSET,
     repo_post_ready_files_total: int | object = _UNSET,
     repo_post_ready_files_applied: int | object = _UNSET,
+    repo_post_ready_apply_token: str | None | object = _UNSET,
     repo_post_ready_started_at: datetime | None | object = _UNSET,
     repo_post_ready_completed_at: datetime | None | object = _UNSET,
     repo_files_last_failed_path: str | None | object = _UNSET,
@@ -542,6 +544,8 @@ async def update_workspace_repo_apply_status(
         workspace.repo_post_ready_files_total = repo_post_ready_files_total
     if repo_post_ready_files_applied is not _UNSET:
         workspace.repo_post_ready_files_applied = repo_post_ready_files_applied
+    if repo_post_ready_apply_token is not _UNSET:
+        workspace.repo_post_ready_apply_token = repo_post_ready_apply_token
     if repo_post_ready_started_at is not _UNSET:
         workspace.repo_post_ready_started_at = repo_post_ready_started_at
     if repo_post_ready_completed_at is not _UNSET:
@@ -854,6 +858,7 @@ async def update_workspace_repo_apply_status_by_id(
     repo_post_ready_phase: str | object = _UNSET,
     repo_post_ready_files_total: int | object = _UNSET,
     repo_post_ready_files_applied: int | object = _UNSET,
+    repo_post_ready_apply_token: str | None | object = _UNSET,
     repo_post_ready_started_at: datetime | None | object = _UNSET,
     repo_post_ready_completed_at: datetime | None | object = _UNSET,
     repo_files_last_failed_path: str | None | object = _UNSET,
@@ -869,6 +874,7 @@ async def update_workspace_repo_apply_status_by_id(
             repo_post_ready_phase=repo_post_ready_phase,
             repo_post_ready_files_total=repo_post_ready_files_total,
             repo_post_ready_files_applied=repo_post_ready_files_applied,
+            repo_post_ready_apply_token=repo_post_ready_apply_token,
             repo_post_ready_started_at=repo_post_ready_started_at,
             repo_post_ready_completed_at=repo_post_ready_completed_at,
             repo_files_last_failed_path=repo_files_last_failed_path,

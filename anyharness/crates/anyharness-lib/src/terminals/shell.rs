@@ -4,6 +4,8 @@ use std::path::Path;
 
 use portable_pty::CommandBuilder;
 
+use super::model::ShellKind;
+
 pub(super) fn detect_default_shell() -> String {
     let shell_env = std::env::var("SHELL").ok();
     let path_env = std::env::var_os("PATH");
@@ -18,8 +20,8 @@ pub(super) fn configure_compact_prompt(
     cmd.env("ANYHARNESS_WORKSPACE_ROOT", workspace_path);
     cmd.env("PROMPT_DIRTRIM", "1");
 
-    match prompt_shell_kind(shell) {
-        PromptShellKind::Bash => {
+    match detect_shell_kind(shell) {
+        ShellKind::Bash => {
             if let Some(rcfile) = ensure_bash_prompt_rcfile() {
                 cmd.arg("--rcfile");
                 cmd.arg(rcfile);
@@ -28,38 +30,46 @@ pub(super) fn configure_compact_prompt(
                 cmd.env("PS1", r"\u@\h:\W\$ ");
             }
         }
-        PromptShellKind::Zsh => {
+        ShellKind::Zsh => {
             cmd.env("PROMPT", "%n@%m:workspace%# ");
         }
-        PromptShellKind::Sh => {
+        ShellKind::Sh => {
             cmd.env("PS1", "$ ");
         }
-        PromptShellKind::Other => {}
+        ShellKind::Other => {}
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PromptShellKind {
-    Bash,
-    Zsh,
-    Sh,
-    Other,
-}
-
-fn prompt_shell_kind(shell: &str) -> PromptShellKind {
+pub(super) fn detect_shell_kind(shell: &str) -> ShellKind {
     let name = Path::new(shell)
         .file_name()
         .and_then(|value| value.to_str())
         .unwrap_or(shell);
     if name.ends_with("bash") {
-        PromptShellKind::Bash
+        ShellKind::Bash
     } else if name.ends_with("zsh") {
-        PromptShellKind::Zsh
+        ShellKind::Zsh
     } else if name == "sh" {
-        PromptShellKind::Sh
+        ShellKind::Sh
     } else {
-        PromptShellKind::Other
+        ShellKind::Other
     }
+}
+
+pub(super) fn detect_posix_shell() -> String {
+    for candidate in [
+        "/bin/bash",
+        "/usr/bin/bash",
+        "/bin/zsh",
+        "/usr/bin/zsh",
+        "/bin/sh",
+        "/usr/bin/sh",
+    ] {
+        if is_executable_command(candidate, std::env::var_os("PATH").as_deref()) {
+            return candidate.to_string();
+        }
+    }
+    detect_default_shell()
 }
 
 fn ensure_bash_prompt_rcfile() -> Option<String> {
@@ -166,6 +176,8 @@ fn is_executable_path(path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use crate::terminals::model::ShellKind;
+
     #[test]
     fn detect_default_shell_avoids_nonexistent_zsh_fallback() {
         let shell = super::detect_default_shell_with_env(None, None);
@@ -187,22 +199,10 @@ mod tests {
     }
 
     #[test]
-    fn prompt_shell_kind_detects_common_shells() {
-        assert_eq!(
-            super::prompt_shell_kind("/bin/bash"),
-            super::PromptShellKind::Bash
-        );
-        assert_eq!(
-            super::prompt_shell_kind("/usr/bin/zsh"),
-            super::PromptShellKind::Zsh
-        );
-        assert_eq!(
-            super::prompt_shell_kind("/bin/sh"),
-            super::PromptShellKind::Sh
-        );
-        assert_eq!(
-            super::prompt_shell_kind("/usr/bin/fish"),
-            super::PromptShellKind::Other
-        );
+    fn detect_shell_kind_detects_common_shells() {
+        assert_eq!(super::detect_shell_kind("/bin/bash"), ShellKind::Bash);
+        assert_eq!(super::detect_shell_kind("/usr/bin/zsh"), ShellKind::Zsh);
+        assert_eq!(super::detect_shell_kind("/bin/sh"), ShellKind::Sh);
+        assert_eq!(super::detect_shell_kind("/usr/bin/fish"), ShellKind::Other);
     }
 }

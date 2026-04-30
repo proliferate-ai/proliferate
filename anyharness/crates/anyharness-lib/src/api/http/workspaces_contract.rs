@@ -10,26 +10,40 @@ use crate::sessions::service::{
     WorkspaceSessionLaunchAgentData, WorkspaceSessionLaunchCatalogData,
     WorkspaceSessionLaunchModelData,
 };
+use crate::terminals::model::{TerminalCommandRunRecord, TerminalCommandRunStatus};
 use crate::workspaces::model::WorkspaceRecord;
-use crate::workspaces::setup_execution::{SetupJobSnapshot, SetupJobStatus};
 use crate::workspaces::types::{
     DetectedHintCategory, DetectedSetupHint, ProjectSetupDetectionResult,
     SetWorkspaceDisplayNameError,
 };
 
-pub(super) fn setup_snapshot_to_contract(snapshot: SetupJobSnapshot) -> GetSetupStatusResponse {
+pub(super) fn setup_command_run_to_contract(
+    run: TerminalCommandRunRecord,
+) -> GetSetupStatusResponse {
     GetSetupStatusResponse {
-        status: match snapshot.status {
-            SetupJobStatus::Queued => SetupScriptStatus::Queued,
-            SetupJobStatus::Running => SetupScriptStatus::Running,
-            SetupJobStatus::Succeeded => SetupScriptStatus::Succeeded,
-            SetupJobStatus::Failed => SetupScriptStatus::Failed,
+        status: match run.status {
+            TerminalCommandRunStatus::Queued => SetupScriptStatus::Queued,
+            TerminalCommandRunStatus::Running => SetupScriptStatus::Running,
+            TerminalCommandRunStatus::Succeeded => SetupScriptStatus::Succeeded,
+            TerminalCommandRunStatus::Failed
+            | TerminalCommandRunStatus::Interrupted
+            | TerminalCommandRunStatus::TimedOut => SetupScriptStatus::Failed,
         },
-        command: snapshot.command,
-        exit_code: snapshot.exit_code,
-        stdout: snapshot.stdout,
-        stderr: snapshot.stderr,
-        duration_ms: snapshot.duration_ms,
+        command: run.command,
+        exit_code: run.exit_code,
+        stdout: run.stdout,
+        stderr: run.stderr.or_else(|| {
+            if run.status == TerminalCommandRunStatus::Interrupted {
+                Some("setup command interrupted".to_string())
+            } else if run.status == TerminalCommandRunStatus::TimedOut {
+                Some("setup command timed out".to_string())
+            } else {
+                None
+            }
+        }),
+        duration_ms: run.duration_ms,
+        terminal_id: run.terminal_id,
+        command_run_id: Some(run.id),
     }
 }
 

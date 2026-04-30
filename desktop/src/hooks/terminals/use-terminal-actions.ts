@@ -19,13 +19,10 @@ import {
 } from "@/lib/domain/terminals/run-terminal";
 import { resolveWorkspaceConnection } from "@/lib/integrations/anyharness/resolve-workspace-connection";
 import {
-  clearTerminalPendingStartupCommand,
   clearTerminalWsHandle,
   emitTerminalData,
   getTerminalWsHandle,
-  popTerminalPendingStartupCommand,
   setTerminalWsHandle,
-  setTerminalPendingStartupCommand,
 } from "@/lib/integrations/anyharness/terminal-handles";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -118,15 +115,7 @@ export function useTerminalActions() {
       baseUrl: workspaceConnection.runtimeUrl,
       authToken: workspaceConnection.authToken,
       terminalId,
-      onOpen: () => {
-        // The shell prompt was already printed before the WebSocket connected.
-        // Ctrl+L clears the screen and redraws the prompt cleanly.
-        handle.send("\x0c");
-        const startupCommand = popTerminalPendingStartupCommand(terminalId);
-        if (startupCommand !== undefined) {
-          handle.send(`${startupCommand.replace(/[\r\n]+$/, "")}\n`);
-        }
-      },
+      onOpen: () => {},
       onData: (data: Uint8Array) => {
         emitTerminalData(terminalId, data);
         const state = useTerminalStore.getState();
@@ -246,8 +235,8 @@ export function useTerminalActions() {
       rows,
       title: RUN_TERMINAL_TITLE,
       purpose: "run",
+      startupCommand: command,
     });
-    setTerminalPendingStartupCommand(record.id, command);
     await invalidateWorkspaceTerminals(workspaceId);
     return record.id;
   }, [
@@ -275,7 +264,6 @@ export function useTerminalActions() {
   }, [attachTerminalStream, getWorkspaceRuntimeBlockReason]);
 
   const clearClosedTerminalState = useCallback((terminalId: string) => {
-    clearTerminalPendingStartupCommand(terminalId);
     clearTerminalWsHandle(terminalId);
     clearTerminalState(terminalId);
     bumpConnectionVersion(terminalId);
@@ -365,6 +353,29 @@ export function useTerminalActions() {
     resolveTerminalWorkspaceConnection,
   ]);
 
+  const rerunCommand = useCallback(async (
+    terminalId: string,
+    workspaceId: string,
+    command: string,
+  ) => {
+    const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
+    if (blockedReason) {
+      throw new Error(blockedReason);
+    }
+    const connection = await resolveTerminalWorkspaceConnection(workspaceId);
+    const client = getAnyHarnessClient(connection);
+    const response = await client.terminals.runCommand(terminalId, {
+      command,
+      interrupt: true,
+    });
+    await invalidateWorkspaceTerminals(workspaceId);
+    return response;
+  }, [
+    getWorkspaceRuntimeBlockReason,
+    invalidateWorkspaceTerminals,
+    resolveTerminalWorkspaceConnection,
+  ]);
+
   return {
     loadWorkspaceTabs,
     createTab: createTabForWorkspace,
@@ -373,6 +384,7 @@ export function useTerminalActions() {
     closeTab,
     resizeTab: resizeTabForWorkspace,
     renameTab,
+    rerunCommand,
   };
 }
 
