@@ -331,6 +331,8 @@ export function useSessionRuntimeActions() {
       openTimeoutMs?: number;
       resumeIfActive?: boolean;
       allowColdIdleNoStream?: boolean;
+      skipInitialRefresh?: boolean;
+      refreshOnStartupReady?: boolean;
       requestHeaders?: HeadersInit;
     },
   ): Promise<void> => {
@@ -369,10 +371,12 @@ export function useSessionRuntimeActions() {
       return;
     }
 
-    await refreshSessionSlotMeta(sessionId, {
-      resumeIfActive: options?.resumeIfActive ?? true,
-      requestHeaders: options?.requestHeaders,
-    });
+    if (!options?.skipInitialRefresh) {
+      await refreshSessionSlotMeta(sessionId, {
+        resumeIfActive: options?.resumeIfActive ?? true,
+        requestHeaders: options?.requestHeaders,
+      });
+    }
 
     const refreshedSlot = useHarnessStore.getState().sessionSlots[sessionId];
     if (shouldSkipColdIdleSessionStream(refreshedSlot, options?.allowColdIdleNoStream)) {
@@ -388,6 +392,8 @@ export function useSessionRuntimeActions() {
 
     let openResolved = false;
     let resolveOpen: (() => void) | null = null;
+    let startupReadyRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let startupReadyRefreshStarted = false;
     const openPromise = new Promise<void>((resolve) => {
       resolveOpen = () => {
         if (openResolved) {
@@ -397,6 +403,49 @@ export function useSessionRuntimeActions() {
         resolve();
       };
     });
+
+    const scheduleStartupReadyRefresh = (
+      reason: "stream_open" | "available_commands",
+      delayMs: number,
+    ) => {
+      if (!options?.refreshOnStartupReady || startupReadyRefreshStarted) {
+        return;
+      }
+      if (startupReadyRefreshTimer) {
+        clearTimeout(startupReadyRefreshTimer);
+      }
+      startupReadyRefreshTimer = setTimeout(() => {
+        startupReadyRefreshTimer = null;
+        if (startupReadyRefreshStarted) {
+          return;
+        }
+        startupReadyRefreshStarted = true;
+        const refreshStartedAt = performance.now();
+        void refreshSessionSlotMeta(sessionId, {
+          resumeIfActive: false,
+          requestHeaders: options?.requestHeaders,
+        }).then(() => {
+          logLatency("session.stream.startup_meta_refreshed", {
+            sessionId,
+            reason,
+            elapsedMs: Math.round(performance.now() - refreshStartedAt),
+          });
+        }).catch(() => {
+          logLatency("session.stream.startup_meta_refresh_failed", {
+            sessionId,
+            reason,
+            elapsedMs: Math.round(performance.now() - refreshStartedAt),
+          });
+        });
+      }, delayMs);
+    };
+    const clearStartupReadyRefreshTimer = () => {
+      if (!startupReadyRefreshTimer) {
+        return;
+      }
+      clearTimeout(startupReadyRefreshTimer);
+      startupReadyRefreshTimer = null;
+    };
 
     const scheduleReconnect = (delayMs = 350) => {
       clearSessionReconnectTimer(sessionId);
@@ -438,6 +487,7 @@ export function useSessionRuntimeActions() {
           sessionId,
           elapsedMs: Math.round(performance.now() - connectStartedAt),
         });
+        scheduleStartupReadyRefresh("stream_open", 3500);
         resolveOpen?.();
       },
       onEvent: (envelope) => {
@@ -477,6 +527,9 @@ export function useSessionRuntimeActions() {
 
         logDevSSEEvent(sessionId, envelope, "applied");
         const event = envelope.event;
+        if (event.type === "available_commands_update") {
+          scheduleStartupReadyRefresh("available_commands", 0);
+        }
         if (event.type === "turn_started" || event.type === "session_ended") {
           clearPendingConfigRollbackCheck(sessionId);
         }
@@ -631,6 +684,7 @@ export function useSessionRuntimeActions() {
       },
       onError: () => {
         resolveOpen?.();
+        clearStartupReadyRefreshTimer();
         if (!handle || !isCurrentStreamHandle(sessionId, handle)) {
           return;
         }
@@ -642,6 +696,7 @@ export function useSessionRuntimeActions() {
       },
       onClose: () => {
         resolveOpen?.();
+        clearStartupReadyRefreshTimer();
         if (!handle || !isCurrentStreamHandle(sessionId, handle)) {
           return;
         }

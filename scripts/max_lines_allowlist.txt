@@ -26,7 +26,6 @@ desktop/src/components/workspace/chat/transcript/MessageList.tsx
 desktop/src/hooks/sessions/use-session-control-actions.ts
 desktop/src/hooks/sessions/use-session-runtime-actions.ts
 desktop/src/lib/domain/chat/__fixtures__/playground.ts
-desktop/src/lib/domain/workspaces/sidebar.test.ts
 desktop/src/stores/preferences/workspace-ui-store.ts
 server/tests/integration/test_cloud_api.py
 server/proliferate/db/store/billing.py

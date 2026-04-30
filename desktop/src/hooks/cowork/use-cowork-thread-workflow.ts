@@ -9,6 +9,7 @@ import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-m
 import {
   type WorkspaceCollections,
   upsertLocalWorkspaceCollections,
+  workspaceFileTreeStateKey,
 } from "@/lib/domain/workspaces/collections";
 import {
   buildSubmittingPendingWorkspaceEntry,
@@ -24,16 +25,28 @@ import {
 } from "@/lib/infra/debug-latency";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
+import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
+import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
 import {
   COWORK_WORKSPACE_PATH_PLACEHOLDER,
   resolveSessionMcpServersForLaunch,
 } from "@/lib/integrations/anyharness/mcp_launch";
+import {
+  createSessionSlotFromSummary,
+} from "@/lib/integrations/anyharness/session-runtime";
+import {
+  markWorkspaceViewed,
+  rememberLastViewedSession,
+  trackWorkspaceInteraction,
+} from "@/stores/preferences/workspace-ui-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { markWorkspaceBootstrappedInSession } from "@/hooks/workspaces/workspace-bootstrap-memory";
 
 const EMPTY_MODEL_REGISTRIES: ModelRegistry[] = [];
 
@@ -56,15 +69,23 @@ export function useCoworkThreadWorkflow() {
   const setPendingWorkspaceEntry = useHarnessStore(
     (state) => state.setPendingWorkspaceEntry,
   );
+  const setSelectedWorkspace = useHarnessStore((state) => state.setSelectedWorkspace);
+  const putSessionSlot = useHarnessStore((state) => state.putSessionSlot);
+  const setSelectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+    (state) => state.setSelectedLogicalWorkspaceId,
+  );
   const { agents } = useAgentCatalog();
   const { data: modelRegistries = EMPTY_MODEL_REGISTRIES } = useModelRegistriesQuery();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelId: state.defaultChatModelId,
+    powersInCodingSessionsEnabled: state.powersInCodingSessionsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
   })));
   const showToast = useToastStore((state) => state.show);
   const { selectWorkspace } = useWorkspaceSelection();
+  const { initForWorkspace } = useWorkspaceFileActions();
+  const { ensureSessionStreamConnected } = useSessionRuntimeActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const setDraftText = useChatInputStore((state) => state.setDraftText);
   const clearDraft = useChatInputStore((state) => state.clearDraft);
@@ -113,17 +134,20 @@ export function useCoworkThreadWorkflow() {
 
     try {
       const resolveStartedAt = startLatencyTimer();
-      const { mcpServers, mcpBindingSummaries } = await resolveSessionMcpServersForLaunch({
-        targetLocation: "local",
-        workspacePath: COWORK_WORKSPACE_PATH_PLACEHOLDER,
-        policy: {
-          workspaceSurface: "cowork",
-          lifecycle: "create",
-          enabled: true,
-        },
-      });
+      const { mcpServers, mcpBindingSummaries } = preferences.powersInCodingSessionsEnabled
+        ? await resolveSessionMcpServersForLaunch({
+          targetLocation: "local",
+          workspacePath: COWORK_WORKSPACE_PATH_PLACEHOLDER,
+          policy: {
+            workspaceSurface: "cowork",
+            lifecycle: "create",
+            enabled: true,
+          },
+        })
+        : { mcpServers: [], mcpBindingSummaries: [] };
       logLatency("workspace.cowork.create.mcp_resolved", {
         attemptId: entry.attemptId,
+        powersEnabled: preferences.powersInCodingSessionsEnabled,
         mcpServerCount: mcpServers.length,
         elapsedMs: elapsedMs(resolveStartedAt),
       });
@@ -138,6 +162,7 @@ export function useCoworkThreadWorkflow() {
         agentKind: input.agentKind,
         modelId: input.modelId,
         modeId: modeId ?? null,
+        workspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
         mcpServerCount: mcpServers.length,
         elapsedSincePendingMs: elapsedSince(entry.createdAt),
       });
@@ -168,6 +193,12 @@ export function useCoworkThreadWorkflow() {
         (collections) => upsertLocalWorkspaceCollections(collections, result.workspace),
       );
       upsertWorkspaceSessionRecord(result.workspace.id, result.session);
+      putSessionSlot(
+        result.session.id,
+        createSessionSlotFromSummary(result.session, result.workspace.id, {
+          transcriptHydrated: true,
+        }),
+      );
       if (input.draftText?.length) {
         setDraftText(result.workspace.id, input.draftText);
         if (input.sourceWorkspaceId && input.sourceWorkspaceId !== result.workspace.id) {
@@ -181,9 +212,55 @@ export function useCoworkThreadWorkflow() {
         workspaceId: result.workspace.id,
         request: { kind: "select-existing", workspaceId: result.workspace.id },
       });
-      await selectWorkspace(result.workspace.id, {
-        force: true,
-        preservePending: true,
+      setSelectedLogicalWorkspaceId(null);
+      setSelectedWorkspace(result.workspace.id, {
+        clearPending: false,
+        initialActiveSessionId: result.session.id,
+      });
+      rememberLastViewedSession(result.workspace.id, result.session.id);
+      trackWorkspaceInteraction(result.workspace.id, new Date().toISOString());
+      markWorkspaceViewed(result.workspace.id);
+      markWorkspaceBootstrappedInSession(result.workspace.id);
+
+      const streamStartedAt = startLatencyTimer();
+      void ensureSessionStreamConnected(result.session.id, {
+        resumeIfActive: false,
+        skipInitialRefresh: true,
+        refreshOnStartupReady: true,
+      }).then(() => {
+        logLatency("workspace.cowork.create.stream_dispatched", {
+          attemptId: entry.attemptId,
+          workspaceId: result.workspace.id,
+          sessionId: result.session.id,
+          elapsedMs: elapsedMs(streamStartedAt),
+        });
+      }).catch(() => {
+        logLatency("workspace.cowork.create.stream_dispatch_failed", {
+          attemptId: entry.attemptId,
+          workspaceId: result.workspace.id,
+          sessionId: result.session.id,
+          elapsedMs: elapsedMs(streamStartedAt),
+        });
+      });
+
+      const workspaceInitStartedAt = startLatencyTimer();
+      void initForWorkspace(
+        result.workspace.id,
+        runtimeUrl,
+        workspaceFileTreeStateKey(result.workspace),
+        result.workspace.id,
+      ).then(() => {
+        logLatency("workspace.cowork.create.workspace_initialized", {
+          attemptId: entry.attemptId,
+          workspaceId: result.workspace.id,
+          elapsedMs: elapsedMs(workspaceInitStartedAt),
+        });
+      }).catch(() => {
+        logLatency("workspace.cowork.create.workspace_init_failed", {
+          attemptId: entry.attemptId,
+          workspaceId: result.workspace.id,
+          elapsedMs: elapsedMs(workspaceInitStartedAt),
+        });
       });
       logLatency("workspace.cowork.create.selection.success", {
         attemptId: entry.attemptId,
@@ -220,13 +297,18 @@ export function useCoworkThreadWorkflow() {
     clearDraft,
     createCoworkThreadMutation,
     enterPendingWorkspaceShell,
+    ensureSessionStreamConnected,
+    initForWorkspace,
     navigateToWorkspaceShell,
+    putSessionSlot,
     preferences.coworkWorkspaceDelegationEnabled,
+    preferences.powersInCodingSessionsEnabled,
     queryClient,
     requestComposerFocus,
     runtimeUrl,
-    selectWorkspace,
     setDraftText,
+    setSelectedLogicalWorkspaceId,
+    setSelectedWorkspace,
     setPendingWorkspaceEntry,
     showToast,
     upsertWorkspaceSessionRecord,

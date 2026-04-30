@@ -3,12 +3,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use tokio::sync::{broadcast, oneshot, RwLock};
+use tokio::sync::{broadcast, oneshot, watch, RwLock};
 
 use super::permission_broker::InteractionBroker;
 use super::replay_actor::{spawn_replay_actor, ReplayActorConfig};
 use super::session_actor::{
-    spawn_session_actor, ActorReadyResult, LiveSessionHandle, SessionActorConfig,
+    spawn_session_actor_pending, ActorReadyResult, LiveSessionHandle, SessionActorConfig,
     SessionStartupStrategy, SessionTurnFinishResult,
 };
 use crate::agents::model::ResolvedAgent;
@@ -22,8 +22,11 @@ use crate::sessions::runtime_event::{
 use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::SessionEventEnvelope;
 
+type StartupReadinessState = Option<Result<String, String>>;
+
 pub struct AcpManager {
     live_sessions: Arc<RwLock<HashMap<String, Arc<LiveSessionHandle>>>>,
+    pending_startups: Arc<RwLock<HashMap<String, watch::Receiver<StartupReadinessState>>>>,
     interaction_broker: Arc<InteractionBroker>,
     plan_service: Arc<PlanService>,
 }
@@ -33,6 +36,7 @@ impl AcpManager {
         let interaction_broker = Arc::new(InteractionBroker::new());
         Self {
             live_sessions: Arc::new(RwLock::new(HashMap::new())),
+            pending_startups: Arc::new(RwLock::new(HashMap::new())),
             interaction_broker,
             plan_service,
         }
@@ -74,24 +78,35 @@ impl AcpManager {
 
         let mut sessions = self.live_sessions.write().await;
         if let Some(existing) = sessions.get(&session_id) {
+            let existing = existing.clone();
+            let ready_native_session_id = existing.native_session_id();
+            drop(sessions);
             tracing::info!(
                 session_id = %session_id,
                 elapsed_ms = started.elapsed().as_millis(),
                 flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
+                flow_kind = latency_fields.flow_kind,
+                flow_source = latency_fields.flow_source,
+                prompt_id = latency_fields.prompt_id,
                 "[workspace-latency] session.acp_manager.start.reused_existing_handle"
             );
-            return Ok((
-                existing.clone(),
-                ActorReadyResult {
-                    native_session_id: existing
-                        .native_session_id()
-                        .or(session.native_session_id)
-                        .unwrap_or_default(),
-                },
-            ));
+            if let Some(native_session_id) = ready_native_session_id {
+                return Ok((existing, ActorReadyResult { native_session_id }));
+            }
+
+            let pending_startup = self.pending_startups.read().await.get(&session_id).cloned();
+            if let Some(mut pending_startup) = pending_startup {
+                let ready = wait_for_startup_readiness(&mut pending_startup).await?;
+                return Ok((existing, ready));
+            }
+
+            if let Some(native_session_id) = session.native_session_id {
+                return Ok((existing, ActorReadyResult { native_session_id }));
+            }
+
+            anyhow::bail!(
+                "live session handle for {session_id} has no native session id and no pending startup readiness"
+            );
         }
 
         let last_seq = session_store.last_event_seq(&session_id)?;
@@ -117,7 +132,6 @@ impl AcpManager {
         });
 
         let actor_latency = latency.clone();
-        let actor_latency_fields = latency_trace_fields(actor_latency.as_ref());
         let config = SessionActorConfig {
             session,
             agent,
@@ -137,22 +151,31 @@ impl AcpManager {
             on_exit: Some(on_exit),
         };
 
-        // This blocks until ACP init + new_session completes
+        // Make the live handle visible before waiting on ACP new_session so
+        // stream subscribers do not block behind the live-session write lock.
         let actor_start_started = Instant::now();
-        let (handle, ready) = spawn_session_actor(config)?;
-        sessions.insert(session_id, handle.clone());
-        tracing::info!(
-            session_id = %handle.session_id,
-            native_session_id = %ready.native_session_id,
-            startup_strategy = startup_strategy_label,
-            elapsed_ms = actor_start_started.elapsed().as_millis(),
-            total_elapsed_ms = started.elapsed().as_millis(),
-            flow_id = actor_latency_fields.flow_id,
-            flow_kind = actor_latency_fields.flow_kind,
-            flow_source = actor_latency_fields.flow_source,
-            prompt_id = actor_latency_fields.prompt_id,
-            "[workspace-latency] session.acp_manager.start.actor_ready"
-        );
+        let pending = spawn_session_actor_pending(config)?;
+        let handle = pending.handle.clone();
+        let (startup_tx, startup_rx) = watch::channel::<StartupReadinessState>(None);
+        sessions.insert(session_id.clone(), handle.clone());
+        self.pending_startups
+            .write()
+            .await
+            .insert(session_id.clone(), startup_rx.clone());
+        drop(sessions);
+
+        let ready = wait_for_new_startup_readiness(
+            pending,
+            startup_tx,
+            self.live_sessions.clone(),
+            self.pending_startups.clone(),
+            handle.clone(),
+            startup_strategy_label.to_string(),
+            actor_start_started,
+            started,
+            actor_latency,
+        )
+        .await?;
 
         Ok((handle, ready))
     }
@@ -289,9 +312,78 @@ impl Clone for AcpManager {
     fn clone(&self) -> Self {
         Self {
             live_sessions: self.live_sessions.clone(),
+            pending_startups: self.pending_startups.clone(),
             interaction_broker: self.interaction_broker.clone(),
             plan_service: self.plan_service.clone(),
         }
+    }
+}
+
+async fn wait_for_new_startup_readiness(
+    pending: super::session_actor::PendingSessionActor,
+    startup_tx: watch::Sender<StartupReadinessState>,
+    live_sessions: Arc<RwLock<HashMap<String, Arc<LiveSessionHandle>>>>,
+    pending_startups: Arc<RwLock<HashMap<String, watch::Receiver<StartupReadinessState>>>>,
+    handle: Arc<LiveSessionHandle>,
+    startup_strategy_label: String,
+    actor_start_started: Instant,
+    manager_started: Instant,
+    latency: Option<LatencyRequestContext>,
+) -> anyhow::Result<ActorReadyResult> {
+    let session_id = handle.session_id.clone();
+    tokio::task::spawn_blocking(move || {
+        let ready_result = pending.wait_ready();
+
+        match &ready_result {
+            Ok(ready) => {
+                let latency_fields = latency_trace_fields(latency.as_ref());
+                tracing::info!(
+                    session_id = %session_id,
+                    native_session_id = %ready.native_session_id.as_str(),
+                    startup_strategy = %startup_strategy_label,
+                    elapsed_ms = actor_start_started.elapsed().as_millis(),
+                    total_elapsed_ms = manager_started.elapsed().as_millis(),
+                    flow_id = latency_fields.flow_id,
+                    flow_kind = latency_fields.flow_kind,
+                    flow_source = latency_fields.flow_source,
+                    prompt_id = latency_fields.prompt_id,
+                    "[workspace-latency] session.acp_manager.start.actor_ready"
+                );
+
+                let _ = startup_tx.send(Some(Ok(ready.native_session_id.clone())));
+            }
+            Err(error) => {
+                let message = error.to_string();
+                let _ = startup_tx.send(Some(Err(message)));
+                let mut sessions = live_sessions.blocking_write();
+                if matches!(sessions.get(&session_id), Some(current) if Arc::ptr_eq(current, &handle))
+                {
+                    sessions.remove(&session_id);
+                }
+            }
+        }
+
+        pending_startups.blocking_write().remove(&session_id);
+        ready_result
+    })
+    .await
+    .map_err(|error| anyhow::anyhow!("actor startup wait task failed: {error}"))?
+}
+
+async fn wait_for_startup_readiness(
+    receiver: &mut watch::Receiver<StartupReadinessState>,
+) -> anyhow::Result<ActorReadyResult> {
+    loop {
+        if let Some(result) = receiver.borrow().clone() {
+            return result
+                .map(|native_session_id| ActorReadyResult { native_session_id })
+                .map_err(anyhow::Error::msg);
+        }
+
+        receiver
+            .changed()
+            .await
+            .map_err(|_| anyhow::anyhow!("actor startup readiness channel closed before ready"))?;
     }
 }
 
@@ -301,7 +393,8 @@ mod tests {
     use std::sync::Arc;
 
     use rusqlite::params;
-    use tokio::sync::{broadcast, mpsc};
+    use tokio::sync::{broadcast, mpsc, watch};
+    use tokio::time::{sleep, Duration};
 
     use super::AcpManager;
     use crate::acp::session_actor::{LiveSessionHandle, SessionStartupStrategy};
@@ -427,6 +520,67 @@ mod tests {
             )
             .await
             .expect("reuse existing handle");
+
+        assert!(Arc::ptr_eq(&returned_handle, &handle));
+        assert_eq!(ready.native_session_id, "fresh-native");
+    }
+
+    #[tokio::test]
+    async fn reused_pending_live_handle_waits_for_shared_startup_readiness() {
+        let plan_db = Db::open_in_memory().expect("open plan db");
+        let manager = AcpManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+        let (command_tx, _command_rx) = mpsc::channel(4);
+        let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            "session-1",
+            command_tx,
+            event_tx,
+            None,
+            SessionExecutionPhase::Starting,
+        ));
+        let (ready_tx, ready_rx) = watch::channel::<super::StartupReadinessState>(None);
+        manager
+            .live_sessions
+            .write()
+            .await
+            .insert("session-1".to_string(), handle.clone());
+        manager
+            .pending_startups
+            .write()
+            .await
+            .insert("session-1".to_string(), ready_rx);
+
+        let manager_for_start = manager.clone();
+        let mut start = tokio::spawn(async move {
+            manager_for_start
+                .start_session(
+                    session_record(),
+                    resolved_agent(AgentKind::Claude),
+                    PathBuf::from("/tmp/workspace"),
+                    Default::default(),
+                    Default::default(),
+                    SessionStore::new(Db::open_in_memory().expect("open db")),
+                    vec![],
+                    SessionStartupStrategy::ResumeSeqFreshNative,
+                    None,
+                    None,
+                    None,
+                )
+                .await
+        });
+
+        tokio::select! {
+            _ = &mut start => panic!("pending handle reuse returned before startup readiness"),
+            _ = sleep(Duration::from_millis(20)) => {}
+        }
+
+        ready_tx
+            .send(Some(Ok("fresh-native".to_string())))
+            .expect("send readiness");
+        let (returned_handle, ready) = start
+            .await
+            .expect("start task")
+            .expect("reuse pending handle");
 
         assert!(Arc::ptr_eq(&returned_handle, &handle));
         assert_eq!(ready.native_session_id, "fresh-native");

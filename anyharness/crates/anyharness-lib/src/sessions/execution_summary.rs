@@ -23,6 +23,14 @@ pub fn summarize_session_record(
             pending_interactions: Vec::new(),
             updated_at: record.updated_at.clone(),
         },
+        "starting" => live_snapshot
+            .map(|snapshot| snapshot.to_contract_summary(true))
+            .unwrap_or_else(|| SessionExecutionSummary {
+                phase: SessionExecutionPhase::Starting,
+                has_live_handle: false,
+                pending_interactions: Vec::new(),
+                updated_at: record.updated_at.clone(),
+            }),
         _ => live_snapshot
             .map(|snapshot| snapshot.to_contract_summary(true))
             .unwrap_or_else(|| SessionExecutionSummary {
@@ -183,6 +191,18 @@ mod tests {
         let summary = summarize_session_record(&record, None);
 
         assert_eq!(summary.phase, SessionExecutionPhase::Idle);
+        assert!(!summary.has_live_handle);
+        assert!(summary.pending_interactions.is_empty());
+        assert_eq!(summary.updated_at, "2026-04-06T00:00:00Z");
+    }
+
+    #[test]
+    fn summarize_session_preserves_cold_starting_records() {
+        let record = session_record("starting", "2026-04-06T00:00:00Z");
+
+        let summary = summarize_session_record(&record, None);
+
+        assert_eq!(summary.phase, SessionExecutionPhase::Starting);
         assert!(!summary.has_live_handle);
         assert!(summary.pending_interactions.is_empty());
         assert_eq!(summary.updated_at, "2026-04-06T00:00:00Z");

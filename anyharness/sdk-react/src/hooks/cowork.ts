@@ -130,12 +130,12 @@ export function useCreateCoworkThreadMutation() {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
       return client.cowork.createThread(input);
     },
-    onSuccess: async () => {
-      await Promise.all([
+    onSuccess: () => {
+      void Promise.all([
         queryClient.invalidateQueries({ queryKey: anyHarnessCoworkStatusKey(runtimeUrl) }),
         queryClient.invalidateQueries({ queryKey: anyHarnessCoworkThreadsKey(runtimeUrl) }),
         queryClient.invalidateQueries({ queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl) }),
-      ]);
+      ]).catch(() => undefined);
     },
   });
 }

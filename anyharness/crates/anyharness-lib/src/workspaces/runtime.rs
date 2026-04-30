@@ -117,10 +117,27 @@ impl WorkspaceRuntime {
         surface: &str,
         origin: OriginContext,
     ) -> anyhow::Result<CreateWorktreeResult> {
+        let started = Instant::now();
+        tracing::info!(
+            repo_root_id = %repo_root_id,
+            target_path = %target_path,
+            new_branch_name = %new_branch_name,
+            base_branch = ?base_branch,
+            surface = %surface,
+            "[workspace-latency] workspace.worktree.runtime_create.start"
+        );
+
+        let source_lookup_started = Instant::now();
         let source = self
             .repo_root_service
             .get_repo_root(repo_root_id)?
             .ok_or_else(|| anyhow::anyhow!("repo root not found: {repo_root_id}"))?;
+        tracing::info!(
+            repo_root_id = %repo_root_id,
+            source_path = %source.path,
+            elapsed_ms = source_lookup_started.elapsed().as_millis(),
+            "[workspace-latency] workspace.worktree.runtime_create.source_loaded"
+        );
 
         let target = Path::new(target_path);
         let canonical_target = target
@@ -128,28 +145,54 @@ impl WorkspaceRuntime {
             .and_then(|parent| std::fs::canonicalize(parent).ok())
             .map(|parent| parent.join(target.file_name().unwrap_or_default()))
             .unwrap_or_else(|| target.to_path_buf());
-        let canonical_str = canonical_target.to_string_lossy();
+        let canonical_path = canonical_target.to_string_lossy().to_string();
 
         if canonical_target.exists() {
-            anyhow::bail!("worktree target path already exists: {canonical_str}");
+            anyhow::bail!("worktree target path already exists: {canonical_path}");
         }
 
-        if self.store.find_by_path(&canonical_str)?.is_some() {
-            anyhow::bail!("a workspace record already exists for path: {canonical_str}");
+        let existing_lookup_started = Instant::now();
+        if self.store.find_by_path(&canonical_path)?.is_some() {
+            anyhow::bail!("a workspace record already exists for path: {canonical_path}");
         }
+        tracing::info!(
+            repo_root_id = %repo_root_id,
+            target_path = %canonical_path,
+            elapsed_ms = existing_lookup_started.elapsed().as_millis(),
+            "[workspace-latency] workspace.worktree.runtime_create.path_checked"
+        );
 
         resolver::create_git_worktree(&source.path, target_path, new_branch_name, base_branch)?;
+        // The pre-create canonical target is only for checking the requested
+        // target before it exists. Persist the canonical path of the worktree
+        // that git actually materialized.
+        let canonical_path = fs::canonicalize(target_path)
+            .map_err(|error| {
+                anyhow::anyhow!(
+                    "failed to canonicalize created worktree path {target_path}: {error}"
+                )
+            })?
+            .to_string_lossy()
+            .to_string();
 
-        let ctx = resolver::resolve_git_context(target_path)?;
         let record = build_workspace_record(
             &source,
-            &ctx.repo_root,
+            &canonical_path,
             "worktree",
             surface,
-            ctx.current_branch.clone(),
+            // `git worktree add -b <name>` either creates this branch or
+            // fails; avoid an extra post-create branch probe on the hot path.
+            Some(new_branch_name.to_string()),
             origin,
         );
+        let insert_started = Instant::now();
         self.store.insert(&record)?;
+        tracing::info!(
+            workspace_id = %record.id,
+            repo_root_id = %repo_root_id,
+            elapsed_ms = insert_started.elapsed().as_millis(),
+            "[workspace-latency] workspace.worktree.runtime_create.record_inserted"
+        );
 
         let setup_script = setup_script
             .map(str::trim)
@@ -158,6 +201,13 @@ impl WorkspaceRuntime {
                 self.run_setup_script(&record, Some(base_branch.unwrap_or("HEAD")), script)
             })
             .transpose()?;
+
+        tracing::info!(
+            workspace_id = %record.id,
+            repo_root_id = %repo_root_id,
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "[workspace-latency] workspace.worktree.runtime_create.completed"
+        );
 
         Ok(CreateWorktreeResult {
             workspace: record,

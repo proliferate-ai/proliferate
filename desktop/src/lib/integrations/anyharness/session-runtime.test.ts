@@ -141,6 +141,7 @@ describe("resumeSession", () => {
       powersInCodingSessionsEnabled: false,
     });
 
+    expect(mocks.resolveSessionMcpServersForLaunch).not.toHaveBeenCalled();
     expect(mocks.resume).toHaveBeenCalledWith(
       "session-1",
       {
@@ -149,5 +150,71 @@ describe("resumeSession", () => {
       },
       undefined,
     );
+  });
+
+  it("resolves cowork launch MCP even when user Powers are disabled", async () => {
+    mocks.resolveRuntimeTargetForWorkspace.mockResolvedValue({
+      anyharnessWorkspaceId: "runtime-workspace-1",
+      baseUrl: "http://runtime.local",
+      location: "local",
+      runtimeGeneration: 0,
+    });
+    mocks.workspacesGet.mockResolvedValue({
+      path: "/cowork/thread-1",
+      surface: "cowork",
+    });
+    mocks.resolveSessionMcpServersForLaunch.mockResolvedValue({
+      mcpBindingSummaries: [],
+      mcpServers: [],
+      warnings: [],
+    });
+    mocks.resume.mockResolvedValue({ id: "session-1" });
+
+    await resumeSession("session-1", {
+      powersInCodingSessionsEnabled: false,
+    });
+
+    expect(mocks.resolveSessionMcpServersForLaunch).toHaveBeenCalledWith({
+      targetLocation: "local",
+      workspacePath: "/cowork/thread-1",
+      policy: {
+        workspaceSurface: "cowork",
+        lifecycle: "resume",
+        enabled: true,
+      },
+    });
+  });
+
+  it("resolves launch MCP when Powers are enabled for resume", async () => {
+    mocks.resolveRuntimeTargetForWorkspace.mockResolvedValue({
+      anyharnessWorkspaceId: "runtime-workspace-1",
+      baseUrl: "http://runtime.local",
+      location: "local",
+      runtimeGeneration: 0,
+    });
+    mocks.workspacesGet.mockResolvedValue({
+      path: "/repo",
+      surface: "coding",
+    });
+    mocks.resolveSessionMcpServersForLaunch.mockResolvedValue({
+      mcpBindingSummaries: [{ id: "conn", serverName: "server", outcome: "applied" }],
+      mcpServers: [{ transport: "http", serverName: "server", url: "https://example.com/mcp" }],
+      warnings: [],
+    });
+    mocks.resume.mockResolvedValue({ id: "session-1" });
+
+    await resumeSession("session-1", {
+      powersInCodingSessionsEnabled: true,
+    });
+
+    expect(mocks.resolveSessionMcpServersForLaunch).toHaveBeenCalledWith({
+      targetLocation: "local",
+      workspacePath: "/repo",
+      policy: {
+        workspaceSurface: "coding",
+        lifecycle: "resume",
+        enabled: true,
+      },
+    });
   });
 });
