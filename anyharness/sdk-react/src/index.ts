@@ -173,5 +173,6 @@ export {
   useTerminalsQuery,
   useCreateTerminalMutation,
   useResizeTerminalMutation,
+  useUpdateTerminalTitleMutation,
   useCloseTerminalMutation,
 } from "./hooks/terminals.js";

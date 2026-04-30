@@ -2292,6 +2292,67 @@
         }
       }
     },
+    "/v1/terminals/{terminal_id}/title": {
+      "patch": {
+        "tags": [
+          "terminals"
+        ],
+        "operationId": "update_terminal_title",
+        "parameters": [
+          {
+            "name": "terminal_id",
+            "in": "path",
+            "description": "Terminal ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTerminalTitleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Terminal title updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid title",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Terminal not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces": {
       "get": {
         "tags": [
@@ -5839,6 +5900,16 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "purpose": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TerminalPurpose"
+              }
             ]
           },
           "rows": {
@@ -12210,12 +12281,20 @@
           "exit"
         ]
       },
+      "TerminalPurpose": {
+        "type": "string",
+        "enum": [
+          "general",
+          "run"
+        ]
+      },
       "TerminalRecord": {
         "type": "object",
         "required": [
           "id",
           "workspaceId",
           "title",
+          "purpose",
           "cwd",
           "status",
           "createdAt",
@@ -12237,6 +12316,9 @@
           },
           "id": {
             "type": "string"
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/TerminalPurpose"
           },
           "status": {
             "$ref": "#/components/schemas/TerminalStatus"
@@ -12451,6 +12533,17 @@
         }
       },
       "UpdateSessionTitleRequest": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateTerminalTitleRequest": {
         "type": "object",
         "required": [
           "title"

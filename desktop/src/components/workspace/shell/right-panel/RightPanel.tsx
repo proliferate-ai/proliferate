@@ -1,266 +1,522 @@
-import { useMemo, useState, type ComponentType } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
+import type { TerminalRecord } from "@anyharness/sdk";
+import { useTerminalsQuery } from "@anyharness/sdk-react";
 import { WorkspaceFilesPanel } from "@/components/workspace/files/panel/WorkspaceFilesPanel";
 import { GitPanel } from "@/components/workspace/git/GitPanel";
 import { TerminalPanel } from "@/components/workspace/terminals/TerminalPanel";
-import { SizedPanel } from "@/components/ui/layout/SizedPanel";
-import { useResize } from "@/hooks/layout/use-resize";
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import { IconButton } from "@/components/ui/IconButton";
 import { CloudWorkspaceSettingsPanel } from "@/components/cloud/workspace-settings/CloudWorkspaceSettingsPanel";
+import { useTerminalActions } from "@/hooks/terminals/use-terminal-actions";
 import {
-  ChevronDown,
-  FolderList,
-  GitBranch,
-  MoreHorizontal,
-  Settings,
-  type IconProps,
-} from "@/components/ui/icons";
+  availableRightPanelTools,
+  parseRightPanelHeaderEntryKey,
+  reconcileRightPanelWorkspaceState,
+  removeTerminalFromRightPanelState,
+  reorderHeaderEntryInRightPanelState,
+  rightPanelTerminalHeaderKey,
+  rightPanelToolHeaderKey,
+  type RightPanelHeaderEntryKey,
+  type RightPanelTool,
+  type RightPanelWorkspaceState,
+} from "@/lib/domain/workspaces/right-panel";
+import { isApplePlatform, isTextEntryTarget } from "@/lib/domain/shortcuts/matching";
+import { useTerminalStore } from "@/stores/terminal/terminal-store";
+import { useToastStore } from "@/stores/toast/toast-store";
+import {
+  RightPanelHeaderTabs,
+  type HeaderEntry,
+} from "@/components/workspace/shell/right-panel/RightPanelHeaderTabs";
+import { RightPanelPlaceholder } from "@/components/workspace/shell/right-panel/RightPanelPlaceholder";
 
-export type RightPanelMode = "files" | "changes" | "settings";
-
-interface PanelModeConfig {
-  id: RightPanelMode;
-  label: string;
-  icon: ComponentType<IconProps>;
-}
-
-const PANEL_MODES: PanelModeConfig[] = [
-  { id: "files", label: "Files", icon: FolderList },
-  { id: "changes", label: "Changes", icon: GitBranch },
-  { id: "settings", label: "Settings", icon: Settings },
-];
+const EMPTY_TERMINALS: never[] = [];
 
 interface RightPanelProps {
+  workspaceId: string | null;
   isWorkspaceReady: boolean;
   shouldKeepContentVisible?: boolean;
   isCloudWorkspaceSelected: boolean;
-  mode: RightPanelMode;
-  onModeChange: (mode: RightPanelMode) => void;
-  terminalCollapsed: boolean;
-  onTerminalCollapsedChange: (collapsed: boolean) => void;
-  terminalFocusRequestToken: number;
+  state: RightPanelWorkspaceState;
+  onStateChange: Dispatch<SetStateAction<RightPanelWorkspaceState>>;
+  terminalActivationRequestToken: number;
 }
 
 export function RightPanel({
+  workspaceId,
   isWorkspaceReady,
   shouldKeepContentVisible = false,
   isCloudWorkspaceSelected,
-  mode,
-  onModeChange,
-  terminalCollapsed,
-  onTerminalCollapsedChange,
-  terminalFocusRequestToken,
+  state,
+  onStateChange,
+  terminalActivationRequestToken,
 }: RightPanelProps) {
-  const [pinnedModes, setPinnedModes] = useState<RightPanelMode[]>([
-    "files",
-    "changes",
-  ]);
-  const [terminalHeight, setTerminalHeight] = useState(200);
-
-  const onTerminalSeparatorDown = useResize({
-    direction: "vertical",
-    size: terminalHeight,
-    onResize: setTerminalHeight,
-    reverse: true,
-    min: 100,
-    max: 500,
+  const { createTab, closeTab, renameTab } = useTerminalActions();
+  const setActiveTerminalForWorkspace = useTerminalStore(
+    (store) => store.setActiveTerminalForWorkspace,
+  );
+  const unreadByTerminal = useTerminalStore((store) => store.unreadByTerminal);
+  const showToast = useToastStore((store) => store.show);
+  const [terminalFocusNonce, setTerminalFocusNonce] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const handledActivationTokenRef = useRef(0);
+  const shouldRenderContent = isWorkspaceReady || shouldKeepContentVisible;
+  const terminalsQuery = useTerminalsQuery({
+    workspaceId,
+    enabled: Boolean(workspaceId && shouldRenderContent),
   });
-
-  const availablePanelModes = useMemo(
-    () => PANEL_MODES.filter((panelMode) => panelMode.id !== "settings" || isCloudWorkspaceSelected),
+  const terminals = terminalsQuery.data ?? EMPTY_TERMINALS;
+  const liveTerminalIds = useMemo(
+    () => terminals.map((terminal) => terminal.id),
+    [terminals],
+  );
+  const availableTools = useMemo(
+    () => availableRightPanelTools(isCloudWorkspaceSelected),
     [isCloudWorkspaceSelected],
   );
-  const availableModeIds = useMemo(
-    () => new Set(availablePanelModes.map((panelMode) => panelMode.id)),
-    [availablePanelModes],
+  const orderedTools = useMemo(
+    () => state.toolOrder.filter((tool) => availableTools.includes(tool)),
+    [availableTools, state.toolOrder],
   );
-  const activeMode = mode === "settings" && !isCloudWorkspaceSelected ? "files" : mode;
-  const visiblePinnedModes = useMemo(
-    () => pinnedModes.filter((panelMode) => availableModeIds.has(panelMode)),
-    [availableModeIds, pinnedModes],
+  const orderedTerminals = useMemo(
+    () => orderTerminals(terminals, state.terminalOrder),
+    [state.terminalOrder, terminals],
   );
+  const terminalById = useMemo(
+    () => new Map(orderedTerminals.map((terminal) => [terminal.id, terminal])),
+    [orderedTerminals],
+  );
+  const selectedTerminal = useMemo(
+    () => orderedTerminals.find((terminal) => terminal.id === state.activeTerminalId) ?? null,
+    [orderedTerminals, state.activeTerminalId],
+  );
+  const activeTool = state.activeTool === "terminal"
+    ? "terminal"
+    : orderedTools.includes(state.activeTool)
+      ? state.activeTool
+      : "git";
+  const headerEntries = useMemo<HeaderEntry[]>(() => {
+    const entries: HeaderEntry[] = [];
+    const seenKeys = new Set<RightPanelHeaderEntryKey>();
+    const availableToolSet = new Set(orderedTools);
 
-  const togglePin = (id: RightPanelMode) => {
-    setPinnedModes((prev) => {
-      if (prev.includes(id)) {
-        const visiblePinnedCount = prev.filter((panelMode) => availableModeIds.has(panelMode)).length;
-        if (availableModeIds.has(id) && visiblePinnedCount <= 1) {
-          return prev;
-        }
-        return prev.filter((panelMode) => panelMode !== id);
+    for (const key of state.headerOrder) {
+      const entry = parseRightPanelHeaderEntryKey(key);
+      if (!entry || seenKeys.has(key)) {
+        continue;
       }
-      return [...prev, id];
-    });
-  };
+      if (entry.kind === "tool" && availableToolSet.has(entry.tool)) {
+        entries.push({ kind: "tool", key, tool: entry.tool });
+        seenKeys.add(key);
+      }
+      if (entry.kind === "terminal") {
+        const terminal = terminalById.get(entry.terminalId);
+        if (terminal) {
+          entries.push({ kind: "terminal", key, terminal });
+          seenKeys.add(key);
+        }
+      }
+    }
 
-  const shouldRenderContent = isWorkspaceReady || shouldKeepContentVisible;
+    for (const tool of orderedTools) {
+      const key = rightPanelToolHeaderKey(tool);
+      if (!seenKeys.has(key)) {
+        entries.push({ kind: "tool", key, tool });
+        seenKeys.add(key);
+      }
+    }
+    for (const terminal of orderedTerminals) {
+      const key = rightPanelTerminalHeaderKey(terminal.id);
+      if (!seenKeys.has(key)) {
+        entries.push({ kind: "terminal", key, terminal });
+        seenKeys.add(key);
+      }
+    }
+
+    return entries;
+  }, [orderedTerminals, orderedTools, state.headerOrder, terminalById]);
+
+  const updateState = useCallback(
+    (value: SetStateAction<RightPanelWorkspaceState>) => {
+      onStateChange((previous) => {
+        const current = reconcileRightPanelWorkspaceState(previous, {
+          isCloudWorkspaceSelected,
+        });
+        const next = typeof value === "function"
+          ? (value as (previousValue: RightPanelWorkspaceState) => RightPanelWorkspaceState)(
+              current,
+            )
+          : value;
+        return rightPanelStateEqual(current, next) ? current : next;
+      });
+    },
+    [isCloudWorkspaceSelected, onStateChange],
+  );
+
+  useEffect(() => {
+    updateState((previous) => reconcileRightPanelWorkspaceState(previous, {
+      isCloudWorkspaceSelected,
+      liveTerminalIds: terminalsQuery.isSuccess ? liveTerminalIds : undefined,
+    }));
+  }, [
+    isCloudWorkspaceSelected,
+    liveTerminalIds,
+    terminalsQuery.isSuccess,
+    updateState,
+  ]);
+
+  useEffect(() => {
+    if (!workspaceId) {
+      return;
+    }
+    setActiveTerminalForWorkspace(
+      workspaceId,
+      state.activeTool === "terminal" ? state.activeTerminalId : null,
+    );
+  }, [
+    setActiveTerminalForWorkspace,
+    state.activeTerminalId,
+    state.activeTool,
+    workspaceId,
+  ]);
+
+  const selectTerminal = useCallback((terminalId: string) => {
+    updateState((previous) => ({
+      ...previous,
+      activeTool: "terminal",
+      activeTerminalId: terminalId,
+    }));
+    if (workspaceId) {
+      setActiveTerminalForWorkspace(workspaceId, terminalId);
+    }
+    setTerminalFocusNonce((nonce) => nonce + 1);
+  }, [setActiveTerminalForWorkspace, updateState, workspaceId]);
+
+  const createTerminal = useCallback(async () => {
+    if (!workspaceId || !shouldRenderContent) {
+      return null;
+    }
+    try {
+      const terminalId = await createTab(workspaceId, 120, 40);
+      const terminalKey = rightPanelTerminalHeaderKey(terminalId);
+      updateState((previous) => ({
+        ...previous,
+        activeTool: "terminal",
+        terminalOrder: previous.terminalOrder.includes(terminalId)
+          ? previous.terminalOrder
+          : [...previous.terminalOrder, terminalId],
+        headerOrder: previous.headerOrder.includes(terminalKey)
+          ? previous.headerOrder
+          : [...previous.headerOrder, terminalKey],
+        activeTerminalId: terminalId,
+      }));
+      setTerminalFocusNonce((nonce) => nonce + 1);
+      return terminalId;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      showToast(`Failed to create terminal tab: ${message}`);
+      return null;
+    }
+  }, [createTab, shouldRenderContent, showToast, updateState, workspaceId]);
+
+  const activateTerminalTool = useCallback(async () => {
+    updateState((previous) => ({ ...previous, activeTool: "terminal" }));
+    setTerminalFocusNonce((nonce) => nonce + 1);
+
+    if (!workspaceId || !shouldRenderContent) {
+      return;
+    }
+
+    if (terminalsQuery.isLoading || (terminalsQuery.isFetching && !terminalsQuery.data)) {
+      showToast("Terminals are loading.");
+      return;
+    }
+
+    const result = await terminalsQuery.refetch();
+    if (!result.data) {
+      showToast("Failed to load terminals.");
+      return;
+    }
+    const records = result.data;
+
+    const next = reconcileRightPanelWorkspaceState({ ...state, activeTool: "terminal" }, {
+      isCloudWorkspaceSelected,
+      liveTerminalIds: records.map((terminal) => terminal.id),
+    });
+    updateState(next);
+
+    if (records.length === 0) {
+      await createTerminal();
+      return;
+    }
+
+    if (next.activeTerminalId) {
+      setTerminalFocusNonce((nonce) => nonce + 1);
+    } else {
+      selectTerminal(records[0]!.id);
+    }
+  }, [
+    createTerminal,
+    isCloudWorkspaceSelected,
+    selectTerminal,
+    shouldRenderContent,
+    showToast,
+    state,
+    terminalsQuery,
+    updateState,
+    workspaceId,
+  ]);
+
+  useEffect(() => {
+    if (
+      terminalActivationRequestToken === 0
+      || handledActivationTokenRef.current === terminalActivationRequestToken
+    ) {
+      return;
+    }
+    handledActivationTokenRef.current = terminalActivationRequestToken;
+    void activateTerminalTool();
+  }, [activateTerminalTool, terminalActivationRequestToken]);
+
+  const activateTool = useCallback(
+    (tool: RightPanelTool) => {
+      if (tool === "terminal") {
+        void activateTerminalTool();
+        return;
+      }
+      updateState((previous) => ({ ...previous, activeTool: tool }));
+    },
+    [activateTerminalTool, updateState],
+  );
+
+  const activateHeaderEntry = useCallback(
+    (entry: HeaderEntry) => {
+      if (entry.kind === "tool") {
+        activateTool(entry.tool);
+        return;
+      }
+      selectTerminal(entry.terminal.id);
+    },
+    [activateTool, selectTerminal],
+  );
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const shortcutIndex = resolvePrimaryDigitShortcutIndex(event);
+      if (shortcutIndex === null) {
+        return;
+      }
+
+      const root = rootRef.current;
+      const activeElement = document.activeElement;
+      if (!root || !(activeElement instanceof Element) || !root.contains(activeElement)) {
+        return;
+      }
+
+      const eventTargetElement = event.target instanceof Element ? event.target : null;
+      const isTerminalTarget = Boolean(
+        eventTargetElement?.closest('[data-focus-zone="terminal"]'),
+      );
+      if (isTextEntryTarget(event.target) && !isTerminalTarget) {
+        return;
+      }
+
+      const entry = headerEntries[shortcutIndex];
+      if (!entry) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      activateHeaderEntry(entry);
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [activateHeaderEntry, headerEntries]);
+
+  const handleCloseTerminal = useCallback(
+    (terminalId: string) => {
+      if (!workspaceId) {
+        return;
+      }
+
+      void closeTab(terminalId, workspaceId).then((result) => {
+        if (result !== "closed" && result !== "missing") {
+          return;
+        }
+        updateState((previous) =>
+          removeTerminalFromRightPanelState(
+            previous,
+            terminalId,
+            isCloudWorkspaceSelected,
+          ),
+        );
+      });
+    },
+    [closeTab, isCloudWorkspaceSelected, updateState, workspaceId],
+  );
+
+  const handleRenameTerminal = useCallback(async (terminalId: string, title: string) => {
+    if (!workspaceId) {
+      return;
+    }
+    try {
+      await renameTab(terminalId, workspaceId, title);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      showToast(`Failed to rename terminal: ${message}`);
+      throw error;
+    }
+  }, [renameTab, showToast, workspaceId]);
+
+  const handleReorderHeaderEntry = useCallback(
+    (
+      entryKey: RightPanelHeaderEntryKey,
+      beforeEntryKey: RightPanelHeaderEntryKey | null,
+    ) => {
+      updateState((previous) =>
+        reorderHeaderEntryInRightPanelState(
+          previous,
+          entryKey,
+          beforeEntryKey,
+          isCloudWorkspaceSelected,
+        ),
+      );
+    },
+    [isCloudWorkspaceSelected, updateState],
+  );
+
+  const shouldMountTerminalPanel = shouldRenderContent
+    && (activeTool === "terminal" || orderedTerminals.length > 0);
 
   return (
-    <div data-group="true" className="flex h-full flex-col rounded-tl-lg overflow-hidden border-l border-t border-border">
+    <div
+      ref={rootRef}
+      data-right-panel-root="true"
+      data-group="true"
+      className="relative flex h-full flex-col overflow-hidden rounded-tl-lg border-l border-t border-sidebar-border bg-sidebar-background"
+    >
+      <RightPanelHeaderTabs
+        entries={headerEntries}
+        activeTool={activeTool}
+        activeTerminalId={selectedTerminal?.id ?? null}
+        orderedTerminals={orderedTerminals}
+        unreadByTerminal={unreadByTerminal}
+        isWorkspaceReady={isWorkspaceReady}
+        onActivateTool={activateTool}
+        onSelectTerminal={selectTerminal}
+        onCloseTerminal={handleCloseTerminal}
+        onRenameTerminal={handleRenameTerminal}
+        onCreateTerminal={() => {
+          void createTerminal();
+        }}
+        onReorderHeaderEntry={handleReorderHeaderEntry}
+      />
+
       <div
         data-panel="true"
         id="workspace-side-panel"
-        className="min-h-[80px] flex-1 overflow-hidden"
+        className="relative min-h-0 flex-1 overflow-hidden"
       >
-        <div className="h-full flex flex-col bg-sidebar-background">
-          <div className="flex items-center gap-1 px-2 py-2 border-b border-sidebar-border/70 shrink-0">
-            <div className="flex items-center gap-1">
-              {visiblePinnedModes.map((id) => {
-                const panelMode = availablePanelModes.find((candidate: PanelModeConfig) => candidate.id === id);
-                if (!panelMode) {
-                  return null;
-                }
-                const Icon = panelMode.icon;
-                const isActive = activeMode === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => onModeChange(id)}
-                    aria-label={`Show ${panelMode.label.toLowerCase()} panel`}
-                    className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs transition-colors ${isActive
-                        ? "text-sidebar-foreground"
-                        : "text-sidebar-muted-foreground hover:text-sidebar-foreground"
-                      }`}
-                  >
-                    <Icon className="size-3.5 shrink-0" />
-                    <span>{panelMode.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <PopoverButton
-              align="end"
-              trigger={
-                <IconButton size="md" tone="sidebar" title="Panel options">
-                  <MoreHorizontal className="size-3.5" />
-                </IconButton>
-              }
-              className="w-44 rounded-md border border-border bg-popover p-1 shadow-floating"
-            >
-              {() => (
-                <div className="flex flex-col gap-px">
-                  {availablePanelModes.map((panelMode: PanelModeConfig) => {
-                    const Icon = panelMode.icon;
-                    const isPinned = pinnedModes.includes(panelMode.id);
-                    return (
-                      <button
-                        key={panelMode.id}
-                        type="button"
-                        onClick={() => togglePin(panelMode.id)}
-                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      >
-                        <Icon className="size-4 shrink-0" />
-                        <span className="flex-1 text-left">{panelMode.label}</span>
-                        <span className={`text-xs ${isPinned ? "text-foreground" : "text-muted-foreground/50"}`}>
-                          {isPinned ? "pinned" : "hidden"}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </PopoverButton>
-          </div>
-
-          <div className="flex-1 min-h-0 overflow-hidden">
-            {!shouldRenderContent ? (
-              <RightPanelPlaceholder mode={activeMode} />
-            ) : activeMode === "files" ? (
-              <WorkspaceFilesPanel showHeader={false} />
-            ) : activeMode === "settings" ? (
-              <CloudWorkspaceSettingsPanel />
-            ) : (
-              <GitPanel />
+        {!shouldRenderContent ? (
+          <RightPanelPlaceholder tool={activeTool} />
+        ) : (
+          <>
+            {activeTool === "files" && (
+              <div className="absolute inset-0">
+                <WorkspaceFilesPanel showHeader={false} />
+              </div>
             )}
-          </div>
-        </div>
-      </div>
-
-      {terminalCollapsed ? (
-        <TerminalPanel
-          collapsed
-          onToggleCollapse={() => onTerminalCollapsedChange(false)}
-        />
-      ) : (
-        <>
-          <div
-            role="separator"
-            aria-orientation="horizontal"
-            aria-controls="terminal-panel"
-            onMouseDown={onTerminalSeparatorDown}
-            className="relative flex items-center justify-center h-[3px] shrink-0 cursor-row-resize group hover:bg-primary/30 active:bg-primary/50 transition-colors after:absolute after:inset-x-0 after:top-0 after:h-px after:bg-separator"
-          />
-          <SizedPanel
-            data-panel="true"
-            id="terminal-panel"
-            className="min-h-0 flex-none overflow-hidden"
-            height={terminalHeight}
-          >
-            {shouldRenderContent ? (
-              <TerminalPanel
-                isRuntimeReady={isWorkspaceReady}
-                onToggleCollapse={() => onTerminalCollapsedChange(true)}
-                focusRequestToken={terminalFocusRequestToken}
-              />
-            ) : (
-              <RightPanelTerminalPlaceholder
-                onToggleCollapse={() => onTerminalCollapsedChange(true)}
-              />
+            {activeTool === "settings" && (
+              <div className="absolute inset-0">
+                <CloudWorkspaceSettingsPanel />
+              </div>
             )}
-          </SizedPanel>
-        </>
-      )}
-    </div>
-  );
-}
-
-function RightPanelPlaceholder({ mode }: { mode: RightPanelMode }) {
-  const title = mode === "files"
-    ? "Files are getting ready"
-    : mode === "changes"
-      ? "Git view is getting ready"
-      : "Cloud settings are getting ready";
-  const description = mode === "files"
-    ? "Keep this panel open. The file tree will appear here as soon as the workspace finishes loading."
-    : mode === "changes"
-      ? "Keep this panel open. Changes and diffs will appear here as soon as the workspace finishes loading."
-      : "Keep this panel open. Repo sync status and setup controls will appear here once the cloud workspace finishes loading.";
-
-  return (
-    <div className="flex h-full items-center justify-center px-6 text-center">
-      <div className="max-w-xs space-y-2">
-        <p className="text-sm font-medium text-foreground">{title}</p>
-        <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+            {activeTool === "git" && (
+              <div className="absolute inset-0">
+                <GitPanel />
+              </div>
+            )}
+            {shouldMountTerminalPanel && (
+              <div className={activeTool === "terminal" ? "absolute inset-0" : "hidden"}>
+                <TerminalPanel
+                  workspaceId={workspaceId}
+                  terminals={orderedTerminals}
+                  activeTerminalId={selectedTerminal?.id ?? null}
+                  isVisible={activeTool === "terminal"}
+                  isRuntimeReady={isWorkspaceReady}
+                  canConnect={terminalsQuery.isSuccess}
+                  isLoading={terminalsQuery.isLoading && !terminalsQuery.data}
+                  errorMessage={terminalsQuery.isError ? "Terminal list unavailable" : null}
+                  focusRequestToken={terminalActivationRequestToken + terminalFocusNonce}
+                  onNewTerminal={() => {
+                    void createTerminal();
+                  }}
+                />
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-function RightPanelTerminalPlaceholder({
-  onToggleCollapse,
-}: {
-  onToggleCollapse: () => void;
-}) {
-  return (
-    <div className="flex h-full flex-col border-t border-border bg-background/60" data-telemetry-block>
-      <div className="flex items-center gap-1 pr-1 relative overflow-hidden border-b border-border shrink-0">
-        <IconButton className="ml-1" onClick={onToggleCollapse} title="Collapse terminal">
-          <ChevronDown className="size-4 text-muted-foreground" />
-        </IconButton>
-        <div className="flex h-8 flex-1 items-center px-2 text-xs text-muted-foreground">
-          Terminal
-        </div>
-      </div>
-      <div className="flex flex-1 items-center justify-center px-6 text-center">
-        <div className="max-w-xs space-y-2">
-          <p className="text-sm font-medium text-foreground">Terminal is getting ready</p>
-          <p className="text-sm leading-6 text-muted-foreground">
-            The terminal area stays pinned in place and will connect once the workspace is ready.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
+function orderTerminals(
+  terminals: readonly TerminalRecord[],
+  terminalOrder: readonly string[],
+): TerminalRecord[] {
+  const byId = new Map(terminals.map((terminal) => [terminal.id, terminal]));
+  const ordered: TerminalRecord[] = [];
+  for (const terminalId of terminalOrder) {
+    const terminal = byId.get(terminalId);
+    if (terminal) {
+      ordered.push(terminal);
+      byId.delete(terminalId);
+    }
+  }
+  ordered.push(...byId.values());
+  return ordered;
+}
+
+function rightPanelStateEqual(
+  left: RightPanelWorkspaceState,
+  right: RightPanelWorkspaceState,
+): boolean {
+  return left.activeTool === right.activeTool
+    && left.activeTerminalId === right.activeTerminalId
+    && arraysEqual(left.toolOrder, right.toolOrder)
+    && arraysEqual(left.terminalOrder, right.terminalOrder)
+    && arraysEqual(left.headerOrder, right.headerOrder);
+}
+
+function arraysEqual(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+function resolvePrimaryDigitShortcutIndex(event: KeyboardEvent): number | null {
+  if (event.shiftKey || event.altKey) {
+    return null;
+  }
+
+  const isApple = isApplePlatform();
+  const hasPrimaryModifier = isApple
+    ? event.metaKey && !event.ctrlKey
+    : event.ctrlKey && !event.metaKey;
+  if (!hasPrimaryModifier) {
+    return null;
+  }
+
+  const keyDigit = /^[1-9]$/.test(event.key) ? Number.parseInt(event.key, 10) : null;
+  const codeMatch = /^Digit([1-9])$/.exec(event.code);
+  const codeDigit = codeMatch ? Number.parseInt(codeMatch[1]!, 10) : null;
+  const digit = keyDigit ?? codeDigit;
+  return digit ? digit - 1 : null;
 }

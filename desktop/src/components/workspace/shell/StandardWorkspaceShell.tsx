@@ -43,10 +43,9 @@ export function StandardWorkspaceShell() {
     sidebarOpen,
     sidebarWidth,
     rightPanelOpen,
-    rightPanelMode,
+    rightPanelState,
     rightPanelWidth,
-    terminalCollapsed,
-    terminalFocusRequestToken,
+    terminalActivationRequestToken,
     publishDialog,
     filePaletteOpen,
     onLeftSeparatorDown,
@@ -218,14 +217,13 @@ export function StandardWorkspaceShell() {
                 >
                   <div className="h-full" style={{ minWidth: 260 }}>
                     <RightPanel
+                      workspaceId={selectedWorkspaceId}
                       isWorkspaceReady={hasRuntimeReadyWorkspace}
                       shouldKeepContentVisible={shouldKeepRuntimePanelsVisible}
                       isCloudWorkspaceSelected={isCloudWorkspaceSelected}
-                      mode={rightPanelMode}
-                      onModeChange={actions.onSetRightPanelMode}
-                      terminalCollapsed={terminalCollapsed}
-                      onTerminalCollapsedChange={layout.setTerminalCollapsed}
-                      terminalFocusRequestToken={terminalFocusRequestToken}
+                      state={rightPanelState}
+                      onStateChange={layout.setRightPanelState}
+                      terminalActivationRequestToken={terminalActivationRequestToken}
                     />
                   </div>
                 </div>

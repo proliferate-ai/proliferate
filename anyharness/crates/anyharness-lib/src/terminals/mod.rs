@@ -1,3 +1,5 @@
+mod shell;
+
 pub mod model;
 pub mod service;
 

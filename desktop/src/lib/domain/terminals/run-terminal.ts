@@ -4,6 +4,7 @@ export interface RunTerminalCandidate {
   id: string;
   workspaceId: string;
   title: string;
+  purpose?: string | null;
   status: string;
 }
 
@@ -14,7 +15,7 @@ export function findReusableRunTerminalId(
   for (const tab of tabs) {
     if (
       tab.workspaceId === workspaceId
-      && tab.title === RUN_TERMINAL_TITLE
+      && tab.purpose === "run"
       && (tab.status === "running" || tab.status === "starting")
     ) {
       return tab.id;

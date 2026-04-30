@@ -1,233 +1,67 @@
-import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import type { TerminalRecord } from "@anyharness/sdk";
+import {
+  Component,
+  useEffect,
+  useRef,
+  useState,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
 import { Button } from "@/components/ui/Button";
-import { IconButton } from "@/components/ui/IconButton";
-import { ChevronDown, X, Plus } from "@/components/ui/icons";
+import { Terminal as TerminalIcon } from "@/components/ui/icons";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
 import { getTerminalWsHandle, onTerminalData } from "@/lib/integrations/anyharness/terminal-handles";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useTerminalActions } from "@/hooks/terminals/use-terminal-actions";
-import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
 import { getTerminalTheme, onThemeChange } from "@/config/theme";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { resolveTerminalTabChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 
 interface TerminalPanelProps {
-  collapsed?: boolean;
-  onToggleCollapse?: () => void;
+  workspaceId: string | null;
+  terminals: readonly TerminalRecord[];
+  activeTerminalId: string | null;
+  isVisible?: boolean;
   isRuntimeReady?: boolean;
+  canConnect?: boolean;
+  isLoading?: boolean;
+  errorMessage?: string | null;
   focusRequestToken?: number;
+  onNewTerminal: () => void;
 }
 
-const STATUS_DOT: Record<string, string> = {
-  starting: "bg-git-yellow animate-pulse",
-  running: "bg-git-green",
-  exited: "bg-muted-foreground",
-  failed: "bg-git-red",
-};
 export function TerminalPanel({
-  collapsed,
-  onToggleCollapse,
+  workspaceId,
+  terminals,
+  activeTerminalId,
+  isVisible = true,
   isRuntimeReady = true,
+  canConnect = true,
+  isLoading = false,
+  errorMessage = null,
   focusRequestToken = 0,
+  onNewTerminal,
 }: TerminalPanelProps) {
-  const selectedWorkspaceId = useHarnessStore((s) => s.selectedWorkspaceId);
-
-  const tabsById = useTerminalStore((s) => s.tabsById);
-  const workspaceTabs = useTerminalStore((s) => s.workspaceTabs);
-  const activeTabByWorkspace = useTerminalStore((s) => s.activeTabByWorkspace);
-  const loadedWorkspaceTabs = useTerminalStore((s) => s.loadedWorkspaceTabs);
-  const selectTab = useTerminalStore((s) => s.selectTab);
-  const { createTab, closeTab, loadWorkspaceTabs } = useTerminalActions();
-  const transparentChromeEnabled = useTransparentChromeEnabled();
-  const chromeClasses = resolveTerminalTabChromeClasses(transparentChromeEnabled);
-  const creatingInitialTabRef = useRef(false);
-  const [canConnectTabs, setCanConnectTabs] = useState(false);
-
-  const tabIds = selectedWorkspaceId ? workspaceTabs[selectedWorkspaceId] ?? [] : [];
-  const activeTabId = selectedWorkspaceId ? activeTabByWorkspace[selectedWorkspaceId] ?? "" : "";
-  const workspaceTabsLoaded = selectedWorkspaceId
-    ? loadedWorkspaceTabs[selectedWorkspaceId] === true
-    : false;
-
-  useEffect(() => {
-    if (!selectedWorkspaceId || !isRuntimeReady) {
-      setCanConnectTabs(false);
-      return;
-    }
-
-    let cancelled = false;
-    setCanConnectTabs(false);
-    void loadWorkspaceTabs(selectedWorkspaceId).finally(() => {
-      if (!cancelled) {
-        setCanConnectTabs(true);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isRuntimeReady, loadWorkspaceTabs, selectedWorkspaceId]);
-
-  const showToast = useToastStore((s) => s.show);
-
-  const handleNewTab = useCallback(() => {
-    if (!selectedWorkspaceId || !isRuntimeReady) return;
-    createTab(selectedWorkspaceId, 120, 40).catch((err) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      showToast(`Failed to create terminal tab: ${msg}`);
-    });
-  }, [selectedWorkspaceId, isRuntimeReady, createTab, showToast]);
-
-  useEffect(() => {
-    if (
-      collapsed
-      || !selectedWorkspaceId
-      || !isRuntimeReady
-      || !canConnectTabs
-      || !workspaceTabsLoaded
-      || tabIds.length > 0
-    ) {
-      return;
-    }
-    if (creatingInitialTabRef.current) return;
-
-    creatingInitialTabRef.current = true;
-    createTab(selectedWorkspaceId, 120, 40)
-      .catch((err) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        showToast(`Failed to create terminal tab: ${msg}`);
-      })
-      .finally(() => {
-        creatingInitialTabRef.current = false;
-      });
-  }, [
-    canConnectTabs,
-    collapsed,
-    createTab,
-    isRuntimeReady,
-    selectedWorkspaceId,
-    showToast,
-    tabIds.length,
-    workspaceTabsLoaded,
-  ]);
-
-  if (collapsed) {
-    return (
-      <div className="flex items-center h-8 px-1 border-t border-border shrink-0">
-        <IconButton onClick={onToggleCollapse} title="Expand terminal">
-          <ChevronDown className="size-4 text-muted-foreground rotate-180" />
-        </IconButton>
-        <span className="text-xs text-muted-foreground ml-1">Terminal</span>
-        {tabIds.length > 0 && (
-          <span className="text-[10px] text-muted-foreground ml-1">
-            ({tabIds.length})
-          </span>
-        )}
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col h-full" data-telemetry-block data-focus-zone="terminal">
-      <div className={chromeClasses.rail}>
-        <IconButton className="ml-1" onClick={onToggleCollapse} title="Collapse terminal">
-          <ChevronDown className="size-4 text-muted-foreground" />
-        </IconButton>
-
-        <div
-          role="tablist"
-          aria-label="Terminal tabs"
-          className="flex h-9 flex-1 items-end gap-1 overflow-x-auto bg-transparent px-1 pt-1"
-        >
-          {tabIds.map((tabId, idx) => {
-            const tab = tabsById[tabId];
-            if (!tab) return null;
-            const isActive = tabId === activeTabId;
-            const fallbackTitle = `Terminal ${idx + 1}`;
-            const displayTitle = tab.title === "Terminal" ? fallbackTitle : tab.title;
-            const shapeClassName = "rounded-t-md";
-            const activeClassName = chromeClasses.active;
-
-            return (
-              <div
-                key={tabId}
-                role="presentation"
-                className={`group/tab flex h-8 min-w-0 max-w-44 shrink-0 items-center px-0.5 transition-colors ${shapeClassName} ${
-                  isActive
-                    ? activeClassName
-                    : chromeClasses.inactive
-                }`}
-              >
-                <Button
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => selectTab(tabId)}
-                  title={displayTitle}
-                  className={`h-full min-w-0 flex-1 justify-start gap-1.5 bg-transparent px-2 py-0 text-xs font-normal hover:bg-transparent ${shapeClassName} ${
-                    isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <span
-                    className={`size-1.5 shrink-0 rounded-full ${
-                      STATUS_DOT[tab.status] ?? "bg-muted-foreground"
-                    }`}
-                  />
-                  <span className="min-w-0 flex-1 truncate">{displayTitle}</span>
-                  {tab.unread && !isActive && (
-                    <span className="size-1.5 shrink-0 rounded-full bg-info" />
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  disabled={!isRuntimeReady}
-                  onClick={() => {
-                    void closeTab(tabId);
-                  }}
-                  title={`Close ${displayTitle}`}
-                  aria-label={`Close ${displayTitle}`}
-                  className={`mr-1 size-5 shrink-0 rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground ${
-                    isActive
-                      ? "opacity-70 hover:opacity-100"
-                      : "opacity-0 transition-opacity group-hover/tab:opacity-70 hover:!opacity-100 focus-visible:opacity-100"
-                  }`}
-                >
-                  <X className="size-3" />
-                </Button>
-              </div>
-            );
-          })}
-
-          <IconButton
-            title="New terminal"
-            onClick={handleNewTab}
-            disabled={!isRuntimeReady}
-            className="mb-1"
-          >
-            <Plus className="size-3 text-muted-foreground" />
-          </IconButton>
-        </div>
-      </div>
-
-      <div className="relative h-full w-full overflow-hidden bg-background flex-1">
-        {tabIds.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2">
-            <p className="text-xs text-muted-foreground">No terminals open</p>
-            <Button onClick={handleNewTab} size="sm">
+    <div className="flex h-full flex-col" data-telemetry-block data-focus-zone="terminal">
+      <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-background">
+        {isLoading ? (
+          <TerminalEmptyState label="Loading terminals" />
+        ) : errorMessage ? (
+          <TerminalEmptyState label={errorMessage} />
+        ) : terminals.length === 0 || !activeTerminalId ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+            <p className="text-xs text-muted-foreground">No terminal selected</p>
+            <Button onClick={onNewTerminal} size="sm" disabled={!isRuntimeReady}>
+              <TerminalIcon className="size-3.5" />
               New terminal
             </Button>
           </div>
         ) : (
-          tabIds.map((tabId) => (
-            <TerminalErrorBoundary key={tabId}>
+          terminals.map((terminal) => (
+            <TerminalErrorBoundary key={terminal.id}>
               <TerminalViewport
-                terminalId={tabId}
-                visible={tabId === activeTabId}
-                canConnect={isRuntimeReady && canConnectTabs && workspaceTabsLoaded}
+                terminal={terminal}
+                workspaceId={workspaceId}
+                visible={isVisible && terminal.id === activeTerminalId}
+                canConnect={isRuntimeReady && canConnect}
                 focusRequestToken={focusRequestToken}
               />
             </TerminalErrorBoundary>
@@ -238,15 +72,25 @@ export function TerminalPanel({
   );
 }
 
+function TerminalEmptyState({ label }: { label: string }) {
+  return (
+    <div className="flex h-full items-center justify-center px-6 text-center">
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
 interface TerminalViewportProps {
-  terminalId: string;
+  terminal: TerminalRecord;
+  workspaceId: string | null;
   visible: boolean;
   canConnect: boolean;
   focusRequestToken: number;
 }
 
 function TerminalViewport({
-  terminalId,
+  terminal,
+  workspaceId,
   visible,
   canConnect,
   focusRequestToken,
@@ -255,15 +99,23 @@ function TerminalViewport({
   const xtermRef = useRef<import("@xterm/xterm").Terminal | null>(null);
   const fitAddonRef = useRef<import("@xterm/addon-fit").FitAddon | null>(null);
   const [isTerminalReady, setIsTerminalReady] = useState(false);
+  const [hasBeenVisible, setHasBeenVisible] = useState(visible);
   const connectionVersion = useTerminalStore(
-    (state) => state.connectionVersionByTerminal[terminalId] ?? 0,
+    (state) => state.connectionVersionByTerminal[terminal.id] ?? 0,
   );
   const { ensureTabConnection, resizeTab } = useTerminalActions();
 
   useEffect(() => {
+    if (visible) {
+      setHasBeenVisible(true);
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (!hasBeenVisible) return;
     const container = containerRef.current;
     if (!container) return;
-    if (xtermRef.current) return; // already initialized
+    if (xtermRef.current) return;
 
     setIsTerminalReady(false);
     let cancelled = false;
@@ -276,7 +128,6 @@ function TerminalViewport({
       const { FitAddon } = await import("@xterm/addon-fit");
       const { WebLinksAddon } = await import("@xterm/addon-web-links");
 
-      // Check container is still in the DOM and we haven't already initialized
       if (cancelled || !containerRef.current || xtermRef.current) return;
 
       let term: import("@xterm/xterm").Terminal;
@@ -296,7 +147,6 @@ function TerminalViewport({
         term.loadAddon(fitAddon);
         term.loadAddon(new WebLinksAddon());
 
-        // Double-check before attaching to DOM — the await above yields control
         if (cancelled || !containerRef.current) {
           term.dispose();
           return;
@@ -309,7 +159,6 @@ function TerminalViewport({
         return;
       }
 
-      // Final cancellation check after open()
       if (cancelled) {
         term.dispose();
         return;
@@ -322,18 +171,20 @@ function TerminalViewport({
         term.options.theme = getTerminalTheme();
       });
 
-      unsubscribeData = onTerminalData(terminalId, (data) => {
+      unsubscribeData = onTerminalData(terminal.id, (data) => {
         term.write(data);
       });
 
       term.onData((data) => {
-        const wsHandle = getTerminalWsHandle(terminalId);
+        const wsHandle = getTerminalWsHandle(terminal.id);
         wsHandle?.send(data);
       });
 
       term.onResize(({ cols, rows }) => {
-        void resizeTab(terminalId, cols, rows);
-        const handle = getTerminalWsHandle(terminalId);
+        if (workspaceId) {
+          void resizeTab(terminal.id, workspaceId, cols, rows);
+        }
+        const handle = getTerminalWsHandle(terminal.id);
         handle?.sendResize(cols, rows);
       });
 
@@ -353,14 +204,23 @@ function TerminalViewport({
       xtermRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [terminalId, resizeTab]);
+  }, [hasBeenVisible, resizeTab, terminal.id, workspaceId]);
 
   useEffect(() => {
-    if (!visible || !isTerminalReady || !canConnect) {
+    if (!visible || !isTerminalReady || !canConnect || !workspaceId) {
       return;
     }
-    void ensureTabConnection(terminalId);
-  }, [canConnect, connectionVersion, ensureTabConnection, isTerminalReady, terminalId, visible]);
+    void ensureTabConnection(terminal.id, workspaceId, terminal.status);
+  }, [
+    canConnect,
+    connectionVersion,
+    ensureTabConnection,
+    isTerminalReady,
+    terminal.id,
+    terminal.status,
+    visible,
+    workspaceId,
+  ]);
 
   useEffect(() => {
     if (visible && isTerminalReady && fitAddonRef.current) {
@@ -376,7 +236,7 @@ function TerminalViewport({
       ref={containerRef}
       data-telemetry-block
       className={`absolute inset-0 overflow-hidden ${visible ? "block" : "hidden"}`}
-      data-terminal-id={terminalId}
+      data-terminal-id={terminal.id}
     />
   );
 }
@@ -399,7 +259,7 @@ class TerminalErrorBoundary extends Component<
     if (this.state.hasError) {
       return (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-          Terminal crashed — switch tabs to recover
+          Terminal crashed - switch tabs to recover
         </div>
       );
     }

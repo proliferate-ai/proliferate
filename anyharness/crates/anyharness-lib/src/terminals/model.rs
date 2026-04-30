@@ -6,11 +6,18 @@ pub enum TerminalStatus {
     Failed,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalPurpose {
+    General,
+    Run,
+}
+
 #[derive(Debug, Clone)]
 pub struct TerminalRecord {
     pub id: String,
     pub workspace_id: String,
     pub title: String,
+    pub purpose: TerminalPurpose,
     pub cwd: String,
     pub status: TerminalStatus,
     pub exit_code: Option<i32>,
@@ -23,6 +30,7 @@ pub struct CreateTerminalOptions {
     pub cwd: Option<String>,
     pub shell: Option<String>,
     pub title: Option<String>,
+    pub purpose: TerminalPurpose,
     pub env: Vec<(String, String)>,
     pub cols: u16,
     pub rows: u16,

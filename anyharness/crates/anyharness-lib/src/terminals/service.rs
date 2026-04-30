@@ -1,14 +1,12 @@
 use std::collections::HashMap;
-use std::ffi::OsStr;
-use std::fs;
 use std::io::{Read as IoRead, Write as IoWrite};
-use std::path::Path;
 use std::sync::Arc;
 
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use tokio::sync::{broadcast, Mutex, RwLock};
 
 use super::model::{CreateTerminalOptions, ResizeTerminalOptions, TerminalRecord, TerminalStatus};
+use super::shell::{configure_compact_prompt, detect_default_shell};
 
 struct PtyHandle {
     record: TerminalRecord,
@@ -144,6 +142,7 @@ impl TerminalService {
                 .filter(|value| !value.is_empty())
                 .unwrap_or("Terminal")
                 .to_string(),
+            purpose: request.purpose,
             cwd: cwd.clone(),
             status: TerminalStatus::Running,
             exit_code: None,
@@ -210,6 +209,21 @@ impl TerminalService {
         Ok(record)
     }
 
+    pub async fn update_terminal_title(
+        &self,
+        terminal_id: &str,
+        title: String,
+    ) -> anyhow::Result<TerminalRecord> {
+        let map = self.terminals.read().await;
+        let handle = map
+            .get(terminal_id)
+            .ok_or_else(|| anyhow::anyhow!("terminal not found"))?;
+        let mut h = handle.lock().await;
+        h.record.title = title;
+        h.record.updated_at = chrono::Utc::now().to_rfc3339();
+        Ok(h.record.clone())
+    }
+
     pub async fn write_input(&self, terminal_id: &str, data: &[u8]) -> anyhow::Result<()> {
         let map = self.terminals.read().await;
         let handle = map
@@ -274,162 +288,6 @@ impl TerminalService {
     }
 }
 
-fn detect_default_shell() -> String {
-    let shell_env = std::env::var("SHELL").ok();
-    let path_env = std::env::var_os("PATH");
-    detect_default_shell_with_env(shell_env.as_deref(), path_env.as_deref())
-}
-
-fn configure_compact_prompt(cmd: &mut CommandBuilder, shell: &str, workspace_path: &str) {
-    cmd.env("ANYHARNESS_WORKSPACE_ROOT", workspace_path);
-    cmd.env("PROMPT_DIRTRIM", "1");
-
-    match prompt_shell_kind(shell) {
-        PromptShellKind::Bash => {
-            if let Some(rcfile) = ensure_bash_prompt_rcfile() {
-                cmd.arg("--rcfile");
-                cmd.arg(rcfile);
-                cmd.arg("-i");
-            } else {
-                cmd.env("PS1", r"\u@\h:\W\$ ");
-            }
-        }
-        PromptShellKind::Zsh => {
-            cmd.env("PROMPT", "%n@%m:workspace%# ");
-        }
-        PromptShellKind::Sh => {
-            cmd.env("PS1", "$ ");
-        }
-        PromptShellKind::Other => {}
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PromptShellKind {
-    Bash,
-    Zsh,
-    Sh,
-    Other,
-}
-
-fn prompt_shell_kind(shell: &str) -> PromptShellKind {
-    let name = Path::new(shell)
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or(shell);
-    if name.ends_with("bash") {
-        PromptShellKind::Bash
-    } else if name.ends_with("zsh") {
-        PromptShellKind::Zsh
-    } else if name == "sh" {
-        PromptShellKind::Sh
-    } else {
-        PromptShellKind::Other
-    }
-}
-
-fn ensure_bash_prompt_rcfile() -> Option<String> {
-    let home = std::env::var_os("HOME")?;
-    let rcfile = Path::new(&home)
-        .join(".proliferate")
-        .join("anyharness")
-        .join("terminal")
-        .join("bashrc");
-    let parent = rcfile.parent()?;
-    fs::create_dir_all(parent).ok()?;
-    fs::write(&rcfile, bash_prompt_rcfile_contents()).ok()?;
-    Some(rcfile.to_string_lossy().to_string())
-}
-
-fn bash_prompt_rcfile_contents() -> &'static str {
-    concat!(
-        "# Managed by AnyHarness. Keeps workspace terminal prompts compact.\n",
-        "if [ -f \"$HOME/.bashrc\" ]; then . \"$HOME/.bashrc\"; fi\n",
-        "export PROMPT_DIRTRIM=1\n",
-        "__anyharness_compact_prompt() {\n",
-        "  local root=\"${ANYHARNESS_WORKSPACE_ROOT:-}\"\n",
-        "  local label=\"${PWD##*/}\"\n",
-        "  if [ -n \"$root\" ]; then\n",
-        "    case \"$PWD\" in\n",
-        "      \"$root\") label=\"workspace\" ;;\n",
-        "      \"$root\"/*) label=\"workspace/${PWD#\"$root\"/}\" ;;\n",
-        "    esac\n",
-        "  fi\n",
-        "  PS1=\"\\u@\\h:${label}\\$ \"\n",
-        "}\n",
-        "case \"${PROMPT_COMMAND:-}\" in\n",
-        "  *__anyharness_compact_prompt*) ;;\n",
-        "  '') PROMPT_COMMAND='__anyharness_compact_prompt' ;;\n",
-        "  *) PROMPT_COMMAND=\"${PROMPT_COMMAND};__anyharness_compact_prompt\" ;;\n",
-        "esac\n",
-        "__anyharness_compact_prompt\n",
-    )
-}
-
-fn detect_default_shell_with_env(shell_env: Option<&str>, path_env: Option<&OsStr>) -> String {
-    let mut candidates: Vec<&str> = Vec::new();
-
-    if let Some(shell) = shell_env.filter(|value| !value.trim().is_empty()) {
-        candidates.push(shell);
-    }
-
-    for fallback in ["/bin/bash", "/usr/bin/bash", "/bin/sh", "/usr/bin/sh"] {
-        if !candidates.contains(&fallback) {
-            candidates.push(fallback);
-        }
-    }
-
-    for candidate in candidates {
-        if is_executable_command(candidate, path_env) {
-            return candidate.to_string();
-        }
-    }
-
-    "/bin/sh".to_string()
-}
-
-fn is_executable_command(command: &str, path_env: Option<&OsStr>) -> bool {
-    let command = command.trim();
-    if command.is_empty() {
-        return false;
-    }
-
-    if command.contains(std::path::MAIN_SEPARATOR) {
-        return is_executable_path(Path::new(command));
-    }
-
-    if let Some(path_env) = path_env {
-        for dir in std::env::split_paths(path_env) {
-            if is_executable_path(&dir.join(command)) {
-                return true;
-            }
-        }
-    }
-
-    false
-}
-
-fn is_executable_path(path: &Path) -> bool {
-    let Ok(metadata) = std::fs::metadata(path) else {
-        return false;
-    };
-    if !metadata.is_file() {
-        return false;
-    }
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-
-        metadata.permissions().mode() & 0o111 != 0
-    }
-
-    #[cfg(not(unix))]
-    {
-        true
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -437,6 +295,7 @@ mod tests {
     use tokio::time::{timeout, Duration};
 
     use super::{CreateTerminalOptions, TerminalOutputEvent, TerminalService};
+    use crate::terminals::model::TerminalPurpose;
 
     async fn read_until_contains(
         rx: &mut tokio::sync::broadcast::Receiver<TerminalOutputEvent>,
@@ -475,6 +334,7 @@ mod tests {
                     cwd: Some("".to_string()),
                     shell: Some("/bin/sh".to_string()),
                     title: None,
+                    purpose: TerminalPurpose::General,
                     env: Vec::new(),
                 },
             )
@@ -522,6 +382,7 @@ mod tests {
                     cwd: Some("".to_string()),
                     shell: Some("/bin/sh".to_string()),
                     title: Some("Run".to_string()),
+                    purpose: TerminalPurpose::Run,
                     env: vec![(
                         "PROLIFERATE_TERMINAL_TEST".to_string(),
                         "env-pass".to_string(),
@@ -531,6 +392,7 @@ mod tests {
             .await?;
 
         assert_eq!(record.title, "Run");
+        assert_eq!(record.purpose, TerminalPurpose::Run);
 
         let mut rx = service
             .subscribe_output(&record.id)
@@ -549,43 +411,39 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn detect_default_shell_avoids_nonexistent_zsh_fallback() {
-        let shell = super::detect_default_shell_with_env(None, None);
-        assert_ne!(shell, "/bin/zsh");
-        assert!(matches!(
-            shell.as_str(),
-            "/bin/bash" | "/usr/bin/bash" | "/bin/sh" | "/usr/bin/sh"
-        ));
-    }
+    #[tokio::test]
+    async fn terminal_title_can_be_updated() -> anyhow::Result<()> {
+        let service = TerminalService::new();
+        let workspace_path = std::env::current_dir()
+            .map(|path| path.to_string_lossy().to_string())
+            .unwrap_or_else(|_| ".".to_string());
 
-    #[test]
-    fn detect_default_shell_skips_missing_shell_env() {
-        let shell = super::detect_default_shell_with_env(Some("/definitely/missing-shell"), None);
-        assert_ne!(shell, "/definitely/missing-shell");
-        assert!(matches!(
-            shell.as_str(),
-            "/bin/bash" | "/usr/bin/bash" | "/bin/sh" | "/usr/bin/sh"
-        ));
-    }
+        let record = service
+            .create_terminal(
+                "workspace-1",
+                &workspace_path,
+                CreateTerminalOptions {
+                    cols: 80,
+                    rows: 24,
+                    cwd: Some("".to_string()),
+                    shell: Some("/bin/sh".to_string()),
+                    title: None,
+                    purpose: TerminalPurpose::General,
+                    env: Vec::new(),
+                },
+            )
+            .await?;
+        let original_updated_at = record.updated_at.clone();
 
-    #[test]
-    fn prompt_shell_kind_detects_common_shells() {
-        assert_eq!(
-            super::prompt_shell_kind("/bin/bash"),
-            super::PromptShellKind::Bash
-        );
-        assert_eq!(
-            super::prompt_shell_kind("/usr/bin/zsh"),
-            super::PromptShellKind::Zsh
-        );
-        assert_eq!(
-            super::prompt_shell_kind("/bin/sh"),
-            super::PromptShellKind::Sh
-        );
-        assert_eq!(
-            super::prompt_shell_kind("/usr/bin/fish"),
-            super::PromptShellKind::Other
-        );
+        let renamed = service
+            .update_terminal_title(&record.id, "Dev server".to_string())
+            .await?;
+
+        assert_eq!(renamed.title, "Dev server");
+        assert_eq!(renamed.purpose, TerminalPurpose::General);
+        assert_ne!(renamed.updated_at, original_updated_at);
+
+        service.close_terminal(&record.id).await?;
+        Ok(())
     }
 }

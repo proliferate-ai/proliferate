@@ -14,11 +14,11 @@ describe("publish dialog state helpers", () => {
     });
   });
 
-  it("moves explicit review diffs into the changes panel", () => {
+  it("moves explicit review diffs into the git panel", () => {
     expect(reviewDiffsFromPublishState()).toEqual({
       publishDialog: CLOSED_PUBLISH_DIALOG_STATE,
       rightPanelOpen: true,
-      rightPanelMode: "changes",
+      rightPanelTool: "git",
     });
   });
 });

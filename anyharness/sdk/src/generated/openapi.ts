@@ -756,6 +756,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/terminals/{terminal_id}/title": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["update_terminal_title"];
+        trace?: never;
+    };
     "/v1/workspaces": {
         parameters: {
             query?: never;
@@ -1709,6 +1725,7 @@ export interface components {
             /** Format: int32 */
             cols: number;
             cwd?: string | null;
+            purpose?: null | components["schemas"]["TerminalPurpose"];
             /** Format: int32 */
             rows: number;
             shell?: string | null;
@@ -3190,12 +3207,15 @@ export interface components {
         SubagentTurnOutcome: "completed" | "failed" | "cancelled";
         /** @enum {string} */
         TerminalLifecycleEvent: "start" | "output" | "exit";
+        /** @enum {string} */
+        TerminalPurpose: "general" | "run";
         TerminalRecord: {
             createdAt: string;
             cwd: string;
             /** Format: int32 */
             exitCode?: number | null;
             id: string;
+            purpose: components["schemas"]["TerminalPurpose"];
             status: components["schemas"]["TerminalStatus"];
             title: string;
             updatedAt: string;
@@ -3243,6 +3263,9 @@ export interface components {
             paths: string[];
         };
         UpdateSessionTitleRequest: {
+            title: string;
+        };
+        UpdateTerminalTitleRequest: {
             title: string;
         };
         UpdateWorkspaceDisplayNameRequest: {
@@ -5170,6 +5193,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TerminalRecord"];
+                };
+            };
+            /** @description Terminal not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_terminal_title: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Terminal ID */
+                terminal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTerminalTitleRequest"];
+            };
+        };
+        responses: {
+            /** @description Terminal title updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalRecord"];
+                };
+            };
+            /** @description Invalid title */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Terminal not found */

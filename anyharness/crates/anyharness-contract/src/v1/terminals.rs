@@ -10,12 +10,20 @@ pub enum TerminalStatus {
     Failed,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TerminalPurpose {
+    General,
+    Run,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalRecord {
     pub id: String,
     pub workspace_id: String,
     pub title: String,
+    pub purpose: TerminalPurpose,
     pub cwd: String,
     pub status: TerminalStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -33,6 +41,8 @@ pub struct CreateTerminalRequest {
     pub shell: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub purpose: Option<TerminalPurpose>,
     pub cols: u16,
     pub rows: u16,
 }
@@ -42,4 +52,48 @@ pub struct CreateTerminalRequest {
 pub struct ResizeTerminalRequest {
     pub cols: u16,
     pub rows: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateTerminalTitleRequest {
+    pub title: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CreateTerminalRequest, TerminalPurpose, UpdateTerminalTitleRequest};
+
+    #[test]
+    fn terminal_purpose_serializes_as_snake_case() {
+        let value = serde_json::to_value(TerminalPurpose::Run).expect("serialize purpose");
+        assert_eq!(value, serde_json::json!("run"));
+    }
+
+    #[test]
+    fn create_terminal_request_omits_missing_purpose() {
+        let value = serde_json::to_value(CreateTerminalRequest {
+            cwd: None,
+            shell: None,
+            title: None,
+            purpose: None,
+            cols: 120,
+            rows: 40,
+        })
+        .expect("serialize create request");
+
+        assert_eq!(value.get("purpose"), None);
+        assert_eq!(value["cols"], 120);
+        assert_eq!(value["rows"], 40);
+    }
+
+    #[test]
+    fn update_terminal_title_request_serializes_title() {
+        let value = serde_json::to_value(UpdateTerminalTitleRequest {
+            title: "Dev server".to_string(),
+        })
+        .expect("serialize title update");
+
+        assert_eq!(value, serde_json::json!({ "title": "Dev server" }));
+    }
 }

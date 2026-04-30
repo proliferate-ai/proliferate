@@ -17,7 +17,11 @@ use crate::{
     app::{test_support, AppState},
     persistence::Db,
     sessions::{model::SessionRecord, store::SessionStore},
-    terminals::model::CreateTerminalOptions,
+    terminals::model::{CreateTerminalOptions, TerminalPurpose},
+    workspaces::{
+        access_model::{WorkspaceAccessMode, WorkspaceAccessRecord},
+        access_store::WorkspaceAccessStore,
+    },
 };
 
 struct TempDirGuard {
@@ -389,9 +393,147 @@ async fn terminal_create_tolerates_missing_workspace_repo_root_id() {
     let payload: Value = serde_json::from_slice(&body).expect("parse response json");
     let terminal_id = payload["id"].as_str().expect("terminal id");
     assert_eq!(payload["title"], "Terminal");
+    assert_eq!(payload["purpose"], "general");
     state
         .terminal_service
         .close_terminal(terminal_id)
+        .await
+        .expect("close terminal");
+}
+
+#[tokio::test]
+async fn terminal_title_route_updates_and_validates_title() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let repo_root = TempDirGuard::new("terminal-title-update");
+    init_repo(repo_root.path());
+    let state = test_state(false);
+    let workspace_path = repo_root.path().display().to_string();
+
+    state
+        .db
+        .with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
+                 VALUES (?1, 'repo', ?2, ?2, ?3, ?3)",
+                rusqlite::params!["workspace-title", workspace_path, "2026-03-25T00:00:00Z"],
+            )?;
+            Ok(())
+        })
+        .expect("seed workspace");
+
+    let terminal = state
+        .terminal_service
+        .create_terminal(
+            "workspace-title",
+            &workspace_path,
+            CreateTerminalOptions {
+                cwd: None,
+                shell: Some("/bin/sh".to_string()),
+                title: Some("Run".to_string()),
+                purpose: TerminalPurpose::Run,
+                env: Vec::new(),
+                cols: 80,
+                rows: 24,
+            },
+        )
+        .await
+        .expect("create terminal");
+
+    let app = build_router(state.clone());
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/v1/terminals/{}/title", terminal.id))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({ "title": "  Dev server  " }).to_string()))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    assert_eq!(payload["title"], "Dev server");
+    assert_eq!(payload["purpose"], "run");
+
+    for title in ["   ".to_string(), "x".repeat(161)] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri(format!("/v1/terminals/{}/title", terminal.id))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "title": title }).to_string()))
+                    .expect("expected request"),
+            )
+            .await
+            .expect("expected response");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("read response body");
+        let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+        assert_eq!(payload["code"], "INVALID_TERMINAL_TITLE");
+    }
+
+    let access_store = WorkspaceAccessStore::new(state.db.clone());
+    access_store
+        .upsert(&WorkspaceAccessRecord {
+            workspace_id: "workspace-title".to_string(),
+            mode: WorkspaceAccessMode::FrozenForHandoff,
+            handoff_op_id: Some("handoff-1".to_string()),
+            updated_at: "2026-03-25T00:00:01Z".to_string(),
+        })
+        .expect("freeze workspace");
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/v1/terminals/{}/title", terminal.id))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({ "title": "Blocked" }).to_string()))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    assert_eq!(payload["code"], "WORKSPACE_MUTATION_BLOCKED");
+    access_store
+        .delete("workspace-title")
+        .expect("unfreeze workspace");
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri("/v1/terminals/missing-terminal/title")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({ "title": "Missing" }).to_string()))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    state
+        .terminal_service
+        .close_terminal(&terminal.id)
         .await
         .expect("close terminal");
 }
@@ -429,6 +571,7 @@ async fn workspace_mobility_preflight_warns_for_active_terminals_without_blockin
                 cwd: None,
                 shell: Some("/bin/sh".to_string()),
                 title: None,
+                purpose: TerminalPurpose::General,
                 env: Vec::new(),
                 cols: 80,
                 rows: 24,

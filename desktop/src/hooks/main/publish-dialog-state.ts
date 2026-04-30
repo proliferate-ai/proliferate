@@ -1,4 +1,4 @@
-import type { RightPanelMode } from "@/components/workspace/shell/right-panel/RightPanel";
+import type { RightPanelTool } from "@/lib/domain/workspaces/right-panel";
 import type { PublishIntent } from "@/lib/domain/workspaces/publish-workflow";
 
 export interface PublishDialogState {
@@ -27,11 +27,11 @@ export function openPublishDialogState(
 export function reviewDiffsFromPublishState(): {
   publishDialog: PublishDialogState;
   rightPanelOpen: boolean;
-  rightPanelMode: RightPanelMode;
+  rightPanelTool: RightPanelTool;
 } {
   return {
     publishDialog: CLOSED_PUBLISH_DIALOG_STATE,
     rightPanelOpen: true,
-    rightPanelMode: "changes",
+    rightPanelTool: "git",
   };
 }
