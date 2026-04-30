@@ -25,6 +25,10 @@ from proliferate.db.models.cloud import CloudWorkspace
 from proliferate.db.store.automation_cloud_workspace_claims import (
     create_cloud_workspace_for_claimed_run,
 )
+from proliferate.db.store.automations import (
+    AutomationRunValue,
+    list_latest_runs_by_cloud_workspace_ids_for_user,
+)
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox,
 )
@@ -84,6 +88,7 @@ from proliferate.server.cloud.runtime.service import (
 )
 from proliferate.server.cloud.workspaces.models import (
     WorkspaceConnection,
+    WorkspaceCreatorContext,
     WorkspaceDetail,
     WorkspaceSummary,
     credential_freshness_payload,
@@ -95,6 +100,19 @@ from proliferate.utils.time import duration_ms, utcnow
 MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 CLOUD_HUMAN_ORIGIN_JSON = '{"kind":"human","entrypoint":"cloud"}'
 CLOUD_SYSTEM_ORIGIN_JSON = '{"kind":"system","entrypoint":"cloud"}'
+
+
+def _creator_context_for_automation_run(
+    run: AutomationRunValue | None,
+) -> WorkspaceCreatorContext | None:
+    if run is None:
+        return None
+    return WorkspaceCreatorContext(
+        kind="automation",
+        automation_id=str(run.automation_id),
+        automation_run_id=str(run.id),
+        label=run.title_snapshot,
+    )
 
 
 @dataclass(frozen=True)
@@ -180,6 +198,10 @@ async def list_cloud_workspaces_for_user(
     user_id: UUID,
 ) -> list[WorkspaceSummary]:
     workspaces = await list_cloud_workspaces_store(user_id)
+    automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
+        user_id=user_id,
+        cloud_workspace_ids=[workspace.id for workspace in workspaces],
+    )
     credential_records = await load_cloud_credentials_for_user(user_id)
     credential_revisions = build_credential_revision_state(credential_records)
     snapshots_by_subject: dict[UUID, BillingSnapshot] = {}
@@ -208,6 +230,9 @@ async def list_cloud_workspaces_for_user(
                 credential_freshness=credential_freshness,
                 action_block_kind=action_block_kind,
                 action_block_reason=action_block_reason,
+                creator_context=_creator_context_for_automation_run(
+                    automation_runs_by_workspace.get(workspace.id)
+                ),
             )
         )
     return summaries
@@ -312,6 +337,10 @@ async def _build_workspace_detail(
         else workspace.billing_subject_id
     )
     action_block_kind, action_block_reason = _workspace_action_block(workspace, billing)
+    automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
+        user_id=workspace.user_id,
+        cloud_workspace_ids=[workspace.id],
+    )
     return workspace_detail_payload(
         workspace,
         statuses,
@@ -319,6 +348,9 @@ async def _build_workspace_detail(
         credential_freshness=credential_freshness,
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
+        creator_context=_creator_context_for_automation_run(
+            automation_runs_by_workspace.get(workspace.id)
+        ),
     )
 
 

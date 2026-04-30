@@ -184,6 +184,16 @@ describe("executeLocalAutomationRun", () => {
     expect(updateDisplayName).toHaveBeenCalledWith("workspace-1", {
       displayName: "Daily Check",
     });
+    expect(client.workspaces.createWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        creatorContext: {
+          kind: "automation",
+          automationId: "automation-1",
+          automationRunId: "fd253849-c4fe-4ec9-ade6-9dde6533bb64",
+          label: "Daily Check",
+        },
+      }),
+    );
   });
 
   it("updates blank and old automation display names when reusing a workspace", async () => {

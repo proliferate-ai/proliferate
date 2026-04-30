@@ -74,6 +74,8 @@ export type CloudWorkspaceDetail = Omit<
   actionBlockReason?: string | null;
 };
 export type CloudOriginContext        = components["schemas"]["OriginContext"];
+export type CloudWorkspaceCreatorContext =
+  components["schemas"]["WorkspaceCreatorContext"];
 export type CloudConnectionInfo       = components["schemas"]["WorkspaceConnection"];
 export type CloudCredentialMutationResponse =
   components["schemas"]["CloudCredentialMutationResponse"];

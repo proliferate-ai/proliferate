@@ -54,6 +54,44 @@ pub enum WorkspaceCleanupState {
     Failed,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum WorkspaceCreatorContext {
+    Human {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+    Automation {
+        #[serde(rename = "automationId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        automation_id: Option<String>,
+        #[serde(rename = "automationRunId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        automation_run_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+    Agent {
+        #[serde(rename = "sourceSessionId")]
+        source_session_id: String,
+        #[serde(rename = "sourceSessionWorkspaceId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source_session_workspace_id: Option<String>,
+        #[serde(rename = "sessionLinkId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        session_link_id: Option<String>,
+        #[serde(rename = "sourceWorkspaceId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source_workspace_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
@@ -74,6 +112,8 @@ pub struct Workspace {
     pub execution_summary: Option<WorkspaceExecutionSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<OriginContext>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub creator_context: Option<WorkspaceCreatorContext>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -125,6 +165,8 @@ pub struct ResolveWorkspaceFromPathRequest {
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<OriginContext>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub creator_context: Option<WorkspaceCreatorContext>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -133,6 +175,8 @@ pub struct CreateWorkspaceRequest {
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<OriginContext>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub creator_context: Option<WorkspaceCreatorContext>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -147,6 +191,8 @@ pub struct CreateWorktreeWorkspaceRequest {
     pub setup_script: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<OriginContext>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub creator_context: Option<WorkspaceCreatorContext>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

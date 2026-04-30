@@ -3,6 +3,9 @@ use rusqlite::{params, Connection, OptionalExtension};
 use super::model::WorkspaceRecord;
 use crate::origin::{decode_origin_json, encode_origin_json};
 use crate::persistence::Db;
+use crate::workspaces::creator_context::{
+    decode_creator_context_json, encode_creator_context_json,
+};
 
 #[derive(Clone)]
 pub struct WorkspaceStore {
@@ -160,12 +163,13 @@ impl WorkspaceStore {
 
 fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<()> {
     let origin_json = encode_origin_json(&r.origin)?;
+    let creator_context_json = encode_creator_context_json(&r.creator_context)?;
     conn.execute(
         "INSERT INTO workspaces (
             id, kind, repo_root_id, path, surface, source_repo_root_path, source_workspace_id,
             git_provider, git_owner, git_repo_name, original_branch, current_branch, display_name,
-            origin_json, lifecycle_state, cleanup_state, created_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+            origin_json, creator_context_json, lifecycle_state, cleanup_state, created_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
         params![
             r.id,
             r.kind,
@@ -181,6 +185,7 @@ fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<
             r.current_branch,
             r.display_name,
             origin_json,
+            creator_context_json,
             r.lifecycle_state,
             r.cleanup_state,
             r.created_at,
@@ -193,6 +198,7 @@ fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<
 fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceRecord> {
     let id: String = row.get("id")?;
     let origin_json: Option<String> = row.get("origin_json")?;
+    let creator_context_json: Option<String> = row.get("creator_context_json")?;
     Ok(WorkspaceRecord {
         id: id.clone(),
         kind: row.get("kind")?,
@@ -208,6 +214,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceRecord> {
         current_branch: row.get("current_branch")?,
         display_name: row.get("display_name")?,
         origin: decode_origin_json("workspaces", &id, origin_json),
+        creator_context: decode_creator_context_json("workspaces", &id, creator_context_json),
         lifecycle_state: row.get("lifecycle_state")?,
         cleanup_state: row.get("cleanup_state")?,
         created_at: row.get("created_at")?,
@@ -222,6 +229,7 @@ mod tests {
     use crate::persistence::Db;
     use crate::sessions::model::SessionRecord;
     use crate::sessions::store::SessionStore;
+    use crate::workspaces::creator_context::WorkspaceCreatorContext;
 
     fn workspace_record(id: &str, kind: &str, path: &str) -> WorkspaceRecord {
         WorkspaceRecord {
@@ -239,6 +247,7 @@ mod tests {
             current_branch: Some("main".to_string()),
             display_name: None,
             origin: None,
+            creator_context: None,
             lifecycle_state: "active".to_string(),
             cleanup_state: "none".to_string(),
             created_at: "2025-01-01T00:00:00Z".to_string(),
@@ -316,6 +325,54 @@ mod tests {
             .expect("workspace record");
 
         assert_eq!(stored.origin, None);
+    }
+
+    #[test]
+    fn stores_and_loads_workspace_creator_context() {
+        let db = Db::open_in_memory().expect("open db");
+        let store = WorkspaceStore::new(db);
+
+        let mut workspace = workspace_record("workspace-1", "worktree", "/tmp/workspace-1");
+        workspace.creator_context = Some(WorkspaceCreatorContext::Agent {
+            source_session_id: "session-1".to_string(),
+            source_session_workspace_id: Some("workspace-parent".to_string()),
+            session_link_id: None,
+            source_workspace_id: Some("workspace-source".to_string()),
+            label: Some("Cowork thread".to_string()),
+        });
+
+        store.insert(&workspace).expect("insert workspace");
+        let stored = store
+            .find_by_id(&workspace.id)
+            .expect("find workspace")
+            .expect("workspace record");
+
+        assert_eq!(stored.creator_context, workspace.creator_context);
+    }
+
+    #[test]
+    fn malformed_workspace_creator_context_is_omitted() {
+        let db = Db::open_in_memory().expect("open db");
+        let store = WorkspaceStore::new(db.clone());
+
+        let workspace = workspace_record("workspace-1", "worktree", "/tmp/workspace-1");
+        store.insert(&workspace).expect("insert workspace");
+
+        db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE workspaces SET creator_context_json = ?1 WHERE id = ?2",
+                ["{\"kind\":\"agent\",\"sourceSessionId\":42}", &workspace.id],
+            )?;
+            Ok(())
+        })
+        .expect("corrupt creator context JSON");
+
+        let stored = store
+            .find_by_id(&workspace.id)
+            .expect("find workspace")
+            .expect("workspace record");
+
+        assert_eq!(stored.creator_context, None);
     }
 
     #[test]

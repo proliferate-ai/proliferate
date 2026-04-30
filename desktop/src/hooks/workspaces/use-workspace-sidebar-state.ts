@@ -2,8 +2,8 @@ import type { GitStatusSnapshot } from "@anyharness/sdk";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
-  collectWorkspaceSessionViewStates,
-  type SessionViewState,
+  collectWorkspaceSidebarActivityStates,
+  type SidebarSessionActivityState,
 } from "@/lib/domain/sessions/activity";
 import {
   buildSidebarGroupStates,
@@ -18,6 +18,7 @@ import { useWorkspaceBranchRenameMonitor } from "@/hooks/workspaces/use-workspac
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 
 interface UseWorkspaceSidebarStateArgs {
   showArchived: boolean;
@@ -25,7 +26,7 @@ interface UseWorkspaceSidebarStateArgs {
 
 interface WorkspaceSidebarState {
   groups: SidebarGroupState[];
-  workspaceActivities: Record<string, SessionViewState>;
+  workspaceActivities: Record<string, SidebarSessionActivityState>;
   archivedCount: number;
   selectedWorkspaceId: string | null;
   selectedLogicalWorkspaceId: string | null;
@@ -41,8 +42,9 @@ export function useWorkspaceSidebarState({
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
   const workspaceActivities = useHarnessStore(useShallow((state) =>
-    collectWorkspaceSessionViewStates(state.sessionSlots)
+    collectWorkspaceSidebarActivityStates(state.sessionSlots)
   ));
+  const deferredLaunchesById = useDeferredHomeLaunchStore((state) => state.launches);
   const activeSessionTitle = useHarnessStore((state) => {
     const sessionId = state.activeSessionId;
     const slot = sessionId ? state.sessionSlots[sessionId] : null;
@@ -80,6 +82,13 @@ export function useWorkspaceSidebarState({
     () => logicalWorkspaces.filter((entry) => archivedSet.has(entry.id)).length,
     [archivedSet, logicalWorkspaces],
   );
+  const pendingPromptCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const launch of Object.values(deferredLaunchesById)) {
+      counts[launch.workspaceId] = (counts[launch.workspaceId] ?? 0) + 1;
+    }
+    return counts;
+  }, [deferredLaunchesById]);
 
   const groups = useMemo(() => buildSidebarGroupStates({
     repoRoots,
@@ -91,6 +100,7 @@ export function useWorkspaceSidebarState({
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     workspaceActivities,
+    pendingPromptCounts,
     gitStatus,
     activeSessionTitle,
     lastViewedAt,
@@ -102,6 +112,7 @@ export function useWorkspaceSidebarState({
     hiddenRepoRootSet,
     lastViewedAt,
     logicalWorkspaces,
+    pendingPromptCounts,
     repoRoots,
     workspaceTypes,
     selectedLogicalWorkspaceId,

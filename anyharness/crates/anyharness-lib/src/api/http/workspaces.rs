@@ -24,6 +24,7 @@ use crate::app::AppState;
 use crate::origin::OriginContext;
 use crate::repo_roots::model::RepoRootRecord;
 use crate::sessions::execution_summary::idle_workspace_execution_summary;
+use crate::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::runtime::WorkspaceResolution;
 
@@ -44,8 +45,15 @@ pub async fn resolve_workspace(
     let workspace_runtime = state.workspace_runtime.clone();
     let path = req.path;
     let origin = request_origin_or_api_default(req.origin, "resolve_workspace");
+    let creator_context = req
+        .creator_context
+        .map(WorkspaceCreatorContext::from_contract);
     let result = run_blocking("resolve", move || {
-        workspace_runtime.resolve_from_path_with_origin(&path, origin)
+        workspace_runtime.resolve_from_path_with_origin_and_creator_context(
+            &path,
+            origin,
+            creator_context,
+        )
     })
     .await?
     .map_err(|e| ApiError::bad_request(e.to_string(), "WORKSPACE_RESOLVE_FAILED"))?;
@@ -71,8 +79,15 @@ pub async fn create_workspace(
     let workspace_runtime = state.workspace_runtime.clone();
     let path = req.path;
     let origin = request_origin_or_api_default(req.origin, "create_workspace");
+    let creator_context = req
+        .creator_context
+        .map(WorkspaceCreatorContext::from_contract);
     let result = run_blocking("create", move || {
-        workspace_runtime.create_workspace_with_origin(&path, origin)
+        workspace_runtime.create_workspace_with_origin_and_creator_context(
+            &path,
+            origin,
+            creator_context,
+        )
     })
     .await?
     .map_err(|e| ApiError::bad_request(e.to_string(), "WORKSPACE_CREATE_FAILED"))?;
@@ -108,6 +123,9 @@ pub async fn create_worktree(
     let base_branch = req.base_branch.clone();
     let setup_script = req.setup_script.clone();
     let origin = request_origin_or_api_default(req.origin, "create_worktree");
+    let creator_context = req
+        .creator_context
+        .map(WorkspaceCreatorContext::from_contract);
     let repo_root_id_for_task = repo_root_id.clone();
     let has_setup_script = setup_script
         .as_deref()
@@ -140,6 +158,7 @@ pub async fn create_worktree(
                 None,
                 "standard",
                 origin,
+                creator_context,
             )
         }
     })

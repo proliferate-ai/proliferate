@@ -19,6 +19,7 @@ use crate::git::service::GitService;
 use crate::origin::OriginContext;
 use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;
+use crate::workspaces::creator_context::WorkspaceCreatorContext;
 
 const BRANCH_PUBLISH_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -59,7 +60,16 @@ impl WorkspaceRuntime {
         path: &str,
         origin: OriginContext,
     ) -> anyhow::Result<WorkspaceResolution> {
-        self.resolve_or_create_workspace(path, true, origin)
+        self.resolve_or_create_workspace(path, true, origin, None)
+    }
+
+    pub fn resolve_from_path_with_origin_and_creator_context(
+        &self,
+        path: &str,
+        origin: OriginContext,
+        creator_context: Option<WorkspaceCreatorContext>,
+    ) -> anyhow::Result<WorkspaceResolution> {
+        self.resolve_or_create_workspace(path, true, origin, creator_context)
     }
 
     pub fn create_workspace(&self, path: &str) -> anyhow::Result<WorkspaceResolution> {
@@ -71,7 +81,16 @@ impl WorkspaceRuntime {
         path: &str,
         origin: OriginContext,
     ) -> anyhow::Result<WorkspaceResolution> {
-        self.resolve_or_create_workspace(path, false, origin)
+        self.resolve_or_create_workspace(path, false, origin, None)
+    }
+
+    pub fn create_workspace_with_origin_and_creator_context(
+        &self,
+        path: &str,
+        origin: OriginContext,
+        creator_context: Option<WorkspaceCreatorContext>,
+    ) -> anyhow::Result<WorkspaceResolution> {
+        self.resolve_or_create_workspace(path, false, origin, creator_context)
     }
 
     pub fn resolve_repo_root_from_path(
@@ -104,6 +123,7 @@ impl WorkspaceRuntime {
             setup_script,
             "standard",
             OriginContext::api_local_runtime(),
+            None,
         )
     }
 
@@ -116,6 +136,7 @@ impl WorkspaceRuntime {
         setup_script: Option<&str>,
         surface: &str,
         origin: OriginContext,
+        creator_context: Option<WorkspaceCreatorContext>,
     ) -> anyhow::Result<CreateWorktreeResult> {
         let started = Instant::now();
         tracing::info!(
@@ -184,6 +205,7 @@ impl WorkspaceRuntime {
             // fails; avoid an extra post-create branch probe on the hot path.
             Some(new_branch_name.to_string()),
             origin,
+            creator_context,
         );
         let insert_started = Instant::now();
         self.store.insert(&record)?;
@@ -332,6 +354,7 @@ impl WorkspaceRuntime {
             "standard",
             ctx.current_branch.clone(),
             OriginContext::system_local_runtime(),
+            None,
         );
         self.store.insert(&record)?;
 
@@ -576,6 +599,7 @@ impl WorkspaceRuntime {
         path: &str,
         allow_existing: bool,
         origin: OriginContext,
+        creator_context: Option<WorkspaceCreatorContext>,
     ) -> anyhow::Result<WorkspaceResolution> {
         let started = Instant::now();
         tracing::info!(path = %path, allow_existing, "[workspace-latency] workspace.runtime.resolve.start");
@@ -603,6 +627,7 @@ impl WorkspaceRuntime {
             "standard",
             ctx.current_branch,
             origin,
+            creator_context,
         );
         self.store.insert(&record)?;
         tracing::info!(
@@ -704,6 +729,7 @@ fn build_workspace_record(
     surface: &str,
     current_branch: Option<String>,
     origin: OriginContext,
+    creator_context: Option<WorkspaceCreatorContext>,
 ) -> WorkspaceRecord {
     let now = chrono::Utc::now().to_rfc3339();
     WorkspaceRecord {
@@ -721,6 +747,7 @@ fn build_workspace_record(
         current_branch,
         display_name: None,
         origin: Some(origin),
+        creator_context,
         lifecycle_state: "active".to_string(),
         cleanup_state: "none".to_string(),
         created_at: now.clone(),

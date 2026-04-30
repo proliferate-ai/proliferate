@@ -14,11 +14,11 @@ export function renderChatTabIcon(
   tab: Pick<HeaderChatTabEntry | HeaderChatMenuEntry, "agentKind" | "viewState">,
 ): ReactNode {
   if (tab.viewState === "working") {
-    return renderChatTabActivityIcon("text-muted-foreground");
+    return renderChatTabActivityIcon("text-info");
   }
 
   if (tab.viewState === "needs_input") {
-    return renderChatTabActivityIcon("text-special");
+    return renderChatTabActivityIcon("text-info");
   }
 
   if (tab.viewState === "errored") {

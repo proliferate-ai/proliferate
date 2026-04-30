@@ -133,6 +133,12 @@ async function createOrReuseWorkspace(
       baseBranch: input.plan.baseRef,
       setupScript: input.plan.setupScript,
       origin: AUTOMATION_LOCAL_ORIGIN,
+      creatorContext: {
+        kind: "automation",
+        automationId: input.claim.automationId,
+        automationRunId: input.claim.id,
+        label: input.claim.titleSnapshot,
+      },
     });
     workspace = response.workspace;
   } catch {

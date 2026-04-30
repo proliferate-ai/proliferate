@@ -428,6 +428,37 @@ async def list_runs_for_automation_for_user(
         return [_run_value(record) for record in records]
 
 
+async def list_latest_runs_by_cloud_workspace_ids_for_user(
+    *,
+    user_id: UUID,
+    cloud_workspace_ids: list[UUID],
+) -> dict[UUID, AutomationRunValue]:
+    if not cloud_workspace_ids:
+        return {}
+    unique_ids = list(dict.fromkeys(cloud_workspace_ids))
+    async with db_engine.async_session_factory() as db:
+        records = list(
+            (
+                await db.execute(
+                    select(AutomationRun)
+                    .where(
+                        AutomationRun.user_id == user_id,
+                        AutomationRun.cloud_workspace_id.in_(unique_ids),
+                    )
+                    .order_by(AutomationRun.created_at.desc(), AutomationRun.id.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+    values_by_workspace: dict[UUID, AutomationRunValue] = {}
+    for record in records:
+        if record.cloud_workspace_id is None or record.cloud_workspace_id in values_by_workspace:
+            continue
+        values_by_workspace[record.cloud_workspace_id] = _run_value(record)
+    return values_by_workspace
+
+
 async def create_due_scheduled_runs_batch(
     *,
     now: datetime,

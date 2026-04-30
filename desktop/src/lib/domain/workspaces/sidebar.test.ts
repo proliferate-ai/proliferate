@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
 import {
   DEFAULT_SIDEBAR_WORKSPACE_TYPES,
   getEffectiveExpandedSidebarGroupKeys,
@@ -10,10 +9,8 @@ import {
 import {
   buildGroups,
   makeCloudLogicalWorkspace,
-  makeCloudWorkspace,
   makeLocalLogicalWorkspace,
   makeRepoRoot,
-  makeWorkspace,
 } from "./sidebar-test-fixtures";
 
 describe("repo-root seeded groups", () => {
@@ -283,116 +280,4 @@ describe("sidebar workspace filters", () => {
     expect(resolveSidebarEmptyState(2, 1)).toBeNull();
   });
 
-  it("marks local system automation worktrees as automation-created", () => {
-    const groups = buildGroups({
-      logicalWorkspaces: [
-        makeLocalLogicalWorkspace({
-          id: "automation-local",
-          repoKey: "/tmp/repo-a",
-          repoName: "repo-a",
-          kind: "worktree",
-          branch: "automation/issue-triage-fd253849c4fe4ec9",
-          origin: { kind: "system", entrypoint: "desktop" },
-        }),
-      ],
-    });
-
-    expect(groups[0]?.items[0]?.createdByAutomation).toBe(true);
-  });
-
-  it("does not mark human automation-prefixed local branches as automation-created", () => {
-    const groups = buildGroups({
-      logicalWorkspaces: [
-        makeLocalLogicalWorkspace({
-          id: "human-local",
-          repoKey: "/tmp/repo-a",
-          repoName: "repo-a",
-          kind: "worktree",
-          branch: "automation/issue-triage-fd253849c4fe4ec9",
-          origin: { kind: "human", entrypoint: "desktop" },
-        }),
-      ],
-    });
-
-    expect(groups[0]?.items[0]?.createdByAutomation).toBe(false);
-  });
-
-  it("does not mark non-automation local system worktrees as automation-created", () => {
-    const groups = buildGroups({
-      logicalWorkspaces: [
-        makeLocalLogicalWorkspace({
-          id: "system-local",
-          repoKey: "/tmp/repo-a",
-          repoName: "repo-a",
-          kind: "worktree",
-          branch: "feature/issue-triage",
-          origin: { kind: "system", entrypoint: "desktop" },
-        }),
-      ],
-    });
-
-    expect(groups[0]?.items[0]?.createdByAutomation).toBe(false);
-  });
-
-  it("marks cloud system workspaces as automation-created", () => {
-    const groups = buildGroups({
-      logicalWorkspaces: [
-        makeCloudLogicalWorkspace({
-          id: "automation-cloud",
-          repoKey: "/tmp/repo-a",
-          repoName: "repo-a",
-          origin: { kind: "system", entrypoint: "cloud" },
-        }),
-      ],
-    });
-
-    expect(groups[0]?.items[0]?.createdByAutomation).toBe(true);
-  });
-
-  it("follows the effective materialization for dual local/cloud rows", () => {
-    const localWorkspace = makeWorkspace({
-      id: "dual-local-materialization",
-      repoName: "repo-a",
-      sourceRoot: "/tmp/repo-a",
-      kind: "worktree",
-      branch: "automation/issue-triage-fd253849c4fe4ec9",
-      origin: { kind: "system", entrypoint: "desktop" },
-    });
-    const cloudWorkspace = makeCloudWorkspace({
-      id: "dual-cloud-materialization",
-      repoName: "repo-a",
-      branch: "feature/issue-triage",
-      origin: { kind: "human", entrypoint: "cloud" },
-    });
-    const base = makeLocalLogicalWorkspace({
-      id: "dual-local-effective",
-      repoKey: "/tmp/repo-a",
-      repoName: "repo-a",
-      kind: "worktree",
-      branch: "automation/issue-triage-fd253849c4fe4ec9",
-      origin: { kind: "system", entrypoint: "desktop" },
-    });
-    const dualLocalEffective: LogicalWorkspace = {
-      ...base,
-      localWorkspace,
-      cloudWorkspace,
-      effectiveOwner: "local",
-    };
-    const dualCloudEffective: LogicalWorkspace = {
-      ...dualLocalEffective,
-      id: "dual-cloud-effective",
-      effectiveOwner: "cloud",
-      preferredMaterializationId: `cloud:${cloudWorkspace.id}`,
-      lifecycle: "cloud_active",
-    };
-
-    const groups = buildGroups({
-      logicalWorkspaces: [dualLocalEffective, dualCloudEffective],
-    });
-
-    expect(groups[0]?.items.find((item) => item.id === "dual-local-effective")?.createdByAutomation)
-      .toBe(true);
-    expect(groups[0]?.items.find((item) => item.id === "dual-cloud-effective")?.createdByAutomation)
-      .toBe(false);
-  });
 });

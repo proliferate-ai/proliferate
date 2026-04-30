@@ -2976,6 +2976,31 @@ export interface components {
             readyAgentKinds: string[];
             credentialFreshness: components["schemas"]["WorkspaceCredentialFreshness"];
         };
+        /**
+         * WorkspaceCreatorContext
+         * @description Display/navigation provenance for workspace creators.
+         */
+        WorkspaceCreatorContext: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "human" | "automation" | "agent";
+            /** Automationid */
+            automationId?: string | null;
+            /** Automationrunid */
+            automationRunId?: string | null;
+            /** Sourcesessionid */
+            sourceSessionId?: string | null;
+            /** Sourcesessionworkspaceid */
+            sourceSessionWorkspaceId?: string | null;
+            /** Sessionlinkid */
+            sessionLinkId?: string | null;
+            /** Sourceworkspaceid */
+            sourceWorkspaceId?: string | null;
+            /** Label */
+            label?: string | null;
+        };
         /** WorkspaceCredentialFreshness */
         WorkspaceCredentialFreshness: {
             /**
@@ -3038,6 +3063,7 @@ export interface components {
             /** Repofileslastfailedpath */
             repoFilesLastFailedPath?: string | null;
             origin?: components["schemas"]["OriginContext"] | null;
+            creatorContext?: components["schemas"]["WorkspaceCreatorContext"] | null;
             /** Allowedagentkinds */
             allowedAgentKinds: string[];
             /** Readyagentkinds */
@@ -3121,6 +3147,7 @@ export interface components {
             /** Repofileslastfailedpath */
             repoFilesLastFailedPath?: string | null;
             origin?: components["schemas"]["OriginContext"] | null;
+            creatorContext?: components["schemas"]["WorkspaceCreatorContext"] | null;
         };
     };
     responses: never;

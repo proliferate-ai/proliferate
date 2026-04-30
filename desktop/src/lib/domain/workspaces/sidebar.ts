@@ -1,9 +1,7 @@
 import type { GitStatusSnapshot, RepoRoot, Workspace } from "@anyharness/sdk";
-import type { SessionViewState } from "@/lib/domain/sessions/activity";
-import { resolveWorkspaceExecutionViewState } from "@/lib/domain/sessions/activity";
+import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
 import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud-workspace-creation";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
-import { isCloudWorkspacePending } from "@/lib/domain/workspaces/cloud-workspace-status";
 import type {
   CloudWorkspaceStatus,
   CloudWorkspaceSummary,
@@ -22,6 +20,28 @@ import {
   localWorkspaceGroupKey,
   repoRootGroupKey,
 } from "./collections";
+import {
+  activeWorkspaceActivity,
+  detailIndicatorsForWorkspace,
+  sidebarStatusIndicatorFromActivity,
+  sidebarWorkspaceVariantForLogicalWorkspace,
+} from "./sidebar-indicators";
+import type {
+  SidebarDetailIndicator,
+  SidebarStatusIndicator,
+  SidebarWorkspaceVariant,
+} from "./sidebar-indicators";
+
+export {
+  sidebarStatusIndicatorFromActivity,
+  sidebarWorkspaceVariantForLogicalWorkspace,
+} from "./sidebar-indicators";
+export type {
+  SidebarDetailIndicator,
+  SidebarIndicatorAction,
+  SidebarStatusIndicator,
+  SidebarWorkspaceVariant,
+} from "./sidebar-indicators";
 
 export interface LocalSidebarWorkspaceEntry {
   source: "local";
@@ -55,7 +75,6 @@ export interface SidebarEntryGitMetadata {
   branchName: string | null;
 }
 
-export type SidebarWorkspaceVariant = "local" | "worktree" | "cloud";
 export type SidebarEmptyState = "noWorkspaces" | "filteredOut" | null;
 
 export const DEFAULT_SIDEBAR_WORKSPACE_TYPES: SidebarWorkspaceVariant[] = [
@@ -86,9 +105,9 @@ export interface SidebarWorkspaceItemState {
   subtitle: string | null;
   active: boolean;
   archived: boolean;
-  activity: SessionViewState;
   variant: SidebarWorkspaceVariant;
-  createdByAutomation: boolean;
+  statusIndicator: SidebarStatusIndicator | null;
+  detailIndicators: SidebarDetailIndicator[];
   cloudStatus: CloudWorkspaceStatus | null;
   lastInteracted: string | null;
   unread: boolean;
@@ -268,50 +287,6 @@ export function toggleSidebarWorkspaceTypeSelection(
   return normalizeSidebarWorkspaceTypes([...normalized, type]);
 }
 
-export function sidebarWorkspaceVariantForLogicalWorkspace(
-  workspace: LogicalWorkspace,
-): SidebarWorkspaceVariant {
-  return workspace.effectiveOwner === "cloud"
-    ? "cloud"
-    : workspace.localWorkspace?.kind === "worktree"
-      ? "worktree"
-      : "local";
-}
-
-function isSystemOrigin(
-  origin: { kind: string; entrypoint: string } | null | undefined,
-  entrypoint: "desktop" | "cloud",
-): boolean {
-  return origin?.kind === "system" && origin.entrypoint === entrypoint;
-}
-
-function localWorkspaceCreatedByAutomation(workspace: Workspace): boolean {
-  const currentBranch = workspace.currentBranch?.trim();
-  const originalBranch = workspace.originalBranch?.trim();
-  return isSystemOrigin(workspace.origin, "desktop")
-    && (
-      currentBranch?.startsWith("automation/")
-      || originalBranch?.startsWith("automation/")
-      || false
-    );
-}
-
-function cloudWorkspaceCreatedByAutomation(workspace: CloudWorkspaceSummary): boolean {
-  return isSystemOrigin(workspace.origin, "cloud");
-}
-
-function logicalWorkspaceCreatedByAutomation(workspace: LogicalWorkspace): boolean {
-  if (workspace.effectiveOwner === "cloud") {
-    return workspace.cloudWorkspace
-      ? cloudWorkspaceCreatedByAutomation(workspace.cloudWorkspace)
-      : false;
-  }
-
-  return workspace.localWorkspace
-    ? localWorkspaceCreatedByAutomation(workspace.localWorkspace)
-    : false;
-}
-
 export function getEffectiveExpandedSidebarGroupKeys(args: {
   groups: SidebarGroupState[];
   explicitlyExpandedRepoKeys: ReadonlySet<string>;
@@ -369,7 +344,8 @@ export function buildSidebarGroupStates(args: {
   hiddenRepoRootIds: Set<string>;
   selectedLogicalWorkspaceId: string | null;
   selectedWorkspaceId: string | null;
-  workspaceActivities: Record<string, SessionViewState>;
+  workspaceActivities: Record<string, SidebarSessionActivityState>;
+  pendingPromptCounts?: Record<string, number>;
   gitStatus: GitStatusSnapshot | undefined;
   activeSessionTitle: string | null;
   lastViewedAt: Record<string, string>;
@@ -408,12 +384,6 @@ export function buildSidebarGroupStates(args: {
         const lastInteracted = args.workspaceLastInteracted[entry.id] ?? null;
         const preferredLocalWorkspace = entry.localWorkspace;
         const preferredCloudWorkspace = entry.cloudWorkspace;
-        const activity = preferredLocalWorkspace
-          ? args.workspaceActivities[preferredLocalWorkspace.id]
-            ?? resolveWorkspaceExecutionViewState(preferredLocalWorkspace.executionSummary ?? null)
-          : preferredCloudWorkspace && isCloudWorkspacePending(preferredCloudWorkspace.status)
-            ? "working"
-            : "idle";
         const variant = sidebarWorkspaceVariantForLogicalWorkspace(entry);
         const displayNameOverride = preferredLocalWorkspace?.displayName?.trim()
           || preferredCloudWorkspace?.displayName?.trim()
@@ -433,6 +403,13 @@ export function buildSidebarGroupStates(args: {
               workspace: preferredCloudWorkspace,
             })
             : entry.displayName;
+        const unread = isWorkspaceUnread({
+          isActive: active,
+          isArchived: archived,
+          lastInteracted,
+          lastViewedAt: args.lastViewedAt[entry.id],
+        });
+        const activity = activeWorkspaceActivity(entry, args.workspaceActivities);
 
         return {
           id: entry.id,
@@ -443,19 +420,19 @@ export function buildSidebarGroupStates(args: {
           subtitle: active ? args.activeSessionTitle : null,
           active,
           archived,
-          activity,
           variant,
-          createdByAutomation: logicalWorkspaceCreatedByAutomation(entry),
+          statusIndicator: sidebarStatusIndicatorFromActivity({
+            activity,
+            unread,
+            pendingPromptCount: args.pendingPromptCounts?.[entry.id] ?? 0,
+            errorAction: { kind: "open_workspace", workspaceId: entry.id },
+          }),
+          detailIndicators: detailIndicatorsForWorkspace(entry, variant),
           cloudStatus: preferredCloudWorkspace
             ? preferredCloudWorkspace.status as CloudWorkspaceStatus
             : null,
           lastInteracted,
-          unread: isWorkspaceUnread({
-            isActive: active,
-            isArchived: archived,
-            lastInteracted,
-            lastViewedAt: args.lastViewedAt[entry.id],
-          }),
+          unread,
         };
       });
       const visibleItems = items.filter((item) =>

@@ -9,6 +9,7 @@ export type WorkspaceExecutionSummary = components["schemas"]["WorkspaceExecutio
 export type OriginKind = components["schemas"]["OriginKind"];
 export type OriginEntrypoint = components["schemas"]["OriginEntrypoint"];
 export type OriginContext = components["schemas"]["OriginContext"];
+export type WorkspaceCreatorContext = components["schemas"]["WorkspaceCreatorContext"];
 export type Workspace = Omit<GeneratedWorkspace, "kind" | "repoRootId" | "surface"> & {
   kind: WorkspaceKind;
   repoRootId?: string;

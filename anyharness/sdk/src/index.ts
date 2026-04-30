@@ -100,6 +100,7 @@ export type {
   OriginKind,
   OriginEntrypoint,
   OriginContext,
+  WorkspaceCreatorContext,
   Workspace,
   ResolveWorkspaceResponse,
   WorkspaceSessionLaunchModel,

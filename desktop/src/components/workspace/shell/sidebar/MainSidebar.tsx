@@ -384,7 +384,7 @@ export function MainSidebar() {
               onCreateCloudWorkspace={actions.handleCreateCloudWorkspace}
               onOpenCloudRepoSettings={handleOpenCloudRepoSettings}
               onSelectWorkspace={actions.handleSelectWorkspace}
-              onOpenAutomations={actions.handleGoAutomations}
+              onIndicatorAction={actions.handleSidebarIndicatorAction}
               onArchiveWorkspace={archiveWorkspace}
               onUnarchiveWorkspace={unarchiveWorkspace}
               onRenameWorkspace={handleRenameWorkspace}

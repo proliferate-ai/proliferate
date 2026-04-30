@@ -14,6 +14,14 @@ export type SessionViewState =
   | "errored"
   | "closed";
 
+export type SidebarSessionActivityState =
+  | "iterating"
+  | "waiting_input"
+  | "waiting_plan"
+  | "error"
+  | "closed"
+  | "idle";
+
 interface SessionActivitySnapshot {
   status: SessionStatus | null;
   executionSummary?: SessionExecutionSummary | null;
@@ -175,6 +183,45 @@ export function resolveSessionViewState(
   }
 }
 
+export function resolveSessionSidebarActivityState(
+  slot: SessionActivitySnapshot | null | undefined,
+): SidebarSessionActivityState {
+  if (!slot) {
+    return "idle";
+  }
+
+  const pendingInteractions = pendingInteractionsForActivity(slot);
+  const hasPendingInput = pendingInteractions.some((interaction) =>
+    !isPlanOwnedPendingInteraction(interaction)
+  );
+  const hasPendingPlan = pendingInteractions.some(isPlanOwnedPendingInteraction);
+
+  if (slot.executionSummary?.phase === "errored" || slot.status === "errored") {
+    return "error";
+  }
+  if (hasPendingInput) {
+    return "waiting_input";
+  }
+  if (hasPendingPlan) {
+    return "waiting_plan";
+  }
+
+  switch (resolveSessionExecutionPhase(slot)) {
+    case "starting":
+    case "running":
+      return "iterating";
+    case "awaiting_interaction":
+      return "waiting_input";
+    case "errored":
+      return "error";
+    case "closed":
+      return "closed";
+    case "idle":
+    default:
+      return "idle";
+  }
+}
+
 export function shouldSkipColdIdleSessionStream(
   slot: SessionActivitySnapshot | null | undefined,
   allowColdIdleNoStream?: boolean,
@@ -197,6 +244,22 @@ export function resolveWorkspaceExecutionViewState(
       return "working";
     case "errored":
       return "errored";
+    case "idle":
+    default:
+      return "idle";
+  }
+}
+
+export function resolveWorkspaceExecutionSidebarActivityState(
+  summary: WorkspaceExecutionSummary | null | undefined,
+): SidebarSessionActivityState {
+  switch (summary?.phase) {
+    case "awaiting_interaction":
+      return "waiting_input";
+    case "running":
+      return "iterating";
+    case "errored":
+      return "error";
     case "idle":
     default:
       return "idle";
@@ -266,6 +329,29 @@ export function collectWorkspaceSessionViewStates(
   return states;
 }
 
+export function collectWorkspaceSidebarActivityStates(
+  sessionSlots: Record<string, WorkspaceSessionActivitySnapshot>,
+): Record<string, SidebarSessionActivityState> {
+  const states: Record<string, SidebarSessionActivityState> = {};
+
+  for (const slot of Object.values(sessionSlots)) {
+    if (!slot.workspaceId) {
+      continue;
+    }
+
+    const nextState = resolveSessionSidebarActivityState(slot);
+    const currentState = states[slot.workspaceId];
+    if (
+      !currentState
+      || sidebarSessionActivityPriority(nextState) > sidebarSessionActivityPriority(currentState)
+    ) {
+      states[slot.workspaceId] = nextState;
+    }
+  }
+
+  return states;
+}
+
 function sessionViewStatePriority(state: SessionViewState): number {
   switch (state) {
     case "needs_input":
@@ -273,6 +359,24 @@ function sessionViewStatePriority(state: SessionViewState): number {
     case "working":
       return 3;
     case "errored":
+      return 2;
+    case "closed":
+      return 1;
+    case "idle":
+    default:
+      return 0;
+  }
+}
+
+function sidebarSessionActivityPriority(state: SidebarSessionActivityState): number {
+  switch (state) {
+    case "error":
+      return 5;
+    case "waiting_input":
+      return 4;
+    case "waiting_plan":
+      return 3;
+    case "iterating":
       return 2;
     case "closed":
       return 1;

@@ -46,6 +46,31 @@ def test_workspace_summary_keeps_null_origin_for_legacy_rows() -> None:
     payload = workspace_summary_payload(_workspace(origin_json=None))
 
     assert payload.origin is None
+    assert payload.creator_context is None
+
+
+def test_workspace_summary_projects_creator_context_when_present() -> None:
+    payload = workspace_summary_payload(
+        _workspace(origin_json='{"kind":"system","entrypoint":"cloud"}'),
+        creator_context=workspace_models.WorkspaceCreatorContext(
+            kind="automation",
+            automation_id="automation-1",
+            automation_run_id="run-1",
+            label="Daily Check",
+        ),
+    )
+
+    assert payload.creator_context is not None
+    assert payload.creator_context.model_dump() == {
+        "kind": "automation",
+        "automation_id": "automation-1",
+        "automation_run_id": "run-1",
+        "source_session_id": None,
+        "source_session_workspace_id": None,
+        "session_link_id": None,
+        "source_workspace_id": None,
+        "label": "Daily Check",
+    }
 
 
 def test_workspace_summary_drops_malformed_origin(monkeypatch: pytest.MonkeyPatch) -> None:

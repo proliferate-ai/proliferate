@@ -99,6 +99,10 @@ pub(super) fn workspace_to_contract_with_summary(
             .origin
             .as_ref()
             .map(crate::origin::OriginContext::to_contract),
+        creator_context: record
+            .creator_context
+            .as_ref()
+            .map(crate::workspaces::creator_context::WorkspaceCreatorContext::to_contract),
         created_at: record.created_at,
         updated_at: record.updated_at,
     }

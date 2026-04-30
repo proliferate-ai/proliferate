@@ -1,25 +1,26 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import {
   CLOUD_SIDEBAR_STATUS_DEFINITIONS,
   type CloudSidebarStatus,
 } from "@/config/cloud-sidebar";
 import {
   Archive,
-  BrailleSweepBadge,
-  CircleAlert,
-  MessageSquare,
   Pencil,
-  RefreshCw,
 } from "@/components/ui/icons";
-import { IconButton } from "@/components/ui/IconButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import { Tooltip } from "@/components/ui/Tooltip";
-import type { SessionViewState } from "@/lib/domain/sessions/activity";
-import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar";
+import type {
+  SidebarDetailIndicator,
+  SidebarIndicatorAction,
+  SidebarStatusIndicator,
+  SidebarWorkspaceVariant,
+} from "@/lib/domain/workspaces/sidebar";
 import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/workspace-display";
+import {
+  SidebarDetailIndicatorsView,
+  SidebarStatusIndicatorView,
+} from "./SidebarIndicators";
 import { SidebarActionButton } from "./SidebarActionButton";
 import { SidebarRowSurface } from "./SidebarRowSurface";
-import { SidebarWorkspaceVariantIcon } from "./SidebarWorkspaceVariantIcon";
 import { WorkspaceRenamePopover } from "./WorkspaceRenamePopover";
 
 const CONTEXT_ROW =
@@ -40,15 +41,13 @@ interface WorkspaceItemProps {
   cloudStatus?: CloudSidebarStatus | null;
   active?: boolean;
   archived?: boolean;
-  activity?: SessionViewState;
-  createdByAutomation?: boolean;
+  statusIndicator?: SidebarStatusIndicator | null;
+  detailIndicators?: SidebarDetailIndicator[];
   lastInteracted?: string | null;
-  unread?: boolean;
-  pendingPromptCount?: number;
   onSelect?: () => void;
   onArchive?: () => void;
   onUnarchive?: () => void;
-  onOpenAutomations?: () => void;
+  onIndicatorAction?: (action: SidebarIndicatorAction) => void;
   /**
    * Persist a display name override. `null` clears it. Omit to disable the
    * Rename context menu item (e.g. for cloud entries).
@@ -65,15 +64,13 @@ export function WorkspaceItem({
   cloudStatus = null,
   active = false,
   archived = false,
-  activity = "idle",
-  createdByAutomation = false,
+  statusIndicator = null,
+  detailIndicators = [],
   lastInteracted,
-  unread = false,
-  pendingPromptCount = 0,
   onSelect,
   onArchive,
   onUnarchive,
-  onOpenAutomations,
+  onIndicatorAction,
   onRename,
 }: WorkspaceItemProps) {
   const hasArchiveAction = !!(onArchive || onUnarchive);
@@ -86,71 +83,6 @@ export function WorkspaceItem({
       ? CLOUD_SIDEBAR_STATUS_DEFINITIONS[cloudStatus]
       : null;
   const [renameOpen, setRenameOpen] = useState(false);
-
-  const statusSlot: { tooltip: string; element: ReactNode } | null =
-    activity === "working"
-      ? {
-        tooltip: "Working",
-        element: <BrailleSweepBadge className="text-sm text-muted-foreground" />,
-      }
-      : activity === "needs_input"
-        ? {
-          tooltip: "Needs input",
-          element: <BrailleSweepBadge className="text-sm text-special" />,
-        }
-        : activity === "errored"
-          ? {
-            tooltip: "Error",
-            element: <CircleAlert className="size-3 text-destructive" />,
-          }
-          : pendingPromptCount > 0
-            ? {
-              tooltip: pendingPromptCount === 1
-                ? "Queued Home prompt"
-                : `${pendingPromptCount} queued Home prompts`,
-              element: <MessageSquare className="size-3 text-special" />,
-            }
-            : unread
-            ? {
-              tooltip: "Unread",
-              element: <div className="size-1.5 rounded-full bg-unread" />,
-            }
-            : null;
-  const variantMetaIcon = (
-    <SidebarWorkspaceVariantIcon
-      variant={variant}
-      withTooltip
-      className={`size-3 ${
-        archived ? "text-sidebar-muted-foreground/40" : "text-sidebar-muted-foreground"
-      }`}
-    />
-  );
-  const automationMetaIcon = createdByAutomation ? (
-    <Tooltip content={onOpenAutomations ? "Created by automation · Open Automations" : "Created by automation"}>
-      {onOpenAutomations ? (
-        <IconButton
-          tone="sidebar"
-          size="sm"
-          title="Open Automations"
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpenAutomations();
-          }}
-          className={`!size-4 !px-0 hover:bg-transparent ${
-            archived ? "text-sidebar-muted-foreground/40" : "text-sidebar-muted-foreground"
-          }`}
-        >
-          <RefreshCw className="size-3" />
-        </IconButton>
-      ) : (
-        <RefreshCw
-          className={`size-3 ${
-            archived ? "text-sidebar-muted-foreground/40" : "text-sidebar-muted-foreground"
-          }`}
-        />
-      )}
-    </Tooltip>
-  ) : null;
 
   const row = (
     <SidebarRowSurface
@@ -178,11 +110,10 @@ export function WorkspaceItem({
       {/* Leading status slot. Idle variants render with the right-side metadata
           instead so the icon sits next to the relative-time / git summary. */}
       <div className="flex w-4 shrink-0 items-center justify-center">
-        {statusSlot && (
-          <Tooltip content={statusSlot.tooltip} className="inline-flex shrink-0 items-center justify-center">
-            {statusSlot.element}
-          </Tooltip>
-        )}
+        <SidebarStatusIndicatorView
+          indicator={statusIndicator}
+          onAction={onIndicatorAction}
+        />
       </div>
 
       {/* Title */}
@@ -221,8 +152,11 @@ export function WorkspaceItem({
               : ""
           }`}
         >
-          {automationMetaIcon}
-          {variantMetaIcon}
+          <SidebarDetailIndicatorsView
+            indicators={detailIndicators}
+            archived={archived}
+            onAction={onIndicatorAction}
+          />
         </div>
       </div>
     </SidebarRowSurface>

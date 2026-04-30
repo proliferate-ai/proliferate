@@ -6,6 +6,7 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/use-create-cloud-workspace";
 import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud-workspace-creation";
+import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar";
 import { useWorkspaceEntryActions } from "./use-workspace-entry-actions";
 import { useWorkspaceSelection } from "./selection/use-workspace-selection";
 import { useAddRepo } from "./use-add-repo";
@@ -44,7 +45,7 @@ export function useWorkspaceSidebarActions() {
     }
   }, [location.pathname, navigate]);
 
-  const goToTopLevelRoute = useCallback((path: "/" | "/powers" | "/automations") => {
+  const goToTopLevelRoute = useCallback((path: string) => {
     if (mobility.selectionLocked) {
       showToast("Finish the current workspace move before leaving this workspace.");
       return;
@@ -97,6 +98,42 @@ export function useWorkspaceSidebarActions() {
       showToast(`Failed to select workspace: ${message}`);
     });
   }, [
+    mobility.selectedLogicalWorkspaceId,
+    mobility.selectionLocked,
+    navigateToWorkspaceShell,
+    selectWorkspace,
+    showToast,
+  ]);
+
+  const handleSidebarIndicatorAction = useCallback((action: SidebarIndicatorAction) => {
+    switch (action.kind) {
+      case "open_workspace":
+        handleSelectWorkspace(action.workspaceId);
+        return;
+      case "open_automations":
+        goToTopLevelRoute(action.automationId
+          ? `/automations/${encodeURIComponent(action.automationId)}`
+          : "/automations");
+        return;
+      case "open_source_session": {
+        if (mobility.selectionLocked && action.workspaceId !== mobility.selectedLogicalWorkspaceId) {
+          showToast("Finish the current workspace move before switching workspaces.");
+          return;
+        }
+
+        navigateToWorkspaceShell();
+        void selectWorkspace(action.workspaceId, {
+          force: true,
+          initialActiveSessionId: action.sessionId,
+        }).catch((error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          showToast(`Failed to open source session: ${message}`);
+        });
+      }
+    }
+  }, [
+    goToTopLevelRoute,
+    handleSelectWorkspace,
     mobility.selectedLogicalWorkspaceId,
     mobility.selectionLocked,
     navigateToWorkspaceShell,
@@ -188,6 +225,7 @@ export function useWorkspaceSidebarActions() {
     handleGoHome,
     handleGoPowers,
     handleGoAutomations,
+    handleSidebarIndicatorAction,
     handleSelectWorkspace,
     handleCreateLocalWorkspace,
     handleCreateWorktreeWorkspace,

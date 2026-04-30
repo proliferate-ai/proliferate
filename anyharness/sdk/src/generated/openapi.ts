@@ -1520,11 +1520,13 @@ export interface components {
             workspaceId: string;
         };
         CreateWorkspaceRequest: {
+            creatorContext?: null | components["schemas"]["WorkspaceCreatorContext"];
             origin?: null | components["schemas"]["OriginContext"];
             path: string;
         };
         CreateWorktreeWorkspaceRequest: {
             baseBranch?: string | null;
+            creatorContext?: null | components["schemas"]["WorkspaceCreatorContext"];
             newBranchName: string;
             origin?: null | components["schemas"]["OriginContext"];
             repoRootId: string;
@@ -2475,6 +2477,7 @@ export interface components {
             path: string;
         };
         ResolveWorkspaceFromPathRequest: {
+            creatorContext?: null | components["schemas"]["WorkspaceCreatorContext"];
             origin?: null | components["schemas"]["OriginContext"];
             path: string;
         };
@@ -2884,6 +2887,7 @@ export interface components {
         Workspace: {
             cleanupState: components["schemas"]["WorkspaceCleanupState"];
             createdAt: string;
+            creatorContext?: null | components["schemas"]["WorkspaceCreatorContext"];
             currentBranch?: string | null;
             displayName?: string | null;
             executionSummary?: null | components["schemas"]["WorkspaceExecutionSummary"];
@@ -2899,6 +2903,25 @@ export interface components {
         };
         /** @enum {string} */
         WorkspaceCleanupState: "none" | "pending" | "complete" | "failed";
+        WorkspaceCreatorContext: {
+            /** @enum {string} */
+            kind: "human";
+            label?: string | null;
+        } | {
+            automationId?: string | null;
+            automationRunId?: string | null;
+            /** @enum {string} */
+            kind: "automation";
+            label?: string | null;
+        } | {
+            /** @enum {string} */
+            kind: "agent";
+            label?: string | null;
+            sessionLinkId?: string | null;
+            sourceSessionId: string;
+            sourceSessionWorkspaceId?: string | null;
+            sourceWorkspaceId?: string | null;
+        };
         /** @enum {string} */
         WorkspaceExecutionPhase: "running" | "awaiting_interaction" | "idle" | "errored";
         WorkspaceExecutionSummary: {

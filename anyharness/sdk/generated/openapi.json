@@ -5139,6 +5139,16 @@
           "path"
         ],
         "properties": {
+          "creatorContext": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceCreatorContext"
+              }
+            ]
+          },
           "origin": {
             "oneOf": [
               {
@@ -5166,6 +5176,16 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "creatorContext": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceCreatorContext"
+              }
             ]
           },
           "newBranchName": {
@@ -9138,6 +9158,16 @@
           "path"
         ],
         "properties": {
+          "creatorContext": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceCreatorContext"
+              }
+            ]
+          },
           "origin": {
             "oneOf": [
               {
@@ -10993,6 +11023,16 @@
           "createdAt": {
             "type": "string"
           },
+          "creatorContext": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceCreatorContext"
+              }
+            ]
+          },
           "currentBranch": {
             "type": [
               "string",
@@ -11061,6 +11101,104 @@
           "pending",
           "complete",
           "failed"
+        ]
+      },
+      "WorkspaceCreatorContext": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "human"
+                ]
+              },
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "automationId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "automationRunId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "automation"
+                ]
+              },
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "sourceSessionId",
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "agent"
+                ]
+              },
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sessionLinkId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSessionId": {
+                "type": "string"
+              },
+              "sourceSessionWorkspaceId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceWorkspaceId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
         ]
       },
       "WorkspaceExecutionPhase": {

@@ -1,20 +1,19 @@
 import type { CoworkThread } from "@anyharness/sdk";
 import {
-  BrailleSweepBadge,
   ChevronDown,
   ChevronRight,
-  CircleAlert,
 } from "@/components/ui/icons";
-import { Tooltip } from "@/components/ui/Tooltip";
+import { SidebarStatusIndicatorView } from "@/components/workspace/shell/sidebar/SidebarIndicators";
 import { SidebarRowSurface } from "@/components/workspace/shell/sidebar/SidebarRowSurface";
-import type { SessionViewState } from "@/lib/domain/sessions/activity";
+import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
+import { sidebarStatusIndicatorFromActivity } from "@/lib/domain/workspaces/sidebar";
 import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/workspace-display";
 import { coworkThreadTitle } from "@/lib/domain/cowork/threads";
 
 interface CoworkThreadRowProps {
   thread: CoworkThread;
   active: boolean;
-  activity?: SessionViewState;
+  activity?: SidebarSessionActivityState;
   canExpand: boolean;
   expanded: boolean;
   onToggleExpanded: () => void;
@@ -30,22 +29,7 @@ export function CoworkThreadRow({
   onToggleExpanded,
   onSelect,
 }: CoworkThreadRowProps) {
-  const activityIndicator = activity === "working"
-    ? {
-      tooltip: "Working",
-      element: <BrailleSweepBadge className="text-sm text-muted-foreground" />,
-    }
-    : activity === "needs_input"
-      ? {
-        tooltip: "Needs input",
-        element: <BrailleSweepBadge className="text-sm text-special" />,
-      }
-      : activity === "errored"
-        ? {
-          tooltip: "Error",
-          element: <CircleAlert className="size-3 text-destructive" />,
-        }
-        : null;
+  const activityIndicator = sidebarStatusIndicatorFromActivity({ activity });
 
   return (
     <SidebarRowSurface
@@ -55,11 +39,7 @@ export function CoworkThreadRow({
     >
       <div className="flex w-full items-center gap-1.5 text-sm leading-4">
         <div className="flex w-4 shrink-0 items-center justify-center">
-          {activityIndicator && (
-            <Tooltip content={activityIndicator.tooltip} className="inline-flex shrink-0 items-center justify-center">
-              {activityIndicator.element}
-            </Tooltip>
-          )}
+          <SidebarStatusIndicatorView indicator={activityIndicator} />
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-2">

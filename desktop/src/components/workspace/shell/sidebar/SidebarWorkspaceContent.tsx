@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import {
   resolveCloudRepoActionState,
   type CloudWorkspaceRepoTarget,
@@ -6,9 +5,9 @@ import {
 import type {
   SidebarEmptyState,
   SidebarGroupState,
+  SidebarIndicatorAction,
 } from "@/lib/domain/workspaces/sidebar";
 import { BrailleSweepBadge } from "@/components/ui/icons";
-import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 import { RepoGroup } from "./RepoGroup";
 import { SidebarShowToggleRow } from "./SidebarShowToggleRow";
 import { WorkspaceItem } from "./WorkspaceItem";
@@ -45,7 +44,7 @@ interface SidebarWorkspaceContentProps {
   ) => void;
   onOpenCloudRepoSettings: (target: CloudWorkspaceRepoTarget) => void;
   onSelectWorkspace: (workspaceId: string) => void;
-  onOpenAutomations: () => void;
+  onIndicatorAction: (action: SidebarIndicatorAction) => void;
   onArchiveWorkspace: (workspaceId: string) => void;
   onUnarchiveWorkspace: (workspaceId: string) => void;
   onRenameWorkspace: (
@@ -83,22 +82,13 @@ export function SidebarWorkspaceContent({
   onCreateCloudWorkspace,
   onOpenCloudRepoSettings,
   onSelectWorkspace,
-  onOpenAutomations,
+  onIndicatorAction,
   onArchiveWorkspace,
   onUnarchiveWorkspace,
   onRenameWorkspace,
   onRemoveRepo,
   onOpenRepoSettings,
 }: SidebarWorkspaceContentProps) {
-  const deferredLaunchesById = useDeferredHomeLaunchStore((state) => state.launches);
-  const deferredPromptCountByWorkspace = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const launch of Object.values(deferredLaunchesById)) {
-      counts.set(launch.workspaceId, (counts.get(launch.workspaceId) ?? 0) + 1);
-    }
-    return counts;
-  }, [deferredLaunchesById]);
-
   if (isLoading && emptyState === "noWorkspaces") {
     return <SidebarLoadingState />;
   }
@@ -199,15 +189,13 @@ export function SidebarWorkspaceContent({
                 subtitle={item.subtitle}
                 active={item.active}
                 archived={item.archived}
-                activity={item.activity}
                 variant={item.variant}
-                createdByAutomation={item.createdByAutomation}
+                statusIndicator={item.statusIndicator}
+                detailIndicators={item.detailIndicators}
                 cloudStatus={item.cloudStatus}
                 lastInteracted={item.lastInteracted}
-                unread={item.unread}
-                pendingPromptCount={deferredPromptCountByWorkspace.get(item.id) ?? 0}
                 onSelect={() => onSelectWorkspace(item.id)}
-                onOpenAutomations={onOpenAutomations}
+                onIndicatorAction={onIndicatorAction}
                 onArchive={item.archived ? undefined : () => onArchiveWorkspace(item.id)}
                 onUnarchive={item.archived ? () => onUnarchiveWorkspace(item.id) : undefined}
                 onRename={

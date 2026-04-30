@@ -4,7 +4,7 @@ import { PopoverButton } from "@/components/ui/PopoverButton";
 import { SessionTitleRenamePopover } from "@/components/workspace/shell/SessionTitleRenamePopover";
 import { useCoworkManagedWorkspaces } from "@/hooks/cowork/use-cowork-managed-workspaces";
 import { useCoworkSessionActions } from "@/hooks/cowork/use-cowork-session-actions";
-import type { SessionViewState } from "@/lib/domain/sessions/activity";
+import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
 import { coworkThreadTitle } from "@/lib/domain/cowork/threads";
 import { CoworkManagedWorkspaceList } from "./CoworkManagedWorkspaceList";
 import { CoworkSessionActionsMenu } from "./CoworkSessionActionsMenu";
@@ -13,7 +13,7 @@ import { CoworkThreadRow } from "./CoworkThreadRow";
 interface CoworkThreadItemProps {
   thread: CoworkThread;
   active: boolean;
-  activity?: SessionViewState;
+  activity?: SidebarSessionActivityState;
   expanded: boolean;
   onToggleExpanded: () => void;
   onSelect: () => void;

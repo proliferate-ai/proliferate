@@ -1,4 +1,5 @@
 use crate::origin::OriginContext;
+use crate::workspaces::creator_context::WorkspaceCreatorContext;
 
 #[derive(Debug, Clone)]
 pub struct WorkspaceRecord {
@@ -16,6 +17,7 @@ pub struct WorkspaceRecord {
     pub current_branch: Option<String>,
     pub display_name: Option<String>,
     pub origin: Option<OriginContext>,
+    pub creator_context: Option<WorkspaceCreatorContext>,
     pub lifecycle_state: String,
     pub cleanup_state: String,
     pub created_at: String,

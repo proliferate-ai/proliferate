@@ -1,4 +1,5 @@
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
+import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
 import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
 import {
@@ -17,6 +18,7 @@ export function makeWorkspace(args: {
   branch?: string;
   displayName?: string | null;
   origin?: Workspace["origin"];
+  creatorContext?: Workspace["creatorContext"];
   updatedAt?: string;
 }): Workspace {
   const {
@@ -27,6 +29,7 @@ export function makeWorkspace(args: {
     branch = kind === "worktree" ? `feature/${id}` : "main",
     displayName = null,
     origin = null,
+    creatorContext = null,
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
 
@@ -45,6 +48,7 @@ export function makeWorkspace(args: {
     currentBranch: branch,
     displayName,
     origin,
+    creatorContext,
     executionSummary: null,
     lifecycleState: "active",
     cleanupState: "none",
@@ -87,6 +91,8 @@ export function makeCloudWorkspace(args: {
   branch?: string;
   displayName?: string | null;
   origin?: CloudWorkspaceSummary["origin"];
+  creatorContext?: CloudWorkspaceSummary["creatorContext"];
+  status?: CloudWorkspaceSummary["status"];
   updatedAt?: string;
 }): CloudWorkspaceSummary {
   const {
@@ -95,6 +101,8 @@ export function makeCloudWorkspace(args: {
     branch = "main",
     displayName = null,
     origin = null,
+    creatorContext = null,
+    status = "ready",
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
 
@@ -102,6 +110,7 @@ export function makeCloudWorkspace(args: {
     id,
     displayName,
     origin,
+    creatorContext,
     repo: {
       provider: "github",
       owner: "proliferate-ai",
@@ -109,8 +118,8 @@ export function makeCloudWorkspace(args: {
       branch,
       baseBranch: "main",
     },
-    status: "ready",
-    workspaceStatus: "ready",
+    status,
+    workspaceStatus: status,
     runtime: {
       environmentId: null,
       status: "running",
@@ -139,6 +148,7 @@ export function makeLocalLogicalWorkspace(args: {
   kind?: Workspace["kind"];
   branch?: string;
   origin?: Workspace["origin"];
+  creatorContext?: Workspace["creatorContext"];
   updatedAt?: string;
 }): LogicalWorkspace {
   const {
@@ -148,6 +158,7 @@ export function makeLocalLogicalWorkspace(args: {
     kind = "local",
     branch,
     origin,
+    creatorContext,
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
   const localWorkspace = makeWorkspace({
@@ -157,6 +168,7 @@ export function makeLocalLogicalWorkspace(args: {
     kind,
     branch,
     origin,
+    creatorContext,
     updatedAt,
   });
 
@@ -186,6 +198,7 @@ export function makeCloudLogicalWorkspace(args: {
   repoName: string;
   branch?: string;
   origin?: CloudWorkspaceSummary["origin"];
+  creatorContext?: CloudWorkspaceSummary["creatorContext"];
   updatedAt?: string;
 }): LogicalWorkspace {
   const {
@@ -194,6 +207,7 @@ export function makeCloudLogicalWorkspace(args: {
     repoName,
     branch = "main",
     origin,
+    creatorContext,
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
   const cloudWorkspace = makeCloudWorkspace({
@@ -201,6 +215,7 @@ export function makeCloudLogicalWorkspace(args: {
     repoName,
     branch,
     origin,
+    creatorContext,
     updatedAt,
   });
 
@@ -232,6 +247,10 @@ export function buildGroups(args: {
   archivedIds?: string[];
   hiddenRepoRootIds?: string[];
   selectedLogicalWorkspaceId?: string | null;
+  workspaceActivities?: Record<string, SidebarSessionActivityState>;
+  pendingPromptCounts?: Record<string, number>;
+  lastViewedAt?: Record<string, string>;
+  workspaceLastInteracted?: Record<string, string>;
 }) {
   return buildSidebarGroupStates({
     repoRoots: args.repoRoots ?? [],
@@ -242,10 +261,11 @@ export function buildGroups(args: {
     hiddenRepoRootIds: new Set(args.hiddenRepoRootIds ?? []),
     selectedLogicalWorkspaceId: args.selectedLogicalWorkspaceId ?? null,
     selectedWorkspaceId: null,
-    workspaceActivities: {},
+    workspaceActivities: args.workspaceActivities ?? {},
+    pendingPromptCounts: args.pendingPromptCounts,
     gitStatus: undefined,
     activeSessionTitle: null,
-    lastViewedAt: {},
-    workspaceLastInteracted: {},
+    lastViewedAt: args.lastViewedAt ?? {},
+    workspaceLastInteracted: args.workspaceLastInteracted ?? {},
   });
 }

@@ -37,6 +37,7 @@ use crate::sessions::runtime::{CreateAndStartSessionError, SendPromptOutcome, Se
 use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
 use crate::sessions::service::SessionService;
 use crate::sessions::store::SessionStore;
+use crate::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::runtime::WorkspaceRuntime;
 
@@ -532,6 +533,7 @@ impl CoworkRuntime {
             None,
             "cowork",
             OriginContext::cowork(),
+            None,
         )?;
         tracing::info!(
             thread_id = %thread_id,
@@ -784,7 +786,8 @@ impl CoworkRuntime {
         parent_session_id: &str,
         input: CreateCodingWorkspaceInput,
     ) -> Result<CreateCodingWorkspaceResult, CoworkDelegationError> {
-        self.delegation_service
+        let parent_thread = self
+            .delegation_service
             .validate_parent_can_delegate(parent_session_id)?;
         let source_workspace = self
             .delegation_service
@@ -805,18 +808,27 @@ impl CoworkRuntime {
             .or(source_workspace.current_branch.as_deref())
             .unwrap_or("main")
             .to_string();
-        let label = normalize_optional_text(input.label);
+        let requested_label = normalize_optional_text(input.label);
         let name_plan = allocate_coding_workspace_name(
             &repo_root.path,
             &self.runtime_home,
-            label.as_deref(),
+            requested_label.as_deref(),
             input.workspace_name.as_deref(),
             input.branch_name.as_deref(),
         )?;
+        let label =
+            requested_label.or_else(|| Some(coding_workspace_label(&name_plan.workspace_name)));
         if let Some(parent) = name_plan.target_path.parent() {
             fs::create_dir_all(parent).map_err(anyhow::Error::from)?;
         }
         let target_path_string = name_plan.target_path.display().to_string();
+        let creator_context = WorkspaceCreatorContext::Agent {
+            source_session_id: parent_session_id.to_string(),
+            source_session_workspace_id: Some(parent_thread.workspace_id.clone()),
+            session_link_id: None,
+            source_workspace_id: Some(source_workspace.id.clone()),
+            label: label.clone(),
+        };
 
         let worktree = self.workspace_runtime.create_worktree_with_surface(
             &repo_root_id,
@@ -826,8 +838,8 @@ impl CoworkRuntime {
             None,
             "standard",
             OriginContext::cowork(),
+            Some(creator_context),
         )?;
-        let label = label.or_else(|| Some(coding_workspace_label(&name_plan.workspace_name)));
         let managed_workspace = CoworkManagedWorkspaceRecord {
             id: Uuid::new_v4().to_string(),
             parent_session_id: parent_session_id.to_string(),

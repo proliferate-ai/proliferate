@@ -68,6 +68,22 @@ class OriginContext(BaseModel):
     entrypoint: Literal["desktop", "cloud", "local_runtime", "cowork"]
 
 
+class WorkspaceCreatorContext(BaseModel):
+    """Display/navigation provenance for workspace creators."""
+
+    kind: Literal["human", "automation", "agent"]
+    automation_id: str | None = Field(default=None, serialization_alias="automationId")
+    automation_run_id: str | None = Field(default=None, serialization_alias="automationRunId")
+    source_session_id: str | None = Field(default=None, serialization_alias="sourceSessionId")
+    source_session_workspace_id: str | None = Field(
+        default=None,
+        serialization_alias="sourceSessionWorkspaceId",
+    )
+    session_link_id: str | None = Field(default=None, serialization_alias="sessionLinkId")
+    source_workspace_id: str | None = Field(default=None, serialization_alias="sourceWorkspaceId")
+    label: str | None = None
+
+
 class WorkspaceSummary(BaseModel):
     id: str
     display_name: str | None = Field(serialization_alias="displayName")
@@ -93,6 +109,10 @@ class WorkspaceSummary(BaseModel):
         serialization_alias="repoFilesLastFailedPath",
     )
     origin: OriginContext | None = None
+    creator_context: WorkspaceCreatorContext | None = Field(
+        default=None,
+        serialization_alias="creatorContext",
+    )
 
 
 class WorkspaceDetail(WorkspaceSummary):
@@ -195,6 +215,7 @@ def workspace_summary_payload(
     credential_freshness: CredentialFreshnessSnapshot | None = None,
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,
+    creator_context: WorkspaceCreatorContext | None = None,
 ) -> WorkspaceSummary:
     runtime_status = (
         runtime_environment.status
@@ -239,6 +260,7 @@ def workspace_summary_payload(
         post_ready_completed_at=_to_iso(workspace.repo_post_ready_completed_at),
         repo_files_last_failed_path=workspace.repo_files_last_failed_path,
         origin=_origin_payload(workspace),
+        creator_context=creator_context,
     )
 
 
@@ -250,6 +272,7 @@ def workspace_detail_payload(
     credential_freshness: CredentialFreshnessSnapshot | None = None,
     action_block_kind: str | None = None,
     action_block_reason: str | None = None,
+    creator_context: WorkspaceCreatorContext | None = None,
 ) -> WorkspaceDetail:
     summary = workspace_summary_payload(
         workspace,
@@ -257,6 +280,7 @@ def workspace_detail_payload(
         credential_freshness=credential_freshness,
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
+        creator_context=creator_context,
     )
     return WorkspaceDetail(
         **summary.model_dump(),
