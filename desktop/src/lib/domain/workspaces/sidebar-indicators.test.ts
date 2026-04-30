@@ -350,6 +350,26 @@ describe("sidebar indicators", () => {
     expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("iterating");
   });
 
+  it("uses running counts from mixed workspace summaries when mounted local activity is idle", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "mixed-running-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          executionSummary: workspaceExecutionSummary("awaiting_interaction", {
+            runningCount: 1,
+          }),
+        }),
+      ],
+      workspaceActivities: {
+        "mixed-running-local-materialization": "idle",
+      },
+    });
+
+    expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("iterating");
+  });
+
   it("keeps mounted waiting input when the local workspace summary is running", () => {
     const groups = buildGroups({
       logicalWorkspaces: [
