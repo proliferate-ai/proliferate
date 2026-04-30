@@ -17,7 +17,7 @@ import {
 } from "@/platform/tauri/shell";
 import {
   Play,
-  SplitPanelRight,
+  SplitPanel,
 } from "@/components/ui/icons";
 import type { GitStatusSnapshot, Workspace } from "@anyharness/sdk";
 import type { CurrentPullRequestResponse } from "@anyharness/sdk";
@@ -145,12 +145,12 @@ export function GlobalHeader({
           className="h-7 px-1.5 text-xs rounded-md"
         >
           {hasStats && (
-            <span className="flex items-center gap-1 mr-1 text-xs tabular-nums">
+            <span className="mr-1 flex items-center gap-1 text-xs tabular-nums">
               <span className="text-git-green">+{additions}</span>
               <span className="text-git-red">-{deletions}</span>
             </span>
           )}
-          <SplitPanelRight className="size-3.5 text-muted-foreground" />
+          <SplitPanel className="size-3.5 text-muted-foreground" />
         </Button>
       </div>
     </div>

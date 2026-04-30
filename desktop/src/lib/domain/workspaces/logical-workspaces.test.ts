@@ -6,21 +6,28 @@ import {
   replaceLogicalWorkspaceBranch,
   resolveLogicalWorkspaceMaterializationId,
 } from "@/lib/domain/workspaces/logical-workspaces";
-import { makeCloudWorkspace, makeWorkspace } from "@/lib/domain/workspaces/sidebar-test-fixtures";
+import {
+  buildGroups,
+  makeCloudWorkspace,
+  makeRepoRoot,
+  makeWorkspace,
+} from "@/lib/domain/workspaces/sidebar-test-fixtures";
 
 function makeMobilityWorkspace(args: {
+  id?: string;
   owner: "local" | "cloud";
   branch?: string;
   cloudWorkspaceId?: string | null;
 }): CloudMobilityWorkspaceSummary {
   const {
+    id = "mobility-1",
     owner,
     branch = "main",
     cloudWorkspaceId = "cloud-1",
   } = args;
 
   return {
-    id: "mobility-1",
+    id,
     displayName: branch,
     repo: {
       provider: "github",
@@ -75,6 +82,76 @@ describe("logical workspaces", () => {
     expect(logicalWorkspaces).toHaveLength(1);
     expect(logicalWorkspaces[0]?.preferredMaterializationId).toBeNull();
     expect(resolveLogicalWorkspaceMaterializationId(logicalWorkspaces[0]!)).toBeNull();
+  });
+
+  it("groups mobility-only placeholders by repository identity instead of branch identity", () => {
+    const logicalWorkspaces = buildLogicalWorkspaces({
+      localWorkspaces: [],
+      repoRoots: [],
+      cloudWorkspaces: [],
+      cloudMobilityWorkspaces: [
+        makeMobilityWorkspace({
+          id: "mobility-1",
+          owner: "cloud",
+          branch: "twilight",
+          cloudWorkspaceId: "cloud-1",
+        }),
+        makeMobilityWorkspace({
+          id: "mobility-2",
+          owner: "cloud",
+          branch: "ember",
+          cloudWorkspaceId: "cloud-2",
+        }),
+      ],
+      currentSelectionId: null,
+    });
+
+    expect(logicalWorkspaces).toHaveLength(2);
+    expect(logicalWorkspaces.map((workspace) => workspace.repoKey)).toEqual([
+      "github:proliferate-ai:proliferate",
+      "github:proliferate-ai:proliferate",
+    ]);
+    expect(logicalWorkspaces.map((workspace) => workspace.repoName)).toEqual([
+      "proliferate",
+      "proliferate",
+    ]);
+    expect(logicalWorkspaces.map((workspace) => workspace.branchKey).sort()).toEqual([
+      "ember",
+      "twilight",
+    ]);
+  });
+
+  it("merges a matching local repo root with mobility-only placeholders in one sidebar group", () => {
+    const logicalWorkspaces = buildLogicalWorkspaces({
+      localWorkspaces: [],
+      repoRoots: [makeRepoRoot({ sourceRoot: "/tmp/proliferate" })],
+      cloudWorkspaces: [],
+      cloudMobilityWorkspaces: [
+        makeMobilityWorkspace({
+          id: "mobility-1",
+          owner: "cloud",
+          branch: "twilight",
+          cloudWorkspaceId: "cloud-1",
+        }),
+        makeMobilityWorkspace({
+          id: "mobility-2",
+          owner: "cloud",
+          branch: "ember",
+          cloudWorkspaceId: "cloud-2",
+        }),
+      ],
+      currentSelectionId: null,
+    });
+
+    const groups = buildGroups({
+      repoRoots: [makeRepoRoot({ sourceRoot: "/tmp/proliferate" })],
+      logicalWorkspaces,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.sourceRoot).toBe("/tmp/proliferate");
+    expect(groups[0]?.name).toBe("proliferate");
+    expect(groups[0]?.items.map((item) => item.id)).toHaveLength(2);
   });
 
   it("honors a local mobility owner over a stale selected cloud materialization", () => {

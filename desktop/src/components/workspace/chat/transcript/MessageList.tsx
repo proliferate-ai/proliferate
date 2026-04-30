@@ -125,7 +125,7 @@ import type {
 } from "@anyharness/sdk";
 import type { SessionViewState } from "@/lib/domain/sessions/activity";
 
-const TURN_HORIZONTAL_PADDING = "px-0";
+const TURN_HORIZONTAL_PADDING = "px-7";
 const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
 const EMPTY_PROPOSED_PLAN_TOOL_CALL_IDS = new Set<string>();
 const ProposedPlanToolCallIdsContext = createContext<Set<string>>(

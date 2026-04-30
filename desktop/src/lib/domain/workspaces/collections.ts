@@ -10,7 +10,7 @@ function sortWorkspacesByUpdatedAtDesc<T extends Pick<Workspace, "updatedAt">>(w
 }
 
 export function cloudWorkspaceGroupKey(
-  workspace: Pick<CloudWorkspaceSummary, "repo">,
+  workspace: { repo: Pick<CloudWorkspaceSummary["repo"], "provider" | "owner" | "name"> },
 ): string {
   return `${workspace.repo.provider}:${workspace.repo.owner}:${workspace.repo.name}`;
 }
