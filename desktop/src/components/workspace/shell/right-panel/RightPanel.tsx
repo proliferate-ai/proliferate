@@ -4,10 +4,10 @@ import {
   useMemo,
   useRef,
   useState,
-  type DragEvent,
   type ReactNode,
   type ComponentType,
   type Dispatch,
+  type PointerEvent,
   type SetStateAction,
 } from "react";
 import type { TerminalRecord } from "@anyharness/sdk";
@@ -74,6 +74,16 @@ type HeaderEntry =
   | { kind: "tool"; key: RightPanelHeaderEntryKey; tool: RightPanelTool }
   | { kind: "terminal"; key: RightPanelHeaderEntryKey; terminal: TerminalRecord };
 
+interface HeaderDragSession {
+  key: RightPanelHeaderEntryKey;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  isDragging: boolean;
+}
+
+const HEADER_DRAG_THRESHOLD_PX = 4;
+
 interface RightPanelProps {
   workspaceId: string | null;
   isWorkspaceReady: boolean;
@@ -102,6 +112,9 @@ export function RightPanel({
   const [terminalFocusNonce, setTerminalFocusNonce] = useState(0);
   const [draggedHeaderKey, setDraggedHeaderKey] = useState<RightPanelHeaderEntryKey | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const headerEntryNodesRef = useRef(new Map<RightPanelHeaderEntryKey, HTMLDivElement>());
+  const headerDragSessionRef = useRef<HeaderDragSession | null>(null);
+  const suppressNextHeaderClickRef = useRef(false);
   const handledActivationTokenRef = useRef(0);
   const shouldRenderContent = isWorkspaceReady || shouldKeepContentVisible;
   const terminalsQuery = useTerminalsQuery({
@@ -431,6 +444,108 @@ export function RightPanel({
     [isCloudWorkspaceSelected, updateState],
   );
 
+  const registerHeaderEntryNode = useCallback((
+    entryKey: RightPanelHeaderEntryKey,
+    node: HTMLDivElement | null,
+  ) => {
+    if (node) {
+      headerEntryNodesRef.current.set(entryKey, node);
+      return;
+    }
+    headerEntryNodesRef.current.delete(entryKey);
+  }, []);
+
+  const resolveHeaderDropBeforeKey = useCallback((
+    clientX: number,
+    draggedKey: RightPanelHeaderEntryKey,
+  ): RightPanelHeaderEntryKey | null => {
+    const candidates = [...headerEntryNodesRef.current.entries()]
+      .filter(([entryKey]) => entryKey !== draggedKey)
+      .map(([entryKey, node]) => ({
+        entryKey,
+        rect: node.getBoundingClientRect(),
+      }))
+      .sort((left, right) => left.rect.left - right.rect.left);
+
+    const target = candidates.find(({ rect }) => clientX < rect.left + rect.width / 2);
+    return target?.entryKey ?? null;
+  }, []);
+
+  const suppressNextHeaderClick = useCallback(() => {
+    suppressNextHeaderClickRef.current = true;
+    window.setTimeout(() => {
+      suppressNextHeaderClickRef.current = false;
+    }, 50);
+  }, []);
+
+  const shouldSuppressHeaderClick = useCallback(() => {
+    if (!suppressNextHeaderClickRef.current) {
+      return false;
+    }
+    suppressNextHeaderClickRef.current = false;
+    return true;
+  }, []);
+
+  const handleHeaderPointerDown = useCallback((
+    entryKey: RightPanelHeaderEntryKey,
+    event: PointerEvent<HTMLDivElement>,
+  ) => {
+    if (event.button !== 0) {
+      return;
+    }
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest("[data-right-panel-tab-no-drag='true']")) {
+      return;
+    }
+
+    headerDragSessionRef.current = {
+      key: entryKey,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      isDragging: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, []);
+
+  const handleHeaderPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const session = headerDragSessionRef.current;
+    if (!session || session.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (!session.isDragging) {
+      const distance = Math.hypot(event.clientX - session.startX, event.clientY - session.startY);
+      if (distance < HEADER_DRAG_THRESHOLD_PX) {
+        return;
+      }
+      session.isDragging = true;
+      setDraggedHeaderKey(session.key);
+    }
+
+    event.preventDefault();
+    handleReorderHeaderEntry(
+      session.key,
+      resolveHeaderDropBeforeKey(event.clientX, session.key),
+    );
+  }, [handleReorderHeaderEntry, resolveHeaderDropBeforeKey]);
+
+  const finishHeaderPointerDrag = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const session = headerDragSessionRef.current;
+    if (!session || session.pointerId !== event.pointerId) {
+      return;
+    }
+    if (session.isDragging) {
+      event.preventDefault();
+      suppressNextHeaderClick();
+    }
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    headerDragSessionRef.current = null;
+    setDraggedHeaderKey(null);
+  }, [suppressNextHeaderClick]);
+
   const shouldMountTerminalPanel = shouldRenderContent
     && (activeTool === "terminal" || orderedTerminals.length > 0);
 
@@ -470,14 +585,12 @@ export function RightPanel({
                         <RightPanelHeaderEntryDropZone
                           key={entry.key}
                           entryKey={entry.key}
-                          draggedHeaderKey={draggedHeaderKey}
-                          onDropBefore={(beforeEntryKey) => {
-                            if (draggedHeaderKey && draggedHeaderKey !== beforeEntryKey) {
-                              handleReorderHeaderEntry(draggedHeaderKey, beforeEntryKey);
-                            }
-                            setDraggedHeaderKey(null);
-                          }}
-                          onClearDrag={() => setDraggedHeaderKey(null)}
+                          isDragging={draggedHeaderKey === entry.key}
+                          onRegister={registerHeaderEntryNode}
+                          onPointerDown={handleHeaderPointerDown}
+                          onPointerMove={handleHeaderPointerMove}
+                          onPointerUp={finishHeaderPointerDrag}
+                          onPointerCancel={finishHeaderPointerDrag}
                         >
                           <Tooltip
                             content={panelTool.label}
@@ -491,19 +604,18 @@ export function RightPanel({
                               aria-selected={isActive}
                               aria-controls={`tabpanel-workspace-right-panel-${entry.tool}`}
                               tabIndex={isActive ? 0 : -1}
-                              draggable
+                              data-reorderable="true"
                               data-stable="true"
                               data-active={isActive ? true : undefined}
                               data-app-active={isActive ? true : undefined}
                               aria-grabbed={draggedHeaderKey === entry.key}
-                              onDragStart={(event) => {
-                                event.dataTransfer.effectAllowed = "move";
-                                event.dataTransfer.setData("text/plain", entry.key);
-                                setDraggedHeaderKey(entry.key);
-                              }}
-                              onDragEnd={() => setDraggedHeaderKey(null)}
                               aria-label={panelTool.label}
-                              onClick={() => activateTool(entry.tool)}
+                              onClick={() => {
+                                if (shouldSuppressHeaderClick()) {
+                                  return;
+                                }
+                                activateTool(entry.tool);
+                              }}
                               className={HEADER_STABLE_TAB_CLASS}
                             >
                               <span className="ui-tab-system-tab__content">
@@ -533,14 +645,12 @@ export function RightPanel({
                       <RightPanelHeaderEntryDropZone
                         key={entry.key}
                         entryKey={entry.key}
-                        draggedHeaderKey={draggedHeaderKey}
-                        onDropBefore={(beforeEntryKey) => {
-                          if (draggedHeaderKey && draggedHeaderKey !== beforeEntryKey) {
-                            handleReorderHeaderEntry(draggedHeaderKey, beforeEntryKey);
-                          }
-                          setDraggedHeaderKey(null);
-                        }}
-                        onClearDrag={() => setDraggedHeaderKey(null)}
+                        isDragging={draggedHeaderKey === entry.key}
+                        onRegister={registerHeaderEntryNode}
+                        onPointerDown={handleHeaderPointerDown}
+                        onPointerMove={handleHeaderPointerMove}
+                        onPointerUp={finishHeaderPointerDrag}
+                        onPointerCancel={finishHeaderPointerDrag}
                       >
                         <TerminalHeaderIcon
                           terminal={terminal}
@@ -549,32 +659,16 @@ export function RightPanel({
                           unread={unreadByTerminal[terminal.id] === true}
                           isRuntimeReady={isWorkspaceReady}
                           isDragging={draggedHeaderKey === entry.key}
-                          dragKey={entry.key}
+                          shouldSuppressClick={shouldSuppressHeaderClick}
                           onSelect={() => selectTerminal(terminal.id)}
                           onClose={() => handleCloseTerminal(terminal.id)}
                           onRename={(title) => handleRenameTerminal(terminal.id, title)}
-                          onDragStart={() => setDraggedHeaderKey(entry.key)}
-                          onDragEnd={() => setDraggedHeaderKey(null)}
                         />
                       </RightPanelHeaderEntryDropZone>
                     );
                   })}
 
-                  <div
-                    className="right-panel-tab-drop-target"
-                    onDragOver={(event) => {
-                      if (draggedHeaderKey) {
-                        event.preventDefault();
-                      }
-                    }}
-                    onDrop={(event) => {
-                      if (draggedHeaderKey) {
-                        event.preventDefault();
-                        handleReorderHeaderEntry(draggedHeaderKey, null);
-                      }
-                      setDraggedHeaderKey(null);
-                    }}
-                  />
+                  <div className="right-panel-tab-drop-target" />
                 </div>
               </div>
               <div className="ui-tab-system-tabs__spacer" aria-hidden="true" />
@@ -702,46 +796,51 @@ interface TerminalHeaderIconProps {
   unread: boolean;
   isRuntimeReady: boolean;
   isDragging: boolean;
-  dragKey: RightPanelHeaderEntryKey;
+  shouldSuppressClick: () => boolean;
   onSelect: () => void;
   onClose: () => void;
   onRename: (title: string) => Promise<void>;
-  onDragStart: () => void;
-  onDragEnd: () => void;
 }
 
 interface RightPanelHeaderEntryDropZoneProps {
   entryKey: RightPanelHeaderEntryKey;
-  draggedHeaderKey: RightPanelHeaderEntryKey | null;
-  onDropBefore: (beforeEntryKey: RightPanelHeaderEntryKey) => void;
-  onClearDrag: () => void;
+  isDragging: boolean;
+  onRegister: (entryKey: RightPanelHeaderEntryKey, node: HTMLDivElement | null) => void;
+  onPointerDown: (
+    entryKey: RightPanelHeaderEntryKey,
+    event: PointerEvent<HTMLDivElement>,
+  ) => void;
+  onPointerMove: (event: PointerEvent<HTMLDivElement>) => void;
+  onPointerUp: (event: PointerEvent<HTMLDivElement>) => void;
+  onPointerCancel: (event: PointerEvent<HTMLDivElement>) => void;
   children: ReactNode;
 }
 
 function RightPanelHeaderEntryDropZone({
   entryKey,
-  draggedHeaderKey,
-  onDropBefore,
-  onClearDrag,
+  isDragging,
+  onRegister,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
   children,
 }: RightPanelHeaderEntryDropZoneProps) {
-  const canDrop = Boolean(draggedHeaderKey && draggedHeaderKey !== entryKey);
+  const setNode = useCallback(
+    (node: HTMLDivElement | null) => onRegister(entryKey, node),
+    [entryKey, onRegister],
+  );
+
   return (
     <div
+      ref={setNode}
       className="right-panel-header-entry-shell"
-      data-drop-target={canDrop ? true : undefined}
-      onDragOver={(event) => {
-        if (canDrop) {
-          event.preventDefault();
-        }
-      }}
-      onDrop={(event) => {
-        if (canDrop) {
-          event.preventDefault();
-          onDropBefore(entryKey);
-        }
-        onClearDrag();
-      }}
+      data-dragging={isDragging ? true : undefined}
+      onPointerDown={(event) => onPointerDown(entryKey, event)}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onLostPointerCapture={onPointerCancel}
     >
       {children}
     </div>
@@ -755,12 +854,10 @@ function TerminalHeaderIcon({
   unread,
   isRuntimeReady,
   isDragging,
-  dragKey,
+  shouldSuppressClick,
   onSelect,
   onClose,
   onRename,
-  onDragStart,
-  onDragEnd,
 }: TerminalHeaderIconProps) {
   const [renameDraft, setRenameDraft] = useState(displayTitle);
   const [renaming, setRenaming] = useState(false);
@@ -771,16 +868,6 @@ function TerminalHeaderIcon({
       setRenameDraft(displayTitle);
     }
   }, [displayTitle, isEditingHeaderTitle]);
-
-  const handleDragStart = (event: DragEvent<HTMLElement>) => {
-    if (isEditingHeaderTitle) {
-      event.preventDefault();
-      return;
-    }
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", dragKey);
-    onDragStart();
-  };
 
   const submitRename = (title: string, onDone?: () => void) => {
     const nextTitle = title.trim();
@@ -799,7 +886,7 @@ function TerminalHeaderIcon({
 
   if (isActive && isEditingHeaderTitle) {
     return (
-      <div className="right-panel-terminal-tab-shell">
+      <div className="right-panel-terminal-tab-shell" data-right-panel-tab-no-drag="true">
         <form
           className={HEADER_TAB_EDIT_CLASS}
           onSubmit={(event) => {
@@ -861,13 +948,16 @@ function TerminalHeaderIcon({
       aria-selected={isActive}
       aria-controls={`tabpanel-editor-panel-group-terminal-${terminal.id}`}
       tabIndex={isActive ? 0 : -1}
-      draggable={!isEditingHeaderTitle}
+      data-reorderable="true"
       aria-grabbed={isDragging}
       data-active={isActive ? true : undefined}
       data-dragging={isDragging ? true : undefined}
-      onDragStart={handleDragStart}
-      onDragEnd={onDragEnd}
-      onClick={onSelect}
+      onClick={() => {
+        if (shouldSuppressClick()) {
+          return;
+        }
+        onSelect();
+      }}
       onDoubleClick={() => setIsEditingHeaderTitle(true)}
       className={HEADER_TERMINAL_TAB_CLASS}
     >
@@ -916,6 +1006,7 @@ function TerminalHeaderIcon({
                 maxLength={160}
                 onChange={(event) => setRenameDraft(event.target.value)}
                 className="h-8 text-xs"
+                data-right-panel-tab-no-drag="true"
                 autoFocus
               />
               <div className="flex items-center justify-end gap-1">
@@ -940,7 +1031,10 @@ function TerminalHeaderIcon({
             </form>
           )}
         </PopoverButton>
-        <div className="ui-tab-system-tab__close-container">
+        <div
+          className="ui-tab-system-tab__close-container"
+          data-right-panel-tab-no-drag="true"
+        >
           <IconButton
             size="xs"
             tone="sidebar"

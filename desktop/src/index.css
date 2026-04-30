@@ -1819,6 +1819,7 @@ body {
   align-items: stretch;
   flex-shrink: 0;
   height: 100%;
+  touch-action: none;
 }
 
 .right-panel-tab-system .ui-tab-system-tab {
@@ -1852,12 +1853,13 @@ body {
   transition-timing-function: ease;
 }
 
-.right-panel-tab-system .ui-tab-system-tab[draggable="true"] {
+.right-panel-tab-system .ui-tab-system-tab[data-reorderable="true"] {
   cursor: grab;
 }
 
 .right-panel-tab-system .ui-tab-system-tab[aria-grabbed="true"],
-.right-panel-tab-system .ui-tab-system-tab[data-dragging] {
+.right-panel-tab-system .ui-tab-system-tab[data-dragging],
+.right-panel-tab-system .right-panel-header-entry-shell[data-dragging="true"] .ui-tab-system-tab {
   cursor: grabbing;
   opacity: 0.72;
 }
