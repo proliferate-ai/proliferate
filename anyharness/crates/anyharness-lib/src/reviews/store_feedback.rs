@@ -102,8 +102,11 @@ impl ReviewStore {
         job_id: &str,
         prompt_seq: Option<i64>,
         feedback_turn_id: Option<&str>,
+        sent_at: Option<&str>,
     ) -> anyhow::Result<Option<ReviewFeedbackJobRecord>> {
-        let now = chrono::Utc::now().to_rfc3339();
+        let now = sent_at
+            .map(str::to_string)
+            .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
         self.db.with_tx(|tx| {
             let job = tx
                 .query_row(
@@ -193,7 +196,8 @@ impl ReviewStore {
                      updated_at = ?3
                  WHERE id = (
                     SELECT review_run_id FROM review_feedback_jobs WHERE id = ?4
-                 )",
+                 )
+                   AND status != 'passed'",
                 params![reason, detail, now, job_id],
             )?;
             tx.execute(
@@ -204,7 +208,14 @@ impl ReviewStore {
                      updated_at = ?3
                  WHERE id = (
                     SELECT review_round_id FROM review_feedback_jobs WHERE id = ?4
-                 )",
+                 )
+                   AND NOT EXISTS (
+                     SELECT 1
+                     FROM review_runs run
+                     JOIN review_feedback_jobs job ON job.review_run_id = run.id
+                     WHERE job.id = ?4
+                       AND run.status = 'passed'
+                   )",
                 params![reason, detail, now, job_id],
             )?;
             Ok(())
@@ -214,10 +225,18 @@ impl ReviewStore {
     pub fn pending_feedback_jobs(&self, now: &str) -> anyhow::Result<Vec<ReviewFeedbackJobRecord>> {
         self.db.with_conn(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT * FROM review_feedback_jobs
-                 WHERE state = 'pending'
-                   AND (next_attempt_at IS NULL OR next_attempt_at <= ?1)
-                 ORDER BY created_at ASC, id ASC",
+                "SELECT job.*
+                 FROM review_feedback_jobs job
+                 JOIN review_runs run ON run.id = job.review_run_id
+                 WHERE job.state = 'pending'
+                   AND (job.next_attempt_at IS NULL OR job.next_attempt_at <= ?1)
+                   AND job.sent_prompt_seq IS NULL
+                   AND (
+                       run.auto_iterate != 0
+                       OR job.attempt_count > 0
+                       OR run.status = 'passed'
+                   )
+                 ORDER BY job.created_at ASC, job.id ASC",
             )?;
             let rows = stmt.query_map([now], map_feedback_job)?;
             rows.collect()
@@ -258,11 +277,11 @@ impl ReviewStore {
         })
     }
 
-    pub fn find_turn_id_for_pending_prompt_execution(
+    pub fn find_pending_prompt_execution(
         &self,
         session_id: &str,
         pending_prompt_seq: i64,
-    ) -> anyhow::Result<Option<String>> {
+    ) -> anyhow::Result<Option<(String, String)>> {
         self.db.with_conn(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT seq, event_type, turn_id, payload_json
@@ -280,7 +299,7 @@ impl ReviewStore {
             })?;
             let mut current_turn_id: Option<String> = None;
             for row in rows {
-                let (_seq, event_type, turn_id, payload_json) = row?;
+                let (seq, event_type, turn_id, payload_json) = row?;
                 if event_type == "turn_started" {
                     current_turn_id = turn_id;
                     continue;
@@ -296,7 +315,16 @@ impl ReviewStore {
                 if payload.seq == pending_prompt_seq
                     && payload.reason == PendingPromptRemovalReason::Executed
                 {
-                    return Ok(current_turn_id.clone());
+                    let executed_at = conn.query_row(
+                        "SELECT timestamp
+                         FROM session_events
+                         WHERE session_id = ?1 AND seq = ?2",
+                        params![session_id, seq],
+                        |timestamp_row| timestamp_row.get::<_, String>(0),
+                    )?;
+                    return Ok(current_turn_id
+                        .clone()
+                        .map(|turn_id| (turn_id, executed_at)));
                 }
             }
             Ok(None)
@@ -335,17 +363,41 @@ impl ReviewStore {
         })
     }
 
-    pub fn mark_parent_waiting_for_revision_for_turn(
+    pub fn mark_parent_feedback_turn_finished(
         &self,
         parent_session_id: &str,
         turn_id: &str,
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<Option<String>> {
         let now = chrono::Utc::now().to_rfc3339();
-        self.db.with_conn(|conn| {
-            let changed = conn.execute(
+        self.db.with_tx(|tx| {
+            let run_id = tx
+                .query_row(
+                    "SELECT review_runs.id
+                     FROM review_runs
+                     WHERE parent_session_id = ?1
+                       AND status = 'parent_revising'
+                       AND EXISTS (
+                         SELECT 1
+                         FROM review_feedback_jobs job
+                         WHERE job.review_run_id = review_runs.id
+                           AND job.feedback_turn_id = ?2
+                           AND job.state = 'sent'
+                       )
+                     ORDER BY updated_at DESC, id DESC
+                     LIMIT 1",
+                    params![parent_session_id, turn_id],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()?;
+            let Some(run_id) = run_id else {
+                return Ok(None);
+            };
+
+            tx.execute(
                 "UPDATE review_runs
                  SET status = CASE
                        WHEN current_round_number >= max_rounds THEN 'stopped'
+                       WHEN auto_iterate != 0 THEN status
                        ELSE 'waiting_for_revision'
                      END,
                      active_round_id = CASE
@@ -365,18 +417,11 @@ impl ReviewStore {
                        ELSE stopped_at
                      END,
                      updated_at = ?1
-                 WHERE parent_session_id = ?2
-                   AND status = 'parent_revising'
-                   AND EXISTS (
-                     SELECT 1
-                     FROM review_feedback_jobs job
-                     WHERE job.review_run_id = review_runs.id
-                       AND job.feedback_turn_id = ?3
-                       AND job.state = 'sent'
-                   )",
-                params![now, parent_session_id, turn_id],
+                 WHERE id = ?2
+                   AND status = 'parent_revising'",
+                params![now, run_id],
             )?;
-            Ok(changed > 0)
+            Ok(Some(run_id))
         })
     }
 }

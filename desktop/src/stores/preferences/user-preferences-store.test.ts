@@ -283,7 +283,7 @@ describe("user preference migration", () => {
       reviewDefaultsByKind: {
         plan: {
           maxRounds: 9,
-          autoSendFeedback: true,
+          autoIterate: true,
           reviewers: [
             {
               id: "skeptic",
@@ -303,6 +303,23 @@ describe("user preference migration", () => {
     expect(result.preferences.reviewDefaultsByKind.plan?.maxRounds).toBe(5);
     expect(result.preferences.reviewDefaultsByKind.plan?.reviewers).toHaveLength(1);
     expect(result.preferences.reviewDefaultsByKind.code).toBeNull();
+  });
+
+  it("preserves legacy auto-send review defaults during migration", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      reviewDefaultsByKind: {
+        plan: {
+          maxRounds: 2,
+          autoSendFeedback: false,
+          reviewers: [],
+        },
+        code: null,
+      },
+    } as unknown as UserPreferences);
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.reviewDefaultsByKind.plan?.autoIterate).toBe(false);
   });
 
   it("sanitizes reusable review personalities by kind", () => {

@@ -37,7 +37,7 @@ export interface StartingReviewState {
   parentSessionId: string;
   kind: ReviewKind;
   maxRounds: number;
-  autoSendFeedback: boolean;
+  autoIterate: boolean;
   reviewers: StartingReviewReviewer[];
   startedAt: number;
 }

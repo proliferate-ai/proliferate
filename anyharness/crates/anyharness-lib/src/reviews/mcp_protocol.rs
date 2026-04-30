@@ -112,9 +112,10 @@ pub(super) fn reviewer_tool_list() -> Vec<Value> {
     )]
 }
 
-pub(super) fn parent_tool_list() -> Vec<Value> {
-    vec![
-        tool_definition(
+pub(super) fn parent_tool_list(can_signal_revision: bool) -> Vec<Value> {
+    let mut tools = Vec::new();
+    if can_signal_revision {
+        tools.push(tool_definition(
             "mark_review_revision_ready",
             "Signal that the reviewed plan or implementation has been revised and is ready for the next review round. reviewRunId is required.",
             json!({
@@ -125,13 +126,14 @@ pub(super) fn parent_tool_list() -> Vec<Value> {
                 },
                 "required": ["reviewRunId"]
             }),
-        ),
-        tool_definition(
-            "get_review_status",
-            "Get active review status for this parent session.",
-            json!({ "type": "object", "properties": {} }),
-        ),
-    ]
+        ));
+    }
+    tools.push(tool_definition(
+        "get_review_status",
+        "Get active review status for this parent session.",
+        json!({ "type": "object", "properties": {} }),
+    ));
+    tools
 }
 
 fn tool_definition(name: &str, description: &str, input_schema: Value) -> Value {

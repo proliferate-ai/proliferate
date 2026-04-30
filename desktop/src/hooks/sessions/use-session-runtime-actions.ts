@@ -1,6 +1,7 @@
 import {
   anyHarnessCoworkManagedWorkspacesKey,
   anyHarnessGitStatusKey,
+  anyHarnessSessionReviewsKey,
   anyHarnessSessionSubagentsKey,
 } from "@anyharness/sdk-react";
 import {
@@ -582,6 +583,16 @@ export function useSessionRuntimeActions() {
             queryKey: anyHarnessCoworkManagedWorkspacesKey(
               currentState.runtimeUrl,
               sessionId,
+            ),
+          });
+        }
+
+        if (event.type === "review_run_updated") {
+          void queryClient.invalidateQueries({
+            queryKey: anyHarnessSessionReviewsKey(
+              currentState.runtimeUrl,
+              slotState.workspaceId,
+              event.parentSessionId,
             ),
           });
         }

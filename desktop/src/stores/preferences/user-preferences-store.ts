@@ -24,7 +24,7 @@ export interface ReviewPersonaPreference {
 
 export interface ReviewKindPreference {
   maxRounds: number;
-  autoSendFeedback: boolean;
+  autoIterate: boolean;
   reviewers: ReviewPersonaPreference[];
 }
 
@@ -298,7 +298,9 @@ function sanitizeReviewKindPreference(value: unknown): ReviewKindPreference | nu
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
-  const raw = value as Partial<ReviewKindPreference>;
+  const raw = value as Partial<ReviewKindPreference> & {
+    autoSendFeedback?: unknown;
+  };
   const maxRounds = typeof raw.maxRounds === "number"
     && Number.isFinite(raw.maxRounds)
     ? clampRounds(raw.maxRounds)
@@ -308,8 +310,10 @@ function sanitizeReviewKindPreference(value: unknown): ReviewKindPreference | nu
     : [];
   return {
     maxRounds,
-    autoSendFeedback: typeof raw.autoSendFeedback === "boolean"
-      ? raw.autoSendFeedback
+    autoIterate: typeof raw.autoIterate === "boolean"
+      ? raw.autoIterate
+      : typeof raw.autoSendFeedback === "boolean"
+        ? raw.autoSendFeedback
       : true,
     reviewers: dedupeReviewPersonaPreferences(reviewers).slice(0, MAX_REVIEWERS_PER_RUN),
   };

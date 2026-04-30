@@ -10508,7 +10508,7 @@
           "title",
           "maxRounds",
           "currentRoundNumber",
-          "autoSendFeedback",
+          "autoIterate",
           "parentCanSignalRevisionViaMcp",
           "childSessionIds",
           "rounds",
@@ -10522,7 +10522,7 @@
               "null"
             ]
           },
-          "autoSendFeedback": {
+          "autoIterate": {
             "type": "boolean"
           },
           "childSessionIds": {
@@ -10622,6 +10622,55 @@
           "stopped",
           "system_failed"
         ]
+      },
+      "ReviewRunUpdatedPayload": {
+        "type": "object",
+        "required": [
+          "reviewRunId",
+          "parentSessionId",
+          "kind",
+          "status",
+          "currentRoundNumber",
+          "maxRounds",
+          "autoIterate",
+          "updatedAt"
+        ],
+        "properties": {
+          "activeRoundId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "autoIterate": {
+            "type": "boolean"
+          },
+          "currentRoundNumber": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ReviewKind"
+          },
+          "maxRounds": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "reviewRunId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReviewRunStatus"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
       },
       "RunCommandRequest": {
         "type": "object",
@@ -11134,6 +11183,27 @@
                     "type": "string",
                     "enum": [
                       "session_link_turn_completed"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReviewRunUpdatedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "review_run_updated"
                     ]
                   }
                 }
@@ -11968,7 +12038,7 @@
           "reviewers"
         ],
         "properties": {
-          "autoSendFeedback": {
+          "autoIterate": {
             "type": "boolean"
           },
           "maxRounds": {
@@ -11994,7 +12064,7 @@
           "reviewers"
         ],
         "properties": {
-          "autoSendFeedback": {
+          "autoIterate": {
             "type": "boolean"
           },
           "maxRounds": {

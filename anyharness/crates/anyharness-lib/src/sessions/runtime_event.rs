@@ -1,6 +1,6 @@
 use anyharness_contract::v1::{
-    SessionEvent, SessionEventEnvelope, SessionInfoUpdatePayload, SessionLinkTurnCompletedPayload,
-    SubagentTurnCompletedPayload,
+    ReviewRunUpdatedPayload, SessionEvent, SessionEventEnvelope, SessionInfoUpdatePayload,
+    SessionLinkTurnCompletedPayload, SubagentTurnCompletedPayload,
 };
 
 /// Curated event variants that runtime code may inject outside ACP
@@ -19,6 +19,7 @@ pub(crate) enum RuntimeInjectedSessionEvent {
     },
     SubagentTurnCompleted(SubagentTurnCompletedPayload),
     SessionLinkTurnCompleted(SessionLinkTurnCompletedPayload),
+    ReviewRunUpdated(ReviewRunUpdatedPayload),
 }
 
 impl RuntimeInjectedSessionEvent {
@@ -31,6 +32,7 @@ impl RuntimeInjectedSessionEvent {
             Self::SessionLinkTurnCompleted(payload) => {
                 SessionEvent::SessionLinkTurnCompleted(payload)
             }
+            Self::ReviewRunUpdated(payload) => SessionEvent::ReviewRunUpdated(payload),
         }
     }
 }
