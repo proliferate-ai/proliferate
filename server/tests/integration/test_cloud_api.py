@@ -878,6 +878,12 @@ class TestCloudMcpConnections:
 
         assert response.status_code == 200
         assert "Authorization complete" in response.text
+        assert "Open Proliferate" in response.text
+        assert (
+            "proliferate://powers?source=mcp_oauth_callback&amp;status=completed" in response.text
+        )
+        assert "access-token" not in response.text
+        assert "refresh-token" not in response.text
         assert captured["client_secret"] == "client-secret"
         assert captured["token_endpoint_auth_method"] is None
 
@@ -889,6 +895,22 @@ class TestCloudMcpConnections:
         assert auths[0].payload_ciphertext is not None
         payload = decrypt_json(auths[0].payload_ciphertext)
         assert payload["redirectUri"] == redirect_uri
+
+    @pytest.mark.asyncio
+    async def test_oauth_callback_failure_uses_safe_handoff_page(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        response = await client.get(
+            "/v1/cloud/mcp/oauth/callback",
+            params={"error": "access_denied", "state": "stale-state"},
+        )
+
+        assert response.status_code == 200
+        assert "Authorization failed" in response.text
+        assert "Open Proliferate" in response.text
+        assert "access_denied" not in response.text
+        assert "proliferate://powers?source=mcp_oauth_callback&amp;status=failed" in response.text
 
     @pytest.mark.asyncio
     async def test_changed_mcp_sync_rewrites_existing_row(
