@@ -1,4 +1,5 @@
 import type {
+  GitDiffScope,
   WorkspaceFileEntry,
   ReadWorkspaceFileResponse,
 } from "@anyharness/sdk";
@@ -20,6 +21,18 @@ export interface WorkspaceFileBuffer {
   lastError?: string | null;
 }
 
+export interface WorkspaceFileDiffDescriptor {
+  scope?: GitDiffScope | null;
+  baseRef?: string | null;
+  oldPath?: string | null;
+}
+
+export interface NormalizedWorkspaceFileDiffDescriptor {
+  scope: GitDiffScope;
+  baseRef: string | null;
+  oldPath: string | null;
+}
+
 interface WorkspaceFilesState {
   workspaceId: string | null;
   runtimeWorkspaceId: string | null;
@@ -36,6 +49,7 @@ interface WorkspaceFilesState {
   buffersByPath: Record<string, WorkspaceFileBuffer>;
   tabModes: Record<string, "edit" | "diff">;
   tabPatches: Record<string, string | null>;
+  tabDiffDescriptorsByPath: Record<string, NormalizedWorkspaceFileDiffDescriptor>;
 
   // Actions
   prepareWorkspace: (
@@ -49,7 +63,11 @@ interface WorkspaceFilesState {
   setDirectoryLoadState: (dirPath: string, state: FileLoadState) => void;
   setDirectoryEntries: (dirPath: string, entries: WorkspaceFileEntry[]) => void;
   focusFileTab: (filePath: string) => void;
-  setDiffTab: (filePath: string, patch: string | null) => void;
+  setDiffTab: (
+    filePath: string,
+    patch: string | null,
+    descriptor?: WorkspaceFileDiffDescriptor,
+  ) => void;
   closeTab: (filePath: string) => void;
   reorderOpenTabs: (orderedPaths: string[]) => void;
   setActiveTab: (filePath: string) => void;
@@ -75,7 +93,45 @@ function emptyFilesState() {
     buffersByPath: {} as Record<string, WorkspaceFileBuffer>,
     tabModes: {} as Record<string, "edit" | "diff">,
     tabPatches: {} as Record<string, string | null>,
+    tabDiffDescriptorsByPath: {} as Record<string, NormalizedWorkspaceFileDiffDescriptor>,
   };
+}
+
+export function normalizeWorkspaceFileDiffDescriptor(
+  descriptor?: WorkspaceFileDiffDescriptor,
+): NormalizedWorkspaceFileDiffDescriptor {
+  return {
+    scope: descriptor?.scope ?? "working_tree",
+    baseRef: normalizeNullableDiffPart(descriptor?.baseRef),
+    oldPath: normalizeNullableDiffPart(descriptor?.oldPath),
+  };
+}
+
+export function workspaceFileDiffPatchKey(
+  filePath: string,
+  descriptor?: WorkspaceFileDiffDescriptor,
+): string {
+  const normalized = normalizeWorkspaceFileDiffDescriptor(descriptor);
+  return [
+    "diff",
+    encodeDiffKeyPart(filePath),
+    normalized.scope,
+    encodeDiffKeyPart(normalized.baseRef),
+    encodeDiffKeyPart(normalized.oldPath),
+  ].join(":");
+}
+
+function workspaceFileDiffPatchKeyPrefix(filePath: string): string {
+  return `diff:${encodeDiffKeyPart(filePath)}:`;
+}
+
+function encodeDiffKeyPart(value: string | null): string {
+  return encodeURIComponent(value ?? "");
+}
+
+function normalizeNullableDiffPart(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }
 
 function createLoadingBuffer(filePath: string): WorkspaceFileBuffer {
@@ -200,8 +256,12 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesState>((set, get) => 
 
     const nextModes = { ...get().tabModes };
     delete nextModes[filePath];
-    const nextPatches = { ...get().tabPatches };
-    delete nextPatches[filePath];
+    const nextDescriptors = { ...get().tabDiffDescriptorsByPath };
+    delete nextDescriptors[filePath];
+    const patchKeyPrefix = workspaceFileDiffPatchKeyPrefix(filePath);
+    const nextPatches = Object.fromEntries(
+      Object.entries(get().tabPatches).filter(([key]) => !key.startsWith(patchKeyPrefix)),
+    );
 
     set({
       openTabs: nextTabs,
@@ -209,6 +269,7 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesState>((set, get) => 
       buffersByPath: nextBuffers,
       tabModes: nextModes,
       tabPatches: nextPatches,
+      tabDiffDescriptorsByPath: nextDescriptors,
     });
   },
 
@@ -223,15 +284,21 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesState>((set, get) => 
     set({ openTabs: next });
   },
 
-  setDiffTab: (filePath, patch) => {
+  setDiffTab: (filePath, patch, descriptor) => {
     const openTabs = get().openTabs.includes(filePath)
       ? get().openTabs
       : [...get().openTabs, filePath];
+    const normalizedDescriptor = normalizeWorkspaceFileDiffDescriptor(descriptor);
+    const patchKey = workspaceFileDiffPatchKey(filePath, normalizedDescriptor);
     set({
       openTabs,
       activeFilePath: filePath,
       tabModes: { ...get().tabModes, [filePath]: "diff" },
-      tabPatches: { ...get().tabPatches, [filePath]: patch },
+      tabDiffDescriptorsByPath: {
+        ...get().tabDiffDescriptorsByPath,
+        [filePath]: normalizedDescriptor,
+      },
+      tabPatches: { ...get().tabPatches, [patchKey]: patch },
     });
   },
 

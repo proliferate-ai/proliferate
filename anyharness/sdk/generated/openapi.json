@@ -2887,6 +2887,33 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Diff scope. Defaults to working_tree.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/GitDiffScope"
+            }
+          },
+          {
+            "name": "baseRef",
+            "in": "query",
+            "description": "Branch base ref. Only valid for scope=branch.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "oldPath",
+            "in": "query",
+            "description": "Old path for branch rename/copy rows. Only valid for scope=branch.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2896,6 +2923,56 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GitDiffResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/git/diff/branch-files": {
+      "get": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "list_git_branch_diff_files",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "baseRef",
+            "in": "query",
+            "description": "Branch base ref. Defaults to runtime default branch resolution.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Branch diff file list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitBranchDiffFilesResponse"
                 }
               }
             }
@@ -6301,6 +6378,36 @@
           }
         }
       },
+      "GitBranchDiffFilesResponse": {
+        "type": "object",
+        "required": [
+          "baseRef",
+          "resolvedBaseOid",
+          "mergeBaseOid",
+          "headOid",
+          "files"
+        ],
+        "properties": {
+          "baseRef": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitDiffFile"
+            }
+          },
+          "headOid": {
+            "type": "string"
+          },
+          "mergeBaseOid": {
+            "type": "string"
+          },
+          "resolvedBaseOid": {
+            "type": "string"
+          }
+        }
+      },
       "GitBranchRef": {
         "type": "object",
         "required": [
@@ -6371,14 +6478,14 @@
           }
         }
       },
-      "GitDiffResponse": {
+      "GitDiffFile": {
         "type": "object",
         "required": [
           "path",
-          "binary",
-          "truncated",
+          "status",
           "additions",
-          "deletions"
+          "deletions",
+          "binary"
         ],
         "properties": {
           "additions": {
@@ -6394,6 +6501,62 @@
             "format": "int32",
             "minimum": 0
           },
+          "oldPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GitFileStatus"
+          }
+        }
+      },
+      "GitDiffResponse": {
+        "type": "object",
+        "required": [
+          "path",
+          "scope",
+          "binary",
+          "truncated",
+          "additions",
+          "deletions"
+        ],
+        "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "baseRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "binary": {
+            "type": "boolean"
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "headOid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mergeBaseOid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "patch": {
             "type": [
               "string",
@@ -6403,10 +6566,28 @@
           "path": {
             "type": "string"
           },
+          "resolvedBaseOid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scope": {
+            "$ref": "#/components/schemas/GitDiffScope"
+          },
           "truncated": {
             "type": "boolean"
           }
         }
+      },
+      "GitDiffScope": {
+        "type": "string",
+        "enum": [
+          "working_tree",
+          "unstaged",
+          "staged",
+          "branch"
+        ]
       },
       "GitFileStatus": {
         "type": "string",

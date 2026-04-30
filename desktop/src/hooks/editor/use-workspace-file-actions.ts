@@ -1,4 +1,4 @@
-import { AnyHarnessError } from "@anyharness/sdk";
+import { AnyHarnessError, type GitDiffOptions } from "@anyharness/sdk";
 import {
   getAnyHarnessClient,
   type AnyHarnessClientConnection,
@@ -12,7 +12,11 @@ import {
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { fileWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import {
+  normalizeWorkspaceFileDiffDescriptor,
+  useWorkspaceFilesStore,
+  workspaceFileDiffPatchKey,
+} from "@/stores/editor/workspace-files-store";
 import { useWorkspaceTabsStore } from "@/stores/workspaces/workspace-tabs-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -331,7 +335,7 @@ export function useWorkspaceFileActions() {
     await readFileIntoStore(filePath);
   }, [focusFileTab, readFileIntoStore, setActiveShellTabKey]);
 
-  const openFileDiff = useCallback(async (filePath: string) => {
+  const openFileDiff = useCallback(async (filePath: string, options?: GitDiffOptions) => {
     const state = useWorkspaceFilesStore.getState();
     const {
       workspaceId,
@@ -348,22 +352,24 @@ export function useWorkspaceFileActions() {
       return;
     }
 
-    setDiffTab(filePath, tabPatches[filePath] ?? null);
+    const descriptor = normalizeWorkspaceFileDiffDescriptor(options);
+    const patchKey = workspaceFileDiffPatchKey(filePath, descriptor);
+    setDiffTab(filePath, tabPatches[patchKey] ?? null, descriptor);
     setActiveShellTabKey(workspaceId, fileWorkspaceShellTabKey(filePath));
 
     const loadDiff = async () => {
       try {
         const client = getAnyHarnessClient(buildConnection(runtimeUrl, authToken));
-        const diff = await client.git.getDiff(runtimeWorkspaceId, filePath);
+        const diff = await client.git.getDiff(runtimeWorkspaceId, filePath, descriptor);
         if (!isWorkspaceFilesContextCurrent(workspaceId, initVersion)) {
           return;
         }
-        setDiffTab(filePath, diff.patch ?? null);
+        setDiffTab(filePath, diff.patch ?? null, descriptor);
       } catch {
         if (!isWorkspaceFilesContextCurrent(workspaceId, initVersion)) {
           return;
         }
-        setDiffTab(filePath, null);
+        setDiffTab(filePath, null, descriptor);
       }
     };
 

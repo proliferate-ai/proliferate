@@ -219,6 +219,10 @@ pub fn build_router(state: AppState) -> Router {
             get(git::get_git_diff),
         )
         .route(
+            "/workspaces/{workspace_id}/git/diff/branch-files",
+            get(git::list_git_branch_diff_files),
+        )
+        .route(
             "/workspaces/{workspace_id}/git/branches",
             get(git::list_git_branches),
         )

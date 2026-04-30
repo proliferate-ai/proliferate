@@ -47,6 +47,7 @@ export {
   anyHarnessGitStatusKey,
   anyHarnessGitDiffScopeKey,
   anyHarnessGitDiffKey,
+  anyHarnessGitBranchDiffFilesKey,
   anyHarnessGitBranchesKey,
   anyHarnessPullRequestKey,
   anyHarnessWorkspaceFilesScopeKey,
@@ -151,6 +152,7 @@ export {
 export {
   useGitStatusQuery,
   useGitDiffQuery,
+  useGitBranchDiffFilesQuery,
   useGitBranchesQuery,
   useStageGitPathsMutation,
   useUnstageGitPathsMutation,
