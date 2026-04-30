@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Instant;
 
 use uuid::Uuid;
@@ -9,7 +10,7 @@ use super::model::{
     SessionRecord,
 };
 use super::store::SessionStore;
-use crate::agents::catalog::model_registries;
+use crate::agents::catalog::ModelCatalogService;
 use crate::agents::model::{ModelRegistryMetadata, ResolvedAgentStatus};
 use crate::agents::registry::built_in_registry;
 use crate::agents::resolver::resolve_agent;
@@ -20,6 +21,7 @@ pub struct SessionService {
     session_store: SessionStore,
     workspace_store: WorkspaceStore,
     runtime_home: std::path::PathBuf,
+    model_catalog_service: Arc<ModelCatalogService>,
 }
 
 #[derive(Debug)]
@@ -73,11 +75,13 @@ impl SessionService {
         session_store: SessionStore,
         workspace_store: WorkspaceStore,
         runtime_home: std::path::PathBuf,
+        model_catalog_service: Arc<ModelCatalogService>,
     ) -> Self {
         Self {
             session_store,
             workspace_store,
             runtime_home,
+            model_catalog_service,
         }
     }
 
@@ -173,7 +177,7 @@ impl SessionService {
         );
 
         let model_resolution_started = Instant::now();
-        let registries = model_registries();
+        let registries = self.model_catalog_service.registries();
         let model_registry = find_model_registry(&registries, agent_kind)
             .map_err(|error| CreateSessionError::Invalid(error.to_string()))?;
         let resolved_model_id = resolve_model_id(model_registry, model_id)
@@ -391,7 +395,9 @@ impl SessionService {
             .ok_or_else(|| anyhow::anyhow!("workspace not found: {workspace_id}"))?;
 
         let registry = built_in_registry();
-        let agents = model_registries()
+        let agents = self
+            .model_catalog_service
+            .registries()
             .into_iter()
             .filter_map(|model_registry| {
                 let descriptor = registry
@@ -444,18 +450,30 @@ fn resolve_model_id(
         normalize_legacy_model_id(model_registry.kind.as_str(), model_id).unwrap_or(model_id)
     });
 
-    let valid_model_ids = model_registry
-        .models
-        .iter()
-        .map(|model| model.id.as_str())
-        .collect::<Vec<_>>();
+    let resolved_model_id = normalized_model_id
+        .map(|model_id| resolve_model_alias(model_registry, model_id).unwrap_or(model_id));
 
     resolve_catalog_id(
-        normalized_model_id,
-        &valid_model_ids,
+        resolved_model_id,
+        &model_registry
+            .models
+            .iter()
+            .map(|model| model.id.as_str())
+            .collect::<Vec<_>>(),
         model_registry.default_model_id.as_deref(),
         "model",
     )
+}
+
+fn resolve_model_alias<'a>(
+    model_registry: &'a ModelRegistryMetadata,
+    provided_model_id: &str,
+) -> Option<&'a str> {
+    model_registry
+        .models
+        .iter()
+        .find(|model| model.aliases.iter().any(|alias| alias == provided_model_id))
+        .map(|model| model.id.as_str())
 }
 
 fn resolve_catalog_id(
@@ -492,7 +510,7 @@ fn normalize_legacy_model_id(agent_kind: &str, model_id: &str) -> Option<&'stati
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agents::model::ModelRegistryModelMetadata;
+    use crate::agents::model::{ModelCatalogStatus, ModelRegistryModelMetadata};
 
     fn plain_model(id: &str, is_default: bool) -> ModelRegistryModelMetadata {
         ModelRegistryModelMetadata {
@@ -500,6 +518,9 @@ mod tests {
             display_name: id.to_string(),
             description: None,
             is_default,
+            status: ModelCatalogStatus::Active,
+            aliases: vec![],
+            min_runtime_version: None,
         }
     }
 
@@ -548,6 +569,23 @@ mod tests {
 
         let resolved =
             resolve_model_id(&registry, Some("opus")).expect("legacy model id should normalize");
+
+        assert_eq!(resolved.as_deref(), Some("opus[1m]"));
+    }
+
+    #[test]
+    fn resolves_catalog_aliases_to_canonical_model_id() {
+        let mut opus = plain_model("opus[1m]", false);
+        opus.aliases = vec!["claude-opus-4-7".to_string()];
+        let registry = ModelRegistryMetadata {
+            kind: "claude".to_string(),
+            display_name: "Claude".to_string(),
+            default_model_id: Some("sonnet".to_string()),
+            models: vec![plain_model("sonnet", true), opus],
+        };
+
+        let resolved = resolve_model_id(&registry, Some("claude-opus-4-7"))
+            .expect("catalog alias should resolve");
 
         assert_eq!(resolved.as_deref(), Some("opus[1m]"));
     }

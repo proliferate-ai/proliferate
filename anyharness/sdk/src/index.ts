@@ -41,6 +41,7 @@ export type {
 } from "./types/agents.js";
 
 export type {
+  ModelCatalogStatus,
   ModelRegistry,
   ModelRegistryModel,
 } from "./types/model-registries.js";

@@ -8035,15 +8035,40 @@
           }
         }
       },
+      "ModelCatalogStatus": {
+        "type": "string",
+        "description": "Runtime-owned lifecycle status for a model catalog row.",
+        "enum": [
+          "candidate",
+          "active",
+          "deprecated",
+          "hidden"
+        ]
+      },
       "ModelEntry": {
         "type": "object",
         "description": "A known model in the AnyHarness catalog for a given provider.",
         "required": [
           "id",
           "displayName",
-          "isDefault"
+          "isDefault",
+          "status"
         ],
         "properties": {
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Legacy or provider-native selectors that resolve to this model ID"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional descriptive copy surfaced in launch/settings UIs"
+          },
           "displayName": {
             "type": "string",
             "description": "Human-readable name (e.g. \"Claude Opus 4.6\")"
@@ -8055,6 +8080,17 @@
           "isDefault": {
             "type": "boolean",
             "description": "Whether this is the default model for the provider"
+          },
+          "minRuntimeVersion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Minimum AnyHarness runtime version required for this model, if any"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelCatalogStatus",
+            "description": "Runtime-owned lifecycle status for this model"
           }
         }
       },
@@ -8097,9 +8133,17 @@
         "required": [
           "id",
           "displayName",
-          "isDefault"
+          "isDefault",
+          "status"
         ],
         "properties": {
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Legacy or provider-native selectors that resolve to this model ID"
+          },
           "description": {
             "type": [
               "string",
@@ -8118,6 +8162,17 @@
           "isDefault": {
             "type": "boolean",
             "description": "Whether this is the default model for the registry"
+          },
+          "minRuntimeVersion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Minimum AnyHarness runtime version required for this model, if any"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModelCatalogStatus",
+            "description": "Runtime-owned lifecycle status for this model"
           }
         }
       },

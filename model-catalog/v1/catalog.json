@@ -1,0 +1,290 @@
+{
+  "catalogVersion": "2026-04-25.1",
+  "generatedAt": "2026-04-25T00:00:00Z",
+  "providers": [
+    {
+      "kind": "claude",
+      "displayName": "Claude",
+      "defaultModelId": "sonnet",
+      "models": [
+        {
+          "id": "sonnet",
+          "displayName": "Sonnet 4.6",
+          "description": "Best for everyday tasks",
+          "isDefault": true,
+          "status": "active",
+          "aliases": ["claude-sonnet-4-5", "claude-sonnet-4-6"]
+        },
+        {
+          "id": "sonnet[1m]",
+          "displayName": "Sonnet 4.6",
+          "description": "1M context. Billed as extra usage.",
+          "isDefault": false,
+          "status": "active",
+          "aliases": ["claude-sonnet-4-5-1m", "claude-sonnet-4-6-1m"]
+        },
+        {
+          "id": "opus[1m]",
+          "displayName": "Opus 4.7",
+          "description": "Most capable for complex work. 1M context.",
+          "isDefault": false,
+          "status": "active",
+          "aliases": ["claude-opus-4-5", "claude-opus-4-6", "claude-opus-4-6-1m", "opus"]
+        },
+        {
+          "id": "haiku",
+          "displayName": "Haiku 4.5",
+          "description": "Fastest for quick answers",
+          "isDefault": false,
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "kind": "codex",
+      "displayName": "Codex",
+      "defaultModelId": "gpt-5.4",
+      "models": [
+        {
+          "id": "gpt-5.5",
+          "displayName": "GPT 5.5",
+          "description": "Candidate pending live Codex launch smoke.",
+          "isDefault": false,
+          "status": "candidate"
+        },
+        {
+          "id": "gpt-5.4",
+          "displayName": "GPT 5.4",
+          "isDefault": true,
+          "status": "active"
+        },
+        {
+          "id": "gpt-5.4-mini",
+          "displayName": "GPT 5.4 Mini",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "gpt-5.3-codex",
+          "displayName": "GPT 5.3 Codex",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "gpt-5.3-codex-spark",
+          "displayName": "GPT 5.3 Codex Spark",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "gpt-5.2-codex",
+          "displayName": "GPT 5.2 Codex",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "gpt-5.1-codex-max",
+          "displayName": "GPT 5.1 Codex Max",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "gpt-5.2",
+          "displayName": "GPT 5.2",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "gpt-5.1-codex-mini",
+          "displayName": "GPT 5.1 Codex Mini",
+          "isDefault": false,
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "kind": "gemini",
+      "displayName": "Gemini",
+      "defaultModelId": "auto-gemini-2.5",
+      "models": [
+        {
+          "id": "auto-gemini-2.5",
+          "displayName": "Auto (Gemini 2.5)",
+          "isDefault": true,
+          "status": "active"
+        },
+        {
+          "id": "gemini-2.5-pro",
+          "displayName": "Gemini 2.5 Pro",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "gemini-2.5-flash",
+          "displayName": "Gemini 2.5 Flash",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "gemini-2.5-flash-lite",
+          "displayName": "Gemini 2.5 Flash Lite",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "auto-gemini-3",
+          "displayName": "Auto (Gemini 3)",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "gemini-3-flash-preview",
+          "displayName": "Gemini 3 Flash",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "gemini-3.1-pro-preview",
+          "displayName": "Gemini 3.1 Pro",
+          "isDefault": false,
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "kind": "cursor",
+      "displayName": "Cursor",
+      "defaultModelId": "default[]",
+      "models": [
+        {
+          "id": "default[]",
+          "displayName": "Auto",
+          "isDefault": true,
+          "status": "active"
+        },
+        {
+          "id": "composer-2[fast=true]",
+          "displayName": "Composer 2",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "composer-1.5[]",
+          "displayName": "Composer 1.5",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]",
+          "displayName": "Opus 4.6",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]",
+          "displayName": "Sonnet 4.6",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "gpt-5.4[reasoning=medium,context=272k,fast=false]",
+          "displayName": "GPT 5.4",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "gpt-5.3-codex[reasoning=medium,fast=false]",
+          "displayName": "Codex 5.3",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "gemini-3.1-pro[]",
+          "displayName": "Gemini 3.1 Pro",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "claude-opus-4-5[thinking=true]",
+          "displayName": "Opus 4.5",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "gpt-5.2[reasoning=medium,fast=false]",
+          "displayName": "GPT 5.2",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "gpt-5.4-mini[reasoning=medium]",
+          "displayName": "GPT 5.4 Mini",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "claude-haiku-4-5[thinking=true]",
+          "displayName": "Haiku 4.5",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "claude-sonnet-4-5[thinking=true,context=200k]",
+          "displayName": "Sonnet 4.5",
+          "isDefault": false,
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "kind": "opencode",
+      "displayName": "OpenCode",
+      "defaultModelId": "opencode/big-pickle",
+      "models": [
+        {
+          "id": "opencode/big-pickle",
+          "displayName": "Big Pickle",
+          "isDefault": true,
+          "status": "active"
+        },
+        {
+          "id": "opencode/claude-opus-4-6",
+          "displayName": "Claude Opus 4.6",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "opencode/claude-sonnet-4-5",
+          "displayName": "Claude Sonnet 4.5",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "opencode/gpt-5.3-codex",
+          "displayName": "GPT 5.3 Codex",
+          "isDefault": false,
+          "status": "active"
+        },
+        {
+          "id": "opencode/gemini-3-pro",
+          "displayName": "Gemini 3 Pro",
+          "isDefault": false,
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "kind": "amp",
+      "displayName": "Amp",
+      "defaultModelId": "amp-default",
+      "models": [
+        {
+          "id": "amp-default",
+          "displayName": "Amp Default",
+          "isDefault": true,
+          "status": "active"
+        }
+      ]
+    }
+  ]
+}
