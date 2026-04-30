@@ -9,6 +9,7 @@ import {
   streamSession,
 } from "@anyharness/sdk";
 import type {
+  Session,
   SessionEventEnvelope,
   SessionExecutionSummary,
   SessionLiveConfigSnapshot,
@@ -17,6 +18,7 @@ import type {
 } from "@anyharness/sdk";
 import {
   resolveSessionViewState,
+  resolveStatusFromExecutionSummary,
 } from "@/lib/domain/sessions/activity";
 import {
   logLatency,
@@ -195,6 +197,39 @@ export function createEmptySessionSlot(
     sseHandle: null,
     streamConnectionState: "disconnected",
     transcriptHydrated: false,
+  };
+}
+
+export function createSessionSlotFromSummary(
+  session: Session,
+  workspaceId: string,
+  options?: {
+    titleFallback?: string | null;
+    transcriptHydrated?: boolean;
+  },
+): SessionSlot {
+  const modeId =
+    session.liveConfig?.normalizedControls.mode?.currentValue
+    ?? session.modeId
+    ?? null;
+  const title = session.title?.trim() || options?.titleFallback?.trim() || null;
+
+  return {
+    ...createEmptySessionSlot(session.id, session.agentKind, {
+      workspaceId,
+      modelId: session.modelId ?? null,
+      modeId,
+      title,
+      liveConfig: session.liveConfig ?? null,
+      executionSummary: session.executionSummary ?? null,
+      mcpBindingSummaries: session.mcpBindingSummaries ?? null,
+      lastPromptAt: session.lastPromptAt ?? null,
+    }),
+    status: resolveStatusFromExecutionSummary(
+      session.executionSummary,
+      session.status ?? "idle",
+    ),
+    transcriptHydrated: options?.transcriptHydrated ?? false,
   };
 }
 

@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { ToolCallItem } from "@anyharness/sdk";
 import {
   parseAsyncSubagentLaunch,
+  parseSubagentLaunchResult,
+  parseSubagentProvisioningStatus,
+  resolveSubagentLaunchDisplay,
   resolveSubagentExecutionState,
 } from "@/lib/domain/chat/subagent-launch";
 
@@ -126,6 +129,108 @@ describe("resolveSubagentExecutionState", () => {
         { type: "tool_result_text", text: "Background subagent stopped updating before a final result was observed." },
       ],
     }))).toBe("expired_background");
+  });
+});
+
+describe("resolveSubagentLaunchDisplay", () => {
+  it("uses AnyHarness subagent launch args for title, meta, and prompt", () => {
+    expect(resolveSubagentLaunchDisplay(toolCallItem({
+      title: "mcp__subagents__create_subagent",
+      nativeToolName: "mcp__subagents__create_subagent",
+      rawInput: {
+        agentKind: "codex",
+        label: "repo-reviewer",
+        modelId: "gpt-5.4",
+        prompt: "Review the current diff.",
+      },
+    }))).toEqual({
+      title: "repo-reviewer",
+      meta: "Codex · gpt-5.4",
+      prompt: "Review the current diff.",
+    });
+  });
+
+  it("keeps legacy Agent titles and prompt content parts", () => {
+    expect(resolveSubagentLaunchDisplay(toolCallItem({
+      title: "Task: inspect compact rows",
+      nativeToolName: "Agent",
+      rawInput: {},
+      contentParts: [
+        {
+          type: "tool_input_text",
+          text: "Inspect transcript rendering.",
+        },
+      ],
+    }))).toEqual({
+      title: "Task: inspect compact rows",
+      meta: null,
+      prompt: "Inspect transcript rendering.",
+    });
+  });
+});
+
+describe("parseSubagentProvisioningStatus", () => {
+  it("parses structured AnyHarness create_subagent output", () => {
+    const item = toolCallItem({
+      nativeToolName: "mcp__subagents__create_subagent",
+      semanticKind: "subagent",
+      rawOutput: {
+        childSessionId: "child-1",
+        sessionLinkId: "link-1",
+        promptStatus: "running",
+        wakeScheduleCreated: true,
+        wakeScheduled: true,
+      },
+    });
+
+    expect(parseSubagentProvisioningStatus(item)).toEqual({
+      childSessionId: "child-1",
+      sessionLinkId: "link-1",
+      promptStatus: "running",
+      wakeScheduleCreated: true,
+      wakeScheduled: true,
+    });
+    expect(parseSubagentLaunchResult(item)).toEqual({
+      childSessionId: "child-1",
+      sessionLinkId: "link-1",
+    });
+  });
+
+  it("parses AnyHarness create_subagent JSON emitted as result text", () => {
+    const item = toolCallItem({
+      nativeToolName: "mcp__subagents__create_subagent",
+      semanticKind: "subagent",
+      contentParts: [{
+        type: "tool_result_text",
+        text: JSON.stringify({
+          childSessionId: "child-2",
+          sessionLinkId: "link-2",
+          promptStatus: "running",
+          wakeScheduleCreated: false,
+          wakeScheduled: false,
+        }),
+      }],
+    });
+
+    expect(parseSubagentProvisioningStatus(item)).toEqual({
+      childSessionId: "child-2",
+      sessionLinkId: "link-2",
+      promptStatus: "running",
+      wakeScheduleCreated: false,
+      wakeScheduled: false,
+    });
+    expect(parseSubagentLaunchResult(item)).toEqual({
+      childSessionId: "child-2",
+      sessionLinkId: "link-2",
+    });
+  });
+
+  it("does not treat arbitrary result text as provisioning output", () => {
+    expect(parseSubagentProvisioningStatus(toolCallItem({
+      nativeToolName: "mcp__subagents__create_subagent",
+      semanticKind: "subagent",
+      contentParts: [{ type: "tool_result_text", text: "Finished." }],
+    }))).toBeNull();
   });
 });
 

@@ -5,10 +5,7 @@ use std::time::Duration;
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 
-use crate::app_config::{
-    write_runtime_info_record,
-    RuntimeInfoRecord,
-};
+use crate::app_config::{write_runtime_info_record, RuntimeInfoRecord};
 use crate::desktop_telemetry_mode::{resolve_desktop_telemetry_mode, DesktopTelemetryMode};
 
 const DEFAULT_HOST: &str = "127.0.0.1";

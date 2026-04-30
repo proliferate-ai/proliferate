@@ -19,6 +19,7 @@ import {
   anyHarnessSessionEventsKey,
   anyHarnessSessionKey,
   anyHarnessSessionLiveConfigKey,
+  anyHarnessSessionSubagentsKey,
   anyHarnessSessionsKey,
 } from "../lib/query-keys.js";
 
@@ -102,6 +103,25 @@ export function useSessionEventsQuery(
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.sessions.listEvents(sessionId!, options?.request);
+    },
+  });
+}
+
+export function useSessionSubagentsQuery(
+  sessionId: string | null | undefined,
+  options?: WorkspaceQueryOptions,
+) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useQuery({
+    queryKey: anyHarnessSessionSubagentsKey(runtimeUrl, workspaceId, sessionId),
+    enabled: (options?.enabled ?? true) && !!workspaceId && !!sessionId,
+    queryFn: async () => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions.getSubagents(sessionId!);
     },
   });
 }

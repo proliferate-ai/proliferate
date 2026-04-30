@@ -1,6 +1,7 @@
 import type {
   CoworkArtifactDetailResponse,
   CoworkArtifactManifestResponse,
+  CoworkManagedWorkspacesResponse,
   CoworkStatus,
   CoworkThread,
   CreateCoworkThreadRequest,
@@ -22,6 +23,14 @@ export class CoworkClient {
 
   async listThreads(): Promise<CoworkThread[]> {
     return this.transport.get<CoworkThread[]>("/v1/cowork/threads");
+  }
+
+  async getManagedWorkspaces(
+    sessionId: string,
+  ): Promise<CoworkManagedWorkspacesResponse> {
+    return this.transport.get<CoworkManagedWorkspacesResponse>(
+      `/v1/cowork/sessions/${encodeURIComponent(sessionId)}/managed-workspaces`,
+    );
   }
 
   async getManifest(workspaceId: string): Promise<CoworkArtifactManifestResponse> {

@@ -89,6 +89,14 @@ export type PromptSessionResponse = Omit<
 export type PendingPromptSummary = components["schemas"]["PendingPromptSummary"];
 export type EditPendingPromptRequest =
   components["schemas"]["EditPendingPromptRequest"];
+export type SessionSubagentsResponse =
+  components["schemas"]["SessionSubagentsResponse"];
+export type ParentSubagentLinkSummary =
+  components["schemas"]["ParentSubagentLinkSummary"];
+export type ChildSubagentSummary =
+  components["schemas"]["ChildSubagentSummary"];
+export type SubagentCompletionSummary =
+  components["schemas"]["SubagentCompletionSummary"];
 export type InteractionDecision = components["schemas"]["InteractionDecision"];
 export type ResolveInteractionRequest =
   components["schemas"]["ResolveInteractionRequest"];

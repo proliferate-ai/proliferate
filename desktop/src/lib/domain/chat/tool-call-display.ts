@@ -4,6 +4,7 @@ import {
   formatMcpServerHint,
   parseMcpToolName,
 } from "@/lib/domain/chat/mcp-tool-presentation";
+import { resolveSubagentLaunchDisplay } from "@/lib/domain/chat/subagent-launch";
 
 export type ToolDisplayIconKey =
   | "terminal"
@@ -33,10 +34,12 @@ export function describeToolCallDisplay(
 
   switch (item.semanticKind) {
     case "subagent": {
+      const subagentDisplay = resolveSubagentLaunchDisplay(item);
       const description = readString(raw?.description) ?? undefined;
       return {
-        label: "Agent task",
+        label: subagentDisplay.title,
         hint: description
+          ?? subagentDisplay.meta
           ?? (cleanedToolName && normalizedToolName !== "agent" ? cleanedToolName : undefined),
         iconKey: "clipboard-list",
       };

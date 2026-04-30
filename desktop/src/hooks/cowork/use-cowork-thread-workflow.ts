@@ -61,6 +61,7 @@ export function useCoworkThreadWorkflow() {
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelId: state.defaultChatModelId,
+    coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
   })));
   const showToast = useToastStore((state) => state.show);
   const { selectWorkspace } = useWorkspaceSelection();
@@ -141,6 +142,7 @@ export function useCoworkThreadWorkflow() {
       const result = await createCoworkThreadMutation.mutateAsync({
         agentKind: input.agentKind,
         modelId: input.modelId,
+        coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
         ...(modeId ? { modeId } : {}),
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
         mcpBindingSummaries,
@@ -212,6 +214,7 @@ export function useCoworkThreadWorkflow() {
     createCoworkThreadMutation,
     enterPendingWorkspaceShell,
     navigateToWorkspaceShell,
+    preferences.coworkWorkspaceDelegationEnabled,
     queryClient,
     runtimeUrl,
     selectWorkspace,

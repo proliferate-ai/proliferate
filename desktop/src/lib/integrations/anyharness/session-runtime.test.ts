@@ -3,8 +3,10 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import {
   collectInactiveSessionStreamIds,
   createEmptySessionSlot,
+  createSessionSlotFromSummary,
   resumeSession,
 } from "./session-runtime";
+import type { Session } from "@anyharness/sdk";
 
 const mocks = vi.hoisted(() => ({
   resume: vi.fn(),
@@ -85,6 +87,34 @@ describe("collectInactiveSessionStreamIds", () => {
     });
 
     expect(prunableSessionIds).toEqual(["session-idle"]);
+  });
+});
+
+describe("createSessionSlotFromSummary", () => {
+  it("uses the subagent label as a fallback title for untitled runtime-created sessions", () => {
+    const session = {
+      id: "child-session",
+      agentKind: "claude",
+      modelId: "opus",
+      modeId: "default",
+      title: null,
+      status: "idle",
+      liveConfig: null,
+      executionSummary: null,
+      mcpBindingSummaries: null,
+      lastPromptAt: null,
+    } as Session;
+
+    const slot = createSessionSlotFromSummary(session, "workspace-1", {
+      titleFallback: "haiku-test",
+    });
+
+    expect(slot.sessionId).toBe("child-session");
+    expect(slot.workspaceId).toBe("workspace-1");
+    expect(slot.title).toBe("haiku-test");
+    expect(slot.transcript.sessionMeta.title).toBe("haiku-test");
+    expect(slot.transcriptHydrated).toBe(false);
+    expect(slot.status).toBe("idle");
   });
 });
 

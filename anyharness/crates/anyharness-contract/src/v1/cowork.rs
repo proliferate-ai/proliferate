@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::v1::{Session, SessionMcpBindingSummary, SessionMcpServer, Workspace};
+use crate::v1::{Session, SessionMcpBindingSummary, SessionMcpServer, SessionStatus, Workspace};
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -79,6 +79,7 @@ pub struct CoworkThread {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub requested_model_id: Option<String>,
     pub branch_name: String,
+    pub workspace_delegation_enabled: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     pub created_at: String,
@@ -99,6 +100,8 @@ pub struct CreateCoworkThreadRequest {
     pub mcp_servers: Option<Vec<SessionMcpServer>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cowork_workspace_delegation_enabled: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -107,4 +110,59 @@ pub struct CreateCoworkThreadResponse {
     pub thread: CoworkThread,
     pub workspace: Workspace,
     pub session: Session,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CoworkManagedWorkspacesResponse {
+    pub workspaces: Vec<CoworkManagedWorkspaceSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CoworkManagedWorkspaceSummary {
+    pub ownership_id: String,
+    pub workspace_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_workspace_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    pub created_at: String,
+    pub sessions: Vec<CoworkCodingSessionSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CoworkCodingSessionSummary {
+    pub session_link_id: String,
+    pub coding_session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    pub status: SessionStatus,
+    pub agent_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode_id: Option<String>,
+    pub wake_scheduled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_completion: Option<CoworkCodingCompletionSummary>,
+    pub link_created_at: String,
+    pub session_created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CoworkCodingCompletionSummary {
+    pub completion_id: String,
+    pub child_turn_id: String,
+    pub child_last_event_seq: i64,
+    pub outcome: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_event_seq: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_prompt_seq: Option<i64>,
+    pub created_at: String,
 }

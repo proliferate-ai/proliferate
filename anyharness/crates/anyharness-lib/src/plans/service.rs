@@ -462,6 +462,7 @@ pub fn plan_item_payload(plan: &PlanRecord, source_agent_kind: &str) -> Transcri
             "snapshotHash": plan.snapshot_hash,
         })),
         content_parts: vec![snapshot_part(plan), decision_part(plan, None)],
+        prompt_provenance: None,
     }
 }
 

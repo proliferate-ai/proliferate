@@ -76,8 +76,8 @@ pub fn init(command: &Commands) -> TelemetryGuards {
         ))
     });
 
-    let file_sink = log_path_for_command(command).and_then(|path| {
-        match create_file_log_sink(&path) {
+    let file_sink =
+        log_path_for_command(command).and_then(|path| match create_file_log_sink(&path) {
             Ok(sink) => Some(sink),
             Err(error) => {
                 eprintln!(
@@ -86,8 +86,7 @@ pub fn init(command: &Commands) -> TelemetryGuards {
                 );
                 None
             }
-        }
-    });
+        });
 
     let console_layer = tracing_subscriber::fmt::layer().with_filter(env_filter_from_env());
 
@@ -130,10 +129,7 @@ fn sentry_scope_tags() -> [(&'static str, &'static str); 2] {
 #[cfg(test)]
 mod tests {
     use super::{
-        log_path_for_command,
-        runtime_home_from_install,
-        runtime_home_from_serve,
-        sentry_scope_tags,
+        log_path_for_command, runtime_home_from_install, runtime_home_from_serve, sentry_scope_tags,
     };
     use crate::{
         cli::Commands,

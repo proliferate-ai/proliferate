@@ -34,7 +34,31 @@ impl SessionStore {
             // dependent rows explicitly.
             conn.execute("DELETE FROM cowork_threads WHERE session_id = ?1", [id])?;
             conn.execute(
+                "DELETE FROM cowork_managed_workspaces WHERE parent_session_id = ?1",
+                [id],
+            )?;
+            conn.execute(
                 "DELETE FROM session_background_work WHERE session_id = ?1",
+                [id],
+            )?;
+            conn.execute(
+                "DELETE FROM session_link_wake_schedules
+                 WHERE session_link_id IN (
+                    SELECT id FROM session_links
+                    WHERE parent_session_id = ?1 OR child_session_id = ?1
+                 )",
+                [id],
+            )?;
+            conn.execute(
+                "DELETE FROM session_link_completions
+                 WHERE session_link_id IN (
+                    SELECT id FROM session_links
+                    WHERE parent_session_id = ?1 OR child_session_id = ?1
+                 )",
+                [id],
+            )?;
+            conn.execute(
+                "DELETE FROM session_links WHERE parent_session_id = ?1 OR child_session_id = ?1",
                 [id],
             )?;
             conn.execute(
@@ -87,6 +111,24 @@ impl SessionStore {
                      updated_at = ?3
                  WHERE id = ?4",
                 params![mcp_bindings_ciphertext, mcp_binding_summaries_json, now, id],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn update_mcp_binding_summaries(
+        &self,
+        id: &str,
+        mcp_binding_summaries_json: Option<String>,
+    ) -> anyhow::Result<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE sessions
+                 SET mcp_binding_summaries_json = ?1,
+                     updated_at = ?2
+                 WHERE id = ?3",
+                params![mcp_binding_summaries_json, now, id],
             )?;
             Ok(())
         })
@@ -476,6 +518,7 @@ impl SessionStore {
     ) -> anyhow::Result<PendingPromptRecord> {
         let queued_at = chrono::Utc::now().to_rfc3339();
         let blocks_json = payload.blocks_json()?;
+        let provenance_json = payload.provenance_json()?;
         self.db.with_tx(|tx| {
             let next_seq: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(seq), 0) + 1 FROM session_pending_prompts WHERE session_id = ?1",
@@ -483,14 +526,16 @@ impl SessionStore {
                 |row| row.get(0),
             )?;
             tx.execute(
-                "INSERT INTO session_pending_prompts (session_id, seq, prompt_id, text, blocks_json, queued_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO session_pending_prompts (
+                    session_id, seq, prompt_id, text, blocks_json, provenance_json, queued_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
                     session_id,
                     next_seq,
                     prompt_id,
                     payload.text_summary,
                     blocks_json,
+                    provenance_json,
                     queued_at
                 ],
             )?;
@@ -500,6 +545,7 @@ impl SessionStore {
                 prompt_id: prompt_id.map(|s| s.to_string()),
                 text: payload.text_summary.clone(),
                 blocks_json,
+                provenance_json,
                 queued_at: queued_at.clone(),
             })
         })
@@ -815,6 +861,58 @@ impl SessionStore {
         })
     }
 
+    /// Atomically append an already-normalized runtime-owned event using the
+    /// next durable sequence number.
+    ///
+    /// # Invariants
+    ///
+    /// Callers must hold the ACP start/inject critical section described in
+    /// `docs/anyharness/src/acp.md#startinject-sequence-invariant` and must
+    /// have confirmed that no live actor owns event sequencing for this
+    /// session. Live actors assign seq from memory, so calling this while an
+    /// actor is live can race that actor's `SessionEventSink`.
+    pub(crate) fn append_event_with_next_seq(
+        &self,
+        session_id: &str,
+        event: anyharness_contract::v1::SessionEvent,
+    ) -> anyhow::Result<anyharness_contract::v1::SessionEventEnvelope> {
+        self.db.with_tx(|conn| {
+            let session_exists: bool = conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?1)",
+                [session_id],
+                |row| row.get(0),
+            )?;
+            if !session_exists {
+                return Err(rusqlite::Error::QueryReturnedNoRows);
+            }
+
+            let seq: i64 = conn.query_row(
+                "SELECT COALESCE(MAX(seq), 0) + 1 FROM session_events WHERE session_id = ?1",
+                [session_id],
+                |row| row.get(0),
+            )?;
+            let timestamp = chrono::Utc::now().to_rfc3339();
+            let event_type = event.event_type().to_string();
+            let envelope = anyharness_contract::v1::SessionEventEnvelope {
+                session_id: session_id.to_string(),
+                seq,
+                timestamp: timestamp.clone(),
+                turn_id: None,
+                item_id: None,
+                event,
+            };
+            let payload_json = serde_json::to_string(&envelope.event)
+                .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
+            conn.execute(
+                "INSERT INTO session_events (
+                    session_id, seq, timestamp, event_type, turn_id, item_id, payload_json
+                 ) VALUES (?1, ?2, ?3, ?4, NULL, NULL, ?5)",
+                params![session_id, seq, timestamp, event_type, payload_json],
+            )?;
+            Ok(envelope)
+        })
+    }
+
     pub fn append_raw_notification(
         &self,
         session_id: &str,
@@ -996,6 +1094,7 @@ fn map_session(row: &rusqlite::Row) -> rusqlite::Result<SessionRecord> {
         mcp_bindings_ciphertext: row.get("mcp_bindings_ciphertext")?,
         mcp_binding_summaries_json: row.get("mcp_binding_summaries_json")?,
         system_prompt_append: row.get("system_prompt_append")?,
+        subagents_enabled: row.get::<_, i64>("subagents_enabled")? != 0,
         origin: decode_origin_json("sessions", &id, origin_json),
     })
 }
@@ -1053,6 +1152,7 @@ fn map_pending_prompt(row: &rusqlite::Row) -> rusqlite::Result<PendingPromptReco
         prompt_id: row.get("prompt_id")?,
         text: row.get("text")?,
         blocks_json: row.get("blocks_json")?,
+        provenance_json: row.get("provenance_json")?,
         queued_at: row.get("queued_at")?,
     })
 }
@@ -1083,8 +1183,8 @@ fn insert_session_row(conn: &rusqlite::Connection, record: &SessionRecord) -> ru
          requested_model_id, current_model_id, requested_mode_id, current_mode_id,
          title, thinking_level_id, thinking_budget_tokens, status, created_at,
          updated_at, last_prompt_at, closed_at, dismissed_at, mcp_bindings_ciphertext,
-         mcp_binding_summaries_json, system_prompt_append, origin_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+         mcp_binding_summaries_json, system_prompt_append, subagents_enabled, origin_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
         params![
             record.id,
             record.workspace_id,
@@ -1106,6 +1206,7 @@ fn insert_session_row(conn: &rusqlite::Connection, record: &SessionRecord) -> ru
             record.mcp_bindings_ciphertext,
             record.mcp_binding_summaries_json,
             record.system_prompt_append,
+            if record.subagents_enabled { 1 } else { 0 },
             origin_json,
         ],
     )?;
@@ -1164,8 +1265,9 @@ fn insert_pending_prompt_row(
     record: &PendingPromptRecord,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        "INSERT INTO session_pending_prompts (session_id, seq, prompt_id, text, blocks_json, queued_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT INTO session_pending_prompts (
+            session_id, seq, prompt_id, text, blocks_json, queued_at, provenance_json
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![
             record.session_id,
             record.seq,
@@ -1173,6 +1275,7 @@ fn insert_pending_prompt_row(
             record.text,
             record.blocks_json,
             record.queued_at,
+            record.provenance_json,
         ],
     )?;
     Ok(())
@@ -1280,11 +1383,18 @@ mod tests {
     use super::*;
     use crate::origin::OriginContext;
     use crate::persistence::Db;
+    use crate::sessions::prompt::{PromptPayload, PromptProvenance};
 
     fn count_rows(db: &Db, table: &str, session_id: &str) -> i64 {
         let sql = format!("SELECT COUNT(*) FROM {table} WHERE session_id = ?1");
         db.with_conn(|conn| conn.query_row(&sql, [session_id], |row| row.get(0)))
             .expect("count rows")
+    }
+
+    fn count_all_rows(db: &Db, table: &str) -> i64 {
+        let sql = format!("SELECT COUNT(*) FROM {table}");
+        db.with_conn(|conn| conn.query_row(&sql, [], |row| row.get(0)))
+            .expect("count all rows")
     }
 
     fn seed_workspace(db: &Db) {
@@ -1321,6 +1431,7 @@ mod tests {
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
             system_prompt_append: None,
+            subagents_enabled: true,
             origin: None,
         }
     }
@@ -1393,6 +1504,51 @@ mod tests {
     }
 
     #[test]
+    fn pending_prompt_preserves_internal_provenance_through_load_edit_and_drain() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        store.insert(&session_record()).expect("insert session");
+        let payload = PromptPayload {
+            text_summary: "delegate this".to_string(),
+            blocks: vec![],
+            provenance: Some(PromptProvenance::AgentSession {
+                source_session_id: "parent-session".to_string(),
+                session_link_id: Some("link-1".to_string()),
+                label: Some("Parent agent".to_string()),
+            }),
+        };
+
+        let inserted = store
+            .insert_pending_prompt_payload("session-1", &payload, Some("prompt-1"))
+            .expect("insert pending prompt");
+        assert!(inserted.provenance_json.is_some());
+
+        let loaded = store
+            .find_pending_prompt("session-1", inserted.seq)
+            .expect("find prompt")
+            .expect("prompt exists");
+        assert_eq!(loaded.prompt_payload().provenance, payload.provenance);
+
+        store
+            .update_pending_prompt_text("session-1", inserted.seq, "edited")
+            .expect("edit prompt");
+        let edited = store
+            .find_pending_prompt("session-1", inserted.seq)
+            .expect("find edited prompt")
+            .expect("edited prompt exists");
+        assert_eq!(edited.text, "edited");
+        assert_eq!(edited.prompt_payload().provenance, payload.provenance);
+
+        let drained = store
+            .delete_pending_prompt_record("session-1", inserted.seq)
+            .expect("drain prompt")
+            .expect("drained prompt exists");
+        assert_eq!(drained.prompt_payload().provenance, payload.provenance);
+    }
+
+    #[test]
     fn delete_session_removes_dependent_rows() {
         let db = Db::open_in_memory().expect("open db");
         seed_workspace(&db);
@@ -1400,6 +1556,9 @@ mod tests {
         let store = SessionStore::new(db.clone());
         let record = session_record();
         store.insert(&record).expect("insert session");
+        let mut child = session_record();
+        child.id = "session-child".to_string();
+        store.insert(&child).expect("insert child session");
 
         store
             .append_event(&SessionEventRecord {
@@ -1459,6 +1618,32 @@ mod tests {
                 completed_at: None,
             })
             .expect("insert background work");
+        db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO session_links (
+                    id, relation, parent_session_id, child_session_id, workspace_relation,
+                    created_at
+                 ) VALUES ('link-1', 'subagent', 'session-1', 'session-child', 'same_workspace', ?1)",
+                ["2026-03-25T00:01:05Z"],
+            )?;
+            conn.execute(
+                "INSERT INTO session_link_completions (
+                    completion_id, session_link_id, child_turn_id, child_last_event_seq,
+                    outcome, created_at, updated_at
+                 ) VALUES (
+                    'completion-1', 'link-1', 'turn-child-1', 42,
+                    'completed', ?1, ?1
+                 )",
+                ["2026-03-25T00:01:06Z"],
+            )?;
+            conn.execute(
+                "INSERT INTO session_link_wake_schedules (session_link_id)
+                 VALUES ('link-1')",
+                [],
+            )?;
+            Ok(())
+        })
+        .expect("insert subagent link and completion");
 
         assert_eq!(count_rows(&db, "session_events", "session-1"), 1);
         assert_eq!(count_rows(&db, "session_raw_notifications", "session-1"), 1);
@@ -1472,6 +1657,9 @@ mod tests {
         );
         assert_eq!(count_rows(&db, "session_pending_prompts", "session-1"), 1);
         assert_eq!(count_rows(&db, "session_background_work", "session-1"), 1);
+        assert_eq!(count_all_rows(&db, "session_links"), 1);
+        assert_eq!(count_all_rows(&db, "session_link_completions"), 1);
+        assert_eq!(count_all_rows(&db, "session_link_wake_schedules"), 1);
 
         store
             .delete_session("session-1")
@@ -1493,6 +1681,9 @@ mod tests {
         );
         assert_eq!(count_rows(&db, "session_pending_prompts", "session-1"), 0);
         assert_eq!(count_rows(&db, "session_background_work", "session-1"), 0);
+        assert_eq!(count_all_rows(&db, "session_links"), 0);
+        assert_eq!(count_all_rows(&db, "session_link_completions"), 0);
+        assert_eq!(count_all_rows(&db, "session_link_wake_schedules"), 0);
     }
 
     #[test]

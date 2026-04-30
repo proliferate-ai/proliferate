@@ -1,32 +1,44 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use anyharness_contract::v1::SessionMcpBindingSummary;
+use anyharness_contract::v1::{
+    CoworkCodingCompletionSummary, CoworkCodingSessionSummary, CoworkManagedWorkspaceSummary,
+    CoworkManagedWorkspacesResponse, SessionLinkTurnCompletedPayload, SessionMcpBindingSummary,
+    SubagentTurnOutcome,
+};
 use uuid::Uuid;
 
+use super::delegation::model::{
+    CreateCodingSessionInput, CreateCodingWorkspaceInput, SendCodingMessageInput,
+};
+use super::delegation::service::{CoworkDelegationError, CoworkDelegationService};
 use super::mcp_auth::CoworkMcpAuth;
-use super::model::{CoworkRootRecord, CoworkThreadRecord};
+use super::model::{CoworkManagedWorkspaceRecord, CoworkRootRecord, CoworkThreadRecord};
 use super::service::CoworkService;
+use crate::acp::manager::AcpManager;
+use crate::acp::session_actor::SessionCommand;
 use crate::git::GitService;
 use crate::origin::OriginContext;
 use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;
+use crate::sessions::extensions::{
+    SessionExtension, SessionLaunchContext, SessionLaunchExtras, SessionTurnFinishedContext,
+};
+use crate::sessions::links::completions::LinkCompletionRecord;
+use crate::sessions::links::model::SessionLinkRelation;
 use crate::sessions::mcp::{SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer};
 use crate::sessions::model::SessionRecord;
-use crate::sessions::runtime::{CreateAndStartSessionError, SessionRuntime};
+use crate::sessions::prompt::{PromptPayload, PromptProvenance};
+use crate::sessions::runtime::{CreateAndStartSessionError, SendPromptOutcome, SessionRuntime};
+use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
 use crate::sessions::service::SessionService;
+use crate::sessions::store::SessionStore;
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::runtime::WorkspaceRuntime;
-
-#[derive(Debug, Clone, Default)]
-pub struct CoworkSessionLaunchExtras {
-    pub system_prompt_append: Vec<String>,
-    pub mcp_servers: Vec<SessionMcpServer>,
-}
 
 #[derive(Debug)]
 pub enum CoworkCreateThreadError {
@@ -57,6 +69,40 @@ pub struct CreateCoworkThreadResult {
     pub session: SessionRecord,
 }
 
+#[derive(Debug, Clone)]
+pub struct CreateCodingWorkspaceResult {
+    pub managed_workspace: CoworkManagedWorkspaceRecord,
+    pub workspace: WorkspaceRecord,
+    pub ready: bool,
+    pub status: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateCodingSessionResult {
+    pub session_link: crate::sessions::links::model::SessionLinkRecord,
+    pub session: SessionRecord,
+    pub prompt_status: String,
+    pub wake_schedule_created: bool,
+    pub wake_scheduled: bool,
+}
+
+#[derive(Debug)]
+pub struct SendCodingMessageResult {
+    pub coding_session_id: String,
+    pub outcome: SendPromptOutcome,
+    pub wake_schedule_created: bool,
+    pub wake_scheduled: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct CoworkCodingStatusResult {
+    pub session: SessionRecord,
+    pub execution: anyharness_contract::v1::SessionExecutionSummary,
+    pub session_link: crate::sessions::links::model::SessionLinkRecord,
+    pub wake_scheduled: bool,
+    pub latest_completion: Option<LinkCompletionRecord>,
+}
+
 const COWORK_WORKSPACE_PATH_PLACEHOLDER: &str = "__PROLIFERATE_COWORK_WORKSPACE_PATH__";
 
 fn materialize_cowork_workspace_path(mcp_servers: &mut [SessionMcpServer], workspace_path: &str) {
@@ -77,6 +123,9 @@ pub struct CoworkSessionHooks {
     runtime_base_url: String,
     runtime_bearer_token: Option<String>,
     mcp_auth: Arc<CoworkMcpAuth>,
+    delegation_service: CoworkDelegationService,
+    acp_manager: AcpManager,
+    session_store: SessionStore,
     autosave_locks: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
 }
 
@@ -85,22 +134,28 @@ impl CoworkSessionHooks {
         runtime_base_url: String,
         runtime_bearer_token: Option<String>,
         mcp_auth: Arc<CoworkMcpAuth>,
+        delegation_service: CoworkDelegationService,
+        acp_manager: AcpManager,
+        session_store: SessionStore,
     ) -> Self {
         Self {
             runtime_base_url,
             runtime_bearer_token,
             mcp_auth,
+            delegation_service,
+            acp_manager,
+            session_store,
             autosave_locks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
-    pub fn resolve_launch_extras(
+    fn cowork_launch_extras(
         &self,
         workspace: &WorkspaceRecord,
         session_id: &str,
-    ) -> anyhow::Result<CoworkSessionLaunchExtras> {
+    ) -> anyhow::Result<SessionLaunchExtras> {
         if workspace.surface != "cowork" {
-            return Ok(CoworkSessionLaunchExtras::default());
+            return Ok(SessionLaunchExtras::default());
         }
 
         let capability_token = self
@@ -123,7 +178,7 @@ impl CoworkSessionHooks {
             value: capability_token,
         });
 
-        Ok(CoworkSessionLaunchExtras {
+        Ok(SessionLaunchExtras {
             system_prompt_append: cowork_artifact_system_prompt_append(),
             mcp_servers: vec![SessionMcpServer::Http(SessionMcpHttpServer {
                 connection_id: "cowork".to_string(),
@@ -132,6 +187,7 @@ impl CoworkSessionHooks {
                 url,
                 headers,
             })],
+            mcp_binding_summaries: Vec::new(),
         })
     }
 
@@ -149,7 +205,7 @@ impl CoworkSessionHooks {
         self.mcp_auth.capability_header_name()
     }
 
-    pub fn notify_turn_finished(&self, workspace: &WorkspaceRecord, session_id: &str) {
+    fn notify_turn_finished(&self, workspace: &WorkspaceRecord, session_id: &str) {
         if workspace.surface != "cowork" {
             return;
         }
@@ -186,8 +242,164 @@ impl CoworkSessionHooks {
     }
 }
 
+impl SessionExtension for CoworkSessionHooks {
+    fn resolve_launch_extras(
+        &self,
+        ctx: &SessionLaunchContext<'_>,
+    ) -> anyhow::Result<SessionLaunchExtras> {
+        self.cowork_launch_extras(ctx.workspace, &ctx.session.id)
+    }
+
+    fn on_turn_finished(&self, ctx: SessionTurnFinishedContext) {
+        self.notify_turn_finished(&ctx.workspace, &ctx.session_id);
+        let service = self.delegation_service.clone();
+        let acp_manager = self.acp_manager.clone();
+        let session_store = self.session_store.clone();
+        tokio::spawn(async move {
+            if let Err(error) =
+                deliver_cowork_coding_completion(service, acp_manager, session_store, ctx).await
+            {
+                tracing::warn!(error = %error, "failed to process cowork coding completion");
+            }
+        });
+    }
+}
+
+async fn deliver_cowork_coding_completion(
+    service: CoworkDelegationService,
+    acp_manager: AcpManager,
+    session_store: SessionStore,
+    ctx: SessionTurnFinishedContext,
+) -> anyhow::Result<()> {
+    if ctx.turn_id.trim().is_empty() {
+        return Ok(());
+    }
+    let Some(link) = service.find_coding_parent_for_child(&ctx.session_id)? else {
+        return Ok(());
+    };
+
+    let now = chrono::Utc::now().to_rfc3339();
+    let completion = LinkCompletionRecord {
+        completion_id: Uuid::new_v4().to_string(),
+        session_link_id: link.id.clone(),
+        child_turn_id: ctx.turn_id.clone(),
+        child_last_event_seq: ctx.last_event_seq,
+        outcome: ctx.outcome,
+        parent_event_seq: None,
+        parent_prompt_seq: None,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    let prompt = cowork_coding_wake_prompt_text(
+        link.label.as_deref(),
+        &link.child_session_id,
+        &link.id,
+        ctx.outcome,
+        ctx.last_event_seq,
+    );
+    let prompt_payload = PromptPayload::text(prompt).with_provenance(PromptProvenance::LinkWake {
+        relation: SessionLinkRelation::CoworkCodingSession
+            .as_str()
+            .to_string(),
+        session_link_id: link.id.clone(),
+        completion_id: completion.completion_id.clone(),
+        label: link.label.clone(),
+    });
+    let Some(inserted) = service.insert_completion_and_consume_schedule(
+        &completion,
+        &link.parent_session_id,
+        &prompt_payload,
+    )?
+    else {
+        return Ok(());
+    };
+
+    let payload = SessionLinkTurnCompletedPayload {
+        relation: SessionLinkRelation::CoworkCodingSession
+            .as_str()
+            .to_string(),
+        completion_id: inserted.completion.completion_id.clone(),
+        session_link_id: link.id.clone(),
+        parent_session_id: link.parent_session_id.clone(),
+        child_session_id: link.child_session_id.clone(),
+        child_turn_id: ctx.turn_id.clone(),
+        child_last_event_seq: ctx.last_event_seq,
+        outcome: to_contract_outcome(ctx.outcome),
+        label: link.label.clone(),
+    };
+    match acp_manager
+        .emit_runtime_event(
+            &link.parent_session_id,
+            session_store.clone(),
+            RuntimeInjectedSessionEvent::SessionLinkTurnCompleted(payload),
+        )
+        .await
+    {
+        Ok(envelope) => {
+            let _ = service.mark_parent_event_seq(&inserted.completion.completion_id, envelope.seq);
+        }
+        Err(error) => {
+            tracing::warn!(
+                parent_session_id = %link.parent_session_id,
+                child_session_id = %link.child_session_id,
+                completion_id = %inserted.completion.completion_id,
+                error = %error,
+                "failed to inject cowork coding completion event"
+            );
+        }
+    }
+
+    if let (Some(record), Some(handle)) = (
+        inserted.wake_prompt.as_ref(),
+        acp_manager.get_handle(&link.parent_session_id).await,
+    ) {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        handle
+            .command_tx
+            .send(SessionCommand::Prompt {
+                payload: prompt_payload,
+                prompt_id: None,
+                latency: None,
+                from_queue_seq: Some(record.seq),
+                respond_to: tx,
+            })
+            .await?;
+        let _ = rx.await?.map_err(|error| anyhow::anyhow!("{error:?}"))?;
+    }
+    Ok(())
+}
+
+fn cowork_coding_wake_prompt_text(
+    label: Option<&str>,
+    child_session_id: &str,
+    session_link_id: &str,
+    outcome: crate::sessions::extensions::SessionTurnOutcome,
+    child_last_event_seq: i64,
+) -> String {
+    let label = label.unwrap_or("coding session");
+    format!(
+        "Coding session \"{label}\" finished a turn.\n\nChild session: {child_session_id}\nSession link: {session_link_id}\nOutcome: {}\nLast child event seq: {child_last_event_seq}\n\nUse the cowork coding-session tools to inspect the child session before continuing.",
+        outcome.as_str()
+    )
+}
+
+fn to_contract_outcome(
+    outcome: crate::sessions::extensions::SessionTurnOutcome,
+) -> SubagentTurnOutcome {
+    match outcome {
+        crate::sessions::extensions::SessionTurnOutcome::Completed => {
+            SubagentTurnOutcome::Completed
+        }
+        crate::sessions::extensions::SessionTurnOutcome::Failed => SubagentTurnOutcome::Failed,
+        crate::sessions::extensions::SessionTurnOutcome::Cancelled => {
+            SubagentTurnOutcome::Cancelled
+        }
+    }
+}
+
 pub struct CoworkRuntime {
     cowork_service: CoworkService,
+    delegation_service: CoworkDelegationService,
     repo_root_service: RepoRootService,
     workspace_runtime: Arc<WorkspaceRuntime>,
     session_service: Arc<SessionService>,
@@ -198,6 +410,7 @@ pub struct CoworkRuntime {
 impl CoworkRuntime {
     pub fn new(
         cowork_service: CoworkService,
+        delegation_service: CoworkDelegationService,
         repo_root_service: RepoRootService,
         workspace_runtime: Arc<WorkspaceRuntime>,
         session_service: Arc<SessionService>,
@@ -206,6 +419,7 @@ impl CoworkRuntime {
     ) -> Self {
         Self {
             cowork_service,
+            delegation_service,
             repo_root_service,
             workspace_runtime,
             session_service,
@@ -265,6 +479,7 @@ impl CoworkRuntime {
         mode_id: Option<&str>,
         mut mcp_servers: Vec<SessionMcpServer>,
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+        workspace_delegation_enabled: bool,
     ) -> Result<CreateCoworkThreadResult, CoworkCreateThreadError> {
         let total_started = Instant::now();
         let mcp_server_count = mcp_servers.len();
@@ -315,6 +530,7 @@ impl CoworkRuntime {
             None,
             mcp_servers,
             mcp_binding_summaries,
+            false,
             OriginContext::cowork(),
         ) {
             Ok(session) => session,
@@ -344,6 +560,7 @@ impl CoworkRuntime {
             agent_kind: agent_kind.to_string(),
             requested_model_id: model_id.map(str::to_string),
             branch_name,
+            workspace_delegation_enabled,
             created_at: chrono::Utc::now().to_rfc3339(),
         };
         let thread = match self.cowork_service.create_thread(thread_record) {
@@ -421,6 +638,506 @@ impl CoworkRuntime {
         Ok(threads)
     }
 
+    pub fn validate_canonical_thread(
+        &self,
+        workspace_id: &str,
+        session_id: &str,
+    ) -> anyhow::Result<(CoworkThreadRecord, WorkspaceRecord, SessionRecord)> {
+        let workspace = self
+            .workspace_runtime
+            .get_workspace(workspace_id)?
+            .ok_or_else(|| anyhow::anyhow!("workspace not found"))?;
+        let session = self
+            .session_service
+            .get_session(session_id)?
+            .ok_or_else(|| anyhow::anyhow!("session not found"))?;
+        if session.workspace_id != workspace_id {
+            anyhow::bail!("session does not belong to workspace");
+        }
+        if workspace.surface != "cowork" {
+            anyhow::bail!("workspace is not a cowork workspace");
+        }
+        let thread = self
+            .cowork_service
+            .find_thread_by_session(session_id)?
+            .ok_or_else(|| anyhow::anyhow!("session is not the canonical cowork session"))?;
+        if thread.workspace_id != workspace_id {
+            anyhow::bail!("cowork thread does not belong to workspace");
+        }
+        Ok((thread, workspace, session))
+    }
+
+    pub fn workspace_delegation_enabled(&self, parent_session_id: &str) -> anyhow::Result<bool> {
+        self.delegation_service
+            .workspace_delegation_enabled(parent_session_id)
+    }
+
+    pub fn list_coding_workspace_launch_options(
+        &self,
+        parent_session_id: &str,
+    ) -> Result<Vec<super::delegation::model::CodingWorkspaceLaunchOption>, CoworkDelegationError>
+    {
+        self.delegation_service
+            .list_source_workspace_options(parent_session_id)
+    }
+
+    pub fn workspace_session_launch_catalog(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<crate::sessions::service::WorkspaceSessionLaunchCatalogData> {
+        self.session_runtime
+            .workspace_session_launch_catalog(workspace_id)
+    }
+
+    pub fn validate_managed_coding_workspace(
+        &self,
+        parent_session_id: &str,
+        workspace_id: &str,
+    ) -> Result<CoworkManagedWorkspaceRecord, CoworkDelegationError> {
+        self.delegation_service
+            .find_managed_workspace(parent_session_id, workspace_id)
+    }
+
+    pub fn session_record(&self, session_id: &str) -> anyhow::Result<Option<SessionRecord>> {
+        self.session_service.get_session(session_id)
+    }
+
+    pub fn live_config_snapshot(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Option<anyharness_contract::v1::SessionLiveConfigSnapshot>> {
+        self.session_runtime.live_config_snapshot(session_id)
+    }
+
+    pub fn repo_default_branch_for_workspace(
+        &self,
+        workspace: &WorkspaceRecord,
+    ) -> anyhow::Result<Option<String>> {
+        let Some(repo_root_id) = workspace.repo_root_id.as_deref() else {
+            return Ok(None);
+        };
+        Ok(self
+            .repo_root_service
+            .get_repo_root(repo_root_id)?
+            .and_then(|repo_root| repo_root.default_branch))
+    }
+
+    pub async fn create_coding_workspace(
+        &self,
+        parent_session_id: &str,
+        input: CreateCodingWorkspaceInput,
+    ) -> Result<CreateCodingWorkspaceResult, CoworkDelegationError> {
+        self.delegation_service
+            .validate_parent_can_delegate(parent_session_id)?;
+        let source_workspace = self
+            .delegation_service
+            .validate_source_workspace(&input.source_workspace_id)?;
+        let repo_root_id = source_workspace.repo_root_id.clone().ok_or_else(|| {
+            CoworkDelegationError::IneligibleSourceWorkspace(
+                "workspace has no repo root metadata".into(),
+            )
+        })?;
+        let repo_root = self
+            .repo_root_service
+            .get_repo_root(&repo_root_id)?
+            .ok_or_else(|| anyhow::anyhow!("repo root not found: {repo_root_id}"))?;
+        let workspace_id = Uuid::new_v4().to_string();
+        let branch_name = format!("cowork/coding/{workspace_id}");
+        let target_path = self
+            .runtime_home
+            .join("cowork")
+            .join("coding-workspaces")
+            .join(&workspace_id);
+        if let Some(parent) = target_path.parent() {
+            fs::create_dir_all(parent).map_err(anyhow::Error::from)?;
+        }
+        let target_path_string = target_path.display().to_string();
+        let base_branch = repo_root
+            .default_branch
+            .as_deref()
+            .or(source_workspace.original_branch.as_deref())
+            .or(source_workspace.current_branch.as_deref())
+            .unwrap_or("main")
+            .to_string();
+
+        let worktree = self.workspace_runtime.create_worktree_with_surface(
+            &repo_root_id,
+            &target_path_string,
+            &branch_name,
+            Some(&base_branch),
+            None,
+            "standard",
+            OriginContext::cowork(),
+        )?;
+        let label = normalize_optional_text(input.label);
+        let managed_workspace = CoworkManagedWorkspaceRecord {
+            id: Uuid::new_v4().to_string(),
+            parent_session_id: parent_session_id.to_string(),
+            workspace_id: worktree.workspace.id.clone(),
+            source_workspace_id: Some(source_workspace.id.clone()),
+            label: label.clone(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+        if let Err(error) = self
+            .delegation_service
+            .insert_managed_workspace(&managed_workspace)
+        {
+            self.cleanup_failed_coding_workspace(&repo_root, &worktree.workspace, &target_path);
+            return Err(error);
+        }
+
+        Ok(CreateCodingWorkspaceResult {
+            managed_workspace,
+            workspace: worktree.workspace,
+            ready: true,
+            status: "ready".to_string(),
+        })
+    }
+
+    pub async fn create_coding_session(
+        &self,
+        parent_session_id: &str,
+        input: CreateCodingSessionInput,
+    ) -> Result<CreateCodingSessionResult, CoworkDelegationError> {
+        let parent_thread = self
+            .delegation_service
+            .validate_parent_can_delegate(parent_session_id)?;
+        let prompt = normalize_required_prompt(input.prompt)?;
+        let managed = self
+            .delegation_service
+            .find_managed_workspace(parent_session_id, &input.workspace_id)?;
+        let session = self
+            .create_durable_coding_session(
+                &managed.workspace_id,
+                &parent_thread,
+                input.agent_kind.as_deref(),
+                input.model_id.as_deref(),
+                input.mode_id.as_deref(),
+            )
+            .map_err(|error| CoworkDelegationError::Internal(anyhow::anyhow!("{error:?}")))?;
+        let label = normalize_optional_text(input.label);
+        let link = match self.delegation_service.create_coding_session_link(
+            parent_session_id,
+            &managed.workspace_id,
+            &session.id,
+            label.clone(),
+        ) {
+            Ok(link) => link,
+            Err(error) => {
+                let _ = self.session_service.store().delete_session(&session.id);
+                return Err(error);
+            }
+        };
+        let mut wake_schedule_created = false;
+        if input.wake_on_completion {
+            match self
+                .delegation_service
+                .schedule_coding_wake(parent_session_id, &session.id)
+            {
+                Ok((_link, created)) => {
+                    wake_schedule_created = created;
+                }
+                Err(error) => {
+                    let _ = self.session_service.store().delete_session(&session.id);
+                    return Err(error);
+                }
+            }
+        }
+        let started = match self
+            .session_runtime
+            .start_persisted_session(&session, None)
+            .await
+        {
+            Ok(started) => started,
+            Err(error) => {
+                if input.wake_on_completion {
+                    let _ = self.delegation_service.delete_wake_schedule(&link.id);
+                }
+                let _ = self.session_service.store().delete_session(&session.id);
+                return Err(CoworkDelegationError::Internal(anyhow::anyhow!(
+                    "{error:?}"
+                )));
+            }
+        };
+        let outcome = match self
+            .send_parent_prompt_to_coding_session(
+                parent_session_id,
+                &started.id,
+                &link.id,
+                label,
+                prompt,
+            )
+            .await
+        {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                if input.wake_on_completion {
+                    let _ = self.delegation_service.delete_wake_schedule(&link.id);
+                }
+                return Err(error);
+            }
+        };
+        Ok(CreateCodingSessionResult {
+            session_link: link,
+            session: started,
+            prompt_status: prompt_outcome_label(&outcome).to_string(),
+            wake_schedule_created,
+            wake_scheduled: input.wake_on_completion,
+        })
+    }
+
+    pub async fn send_coding_message(
+        &self,
+        parent_session_id: &str,
+        input: SendCodingMessageInput,
+    ) -> Result<SendCodingMessageResult, CoworkDelegationError> {
+        let prompt = normalize_required_prompt(input.prompt)?;
+        let link = self
+            .delegation_service
+            .authorize_coding_session(parent_session_id, &input.coding_session_id)?;
+        let mut wake_schedule_created = false;
+        if input.wake_on_completion {
+            let (_link, created) = self
+                .delegation_service
+                .schedule_coding_wake(parent_session_id, &input.coding_session_id)?;
+            wake_schedule_created = created;
+        }
+        let outcome = match self
+            .session_runtime
+            .send_text_prompt_with_provenance(
+                &input.coding_session_id,
+                prompt,
+                CoworkDelegationService::parent_to_child_provenance(
+                    parent_session_id,
+                    &link.id,
+                    link.label,
+                ),
+            )
+            .await
+        {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                if input.wake_on_completion {
+                    let _ = self.delegation_service.delete_wake_schedule(&link.id);
+                }
+                return Err(CoworkDelegationError::Internal(anyhow::anyhow!(
+                    "{error:?}"
+                )));
+            }
+        };
+        Ok(SendCodingMessageResult {
+            coding_session_id: input.coding_session_id,
+            outcome,
+            wake_schedule_created,
+            wake_scheduled: input.wake_on_completion,
+        })
+    }
+
+    pub fn schedule_coding_wake(
+        &self,
+        parent_session_id: &str,
+        coding_session_id: &str,
+    ) -> Result<(crate::sessions::links::model::SessionLinkRecord, bool), CoworkDelegationError>
+    {
+        self.delegation_service
+            .schedule_coding_wake(parent_session_id, coding_session_id)
+    }
+
+    pub async fn coding_status(
+        &self,
+        parent_session_id: &str,
+        coding_session_id: &str,
+    ) -> Result<CoworkCodingStatusResult, CoworkDelegationError> {
+        let link = self
+            .delegation_service
+            .authorize_coding_session(parent_session_id, coding_session_id)?;
+        let session = self
+            .delegation_service
+            .session_store()
+            .find_by_id(coding_session_id)?
+            .ok_or_else(|| CoworkDelegationError::CodingSessionNotOwned)?;
+        let execution = self
+            .session_runtime
+            .session_execution_summary(&session)
+            .await;
+        let wake_scheduled = self
+            .delegation_service
+            .list_wake_schedules(&[link.id.clone()])?
+            .into_iter()
+            .next()
+            .is_some();
+        let latest_completion = self
+            .delegation_service
+            .latest_completion_for_link(&link.id)?;
+        Ok(CoworkCodingStatusResult {
+            session,
+            execution,
+            session_link: link,
+            wake_scheduled,
+            latest_completion,
+        })
+    }
+
+    pub fn read_coding_events(
+        &self,
+        parent_session_id: &str,
+        coding_session_id: &str,
+        since_seq: Option<i64>,
+        limit: Option<usize>,
+    ) -> Result<crate::sessions::delegation::DelegatedEventSlice, CoworkDelegationError> {
+        self.delegation_service.read_coding_events(
+            parent_session_id,
+            coding_session_id,
+            since_seq,
+            limit,
+        )
+    }
+
+    pub async fn managed_workspaces_context(
+        &self,
+        parent_session_id: &str,
+    ) -> Result<CoworkManagedWorkspacesResponse, CoworkDelegationError> {
+        let workspaces = self
+            .delegation_service
+            .list_managed_workspaces(parent_session_id)?;
+        let mut summaries = Vec::with_capacity(workspaces.len());
+        for managed in workspaces {
+            let linked_sessions = self
+                .delegation_service
+                .list_coding_session_links(parent_session_id, &managed.workspace_id)?;
+            let link_ids = linked_sessions
+                .iter()
+                .map(|(link, _session)| link.id.clone())
+                .collect::<Vec<_>>();
+            let scheduled = self
+                .delegation_service
+                .list_wake_schedules(&link_ids)?
+                .into_iter()
+                .map(|schedule| schedule.session_link_id)
+                .collect::<HashSet<_>>();
+            let sessions = linked_sessions
+                .into_iter()
+                .map(|(link, session)| {
+                    let status = session.to_contract().status;
+                    let latest_completion = self
+                        .delegation_service
+                        .latest_completion_for_link(&link.id)?
+                        .map(|record| CoworkCodingCompletionSummary {
+                            completion_id: record.completion_id,
+                            child_turn_id: record.child_turn_id,
+                            child_last_event_seq: record.child_last_event_seq,
+                            outcome: record.outcome.as_str().to_string(),
+                            parent_event_seq: record.parent_event_seq,
+                            parent_prompt_seq: record.parent_prompt_seq,
+                            created_at: record.created_at,
+                        });
+                    Ok(CoworkCodingSessionSummary {
+                        session_link_id: link.id.clone(),
+                        coding_session_id: session.id,
+                        title: session.title,
+                        label: link.label,
+                        status,
+                        agent_kind: session.agent_kind,
+                        model_id: session.current_model_id.or(session.requested_model_id),
+                        mode_id: session.current_mode_id.or(session.requested_mode_id),
+                        wake_scheduled: scheduled.contains(&link.id),
+                        latest_completion,
+                        link_created_at: link.created_at,
+                        session_created_at: session.created_at,
+                    })
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            summaries.push(CoworkManagedWorkspaceSummary {
+                ownership_id: managed.id,
+                workspace_id: managed.workspace_id,
+                source_workspace_id: managed.source_workspace_id,
+                label: managed.label,
+                created_at: managed.created_at,
+                sessions,
+            });
+        }
+        Ok(CoworkManagedWorkspacesResponse {
+            workspaces: summaries,
+        })
+    }
+
+    fn create_durable_coding_session(
+        &self,
+        workspace_id: &str,
+        parent_thread: &CoworkThreadRecord,
+        agent_kind: Option<&str>,
+        model_id: Option<&str>,
+        mode_id: Option<&str>,
+    ) -> Result<SessionRecord, CreateAndStartSessionError> {
+        let resolved_agent_kind =
+            normalize_optional_ref(agent_kind).unwrap_or(parent_thread.agent_kind.as_str());
+        let resolved_mode_id = normalize_optional_ref(mode_id)
+            .or_else(|| default_cowork_coding_mode_for_agent(resolved_agent_kind));
+
+        self.session_runtime.create_durable_session(
+            workspace_id,
+            resolved_agent_kind,
+            normalize_optional_ref(model_id).or(parent_thread.requested_model_id.as_deref()),
+            resolved_mode_id,
+            None,
+            Vec::new(),
+            None,
+            false,
+            OriginContext::cowork(),
+        )
+    }
+
+    async fn send_parent_prompt_to_coding_session(
+        &self,
+        parent_session_id: &str,
+        coding_session_id: &str,
+        session_link_id: &str,
+        label: Option<String>,
+        prompt: String,
+    ) -> Result<SendPromptOutcome, CoworkDelegationError> {
+        self.session_runtime
+            .send_text_prompt_with_provenance(
+                coding_session_id,
+                prompt,
+                CoworkDelegationService::parent_to_child_provenance(
+                    parent_session_id,
+                    session_link_id,
+                    label,
+                ),
+            )
+            .await
+            .map_err(|error| {
+                tracing::warn!(
+                    parent_session_id,
+                    coding_session_id,
+                    error = ?error,
+                    "failed to dispatch cowork coding prompt"
+                );
+                CoworkDelegationError::Internal(anyhow::anyhow!("{error:?}"))
+            })
+    }
+
+    fn cleanup_failed_coding_workspace(
+        &self,
+        repo_root: &RepoRootRecord,
+        workspace: &WorkspaceRecord,
+        worktree_path: &PathBuf,
+    ) {
+        if let Err(error) = self.workspace_runtime.cleanup_failed_worktree(
+            &repo_root.path,
+            &workspace.id,
+            &worktree_path.display().to_string(),
+        ) {
+            tracing::warn!(
+                workspace_id = %workspace.id,
+                repo_root_id = %repo_root.id,
+                path = %worktree_path.display(),
+                error = %error,
+                "failed to clean up cowork coding workspace after bootstrap failure"
+            );
+        }
+    }
+
     fn cleanup_failed_thread_bootstrap(
         &self,
         repo_root: &RepoRootRecord,
@@ -469,6 +1186,42 @@ fn cowork_artifact_system_prompt_append() -> Vec<String> {
         "JSX artifacts must default-export a React component with no required props.".to_string(),
         "JSX artifacts may only import allowlisted libraries.".to_string(),
     ]
+}
+
+fn normalize_required_prompt(value: String) -> Result<String, CoworkDelegationError> {
+    let prompt = value.trim().to_string();
+    if prompt.is_empty() {
+        return Err(CoworkDelegationError::Internal(anyhow::anyhow!(
+            "prompt is required"
+        )));
+    }
+    Ok(prompt)
+}
+
+fn normalize_optional_text(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn normalize_optional_ref(value: Option<&str>) -> Option<&str> {
+    value.map(str::trim).filter(|value| !value.is_empty())
+}
+
+pub(crate) fn default_cowork_coding_mode_for_agent(agent_kind: &str) -> Option<&'static str> {
+    match agent_kind.trim().to_ascii_lowercase().as_str() {
+        "claude" => Some("bypassPermissions"),
+        "codex" => Some("full-access"),
+        "gemini" => Some("yolo"),
+        _ => None,
+    }
+}
+
+fn prompt_outcome_label(outcome: &SendPromptOutcome) -> &'static str {
+    match outcome {
+        SendPromptOutcome::Running { .. } => "running",
+        SendPromptOutcome::Queued { .. } => "queued",
+    }
 }
 
 fn ensure_managed_repo(path: &PathBuf) -> anyhow::Result<()> {

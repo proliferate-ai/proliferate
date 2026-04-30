@@ -135,6 +135,44 @@ describe("transcript reducer", () => {
     expect(item.contentParts.map((part) => part.type)).toEqual(["text", "plan_reference"]);
   });
 
+  it("treats subagent completion events as metadata, not transcript content", () => {
+    const state = reduceEvents(
+      [
+        {
+          sessionId: "session-1",
+          seq: 1,
+          timestamp: "2026-04-04T00:00:01Z",
+          event: {
+            type: "subagent_turn_completed",
+            completionId: "completion-1",
+            sessionLinkId: "link-1",
+            parentSessionId: "parent-1",
+            childSessionId: "child-1",
+            childTurnId: "turn-child-1",
+            childLastEventSeq: 42,
+            outcome: "completed",
+            label: "Reviewer",
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    expect(Object.keys(state.itemsById)).toEqual([]);
+    expect(state.turnOrder).toEqual([]);
+    expect(state.unknownEvents).toEqual([]);
+    expect(state.lastSeq).toBe(1);
+    expect(state.linkCompletionsByCompletionId["completion-1"]).toMatchObject({
+      relation: "subagent",
+      completionId: "completion-1",
+      sessionLinkId: "link-1",
+      childSessionId: "child-1",
+      outcome: "completed",
+      seq: 1,
+    });
+    expect(state.latestLinkCompletionBySessionLinkId["link-1"]).toBe("completion-1");
+  });
+
   it("closes orphaned assistant and reasoning streams when a turn ends", () => {
     const state = reduceEvents(
       [
@@ -798,6 +836,58 @@ describe("transcript reducer", () => {
     expect(item.kind).toBe("tool_call");
     expect(item.semanticKind).toBe("cowork_artifact_create");
     expect(item.nativeToolName).toBe("mcp__cowork__create_artifact");
+  });
+
+  it("classifies AnyHarness create_subagent MCP calls as subagent launches", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        {
+          sessionId: "session-1",
+          seq: 2,
+          timestamp: "2026-04-04T00:00:02Z",
+          turnId: "turn-1",
+          itemId: "tool-subagent-create",
+          event: {
+            type: "item_completed",
+            item: {
+              kind: "tool_invocation",
+              status: "completed",
+              sourceAgentKind: "claude",
+              title: "mcp__subagents__create_subagent",
+              toolCallId: "tool-subagent-create",
+              nativeToolName: "mcp__subagents__create_subagent",
+              rawInput: {
+                agentKind: "codex",
+                label: "repo-reviewer",
+                modelId: "gpt-5.4",
+                prompt: "Review the current diff.",
+              },
+              contentParts: [
+                {
+                  type: "tool_call",
+                  toolCallId: "tool-subagent-create",
+                  title: "mcp__subagents__create_subagent",
+                  toolKind: "other",
+                  nativeToolName: "mcp__subagents__create_subagent",
+                },
+              ],
+            },
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["tool-subagent-create"] as ToolCallItem;
+    expect(item.kind).toBe("tool_call");
+    expect(item.semanticKind).toBe("subagent");
+    expect(item.nativeToolName).toBe("mcp__subagents__create_subagent");
+    expect(item.rawInput).toMatchObject({
+      agentKind: "codex",
+      label: "repo-reviewer",
+      modelId: "gpt-5.4",
+    });
   });
 
   it("classifies Claude cowork artifact update tool calls from captured MCP names", () => {

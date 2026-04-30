@@ -8,6 +8,7 @@ Scope:
 - `desktop/src/components/workspace/chat/transcript/ProposedPlanCard.tsx`
 - `desktop/src/components/workspace/chat/content/PlanReferenceAttachmentCard.tsx`
 - `desktop/src/components/workspace/chat/plans/**`
+- `desktop/src/hooks/chat/use-composer-dock-slots.tsx`
 - `desktop/src/hooks/chat/use-composer-top-slot.tsx`
 - `desktop/src/hooks/chat/use-active-todo-tracker.ts`
 - `desktop/src/lib/domain/chat/active-todo-tracker.ts`
@@ -21,12 +22,16 @@ Three layers, top to bottom:
 
 ```text
 ChatView
-└── ChatComposerDock                        (backdrop + scrim + padded max-width column + inset top-slot region)
-    ├── topSlot: at most one of
+└── ChatComposerDock                        (backdrop + scrim + padded max-width column + inset dock regions)
+    ├── upperSlot: at most one of
     │     ├── ConnectedApprovalCard         (pending tool approval)
     │     ├── TodoTrackerPanel              (Codex/Gemini structured plan)
     │     ├── WorkspaceArrivalAttachedPanel (workspace arrival/setup/pending/cloud-status)
     │     └── CloudRuntimeAttachedPanel     (cloud runtime connecting/resuming/error)
+    ├── subagentSlot
+    │     └── SubagentComposerStrip         (summary control + popover list for linked child sessions)
+    ├── queueSlot
+    │     └── PendingPromptList             (queued prompts, closest to composer)
     ├── ChatInput
     │   └── ChatComposerSurface
     │       └── form: ComposerMentionEditor + ModelSelector + SessionConfigControls + ChatComposerActions
@@ -36,24 +41,33 @@ ChatView
 
 Non-negotiable:
 
-- **`ChatComposerDock` owns the dock shell.** Background, scrim, padding, max-width column, and the inset `px-5` top-slot wrapper all live in `ChatComposerDock.tsx`. The production app (`ChatView`) and the dev playground (`ChatPlaygroundPage`) both render `ChatComposerDock` directly. Do not reconstruct this backdrop in a third place — if you need it somewhere new, reuse the dock.
+- **`ChatComposerDock` owns the dock shell.** Background, scrim, padding, max-width column, and the inset `px-5` region wrappers all live in `ChatComposerDock.tsx`. The production app (`ChatView`) and the dev playground (`ChatPlaygroundPage`) both render `ChatComposerDock` directly. Do not reconstruct this backdrop in a third place — if you need it somewhere new, reuse the dock.
 - **`ChatInput` is the composer surface only.** It does not own any of the outer wrapping. It takes no `topSlot` prop. Everything above and below the composer surface is the dock's responsibility, and the workspace footer row is rendered via the dock's dedicated footer slot rather than ad hoc workspace logic in `ChatInput.tsx`.
-- **Powers status is in-composer status chrome.** `SessionPowersSummary` is the only approved read-only strip inside `ChatInput`. It summarizes MCP/Powers bindings applied at session launch or resume; it is not a gating top-slot inhabitant and must not compete with approvals, todo tracker, workspace arrival, or runtime status precedence.
-- **The composer surface stays unchanged and paints the seam.** There is no `flatTop` mode. Top-slot panels are narrower attached trays that sit directly above the composer: rounded top corners, side/top borders, no bottom border, and no gap. The composer surface paints after the top slot so its own top outline remains visible at the seam.
-- **File mention search is composer-local, not a top-slot inhabitant.** The `@` file search tray renders from `ChatInput` in a small host directly above `ChatComposerSurface` while a trigger is active. It is transient editor UI and does not participate in `useComposerTopSlot` precedence.
+- **Do not add in-composer read-only status badges.** Session MCP/Powers state belongs in settings, session details, or explicit action surfaces, not as a persistent strip inside `ChatInput`.
+- **The composer surface stays unchanged and paints the seam.** There is no `flatTop` mode. Dock-region panels are narrower attached trays that sit directly above the composer: rounded top corners, side/top borders, no bottom border, and no gap. The composer surface paints after the dock regions so its own top outline remains visible at the seam.
+- **File mention search is composer-local, not a dock-region inhabitant.** The `@` file search tray renders from `ChatInput` in a small host directly above `ChatComposerSurface` while a trigger is active. It is transient editor UI and does not participate in `useComposerDockSlots` precedence.
 
-## 2. Top-slot precedence
+## 2. Dock Regions
 
-The slot holds **at most one** inhabitant at a time. The precedence order is computed once in `useComposerTopSlot` (`desktop/src/hooks/chat/use-composer-top-slot.tsx`):
+`useComposerDockSlots` (`desktop/src/hooks/chat/use-composer-dock-slots.tsx`)
+derives the regions above the composer. The upper region holds **at most one**
+gating/status panel at a time, with this precedence:
 
 1. **`ConnectedApprovalCard`** — any `pendingApproval` on the active slot
 2. **`TodoTrackerPanel`** — an active structured plan (Codex/Gemini, non-empty entries, status `in_progress`)
 3. **`WorkspaceArrivalAttachedPanel`** — workspace arrival / setup / pending / cloud-status
 4. **`CloudRuntimeAttachedPanel`** — cloud runtime in any non-ready phase
 
-If you need to introduce a fifth inhabitant, add it to the precedence chain in `use-composer-top-slot.tsx` — do not compute it inline in `ChatView` and do not introduce a parallel arbiter elsewhere.
+If you need to introduce a fifth upper-panel inhabitant, add it to the
+precedence chain in `use-composer-dock-slots.tsx` — do not compute it inline in
+`ChatView` and do not introduce a parallel arbiter elsewhere.
 
-**Stacking is explicitly deferred.** When a genuine multi-inhabitant scenario arises (e.g. an `execute` approval while a Codex todo tracker is also active), upgrade `useComposerTopSlot` to return `ReactNode[]` and update `ChatComposerDock` to render them stacked. Until then, do not prep for stacking with `first:rounded-t-2xl` tricks or similar — see §6.
+Below the upper region, `subagentSlot` renders one compact summary control for
+linked same-workspace child sessions. It opens a popover list with the full
+child-session set; individual child chips should not be rendered directly above
+the composer. Below that, `queueSlot` renders queued prompts closest to the
+composer. Do not move queued prompts above the subagent summary; the queue
+remains the next prompt the active session will process.
 
 ## 2.1 Composer footer semantics
 
@@ -190,9 +204,9 @@ Rules that apply everywhere in `desktop/src/**` but are easy to violate in this 
 
 These are patterns that were tried and rejected. Reintroducing them reopens known problems:
 
-- **Detached top-slot cards (`rounded-2xl border` plus a dock gap).** Top-slot panels are attached trays, not separate floating cards. Keep `ComposerAttachedPanel` on the `rounded-t-2xl border-x border-t` shell and keep the dock top-slot wrapper gapless.
-- **Positive z-index on the top-slot wrapper.** The composer must paint after the attached tray so its top outline remains visible at the seam.
-- **Ad hoc `first:*` stacking rounded-corner tricks.** The top slot currently has one inhabitant. When real stacking lands, update `useComposerTopSlot` and the dock together, not via a CSS trick alone.
+- **Detached dock-region cards (`rounded-2xl border` plus a dock gap).** Panels above the composer are attached trays, not separate floating cards. Keep `ComposerAttachedPanel` on the `rounded-t-2xl border-x border-t` shell and keep dock-region wrappers gapless.
+- **Positive z-index on dock-region wrappers.** The composer must paint after attached trays so its top outline remains visible at the seam.
+- **Ad hoc `first:*` stacking rounded-corner tricks.** Dock-region order is explicit in `ChatComposerDock`; do not fake region-specific corner behavior with selector tricks.
 - **`flatTop` on `ChatComposerSurface`.** The prop was deleted. The composer surface keeps its normal styling. Panels above are attached trays, not a replacement shell for the composer.
 - **Regex classifier on `toolCallId` in `permission-prompt.ts`.** Dead code. Read `pendingApproval.toolKind` directly.
 - **`embeddedInComposer` permission variant that replaces the textarea.** Dead code. Approvals always sit above the composer; the textarea stays usable.

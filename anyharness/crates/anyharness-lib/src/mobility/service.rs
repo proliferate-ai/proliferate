@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
@@ -19,6 +20,7 @@ use crate::mobility::model::{
 use crate::mobility::store::MobilityStore;
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
+use crate::sessions::subagents::service::SubagentService;
 use crate::terminals::model::{TerminalRecord, TerminalStatus};
 use crate::terminals::service::TerminalService;
 use crate::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
@@ -59,6 +61,7 @@ pub struct MobilityService {
     mobility_store: MobilityStore,
     session_service: Arc<SessionService>,
     session_runtime: Arc<SessionRuntime>,
+    subagent_service: Arc<SubagentService>,
     access_gate: Arc<WorkspaceAccessGate>,
     setup_execution_service: Arc<SetupExecutionService>,
     terminal_service: Arc<TerminalService>,
@@ -71,6 +74,7 @@ impl MobilityService {
         mobility_store: MobilityStore,
         session_service: Arc<SessionService>,
         session_runtime: Arc<SessionRuntime>,
+        subagent_service: Arc<SubagentService>,
         access_gate: Arc<WorkspaceAccessGate>,
         setup_execution_service: Arc<SetupExecutionService>,
         terminal_service: Arc<TerminalService>,
@@ -81,6 +85,7 @@ impl MobilityService {
             mobility_store,
             session_service,
             session_runtime,
+            subagent_service,
             access_gate,
             setup_execution_service,
             terminal_service,
@@ -317,6 +322,24 @@ impl MobilityService {
                 ));
             }
         }
+        let session_ids = sessions
+            .iter()
+            .filter(|candidate| candidate.supported)
+            .map(|candidate| candidate.session.id.clone())
+            .collect::<HashSet<_>>();
+        let (_links, _completions, _wake_schedules, partial_graph) = self
+            .subagent_service
+            .mobility_graph_for_sessions(&session_ids)
+            .map_err(MobilityError::Internal)?;
+        for missing_id in partial_graph {
+            blockers.push(MobilityBlocker {
+                code: "partial_subagent_graph".to_string(),
+                message: format!(
+                    "Session graph includes linked subagent session {missing_id} outside this archive"
+                ),
+                session_id: Some(missing_id),
+            });
+        }
         tracing::info!(
             workspace_id = %workspace_id,
             session_count = sessions.len(),
@@ -395,6 +418,19 @@ impl MobilityService {
         let branch_name = current_branch_name(&repo_root)?;
         let delta = collect_workspace_delta(&repo_root, exclude_paths)?;
         let sessions = self.collect_workspace_sessions(&workspace)?;
+        let session_ids = sessions
+            .iter()
+            .map(|bundle| bundle.session.id.clone())
+            .collect::<HashSet<_>>();
+        let (session_links, session_link_completions, session_link_wake_schedules, partial_graph) =
+            self.subagent_service
+                .mobility_graph_for_sessions(&session_ids)
+                .map_err(MobilityError::Internal)?;
+        if let Some(missing_id) = partial_graph.first() {
+            return Err(MobilityError::Invalid(format!(
+                "cannot export partial subagent graph; linked session {missing_id} is outside the archive"
+            )));
+        }
 
         let archive = WorkspaceMobilityArchiveData {
             source_workspace_path: workspace.path,
@@ -404,6 +440,9 @@ impl MobilityService {
             files: delta.files,
             deleted_paths: delta.deleted_paths,
             sessions,
+            session_links,
+            session_link_completions,
+            session_link_wake_schedules,
         };
         validate_archive_size(&archive)?;
         Ok(archive)
@@ -481,6 +520,21 @@ impl MobilityService {
             install_session_agent_artifacts(&session, &workspace_path, &bundle.agent_artifacts)?;
             imported_agent_artifact_count += bundle.agent_artifacts.len();
             imported_session_ids.push(session.id);
+        }
+        for link in &archive.session_links {
+            self.subagent_service
+                .import_link(link)
+                .map_err(MobilityError::Internal)?;
+        }
+        for completion in &archive.session_link_completions {
+            self.subagent_service
+                .import_completion(completion)
+                .map_err(MobilityError::Internal)?;
+        }
+        for schedule in &archive.session_link_wake_schedules {
+            self.subagent_service
+                .import_wake_schedule(schedule)
+                .map_err(MobilityError::Internal)?;
         }
 
         let summary = ImportedWorkspaceArchiveSummary {

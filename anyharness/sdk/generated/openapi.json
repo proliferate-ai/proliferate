@@ -314,6 +314,47 @@
         }
       }
     },
+    "/v1/cowork/sessions/{session_id}/managed-workspaces": {
+      "get": {
+        "tags": [
+          "cowork"
+        ],
+        "operationId": "get_cowork_managed_workspaces",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Cowork parent session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cowork-managed coding workspaces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoworkManagedWorkspacesResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cowork thread not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/cowork/threads": {
       "get": {
         "tags": [
@@ -1724,6 +1765,47 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/subagents": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "get_session_subagents",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subagent parent/child context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSubagentsResponse"
                 }
               }
             }
@@ -3655,6 +3737,75 @@
           }
         }
       },
+      "ChildSubagentSummary": {
+        "type": "object",
+        "required": [
+          "sessionLinkId",
+          "childSessionId",
+          "status",
+          "agentKind",
+          "linkCreatedAt",
+          "childCreatedAt",
+          "wakeScheduled"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "childCreatedAt": {
+            "type": "string"
+          },
+          "childSessionId": {
+            "type": "string"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "latestCompletion": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubagentCompletionSummary"
+              }
+            ]
+          },
+          "linkCreatedAt": {
+            "type": "string"
+          },
+          "modeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessionLinkId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatus"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "wakeScheduled": {
+            "type": "boolean"
+          }
+        }
+      },
       "CommitRequest": {
         "type": "object",
         "required": [
@@ -4431,6 +4582,169 @@
           "application/vnd.proliferate.react"
         ]
       },
+      "CoworkCodingCompletionSummary": {
+        "type": "object",
+        "required": [
+          "completionId",
+          "childTurnId",
+          "childLastEventSeq",
+          "outcome",
+          "createdAt"
+        ],
+        "properties": {
+          "childLastEventSeq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "childTurnId": {
+            "type": "string"
+          },
+          "completionId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "parentEventSeq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "parentPromptSeq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "CoworkCodingSessionSummary": {
+        "type": "object",
+        "required": [
+          "sessionLinkId",
+          "codingSessionId",
+          "status",
+          "agentKind",
+          "wakeScheduled",
+          "linkCreatedAt",
+          "sessionCreatedAt"
+        ],
+        "properties": {
+          "agentKind": {
+            "type": "string"
+          },
+          "codingSessionId": {
+            "type": "string"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "latestCompletion": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CoworkCodingCompletionSummary"
+              }
+            ]
+          },
+          "linkCreatedAt": {
+            "type": "string"
+          },
+          "modeId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessionCreatedAt": {
+            "type": "string"
+          },
+          "sessionLinkId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatus"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "wakeScheduled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CoworkManagedWorkspaceSummary": {
+        "type": "object",
+        "required": [
+          "ownershipId",
+          "workspaceId",
+          "createdAt",
+          "sessions"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ownershipId": {
+            "type": "string"
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CoworkCodingSessionSummary"
+            }
+          },
+          "sourceWorkspaceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        }
+      },
+      "CoworkManagedWorkspacesResponse": {
+        "type": "object",
+        "required": [
+          "workspaces"
+        ],
+        "properties": {
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CoworkManagedWorkspaceSummary"
+            }
+          }
+        }
+      },
       "CoworkRoot": {
         "type": "object",
         "required": [
@@ -4497,6 +4811,7 @@
           "sessionId",
           "agentKind",
           "branchName",
+          "workspaceDelegationEnabled",
           "createdAt",
           "updatedAt"
         ],
@@ -4540,6 +4855,9 @@
           "updatedAt": {
             "type": "string"
           },
+          "workspaceDelegationEnabled": {
+            "type": "boolean"
+          },
           "workspaceId": {
             "type": "string"
           }
@@ -4553,6 +4871,12 @@
         "properties": {
           "agentKind": {
             "type": "string"
+          },
+          "coworkWorkspaceDelegationEnabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "mcpBindingSummaries": {
             "type": [
@@ -4727,6 +5051,12 @@
               {
                 "$ref": "#/components/schemas/OriginContext"
               }
+            ]
+          },
+          "subagentsEnabled": {
+            "type": [
+              "boolean",
+              "null"
             ]
           },
           "systemPromptAppend": {
@@ -6597,6 +6927,116 @@
           }
         }
       },
+      "MobilitySessionLinkCompletionRecord": {
+        "type": "object",
+        "required": [
+          "completionId",
+          "sessionLinkId",
+          "childTurnId",
+          "childLastEventSeq",
+          "outcome",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "childLastEventSeq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "childTurnId": {
+            "type": "string"
+          },
+          "completionId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "parentEventSeq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "parentPromptSeq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "sessionLinkId": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "MobilitySessionLinkRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "relation",
+          "parentSessionId",
+          "childSessionId",
+          "workspaceRelation",
+          "createdAt"
+        ],
+        "properties": {
+          "childSessionId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "createdByToolCallId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdByTurnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "relation": {
+            "type": "string"
+          },
+          "workspaceRelation": {
+            "type": "string"
+          }
+        }
+      },
+      "MobilitySessionLinkWakeScheduleRecord": {
+        "type": "object",
+        "required": [
+          "sessionLinkId"
+        ],
+        "properties": {
+          "sessionLinkId": {
+            "type": "string"
+          }
+        }
+      },
       "MobilitySessionLiveConfigSnapshotRecord": {
         "type": "object",
         "required": [
@@ -6738,6 +7178,9 @@
           },
           "status": {
             "type": "string"
+          },
+          "subagentsEnabled": {
+            "type": "boolean"
           },
           "systemPromptAppend": {
             "type": [
@@ -7037,6 +7480,47 @@
           "system"
         ]
       },
+      "ParentSubagentLinkSummary": {
+        "type": "object",
+        "required": [
+          "sessionLinkId",
+          "parentSessionId",
+          "parentAgentKind",
+          "linkCreatedAt"
+        ],
+        "properties": {
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "linkCreatedAt": {
+            "type": "string"
+          },
+          "parentAgentKind": {
+            "type": "string"
+          },
+          "parentModelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "parentTitle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessionLinkId": {
+            "type": "string"
+          }
+        }
+      },
       "PendingInteractionPayloadSummary": {
         "oneOf": [
           {
@@ -7194,6 +7678,16 @@
               "null"
             ]
           },
+          "promptProvenance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PromptProvenance"
+              }
+            ]
+          },
           "queuedAt": {
             "type": "string"
           },
@@ -7249,6 +7743,16 @@
               "null"
             ]
           },
+          "promptProvenance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PromptProvenance"
+              }
+            ]
+          },
           "queuedAt": {
             "type": "string"
           },
@@ -7273,6 +7777,16 @@
             "items": {
               "$ref": "#/components/schemas/ContentPart"
             }
+          },
+          "promptProvenance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PromptProvenance"
+              }
+            ]
           },
           "seq": {
             "type": "integer",
@@ -7681,6 +8195,120 @@
                 "type": "string",
                 "enum": [
                   "plan_reference"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "PromptProvenance": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "sourceSessionId",
+              "type"
+            ],
+            "properties": {
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sessionLinkId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSessionId": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "agentSession"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "sessionLinkId",
+              "completionId",
+              "type"
+            ],
+            "properties": {
+              "completionId": {
+                "type": "string"
+              },
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sessionLinkId": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "subagentWake"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "relation",
+              "sessionLinkId",
+              "completionId",
+              "type"
+            ],
+            "properties": {
+              "completionId": {
+                "type": "string"
+              },
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "relation": {
+                "type": "string"
+              },
+              "sessionLinkId": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "linkWake"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "system"
                 ]
               }
             }
@@ -8928,6 +9556,48 @@
           {
             "allOf": [
               {
+                "$ref": "#/components/schemas/SubagentTurnCompletedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "subagent_turn_completed"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SessionLinkTurnCompletedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "session_link_turn_completed"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/UsageUpdatePayload"
               },
               {
@@ -9160,6 +9830,52 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "SessionLinkTurnCompletedPayload": {
+        "type": "object",
+        "required": [
+          "relation",
+          "completionId",
+          "sessionLinkId",
+          "parentSessionId",
+          "childSessionId",
+          "childTurnId",
+          "childLastEventSeq",
+          "outcome"
+        ],
+        "properties": {
+          "childLastEventSeq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "childSessionId": {
+            "type": "string"
+          },
+          "childTurnId": {
+            "type": "string"
+          },
+          "completionId": {
+            "type": "string"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/SubagentTurnOutcome"
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "relation": {
+            "type": "string"
+          },
+          "sessionLinkId": {
+            "type": "string"
           }
         }
       },
@@ -9488,6 +10204,30 @@
           "closed"
         ]
       },
+      "SessionSubagentsResponse": {
+        "type": "object",
+        "required": [
+          "children"
+        ],
+        "properties": {
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChildSubagentSummary"
+            }
+          },
+          "parent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ParentSubagentLinkSummary"
+              }
+            ]
+          }
+        }
+      },
       "SetSessionConfigOptionRequest": {
         "type": "object",
         "description": "Request payload for changing a single live session config option.",
@@ -9689,6 +10429,98 @@
           "cancelled"
         ]
       },
+      "SubagentCompletionSummary": {
+        "type": "object",
+        "required": [
+          "completionId",
+          "childTurnId",
+          "outcome",
+          "childLastEventSeq",
+          "createdAt"
+        ],
+        "properties": {
+          "childLastEventSeq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "childTurnId": {
+            "type": "string"
+          },
+          "completionId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/SubagentTurnOutcome"
+          },
+          "parentEventSeq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "parentPromptSeq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "SubagentTurnCompletedPayload": {
+        "type": "object",
+        "required": [
+          "completionId",
+          "sessionLinkId",
+          "parentSessionId",
+          "childSessionId",
+          "childTurnId",
+          "childLastEventSeq",
+          "outcome"
+        ],
+        "properties": {
+          "childLastEventSeq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "childSessionId": {
+            "type": "string"
+          },
+          "childTurnId": {
+            "type": "string"
+          },
+          "completionId": {
+            "type": "string"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/SubagentTurnOutcome"
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "sessionLinkId": {
+            "type": "string"
+          }
+        }
+      },
+      "SubagentTurnOutcome": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "failed",
+          "cancelled"
+        ]
+      },
       "TerminalLifecycleEvent": {
         "type": "string",
         "enum": [
@@ -9816,6 +10648,16 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "promptProvenance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PromptProvenance"
+              }
             ]
           },
           "rawInput": {},
@@ -10204,6 +11046,24 @@
           },
           "repoRootPath": {
             "type": "string"
+          },
+          "sessionLinkCompletions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MobilitySessionLinkCompletionRecord"
+            }
+          },
+          "sessionLinkWakeSchedules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MobilitySessionLinkWakeScheduleRecord"
+            }
+          },
+          "sessionLinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MobilitySessionLinkRecord"
+            }
           },
           "sessions": {
             "type": "array",

@@ -3,6 +3,10 @@ use utoipa::ToSchema;
 
 use super::{ContentPart, OriginContext};
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkspaceMobilityRuntimeMode {
@@ -126,6 +130,12 @@ pub struct WorkspaceMobilityArchive {
     pub deleted_paths: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sessions: Vec<WorkspaceMobilitySessionBundle>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub session_links: Vec<MobilitySessionLinkRecord>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub session_link_completions: Vec<MobilitySessionLinkCompletionRecord>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub session_link_wake_schedules: Vec<MobilitySessionLinkWakeScheduleRecord>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -191,6 +201,47 @@ pub struct MobilitySessionRecord {
     pub system_prompt_append: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<OriginContext>,
+    #[serde(default = "default_true")]
+    pub subagents_enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MobilitySessionLinkRecord {
+    pub id: String,
+    pub relation: String,
+    pub parent_session_id: String,
+    pub child_session_id: String,
+    pub workspace_relation: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_by_turn_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_by_tool_call_id: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MobilitySessionLinkCompletionRecord {
+    pub completion_id: String,
+    pub session_link_id: String,
+    pub child_turn_id: String,
+    pub child_last_event_seq: i64,
+    pub outcome: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_event_seq: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_prompt_seq: Option<i64>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MobilitySessionLinkWakeScheduleRecord {
+    pub session_link_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

@@ -1,0 +1,103 @@
+import { useCallback } from "react";
+import { getAnyHarnessClient } from "@anyharness/sdk-react";
+import type { SessionEventEnvelope } from "@anyharness/sdk";
+import {
+  createSessionSlotFromSummary,
+  getWorkspaceClientAndId,
+} from "@/lib/integrations/anyharness/session-runtime";
+import { useHarnessStore } from "@/stores/sessions/harness-store";
+
+interface MountLinkedSessionInput {
+  sessionId: string;
+  label?: string | null;
+  workspaceId: string | null;
+  requestHeaders?: HeadersInit;
+}
+
+interface MountSubagentChildInput {
+  childSessionId: string;
+  label?: string | null;
+  workspaceId: string | null;
+  requestHeaders?: HeadersInit;
+}
+
+export function useLinkedSessionMounting() {
+  const mountLinkedSessionSlot = useCallback(async (
+    input: MountLinkedSessionInput,
+  ): Promise<void> => {
+    if (!input.workspaceId) {
+      return;
+    }
+
+    const existing = useHarnessStore.getState().sessionSlots[input.sessionId] ?? null;
+    if (existing?.workspaceId === input.workspaceId) {
+      return;
+    }
+
+    try {
+      const runtimeUrl = useHarnessStore.getState().runtimeUrl;
+      const { connection } = await getWorkspaceClientAndId(runtimeUrl, input.workspaceId);
+      const session = await getAnyHarnessClient(connection).sessions.get(
+        input.sessionId,
+        input.requestHeaders ? { headers: input.requestHeaders } : undefined,
+      );
+
+      if (useHarnessStore.getState().sessionSlots[input.sessionId]) {
+        return;
+      }
+
+      useHarnessStore.getState().putSessionSlot(
+        input.sessionId,
+        createSessionSlotFromSummary(session, input.workspaceId, {
+          titleFallback: input.label ?? null,
+          transcriptHydrated: false,
+        }),
+      );
+    } catch {
+      // Linked session mounting is opportunistic. The source transcript still
+      // contains durable metadata and users can open the linked session later.
+    }
+  }, []);
+
+  const mountSubagentChildSession = useCallback((
+    input: MountSubagentChildInput,
+  ): Promise<void> => mountLinkedSessionSlot({
+    sessionId: input.childSessionId,
+    label: input.label,
+    workspaceId: input.workspaceId,
+    requestHeaders: input.requestHeaders,
+  }), [mountLinkedSessionSlot]);
+
+  const mountSubagentChildrenFromEvents = useCallback((
+    parentWorkspaceId: string | null,
+    events: readonly SessionEventEnvelope[],
+    requestHeaders?: HeadersInit,
+  ): void => {
+    if (!parentWorkspaceId) {
+      return;
+    }
+
+    const seenChildSessionIds = new Set<string>();
+    for (const envelope of events) {
+      const event = envelope.event;
+      if (event.type !== "subagent_turn_completed") {
+        continue;
+      }
+      if (seenChildSessionIds.has(event.childSessionId)) {
+        continue;
+      }
+      seenChildSessionIds.add(event.childSessionId);
+      void mountSubagentChildSession({
+        childSessionId: event.childSessionId,
+        label: event.label ?? null,
+        workspaceId: parentWorkspaceId,
+        requestHeaders,
+      });
+    }
+  }, [mountSubagentChildSession]);
+
+  return {
+    mountSubagentChildSession,
+    mountSubagentChildrenFromEvents,
+  };
+}

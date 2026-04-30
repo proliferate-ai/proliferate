@@ -20,6 +20,7 @@ use crate::agents::model::{AgentKind, ResolvedAgent};
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::plans::model::{NewPlan, PlanRecord};
 use crate::plans::service::{PlanCreateError, PlanDecisionError, PlanService};
+use crate::sessions::extensions::SessionTurnOutcome;
 use crate::sessions::live_config::{
     build_live_config_snapshot, normalized_key_rank, option_matches_key, snapshot_from_record,
     snapshot_to_record, LegacyModeOption, LegacyModeState, NormalizedControlKind,
@@ -29,6 +30,7 @@ use crate::sessions::mcp::{to_acp_servers, SessionMcpServer};
 use crate::sessions::model::PendingConfigChangeRecord;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::prompt::{capabilities_from_acp, PromptPayload};
+use crate::sessions::runtime_event::{RuntimeEventInjectionResult, RuntimeInjectedSessionEvent};
 use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::{
     AvailableCommandsUpdatePayload, ConfigApplyState, ConfigOptionUpdatePayload,
@@ -135,15 +137,17 @@ pub enum ResolveInteractionCommandError {
     ActorDead,
 }
 
-pub enum SessionCommand {
+pub(crate) enum SessionCommand {
     Prompt {
         payload: PromptPayload,
         prompt_id: Option<String>,
         latency: Option<LatencyRequestContext>,
         /// Set by the actor's own startup-drain path when self-dispatching a
-        /// queue head. External callers always pass `None`. When `Some`, the
-        /// first iteration of the drain loop will delete this row and emit
-        /// `PendingPromptRemoved { Executed }` right after `begin_turn`.
+        /// queue head. External callers pass `None` unless they have already
+        /// durably inserted a queue row and only need the actor to drain it.
+        /// When `Some`, the first iteration of the drain loop will delete this
+        /// row and emit `PendingPromptRemoved { Executed }` right after
+        /// `begin_turn`.
         from_queue_seq: Option<i64>,
         respond_to: oneshot::Sender<Result<PromptAcceptance, PromptAcceptError>>,
     },
@@ -171,6 +175,10 @@ pub enum SessionCommand {
         expected_version: i64,
         decision: ProposedPlanDecisionState,
         respond_to: oneshot::Sender<Result<PlanRecord, PlanDecisionError>>,
+    },
+    InjectRuntimeEvent {
+        event: RuntimeInjectedSessionEvent,
+        respond_to: oneshot::Sender<RuntimeEventInjectionResult>,
     },
     Cancel,
     Dismiss {
@@ -403,7 +411,7 @@ fn classify_resume_replay_notification(
 
 pub struct LiveSessionHandle {
     pub session_id: String,
-    pub command_tx: mpsc::Sender<SessionCommand>,
+    pub(crate) command_tx: mpsc::Sender<SessionCommand>,
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,
     pub busy: Arc<AtomicBool>,
     execution: Arc<RwLock<LiveSessionExecutionSnapshot>>,
@@ -576,8 +584,10 @@ pub struct ActorReadyResult {
 #[derive(Debug, Clone)]
 pub struct SessionTurnFinishResult {
     pub session_id: String,
-    pub turn_finished: bool,
-    pub errored: bool,
+    pub turn_id: String,
+    pub outcome: SessionTurnOutcome,
+    pub stop_reason: Option<String>,
+    pub last_event_seq: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -1526,7 +1536,11 @@ async fn run_actor(
                                 {
                                     let mut sink = event_sink.lock().await;
                                     let content_parts = current_payload.content_parts();
-                                    sink.begin_turn(current_payload.text_summary.clone(), content_parts);
+                                    sink.begin_turn(
+                                        current_payload.text_summary.clone(),
+                                        content_parts,
+                                        current_payload.public_provenance(),
+                                    );
                                     if let Err(error) = store.mark_prompt_attachments_state(
                                         &session_id,
                                         &current_payload.attachment_ids(),
@@ -1709,6 +1723,10 @@ async fn run_actor(
                                                 .await;
                                                 let _ = respond_to.send(result);
                                             }
+                                            Some(SessionCommand::InjectRuntimeEvent { event, respond_to }) => {
+                                                let result = event_sink.lock().await.inject_runtime_event(event);
+                                                let _ = respond_to.send(result);
+                                            }
                                             Some(SessionCommand::SetConfigOption { config_id, value, respond_to }) => {
                                                 let option = find_select_option_for_request(&startup_state.config_options, &config_id);
                                                 let result = queue_pending_config_change(
@@ -1753,7 +1771,33 @@ async fn run_actor(
                                                 let _ = respond_to.send(Ok(()));
                                                 exit_after_prompt = Some(ActorExitDisposition::Close);
                                             }
-                                            Some(SessionCommand::Prompt { payload: queued_payload, prompt_id: queued_prompt_id, latency: _, from_queue_seq: _, respond_to }) => {
+                                            Some(SessionCommand::Prompt { payload: queued_payload, prompt_id: queued_prompt_id, latency: _, from_queue_seq, respond_to }) => {
+                                                if let Some(seq) = from_queue_seq {
+                                                    match store.find_pending_prompt(&session_id, seq) {
+                                                        Ok(Some(record)) => {
+                                                            let mut sink = event_sink.lock().await;
+                                                            sink.pending_prompt_added(PendingPromptAddedPayload {
+                                                                seq: record.seq,
+                                                                prompt_id: record.prompt_id.clone(),
+                                                                text: record.text.clone(),
+                                                                content_parts: record.prompt_payload().content_parts(),
+                                                                queued_at: record.queued_at.clone(),
+                                                                prompt_provenance: record.prompt_payload().public_provenance(),
+                                                            });
+                                                        }
+                                                        Ok(None) => {}
+                                                        Err(error) => {
+                                                            tracing::warn!(
+                                                                session_id = %session_id,
+                                                                seq,
+                                                                error = %error,
+                                                                "failed to load prequeued prompt for pending prompt event",
+                                                            );
+                                                        }
+                                                    }
+                                                    let _ = respond_to.send(Ok(PromptAcceptance::Queued { seq }));
+                                                    continue;
+                                                }
                                                 // Invariant 2/3: busy-path enqueue. Insert durably,
                                                 // emit PendingPromptAdded, respond Queued.
                                                 match store.insert_pending_prompt_payload(&session_id, &queued_payload, queued_prompt_id.as_deref()) {
@@ -1765,6 +1809,7 @@ async fn run_actor(
                                                             text: record.text.clone(),
                                                             content_parts: record.prompt_payload().content_parts(),
                                                             queued_at: record.queued_at.clone(),
+                                                            prompt_provenance: record.prompt_payload().public_provenance(),
                                                         });
                                                         drop(sink);
                                                         let _ = respond_to.send(Ok(PromptAcceptance::Queued { seq: record.seq }));
@@ -1840,8 +1885,16 @@ async fn run_actor(
                                         "session.actor.prompt.conn_resolved"
                                     );
                                     let stop = map_stop_reason(&resp.stop_reason);
+                                    let outcome =
+                                        if matches!(stop, anyharness_contract::v1::StopReason::Cancelled) {
+                                            SessionTurnOutcome::Cancelled
+                                        } else {
+                                            SessionTurnOutcome::Completed
+                                        };
+                                    let stop_reason = stop.to_string();
                                     let mut sink = event_sink.lock().await;
                                     sink.turn_ended(stop);
+                                    let last_event_seq = sink.debug_snapshot().next_seq - 1;
                                     drop(sink);
                                     tracing::info!(
                                         session_id = %session_id,
@@ -1868,8 +1921,13 @@ async fn run_actor(
                                     if let Some(callback) = on_turn_finish.as_ref() {
                                         callback(SessionTurnFinishResult {
                                             session_id: session_id.clone(),
-                                            turn_finished: true,
-                                            errored: false,
+                                            turn_id: sink_snapshot_before_turn_end
+                                                .current_turn_id
+                                                .clone()
+                                                .unwrap_or_default(),
+                                            outcome,
+                                            stop_reason: Some(stop_reason),
+                                            last_event_seq,
                                         });
                                     }
                                     if let Err(error) = apply_pending_config_changes_if_idle(
@@ -1913,6 +1971,7 @@ async fn run_actor(
                                     );
                                     let mut sink = event_sink.lock().await;
                                     sink.error(e.to_string(), None);
+                                    let last_event_seq = sink.debug_snapshot().next_seq - 1;
                                     drop(sink);
                                     let now = chrono::Utc::now().to_rfc3339();
                                     handle.set_execution_phase(SessionExecutionPhase::Errored).await;
@@ -1920,8 +1979,13 @@ async fn run_actor(
                                     if let Some(callback) = on_turn_finish.as_ref() {
                                         callback(SessionTurnFinishResult {
                                             session_id: session_id.clone(),
-                                            turn_finished: true,
-                                            errored: true,
+                                            turn_id: sink_snapshot_on_error
+                                                .current_turn_id
+                                                .clone()
+                                                .unwrap_or_default(),
+                                            outcome: SessionTurnOutcome::Failed,
+                                            stop_reason: None,
+                                            last_event_seq,
                                         });
                                     }
                                     broken_session = true;
@@ -1998,6 +2062,10 @@ async fn run_actor(
                             decision,
                         )
                         .await;
+                        let _ = respond_to.send(result);
+                    }
+                    Some(SessionCommand::InjectRuntimeEvent { event, respond_to }) => {
+                        let result = event_sink.lock().await.inject_runtime_event(event);
                         let _ = respond_to.send(result);
                     }
                     Some(SessionCommand::SetConfigOption {
@@ -3885,6 +3953,11 @@ async fn handle_edit_pending_prompt(
                 seq,
                 text: payload.text_summary,
                 content_parts,
+                prompt_provenance: store
+                    .find_pending_prompt(session_id, seq)
+                    .ok()
+                    .flatten()
+                    .and_then(|record| record.prompt_payload().public_provenance()),
             });
             Ok(())
         }
@@ -4515,6 +4588,7 @@ mod tests {
                 mcp_bindings_ciphertext: None,
                 mcp_binding_summaries_json: None,
                 system_prompt_append: None,
+                subagents_enabled: true,
                 origin: None,
             })
             .expect("insert session");
@@ -4678,6 +4752,7 @@ mod tests {
                 mcp_bindings_ciphertext: None,
                 mcp_binding_summaries_json: None,
                 system_prompt_append: None,
+                subagents_enabled: true,
                 origin: None,
             })
             .expect("insert session");
@@ -4805,6 +4880,7 @@ mod tests {
                 mcp_bindings_ciphertext: None,
                 mcp_binding_summaries_json: None,
                 system_prompt_append: None,
+                subagents_enabled: true,
                 origin: None,
             })
             .expect("insert session");
@@ -5462,6 +5538,7 @@ mod tests {
                 mcp_bindings_ciphertext: None,
                 mcp_binding_summaries_json: None,
                 system_prompt_append: None,
+                subagents_enabled: true,
                 origin: None,
             })
             .expect("insert session");

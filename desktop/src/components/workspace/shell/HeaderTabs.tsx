@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { useSessionTitleActions } from "@/hooks/sessions/use-session-title-actions";
@@ -16,6 +10,7 @@ import {
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { SessionTitleRenamePopover } from "@/components/workspace/shell/SessionTitleRenamePopover";
 import { HeaderTab } from "@/components/workspace/shell/HeaderTab";
+import { HeaderChatMenuPopover } from "@/components/workspace/shell/HeaderChatMenuPopover";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { Button } from "@/components/ui/Button";
 import {
@@ -25,6 +20,7 @@ import {
   CircleAlert,
   BrailleSweepBadge,
 } from "@/components/ui/icons";
+import { useHeaderSubagentTabs } from "@/hooks/chat/subagents/use-header-subagent-tabs";
 import {
   failLatencyFlow,
   startLatencyFlow,
@@ -44,6 +40,9 @@ export function HeaderTabs() {
 
   const activeSessionId = useHarnessStore((s) => s.activeSessionId);
   const selectedWorkspaceId = useHarnessStore((s) => s.selectedWorkspaceId);
+  const activeSessionWorkspaceId = useHarnessStore((s) =>
+    s.activeSessionId ? s.sessionSlots[s.activeSessionId]?.workspaceId ?? null : null,
+  );
   const showToast = useToastStore((state) => state.show);
   const { dismissSession, selectSession } = useSessionActions();
   const { updateSessionTitle } = useSessionTitleActions();
@@ -61,6 +60,10 @@ export function HeaderTabs() {
 
   const isChatActive = activeMainTab.kind === "chat";
   const chatTabs = useWorkspaceChatTabs(selectedWorkspaceId, activeSessionId, isChatActive);
+  const subagentTabs = useHeaderSubagentTabs(
+    isChatActive ? activeSessionId : null,
+    activeSessionWorkspaceId,
+  );
 
   const setChatTabElement = useCallback((sessionId: string, element: HTMLSpanElement | null) => {
     if (element) {
@@ -81,20 +84,24 @@ export function HeaderTabs() {
     });
   }, [activeSessionId, chatTabs.length, isChatActive]);
 
-  const activateSession = useCallback((tab: ChatTabEntry) => {
+  const activateSessionId = useCallback((sessionId: string) => {
     activateChatTab();
     const latencyFlowId = startLatencyFlow({
       flowKind: "session_switch",
       source: "header_tab",
       targetWorkspaceId: selectedWorkspaceId,
-      targetSessionId: tab.id,
+      targetSessionId: sessionId,
     });
-    void selectSession(tab.id, { latencyFlowId }).catch((error) => {
+    void selectSession(sessionId, { latencyFlowId }).catch((error) => {
       failLatencyFlow(latencyFlowId, "session_switch_failed");
       const message = error instanceof Error ? error.message : String(error);
       showToast(message);
     });
   }, [activateChatTab, selectSession, selectedWorkspaceId, showToast]);
+
+  const activateSession = useCallback((tab: ChatTabEntry) => {
+    activateSessionId(tab.id);
+  }, [activateSessionId]);
 
   return (
     <div
@@ -134,6 +141,15 @@ export function HeaderTabs() {
           </span>
         ))}
       </div>
+
+      <HeaderChatMenuPopover
+        chatTabs={chatTabs}
+        subagentTabs={subagentTabs}
+        renderSessionIcon={renderSessionIcon}
+        renderSessionStatusBadge={renderSessionStatusBadge}
+        onOpenChatTab={activateSession}
+        onOpenSession={activateSessionId}
+      />
 
       {openTabs.length > 0 && (
         <div className="flex min-w-0 max-w-[45%] flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden">

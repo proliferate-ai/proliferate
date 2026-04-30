@@ -20,6 +20,7 @@ export function createOptimisticPendingPrompt(
     text,
     contentParts,
     queuedAt,
+    promptProvenance: null,
   };
 }
 

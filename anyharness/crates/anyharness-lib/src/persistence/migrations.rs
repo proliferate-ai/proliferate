@@ -100,6 +100,22 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0028_mobility_archive_installs",
         include_str!("sql/0028_mobility_archive_installs.sql"),
     ),
+    (
+        "0029_session_links_prompt_provenance",
+        include_str!("sql/0029_session_links_prompt_provenance.sql"),
+    ),
+    (
+        "0030_subagent_links_and_completions",
+        include_str!("sql/0030_subagent_links_and_completions.sql"),
+    ),
+    (
+        "0031_session_subagents_policy",
+        include_str!("sql/0031_session_subagents_policy.sql"),
+    ),
+    (
+        "0032_cowork_managed_workspaces",
+        include_str!("sql/0032_cowork_managed_workspaces.sql"),
+    ),
 ];
 
 const CUSTOM_MIGRATIONS: &[(&str, fn(&Transaction<'_>) -> rusqlite::Result<()>)] = &[(

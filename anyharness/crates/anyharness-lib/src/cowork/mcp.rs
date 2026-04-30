@@ -4,11 +4,9 @@ use serde_json::{json, Value};
 use super::artifacts::{
     CoworkArtifactRuntime, CreateCoworkArtifactInput, UpdateCoworkArtifactInput,
 };
-use super::manifest::CoworkArtifactError;
-use super::service::CoworkService;
-use crate::sessions::service::SessionService;
+use super::delegation::mcp as delegation_mcp;
+use super::runtime::CoworkRuntime;
 use crate::workspaces::model::WorkspaceRecord;
-use crate::workspaces::runtime::WorkspaceRuntime;
 
 #[derive(Debug, Deserialize)]
 struct JsonRpcRequest {
@@ -64,11 +62,9 @@ struct GetArtifactArgs {
     id: String,
 }
 
-pub fn handle_json_rpc(
+pub async fn handle_json_rpc(
     artifact_runtime: &CoworkArtifactRuntime,
-    session_service: &SessionService,
-    workspace_runtime: &WorkspaceRuntime,
-    cowork_service: &CoworkService,
+    cowork_runtime: &CoworkRuntime,
     workspace_id: &str,
     session_id: &str,
     request_body: Value,
@@ -82,13 +78,9 @@ pub fn handle_json_rpc(
         )));
     }
 
-    let workspace = resolve_workspace_context(
-        session_service,
-        workspace_runtime,
-        cowork_service,
-        workspace_id,
-        session_id,
-    )?;
+    let (thread, workspace, _session) =
+        cowork_runtime.validate_canonical_thread(workspace_id, session_id)?;
+    let workspace_delegation_enabled = thread.workspace_delegation_enabled;
 
     match request.method.as_str() {
         "initialize" => {
@@ -107,7 +99,7 @@ pub fn handle_json_rpc(
                         "name": "proliferate-cowork",
                         "version": env!("CARGO_PKG_VERSION"),
                     },
-                    "instructions": "Use cowork artifact tools to manage cowork artifacts for this workspace."
+                    "instructions": "Use cowork artifact tools to manage cowork artifacts for this workspace. When workspace delegation is available, use get_coding_workspace_launch_options to choose a source workspace, then create_coding_workspace to provision a normal coding worktree. create_coding_workspace does not start agent work. Use get_coding_session_launch_options for that managed workspace, then create_coding_session to start a linked coding session with a prompt. Set wakeOnCompletion or call schedule_coding_wake when you want this cowork thread prompted after the coding session's next completed turn. Inspect coding work with get_coding_status and read_coding_events."
                 }),
             )))
         }
@@ -115,18 +107,24 @@ pub fn handle_json_rpc(
         "tools/list" => Ok(Some(jsonrpc_result(
             request.id,
             json!({
-                "tools": build_tool_list()
+                "tools": build_tool_list(workspace_delegation_enabled)
             }),
         ))),
         "tools/call" => {
             let params: CallToolParams =
                 serde_json::from_value(request.params.unwrap_or_else(|| json!({})))?;
-            Ok(Some(handle_tool_call(
-                artifact_runtime,
-                &workspace,
-                request.id,
-                params,
-            )?))
+            Ok(Some(
+                handle_tool_call(
+                    artifact_runtime,
+                    cowork_runtime,
+                    &workspace,
+                    session_id,
+                    workspace_delegation_enabled,
+                    request.id,
+                    params,
+                )
+                .await?,
+            ))
         }
         _ => Ok(Some(jsonrpc_error(
             request.id,
@@ -136,89 +134,106 @@ pub fn handle_json_rpc(
     }
 }
 
-fn resolve_workspace_context(
-    session_service: &SessionService,
-    workspace_runtime: &WorkspaceRuntime,
-    cowork_service: &CoworkService,
-    workspace_id: &str,
-    session_id: &str,
-) -> anyhow::Result<WorkspaceRecord> {
-    let workspace = workspace_runtime
-        .get_workspace(workspace_id)?
-        .ok_or_else(|| anyhow::anyhow!("workspace not found"))?;
-    let session = session_service
-        .get_session(session_id)?
-        .ok_or_else(|| anyhow::anyhow!("session not found"))?;
-    if session.workspace_id != workspace_id {
-        anyhow::bail!("session does not belong to workspace");
-    }
-    if workspace.surface != "cowork" {
-        anyhow::bail!("workspace is not a cowork workspace");
-    }
-    let threads = cowork_service.list_threads()?;
-    let is_canonical = threads
-        .iter()
-        .any(|thread| thread.workspace_id == workspace_id && thread.session_id == session_id);
-    if !is_canonical {
-        anyhow::bail!("session is not the canonical cowork session for this workspace");
-    }
-    Ok(workspace)
-}
-
-fn handle_tool_call(
+async fn handle_tool_call(
     artifact_runtime: &CoworkArtifactRuntime,
+    cowork_runtime: &CoworkRuntime,
     workspace: &WorkspaceRecord,
+    parent_session_id: &str,
+    workspace_delegation_enabled: bool,
     id: Option<Value>,
     params: CallToolParams,
 ) -> anyhow::Result<Value> {
+    if delegation_mcp::is_tool(&params.name) && !workspace_delegation_enabled {
+        return Ok(jsonrpc_tool_result::<Value, _>(
+            id,
+            Err(anyhow::anyhow!(
+                "cowork workspace delegation is disabled for this thread"
+            )),
+        ));
+    }
+
     match params.name.as_str() {
         "create_artifact" => {
             let args: CreateArtifactArgs = deserialize_args(params.arguments)?;
-            let artifact = artifact_runtime.create_artifact(
-                workspace,
-                CreateCoworkArtifactInput {
-                    path: args.path,
-                    content: args.content,
-                    title: args.title,
-                    description: args.description,
-                },
-            );
+            let artifact_runtime = artifact_runtime.clone();
+            let workspace = workspace.clone();
+            let artifact = tokio::task::spawn_blocking(move || {
+                artifact_runtime.create_artifact(
+                    &workspace,
+                    CreateCoworkArtifactInput {
+                        path: args.path,
+                        content: args.content,
+                        title: args.title,
+                        description: args.description,
+                    },
+                )
+            })
+            .await?;
             Ok(jsonrpc_tool_result(id, artifact))
         }
         "update_artifact" => {
             let args: UpdateArtifactArgs = deserialize_args(params.arguments)?;
-            let artifact = artifact_runtime.update_artifact(
-                workspace,
-                UpdateCoworkArtifactInput {
-                    id: args.id,
-                    content: args.content,
-                    title: args.title,
-                    description: args.description,
-                },
-            );
+            let artifact_runtime = artifact_runtime.clone();
+            let workspace = workspace.clone();
+            let artifact = tokio::task::spawn_blocking(move || {
+                artifact_runtime.update_artifact(
+                    &workspace,
+                    UpdateCoworkArtifactInput {
+                        id: args.id,
+                        content: args.content,
+                        title: args.title,
+                        description: args.description,
+                    },
+                )
+            })
+            .await?;
             Ok(jsonrpc_tool_result(id, artifact))
         }
         "delete_artifact" => {
             let args: DeleteArtifactArgs = deserialize_args(params.arguments)?;
-            let result = artifact_runtime
-                .delete_artifact(workspace, &args.id)
-                .map(|_| {
-                    json!({
-                        "id": args.id,
-                        "deleted": true,
+            let artifact_runtime = artifact_runtime.clone();
+            let workspace = workspace.clone();
+            let result = tokio::task::spawn_blocking(move || {
+                artifact_runtime
+                    .delete_artifact(&workspace, &args.id)
+                    .map(|_| {
+                        json!({
+                            "id": args.id,
+                            "deleted": true,
+                        })
                     })
-                });
+            })
+            .await?;
             Ok(jsonrpc_tool_result(id, result))
         }
         "list_artifacts" => {
-            let manifest = artifact_runtime.get_manifest(workspace);
+            let artifact_runtime = artifact_runtime.clone();
+            let workspace = workspace.clone();
+            let manifest =
+                tokio::task::spawn_blocking(move || artifact_runtime.get_manifest(&workspace))
+                    .await?;
             Ok(jsonrpc_tool_result(id, manifest))
         }
         "get_artifact" => {
             let args: GetArtifactArgs = deserialize_args(params.arguments)?;
-            let artifact = artifact_runtime.get_artifact(workspace, &args.id);
+            let artifact_runtime = artifact_runtime.clone();
+            let workspace = workspace.clone();
+            let artifact = tokio::task::spawn_blocking(move || {
+                artifact_runtime.get_artifact(&workspace, &args.id)
+            })
+            .await?;
             Ok(jsonrpc_tool_result(id, artifact))
         }
+        name if delegation_mcp::is_tool(name) => Ok(jsonrpc_tool_result(
+            id,
+            delegation_mcp::handle_tool_call(
+                cowork_runtime,
+                parent_session_id,
+                name,
+                params.arguments,
+            )
+            .await,
+        )),
         _ => Ok(jsonrpc_error(
             id,
             -32601,
@@ -250,9 +265,10 @@ fn jsonrpc_error(id: Option<Value>, code: i64, message: impl Into<String>) -> Va
     })
 }
 
-fn jsonrpc_tool_result<T>(id: Option<Value>, result: Result<T, CoworkArtifactError>) -> Value
+fn jsonrpc_tool_result<T, E>(id: Option<Value>, result: Result<T, E>) -> Value
 where
     T: serde::Serialize,
+    E: ToString,
 {
     match result {
         Ok(result) => {
@@ -275,10 +291,7 @@ where
             id,
             json!({
                 "content": [
-                    {
-                        "type": "text",
-                        "text": error.to_string()
-                    }
+                    { "type": "text", "text": error.to_string() }
                 ],
                 "isError": true,
             }),
@@ -286,8 +299,8 @@ where
     }
 }
 
-fn build_tool_list() -> Vec<Value> {
-    vec![
+fn build_tool_list(include_delegation_tools: bool) -> Vec<Value> {
+    let mut tools = vec![
         tool_definition(
             "create_artifact",
             "Create a new cowork artifact file and register it in the manifest.",
@@ -346,7 +359,13 @@ fn build_tool_list() -> Vec<Value> {
                 "required": ["id"]
             }),
         ),
-    ]
+    ];
+
+    if include_delegation_tools {
+        tools.extend(delegation_mcp::tool_definitions());
+    }
+
+    tools
 }
 
 fn tool_definition(name: &str, description: &str, input_schema: Value) -> Value {

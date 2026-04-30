@@ -15,5 +15,16 @@ pub struct CoworkThreadRecord {
     pub agent_kind: String,
     pub requested_model_id: Option<String>,
     pub branch_name: String,
+    pub workspace_delegation_enabled: bool,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct CoworkManagedWorkspaceRecord {
+    pub id: String,
+    pub parent_session_id: String,
+    pub workspace_id: String,
+    pub source_workspace_id: Option<String>,
+    pub label: Option<String>,
     pub created_at: String,
 }

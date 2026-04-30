@@ -19,6 +19,10 @@ type ConfigOptionUpdatePayload =
 type SessionStateUpdatePayload =
   components["schemas"]["SessionStateUpdatePayload"];
 type SessionInfoUpdatePayload = components["schemas"]["SessionInfoUpdatePayload"];
+type SubagentTurnCompletedPayload =
+  components["schemas"]["SubagentTurnCompletedPayload"];
+type SessionLinkTurnCompletedPayload =
+  components["schemas"]["SessionLinkTurnCompletedPayload"];
 type UsageUpdatePayload = components["schemas"]["UsageUpdatePayload"];
 type PendingPromptAddedPayload =
   components["schemas"]["PendingPromptAddedPayload"];
@@ -71,6 +75,12 @@ export type SessionStateUpdateEvent = SessionStateUpdatePayload & {
 export type SessionInfoUpdateEvent = SessionInfoUpdatePayload & {
   type: "session_info_update";
 };
+export type SubagentTurnCompletedEvent = SubagentTurnCompletedPayload & {
+  type: "subagent_turn_completed";
+};
+export type SessionLinkTurnCompletedEvent = SessionLinkTurnCompletedPayload & {
+  type: "session_link_turn_completed";
+};
 export type UsageUpdateEvent = UsageUpdatePayload & {
   type: "usage_update";
 };
@@ -86,6 +96,8 @@ export type PendingPromptRemovedEvent = PendingPromptRemovedPayload & {
 export type PendingPromptRemovalReason =
   components["schemas"]["PendingPromptRemovalReason"];
 export type PendingPromptSummary = components["schemas"]["PendingPromptSummary"];
+export type PromptProvenance = components["schemas"]["PromptProvenance"];
+export type SubagentTurnOutcome = components["schemas"]["SubagentTurnOutcome"];
 export type InteractionKind = components["schemas"]["InteractionKind"];
 export type InteractionSource = components["schemas"]["InteractionSource"];
 export type InteractionPayload = components["schemas"]["InteractionPayload"];
@@ -159,6 +171,8 @@ export type SessionEvent =
   | ConfigOptionUpdateEvent
   | SessionStateUpdateEvent
   | SessionInfoUpdateEvent
+  | SubagentTurnCompletedEvent
+  | SessionLinkTurnCompletedEvent
   | UsageUpdateEvent
   | PendingPromptAddedEvent
   | PendingPromptUpdatedEvent

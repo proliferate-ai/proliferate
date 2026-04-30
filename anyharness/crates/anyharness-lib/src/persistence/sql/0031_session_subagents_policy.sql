@@ -1,0 +1,2 @@
+ALTER TABLE sessions
+ADD COLUMN subagents_enabled INTEGER NOT NULL DEFAULT 1;

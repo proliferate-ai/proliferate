@@ -36,7 +36,6 @@ import { ModelSelector } from "./ModelSelector";
 import { SessionConfigControls } from "./SessionConfigControls";
 import { Textarea } from "@/components/ui/Textarea";
 import { ChatComposerSurface } from "./ChatComposerSurface";
-import { SessionPowersSummary } from "./SessionPowersSummary";
 import { DraftAttachmentPreviewList } from "@/components/workspace/chat/content/PromptContentRenderer";
 import { ComposerControlButton } from "./ComposerControlButton";
 import { PlanPickerPopover } from "./PlanPickerPopover";
@@ -240,11 +239,9 @@ export function ChatInput() {
               </Button>
             </div>
           )}
-          <div className="px-2 py-1.5">
-            <div className="flex w-full flex-wrap items-center justify-start gap-1">
-              <SessionPowersSummary summaries={activeSlot?.mcpBindingSummaries ?? null} />
-            </div>
-          </div>
+          {!isEditingQueuedPrompt && !attachments.hasAttachments && !planAttachments.hasPlans && (
+            <div className="h-5" aria-hidden="true" />
+          )}
           {!isEditingQueuedPrompt && (
             <DraftAttachmentPreviewList
               attachments={[...attachments.attachments, ...planAttachments.attachments]}

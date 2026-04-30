@@ -87,6 +87,9 @@ export type {
   CoworkThread,
   CreateCoworkThreadRequest,
   CreateCoworkThreadResponse,
+  CoworkManagedWorkspacesResponse,
+  CoworkManagedWorkspaceSummary,
+  CoworkCodingSessionSummary,
 } from "./types/cowork.js";
 
 export type {
@@ -154,6 +157,10 @@ export type {
   PromptSessionStatus,
   PendingPromptSummary,
   EditPendingPromptRequest,
+  SessionSubagentsResponse,
+  ParentSubagentLinkSummary,
+  ChildSubagentSummary,
+  SubagentCompletionSummary,
   InteractionDecision,
   ListSessionEventsOptions,
   McpElicitationUrlRevealResponse,
@@ -191,6 +198,8 @@ export type {
   TranscriptItemKind,
   TranscriptItemStatus,
   TranscriptItemDeltaPayload,
+  PromptProvenance,
+  SubagentTurnOutcome,
   ContentPart,
   TextContentPart,
   ReasoningContentPart,

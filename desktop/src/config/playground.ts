@@ -54,6 +54,10 @@ export type ScenarioKey =
   | "tool-cowork-artifact"
   | "tool-generic-result"
   | "tool-subagent-task"
+  | "subagents-composer-few"
+  | "subagents-composer-many"
+  | "subagents-queued-wake"
+  | "subagent-wake-card"
   | "mobility-local-actionable"
   | "mobility-local-blocked"
   | "mobility-unpublished-branch"
@@ -123,6 +127,10 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "tool-cowork-artifact": { label: "Tool artifact" },
   "tool-generic-result": { label: "Tool generic result" },
   "tool-subagent-task": { label: "Tool subagent task" },
+  "subagents-composer-few": { label: "Subagents composer (3)" },
+  "subagents-composer-many": { label: "Subagents composer (10)" },
+  "subagents-queued-wake": { label: "Subagent queued wake" },
+  "subagent-wake-card": { label: "Subagent wake card" },
   "mobility-local-actionable": { label: "Mobility (actionable)" },
   "mobility-local-blocked": { label: "Mobility (blocked)" },
   "mobility-unpublished-branch": { label: "Mobility (publish branch)" },

@@ -2,7 +2,8 @@ use std::collections::HashSet;
 
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{
-    ContentPart, PromptCapabilities, PromptInputBlock, SessionLiveConfigSnapshot,
+    ContentPart, PromptCapabilities, PromptInputBlock, PromptProvenance as PublicPromptProvenance,
+    SessionLiveConfigSnapshot,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 use serde::{Deserialize, Serialize};
@@ -40,6 +41,7 @@ pub struct PromptPrepareContext<'a> {
 pub struct PromptPayload {
     pub blocks: Vec<StoredPromptBlock>,
     pub text_summary: String,
+    pub(crate) provenance: Option<PromptProvenance>,
 }
 
 impl PromptPayload {
@@ -53,10 +55,16 @@ impl PromptPayload {
         Self {
             blocks,
             text_summary,
+            provenance: None,
         }
     }
 
-    pub fn from_persisted(blocks_json: Option<&str>, fallback_text: &str) -> Self {
+    pub fn from_persisted(
+        blocks_json: Option<&str>,
+        fallback_text: &str,
+        provenance_json: Option<&str>,
+    ) -> Self {
+        let provenance = decode_prompt_provenance(provenance_json);
         if let Some(blocks_json) = blocks_json.map(str::trim).filter(|value| !value.is_empty()) {
             match serde_json::from_str::<Vec<StoredPromptBlock>>(blocks_json) {
                 Ok(blocks) => {
@@ -64,6 +72,7 @@ impl PromptPayload {
                     return Self {
                         blocks,
                         text_summary,
+                        provenance,
                     };
                 }
                 Err(error) => {
@@ -71,7 +80,9 @@ impl PromptPayload {
                 }
             }
         }
-        Self::text(fallback_text.to_string())
+        let mut payload = Self::text(fallback_text.to_string());
+        payload.provenance = provenance;
+        payload
     }
 
     pub fn blocks_json(&self) -> anyhow::Result<Option<String>> {
@@ -81,6 +92,25 @@ impl PromptPayload {
             return Ok(None);
         }
         Ok(Some(serde_json::to_string(&self.blocks)?))
+    }
+
+    pub fn provenance_json(&self) -> anyhow::Result<Option<String>> {
+        self.provenance
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(anyhow::Error::from)
+    }
+
+    pub fn public_provenance(&self) -> Option<PublicPromptProvenance> {
+        self.provenance
+            .as_ref()
+            .and_then(PromptProvenance::to_public)
+    }
+
+    pub(crate) fn with_provenance(mut self, provenance: PromptProvenance) -> Self {
+        self.provenance = Some(provenance);
+        self
     }
 
     pub fn content_parts(&self) -> Vec<ContentPart> {
@@ -221,6 +251,94 @@ impl PromptPayload {
             }
         }
         Ok(blocks)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub(crate) enum PromptProvenance {
+    #[serde(rename_all = "camelCase")]
+    AgentSession {
+        source_session_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        session_link_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    Automation {
+        automation_run_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    SubagentWake {
+        session_link_id: String,
+        completion_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    LinkWake {
+        relation: String,
+        session_link_id: String,
+        completion_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    System {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+}
+
+impl PromptProvenance {
+    pub(crate) fn to_public(&self) -> Option<PublicPromptProvenance> {
+        match self {
+            PromptProvenance::AgentSession {
+                source_session_id,
+                session_link_id,
+                label,
+            } => Some(PublicPromptProvenance::AgentSession {
+                source_session_id: source_session_id.clone(),
+                session_link_id: session_link_id.clone(),
+                label: label.clone(),
+            }),
+            PromptProvenance::SubagentWake {
+                session_link_id,
+                completion_id,
+                label,
+            } => Some(PublicPromptProvenance::SubagentWake {
+                session_link_id: session_link_id.clone(),
+                completion_id: completion_id.clone(),
+                label: label.clone(),
+            }),
+            PromptProvenance::LinkWake {
+                relation,
+                session_link_id,
+                completion_id,
+                label,
+            } => Some(PublicPromptProvenance::LinkWake {
+                relation: relation.clone(),
+                session_link_id: session_link_id.clone(),
+                completion_id: completion_id.clone(),
+                label: label.clone(),
+            }),
+            PromptProvenance::Automation { label, .. } => {
+                label.as_ref().map(|label| PublicPromptProvenance::System {
+                    label: Some(label.clone()),
+                })
+            }
+            PromptProvenance::System { label } => {
+                if label.as_deref() == Some("subagent_wake") {
+                    return None;
+                }
+                Some(PublicPromptProvenance::System {
+                    label: label.clone(),
+                })
+            }
+        }
     }
 }
 
@@ -782,6 +900,7 @@ pub fn prepare_prompt(
     let payload = PromptPayload {
         text_summary: summarize_blocks(&stored_blocks),
         blocks: stored_blocks,
+        provenance: None,
     };
     if !payload.has_content() {
         return Err(PromptValidationError::new(
@@ -794,6 +913,17 @@ pub fn prepare_prompt(
         payload,
         attachments,
     })
+}
+
+fn decode_prompt_provenance(value: Option<&str>) -> Option<PromptProvenance> {
+    let value = value.map(str::trim).filter(|value| !value.is_empty())?;
+    match serde_json::from_str(value) {
+        Ok(provenance) => Some(provenance),
+        Err(error) => {
+            tracing::warn!(error = %error, "invalid pending prompt provenance JSON");
+            None
+        }
+    }
 }
 
 fn checked_total(current: usize, next: usize, max: usize) -> Result<usize, PromptValidationError> {
@@ -1090,6 +1220,25 @@ mod tests {
             text_blocks.as_slice(),
             [acp::ContentBlock::Text(_)]
         ));
+    }
+
+    #[test]
+    fn persisted_prompt_provenance_rejects_invalid_kind_field_combinations() {
+        let missing_source = PromptPayload::from_persisted(
+            None,
+            "hello",
+            Some(r#"{"kind":"agent_session","label":"Parent"}"#),
+        );
+        assert_eq!(missing_source.provenance, None);
+
+        let mixed_fields = PromptPayload::from_persisted(
+            None,
+            "hello",
+            Some(
+                r#"{"kind":"agent_session","sourceSessionId":"session-1","automationRunId":"run-1"}"#,
+            ),
+        );
+        assert_eq!(mixed_fields.provenance, None);
     }
 
     fn context<'a>(

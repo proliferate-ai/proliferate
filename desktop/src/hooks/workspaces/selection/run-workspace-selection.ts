@@ -103,10 +103,11 @@ export async function runWorkspaceSelection(
 
       const cachedSessionId =
         useWorkspaceUiStore.getState().lastViewedSessionByWorkspace[directWorkspace.id] ?? null;
+      const initialActiveSessionId = request.options?.initialActiveSessionId ?? cachedSessionId;
       deps.setSelectedLogicalWorkspaceId(null);
       deps.setSelectedWorkspace(directWorkspace.id, {
         clearPending: !request.options?.preservePending,
-        initialActiveSessionId: cachedSessionId,
+        initialActiveSessionId,
       });
 
       const context: WorkspaceSelectionContext = {
@@ -177,10 +178,11 @@ export async function runWorkspaceSelection(
 
   const cachedSessionId =
     useWorkspaceUiStore.getState().lastViewedSessionByWorkspace[logicalWorkspace.id] ?? null;
+  const initialActiveSessionId = request.options?.initialActiveSessionId ?? cachedSessionId;
   deps.setSelectedLogicalWorkspaceId(logicalWorkspace.id);
   deps.setSelectedWorkspace(resolvedWorkspaceId, {
     clearPending: !request.options?.preservePending,
-    initialActiveSessionId: cachedSessionId,
+    initialActiveSessionId,
   });
 
   const baseContext: WorkspaceSelectionContext = {

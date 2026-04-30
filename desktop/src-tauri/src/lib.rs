@@ -1,7 +1,7 @@
 mod app_config;
 mod commands;
-pub mod diagnostics;
 mod desktop_telemetry_mode;
+pub mod diagnostics;
 mod editors;
 mod quit_flow;
 mod sidecar;

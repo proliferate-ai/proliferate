@@ -89,6 +89,7 @@ impl SessionService {
         mcp_bindings_ciphertext: Option<String>,
         mcp_binding_summaries_json: Option<String>,
         system_prompt_append: Option<String>,
+        subagents_enabled: bool,
         origin: OriginContext,
     ) -> Result<SessionRecord, CreateSessionError> {
         let started = Instant::now();
@@ -210,6 +211,7 @@ impl SessionService {
             mcp_bindings_ciphertext,
             mcp_binding_summaries_json,
             system_prompt_append,
+            subagents_enabled,
             origin: Some(origin),
         };
 

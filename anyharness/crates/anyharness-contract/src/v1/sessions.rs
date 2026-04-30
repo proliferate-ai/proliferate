@@ -6,8 +6,8 @@ use utoipa::ToSchema;
 use super::OriginContext;
 use super::{
     ContentPart, InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
-    PermissionInteractionOption, SessionLiveConfigSnapshot, SessionMcpBindingSummary,
-    SessionMcpServer, UserInputQuestion,
+    PermissionInteractionOption, PromptProvenance, SessionLiveConfigSnapshot,
+    SessionMcpBindingSummary, SessionMcpServer, UserInputQuestion,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -135,6 +135,8 @@ pub struct PendingPromptSummary {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub content_parts: Vec<ContentPart>,
     pub queued_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_provenance: Option<PromptProvenance>,
 }
 
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
@@ -152,6 +154,8 @@ pub struct CreateSessionRequest {
     pub mcp_servers: Option<Vec<SessionMcpServer>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subagents_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<OriginContext>,
 }
@@ -181,9 +185,69 @@ impl fmt::Debug for CreateSessionRequest {
                     .as_ref()
                     .map(|summaries| summaries.len()),
             )
+            .field("subagents_enabled", &self.subagents_enabled)
             .field("origin", &self.origin)
             .finish()
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionSubagentsResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent: Option<ParentSubagentLinkSummary>,
+    pub children: Vec<ChildSubagentSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ParentSubagentLinkSummary {
+    pub session_link_id: String,
+    pub parent_session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_title: Option<String>,
+    pub parent_agent_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_model_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    pub link_created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChildSubagentSummary {
+    pub session_link_id: String,
+    pub child_session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    pub status: SessionStatus,
+    pub agent_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode_id: Option<String>,
+    pub link_created_at: String,
+    pub child_created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_completion: Option<SubagentCompletionSummary>,
+    pub wake_scheduled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentCompletionSummary {
+    pub completion_id: String,
+    pub child_turn_id: String,
+    pub outcome: super::SubagentTurnOutcome,
+    pub child_last_event_seq: i64,
+    pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_event_seq: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_prompt_seq: Option<i64>,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, ToSchema)]
@@ -503,6 +567,7 @@ mod tests {
                 }),
             ]),
             mcp_binding_summaries: None,
+            subagents_enabled: None,
             origin: None,
         };
 

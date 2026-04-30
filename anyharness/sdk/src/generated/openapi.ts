@@ -132,6 +132,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cowork/sessions/{session_id}/managed-workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_cowork_managed_workspaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cowork/threads": {
         parameters: {
             query?: never;
@@ -574,6 +590,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["resume_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/subagents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_session_subagents"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1178,6 +1210,20 @@ export interface components {
         AvailableCommandsUpdatePayload: {
             availableCommands: unknown[];
         };
+        ChildSubagentSummary: {
+            agentKind: string;
+            childCreatedAt: string;
+            childSessionId: string;
+            label?: string | null;
+            latestCompletion?: null | components["schemas"]["SubagentCompletionSummary"];
+            linkCreatedAt: string;
+            modeId?: string | null;
+            modelId?: string | null;
+            sessionLinkId: string;
+            status: components["schemas"]["SessionStatus"];
+            title?: string | null;
+            wakeScheduled: boolean;
+        };
         CommitRequest: {
             body?: string | null;
             summary: string;
@@ -1350,6 +1396,43 @@ export interface components {
         };
         /** @enum {string} */
         CoworkArtifactType: "text/markdown" | "text/html" | "image/svg+xml" | "application/vnd.proliferate.react";
+        CoworkCodingCompletionSummary: {
+            /** Format: int64 */
+            childLastEventSeq: number;
+            childTurnId: string;
+            completionId: string;
+            createdAt: string;
+            outcome: string;
+            /** Format: int64 */
+            parentEventSeq?: number | null;
+            /** Format: int64 */
+            parentPromptSeq?: number | null;
+        };
+        CoworkCodingSessionSummary: {
+            agentKind: string;
+            codingSessionId: string;
+            label?: string | null;
+            latestCompletion?: null | components["schemas"]["CoworkCodingCompletionSummary"];
+            linkCreatedAt: string;
+            modeId?: string | null;
+            modelId?: string | null;
+            sessionCreatedAt: string;
+            sessionLinkId: string;
+            status: components["schemas"]["SessionStatus"];
+            title?: string | null;
+            wakeScheduled: boolean;
+        };
+        CoworkManagedWorkspaceSummary: {
+            createdAt: string;
+            label?: string | null;
+            ownershipId: string;
+            sessions: components["schemas"]["CoworkCodingSessionSummary"][];
+            sourceWorkspaceId?: string | null;
+            workspaceId: string;
+        };
+        CoworkManagedWorkspacesResponse: {
+            workspaces: components["schemas"]["CoworkManagedWorkspaceSummary"][];
+        };
         CoworkRoot: {
             createdAt: string;
             defaultBranch: string;
@@ -1374,10 +1457,12 @@ export interface components {
             sessionId: string;
             title?: string | null;
             updatedAt: string;
+            workspaceDelegationEnabled: boolean;
             workspaceId: string;
         };
         CreateCoworkThreadRequest: {
             agentKind: string;
+            coworkWorkspaceDelegationEnabled?: boolean | null;
             mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][] | null;
             mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
             modeId?: string | null;
@@ -1414,6 +1499,7 @@ export interface components {
             modeId?: string | null;
             modelId?: string | null;
             origin?: null | components["schemas"]["OriginContext"];
+            subagentsEnabled?: boolean | null;
             systemPromptAppend?: string[] | null;
             workspaceId: string;
         };
@@ -1829,6 +1915,34 @@ export interface components {
             timestamp: string;
             turnId?: string | null;
         };
+        MobilitySessionLinkCompletionRecord: {
+            /** Format: int64 */
+            childLastEventSeq: number;
+            childTurnId: string;
+            completionId: string;
+            createdAt: string;
+            outcome: string;
+            /** Format: int64 */
+            parentEventSeq?: number | null;
+            /** Format: int64 */
+            parentPromptSeq?: number | null;
+            sessionLinkId: string;
+            updatedAt: string;
+        };
+        MobilitySessionLinkRecord: {
+            childSessionId: string;
+            createdAt: string;
+            createdByToolCallId?: string | null;
+            createdByTurnId?: string | null;
+            id: string;
+            label?: string | null;
+            parentSessionId: string;
+            relation: string;
+            workspaceRelation: string;
+        };
+        MobilitySessionLinkWakeScheduleRecord: {
+            sessionLinkId: string;
+        };
         MobilitySessionLiveConfigSnapshotRecord: {
             normalizedControlsJson: string;
             promptCapabilitiesJson?: string | null;
@@ -1860,6 +1974,7 @@ export interface components {
             requestedModeId?: string | null;
             requestedModelId?: string | null;
             status: string;
+            subagentsEnabled?: boolean;
             systemPromptAppend?: string | null;
             /** Format: int32 */
             thinkingBudgetTokens?: number | null;
@@ -1965,6 +2080,15 @@ export interface components {
         OriginEntrypoint: "desktop" | "cloud" | "local_runtime" | "cowork";
         /** @enum {string} */
         OriginKind: "human" | "cowork" | "api" | "system";
+        ParentSubagentLinkSummary: {
+            label?: string | null;
+            linkCreatedAt: string;
+            parentAgentKind: string;
+            parentModelId?: string | null;
+            parentSessionId: string;
+            parentTitle?: string | null;
+            sessionLinkId: string;
+        };
         PendingInteractionPayloadSummary: {
             context?: null | components["schemas"]["PermissionInteractionContext"];
             options?: components["schemas"]["PermissionInteractionOption"][];
@@ -1995,6 +2119,7 @@ export interface components {
         PendingPromptAddedPayload: {
             contentParts?: components["schemas"]["ContentPart"][];
             promptId?: string | null;
+            promptProvenance?: null | components["schemas"]["PromptProvenance"];
             queuedAt: string;
             /** Format: int64 */
             seq: number;
@@ -2010,6 +2135,7 @@ export interface components {
         PendingPromptSummary: {
             contentParts?: components["schemas"]["ContentPart"][];
             promptId?: string | null;
+            promptProvenance?: null | components["schemas"]["PromptProvenance"];
             queuedAt: string;
             /** Format: int64 */
             seq: number;
@@ -2017,6 +2143,7 @@ export interface components {
         };
         PendingPromptUpdatedPayload: {
             contentParts?: components["schemas"]["ContentPart"][];
+            promptProvenance?: null | components["schemas"]["PromptProvenance"];
             /** Format: int64 */
             seq: number;
             text: string;
@@ -2113,6 +2240,30 @@ export interface components {
             snapshotHash: string;
             /** @enum {string} */
             type: "plan_reference";
+        };
+        PromptProvenance: {
+            label?: string | null;
+            sessionLinkId?: string | null;
+            sourceSessionId: string;
+            /** @enum {string} */
+            type: "agentSession";
+        } | {
+            completionId: string;
+            label?: string | null;
+            sessionLinkId: string;
+            /** @enum {string} */
+            type: "subagentWake";
+        } | {
+            completionId: string;
+            label?: string | null;
+            relation: string;
+            sessionLinkId: string;
+            /** @enum {string} */
+            type: "linkWake";
+        } | {
+            label?: string | null;
+            /** @enum {string} */
+            type: "system";
         };
         PromptSessionRequest: {
             blocks: components["schemas"]["PromptInputBlock"][];
@@ -2391,6 +2542,12 @@ export interface components {
         }) | (components["schemas"]["SessionInfoUpdatePayload"] & {
             /** @enum {string} */
             type: "session_info_update";
+        }) | (components["schemas"]["SubagentTurnCompletedPayload"] & {
+            /** @enum {string} */
+            type: "subagent_turn_completed";
+        }) | (components["schemas"]["SessionLinkTurnCompletedPayload"] & {
+            /** @enum {string} */
+            type: "session_link_turn_completed";
         }) | (components["schemas"]["UsageUpdatePayload"] & {
             /** @enum {string} */
             type: "usage_update";
@@ -2433,6 +2590,18 @@ export interface components {
         SessionInfoUpdatePayload: {
             title?: string | null;
             updatedAt?: string | null;
+        };
+        SessionLinkTurnCompletedPayload: {
+            /** Format: int64 */
+            childLastEventSeq: number;
+            childSessionId: string;
+            childTurnId: string;
+            completionId: string;
+            label?: string | null;
+            outcome: components["schemas"]["SubagentTurnOutcome"];
+            parentSessionId: string;
+            relation: string;
+            sessionLinkId: string;
         };
         /**
          * @description The current live session configuration snapshot persisted by AnyHarness.
@@ -2519,6 +2688,10 @@ export interface components {
         };
         /** @enum {string} */
         SessionStatus: "starting" | "idle" | "running" | "completed" | "errored" | "closed";
+        SessionSubagentsResponse: {
+            children: components["schemas"]["ChildSubagentSummary"][];
+            parent?: null | components["schemas"]["ParentSubagentLinkSummary"];
+        };
         /** @description Request payload for changing a single live session config option. */
         SetSessionConfigOptionRequest: {
             /** @description Raw ACP config option identifier to mutate. */
@@ -2573,6 +2746,31 @@ export interface components {
         };
         /** @enum {string} */
         StopReason: "end_turn" | "max_tokens" | "max_turn_requests" | "refusal" | "cancelled";
+        SubagentCompletionSummary: {
+            /** Format: int64 */
+            childLastEventSeq: number;
+            childTurnId: string;
+            completionId: string;
+            createdAt: string;
+            outcome: components["schemas"]["SubagentTurnOutcome"];
+            /** Format: int64 */
+            parentEventSeq?: number | null;
+            /** Format: int64 */
+            parentPromptSeq?: number | null;
+        };
+        SubagentTurnCompletedPayload: {
+            /** Format: int64 */
+            childLastEventSeq: number;
+            childSessionId: string;
+            childTurnId: string;
+            completionId: string;
+            label?: string | null;
+            outcome: components["schemas"]["SubagentTurnOutcome"];
+            parentSessionId: string;
+            sessionLinkId: string;
+        };
+        /** @enum {string} */
+        SubagentTurnOutcome: "completed" | "failed" | "cancelled";
         /** @enum {string} */
         TerminalLifecycleEvent: "start" | "output" | "exit";
         TranscriptItemDeltaPayload: {
@@ -2597,6 +2795,7 @@ export interface components {
             messageId?: string | null;
             nativeToolName?: string | null;
             parentToolCallId?: string | null;
+            promptProvenance?: null | components["schemas"]["PromptProvenance"];
             rawInput?: unknown;
             rawOutput?: unknown;
             sourceAgentKind: string;
@@ -2693,6 +2892,9 @@ export interface components {
             deletedPaths?: string[];
             files: components["schemas"]["WorkspaceMobilityFileEntry"][];
             repoRootPath: string;
+            sessionLinkCompletions?: components["schemas"]["MobilitySessionLinkCompletionRecord"][];
+            sessionLinkWakeSchedules?: components["schemas"]["MobilitySessionLinkWakeScheduleRecord"][];
+            sessionLinks?: components["schemas"]["MobilitySessionLinkRecord"][];
             sessions?: components["schemas"]["WorkspaceMobilitySessionBundle"][];
             sourceWorkspacePath: string;
         };
@@ -3022,6 +3224,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CoworkStatus"];
+                };
+            };
+        };
+    };
+    get_cowork_managed_workspaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Cowork parent session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cowork-managed coding workspaces */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoworkManagedWorkspacesResponse"];
+                };
+            };
+            /** @description Cowork thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -4099,6 +4333,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_session_subagents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Subagent parent/child context */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionSubagentsResponse"];
                 };
             };
             /** @description Session not found */

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { ContentPart } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { CopyMessageButton } from "./CopyMessageButton";
@@ -10,6 +10,7 @@ export interface UserMessageProps {
   content: string;
   contentParts?: ContentPart[];
   showCopyButton?: boolean;
+  footer?: ReactNode;
 }
 
 export function UserMessage({
@@ -17,6 +18,7 @@ export function UserMessage({
   content,
   contentParts = [],
   showCopyButton = false,
+  footer,
 }: UserMessageProps) {
   const [expanded, setExpanded] = useState(false);
   const [needsToggle, setNeedsToggle] = useState(false);
@@ -87,6 +89,11 @@ export function UserMessage({
             )}
           </div>
         )}
+        {footer ? (
+          <div className="max-w-[77%] self-end">
+            {footer}
+          </div>
+        ) : null}
         {showCopyButton && content && shouldRenderTextBubble && (
           <div className="pr-1 pt-0.5">
             <CopyMessageButton

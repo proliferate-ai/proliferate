@@ -355,6 +355,7 @@ export function useSessionCreationActions({
       ).catch(() => null);
       const powersInCodingSessionsEnabled = useUserPreferencesStore.getState()
         .powersInCodingSessionsEnabled;
+      const subagentsEnabled = useUserPreferencesStore.getState().subagentsEnabled;
       const {
         mcpServers,
         mcpBindingSummaries,
@@ -411,6 +412,7 @@ export function useSessionCreationActions({
           ? mcpBindingSummaries
           : undefined,
         systemPromptAppend,
+        subagentsEnabled,
         origin: DESKTOP_ORIGIN,
       }, requestOptions);
 

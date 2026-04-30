@@ -18,6 +18,8 @@ export interface UserPreferences {
   turnEndSoundId: TurnEndSoundId;
   transparentChromeEnabled: boolean;
   powersInCodingSessionsEnabled: boolean;
+  subagentsEnabled: boolean;
+  coworkWorkspaceDelegationEnabled: boolean;
   cloudRuntimeInputSyncEnabled: boolean;
   onboardingCompletedVersion: number;
   onboardingPrimaryGoalId: OnboardingGoalId | "";
@@ -39,6 +41,8 @@ export const USER_PREFERENCE_DEFAULTS: UserPreferences = {
   turnEndSoundId: "ding",
   transparentChromeEnabled: true,
   powersInCodingSessionsEnabled: false,
+  subagentsEnabled: true,
+  coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
   onboardingCompletedVersion: 0,
   onboardingPrimaryGoalId: "",
@@ -108,6 +112,8 @@ async function readLegacyUserPreferences(): Promise<UserPreferences> {
     turnEndSoundId: USER_PREFERENCE_DEFAULTS.turnEndSoundId,
     transparentChromeEnabled: USER_PREFERENCE_DEFAULTS.transparentChromeEnabled,
     powersInCodingSessionsEnabled: USER_PREFERENCE_DEFAULTS.powersInCodingSessionsEnabled,
+    subagentsEnabled: USER_PREFERENCE_DEFAULTS.subagentsEnabled,
+    coworkWorkspaceDelegationEnabled: USER_PREFERENCE_DEFAULTS.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: USER_PREFERENCE_DEFAULTS.cloudRuntimeInputSyncEnabled,
     onboardingCompletedVersion: USER_PREFERENCE_DEFAULTS.onboardingCompletedVersion,
     onboardingPrimaryGoalId: USER_PREFERENCE_DEFAULTS.onboardingPrimaryGoalId,
@@ -176,6 +182,16 @@ export function migrateUserPreferences(preferences: UserPreferences): {
     changed = true;
   }
 
+  if (typeof next.subagentsEnabled !== "boolean") {
+    next.subagentsEnabled = USER_PREFERENCE_DEFAULTS.subagentsEnabled;
+    changed = true;
+  }
+
+  if (typeof next.coworkWorkspaceDelegationEnabled !== "boolean") {
+    next.coworkWorkspaceDelegationEnabled = USER_PREFERENCE_DEFAULTS.coworkWorkspaceDelegationEnabled;
+    changed = true;
+  }
+
   if (typeof next.cloudRuntimeInputSyncEnabled !== "boolean") {
     next.cloudRuntimeInputSyncEnabled = USER_PREFERENCE_DEFAULTS.cloudRuntimeInputSyncEnabled;
     changed = true;
@@ -214,6 +230,8 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
     turnEndSoundId: state.turnEndSoundId,
     transparentChromeEnabled: state.transparentChromeEnabled,
     powersInCodingSessionsEnabled: state.powersInCodingSessionsEnabled,
+    subagentsEnabled: state.subagentsEnabled,
+    coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: state.cloudRuntimeInputSyncEnabled,
     onboardingCompletedVersion: state.onboardingCompletedVersion,
     onboardingPrimaryGoalId: state.onboardingPrimaryGoalId,

@@ -5,22 +5,26 @@ import { SidebarShowToggleRow } from "@/components/workspace/shell/sidebar/Sideb
 import { useCoworkStatus } from "@/hooks/cowork/use-cowork-status";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/use-cowork-thread-workflow";
 import { useCoworkThreads } from "@/hooks/cowork/use-cowork-threads";
+import { useOpenCoworkCodingSession } from "@/hooks/cowork/use-open-cowork-coding-session";
 import { collectWorkspaceSessionViewStates } from "@/lib/domain/sessions/activity";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { SidebarActionButton } from "@/components/workspace/shell/sidebar/SidebarActionButton";
+import { CoworkManagedWorkspaceTree } from "./CoworkManagedWorkspaceTree";
 import { CoworkThreadRow } from "./CoworkThreadRow";
 
 const DEFAULT_VISIBLE_THREAD_COUNT = 5;
 
 export function CoworkThreadsSection() {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const activeSessionId = useHarnessStore((state) => state.activeSessionId);
   const workspaceActivities = useHarnessStore(useShallow((state) =>
     collectWorkspaceSessionViewStates(state.sessionSlots)
   ));
   const { status, isLoading: statusLoading } = useCoworkStatus();
   const { threads, isLoading: threadsLoading } = useCoworkThreads(status?.enabled ?? false);
   const { createThread, openThread, isCreatingThread } = useCoworkThreadWorkflow();
+  const openCodingSession = useOpenCoworkCodingSession();
   const [expanded, setExpanded] = useState(false);
   const threadsCollapsed = useWorkspaceUiStore((s) => s.threadsCollapsed);
   const setThreadsCollapsed = useWorkspaceUiStore((s) => s.setThreadsCollapsed);
@@ -49,10 +53,6 @@ export function CoworkThreadsSection() {
   const handleToggleExpanded = useCallback(() => {
     setExpanded((current) => !current);
   }, []);
-
-  if (!status?.enabled && !statusLoading) {
-    return null;
-  }
 
   return (
     <div className="pb-2">
@@ -97,13 +97,21 @@ export function CoworkThreadsSection() {
           ) : (
             <>
               {visibleThreads.map((thread) => (
-                <CoworkThreadRow
-                  key={thread.id}
-                  thread={thread}
-                  active={selectedWorkspaceId === thread.workspaceId}
-                  activity={workspaceActivities[thread.workspaceId]}
-                  onSelect={() => { void openThread(thread.workspaceId); }}
-                />
+                <div key={thread.id} className="min-w-0">
+                  <CoworkThreadRow
+                    thread={thread}
+                    active={selectedWorkspaceId === thread.workspaceId}
+                    activity={workspaceActivities[thread.workspaceId]}
+                    onSelect={() => { void openThread(thread.workspaceId); }}
+                  />
+                  <CoworkManagedWorkspaceTree
+                    parentSessionId={thread.sessionId}
+                    enabled={thread.workspaceDelegationEnabled}
+                    selectedWorkspaceId={selectedWorkspaceId}
+                    activeSessionId={activeSessionId}
+                    onOpenSession={(input) => { void openCodingSession(input); }}
+                  />
+                </div>
               ))}
               {toggleLabel && (
                 <SidebarShowToggleRow

@@ -6,17 +6,18 @@ use tokio::sync::broadcast;
 
 use crate::plans::service::PlanEventContext;
 use crate::sessions::model::{SessionBackgroundWorkState, SessionEventRecord};
+use crate::sessions::runtime_event::{RuntimeEventInjectionError, RuntimeInjectedSessionEvent};
 use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::{
     AvailableCommandsUpdatePayload, ConfigOptionUpdatePayload, ContentPart,
     CurrentModeUpdatePayload, ErrorEvent, FileChangeOperation, FileOpenTarget, FileReadScope,
     InteractionKind, InteractionOutcome, InteractionRequestedEvent, InteractionResolvedEvent,
     ItemCompletedEvent, ItemDeltaEvent, ItemStartedEvent, PendingPromptAddedPayload,
-    PendingPromptRemovedPayload, PendingPromptUpdatedPayload, PlanEntry, SessionEndReason,
-    SessionEndedEvent, SessionEvent, SessionEventEnvelope, SessionInfoUpdatePayload,
-    SessionStartedEvent, SessionStateUpdatePayload, StopReason, TranscriptItemDeltaPayload,
-    TranscriptItemKind, TranscriptItemPayload, TranscriptItemStatus, TurnEndedEvent,
-    TurnStartedEvent, UsageUpdatePayload,
+    PendingPromptRemovedPayload, PendingPromptUpdatedPayload, PlanEntry, PromptProvenance,
+    SessionEndReason, SessionEndedEvent, SessionEvent, SessionEventEnvelope,
+    SessionInfoUpdatePayload, SessionStartedEvent, SessionStateUpdatePayload, StopReason,
+    TranscriptItemDeltaPayload, TranscriptItemKind, TranscriptItemPayload, TranscriptItemStatus,
+    TurnEndedEvent, TurnStartedEvent, UsageUpdatePayload,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -295,7 +296,12 @@ impl SessionEventSink {
         );
     }
 
-    pub fn begin_turn(&mut self, prompt_text: String, content_parts: Vec<ContentPart>) {
+    pub fn begin_turn(
+        &mut self,
+        prompt_text: String,
+        content_parts: Vec<ContentPart>,
+        prompt_provenance: Option<PromptProvenance>,
+    ) -> String {
         self.close_open_items();
         self.close_plan_item();
         self.close_tool_items();
@@ -326,6 +332,7 @@ impl SessionEventSink {
             } else {
                 content_parts
             },
+            prompt_provenance,
         };
         self.emit_with_ids(
             SessionEvent::ItemStarted(ItemStartedEvent { item: item.clone() }),
@@ -337,6 +344,7 @@ impl SessionEventSink {
             Some(turn_id),
             Some(item_id),
         );
+        self.current_turn_id.clone().unwrap_or_default()
     }
 
     pub fn agent_message_chunk(&mut self, payload: AcpChunkPayload) {
@@ -379,6 +387,7 @@ impl SessionEventSink {
                 raw_input: None,
                 raw_output: None,
                 content_parts: vec![ContentPart::Text { text: text.clone() }],
+                prompt_provenance: None,
             };
             self.emit_with_ids(
                 SessionEvent::ItemStarted(ItemStartedEvent { item }),
@@ -461,6 +470,7 @@ impl SessionEventSink {
                     text: text.clone(),
                     visibility: anyharness_contract::v1::ReasoningVisibility::Private,
                 }],
+                prompt_provenance: None,
             };
             self.emit_with_ids(
                 SessionEvent::ItemStarted(ItemStartedEvent { item }),
@@ -646,6 +656,7 @@ impl SessionEventSink {
             content_parts: vec![ContentPart::Plan {
                 entries: entries.clone(),
             }],
+            prompt_provenance: None,
         };
         self.emit_with_ids(
             SessionEvent::ItemStarted(ItemStartedEvent { item }),
@@ -796,6 +807,7 @@ impl SessionEventSink {
                     raw_input: None,
                     raw_output,
                     content_parts: replacement_parts,
+                    prompt_provenance: None,
                 },
             }),
             Some(turn_id),
@@ -931,6 +943,7 @@ impl SessionEventSink {
             raw_input,
             raw_output,
             content_parts,
+            prompt_provenance: None,
         };
 
         ToolItemState {
@@ -967,6 +980,7 @@ impl SessionEventSink {
                 raw_input: None,
                 raw_output: None,
                 content_parts: vec![ContentPart::Text { text }],
+                prompt_provenance: None,
             };
             self.emit_with_ids(
                 SessionEvent::ItemCompleted(ItemCompletedEvent { item: payload }),
@@ -1016,6 +1030,7 @@ impl SessionEventSink {
                     text,
                     visibility: anyharness_contract::v1::ReasoningVisibility::Private,
                 }],
+                prompt_provenance: None,
             };
             self.emit_with_ids(
                 SessionEvent::ItemCompleted(ItemCompletedEvent { item: payload }),
@@ -1042,6 +1057,7 @@ impl SessionEventSink {
                 content_parts: vec![ContentPart::Plan {
                     entries: item.entries,
                 }],
+                prompt_provenance: None,
             };
             self.emit_with_ids(
                 SessionEvent::ItemCompleted(ItemCompletedEvent { item: payload }),
@@ -1077,6 +1093,21 @@ impl SessionEventSink {
             turn_id,
             item_id,
         );
+    }
+
+    pub(crate) fn inject_runtime_event(
+        &mut self,
+        event: RuntimeInjectedSessionEvent,
+    ) -> Result<SessionEventEnvelope, RuntimeEventInjectionError> {
+        publish_session_event_strict(
+            &self.session_id,
+            &mut self.next_seq,
+            &self.event_tx,
+            &self.store,
+            event.into_session_event(),
+            None,
+            None,
+        )
     }
 }
 
@@ -1127,6 +1158,46 @@ pub(crate) fn publish_session_event(
 
     let _ = event_tx.send(envelope.clone());
     envelope
+}
+
+pub(crate) fn publish_session_event_strict(
+    session_id: &str,
+    next_seq: &mut i64,
+    event_tx: &broadcast::Sender<SessionEventEnvelope>,
+    store: &SessionStore,
+    event: SessionEvent,
+    turn_id: Option<String>,
+    item_id: Option<String>,
+) -> Result<SessionEventEnvelope, RuntimeEventInjectionError> {
+    let seq = *next_seq;
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    let event_type = event.event_type().to_string();
+    let envelope = SessionEventEnvelope {
+        session_id: session_id.to_string(),
+        seq,
+        timestamp: timestamp.clone(),
+        turn_id: turn_id.clone(),
+        item_id: item_id.clone(),
+        event,
+    };
+    let payload_json = serde_json::to_string(&envelope.event)
+        .map_err(|error| RuntimeEventInjectionError::PersistenceFailed(error.to_string()))?;
+    let record = SessionEventRecord {
+        id: 0,
+        session_id: session_id.to_string(),
+        seq,
+        timestamp,
+        event_type,
+        turn_id,
+        item_id,
+        payload_json,
+    };
+    store
+        .append_event(&record)
+        .map_err(|error| RuntimeEventInjectionError::PersistenceFailed(error.to_string()))?;
+    *next_seq += 1;
+    let _ = event_tx.send(envelope.clone());
+    Ok(envelope)
 }
 
 fn parse_meta(meta: Option<&serde_json::Value>) -> ParsedMeta {
@@ -2259,6 +2330,7 @@ mod tests {
     use super::{AcpChunkPayload, SessionEventSink};
     use crate::persistence::Db;
     use crate::sessions::model::{SessionBackgroundWorkState, SessionRecord};
+    use crate::sessions::runtime_event::{RuntimeEventInjectionError, RuntimeInjectedSessionEvent};
     use crate::sessions::store::SessionStore;
     use anyharness_contract::v1::{
         ContentPart, SessionEvent, SessionEventEnvelope, StopReason, TranscriptItemKind,
@@ -2277,7 +2349,7 @@ mod tests {
             store.clone(),
         );
 
-        sink.begin_turn("hello".to_string(), Vec::new());
+        sink.begin_turn("hello".to_string(), Vec::new(), None);
         sink.agent_message_chunk(AcpChunkPayload {
             content: json!("Hel"),
             ..Default::default()
@@ -2321,6 +2393,61 @@ mod tests {
     }
 
     #[test]
+    fn injected_runtime_event_persists_strictly_and_keeps_sequence() {
+        let store = seeded_store();
+        let (tx, mut rx) = broadcast::channel(32);
+        let mut sink = SessionEventSink::resume_from_seq(
+            "session-1".to_string(),
+            "claude".to_string(),
+            PathBuf::from("/tmp/workspace"),
+            5,
+            tx,
+            store.clone(),
+        );
+
+        let envelope = sink
+            .inject_runtime_event(RuntimeInjectedSessionEvent::SessionInfoUpdate {
+                title: Some("Renamed".to_string()),
+                updated_at: Some("2026-04-04T00:02:00Z".to_string()),
+            })
+            .expect("inject event");
+
+        assert_eq!(envelope.seq, 6);
+        assert_eq!(sink.next_seq(), 7);
+        let persisted = store.list_events("session-1").expect("list events");
+        assert_eq!(persisted.len(), 1);
+        assert_eq!(persisted[0].seq, 6);
+        assert_eq!(persisted[0].event_type, "session_info_update");
+        assert_eq!(rx.try_recv().expect("broadcast event").seq, 6);
+    }
+
+    #[test]
+    fn injected_runtime_event_errors_when_persistence_fails() {
+        let store = SessionStore::new(Db::open_in_memory().expect("open db"));
+        let (tx, _rx) = broadcast::channel(32);
+        let mut sink = SessionEventSink::new(
+            "missing-session".to_string(),
+            "claude".to_string(),
+            PathBuf::from("/tmp/workspace"),
+            tx,
+            store,
+        );
+
+        let error = sink
+            .inject_runtime_event(RuntimeInjectedSessionEvent::SessionInfoUpdate {
+                title: Some("Renamed".to_string()),
+                updated_at: None,
+            })
+            .expect_err("persistence should fail");
+
+        assert!(matches!(
+            error,
+            RuntimeEventInjectionError::PersistenceFailed(_)
+        ));
+        assert_eq!(sink.next_seq(), 1);
+    }
+
+    #[test]
     fn assistant_completion_marker_closes_matching_open_message() {
         let store = seeded_store();
         let (tx, mut rx) = broadcast::channel(32);
@@ -2332,7 +2459,7 @@ mod tests {
             store.clone(),
         );
 
-        sink.begin_turn("hello".to_string(), Vec::new());
+        sink.begin_turn("hello".to_string(), Vec::new(), None);
         sink.agent_message_chunk(AcpChunkPayload {
             content: json!("Hel"),
             message_id: Some("2d313586-97aa-436b-932c-7e0c0b286f87".to_string()),
@@ -2402,7 +2529,7 @@ mod tests {
             store,
         );
 
-        sink.begin_turn("hello".to_string(), Vec::new());
+        sink.begin_turn("hello".to_string(), Vec::new(), None);
         sink.agent_message_chunk(AcpChunkPayload {
             content: json!("Hello"),
             message_id: Some("2d313586-97aa-436b-932c-7e0c0b286f87".to_string()),
@@ -2441,7 +2568,7 @@ mod tests {
             store,
         );
 
-        sink.begin_turn("hello".to_string(), Vec::new());
+        sink.begin_turn("hello".to_string(), Vec::new(), None);
         sink.agent_thought_chunk(transient_status_chunk("Authenticating MCP server"));
         sink.agent_thought_chunk(transient_status_chunk("Waiting for browser auth"));
         sink.turn_ended(StopReason::EndTurn);
@@ -2497,7 +2624,7 @@ mod tests {
             store,
         );
 
-        sink.begin_turn("hello".to_string(), Vec::new());
+        sink.begin_turn("hello".to_string(), Vec::new(), None);
         sink.agent_thought_chunk(AcpChunkPayload {
             content: json!("Thinking"),
             message_id: Some("reasoning-1".to_string()),
@@ -2535,7 +2662,7 @@ mod tests {
             store.clone(),
         );
 
-        sink.begin_turn("plan this".to_string(), Vec::new());
+        sink.begin_turn("plan this".to_string(), Vec::new(), None);
         sink.plan(vec![json!({ "content": "Step 1", "status": "pending" })]);
         sink.plan(vec![json!({ "content": "Step 1", "status": "completed" })]);
         sink.turn_ended(StopReason::EndTurn);
@@ -2581,7 +2708,7 @@ mod tests {
             store.clone(),
         );
 
-        sink.begin_turn("delegate".to_string(), Vec::new());
+        sink.begin_turn("delegate".to_string(), Vec::new(), None);
         sink.tool_call(super::AcpToolPayload {
             tool_call_id: "tool-1".to_string(),
             title: Some("Launch investigator".to_string()),
@@ -2677,7 +2804,7 @@ mod tests {
             store,
         );
 
-        sink.begin_turn("delegate".to_string(), Vec::new());
+        sink.begin_turn("delegate".to_string(), Vec::new(), None);
         sink.tool_call(super::AcpToolPayload {
             tool_call_id: "tool-1".to_string(),
             title: Some("Task".to_string()),
@@ -2814,6 +2941,7 @@ mod tests {
                 mcp_bindings_ciphertext: None,
                 mcp_binding_summaries_json: None,
                 system_prompt_append: None,
+                subagents_enabled: true,
                 origin: None,
             })
             .expect("seed session");

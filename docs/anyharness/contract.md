@@ -110,6 +110,13 @@ Owns session-facing transport types:
 runtime must resolve the trusted plan snapshot from its own store before any
 agent input is produced. Clients must not send plan markdown as authority.
 
+Prompt provenance is a read-only display model on transcript user-message
+payloads and pending-prompt summaries/events. Public prompt request bodies must
+not accept provenance as trusted input. The public variants are deliberately
+bounded to display-safe `agentSession`, `subagentWake`, and `system` shapes;
+internal automation provenance is redacted or omitted rather than exposed
+directly.
+
 `Session.mcpBindingSummaries` is a non-secret launch-time read model. It may
 describe which MCP bindings were applied or not applied, but it must not carry
 URLs, headers, env vars, command args, absolute paths, tokens, or raw error
@@ -120,6 +127,10 @@ unknown; it does not mean the session had no MCP bindings.
 When present, it may carry refreshed secret-bearing `mcpServers` plus matching
 redacted `mcpBindingSummaries`; runtime liveness remains authoritative for
 whether those refreshed bindings are persisted.
+
+`CreateSessionRequest.subagentsEnabled` is a create-time session policy.
+Omitted values default to enabled for compatibility. Resume requests do not
+carry this flag; resumed sessions use their persisted policy.
 
 ### `files.rs`
 
@@ -161,6 +172,12 @@ Owns the normalized session event stream:
 
 This file is the public transcript/event contract and must remain stable and
 well-structured.
+
+`SessionEvent::SubagentTurnCompleted` is a metadata notification, not a
+transcript item. SDK reducers and UI consumers should not render it as assistant
+or user content by default. It tells a parent session that one owned child
+session completed a turn and carries the durable `completionId`, `sessionLinkId`,
+child identifiers, child last event seq, outcome, and optional label.
 
 Interaction payloads should expose only typed, UI-safe fields. Adapter-specific
 metadata that becomes stable UI behavior must be promoted into a typed contract
@@ -206,3 +223,12 @@ If a type must appear in OpenAPI or the generated SDK, it belongs here.
 
 If a type is only needed for runtime execution, persistence, or adapter
 behavior, it does not belong here.
+
+## Mobility Archive Rule
+
+Workspace mobility archives are public transport. If a workspace contains a
+subagent graph, the archive must preserve `session_links` and
+`session_link_completions` plus pending `session_link_wake_schedules` when both
+linked sessions are included. Export must block with a clear preflight error
+when only one side of a subagent link would be moved, because importing a
+partial graph would break child ownership and parent wake behavior.

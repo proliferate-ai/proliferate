@@ -14,6 +14,7 @@ import {
   buildCloudWorkspaceStatusScreenModel,
   type CloudWorkspaceStatusScreenModel,
 } from "@/lib/domain/workspaces/cloud-workspace-status";
+import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
 import type { SelectedCloudRuntimeViewModel } from "@/lib/domain/workspaces/cloud-runtime-state";
 import type { CloudWorkspaceStatus, CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
 
@@ -262,17 +263,32 @@ export const PLAYGROUND_COWORK_ARTIFACT_TOOL_CALL = toolCallItem({
 const subagentItem = toolCallItem({
   itemId: "tool-agent",
   toolCallId: "tool-agent",
-  title: "Task: inspect compact rows",
-  nativeToolName: "Agent",
+  title: "mcp__subagents__create_subagent",
+  nativeToolName: "mcp__subagents__create_subagent",
   semanticKind: "subagent",
+  rawInput: {
+    agentKind: "codex",
+    label: "repo-reviewer",
+    modelId: "gpt-5.4",
+    prompt: "Inspect the transcript rendering path and report whether nested tool calls use compact rows.",
+  },
+  rawOutput: {
+    childSessionId: "child-repo-reviewer",
+    sessionLinkId: "link-repo-reviewer",
+    promptStatus: "running",
+    wakeScheduleCreated: true,
+    wakeScheduled: true,
+  },
   contentParts: [
     {
-      type: "tool_input_text",
-      text: "Inspect the transcript rendering path and report whether nested tool calls use compact rows.",
-    },
-    {
       type: "tool_result_text",
-      text: "Nested command and file-read rows now use the compact transcript action surface.",
+      text: JSON.stringify({
+        childSessionId: "child-repo-reviewer",
+        sessionLinkId: "link-repo-reviewer",
+        promptStatus: "running",
+        wakeScheduleCreated: true,
+        wakeScheduled: true,
+      }),
     },
   ],
 });
@@ -375,6 +391,238 @@ export const PLAYGROUND_SUBAGENT_TRANSCRIPT: TranscriptState = {
   isStreaming: false,
   lastSeq: 4,
   pendingPrompts: [],
+  linkCompletionsByCompletionId: {},
+  latestLinkCompletionBySessionLinkId: {},
+};
+
+type PlaygroundSubagentStripRow = {
+  sessionLinkId: string;
+  childSessionId: string;
+  label: string;
+  statusLabel: string;
+  meta: string | null;
+  latestCompletionLabel: string | null;
+  wakeScheduled: boolean;
+  color: string;
+};
+
+function subagentStripRow(
+  overrides: Omit<PlaygroundSubagentStripRow, "color">,
+): PlaygroundSubagentStripRow {
+  return {
+    ...overrides,
+    color: resolveSubagentColor(overrides.sessionLinkId),
+  };
+}
+
+export const PLAYGROUND_SUBAGENT_STRIP_ROWS: PlaygroundSubagentStripRow[] = [
+  subagentStripRow({
+    sessionLinkId: "link-haiku-session-lifecycle",
+    childSessionId: "298c62c7-b359-4cc7-a65e-b297ebabce2f",
+    label: "haiku-session-lifecycle",
+    statusLabel: "Idle",
+    meta: "Claude · haiku · default",
+    latestCompletionLabel: "Turn completed",
+    wakeScheduled: false,
+  }),
+  subagentStripRow({
+    sessionLinkId: "link-sonnet-cloud-auth",
+    childSessionId: "67aa6956-3cfb-4b7c-a2ea-faf470f2e74e",
+    label: "sonnet-cloud-auth",
+    statusLabel: "Idle",
+    meta: "Claude · sonnet · default",
+    latestCompletionLabel: null,
+    wakeScheduled: true,
+  }),
+  subagentStripRow({
+    sessionLinkId: "link-codex-server-routes",
+    childSessionId: "8cfbaa2a-404e-4dac-ad04-25b8a066a514",
+    label: "codex-server-routes",
+    statusLabel: "Idle",
+    meta: "Codex · gpt-5.4 · auto",
+    latestCompletionLabel: "Turn completed",
+    wakeScheduled: false,
+  }),
+  subagentStripRow({
+    sessionLinkId: "link-codex-cicd",
+    childSessionId: "0d3f015b-5de1-4984-badd-d1a0f022947f",
+    label: "codex-cicd",
+    statusLabel: "Idle",
+    meta: "Codex · gpt-5.3-codex · auto",
+    latestCompletionLabel: "Turn completed",
+    wakeScheduled: false,
+  }),
+  subagentStripRow({
+    sessionLinkId: "link-gemini-pro-mcp-catalog",
+    childSessionId: "354f014b-886a-4957-b315-f99e1c07ede4",
+    label: "gemini-pro-mcp-catalog",
+    statusLabel: "Failed",
+    meta: "Gemini · gemini-3-flash-preview · default",
+    latestCompletionLabel: "Turn failed",
+    wakeScheduled: false,
+  }),
+  subagentStripRow({
+    sessionLinkId: "link-gemini-flash-sdk",
+    childSessionId: "9d817b15-eda5-43a8-9141-d7db85993c45",
+    label: "gemini-flash-sdk",
+    statusLabel: "Working",
+    meta: "Gemini · gemini-3-flash-preview · default",
+    latestCompletionLabel: null,
+    wakeScheduled: true,
+  }),
+  subagentStripRow({
+    sessionLinkId: "link-opencode-cloud-runtime",
+    childSessionId: "7c9d7648-0041-440e-85b1-17de9e2b70d8",
+    label: "opencode-cloud-runtime",
+    statusLabel: "Working",
+    meta: "Opencode · opencode/big-pickle · build",
+    latestCompletionLabel: null,
+    wakeScheduled: false,
+  }),
+  subagentStripRow({
+    sessionLinkId: "link-cursor-tauri-commands",
+    childSessionId: "a1124490-6516-4b52-a5f4-fde1eee57c2d",
+    label: "cursor-tauri-commands",
+    statusLabel: "Idle",
+    meta: "Cursor · default · agent",
+    latestCompletionLabel: "Turn completed",
+    wakeScheduled: false,
+  }),
+  subagentStripRow({
+    sessionLinkId: "link-runtime-server-sdk-survey",
+    childSessionId: "b5870e25-f4f7-a08b-61d6e703177b",
+    label: "runtime-server-sdk-survey",
+    statusLabel: "Working",
+    meta: "Claude · sonnet · default",
+    latestCompletionLabel: null,
+    wakeScheduled: true,
+  }),
+  subagentStripRow({
+    sessionLinkId: "link-frontend-repo-survey",
+    childSessionId: "03ff96b2-9ca2-4df7-9296-c3b5146dfc6a",
+    label: "frontend-repo-survey",
+    statusLabel: "Working",
+    meta: "Claude · sonnet · default",
+    latestCompletionLabel: null,
+    wakeScheduled: true,
+  }),
+];
+
+export const PLAYGROUND_SUBAGENT_WAKE_QUEUE: PendingPromptListEntry[] = [{
+  seq: 7,
+  text: [
+    'Subagent "runtime-server-sdk-survey" completed a turn.',
+    "",
+    "Child session: b5870e25-f4f7-a08b-61d6e703177b",
+    "Session link: link-runtime-server-sdk-survey",
+    "Outcome: completed",
+    "Last child event seq: 184",
+    "",
+    "Use the subagent tools to inspect the child session before continuing.",
+  ].join("\n"),
+  contentParts: [],
+  isBeingEdited: false,
+  promptProvenance: {
+    type: "subagentWake",
+    sessionLinkId: "link-runtime-server-sdk-survey",
+    completionId: "completion-runtime-server-sdk-survey",
+    label: "runtime-server-sdk-survey",
+  },
+}];
+
+export const PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT: TranscriptState = {
+  sessionMeta: {
+    sessionId: "playground-subagent-wake",
+    title: "Parent delegation session",
+    updatedAt: "2026-04-21T02:34:00Z",
+    nativeSessionId: null,
+    sourceAgentKind: "codex",
+  },
+  turnOrder: ["turn-subagent-wake"],
+  turnsById: {
+    "turn-subagent-wake": {
+      turnId: "turn-subagent-wake",
+      itemOrder: ["assistant-before-wake", "scheduled-wake-message"],
+      startedAt: "2026-04-21T02:31:45Z",
+      completedAt: "2026-04-21T02:34:00Z",
+      stopReason: "end_turn",
+      fileBadges: [],
+    },
+  },
+  itemsById: {
+    "assistant-before-wake": {
+      kind: "assistant_prose",
+      itemId: "assistant-before-wake",
+      turnId: "turn-subagent-wake",
+      status: "completed",
+      sourceAgentKind: "codex",
+      messageId: null,
+      title: null,
+      nativeToolName: null,
+      parentToolCallId: null,
+      rawInput: undefined,
+      rawOutput: undefined,
+      contentParts: [],
+      timestamp: "2026-04-21T02:31:45Z",
+      startedSeq: 1,
+      lastUpdatedSeq: 1,
+      completedSeq: 1,
+      completedAt: "2026-04-21T02:31:45Z",
+      text: "I scheduled a wake for the runtime survey child and continued the main investigation.",
+      isStreaming: false,
+    },
+    "scheduled-wake-message": {
+      kind: "user_message",
+      itemId: "scheduled-wake-message",
+      turnId: "turn-subagent-wake",
+      status: "completed",
+      sourceAgentKind: "system",
+      messageId: null,
+      title: null,
+      nativeToolName: null,
+      parentToolCallId: null,
+      rawInput: undefined,
+      rawOutput: undefined,
+      contentParts: [],
+      timestamp: "2026-04-21T02:34:00Z",
+      startedSeq: 9,
+      lastUpdatedSeq: 9,
+      completedSeq: 9,
+      completedAt: "2026-04-21T02:34:00Z",
+      text: PLAYGROUND_SUBAGENT_WAKE_QUEUE[0].text,
+      isStreaming: false,
+      promptProvenance: PLAYGROUND_SUBAGENT_WAKE_QUEUE[0].promptProvenance,
+    },
+  },
+  openAssistantItemId: null,
+  openThoughtItemId: null,
+  pendingInteractions: [],
+  availableCommands: [],
+  liveConfig: null,
+  currentModeId: null,
+  usageState: null,
+  unknownEvents: [],
+  isStreaming: false,
+  lastSeq: 10,
+  pendingPrompts: [],
+  linkCompletionsByCompletionId: {
+    "completion-runtime-server-sdk-survey": {
+      relation: "subagent",
+      completionId: "completion-runtime-server-sdk-survey",
+      sessionLinkId: "link-runtime-server-sdk-survey",
+      parentSessionId: "playground-subagent-wake",
+      childSessionId: "b5870e25-f4f7-a08b-61d6e703177b",
+      childTurnId: "turn-runtime-server-sdk-survey",
+      childLastEventSeq: 184,
+      outcome: "completed",
+      label: "runtime-server-sdk-survey",
+      seq: 8,
+      timestamp: "2026-04-21T02:33:58Z",
+    },
+  },
+  latestLinkCompletionBySessionLinkId: {
+    "link-runtime-server-sdk-survey": "completion-runtime-server-sdk-survey",
+  },
 };
 
 export const EXECUTE_OPTIONS: PermissionOptionAction[] = [

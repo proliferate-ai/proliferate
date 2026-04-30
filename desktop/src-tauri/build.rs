@@ -320,7 +320,12 @@ fn find_existing_binary(repo_root: &Path, target: &str, profile: &str) -> Option
     find_named_binary(repo_root, target, profile, "anyharness")
 }
 
-fn find_named_binary(repo_root: &Path, target: &str, profile: &str, bin_name: &str) -> Option<PathBuf> {
+fn find_named_binary(
+    repo_root: &Path,
+    target: &str,
+    profile: &str,
+    bin_name: &str,
+) -> Option<PathBuf> {
     let bin_name = if target.contains("windows") {
         format!("{bin_name}.exe")
     } else {
@@ -346,7 +351,12 @@ fn find_proliferate_debug_binary(
     profile: &str,
 ) -> Option<PathBuf> {
     find_named_binary(repo_root, target, profile, "proliferate-debug").or_else(|| {
-        find_named_binary(&manifest_dir.join("../../"), target, profile, "proliferate-debug")
+        find_named_binary(
+            &manifest_dir.join("../../"),
+            target,
+            profile,
+            "proliferate-debug",
+        )
     })
 }
 

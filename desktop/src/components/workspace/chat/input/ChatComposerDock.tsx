@@ -2,7 +2,9 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
   backdrop?: boolean;
-  topSlot?: ReactNode;
+  upperSlot?: ReactNode;
+  subagentSlot?: ReactNode;
+  queueSlot?: ReactNode;
   footerSlot?: ReactNode;
   children: ReactNode;
 }
@@ -12,7 +14,7 @@ interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
  *   1. optional backdrop wrapper (blur + scrim) so the composer looks
  *      layered over the transcript scroll
  *   2. a padded max-width column
- *   3. an optional inset top-slot region (narrower than the composer)
+ *   3. optional inset dock regions (narrower than the composer)
  *   4. children — usually `<ChatInput />` or a playground surface
  *
  * Consumed by `ChatView` (production) and `ChatPlaygroundPage` (dev) so
@@ -20,7 +22,9 @@ interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
  */
 export function ChatComposerDock({
   backdrop = true,
-  topSlot,
+  upperSlot,
+  subagentSlot,
+  queueSlot,
   footerSlot,
   children,
   className = "",
@@ -33,8 +37,14 @@ export function ChatComposerDock({
       )}
       <div className={`relative px-4 pb-4 ${className}`} {...rest}>
         <div className="relative mx-auto max-w-3xl @container">
-          {topSlot && (
-            <div className="relative flex flex-col px-5">{topSlot}</div>
+          {upperSlot && (
+            <div className="relative flex flex-col px-5">{upperSlot}</div>
+          )}
+          {subagentSlot && (
+            <div className="relative flex flex-col px-5">{subagentSlot}</div>
+          )}
+          {queueSlot && (
+            <div className="relative flex flex-col px-5">{queueSlot}</div>
           )}
           {children}
           {footerSlot ? (

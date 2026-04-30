@@ -24,7 +24,7 @@ use super::replay::{
     derive_source_agent_kind, export_recording, list_recordings, load_recording, validate_speed,
     ReplayError,
 };
-use super::service::SessionService;
+use super::service::{SessionService, WorkspaceSessionLaunchCatalogData};
 use crate::acp::manager::AcpManager;
 use crate::acp::permission_broker::PermissionDecision;
 use crate::acp::session_actor::{
@@ -36,15 +36,18 @@ use crate::agents::model::{AgentKind, ResolvedAgent};
 use crate::agents::registry::built_in_registry;
 use crate::agents::resolver::resolve_agent;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
-use crate::cowork::runtime::CoworkSessionHooks;
 use crate::origin::OriginContext;
 use crate::plans::model::PlanRecord;
 use crate::plans::service::{PlanDecisionError, PlanService};
+use crate::sessions::extensions::{
+    SessionExtension, SessionLaunchContext, SessionLaunchExtras, SessionTurnFinishedContext,
+};
 use crate::sessions::model::PromptAttachmentState;
 use crate::sessions::prompt::{
     capabilities_from_live_config, prepare_prompt, PlanReferenceResolver, PromptPrepareContext,
-    PromptValidationError,
+    PromptProvenance, PromptValidationError,
 };
+use crate::sessions::runtime_event::{RuntimeEventInjectionResult, RuntimeInjectedSessionEvent};
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::runtime::WorkspaceRuntime;
 
@@ -54,7 +57,7 @@ pub struct SessionRuntime {
     acp_manager: AcpManager,
     runtime_home: PathBuf,
     session_data_cipher: Option<SessionDataCipher>,
-    cowork_session_hooks: Arc<CoworkSessionHooks>,
+    session_extensions: Vec<Arc<dyn SessionExtension>>,
     access_gate: Arc<WorkspaceAccessGate>,
     plan_service: Arc<PlanService>,
 }
@@ -232,7 +235,7 @@ impl SessionRuntime {
         acp_manager: AcpManager,
         runtime_home: PathBuf,
         session_data_cipher: Option<SessionDataCipher>,
-        cowork_session_hooks: Arc<CoworkSessionHooks>,
+        session_extensions: Vec<Arc<dyn SessionExtension>>,
         access_gate: Arc<WorkspaceAccessGate>,
         plan_service: Arc<PlanService>,
     ) -> Self {
@@ -242,7 +245,7 @@ impl SessionRuntime {
             acp_manager,
             runtime_home,
             session_data_cipher,
-            cowork_session_hooks,
+            session_extensions,
             access_gate,
             plan_service,
         }
@@ -321,6 +324,21 @@ impl SessionRuntime {
         Ok(summaries)
     }
 
+    pub fn workspace_session_launch_catalog(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<WorkspaceSessionLaunchCatalogData> {
+        self.session_service
+            .get_workspace_session_launch_catalog(workspace_id)
+    }
+
+    pub fn live_config_snapshot(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Option<SessionLiveConfigSnapshot>> {
+        self.session_service.get_live_config_snapshot(session_id)
+    }
+
     pub async fn create_and_start_session(
         &self,
         workspace_id: &str,
@@ -330,6 +348,7 @@ impl SessionRuntime {
         system_prompt_append: Option<Vec<String>>,
         mcp_servers: Vec<SessionMcpServer>,
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+        subagents_enabled: bool,
         origin: OriginContext,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
@@ -364,6 +383,7 @@ impl SessionRuntime {
             system_prompt_append,
             mcp_servers,
             mcp_binding_summaries,
+            subagents_enabled,
             origin,
         )?;
         tracing::info!(
@@ -473,6 +493,7 @@ impl SessionRuntime {
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
             system_prompt_append: None,
+            subagents_enabled: true,
             origin: Some(OriginContext::system_local_runtime()),
         };
         self.session_service
@@ -521,6 +542,7 @@ impl SessionRuntime {
         system_prompt_append: Option<Vec<String>>,
         mcp_servers: Vec<SessionMcpServer>,
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+        subagents_enabled: bool,
         origin: OriginContext,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
         let system_prompt_append = join_system_prompt_append(system_prompt_append);
@@ -538,6 +560,7 @@ impl SessionRuntime {
                 mcp_bindings_ciphertext,
                 mcp_binding_summaries_json,
                 system_prompt_append,
+                subagents_enabled,
                 origin,
             )
             .map_err(map_create_session_service_error)
@@ -554,7 +577,6 @@ impl SessionRuntime {
             .start_live_session(
                 record,
                 SessionStartupStrategy::Fresh,
-                0,
                 record.system_prompt_append.clone(),
                 latency,
             )
@@ -593,9 +615,16 @@ impl SessionRuntime {
 
         let persist_started = Instant::now();
         self.persist_live_session_state(&record.id, &native_session_id);
-        let mut updated = record.clone();
-        updated.native_session_id = Some(native_session_id);
-        updated.status = "idle".into();
+        let updated = self
+            .session_service
+            .get_session(&record.id)
+            .map_err(CreateAndStartSessionError::Internal)?
+            .unwrap_or_else(|| {
+                let mut fallback = record.clone();
+                fallback.native_session_id = Some(native_session_id.clone());
+                fallback.status = "idle".into();
+                fallback
+            });
         tracing::info!(
             workspace_id = %updated.workspace_id,
             session_id = %updated.id,
@@ -885,6 +914,65 @@ impl SessionRuntime {
             .map_err(SendPromptError::Internal)?
             .unwrap_or(record);
 
+        Ok(match acceptance {
+            PromptAcceptance::Started => SendPromptOutcome::Running { session },
+            PromptAcceptance::Queued { seq } => SendPromptOutcome::Queued { session, seq },
+        })
+    }
+
+    pub(crate) async fn send_text_prompt_with_provenance(
+        &self,
+        session_id: &str,
+        text: String,
+        provenance: PromptProvenance,
+    ) -> Result<SendPromptOutcome, SendPromptError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| SendPromptError::Internal(anyhow::anyhow!(error.to_string())))?;
+        if text.trim().is_empty() {
+            return Err(SendPromptError::EmptyPrompt);
+        }
+        let record = self
+            .get_session_or_not_found(session_id)
+            .map_err(map_lifecycle_error_to_prompt)?;
+        let handle = self
+            .ensure_live_session_handle(&record, None, None)
+            .await
+            .map_err(map_start_error_to_prompt)?;
+        let payload =
+            crate::sessions::prompt::PromptPayload::text(text).with_provenance(provenance);
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        handle
+            .command_tx
+            .send(SessionCommand::Prompt {
+                payload,
+                prompt_id: None,
+                latency: None,
+                from_queue_seq: None,
+                respond_to: tx,
+            })
+            .await
+            .map_err(|_| {
+                SendPromptError::Internal(anyhow::anyhow!("session actor channel closed"))
+            })?;
+        let acceptance = rx
+            .await
+            .map_err(|_| {
+                SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
+            })?
+            .map_err(|error| match error {
+                PromptAcceptError::ActorDead => {
+                    SendPromptError::Internal(anyhow::anyhow!("session actor is not responding"))
+                }
+                PromptAcceptError::EnqueueFailed(detail) => {
+                    SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
+                }
+            })?;
+        let session = self
+            .session_service
+            .get_session(session_id)
+            .map_err(SendPromptError::Internal)?
+            .unwrap_or(record);
         Ok(match acceptance {
             PromptAcceptance::Started => SendPromptOutcome::Running { session },
             PromptAcceptance::Queued { seq } => SendPromptOutcome::Queued { session, seq },
@@ -1457,8 +1545,8 @@ impl SessionRuntime {
         let session_store = self.session_service.store().clone();
 
         // Repair any turns that were left open (turn_started without
-        // turn_ended) before reading last_seq, so the resumed event sink
-        // starts after the synthetic turn_ended events.
+        // turn_ended) before starting the actor. AcpManager reads last_seq
+        // inside its start/inject critical section after this repair.
         match session_store.repair_unclosed_turns(&record.id) {
             Ok(0) => {}
             Ok(n) => {
@@ -1477,9 +1565,6 @@ impl SessionRuntime {
             }
         }
 
-        let last_seq = session_store
-            .last_event_seq(&record.id)
-            .map_err(StartSessionError::Internal)?;
         let startup_strategy = choose_session_startup_strategy(&record, &session_store)
             .map_err(StartSessionError::Internal)?;
 
@@ -1487,7 +1572,6 @@ impl SessionRuntime {
             .start_live_session(
                 &record,
                 startup_strategy,
-                last_seq,
                 record.system_prompt_append.clone(),
                 latency,
             )
@@ -1512,7 +1596,6 @@ impl SessionRuntime {
         &self,
         record: &SessionRecord,
         startup_strategy: SessionStartupStrategy,
-        last_seq: i64,
         system_prompt_append: Option<String>,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<(Arc<LiveSessionHandle>, String), StartSessionError> {
@@ -1524,7 +1607,6 @@ impl SessionRuntime {
             workspace_id = %record.workspace_id,
             agent_kind = %record.agent_kind,
             startup_strategy = startup_strategy_label,
-            last_seq,
             has_system_prompt_append = system_prompt_append.is_some(),
             flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
@@ -1592,11 +1674,12 @@ impl SessionRuntime {
         )
         .map_err(map_decrypt_bindings_error_to_start)?;
         let launch_extras = self
-            .cowork_session_hooks
-            .resolve_launch_extras(&workspace, &record.id)
+            .resolve_extension_launch_extras(&workspace, record)
             .map_err(StartSessionError::Internal)?;
         let system_prompt_append =
             merge_system_prompt_append(system_prompt_append, launch_extras.system_prompt_append);
+        self.persist_extension_binding_summaries(record, &launch_extras.mcp_binding_summaries)
+            .map_err(StartSessionError::Internal)?;
         mcp_servers.extend(launch_extras.mcp_servers);
         let acp_start_started = Instant::now();
         let (handle, ready) = self
@@ -1610,15 +1693,20 @@ impl SessionRuntime {
                 session_store,
                 mcp_servers,
                 startup_strategy,
-                last_seq,
                 system_prompt_append,
                 Some(Arc::new({
-                    let cowork_session_hooks = self.cowork_session_hooks.clone();
+                    let extensions = self.session_extensions.clone();
                     let workspace = workspace.clone();
                     move |result| {
-                        if result.turn_finished {
-                            cowork_session_hooks
-                                .notify_turn_finished(&workspace, &result.session_id);
+                        for extension in &extensions {
+                            extension.on_turn_finished(SessionTurnFinishedContext {
+                                workspace: workspace.clone(),
+                                session_id: result.session_id.clone(),
+                                turn_id: result.turn_id.clone(),
+                                outcome: result.outcome,
+                                stop_reason: result.stop_reason.clone(),
+                                last_event_seq: result.last_event_seq,
+                            });
                         }
                     }
                 })),
@@ -1641,6 +1729,65 @@ impl SessionRuntime {
         );
 
         Ok((handle, ready.native_session_id))
+    }
+
+    #[allow(dead_code)]
+    pub(crate) async fn emit_runtime_event(
+        &self,
+        session_id: &str,
+        event: RuntimeInjectedSessionEvent,
+    ) -> RuntimeEventInjectionResult {
+        self.acp_manager
+            .emit_runtime_event(session_id, self.session_service.store().clone(), event)
+            .await
+    }
+
+    fn resolve_extension_launch_extras(
+        &self,
+        workspace: &crate::workspaces::model::WorkspaceRecord,
+        record: &SessionRecord,
+    ) -> anyhow::Result<SessionLaunchExtras> {
+        let ctx = SessionLaunchContext {
+            workspace,
+            session: record,
+        };
+        let mut combined = SessionLaunchExtras::default();
+        for extension in &self.session_extensions {
+            let mut extras = extension.resolve_launch_extras(&ctx)?;
+            combined
+                .system_prompt_append
+                .append(&mut extras.system_prompt_append);
+            combined.mcp_servers.append(&mut extras.mcp_servers);
+            combined
+                .mcp_binding_summaries
+                .append(&mut extras.mcp_binding_summaries);
+        }
+        Ok(combined)
+    }
+
+    fn persist_extension_binding_summaries(
+        &self,
+        record: &SessionRecord,
+        extension_summaries: &[SessionMcpBindingSummary],
+    ) -> anyhow::Result<()> {
+        if extension_summaries.is_empty() {
+            return Ok(());
+        }
+        let mut summaries = record
+            .to_contract()
+            .mcp_binding_summaries
+            .unwrap_or_default();
+        for summary in extension_summaries {
+            if summaries.iter().all(|existing| existing.id != summary.id) {
+                summaries.push(summary.clone());
+            }
+        }
+        let summaries_json = serialize_binding_summaries(Some(summaries))
+            .map_err(|error| anyhow::anyhow!("serialize MCP binding summaries: {error}"))?;
+        self.session_service
+            .store()
+            .update_mcp_binding_summaries(&record.id, summaries_json)?;
+        Ok(())
     }
 
     fn get_session_or_not_found(
@@ -1927,6 +2074,7 @@ mod tests {
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
             system_prompt_append: None,
+            subagents_enabled: true,
             origin: None,
         }
     }

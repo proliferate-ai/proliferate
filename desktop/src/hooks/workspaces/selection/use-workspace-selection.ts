@@ -26,7 +26,12 @@ export function useWorkspaceSelection() {
   return {
     selectWorkspace: useCallback(async (
       workspaceId: string,
-      options?: { force?: boolean; preservePending?: boolean; latencyFlowId?: string | null },
+      options?: {
+        force?: boolean;
+        preservePending?: boolean;
+        initialActiveSessionId?: string | null;
+        latencyFlowId?: string | null;
+      },
     ) => {
       const runtimeUrl = useHarnessStore.getState().runtimeUrl;
       const workspaceCollections = getWorkspaceCollectionsFromCache(queryClient, runtimeUrl);

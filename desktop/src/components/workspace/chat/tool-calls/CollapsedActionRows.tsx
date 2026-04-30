@@ -295,6 +295,7 @@ function ActionDisclosureRow({
 }
 
 function GenericActionRow({ item }: { item: ToolCallItem }) {
+  const [expanded, setExpanded] = useState(false);
   const toolCallPart = item.contentParts.find(
     (part): part is ToolCallContentPart => part.type === "tool_call",
   );
@@ -305,6 +306,37 @@ function GenericActionRow({ item }: { item: ToolCallItem }) {
     : item.status === "in_progress"
       ? `${display.label} running`
       : display.label;
+  const output = deriveGenericToolOutput(item);
+
+  if (output) {
+    return (
+      <div>
+        <ActionDisclosureRow
+          label={display.hint ? `${label} ${display.hint}` : label}
+          expanded={expanded}
+          failed={item.status === "failed"}
+          onToggle={() => setExpanded((value) => !value)}
+        />
+        {expanded && (
+          <div className="mt-1.5 overflow-hidden rounded-lg border border-border/60 bg-foreground/[0.04]">
+            <div className="flex items-center justify-between gap-2 px-2 py-1 text-sm text-muted-foreground">
+              <span>Result</span>
+            </div>
+            <AutoHideScrollArea
+              className="border-t border-border/60"
+              viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+              allowHorizontal
+            >
+              <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-sm leading-relaxed text-muted-foreground">
+                <code>{output}</code>
+              </pre>
+            </AutoHideScrollArea>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <PlainActionRow
       tone={item.status === "failed" ? "failed" : "normal"}
@@ -424,6 +456,26 @@ function deriveCommandOutput(item: ToolCallItem): string {
     .map((part) => part.text)
     .join("\n\n");
   return normalizeToolResultText(toolResultText || (typeof item.rawOutput === "string" ? item.rawOutput : ""));
+}
+
+function deriveGenericToolOutput(item: ToolCallItem): string {
+  const toolResultText = item.contentParts
+    .filter((part): part is ToolResultTextContentPart => part.type === "tool_result_text")
+    .map((part) => part.text)
+    .join("\n\n");
+  if (toolResultText.trim()) {
+    return normalizeToolResultText(toolResultText);
+  }
+
+  if (typeof item.rawOutput === "string") {
+    return normalizeToolResultText(item.rawOutput);
+  }
+
+  if (item.rawOutput && typeof item.rawOutput === "object") {
+    return JSON.stringify(item.rawOutput, null, 2);
+  }
+
+  return "";
 }
 
 function deriveReadPath(item: ToolCallItem): string {

@@ -3,11 +3,12 @@ use anyharness_contract::v1::{
     ExportWorkspaceMobilityArchiveRequest, InstallWorkspaceMobilityArchiveRequest,
     InstallWorkspaceMobilityArchiveResponse, MobilityPendingConfigChangeRecord,
     MobilityPendingPromptRecord, MobilityPromptAttachmentRecord, MobilitySessionEventRecord,
-    MobilitySessionLiveConfigSnapshotRecord, MobilitySessionRawNotificationRecord,
-    MobilitySessionRecord, UpdateWorkspaceMobilityRuntimeStateRequest, WorkspaceMobilityArchive,
-    WorkspaceMobilityBlocker, WorkspaceMobilityFileEntry, WorkspaceMobilityPreflightResponse,
-    WorkspaceMobilityRuntimeState, WorkspaceMobilitySessionBundle,
-    WorkspaceMobilitySessionCandidate,
+    MobilitySessionLinkCompletionRecord, MobilitySessionLinkRecord,
+    MobilitySessionLinkWakeScheduleRecord, MobilitySessionLiveConfigSnapshotRecord,
+    MobilitySessionRawNotificationRecord, MobilitySessionRecord,
+    UpdateWorkspaceMobilityRuntimeStateRequest, WorkspaceMobilityArchive, WorkspaceMobilityBlocker,
+    WorkspaceMobilityFileEntry, WorkspaceMobilityPreflightResponse, WorkspaceMobilityRuntimeState,
+    WorkspaceMobilitySessionBundle, WorkspaceMobilitySessionCandidate,
 };
 use axum::{
     extract::{Path, State},
@@ -28,11 +29,16 @@ use crate::mobility::model::{
     WorkspaceMobilitySessionBundleData, MAX_MOBILITY_FILE_BYTES,
 };
 use crate::mobility::service::MobilityError;
+use crate::sessions::extensions::SessionTurnOutcome;
+use crate::sessions::links::model::{
+    SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
+};
 use crate::sessions::model::{
     PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentKind, PromptAttachmentRecord,
     PromptAttachmentState, SessionEventRecord, SessionLiveConfigSnapshotRecord,
     SessionRawNotificationRecord, SessionRecord,
 };
+use crate::sessions::subagents::model::{SubagentCompletionRecord, SubagentWakeScheduleRecord};
 use crate::workspaces::access_gate::WorkspaceAccessError;
 use crate::workspaces::access_model::WorkspaceAccessMode;
 
@@ -356,6 +362,21 @@ fn to_contract_archive(archive: WorkspaceMobilityArchiveData) -> WorkspaceMobili
             .into_iter()
             .map(to_contract_session_bundle)
             .collect(),
+        session_links: archive
+            .session_links
+            .into_iter()
+            .map(to_contract_session_link)
+            .collect(),
+        session_link_completions: archive
+            .session_link_completions
+            .into_iter()
+            .map(to_contract_session_link_completion)
+            .collect(),
+        session_link_wake_schedules: archive
+            .session_link_wake_schedules
+            .into_iter()
+            .map(to_contract_session_link_wake_schedule)
+            .collect(),
     }
 }
 
@@ -423,10 +444,49 @@ fn to_contract_session_record(record: SessionRecord) -> MobilitySessionRecord {
         closed_at: record.closed_at,
         dismissed_at: record.dismissed_at,
         system_prompt_append: record.system_prompt_append,
+        subagents_enabled: record.subagents_enabled,
         origin: record
             .origin
             .as_ref()
             .map(crate::origin::OriginContext::to_contract),
+    }
+}
+
+fn to_contract_session_link(record: SessionLinkRecord) -> MobilitySessionLinkRecord {
+    MobilitySessionLinkRecord {
+        id: record.id,
+        relation: record.relation.as_str().to_string(),
+        parent_session_id: record.parent_session_id,
+        child_session_id: record.child_session_id,
+        workspace_relation: record.workspace_relation.as_str().to_string(),
+        label: record.label,
+        created_by_turn_id: record.created_by_turn_id,
+        created_by_tool_call_id: record.created_by_tool_call_id,
+        created_at: record.created_at,
+    }
+}
+
+fn to_contract_session_link_completion(
+    record: SubagentCompletionRecord,
+) -> MobilitySessionLinkCompletionRecord {
+    MobilitySessionLinkCompletionRecord {
+        completion_id: record.completion_id,
+        session_link_id: record.session_link_id,
+        child_turn_id: record.child_turn_id,
+        child_last_event_seq: record.child_last_event_seq,
+        outcome: record.outcome.as_str().to_string(),
+        parent_event_seq: record.parent_event_seq,
+        parent_prompt_seq: record.parent_prompt_seq,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+    }
+}
+
+fn to_contract_session_link_wake_schedule(
+    record: SubagentWakeScheduleRecord,
+) -> MobilitySessionLinkWakeScheduleRecord {
+    MobilitySessionLinkWakeScheduleRecord {
+        session_link_id: record.session_link_id,
     }
 }
 
@@ -528,6 +588,21 @@ fn from_contract_archive(
             .into_iter()
             .map(|bundle| from_contract_session_bundle(bundle, workspace_id))
             .collect::<Result<Vec<_>, _>>()?,
+        session_links: archive
+            .session_links
+            .into_iter()
+            .map(from_contract_session_link)
+            .collect::<Result<Vec<_>, _>>()?,
+        session_link_completions: archive
+            .session_link_completions
+            .into_iter()
+            .map(from_contract_session_link_completion)
+            .collect::<Result<Vec<_>, _>>()?,
+        session_link_wake_schedules: archive
+            .session_link_wake_schedules
+            .into_iter()
+            .map(from_contract_session_link_wake_schedule)
+            .collect::<Result<Vec<_>, _>>()?,
     })
 }
 
@@ -621,9 +696,67 @@ fn from_contract_session_record(
         mcp_bindings_ciphertext: None,
         mcp_binding_summaries_json: None,
         system_prompt_append: record.system_prompt_append,
+        subagents_enabled: record.subagents_enabled,
         origin: record
             .origin
             .map(crate::origin::OriginContext::from_contract),
+    }
+}
+
+fn from_contract_session_link(
+    record: MobilitySessionLinkRecord,
+) -> Result<SessionLinkRecord, ApiError> {
+    Ok(SessionLinkRecord {
+        id: record.id,
+        relation: SessionLinkRelation::parse(&record.relation).map_err(|error| {
+            ApiError::bad_request(error.to_string(), "MOBILITY_INVALID_ARCHIVE")
+        })?,
+        parent_session_id: record.parent_session_id,
+        child_session_id: record.child_session_id,
+        workspace_relation: SessionLinkWorkspaceRelation::parse(&record.workspace_relation)
+            .map_err(|error| {
+                ApiError::bad_request(error.to_string(), "MOBILITY_INVALID_ARCHIVE")
+            })?,
+        label: record.label,
+        created_by_turn_id: record.created_by_turn_id,
+        created_by_tool_call_id: record.created_by_tool_call_id,
+        created_at: record.created_at,
+    })
+}
+
+fn from_contract_session_link_completion(
+    record: MobilitySessionLinkCompletionRecord,
+) -> Result<SubagentCompletionRecord, ApiError> {
+    Ok(SubagentCompletionRecord {
+        completion_id: record.completion_id,
+        session_link_id: record.session_link_id,
+        child_turn_id: record.child_turn_id,
+        child_last_event_seq: record.child_last_event_seq,
+        outcome: parse_mobility_completion_outcome(&record.outcome)?,
+        parent_event_seq: record.parent_event_seq,
+        parent_prompt_seq: record.parent_prompt_seq,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+    })
+}
+
+fn from_contract_session_link_wake_schedule(
+    record: MobilitySessionLinkWakeScheduleRecord,
+) -> Result<SubagentWakeScheduleRecord, ApiError> {
+    Ok(SubagentWakeScheduleRecord {
+        session_link_id: record.session_link_id,
+    })
+}
+
+fn parse_mobility_completion_outcome(value: &str) -> Result<SessionTurnOutcome, ApiError> {
+    match value {
+        "completed" => Ok(SessionTurnOutcome::Completed),
+        "failed" => Ok(SessionTurnOutcome::Failed),
+        "cancelled" => Ok(SessionTurnOutcome::Cancelled),
+        other => Err(ApiError::bad_request(
+            format!("Invalid subagent wake outcome: {other}"),
+            "MOBILITY_INVALID_ARCHIVE",
+        )),
     }
 }
 
@@ -658,6 +791,7 @@ fn from_contract_pending_prompt(record: MobilityPendingPromptRecord) -> PendingP
         prompt_id: record.prompt_id,
         text: record.text,
         blocks_json: record.blocks_json,
+        provenance_json: None,
         queued_at: record.queued_at,
     }
 }

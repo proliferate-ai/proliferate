@@ -7,6 +7,7 @@ import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspace
 export interface WorkspaceSelectionOptions {
   force?: boolean;
   preservePending?: boolean;
+  initialActiveSessionId?: string | null;
   latencyFlowId?: string | null;
 }
 

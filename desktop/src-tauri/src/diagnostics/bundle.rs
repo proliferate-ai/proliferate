@@ -8,9 +8,7 @@ use serde::{Deserialize, Serialize};
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
 
 use crate::app_config::{
-    default_anyharness_runtime_home_path,
-    load_runtime_info_record,
-    logs_dir_path,
+    default_anyharness_runtime_home_path, load_runtime_info_record, logs_dir_path,
 };
 
 use super::scrub::scrub_diagnostic_text;
@@ -96,11 +94,17 @@ pub async fn export_debug_bundle_to_path(
     let anyharness_base_log = anyharness_runtime_home
         .as_ref()
         .map(|runtime_home| runtime_home.join("logs/anyharness.log"));
-    let anyharness_logs_exist = anyharness_base_log.as_ref().is_some_and(|path| path.is_file());
+    let anyharness_logs_exist = anyharness_base_log
+        .as_ref()
+        .is_some_and(|path| path.is_file());
     let runtime_home_for_manifest = health
         .as_ref()
         .map(|value| value.runtime_home.clone())
-        .or_else(|| runtime_info.as_ref().and_then(|value| value.runtime_home.clone()))
+        .or_else(|| {
+            runtime_info
+                .as_ref()
+                .and_then(|value| value.runtime_home.clone())
+        })
         .or_else(|| {
             anyharness_logs_exist.then(|| {
                 anyharness_runtime_home
@@ -111,8 +115,12 @@ pub async fn export_debug_bundle_to_path(
             })
         });
 
-    let output_file = fs::File::create(&options.output_path)
-        .map_err(|error| format!("Failed to create {}: {error}", options.output_path.display()))?;
+    let output_file = fs::File::create(&options.output_path).map_err(|error| {
+        format!(
+            "Failed to create {}: {error}",
+            options.output_path.display()
+        )
+    })?;
     let mut zip = ZipWriter::new(output_file);
     let file_options = SimpleFileOptions::default()
         .compression_method(CompressionMethod::Deflated)
@@ -158,7 +166,11 @@ pub async fn export_debug_bundle_to_path(
         runtime_version: health
             .as_ref()
             .map(|value| value.version.clone())
-            .or_else(|| runtime_info.as_ref().and_then(|value| value.version.clone())),
+            .or_else(|| {
+                runtime_info
+                    .as_ref()
+                    .and_then(|value| value.version.clone())
+            }),
         runtime_status,
         runtime_home: runtime_home_for_manifest,
         platform: format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
@@ -276,8 +288,7 @@ mod tests {
         fs::create_dir_all(base.parent().expect("temp dir should exist"))
             .expect("temp dir should be created");
         fs::write(&base, "base").expect("base log should be created");
-        fs::write(base.with_extension("log.1"), "rotated")
-            .expect("rotated log should be created");
+        fs::write(base.with_extension("log.1"), "rotated").expect("rotated log should be created");
 
         let files = collect_log_files(&base);
         assert_eq!(files.len(), 2);

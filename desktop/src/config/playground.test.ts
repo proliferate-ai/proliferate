@@ -3,9 +3,14 @@ import { isValidElement } from "react";
 import { SCENARIOS, type ScenarioKey } from "./playground";
 import {
   renderMobilityOverlayPreview,
+  renderQueueSlot,
+  renderSubagentSlot,
   renderTopSlot,
 } from "@/components/playground/PlaygroundComposer";
-import { FILE_MENTION_SEARCH_RESULTS } from "@/lib/domain/chat/__fixtures__/playground";
+import {
+  FILE_MENTION_SEARCH_RESULTS,
+  PLAYGROUND_SUBAGENT_STRIP_ROWS,
+} from "@/lib/domain/chat/__fixtures__/playground";
 import { isValidWorkspaceRelativePath } from "@/lib/domain/chat/file-mention-links";
 
 const USER_INPUT_SCENARIOS: ScenarioKey[] = [
@@ -30,6 +35,13 @@ const TOOL_CALL_SCENARIOS: ScenarioKey[] = [
   "tool-subagent-task",
 ];
 
+const SUBAGENT_PLAYGROUND_SCENARIOS: ScenarioKey[] = [
+  "subagents-composer-few",
+  "subagents-composer-many",
+  "subagents-queued-wake",
+  "subagent-wake-card",
+];
+
 const CLOUD_COMPOSER_SCENARIOS: ScenarioKey[] = [
   "cloud-first-runtime",
   "cloud-provisioning",
@@ -47,6 +59,15 @@ describe("playground scenarios", () => {
 
   it("includes compact tool-call scenarios for visual iteration", () => {
     expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(TOOL_CALL_SCENARIOS));
+  });
+
+  it("includes subagent composer and wake scenarios for visual iteration", () => {
+    expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(SUBAGENT_PLAYGROUND_SCENARIOS));
+    expect(PLAYGROUND_SUBAGENT_STRIP_ROWS.length).toBeGreaterThan(6);
+    expect(isValidElement(renderSubagentSlot("subagents-composer-few"))).toBe(true);
+    expect(isValidElement(renderSubagentSlot("subagents-composer-many"))).toBe(true);
+    expect(isValidElement(renderSubagentSlot("subagents-queued-wake"))).toBe(true);
+    expect(isValidElement(renderQueueSlot("subagents-queued-wake"))).toBe(true);
   });
 
   it("renders cloud composer top-slot scenarios", () => {

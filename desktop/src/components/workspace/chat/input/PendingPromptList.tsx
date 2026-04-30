@@ -1,17 +1,21 @@
 import { useCallback } from "react";
 import { Button } from "@/components/ui/Button";
 import { Pencil, X } from "@/components/ui/icons";
-import type { ContentPart } from "@anyharness/sdk";
+import type { ContentPart, PromptProvenance } from "@anyharness/sdk";
 import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
 import { useQueuedPromptEditReader } from "@/hooks/chat/use-queued-prompt-edit";
 import { useDeletePendingPrompt } from "@/hooks/sessions/use-delete-pending-prompt";
 import { PromptContentRenderer } from "@/components/workspace/chat/content/PromptContentRenderer";
+import { SubagentWakeBadge } from "@/components/workspace/chat/transcript/SubagentWakeBadge";
+import { isSubagentWakeProvenance } from "@/lib/domain/chat/subagents/provenance";
+import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
 
 export interface PendingPromptListEntry {
   seq: number;
   text: string;
   contentParts: ContentPart[];
   isBeingEdited: boolean;
+  promptProvenance?: PromptProvenance | null;
 }
 
 export interface PendingPromptListProps {
@@ -93,6 +97,9 @@ interface PendingPromptRowProps {
 function PendingPromptRow({ entry, sessionId, onBeginEdit, onDelete }: PendingPromptRowProps) {
   const { seq, text, isBeingEdited } = entry;
   const hasStructuredAttachments = entry.contentParts.some((part) => part.type !== "text");
+  const wakeProvenance = isSubagentWakeProvenance(entry.promptProvenance)
+    ? entry.promptProvenance
+    : null;
 
   const handleBeginEdit = useCallback(() => {
     if (hasStructuredAttachments) {
@@ -104,6 +111,23 @@ function PendingPromptRow({ entry, sessionId, onBeginEdit, onDelete }: PendingPr
   const handleDelete = useCallback(() => {
     onDelete(seq);
   }, [onDelete, seq]);
+
+  if (wakeProvenance) {
+    return (
+      <div className="flex justify-end">
+        <SubagentWakeBadge
+          label={wakeProvenance.label ?? null}
+          color={resolveSubagentColor(wakeProvenance.sessionLinkId)}
+          titleFallback={
+            wakeProvenance.type === "linkWake"
+            && wakeProvenance.relation === "cowork_coding_session"
+              ? "Coding session"
+              : "Subagent"
+          }
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2 rounded-md px-2 py-1 text-sm text-foreground hover:bg-muted/40">

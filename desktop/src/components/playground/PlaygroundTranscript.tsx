@@ -19,6 +19,7 @@ import {
   CLAUDE_PLAN_SHORT,
   PLAYGROUND_COWORK_ARTIFACT_TOOL_CALL,
   PLAYGROUND_SUBAGENT_TRANSCRIPT,
+  PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT,
 } from "@/lib/domain/chat/__fixtures__/playground";
 import type { PlaygroundScenarioSelection } from "@/config/playground";
 import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-session";
@@ -353,6 +354,19 @@ export function PlaygroundTranscript({ selection, replay }: PlaygroundTranscript
           selectedWorkspaceId={selectedWorkspaceId ?? "playground-workspace"}
           optimisticPrompt={null}
           transcript={PLAYGROUND_SUBAGENT_TRANSCRIPT}
+          sessionViewState="idle"
+        />
+      </div>
+    );
+  }
+  if (scenario === "subagent-wake-card") {
+    return (
+      <div className="h-[min(720px,calc(100vh-13rem))] min-h-[420px]">
+        <MessageList
+          activeSessionId="playground-subagent-wake"
+          selectedWorkspaceId={selectedWorkspaceId ?? "playground-workspace"}
+          optimisticPrompt={null}
+          transcript={PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT}
           sessionViewState="idle"
         />
       </div>

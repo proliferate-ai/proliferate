@@ -15,6 +15,7 @@ import type {
   SetSessionConfigOptionRequest,
   SetSessionConfigOptionResponse,
   Session,
+  SessionSubagentsResponse,
   UpdateSessionTitleRequest,
 } from "../types/sessions.js";
 import { normalizeSessionEventEnvelope } from "../types/events.js";
@@ -55,6 +56,16 @@ export class SessionsClient {
       `/v1/sessions/${encodeURIComponent(sessionId)}`,
       options,
     ));
+  }
+
+  async getSubagents(
+    sessionId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<SessionSubagentsResponse> {
+    return this.transport.get<SessionSubagentsResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/subagents`,
+      options,
+    );
   }
 
   async updateTitle(

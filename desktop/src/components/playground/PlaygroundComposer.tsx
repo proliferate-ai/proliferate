@@ -6,6 +6,7 @@ import { ComposerFileMentionBadge } from "@/components/workspace/chat/input/Comp
 import { ComposerFileMentionSearch } from "@/components/workspace/chat/input/ComposerFileMentionSearch";
 import { ChatComposerSurface } from "@/components/workspace/chat/input/ChatComposerSurface";
 import { PendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
+import { SubagentComposerStrip } from "@/components/workspace/chat/input/SubagentComposerStrip";
 import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerPanel";
 import { UserInputCard } from "@/components/workspace/chat/input/UserInputCard";
 import { McpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
@@ -54,6 +55,8 @@ import {
   PENDING_PROMPTS_MULTI,
   PENDING_PROMPTS_SINGLE,
   PENDING_PROMPTS_WITH_EDITING,
+  PLAYGROUND_SUBAGENT_STRIP_ROWS,
+  PLAYGROUND_SUBAGENT_WAKE_QUEUE,
   TODOS_LONG,
   TODOS_MID,
   TODOS_SHORT,
@@ -77,11 +80,15 @@ const revealExampleUrl = async () => "https://accounts.example.com/oauth/authori
 export function PlaygroundComposer({ selection, replay }: PlaygroundComposerProps) {
   const replayTopSlot = useComposerTopSlot();
   const scenario = selection.kind === "fixture" ? selection.key : null;
-  const topSlot = scenario ? renderTopSlot(scenario) : replayTopSlot;
+  const upperSlot = scenario ? renderTopSlot(scenario) : replayTopSlot;
+  const subagentSlot = scenario ? renderSubagentSlot(scenario) : null;
+  const queueSlot = scenario ? renderQueueSlot(scenario) : null;
   return (
     <div className="relative">
       <ChatComposerDock
-        topSlot={topSlot ?? undefined}
+        upperSlot={upperSlot ?? undefined}
+        subagentSlot={subagentSlot ?? undefined}
+        queueSlot={queueSlot ?? undefined}
         footerSlot={scenario ? <PlaygroundMobilityFooterRow scenario={scenario} /> : undefined}
       >
         {selection.kind === "recording"
@@ -101,6 +108,10 @@ export function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
     case "gemini-retry-status":
     case "gemini-blocked-warning":
     case "gemini-no-response-warning":
+    case "subagents-composer-few":
+    case "subagents-composer-many":
+    case "subagents-queued-wake":
+    case "subagent-wake-card":
       return null;
     case "todos-short":
       return <TodoTrackerPanel entries={TODOS_SHORT} />;
@@ -383,6 +394,67 @@ export function renderTopSlot(scenario: ScenarioKey): ReactNode | null {
         />
       );
   }
+}
+
+export function renderSubagentSlot(scenario: ScenarioKey): ReactNode | null {
+  switch (scenario) {
+    case "subagents-composer-few":
+      return (
+        <SubagentComposerStrip
+          rows={PLAYGROUND_SUBAGENT_STRIP_ROWS.slice(0, 3)}
+          parent={null}
+          summary={buildPlaygroundSubagentSummary(PLAYGROUND_SUBAGENT_STRIP_ROWS.slice(0, 3))}
+          onOpenSubagent={noop}
+          onOpenParent={noop}
+        />
+      );
+    case "subagents-composer-many":
+    case "subagents-queued-wake":
+      return (
+        <SubagentComposerStrip
+          rows={PLAYGROUND_SUBAGENT_STRIP_ROWS}
+          parent={null}
+          summary={buildPlaygroundSubagentSummary(PLAYGROUND_SUBAGENT_STRIP_ROWS)}
+          onOpenSubagent={noop}
+          onOpenParent={noop}
+        />
+      );
+    default:
+      return null;
+  }
+}
+
+function buildPlaygroundSubagentSummary(
+  rows: typeof PLAYGROUND_SUBAGENT_STRIP_ROWS,
+) {
+  const workingCount = rows.filter((row) => row.statusLabel === "Working").length;
+  const wakeScheduledCount = rows.filter((row) => row.wakeScheduled).length;
+  const failedCount = rows.filter((row) => row.statusLabel === "Failed").length;
+  const detailParts = [
+    workingCount > 0 ? `${workingCount} working` : null,
+    wakeScheduledCount > 0 ? `${wakeScheduledCount} wake scheduled` : null,
+    failedCount > 0 ? `${failedCount} failed` : null,
+  ].filter((part): part is string => part !== null);
+  return {
+    label: `${rows.length} ${rows.length === 1 ? "subagent" : "subagents"}`,
+    detail: detailParts.slice(0, 2).join(" · ") || null,
+    active: workingCount > 0 || wakeScheduledCount > 0 || failedCount > 0,
+  };
+}
+
+export function renderQueueSlot(scenario: ScenarioKey): ReactNode | null {
+  if (scenario !== "subagents-queued-wake") {
+    return null;
+  }
+
+  return (
+    <PendingPromptList
+      sessionId={null}
+      entries={PLAYGROUND_SUBAGENT_WAKE_QUEUE}
+      onBeginEdit={noop}
+      onDelete={noop}
+    />
+  );
 }
 
 function PlaygroundComposerSurface() {

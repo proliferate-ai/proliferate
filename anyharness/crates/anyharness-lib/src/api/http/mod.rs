@@ -16,6 +16,7 @@ pub mod provider_configs;
 pub mod replay;
 pub mod repo_roots;
 pub mod sessions;
+pub mod subagents;
 pub mod terminals;
 pub mod workspaces;
 pub(crate) mod workspaces_contract;

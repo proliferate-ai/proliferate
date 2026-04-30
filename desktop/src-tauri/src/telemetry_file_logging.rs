@@ -1,12 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use file_rotate::{
-    compression::Compression,
-    suffix::AppendCount,
-    ContentLimit,
-    FileRotate,
-};
+use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
 use tracing_appender::{
     non_blocking,
     non_blocking::{NonBlocking, WorkerGuard},
@@ -24,7 +19,10 @@ pub struct FileLogSink {
 
 fn build_rotating_writer(log_path: &Path) -> Result<FileRotate<AppendCount>, String> {
     let Some(parent) = log_path.parent() else {
-        return Err(format!("Log path {} has no parent directory", log_path.display()));
+        return Err(format!(
+            "Log path {} has no parent directory",
+            log_path.display()
+        ));
     };
 
     fs::create_dir_all(parent)
@@ -104,7 +102,9 @@ mod tests {
             .write_all(oversized.as_bytes())
             .expect("large write should succeed");
         writer.flush().expect("flush should succeed");
-        writer.write_all(b"next line").expect("follow-up write should succeed");
+        writer
+            .write_all(b"next line")
+            .expect("follow-up write should succeed");
         writer.flush().expect("flush should succeed");
 
         assert!(path.is_file());

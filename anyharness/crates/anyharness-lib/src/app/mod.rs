@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::acp::manager::AcpManager;
 use crate::agents::reconcile_execution::AgentReconcileService;
 use crate::cowork::artifacts::CoworkArtifactRuntime;
+use crate::cowork::delegation::service::CoworkDelegationService;
 use crate::cowork::mcp_auth::CoworkMcpAuth;
 use crate::cowork::runtime::{CoworkRuntime, CoworkSessionHooks};
 use crate::cowork::service::CoworkService;
@@ -19,10 +20,17 @@ use crate::plans::store::PlanStore;
 use crate::processes::ProcessService;
 use crate::repo_roots::service::RepoRootService;
 use crate::repo_roots::store::RepoRootStore;
+use crate::sessions::links::completions::LinkCompletionStore;
+use crate::sessions::links::service::SessionLinkService;
+use crate::sessions::links::store::SessionLinkStore;
 use crate::sessions::mcp::{load_data_cipher_from_env, DATA_KEY_ENV_VAR};
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
 use crate::sessions::store::SessionStore;
+use crate::sessions::subagents::hooks::SubagentSessionHooks;
+use crate::sessions::subagents::mcp_auth::SubagentMcpAuth;
+use crate::sessions::subagents::service::SubagentService;
+use crate::sessions::subagents::store::SubagentStore;
 use crate::terminals::TerminalService;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::access_store::WorkspaceAccessStore;
@@ -58,6 +66,8 @@ pub struct AppState {
     pub cowork_artifact_runtime: Arc<CoworkArtifactRuntime>,
     pub cowork_session_hooks: Arc<CoworkSessionHooks>,
     pub cowork_runtime: Arc<CoworkRuntime>,
+    pub subagent_service: Arc<SubagentService>,
+    pub subagent_session_hooks: Arc<SubagentSessionHooks>,
     pub session_service: Arc<SessionService>,
     pub session_runtime: Arc<SessionRuntime>,
     pub workspace_access_gate: Arc<WorkspaceAccessGate>,
@@ -96,11 +106,6 @@ impl AppState {
         let cowork_service = Arc::new(CoworkService::new(CoworkStore::new(db.clone())));
         let cowork_artifact_runtime = Arc::new(CoworkArtifactRuntime::new());
         let cowork_mcp_auth = Arc::new(CoworkMcpAuth::new(runtime_home.clone()));
-        let cowork_session_hooks = Arc::new(CoworkSessionHooks::new(
-            runtime_base_url.clone(),
-            bearer_token.clone(),
-            cowork_mcp_auth,
-        ));
         let files_runtime = Arc::new(WorkspaceFilesRuntime::new(
             workspace_runtime.clone(),
             cowork_artifact_runtime.clone(),
@@ -120,18 +125,57 @@ impl AppState {
             WorkspaceAccessStore::new(db.clone()),
             terminal_service.clone(),
         ));
+        let session_link_service = SessionLinkService::new(
+            SessionLinkStore::new(db.clone()),
+            SessionStore::new(db.clone()),
+        );
+        let cowork_delegation_service = CoworkDelegationService::new(
+            (*cowork_service).clone(),
+            SessionStore::new(db.clone()),
+            session_link_service.clone(),
+            LinkCompletionStore::new(db.clone()),
+            workspace_runtime.clone(),
+            workspace_access_gate.clone(),
+        );
+        let cowork_session_hooks = Arc::new(CoworkSessionHooks::new(
+            runtime_base_url.clone(),
+            bearer_token.clone(),
+            cowork_mcp_auth,
+            cowork_delegation_service.clone(),
+            acp_manager.clone(),
+            SessionStore::new(db.clone()),
+        ));
+        let subagent_service = Arc::new(SubagentService::new(
+            SessionStore::new(db.clone()),
+            session_link_service,
+            SubagentStore::new(db.clone()),
+            workspace_runtime.clone(),
+            workspace_access_gate.clone(),
+        ));
+        let subagent_mcp_auth = Arc::new(SubagentMcpAuth::new(runtime_home.clone()));
+        let subagent_session_hooks = Arc::new(SubagentSessionHooks::new(
+            runtime_base_url.clone(),
+            bearer_token.clone(),
+            subagent_mcp_auth,
+            subagent_service.clone(),
+            acp_manager.clone(),
+            SessionStore::new(db.clone()),
+        ));
+        let session_extensions: Vec<Arc<dyn crate::sessions::extensions::SessionExtension>> =
+            vec![cowork_session_hooks.clone(), subagent_session_hooks.clone()];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),
             workspace_runtime.clone(),
             acp_manager.clone(),
             runtime_home.clone(),
             session_data_cipher,
-            cowork_session_hooks.clone(),
+            session_extensions,
             workspace_access_gate.clone(),
             plan_service.clone(),
         ));
         let cowork_runtime = Arc::new(CoworkRuntime::new(
             (*cowork_service).clone(),
+            cowork_delegation_service,
             (*repo_root_service).clone(),
             workspace_runtime.clone(),
             session_service.clone(),
@@ -145,6 +189,7 @@ impl AppState {
             MobilityStore::new(db.clone()),
             session_service.clone(),
             session_runtime.clone(),
+            subagent_service.clone(),
             workspace_access_gate.clone(),
             setup_execution_service.clone(),
             terminal_service.clone(),
@@ -170,6 +215,8 @@ impl AppState {
             cowork_artifact_runtime,
             cowork_session_hooks,
             cowork_runtime,
+            subagent_service,
+            subagent_session_hooks,
             session_service,
             session_runtime,
             workspace_access_gate,

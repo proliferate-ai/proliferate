@@ -1,6 +1,7 @@
 use anyharness_contract::v1::{
-    CoworkArtifactDetailResponse, CoworkArtifactManifestResponse, CoworkRoot, CoworkStatus,
-    CoworkThread, CreateCoworkThreadRequest, CreateCoworkThreadResponse, Workspace,
+    CoworkArtifactDetailResponse, CoworkArtifactManifestResponse, CoworkManagedWorkspacesResponse,
+    CoworkRoot, CoworkStatus, CoworkThread, CreateCoworkThreadRequest, CreateCoworkThreadResponse,
+    Workspace,
 };
 use axum::{
     extract::{Path, State},
@@ -111,6 +112,7 @@ pub async fn create_cowork_thread(
             req.mode_id.as_deref(),
             mcp_servers,
             req.mcp_binding_summaries,
+            req.cowork_workspace_delegation_enabled.unwrap_or(true),
         )
         .await
         .map_err(map_create_cowork_thread_error)?;
@@ -214,27 +216,48 @@ pub async fn post_cowork_mcp_endpoint(
     }
 
     let artifact_runtime = state.cowork_artifact_runtime.clone();
-    let session_service = state.session_service.clone();
-    let workspace_runtime = state.workspace_runtime.clone();
-    let cowork_service = state.cowork_service.clone();
-    let response = run_blocking("cowork mcp call", move || {
-        handle_json_rpc(
-            &artifact_runtime,
-            &session_service,
-            &workspace_runtime,
-            &cowork_service,
-            &workspace_id,
-            &session_id,
-            body,
-        )
-    })
-    .await?
+    let cowork_runtime = state.cowork_runtime.clone();
+    let response = handle_json_rpc(
+        &artifact_runtime,
+        &cowork_runtime,
+        &workspace_id,
+        &session_id,
+        body,
+    )
+    .await
     .map_err(|error| ApiError::bad_request(error.to_string(), "COWORK_MCP_REQUEST_INVALID"))?;
 
     match response {
         Some(payload) => Ok((StatusCode::OK, Json(payload)).into_response()),
         None => Ok(StatusCode::ACCEPTED.into_response()),
     }
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/cowork/sessions/{session_id}/managed-workspaces",
+    params(("session_id" = String, Path, description = "Cowork parent session ID")),
+    responses(
+        (status = 200, description = "Cowork-managed coding workspaces", body = CoworkManagedWorkspacesResponse),
+        (status = 404, description = "Cowork thread not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "cowork"
+)]
+pub async fn get_cowork_managed_workspaces(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<CoworkManagedWorkspacesResponse>, ApiError> {
+    let response = state
+        .cowork_runtime
+        .managed_workspaces_context(&session_id)
+        .await
+        .map_err(|error| match error {
+            crate::cowork::delegation::service::CoworkDelegationError::CoworkThreadNotFound(_) => {
+                ApiError::not_found("cowork thread not found", "COWORK_THREAD_NOT_FOUND")
+            }
+            other => ApiError::internal(other.to_string()),
+        })?;
+    Ok(Json(response))
 }
 
 fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
@@ -324,6 +347,7 @@ fn cowork_thread_to_contract(summary: CoworkThreadSummary) -> CoworkThread {
         agent_kind: summary.thread.agent_kind,
         requested_model_id: summary.thread.requested_model_id,
         branch_name: summary.thread.branch_name,
+        workspace_delegation_enabled: summary.thread.workspace_delegation_enabled,
         title: summary.title,
         created_at: summary.thread.created_at,
         updated_at: summary.updated_at,

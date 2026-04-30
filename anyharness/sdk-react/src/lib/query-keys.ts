@@ -88,6 +88,13 @@ export function anyHarnessCoworkThreadsKey(runtimeUrl: string | null | undefined
   return [...anyHarnessRuntimeKey(runtimeUrl), "cowork", "threads"] as const;
 }
 
+export function anyHarnessCoworkManagedWorkspacesKey(
+  runtimeUrl: string | null | undefined,
+  sessionId: string | null | undefined,
+) {
+  return [...anyHarnessRuntimeKey(runtimeUrl), "cowork", "sessions", sessionId ?? null, "managed-workspaces"] as const;
+}
+
 export function anyHarnessCoworkManifestKey(
   runtimeUrl: string | null | undefined,
   workspaceId: string | null | undefined,
@@ -154,6 +161,14 @@ export function anyHarnessSessionEventsKey(
   afterSeq?: number,
 ) {
   return [...anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId), "events", afterSeq ?? null] as const;
+}
+
+export function anyHarnessSessionSubagentsKey(
+  runtimeUrl: string | null | undefined,
+  workspaceId: string | null | undefined,
+  sessionId: string | null | undefined,
+) {
+  return [...anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId), "subagents"] as const;
 }
 
 export function anyHarnessPlansKey(

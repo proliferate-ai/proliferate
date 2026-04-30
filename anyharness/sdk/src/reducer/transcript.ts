@@ -60,6 +60,8 @@ export function createTranscriptState(sessionId: string): TranscriptState {
     isStreaming: false,
     lastSeq: 0,
     pendingPrompts: [],
+    linkCompletionsByCompletionId: {},
+    latestLinkCompletionBySessionLinkId: {},
   };
 }
 
@@ -185,6 +187,34 @@ export function reduceEvent(
       };
       break;
 
+    case "subagent_turn_completed":
+    case "session_link_turn_completed": {
+      const relation = evt.type === "subagent_turn_completed"
+        ? "subagent"
+        : evt.relation;
+      s.linkCompletionsByCompletionId = {
+        ...s.linkCompletionsByCompletionId,
+        [evt.completionId]: {
+          relation,
+          completionId: evt.completionId,
+          sessionLinkId: evt.sessionLinkId,
+          parentSessionId: evt.parentSessionId,
+          childSessionId: evt.childSessionId,
+          childTurnId: evt.childTurnId,
+          childLastEventSeq: evt.childLastEventSeq,
+          outcome: evt.outcome,
+          label: evt.label ?? null,
+          seq: envelope.seq,
+          timestamp: envelope.timestamp,
+        },
+      };
+      s.latestLinkCompletionBySessionLinkId = {
+        ...s.latestLinkCompletionBySessionLinkId,
+        [evt.sessionLinkId]: evt.completionId,
+      };
+      break;
+    }
+
     case "usage_update":
       s.usageState = {
         used: evt.used,
@@ -202,6 +232,7 @@ export function reduceEvent(
           text: evt.text,
           contentParts: normalizeContentParts(evt.contentParts ?? []),
           queuedAt: evt.queuedAt,
+          promptProvenance: evt.promptProvenance ?? null,
         },
       ];
       break;
@@ -213,6 +244,7 @@ export function reduceEvent(
             ...entry,
             text: evt.text,
             contentParts: normalizeContentParts(evt.contentParts ?? []),
+            promptProvenance: evt.promptProvenance ?? entry.promptProvenance,
           }
           : entry,
       );
@@ -393,6 +425,7 @@ function createItemFromPayload(
         ...base,
         text: extractText(base.contentParts),
         isStreaming: payload.status === "in_progress",
+        promptProvenance: payload.promptProvenance ?? null,
       };
 
     case "assistant_message":
@@ -475,6 +508,9 @@ function applyPayload(item: KnownTranscriptItem, payload: TranscriptItemPayload,
   item.rawInput = payload.rawInput ?? item.rawInput;
   item.rawOutput = payload.rawOutput ?? item.rawOutput;
   item.contentParts = mergeContentParts(item.contentParts, payload.contentParts ?? []);
+  if (item.kind === "user_message" && payload.promptProvenance !== undefined) {
+    item.promptProvenance = payload.promptProvenance ?? null;
+  }
   item.lastUpdatedSeq = seq;
   item.completedAt = payload.status === "in_progress" ? null : ts;
   item.completedSeq = payload.status === "in_progress" ? null : seq;
@@ -1229,6 +1265,22 @@ function deriveToolCallSemanticKind(
   }
   if (normalizedEffectiveToolName === "mcp__cowork__update_artifact") {
     return "cowork_artifact_update";
+  }
+  if (
+    normalizedEffectiveToolName === "mcp__cowork__get_coding_workspace_launch_options"
+    || normalizedEffectiveToolName === "mcp__cowork__create_coding_workspace"
+    || normalizedEffectiveToolName === "mcp__cowork__list_coding_workspaces"
+    || normalizedEffectiveToolName === "mcp__cowork__get_coding_session_launch_options"
+    || normalizedEffectiveToolName === "mcp__cowork__create_coding_session"
+    || normalizedEffectiveToolName === "mcp__cowork__send_coding_message"
+    || normalizedEffectiveToolName === "mcp__cowork__schedule_coding_wake"
+    || normalizedEffectiveToolName === "mcp__cowork__get_coding_status"
+    || normalizedEffectiveToolName === "mcp__cowork__read_coding_events"
+  ) {
+    return "cowork_coding";
+  }
+  if (normalizedEffectiveToolName === "mcp__subagents__create_subagent") {
+    return "subagent";
   }
 
   if (nativeToolName === "Agent" || normalizedToolKind === "think") {

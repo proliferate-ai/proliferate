@@ -19,6 +19,31 @@ export interface AsyncSubagentLaunch {
   outputFile: string | null;
 }
 
+export interface SubagentLaunchDisplay {
+  title: string;
+  meta: string | null;
+  prompt: string | null;
+}
+
+export interface SubagentLaunchResult {
+  sessionLinkId: string | null;
+  childSessionId: string | null;
+}
+
+export interface SubagentProvisioningStatus extends SubagentLaunchResult {
+  promptStatus: string | null;
+  wakeScheduled: boolean | null;
+  wakeScheduleCreated: boolean | null;
+}
+
+const AGENT_KIND_LABELS: Record<string, string> = {
+  claude: "Claude",
+  codex: "Codex",
+  cursor: "Cursor",
+  gemini: "Gemini",
+  opencode: "OpenCode",
+};
+
 export function resolveSubagentExecutionState(
   item: ToolCallItem,
 ): SubagentExecutionState {
@@ -44,6 +69,29 @@ export function resolveSubagentExecutionState(
   }
 
   return wasLaunchedInBackground(item) ? "completed_background" : "completed";
+}
+
+export function resolveSubagentLaunchDisplay(
+  item: ToolCallItem,
+): SubagentLaunchDisplay {
+  const rawInput = isRecord(item.rawInput) ? item.rawInput : {};
+  const label = readStringField(rawInput, "label");
+  const agentKind = readStringField(rawInput, "agentKind");
+  const modelId = readStringField(rawInput, "modelId");
+  const prompt = readStringField(rawInput, "prompt") ?? extractToolInputText(item);
+  const title = label
+    ?? (isAnyHarnessSubagentTool(item) ? "Subagent" : item.title)
+    ?? "Agent task";
+  const meta = [
+    agentKind ? formatAgentKind(agentKind) : null,
+    modelId,
+  ].filter((value): value is string => !!value).join(" · ");
+
+  return {
+    title,
+    meta: meta.length > 0 ? meta : null,
+    prompt,
+  };
 }
 
 export function parseAsyncSubagentLaunch(
@@ -74,6 +122,43 @@ export function parseAsyncSubagentLaunch(
   };
 }
 
+export function parseSubagentLaunchResult(
+  item: ToolCallItem,
+): SubagentLaunchResult | null {
+  const provisioningStatus = parseSubagentProvisioningStatus(item);
+  if (!provisioningStatus || (!provisioningStatus.sessionLinkId && !provisioningStatus.childSessionId)) {
+    return null;
+  }
+
+  return {
+    sessionLinkId: provisioningStatus.sessionLinkId,
+    childSessionId: provisioningStatus.childSessionId,
+  };
+}
+
+export function parseSubagentProvisioningStatus(
+  item: ToolCallItem,
+): SubagentProvisioningStatus | null {
+  if (!isSubagent(item)) {
+    return null;
+  }
+
+  const output = isRecord(item.rawOutput)
+    ? item.rawOutput
+    : parseToolResultJsonObject(item);
+  if (!output) {
+    return null;
+  }
+
+  return {
+    sessionLinkId: readStringField(output, "sessionLinkId"),
+    childSessionId: readStringField(output, "childSessionId"),
+    promptStatus: readStringField(output, "promptStatus"),
+    wakeScheduled: readOptionalBooleanField(output, "wakeScheduled"),
+    wakeScheduleCreated: readOptionalBooleanField(output, "wakeScheduleCreated"),
+  };
+}
+
 function extractToolResultText(item: ToolCallItem): string {
   return item.contentParts
     .filter((part): part is ToolResultTextContentPart => part.type === "tool_result_text")
@@ -82,12 +167,61 @@ function extractToolResultText(item: ToolCallItem): string {
     .join("\n\n");
 }
 
+function extractToolInputText(item: ToolCallItem): string | null {
+  const text = item.contentParts
+    .filter((part): part is Extract<ToolCallItem["contentParts"][number], { type: "tool_input_text" }> =>
+      part.type === "tool_input_text"
+    )
+    .map((part) => part.text.trim())
+    .filter((part) => part.length > 0)
+    .join("\n\n");
+  return text.length > 0 ? text : null;
+}
+
+function readStringField(value: Record<string, unknown>, key: string): string | null {
+  const field = value[key];
+  if (typeof field !== "string") {
+    return null;
+  }
+  const trimmed = field.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function formatAgentKind(agentKind: string): string {
+  const normalized = agentKind.trim().toLowerCase();
+  return AGENT_KIND_LABELS[normalized]
+    ?? normalized
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function readBooleanField(value: unknown, key: string): boolean {
   if (!isRecord(value)) {
     return false;
   }
 
   return value[key] === true;
+}
+
+function readOptionalBooleanField(value: Record<string, unknown>, key: string): boolean | null {
+  const field = value[key];
+  return typeof field === "boolean" ? field : null;
+}
+
+function parseToolResultJsonObject(item: ToolCallItem): Record<string, unknown> | null {
+  const text = extractToolResultText(item).trim();
+  if (!text.startsWith("{") || !text.endsWith("}")) {
+    return null;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function wasLaunchedInBackground(item: ToolCallItem): boolean {
@@ -100,6 +234,10 @@ function getBackgroundWork(item: ToolCallItem): ToolBackgroundWorkMetadata | nul
 
 function isSubagent(item: ToolCallItem): boolean {
   return item.nativeToolName === "Agent" || item.semanticKind === "subagent";
+}
+
+function isAnyHarnessSubagentTool(item: ToolCallItem): boolean {
+  return item.nativeToolName === "mcp__subagents__create_subagent";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

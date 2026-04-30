@@ -148,6 +148,10 @@ impl WorkspaceStore {
                 "DELETE FROM cowork_threads WHERE workspace_id = ?1",
                 [workspace_id],
             )?;
+            conn.execute(
+                "DELETE FROM cowork_managed_workspaces WHERE workspace_id = ?1",
+                [workspace_id],
+            )?;
             conn.execute("DELETE FROM workspaces WHERE id = ?1", [workspace_id])?;
             Ok(())
         })
@@ -264,6 +268,7 @@ mod tests {
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
             system_prompt_append: None,
+            subagents_enabled: true,
             origin: None,
         }
     }

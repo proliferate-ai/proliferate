@@ -30,6 +30,7 @@ import { FileReadCall } from "@/components/workspace/chat/tool-calls/FileReadCal
 import { ToolCallSummary } from "@/components/workspace/chat/tool-calls/ToolCallSummary";
 import { CoworkArtifactToolActionRow } from "@/components/workspace/chat/tool-calls/CoworkArtifactToolActionRow";
 import { CoworkArtifactTurnCard } from "@/components/workspace/chat/tool-calls/CoworkArtifactTurnCard";
+import { CoworkCodingToolActionRow } from "@/components/workspace/chat/tool-calls/cowork/CoworkCodingToolActionRow";
 import { TurnDiffPanel } from "./TurnDiffPanel";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import {
@@ -47,6 +48,8 @@ import {
 import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
 import { useMessageListScroll } from "@/hooks/chat/use-message-list-scroll";
 import { useOpenCoworkArtifact } from "@/hooks/cowork/use-open-cowork-artifact";
+import { useOpenCoworkCodingSession } from "@/hooks/cowork/use-open-cowork-coding-session";
+import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useBrailleFillsweep } from "@/hooks/ui/use-braille-sweep";
 import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/prompt-content";
 import {
@@ -67,13 +70,21 @@ import {
 } from "@/lib/domain/chat/claude-plan-tool-call";
 import {
   parseAsyncSubagentLaunch,
+  parseSubagentLaunchResult,
+  parseSubagentProvisioningStatus,
+  resolveSubagentLaunchDisplay,
   resolveSubagentExecutionState,
   type SubagentExecutionState,
 } from "@/lib/domain/chat/subagent-launch";
 import {
   buildSubagentBrailleColorMap,
+  resolveSubagentColor,
   resolveSubagentBrailleColor,
 } from "@/lib/domain/chat/subagent-braille-color";
+import { isAgentSessionProvenance, isSubagentWakeProvenance } from "@/lib/domain/chat/subagents/provenance";
+import { SubagentWakeBadge } from "@/components/workspace/chat/transcript/SubagentWakeBadge";
+import { SubagentLaunchLedger } from "@/components/workspace/chat/transcript/SubagentLaunchLedger";
+import { UserMessageProvenanceChrome } from "@/components/workspace/chat/transcript/UserMessageProvenanceChrome";
 import {
   turnHasAssistantRenderableTranscriptContent,
   resolveVisibleTranscriptPendingPrompt,
@@ -91,7 +102,6 @@ import type {
   TranscriptState,
   ToolCallContentPart,
   ToolCallItem,
-  ToolInputTextContentPart,
   ToolResultTextContentPart,
   TranscriptItem,
   TurnRecord,
@@ -106,6 +116,7 @@ const ProposedPlanToolCallIdsContext = createContext<Set<string>>(
   EMPTY_PROPOSED_PLAN_TOOL_CALL_IDS,
 );
 const TranscriptSessionIdContext = createContext<string | null>(null);
+const TranscriptOpenSessionContext = createContext<((sessionId: string) => void) | null>(null);
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 
 /**
@@ -123,6 +134,7 @@ interface MessageListProps {
   transcript: TranscriptState;
   sessionViewState: SessionViewState;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
+  onOpenSession?: (sessionId: string) => void;
 }
 
 export function MessageList({
@@ -132,6 +144,7 @@ export function MessageList({
   transcript,
   sessionViewState,
   onHandOffPlanToNewSession,
+  onOpenSession,
 }: MessageListProps) {
   const latestTurnId = transcript.turnOrder[transcript.turnOrder.length - 1] ?? null;
   const latestTurn = latestTurnId ? transcript.turnsById[latestTurnId] ?? null : null;
@@ -257,7 +270,8 @@ export function MessageList({
     <div className="flex-1 min-h-0" data-telemetry-block>
       <ProposedPlanToolCallIdsContext.Provider value={toolCallIdsWithProposedPlan}>
         <TranscriptSessionIdContext.Provider value={activeSessionId}>
-          <AutoHideScrollArea className="h-full" ref={scrollRef}>
+          <TranscriptOpenSessionContext.Provider value={onOpenSession ?? null}>
+            <AutoHideScrollArea className="h-full" ref={scrollRef}>
             <div ref={contentRef} className="max-w-3xl mx-auto pt-4 pb-10">
               {visibleTurnIds.map((turnId, turnIdx) => {
                 const turn = transcript.turnsById[turnId];
@@ -340,12 +354,21 @@ export function MessageList({
               {visiblePendingPrompt && (
                 <TurnShell key="pending-prompt" isFirst={visibleTurnIds.length === 0}>
                   <div className="flex flex-col gap-2">
-                    <UserMessage
-                      sessionId={activeSessionId}
-                      content={visiblePendingPrompt.text}
-                      contentParts={visiblePendingPrompt.contentParts}
-                      showCopyButton
-                    />
+                    {isSubagentWakeProvenance(visiblePendingPrompt.promptProvenance) ? (
+                      <div className="flex justify-end">
+                        <SubagentWakeBadge
+                          label={visiblePendingPrompt.promptProvenance.label ?? null}
+                          color={resolveSubagentColor(visiblePendingPrompt.promptProvenance.sessionLinkId)}
+                        />
+                      </div>
+                    ) : (
+                      <UserMessage
+                        sessionId={activeSessionId}
+                        content={visiblePendingPrompt.text}
+                        contentParts={visiblePendingPrompt.contentParts}
+                        showCopyButton
+                      />
+                    )}
                     {pendingPromptTrailingStatus && (
                       <div className={TRAILING_STATUS_MIN_HEIGHT}>{pendingPromptTrailingStatus}</div>
                     )}
@@ -353,7 +376,8 @@ export function MessageList({
                 </TurnShell>
               )}
             </div>
-          </AutoHideScrollArea>
+            </AutoHideScrollArea>
+          </TranscriptOpenSessionContext.Provider>
         </TranscriptSessionIdContext.Provider>
       </ProposedPlanToolCallIdsContext.Provider>
     </div>
@@ -800,20 +824,64 @@ function TurnShell({
 
 function TranscriptItemBlock({
   item,
+  transcript,
   workspaceId,
   onOpenArtifact,
   onHandOffPlanToNewSession,
 }: {
   item: TranscriptItem;
+  transcript: TranscriptState;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
 }) {
   const toolCallIdsWithProposedPlan = useContext(ProposedPlanToolCallIdsContext);
   const sessionId = useContext(TranscriptSessionIdContext);
+  const openSession = useContext(TranscriptOpenSessionContext);
 
   switch (item.kind) {
-    case "user_message":
+    case "user_message": {
+      if (isSubagentWakeProvenance(item.promptProvenance)) {
+        const completion =
+          transcript.linkCompletionsByCompletionId[item.promptProvenance.completionId] ?? null;
+        return (
+          <div className="flex justify-end">
+            <SubagentWakeBadge
+              label={item.promptProvenance.label ?? completion?.label ?? null}
+              childSessionId={completion?.childSessionId ?? null}
+              outcome={completion?.outcome ?? null}
+              color={resolveSubagentColor(item.promptProvenance.sessionLinkId)}
+              titleFallback={
+                item.promptProvenance.type === "linkWake"
+                && item.promptProvenance.relation === "cowork_coding_session"
+                  ? "Coding session"
+                  : "Subagent"
+              }
+              onOpenChild={openSession ?? undefined}
+            />
+          </div>
+        );
+      }
+
+      if (isAgentSessionProvenance(item.promptProvenance)) {
+        return (
+          <UserMessage
+            sessionId={sessionId}
+            content={item.text}
+            contentParts={item.contentParts}
+            showCopyButton
+            footer={(
+              <UserMessageProvenanceChrome
+                sourceSessionId={item.promptProvenance.sourceSessionId}
+                label={item.promptProvenance.label ?? null}
+                color={resolveSubagentColor(item.promptProvenance.sessionLinkId ?? item.promptProvenance.sourceSessionId)}
+                onOpenParent={openSession ?? undefined}
+              />
+            )}
+          />
+        );
+      }
+
       return (
         <UserMessage
           sessionId={sessionId}
@@ -822,6 +890,7 @@ function TranscriptItemBlock({
           showCopyButton
         />
       );
+    }
 
     case "assistant_prose": {
       if (!item.text) return null;
@@ -948,6 +1017,7 @@ function TranscriptTreeNode({
   return (
     <TranscriptItemBlock
       item={item}
+      transcript={transcript}
       workspaceId={workspaceId}
       onOpenArtifact={onOpenArtifact}
       onHandOffPlanToNewSession={onHandOffPlanToNewSession}
@@ -991,6 +1061,9 @@ function ToolCallItemBlock({
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
 }) {
+  const openCodingSession = useOpenCoworkCodingSession();
+  const { selectWorkspace } = useWorkspaceSelection();
+
   if (
     item.semanticKind === "cowork_artifact_create"
     || item.semanticKind === "cowork_artifact_update"
@@ -1003,6 +1076,18 @@ function ToolCallItemBlock({
             ? (artifactId) => onOpenArtifact(workspaceId, artifactId)
             : undefined
         }
+      />
+    );
+  }
+
+  if (item.semanticKind === "cowork_coding") {
+    return (
+      <CoworkCodingToolActionRow
+        item={item}
+        onOpenCodingSession={(input) => { void openCodingSession(input); }}
+        onOpenWorkspace={(targetWorkspaceId) => {
+          void selectWorkspace(targetWorkspaceId, { force: true });
+        }}
       />
     );
   }
@@ -1259,24 +1344,28 @@ function AgentGroupBlock({
 }) {
   const executionState = resolveSubagentExecutionState(item);
   const asyncLaunch = parseAsyncSubagentLaunch(item);
-  const brailleColor = resolveSubagentBrailleColor(subagentBrailleColors, item);
+  const provisioningStatus = parseSubagentProvisioningStatus(item);
+  const launchResult = parseSubagentLaunchResult(item);
+  const brailleColor = launchResult?.sessionLinkId
+    ? resolveSubagentColor(launchResult.sessionLinkId)
+    : resolveSubagentBrailleColor(subagentBrailleColors, item);
+  const openSession = useContext(TranscriptOpenSessionContext);
   const isRunning =
     executionState === "running" || executionState === "background";
   const [expanded, setExpanded] = useState(false);
   const [workExpanded, setWorkExpanded] = useState(false);
 
-  const promptText = item.contentParts
-    .filter((p): p is ToolInputTextContentPart => p.type === "tool_input_text")
-    .map((p) => p.text)
-    .join("\n\n");
-  const normalizedPrompt = promptText.trim();
+  const subagentDisplay = resolveSubagentLaunchDisplay(item);
+  const normalizedPrompt = subagentDisplay.prompt?.trim() ?? "";
 
   // Agent synthesis lives in the agent item's own tool_result_text content parts
   const agentResultText = item.contentParts
     .filter((p): p is ToolResultTextContentPart => p.type === "tool_result_text")
     .map((p) => p.text)
     .join("\n\n");
-  const normalizedAgentResult = normalizeToolResultText(agentResultText);
+  const normalizedAgentResult = provisioningStatus
+    ? ""
+    : normalizeToolResultText(agentResultText);
 
   // Count internal work
   const descendants = collectDescendantItems(childIds, transcript, childrenByParentId);
@@ -1292,9 +1381,18 @@ function AgentGroupBlock({
     subagents: 0,
   });
 
-  const description = item.title ?? "Agent task";
+  const description = subagentDisplay.title;
   const hasWork = childIds.length > 0;
-  const hasBodyContent = hasWork || !!normalizedPrompt || !!normalizedAgentResult;
+  const hasLaunchLedger = !!normalizedPrompt || !!provisioningStatus;
+  const hasBodyContent = hasWork || hasLaunchLedger || !!normalizedAgentResult;
+  const headerVerb = executionState === "failed"
+    ? "Subagent launch failed"
+    : isRunning
+      ? "Creating subagent"
+      : "Created subagent";
+  const headerIcon = isRunning || executionState === "expired_background"
+    ? <AgentHeaderIcon state={executionState} color={brailleColor} />
+    : null;
   const collapsedSummary =
     workSummary
     || (executionState === "background"
@@ -1313,27 +1411,41 @@ function AgentGroupBlock({
       {/* Agent header — clickable to collapse/expand */}
       <div
         onClick={() => headerExpandable && setExpanded(!expanded)}
-        className={`group/tool-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-base leading-5 transition-colors ${
+        className={`group/tool-action-row inline-flex items-center gap-1 rounded-md pl-0.5 pr-1.5 py-1 text-base leading-5 transition-colors ${
           headerExpandable
             ? "cursor-pointer text-muted-foreground hover:bg-muted/40 hover:text-foreground"
             : "cursor-default text-muted-foreground"
         }`}
       >
-        <ToolActionLeadingAffordance
-          icon={<AgentHeaderIcon state={executionState} color={brailleColor} />}
-          expandable={headerExpandable}
-          expanded={expanded}
-        />
-        <span className="font-[460] text-foreground/90">{description}</span>
+        {headerIcon && (
+          <ToolActionLeadingAffordance
+            icon={headerIcon}
+            expandable={headerExpandable}
+            expanded={expanded}
+          />
+        )}
+        <span className="font-[460] text-foreground/90">{headerVerb}</span>
+        <span className="min-w-0 truncate text-foreground/90">{description}</span>
+        {subagentDisplay.meta && (
+          <span className="ml-1 text-sm text-muted-foreground">{subagentDisplay.meta}</span>
+        )}
         {!expanded && collapsedSummary && (
-          <span className="ml-1 text-sm text-muted-foreground">{collapsedSummary}</span>
+          <span className="ml-1 text-sm text-muted-foreground">
+            {subagentDisplay.meta ? `· ${collapsedSummary}` : collapsedSummary}
+          </span>
         )}
       </div>
 
       {/* Agent body — indented with left border */}
-      {expanded && hasBodyContent && <div className="ml-2 border-l border-border/70 pl-3">
-        {normalizedPrompt && (
-          <AgentPromptBlock content={normalizedPrompt} />
+      {expanded && hasBodyContent && <div className="ml-1 border-l border-border/70 pl-2">
+        {hasLaunchLedger && (
+          <SubagentLaunchLedger
+            prompt={normalizedPrompt || null}
+            provisioningStatus={provisioningStatus}
+            executionState={executionState}
+            childSessionId={launchResult?.childSessionId ?? null}
+            onOpenChild={openSession ?? undefined}
+          />
         )}
 
         {/* Internal work — collapsed when complete */}
@@ -1465,26 +1577,6 @@ function AsyncAgentLaunchBlock({
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function AgentPromptBlock({ content }: { content: string }) {
-  return (
-    <div className="mt-1">
-      <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-        Prompt To Subagent
-      </div>
-      <div className="overflow-hidden rounded-md border border-border/60 bg-muted/25">
-        <AutoHideScrollArea className="w-full" viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}>
-          <div className="px-3 py-2 text-sm leading-relaxed text-muted-foreground">
-            <MarkdownRenderer
-              content={content}
-              className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-            />
-          </div>
-        </AutoHideScrollArea>
-      </div>
     </div>
   );
 }

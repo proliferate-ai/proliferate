@@ -5,6 +5,7 @@ import { getAnyHarnessClient } from "../lib/client-cache.js";
 import {
   anyHarnessCoworkArtifactKey,
   anyHarnessCoworkManifestKey,
+  anyHarnessCoworkManagedWorkspacesKey,
   anyHarnessCoworkStatusKey,
   anyHarnessCoworkThreadsKey,
   anyHarnessRepoRootsKey,
@@ -39,6 +40,23 @@ export function useCoworkThreadsQuery(options?: RuntimeQueryOptions) {
     queryFn: async () => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
       return client.cowork.listThreads();
+    },
+  });
+}
+
+export function useCoworkManagedWorkspacesQuery(
+  sessionId: string | null | undefined,
+  options?: RuntimeQueryOptions,
+) {
+  const runtime = useAnyHarnessRuntimeContext();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+
+  return useQuery({
+    queryKey: anyHarnessCoworkManagedWorkspacesKey(runtimeUrl, sessionId),
+    enabled: (options?.enabled ?? true) && runtimeUrl.length > 0 && !!sessionId,
+    queryFn: async () => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      return client.cowork.getManagedWorkspaces(sessionId!);
     },
   });
 }

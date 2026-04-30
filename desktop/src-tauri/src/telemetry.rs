@@ -101,18 +101,19 @@ pub fn init() -> TelemetryGuards {
         ))
     });
 
-    let file_sink = desktop_native_log_path().ok().and_then(|path| {
-        match create_file_log_sink(&path) {
-            Ok(sink) => Some(sink),
-            Err(error) => {
-                eprintln!(
-                    "[desktop-native] file logging disabled for {}: {error}",
-                    path.display()
-                );
-                None
-            }
-        }
-    });
+    let file_sink =
+        desktop_native_log_path()
+            .ok()
+            .and_then(|path| match create_file_log_sink(&path) {
+                Ok(sink) => Some(sink),
+                Err(error) => {
+                    eprintln!(
+                        "[desktop-native] file logging disabled for {}: {error}",
+                        path.display()
+                    );
+                    None
+                }
+            });
 
     let console_layer = tracing_subscriber::fmt::layer().with_filter(env_filter_from_env());
 

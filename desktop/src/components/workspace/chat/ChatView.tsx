@@ -11,7 +11,7 @@ import { WorkspaceMobilityOverlay } from "@/components/workspace/chat/surface/Wo
 import { type ChatSurfaceState, useChatSurfaceState } from "@/hooks/chat/use-chat-surface-state";
 import { useChatSelectionBoundary } from "@/hooks/chat/use-chat-selection-boundary";
 import { useCloudWorkspacePolling } from "@/hooks/chat/use-cloud-workspace-polling";
-import { useComposerTopSlot } from "@/hooks/chat/use-composer-top-slot";
+import { useComposerDockSlots } from "@/hooks/chat/use-composer-dock-slots";
 import { useSelectedCloudRuntimeRehydration } from "@/hooks/workspaces/use-selected-cloud-runtime-rehydration";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 
@@ -63,7 +63,7 @@ export function ChatView() {
   const { mode } = useChatSurfaceState();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const isSessionMode = shouldShowSessionInputChrome(mode);
-  const composerTopSlot = useComposerTopSlot();
+  const composerDockSlots = useComposerDockSlots();
 
   useCloudWorkspacePolling();
   useSelectedCloudRuntimeRehydration(selectedCloudRuntime);
@@ -88,7 +88,9 @@ export function ChatView() {
       <WorkspaceMobilityOverlay />
       <ChatComposerDock
         backdrop={isSessionMode}
-        topSlot={composerTopSlot}
+        upperSlot={composerDockSlots.upperSlot}
+        subagentSlot={composerDockSlots.subagentSlot}
+        queueSlot={composerDockSlots.queueSlot}
         footerSlot={<WorkspaceMobilityFooterRow />}
         data-telemetry-block
         data-focus-zone="chat"

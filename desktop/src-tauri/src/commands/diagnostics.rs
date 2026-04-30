@@ -4,14 +4,9 @@ use tauri::State;
 
 use crate::{
     diagnostics::{
-        export_debug_bundle_to_path,
-        save_diagnostic_json_to_path,
-        scrub_diagnostic_text,
-        suggested_bundle_file_name,
-        ExportDebugBundleOptions,
-        ExportDebugBundleResult,
-        SaveDiagnosticJsonOptions,
-        SaveDiagnosticJsonResult,
+        export_debug_bundle_to_path, save_diagnostic_json_to_path, scrub_diagnostic_text,
+        suggested_bundle_file_name, ExportDebugBundleOptions, ExportDebugBundleResult,
+        SaveDiagnosticJsonOptions, SaveDiagnosticJsonResult,
     },
     sidecar::{RuntimeStatus, SharedSidecar},
 };

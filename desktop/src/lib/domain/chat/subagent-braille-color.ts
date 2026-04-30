@@ -1,6 +1,6 @@
 import type { ToolCallItem, TranscriptState } from "@anyharness/sdk";
 
-const SUBAGENT_BRAILLE_PALETTE = [
+export const SUBAGENT_COLOR_PALETTE = [
   "color-mix(in oklab, var(--color-terminal-blue) 68%, var(--color-muted-foreground) 32%)",
   "color-mix(in oklab, var(--color-terminal-magenta) 62%, var(--color-muted-foreground) 38%)",
   "color-mix(in oklab, var(--color-highlight-muted) 70%, var(--color-muted-foreground) 30%)",
@@ -9,11 +9,16 @@ const SUBAGENT_BRAILLE_PALETTE = [
   "color-mix(in oklab, var(--color-terminal-yellow) 58%, var(--color-muted-foreground) 42%)",
 ] as const;
 
+export function resolveSubagentColor(seed: string | null | undefined): string {
+  const normalized = seed?.trim() || "subagent";
+  const index = hashString(normalized) % SUBAGENT_COLOR_PALETTE.length;
+  return SUBAGENT_COLOR_PALETTE[index];
+}
+
 export function buildSubagentBrailleColorMap(
   transcript: TranscriptState,
 ): Map<string, string> {
   const colorMap = new Map<string, string>();
-  let paletteIndex = 0;
 
   for (const turnId of transcript.turnOrder) {
     const turn = transcript.turnsById[turnId];
@@ -26,8 +31,7 @@ export function buildSubagentBrailleColorMap(
       const seed = item.toolCallId ?? item.itemId;
       if (colorMap.has(seed)) continue;
 
-      colorMap.set(seed, SUBAGENT_BRAILLE_PALETTE[paletteIndex % SUBAGENT_BRAILLE_PALETTE.length]);
-      paletteIndex += 1;
+      colorMap.set(seed, resolveSubagentColor(seed));
     }
   }
 
@@ -49,4 +53,13 @@ function isSubagentItem(item: unknown): item is ToolCallItem {
     && "semanticKind" in item
     && "nativeToolName" in item
     && (item.semanticKind === "subagent" || item.nativeToolName === "Agent");
+}
+
+function hashString(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }

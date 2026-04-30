@@ -1,4 +1,8 @@
-import { anyHarnessGitStatusKey } from "@anyharness/sdk-react";
+import {
+  anyHarnessCoworkManagedWorkspacesKey,
+  anyHarnessGitStatusKey,
+  anyHarnessSessionSubagentsKey,
+} from "@anyharness/sdk-react";
 import {
   appendHistoryTail,
   applyStreamEnvelope,
@@ -8,6 +12,7 @@ import {
   createTranscriptState,
   type Session,
   type SessionStreamHandle,
+  type ToolCallItem,
 } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -59,11 +64,20 @@ import {
   clearPendingConfigRollbackCheck,
   schedulePendingConfigRollbackCheck,
 } from "@/hooks/sessions/session-runtime-pending-config";
+import {
+  parseSubagentLaunchResult,
+  resolveSubagentLaunchDisplay,
+} from "@/lib/domain/chat/subagent-launch";
+import { useLinkedSessionMounting } from "@/hooks/chat/subagents/use-linked-session-mounting";
 
 export function useSessionRuntimeActions() {
   const queryClient = useQueryClient();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const showToast = useToastStore((state) => state.show);
+  const {
+    mountSubagentChildSession,
+    mountSubagentChildrenFromEvents,
+  } = useLinkedSessionMounting();
   const powersInCodingSessionsEnabled = useUserPreferencesStore(
     (state) => state.powersInCodingSessionsEnabled,
   );
@@ -220,6 +234,11 @@ export function useSessionRuntimeActions() {
             transcript: nextState.state.transcript,
           }),
         });
+        mountSubagentChildrenFromEvents(
+          currentSlot.workspaceId,
+          events,
+          options?.requestHeaders,
+        );
         logLatency("session.history.rehydrate.success", {
           sessionId,
           eventCount: events.length,
@@ -239,6 +258,11 @@ export function useSessionRuntimeActions() {
           transcript: nextState.transcript,
         }),
       });
+      mountSubagentChildrenFromEvents(
+        currentSlot.workspaceId,
+        events,
+        options?.requestHeaders,
+      );
       logLatency("session.history.rehydrate.success", {
         sessionId,
         eventCount: events.length,
@@ -252,7 +276,7 @@ export function useSessionRuntimeActions() {
       });
       return false;
     }
-  }, []);
+  }, [mountSubagentChildrenFromEvents]);
 
   const refreshSessionSlotMeta = useCallback(async (
     sessionId: string,
@@ -481,6 +505,72 @@ export function useSessionRuntimeActions() {
           pendingConfigChanges: reconcileResult.pendingConfigChanges,
         });
 
+        if (event.type === "subagent_turn_completed") {
+          void mountSubagentChildSession({
+            childSessionId: event.childSessionId,
+            label: event.label ?? null,
+            workspaceId: slotState.workspaceId,
+            requestHeaders: options?.requestHeaders,
+          });
+          void queryClient.invalidateQueries({
+            queryKey: anyHarnessSessionSubagentsKey(
+              currentState.runtimeUrl,
+              slotState.workspaceId,
+              sessionId,
+            ),
+          });
+        }
+
+        if (
+          event.type === "session_link_turn_completed"
+          && event.relation === "cowork_coding_session"
+        ) {
+          void queryClient.invalidateQueries({
+            queryKey: anyHarnessCoworkManagedWorkspacesKey(
+              currentState.runtimeUrl,
+              sessionId,
+            ),
+          });
+        }
+
+        if (event.type === "item_completed" && envelope.itemId) {
+          const item = result.state.transcript.itemsById[envelope.itemId];
+          if (item?.kind === "tool_call" && isSubagentMcpMutation(item)) {
+            const launchResult = parseSubagentLaunchResult(item);
+            const display = resolveSubagentLaunchDisplay(item);
+            if (launchResult?.childSessionId) {
+              void mountSubagentChildSession({
+                childSessionId: launchResult.childSessionId,
+                label: display.title,
+                workspaceId: slotState.workspaceId,
+                requestHeaders: options?.requestHeaders,
+              });
+            }
+            void queryClient.invalidateQueries({
+              queryKey: anyHarnessSessionSubagentsKey(
+                currentState.runtimeUrl,
+                slotState.workspaceId,
+                sessionId,
+              ),
+            });
+          }
+          if (
+            item?.kind === "tool_call"
+            && item.status === "completed"
+            && isCoworkCodingCreateMcpMutation(item)
+          ) {
+            void queryClient.invalidateQueries({
+              queryKey: anyHarnessCoworkManagedWorkspacesKey(
+                currentState.runtimeUrl,
+                sessionId,
+              ),
+            });
+            void queryClient.invalidateQueries({
+              queryKey: workspaceCollectionsScopeKey(currentState.runtimeUrl),
+            });
+          }
+        }
+
         if (reconcileResult.reconciledChanges.length > 0) {
           persistReconciledModePreferences(
             slotState.workspaceId,
@@ -578,6 +668,7 @@ export function useSessionRuntimeActions() {
     ]);
   }, [
     closeSessionSlotStream,
+    mountSubagentChildSession,
     persistReconciledModePreferences,
     queryClient,
     refreshSessionSlotMeta,
@@ -593,4 +684,19 @@ export function useSessionRuntimeActions() {
     rehydrateSessionSlotFromHistory,
     refreshSessionSlotMeta,
   };
+}
+
+function isSubagentMcpMutation(item: ToolCallItem): boolean {
+  const nativeToolName = item.nativeToolName?.trim().toLowerCase();
+  return nativeToolName === "mcp__subagents__create_subagent"
+    || nativeToolName === "mcp__subagents__send_subagent_message"
+    || nativeToolName === "mcp__subagents__schedule_subagent_wake";
+}
+
+function isCoworkCodingCreateMcpMutation(item: ToolCallItem): boolean {
+  const nativeToolName = item.nativeToolName?.trim().toLowerCase();
+  return nativeToolName === "mcp__cowork__create_coding_workspace"
+    || nativeToolName === "mcp__cowork__create_coding_session"
+    || nativeToolName === "mcp__cowork__send_coding_message"
+    || nativeToolName === "mcp__cowork__schedule_coding_wake";
 }

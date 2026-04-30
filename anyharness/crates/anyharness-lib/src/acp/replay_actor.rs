@@ -16,6 +16,7 @@ use super::session_actor::{
 };
 use crate::plans::service::PlanDecisionError;
 use crate::sessions::model::SessionRecord;
+use crate::sessions::runtime_event::RuntimeEventInjectionError;
 use crate::sessions::store::SessionStore;
 
 const MAX_REPLAY_GAP: Duration = Duration::from_millis(1500);
@@ -370,6 +371,10 @@ async fn handle_non_replay_command(
             let _ = respond_to.send(Err(PlanDecisionError::NotFound));
             None
         }
+        SessionCommand::InjectRuntimeEvent { respond_to, .. } => {
+            let _ = respond_to.send(Err(RuntimeEventInjectionError::SessionReplaying));
+            None
+        }
         SessionCommand::Cancel => None,
         SessionCommand::Dismiss { respond_to } => {
             let _ = respond_to.send(Ok(()));
@@ -459,6 +464,7 @@ fn pending_payload_summary(payload: &InteractionPayload) -> PendingInteractionPa
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
 
     fn ts(value: &str) -> chrono::DateTime<chrono::FixedOffset> {
         chrono::DateTime::parse_from_rfc3339(value).expect("valid timestamp")
@@ -497,5 +503,32 @@ mod tests {
             }
             _ => panic!("expected session_started"),
         }
+    }
+
+    #[tokio::test]
+    async fn replay_actor_rejects_runtime_event_injection() {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+
+        let disposition = handle_non_replay_command(
+            SessionCommand::InjectRuntimeEvent {
+                event: RuntimeInjectedSessionEvent::SessionInfoUpdate {
+                    title: Some("Renamed".to_string()),
+                    updated_at: None,
+                },
+                respond_to: tx,
+            },
+            false,
+        )
+        .await;
+
+        assert!(disposition.is_none());
+        let error = rx
+            .await
+            .expect("response")
+            .expect_err("replay should reject injection");
+        assert!(matches!(
+            error,
+            RuntimeEventInjectionError::SessionReplaying
+        ));
     }
 }

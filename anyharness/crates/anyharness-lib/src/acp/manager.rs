@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, oneshot, RwLock};
 
 use super::permission_broker::InteractionBroker;
 use super::replay_actor::{spawn_replay_actor, ReplayActorConfig};
@@ -16,6 +16,9 @@ use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::plans::service::PlanService;
 use crate::sessions::mcp::SessionMcpServer;
 use crate::sessions::model::SessionRecord;
+use crate::sessions::runtime_event::{
+    RuntimeEventInjectionError, RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
+};
 use crate::sessions::store::SessionStore;
 use anyharness_contract::v1::SessionEventEnvelope;
 
@@ -49,7 +52,6 @@ impl AcpManager {
         session_store: SessionStore,
         mcp_servers: Vec<SessionMcpServer>,
         startup_strategy: SessionStartupStrategy,
-        last_seq: i64,
         system_prompt_append: Option<String>,
         on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync + 'static>>,
         latency: Option<LatencyRequestContext>,
@@ -63,7 +65,6 @@ impl AcpManager {
             workspace_id = %session.workspace_id,
             agent_kind = %session.agent_kind,
             startup_strategy = startup_strategy_label,
-            last_seq,
             flow_id = latency_fields.flow_id,
             flow_kind = latency_fields.flow_kind,
             flow_source = latency_fields.flow_source,
@@ -92,6 +93,8 @@ impl AcpManager {
                 },
             ));
         }
+
+        let last_seq = session_store.last_event_seq(&session_id)?;
 
         let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4096);
 
@@ -154,6 +157,65 @@ impl AcpManager {
         Ok((handle, ready))
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
+    /// Inject a runtime-owned event into a session.
+    ///
+    /// If the live actor dies between handle lookup and command delivery, this
+    /// transparently removes the stale handle and appends the event offline
+    /// under the same start/inject critical section. `ActorUnavailable` is
+    /// therefore terminal from the caller's perspective, not a normal retry
+    /// signal.
+    pub(crate) async fn emit_runtime_event(
+        &self,
+        session_id: &str,
+        session_store: SessionStore,
+        event: RuntimeInjectedSessionEvent,
+    ) -> RuntimeEventInjectionResult {
+        loop {
+            let handle = {
+                let sessions = self.live_sessions.write().await;
+                if let Some(handle) = sessions.get(session_id) {
+                    handle.clone()
+                } else {
+                    return append_offline_runtime_event(session_id, &session_store, event);
+                }
+            };
+
+            let (tx, rx) = oneshot::channel();
+            let send_result = handle
+                .command_tx
+                .send(super::session_actor::SessionCommand::InjectRuntimeEvent {
+                    event: event.clone(),
+                    respond_to: tx,
+                })
+                .await
+                .map_err(|_| RuntimeEventInjectionError::ActorUnavailable);
+            let result = match send_result {
+                Ok(()) => rx
+                    .await
+                    .map_err(|_| RuntimeEventInjectionError::ActorUnavailable),
+                Err(error) => Err(error),
+            };
+            match result {
+                Ok(result) => return result,
+                Err(RuntimeEventInjectionError::ActorUnavailable) => {
+                    let mut sessions = self.live_sessions.write().await;
+                    match sessions.get(session_id) {
+                        Some(current) if Arc::ptr_eq(current, &handle) => {
+                            sessions.remove(session_id);
+                            return append_offline_runtime_event(session_id, &session_store, event);
+                        }
+                        None => {
+                            return append_offline_runtime_event(session_id, &session_store, event);
+                        }
+                        Some(_) => continue,
+                    }
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
     pub async fn start_replay_session(
         &self,
         session: SessionRecord,
@@ -213,6 +275,16 @@ impl AcpManager {
     }
 }
 
+fn append_offline_runtime_event(
+    session_id: &str,
+    session_store: &SessionStore,
+    event: RuntimeInjectedSessionEvent,
+) -> RuntimeEventInjectionResult {
+    session_store
+        .append_event_with_next_seq(session_id, event.into_session_event())
+        .map_err(|error| RuntimeEventInjectionError::PersistenceFailed(error.to_string()))
+}
+
 impl Clone for AcpManager {
     fn clone(&self) -> Self {
         Self {
@@ -228,6 +300,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
 
+    use rusqlite::params;
     use tokio::sync::{broadcast, mpsc};
 
     use super::AcpManager;
@@ -239,9 +312,12 @@ mod tests {
     use crate::agents::registry::built_in_registry;
     use crate::persistence::Db;
     use crate::plans::{service::PlanService, store::PlanStore};
-    use crate::sessions::model::SessionRecord;
+    use crate::sessions::model::{SessionEventRecord, SessionRecord};
+    use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
     use crate::sessions::store::SessionStore;
-    use anyharness_contract::v1::{SessionEventEnvelope, SessionExecutionPhase};
+    use anyharness_contract::v1::{
+        SessionEvent, SessionEventEnvelope, SessionExecutionPhase, SessionInfoUpdatePayload,
+    };
 
     fn resolved_agent(kind: AgentKind) -> ResolvedAgent {
         let descriptor = built_in_registry()
@@ -295,8 +371,25 @@ mod tests {
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
             system_prompt_append: None,
+            subagents_enabled: true,
             origin: None,
         }
+    }
+
+    fn seeded_session_store() -> SessionStore {
+        let db = Db::open_in_memory().expect("open db");
+        db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
+                 VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
+                params!["workspace-1", "2026-03-25T00:00:00Z"],
+            )?;
+            Ok(())
+        })
+        .expect("seed workspace");
+        let store = SessionStore::new(db);
+        store.insert(&session_record()).expect("insert session");
+        store
     }
 
     #[tokio::test]
@@ -328,7 +421,6 @@ mod tests {
                 SessionStore::new(Db::open_in_memory().expect("open db")),
                 vec![],
                 SessionStartupStrategy::ResumeSeqFreshNative,
-                0,
                 None,
                 None,
                 None,
@@ -338,5 +430,184 @@ mod tests {
 
         assert!(Arc::ptr_eq(&returned_handle, &handle));
         assert_eq!(ready.native_session_id, "fresh-native");
+    }
+
+    #[tokio::test]
+    async fn offline_runtime_event_injection_appends_with_next_sequence() {
+        let plan_db = Db::open_in_memory().expect("open plan db");
+        let manager = AcpManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+        let store = seeded_session_store();
+        store
+            .append_event(&SessionEventRecord {
+                id: 0,
+                session_id: "session-1".to_string(),
+                seq: 1,
+                timestamp: "2026-03-25T00:01:00Z".to_string(),
+                event_type: "turn_started".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                item_id: None,
+                payload_json: r#"{"type":"turn_started"}"#.to_string(),
+            })
+            .expect("append existing event");
+
+        let envelope = manager
+            .emit_runtime_event(
+                "session-1",
+                store.clone(),
+                RuntimeInjectedSessionEvent::SessionInfoUpdate {
+                    title: Some("Renamed".to_string()),
+                    updated_at: Some("2026-03-25T00:02:00Z".to_string()),
+                },
+            )
+            .await
+            .expect("emit runtime event");
+
+        assert_eq!(envelope.seq, 2);
+        let events = store.list_events("session-1").expect("list events");
+        assert_eq!(
+            events.iter().map(|event| event.seq).collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+        assert_eq!(events[1].event_type, "session_info_update");
+    }
+
+    #[tokio::test]
+    async fn offline_runtime_event_injection_serializes_concurrent_appends() {
+        let plan_db = Db::open_in_memory().expect("open plan db");
+        let manager = AcpManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+        let store = seeded_session_store();
+
+        let first = manager.emit_runtime_event(
+            "session-1",
+            store.clone(),
+            RuntimeInjectedSessionEvent::SessionInfoUpdate {
+                title: Some("First".to_string()),
+                updated_at: None,
+            },
+        );
+        let second = manager.emit_runtime_event(
+            "session-1",
+            store.clone(),
+            RuntimeInjectedSessionEvent::SessionInfoUpdate {
+                title: Some("Second".to_string()),
+                updated_at: None,
+            },
+        );
+
+        let (first, second) = tokio::join!(first, second);
+        let mut seqs = vec![
+            first.expect("first injection").seq,
+            second.expect("second injection").seq,
+        ];
+        seqs.sort_unstable();
+        assert_eq!(seqs, vec![1, 2]);
+
+        let events = store.list_events("session-1").expect("list events");
+        assert_eq!(
+            events.iter().map(|event| event.seq).collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+    }
+
+    #[tokio::test]
+    async fn runtime_event_injection_falls_back_when_live_handle_is_stale() {
+        let plan_db = Db::open_in_memory().expect("open plan db");
+        let manager = AcpManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+        let store = seeded_session_store();
+        let (command_tx, command_rx) = mpsc::channel(1);
+        drop(command_rx);
+        let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            "session-1",
+            command_tx,
+            event_tx,
+            Some("native-1".to_string()),
+            SessionExecutionPhase::Idle,
+        ));
+        manager
+            .live_sessions
+            .write()
+            .await
+            .insert("session-1".to_string(), handle);
+
+        let envelope = manager
+            .emit_runtime_event(
+                "session-1",
+                store.clone(),
+                RuntimeInjectedSessionEvent::SessionInfoUpdate {
+                    title: Some("Renamed".to_string()),
+                    updated_at: None,
+                },
+            )
+            .await
+            .expect("fallback append");
+
+        assert_eq!(envelope.seq, 1);
+        assert!(manager
+            .live_sessions
+            .read()
+            .await
+            .get("session-1")
+            .is_none());
+        let events = store.list_events("session-1").expect("list events");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, "session_info_update");
+    }
+
+    #[tokio::test]
+    async fn live_runtime_event_injection_routes_through_actor_command() {
+        let plan_db = Db::open_in_memory().expect("open plan db");
+        let manager = AcpManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+        let store = seeded_session_store();
+        let (command_tx, mut command_rx) = mpsc::channel(4);
+        let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            "session-1",
+            command_tx,
+            event_tx,
+            Some("native-1".to_string()),
+            SessionExecutionPhase::Idle,
+        ));
+        manager
+            .live_sessions
+            .write()
+            .await
+            .insert("session-1".to_string(), handle);
+
+        let actor = tokio::spawn(async move {
+            let Some(super::super::session_actor::SessionCommand::InjectRuntimeEvent {
+                respond_to,
+                ..
+            }) = command_rx.recv().await
+            else {
+                panic!("expected InjectRuntimeEvent");
+            };
+            let _ = respond_to.send(Ok(SessionEventEnvelope {
+                session_id: "session-1".to_string(),
+                seq: 11,
+                timestamp: "2026-03-25T00:02:00Z".to_string(),
+                turn_id: None,
+                item_id: None,
+                event: SessionEvent::SessionInfoUpdate(SessionInfoUpdatePayload {
+                    title: Some("Renamed".to_string()),
+                    updated_at: Some("2026-03-25T00:02:00Z".to_string()),
+                }),
+            }));
+        });
+
+        let envelope = manager
+            .emit_runtime_event(
+                "session-1",
+                store,
+                RuntimeInjectedSessionEvent::SessionInfoUpdate {
+                    title: Some("Renamed".to_string()),
+                    updated_at: None,
+                },
+            )
+            .await
+            .expect("emit runtime event");
+
+        assert_eq!(envelope.seq, 11);
+        actor.await.expect("actor task");
     }
 }

@@ -13,6 +13,12 @@ export type CoworkArtifactDetailResponse =
 export type CoworkThread = components["schemas"]["CoworkThread"];
 export type CreateCoworkThreadRequest =
   components["schemas"]["CreateCoworkThreadRequest"];
+export type CoworkManagedWorkspacesResponse =
+  components["schemas"]["CoworkManagedWorkspacesResponse"];
+export type CoworkManagedWorkspaceSummary =
+  components["schemas"]["CoworkManagedWorkspaceSummary"];
+export type CoworkCodingSessionSummary =
+  components["schemas"]["CoworkCodingSessionSummary"];
 type GeneratedCreateCoworkThreadResponse =
   components["schemas"]["CreateCoworkThreadResponse"];
 export type CreateCoworkThreadResponse = Omit<

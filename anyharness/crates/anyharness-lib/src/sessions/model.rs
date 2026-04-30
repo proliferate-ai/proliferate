@@ -25,6 +25,7 @@ pub struct SessionRecord {
     pub mcp_bindings_ciphertext: Option<String>,
     pub mcp_binding_summaries_json: Option<String>,
     pub system_prompt_append: Option<String>,
+    pub subagents_enabled: bool,
     pub origin: Option<OriginContext>,
 }
 
@@ -85,18 +86,23 @@ fn parse_mcp_binding_summaries(value: Option<&str>) -> Option<Vec<v1::SessionMcp
 
 impl PendingPromptRecord {
     pub fn to_contract(&self) -> v1::PendingPromptSummary {
-        let payload = PromptPayload::from_persisted(self.blocks_json.as_deref(), &self.text);
+        let payload = self.prompt_payload();
         v1::PendingPromptSummary {
             seq: self.seq,
             prompt_id: self.prompt_id.clone(),
             text: self.text.clone(),
             content_parts: payload.content_parts(),
             queued_at: self.queued_at.clone(),
+            prompt_provenance: payload.public_provenance(),
         }
     }
 
     pub fn prompt_payload(&self) -> PromptPayload {
-        PromptPayload::from_persisted(self.blocks_json.as_deref(), &self.text)
+        PromptPayload::from_persisted(
+            self.blocks_json.as_deref(),
+            &self.text,
+            self.provenance_json.as_deref(),
+        )
     }
 
     pub fn attachment_ids(&self) -> Vec<String> {
@@ -129,6 +135,7 @@ pub struct PendingPromptRecord {
     pub prompt_id: Option<String>,
     pub text: String,
     pub blocks_json: Option<String>,
+    pub provenance_json: Option<String>,
     pub queued_at: String,
 }
 

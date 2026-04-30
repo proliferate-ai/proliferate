@@ -70,6 +70,8 @@ function transcriptState(items: ToolCallItem[]): TranscriptState {
     isStreaming: false,
     lastSeq: 0,
     pendingPrompts: [],
+    linkCompletionsByCompletionId: {},
+    latestLinkCompletionBySessionLinkId: {},
   };
 }
 

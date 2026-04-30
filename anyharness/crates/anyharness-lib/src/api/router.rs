@@ -12,7 +12,7 @@ use url::form_urlencoded;
 
 use super::http::{
     agents, cowork, files, git, health, hosting, mobility, model_registries, plans, processes,
-    provider_configs, replay, repo_roots, sessions, terminals, workspaces,
+    provider_configs, replay, repo_roots, sessions, subagents, terminals, workspaces,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -79,6 +79,10 @@ pub fn build_router(state: AppState) -> Router {
             get(cowork::list_cowork_threads).post(cowork::create_cowork_thread),
         )
         .route(
+            "/cowork/sessions/{session_id}/managed-workspaces",
+            get(cowork::get_cowork_managed_workspaces),
+        )
+        .route(
             "/workspaces/{workspace_id}/cowork/manifest",
             get(cowork::get_cowork_manifest),
         )
@@ -89,6 +93,10 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}/cowork/sessions/{session_id}/mcp",
             get(cowork::get_cowork_mcp_endpoint).post(cowork::post_cowork_mcp_endpoint),
+        )
+        .route(
+            "/workspaces/{workspace_id}/sessions/{session_id}/subagents/mcp",
+            get(subagents::get_subagents_mcp_endpoint).post(subagents::post_subagents_mcp_endpoint),
         )
         .route(
             "/workspaces/{workspace_id}/display-name",
@@ -263,6 +271,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/sessions", post(sessions::create_session))
         .route("/sessions", get(sessions::list_sessions))
         .route("/sessions/{session_id}", get(sessions::get_session))
+        .route(
+            "/sessions/{session_id}/subagents",
+            get(subagents::get_session_subagents),
+        )
         .route(
             "/sessions/{session_id}/title",
             patch(sessions::update_session_title),

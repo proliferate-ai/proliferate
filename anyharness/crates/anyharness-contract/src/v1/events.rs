@@ -51,6 +51,8 @@ pub enum SessionEvent {
     ConfigOptionUpdate(ConfigOptionUpdatePayload),
     SessionStateUpdate(SessionStateUpdatePayload),
     SessionInfoUpdate(SessionInfoUpdatePayload),
+    SubagentTurnCompleted(SubagentTurnCompletedPayload),
+    SessionLinkTurnCompleted(SessionLinkTurnCompletedPayload),
     UsageUpdate(UsageUpdatePayload),
 
     PendingPromptAdded(PendingPromptAddedPayload),
@@ -79,6 +81,8 @@ impl SessionEvent {
             Self::ConfigOptionUpdate(_) => "config_option_update",
             Self::SessionStateUpdate(_) => "session_state_update",
             Self::SessionInfoUpdate(_) => "session_info_update",
+            Self::SubagentTurnCompleted(_) => "subagent_turn_completed",
+            Self::SessionLinkTurnCompleted(_) => "session_link_turn_completed",
             Self::UsageUpdate(_) => "usage_update",
             Self::PendingPromptAdded(_) => "pending_prompt_added",
             Self::PendingPromptUpdated(_) => "pending_prompt_updated",
@@ -169,6 +173,47 @@ pub struct TranscriptItemPayload {
     pub raw_output: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub content_parts: Vec<ContentPart>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_provenance: Option<PromptProvenance>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum PromptProvenance {
+    AgentSession {
+        #[serde(rename = "sourceSessionId")]
+        source_session_id: String,
+        #[serde(rename = "sessionLinkId")]
+        #[serde(skip_serializing_if = "Option::is_none")]
+        session_link_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+    SubagentWake {
+        #[serde(rename = "sessionLinkId")]
+        session_link_id: String,
+        #[serde(rename = "completionId")]
+        completion_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+    LinkWake {
+        relation: String,
+        #[serde(rename = "sessionLinkId")]
+        session_link_id: String,
+        #[serde(rename = "completionId")]
+        completion_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+    System {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -525,6 +570,43 @@ pub struct SessionInfoUpdatePayload {
     pub updated_at: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SubagentTurnOutcome {
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentTurnCompletedPayload {
+    pub completion_id: String,
+    pub session_link_id: String,
+    pub parent_session_id: String,
+    pub child_session_id: String,
+    pub child_turn_id: String,
+    pub child_last_event_seq: i64,
+    pub outcome: SubagentTurnOutcome,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionLinkTurnCompletedPayload {
+    pub relation: String,
+    pub completion_id: String,
+    pub session_link_id: String,
+    pub parent_session_id: String,
+    pub child_session_id: String,
+    pub child_turn_id: String,
+    pub child_last_event_seq: i64,
+    pub outcome: SubagentTurnOutcome,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageUpdatePayload {
@@ -548,6 +630,8 @@ pub struct PendingPromptAddedPayload {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub content_parts: Vec<ContentPart>,
     pub queued_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_provenance: Option<PromptProvenance>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -557,6 +641,8 @@ pub struct PendingPromptUpdatedPayload {
     pub text: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub content_parts: Vec<ContentPart>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_provenance: Option<PromptProvenance>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -641,5 +727,85 @@ mod tests {
         let round_tripped: ContentPart =
             serde_json::from_value(json).expect("deserialize plan reference content part");
         assert_eq!(round_tripped, part);
+    }
+
+    #[test]
+    fn subagent_turn_completed_event_round_trips() {
+        let event = SessionEvent::SubagentTurnCompleted(SubagentTurnCompletedPayload {
+            completion_id: "completion-1".to_string(),
+            session_link_id: "link-1".to_string(),
+            parent_session_id: "parent-1".to_string(),
+            child_session_id: "child-1".to_string(),
+            child_turn_id: "turn-child-1".to_string(),
+            child_last_event_seq: 42,
+            outcome: SubagentTurnOutcome::Completed,
+            label: Some("Reviewer".to_string()),
+        });
+
+        let json = serde_json::to_value(&event).expect("serialize subagent event");
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "type": "subagent_turn_completed",
+                "completionId": "completion-1",
+                "sessionLinkId": "link-1",
+                "parentSessionId": "parent-1",
+                "childSessionId": "child-1",
+                "childTurnId": "turn-child-1",
+                "childLastEventSeq": 42,
+                "outcome": "completed",
+                "label": "Reviewer"
+            })
+        );
+
+        let round_tripped: SessionEvent =
+            serde_json::from_value(json).expect("deserialize subagent event");
+        assert_eq!(round_tripped.event_type(), "subagent_turn_completed");
+        let SessionEvent::SubagentTurnCompleted(payload) = round_tripped else {
+            panic!("expected subagent turn completed event");
+        };
+        assert_eq!(payload.completion_id, "completion-1");
+        assert_eq!(payload.outcome, SubagentTurnOutcome::Completed);
+    }
+
+    #[test]
+    fn session_link_turn_completed_event_round_trips() {
+        let event = SessionEvent::SessionLinkTurnCompleted(SessionLinkTurnCompletedPayload {
+            relation: "cowork_coding_session".to_string(),
+            completion_id: "completion-1".to_string(),
+            session_link_id: "link-1".to_string(),
+            parent_session_id: "parent-1".to_string(),
+            child_session_id: "child-1".to_string(),
+            child_turn_id: "turn-child-1".to_string(),
+            child_last_event_seq: 42,
+            outcome: SubagentTurnOutcome::Failed,
+            label: Some("Fixer".to_string()),
+        });
+
+        let json = serde_json::to_value(&event).expect("serialize link event");
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "type": "session_link_turn_completed",
+                "relation": "cowork_coding_session",
+                "completionId": "completion-1",
+                "sessionLinkId": "link-1",
+                "parentSessionId": "parent-1",
+                "childSessionId": "child-1",
+                "childTurnId": "turn-child-1",
+                "childLastEventSeq": 42,
+                "outcome": "failed",
+                "label": "Fixer"
+            })
+        );
+
+        let round_tripped: SessionEvent =
+            serde_json::from_value(json).expect("deserialize link event");
+        assert_eq!(round_tripped.event_type(), "session_link_turn_completed");
+        let SessionEvent::SessionLinkTurnCompleted(payload) = round_tripped else {
+            panic!("expected session link turn completed event");
+        };
+        assert_eq!(payload.relation, "cowork_coding_session");
+        assert_eq!(payload.outcome, SubagentTurnOutcome::Failed);
     }
 }

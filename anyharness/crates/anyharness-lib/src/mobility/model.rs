@@ -1,7 +1,9 @@
+use crate::sessions::links::model::SessionLinkRecord;
 use crate::sessions::model::{
     PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord, SessionEventRecord,
     SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
 };
+use crate::sessions::subagents::model::{SubagentCompletionRecord, SubagentWakeScheduleRecord};
 use crate::workspaces::access_model::WorkspaceAccessRecord;
 
 pub const MAX_MOBILITY_ARCHIVE_BODY_BYTES: usize = 128 * 1024 * 1024;
@@ -23,6 +25,9 @@ pub struct WorkspaceMobilityArchiveData {
     pub files: Vec<MobilityFileData>,
     pub deleted_paths: Vec<String>,
     pub sessions: Vec<WorkspaceMobilitySessionBundleData>,
+    pub session_links: Vec<SessionLinkRecord>,
+    pub session_link_completions: Vec<SubagentCompletionRecord>,
+    pub session_link_wake_schedules: Vec<SubagentWakeScheduleRecord>,
 }
 
 #[derive(Debug, Clone)]

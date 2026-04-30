@@ -28,10 +28,13 @@ It owns:
 
 - the in-memory `session_id -> LiveSessionHandle` map
 - the shared `InteractionBroker`
+- the start/inject sequencing critical section for session events
 
 Its main jobs are:
 
 - prevent duplicate actor startup for the same session
+- seed actor event sinks from the latest durable event seq
+- coordinate offline runtime event injection with actor startup
 - build `SessionActorConfig`
 - create the live broadcast channel
 - spawn the actor and return its control handle
@@ -65,7 +68,7 @@ It includes:
 - session launch env
 - session store
 - shared interaction broker
-- resume metadata such as `is_resume` and `last_seq`
+- resume metadata such as startup strategy and `last_seq`
 
 This is the handoff from durable orchestration into live execution.
 
@@ -131,7 +134,9 @@ The live start flow is:
    - code: `anyharness/crates/anyharness-lib/src/sessions/runtime.rs`
 2. It resolves workspace and agent dependencies.
 3. It calls `AcpManager::start_session(...)`.
-4. `AcpManager` deduplicates by session id and spawns an actor if needed.
+4. `AcpManager` enters the start/inject critical section, deduplicates by
+   session id, reads the latest durable event seq, and spawns an actor if
+   needed.
 5. The actor launches the resolved agent-process executable with merged
    workspace and session env.
 6. The actor creates an ACP `ClientSideConnection` over child stdio.
@@ -144,6 +149,54 @@ The live start flow is:
 10. The actor emits startup events and persists the initial live-config
     snapshot.
 11. The actor returns the native ACP session id back to the caller.
+
+### Start/Inject Sequence Invariant
+
+AnyHarness event `seq` values are session-local and monotonic. Live actors
+normally own seq assignment through `SessionEventSink`, but runtime-owned
+events may also need to be appended while no actor is live.
+
+To prevent duplicate seq values:
+
+- `AcpManager::start_session(...)` reads `last_event_seq` only while holding
+  the live-session registry write lock.
+- offline runtime event injection takes the same lock, re-checks that no live
+  actor exists, and appends by using one store operation that computes the next
+  seq and inserts the event in a single transaction.
+- live runtime event injection routes through `SessionCommand::InjectRuntimeEvent`
+  so the actor’s `SessionEventSink` remains the only seq owner while the actor
+  is live.
+
+This lock is a process-local critical section. It must cover both the final
+live-handle check and the durable seq read/append.
+
+Injected runtime events use strict persistence: if the event cannot be written
+to `session_events`, the injection returns an error and must not report success.
+Existing ACP-derived events currently keep their best-effort persistence
+behavior because they are emitted while processing ACP notifications; injected
+events are runtime-owned calls where the caller relies on the returned envelope
+as durable truth.
+
+Replay actors reject runtime event injection. They are read-only playback
+surfaces over existing events and must not mutate session history.
+
+### Turn-Finished Notifications
+
+At the end of each prompt turn, the session actor emits a
+`SessionTurnFinishResult` to `SessionRuntime`.
+
+The result contains:
+
+- session id
+- turn id
+- outcome: completed, failed, or cancelled
+- optional stop reason
+- last durable event seq for the child session
+
+`SessionRuntime` maps that actor result into extension-facing
+`SessionTurnFinishedContext` and calls registered session extensions. This is
+how cowork autosave and subagent parent wake behavior observe completed turns
+without re-querying "latest" event state after the fact.
 
 ### Prompt Flow
 

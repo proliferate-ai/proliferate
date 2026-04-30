@@ -4,9 +4,12 @@ import type {
   PermissionInteractionContext,
   PlanEntry,
   PermissionInteractionOption,
+  PromptProvenance,
   ProposedPlanContentPart,
   ProposedPlanDecisionContentPart,
   SessionEventEnvelope,
+  SessionLinkTurnCompletedEvent,
+  SubagentTurnCompletedEvent,
   StopReason,
   TranscriptItemStatus,
   UserInputQuestion,
@@ -35,6 +38,8 @@ export interface TranscriptState {
   isStreaming: boolean;
   lastSeq: number;
   pendingPrompts: PendingPromptEntry[];
+  linkCompletionsByCompletionId: Record<string, LinkCompletionMetadata>;
+  latestLinkCompletionBySessionLinkId: Record<string, string>;
 }
 
 export interface PendingPromptEntry {
@@ -43,6 +48,21 @@ export interface PendingPromptEntry {
   text: string;
   contentParts: ContentPart[];
   queuedAt: string;
+  promptProvenance?: PromptProvenance | null;
+}
+
+export interface LinkCompletionMetadata {
+  relation: string;
+  completionId: string;
+  sessionLinkId: string;
+  parentSessionId: string;
+  childSessionId: string;
+  childTurnId: string;
+  childLastEventSeq: number;
+  outcome: SubagentTurnCompletedEvent["outcome"] | SessionLinkTurnCompletedEvent["outcome"];
+  label: string | null;
+  seq: number;
+  timestamp: string;
 }
 
 export interface TurnRecord {
@@ -94,6 +114,7 @@ export interface UserMessageItem extends TranscriptBaseItem {
   kind: "user_message";
   text: string;
   isStreaming: boolean;
+  promptProvenance?: PromptProvenance | null;
 }
 
 export interface AssistantProseItem extends TranscriptBaseItem {
@@ -205,4 +226,5 @@ export type ToolCallSemanticKind =
   | "mode_switch"
   | "cowork_artifact_create"
   | "cowork_artifact_update"
+  | "cowork_coding"
   | "other";
