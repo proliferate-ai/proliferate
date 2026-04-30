@@ -3,16 +3,21 @@ import {
   resolveSessionControlPresentation,
 } from "@/lib/domain/chat/session-mode-control";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls";
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Check, ChevronDown } from "@/components/ui/icons";
+import type { ConfiguredSessionControlKey } from "@/config/session-control-presentations";
 import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
+import { PopoverButton } from "@/components/ui/PopoverButton";
+import { Check, ChevronDown } from "@/components/ui/icons";
+import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { ComposerControlButton } from "./ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 
+type ModeControlDescriptor = LiveSessionControlDescriptor & {
+  key: ConfiguredSessionControlKey;
+};
+
 interface SessionModeControlProps {
   agentKind: string | null;
-  control: LiveSessionControlDescriptor;
+  control: ModeControlDescriptor;
 }
 
 export function SessionModeControl({ agentKind, control }: SessionModeControlProps) {
@@ -20,7 +25,7 @@ export function SessionModeControl({ agentKind, control }: SessionModeControlPro
   const currentValue = currentOption?.value ?? null;
   const currentPresentation = resolveSessionControlPresentation(
     agentKind,
-    "collaboration_mode",
+    control.key,
     currentValue,
   );
   const currentDetail = currentPresentation.shortLabel ?? currentOption?.label ?? control.detail;
@@ -66,22 +71,15 @@ export function SessionModeControl({ agentKind, control }: SessionModeControlPro
           {control.options.map((option) => {
             const presentation = resolveSessionControlPresentation(
               agentKind,
-              "collaboration_mode",
+              control.key,
               option.value,
             );
             return (
               <PopoverMenuItem
                 key={option.value}
+                icon={<SessionControlIcon icon={presentation.icon} className="size-3.5 text-muted-foreground" />}
                 label={presentation.shortLabel ?? option.label}
-                icon={(
-                  <SessionControlIcon
-                    icon={presentation.icon}
-                    className="size-3.5 text-muted-foreground"
-                  />
-                )}
-                trailing={option.selected
-                  ? <Check className="size-3.5 shrink-0 text-foreground/60" />
-                  : undefined}
+                trailing={option.selected ? <Check className="size-3.5 shrink-0 text-foreground/60" /> : null}
                 onClick={() => {
                   control.onSelect(option.value);
                   close();

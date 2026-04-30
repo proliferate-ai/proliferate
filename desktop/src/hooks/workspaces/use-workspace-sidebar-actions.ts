@@ -15,6 +15,7 @@ import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
+import { markWorkspaceViewed } from "@/stores/preferences/workspace-ui-store";
 
 export function useWorkspaceSidebarActions() {
   const location = useLocation();
@@ -88,6 +89,9 @@ export function useWorkspaceSidebarActions() {
     }
 
     navigateToWorkspaceShell();
+    if (workspaceId === mobility.selectedLogicalWorkspaceId) {
+      markWorkspaceViewed(workspaceId);
+    }
     const latencyFlowId = startLatencyFlow({
       flowKind: "workspace_switch",
       source: "sidebar",

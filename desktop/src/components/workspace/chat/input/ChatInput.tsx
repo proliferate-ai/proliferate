@@ -32,16 +32,14 @@ import { serializeChatDraftToPrompt } from "@/lib/domain/chat/file-mentions";
 import { canAttachPromptContent } from "@/lib/domain/chat/prompt-content";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { Button } from "@/components/ui/Button";
-import { AddMessage, Shield } from "@/components/ui/icons";
 import { ChatComposerActions } from "./ChatComposerActions";
+import { ComposerAddActionPopover } from "./ComposerAddActionPopover";
 import { ComposerMentionEditor } from "./ComposerMentionEditor";
 import { ModelSelector } from "./ModelSelector";
 import { SessionConfigControls } from "./SessionConfigControls";
 import { Textarea } from "@/components/ui/Textarea";
 import { ChatComposerSurface } from "./ChatComposerSurface";
 import { DraftAttachmentPreviewList } from "@/components/workspace/chat/content/PromptContentRenderer";
-import { ComposerControlButton } from "./ComposerControlButton";
-import { PlanPickerPopover } from "./PlanPickerPopover";
 
 /**
  * The composer surface: mention-aware editor + model / session controls +
@@ -78,20 +76,44 @@ export function ChatInput() {
   const attachments = usePromptAttachments(activeSessionId, promptCapabilities);
   const planAttachments = usePlanDraftAttachments(selectedWorkspaceId);
   const supportsAttachments = canAttachPromptContent(promptCapabilities);
-  const canAttach = !isEditingQueuedPrompt && !isDisabled && supportsAttachments;
+  const canUseUtilityActions =
+    !isEditingQueuedPrompt && !isDisabled && !areRuntimeControlsDisabled;
+  const canAttach = canUseUtilityActions && supportsAttachments;
   // Plan references are resolved to markdown text by the runtime, so they do
   // not depend on file/image attachment capabilities.
-  const canAttachPlan = !isEditingQueuedPrompt && !isDisabled && !!selectedWorkspaceId;
-  const attachControlTitle = supportsAttachments
-    ? "Attach file"
-    : activeSessionId
-      ? "Attachments are not supported by this agent"
-      : "Attachments are available after a session starts";
-  const reviewControlTitle = activeReview.run || activeReview.startingReview
-    ? "A review is already active for this session"
-    : activeSessionId
-      ? "Review current implementation"
-      : "Review is available after a session starts";
+  const canAttachPlan = canUseUtilityActions && !!selectedWorkspaceId;
+  const canStartReview = canUseUtilityActions
+    && reviewActions.canStartCodeReview
+    && !activeReview.run
+    && !activeReview.startingReview;
+  const attachFileDetail = (() => {
+    if (canAttach) {
+      return "Upload image or text context.";
+    }
+    if (!supportsAttachments) {
+      return activeSessionId
+        ? "Attachments are not supported by this agent"
+        : "Attachments are available after a session starts";
+    }
+    return "Chat is unavailable right now";
+  })();
+  const attachPlanDetail = canAttachPlan
+    ? "Attach an existing plan snapshot."
+    : selectedWorkspaceId
+      ? "Chat is unavailable right now"
+      : "Select a workspace before attaching a plan";
+  const reviewDetail = (() => {
+    if (canStartReview) {
+      return "Start review agents for the current implementation.";
+    }
+    if (activeReview.run || activeReview.startingReview) {
+      return "A review is already active for this session";
+    }
+    if (!activeSessionId) {
+      return "Review is available after a session starts";
+    }
+    return "Review agents are unavailable right now";
+  })();
   const promptText = serializeChatDraftToPrompt(draft);
   const effectiveIsEmpty = isEditingQueuedPrompt
     ? editDraft.trim().length === 0
@@ -348,40 +370,19 @@ export function ChatInput() {
 
             <div className="flex items-center gap-[5px]">
               {!isEditingQueuedPrompt && (
-                <div
-                  className={`flex items-center gap-[5px] ${
-                    areRuntimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-                  }`}
-                >
-                  <ComposerControlButton
-                    iconOnly
-                    disabled={!canAttach}
-                    icon={<AddMessage className="size-4" />}
-                    label="Attach file"
-                    title={attachControlTitle}
-                    onClick={() => fileInputRef.current?.click()}
-                    aria-label="Attach file"
-                  />
-                  <PlanPickerPopover
-                    draftWorkspaceId={selectedWorkspaceId}
-                    disabled={!canAttachPlan}
-                  />
-                  <ComposerControlButton
-                    iconOnly
-                    disabled={
-                      !reviewActions.canStartCodeReview
-                      || !!activeReview.run
-                      || !!activeReview.startingReview
-                    }
-                    icon={<Shield className="size-4" />}
-                    label="Review implementation"
-                    title={reviewControlTitle}
-                    onClick={(event) => {
-                      reviewActions.startCodeReview(rectToReviewAnchor(event.currentTarget.getBoundingClientRect()));
-                    }}
-                    aria-label="Review implementation"
-                  />
-                </div>
+                <ComposerAddActionPopover
+                  canAttachFile={canAttach}
+                  attachFileDetail={attachFileDetail}
+                  canAttachPlan={canAttachPlan}
+                  attachPlanDetail={attachPlanDetail}
+                  canStartReview={canStartReview}
+                  reviewDetail={reviewDetail}
+                  draftWorkspaceId={selectedWorkspaceId}
+                  onAttachFile={() => fileInputRef.current?.click()}
+                  onStartReview={(anchor) => {
+                    reviewActions.startCodeReview(anchor);
+                  }}
+                />
               )}
               <ChatComposerActions
                 isRunning={isRunning}
@@ -397,15 +398,4 @@ export function ChatInput() {
       </ChatComposerSurface>
     </div>
   );
-}
-
-function rectToReviewAnchor(rect: DOMRect) {
-  return {
-    top: rect.top,
-    right: rect.right,
-    bottom: rect.bottom,
-    left: rect.left,
-    width: rect.width,
-    height: rect.height,
-  };
 }

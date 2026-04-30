@@ -1,7 +1,10 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { useQuery } from "@tanstack/react-query";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/collections";
-import { buildWorkspaceCollections } from "@/lib/domain/workspaces/collections";
+import {
+  buildWorkspaceCollections,
+  workspaceCollectionsNeedActivityRefresh,
+} from "@/lib/domain/workspaces/collections";
 import { listCloudWorkspaces } from "@/lib/integrations/cloud/workspaces";
 import { useCloudAvailabilityState } from "@/hooks/cloud/use-cloud-availability-state";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -11,6 +14,8 @@ import {
   logLatency,
   startLatencyTimer,
 } from "@/lib/infra/debug-latency";
+
+const WORKSPACE_ACTIVITY_REFRESH_INTERVAL_MS = 5_000;
 
 export function useWorkspaces() {
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
@@ -49,5 +54,9 @@ export function useWorkspaces() {
       return collections;
     },
     enabled: canQuery,
+    refetchInterval: (query) =>
+      workspaceCollectionsNeedActivityRefresh(query.state.data)
+        ? WORKSPACE_ACTIVITY_REFRESH_INTERVAL_MS
+        : false,
   });
 }

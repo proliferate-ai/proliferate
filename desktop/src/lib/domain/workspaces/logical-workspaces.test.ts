@@ -3,6 +3,8 @@ import type { CloudMobilityWorkspaceSummary } from "@/lib/integrations/cloud/cli
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import {
   buildLogicalWorkspaces,
+  latestLogicalWorkspaceTimestamp,
+  logicalWorkspaceRelatedIds,
   replaceLogicalWorkspaceBranch,
   resolveLogicalWorkspaceMaterializationId,
 } from "@/lib/domain/workspaces/logical-workspaces";
@@ -220,6 +222,34 @@ describe("logical workspaces", () => {
       logicalWorkspaces[0]!,
       localWorkspace.id,
     )).toBe(cloudSelectionId);
+  });
+
+  it("groups logical, local, and cloud materialization ids for attention timestamps", () => {
+    const localWorkspace = makeWorkspace({
+      id: "local-1",
+      branch: "gannet",
+    });
+    const cloudWorkspace = makeCloudWorkspace({
+      id: "cloud-1",
+      branch: "gannet",
+    });
+    const logicalWorkspace = buildLogicalWorkspaces({
+      localWorkspaces: [localWorkspace],
+      repoRoots: [],
+      cloudWorkspaces: [cloudWorkspace],
+      currentSelectionId: localWorkspace.id,
+    })[0]!;
+
+    expect(logicalWorkspaceRelatedIds(logicalWorkspace)).toEqual([
+      "remote:github:proliferate-ai:proliferate:gannet",
+      "local-1",
+      "cloud:cloud-1",
+    ]);
+    expect(latestLogicalWorkspaceTimestamp({
+      "remote:github:proliferate-ai:proliferate:gannet": "2026-04-13T10:00:00.000Z",
+      "cloud:cloud-1": "2026-04-13T10:05:00.000Z",
+      "local-1": "2026-04-13T10:10:00.000Z",
+    }, logicalWorkspace)).toBe("2026-04-13T10:10:00.000Z");
   });
 
   it("replaces the branch segment while preserving logical workspace identity", () => {

@@ -1,10 +1,10 @@
 import type { MouseEvent, ReactNode } from "react";
 import {
   ArrowRight,
-  BrailleSweepBadge,
   CircleAlert,
   Clock,
   MessageSquare,
+  Spinner,
 } from "@/components/ui/icons";
 import { IconButton } from "@/components/ui/IconButton";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -39,10 +39,10 @@ export function SidebarStatusGlyph({
     case "waiting_input":
     case "waiting_plan":
     case "iterating":
-      return <BrailleSweepBadge className="text-sm text-info" />;
+      return <Spinner className="size-4 text-sidebar-muted-foreground opacity-60" />;
     case "queued_prompt":
       return <MessageSquare className="size-3 text-info" />;
-    case "unread":
+    case "needs_review":
       return <div className="size-1.5 rounded-full bg-unread" />;
   }
 }

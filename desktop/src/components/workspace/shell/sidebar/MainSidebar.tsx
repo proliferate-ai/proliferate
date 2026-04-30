@@ -46,6 +46,7 @@ import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/use-workspace-display-name-actions";
 import { useWorkspaceSidebarActions } from "@/hooks/workspaces/use-workspace-sidebar-actions";
 import { useWorkspaceSidebarState } from "@/hooks/workspaces/use-workspace-sidebar-state";
+import { useSessionActivityReconciler } from "@/hooks/sessions/use-session-activity-reconciler";
 import { useRepoSetupModalStore } from "@/stores/ui/repo-setup-modal-store";
 import { RepoSetupModal } from "@/components/workspace/repo-setup/RepoSetupModal";
 import {
@@ -78,6 +79,7 @@ function removeRepoKeys(current: Set<string>, keys: Iterable<string>): Set<strin
 }
 
 export function MainSidebar() {
+  useSessionActivityReconciler();
   const actions = useWorkspaceSidebarActions();
   const supportContext = useSidebarSupportContext();
   const {

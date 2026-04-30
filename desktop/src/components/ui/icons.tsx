@@ -311,6 +311,43 @@ export function CircleQuestion({ className, ...props }: IconProps) {
   );
 }
 
+export function ReadModeFilled({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M6.5 3C5.12 3 4 4.12 4 5.5v13C4 19.88 5.12 21 6.5 21h5.76a6.48 6.48 0 0 1-1.16-2H6.5a.5.5 0 0 1-.5-.5v-13a.5.5 0 0 1 .5-.5h7.09L18 9.41v1.33a6.44 6.44 0 0 1 2 .57V9a1 1 0 0 0-.29-.71l-5-5A1 1 0 0 0 14 3H6.5Z" />
+      <path d="M13 4.5V9a1 1 0 0 0 1 1h4.5L13 4.5Z" />
+      <path d="M8 10.25A.75.75 0 0 1 8.75 9h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 8 10.25Z" />
+      <path d="M8.75 12.5a.75.75 0 0 0 0 1.5h2.5a.75.75 0 0 0 0-1.5h-2.5Z" />
+      <path fillRule="evenodd" clipRule="evenodd" d="M17.25 12.5a4.75 4.75 0 0 0-3.62 7.83l-1.1 1.1a.75.75 0 1 0 1.06 1.06l1.1-1.1a4.75 4.75 0 1 0 2.56-8.89Zm0 1.5a3.25 3.25 0 1 0 0 6.5a3.25 3.25 0 0 0 0-6.5Z" />
+    </svg>
+  );
+}
+
+export function EditModeFilled({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M5.5 3A2.5 2.5 0 0 0 3 5.5v13A2.5 2.5 0 0 0 5.5 21h8.37a2.5 2.5 0 0 0 1.77-.73l4.63-4.63a2.5 2.5 0 0 0 .73-1.77V5.5A2.5 2.5 0 0 0 18.5 3h-13Zm3.25 5h6.5a.75.75 0 0 1 0 1.5h-6.5a.75.75 0 0 1 0-1.5Zm0 3.5h3.5a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1 0-1.5Z" />
+      <path d="M17.44 11.66a1.5 1.5 0 0 1 2.12 2.12l-4.8 4.8a2 2 0 0 1-.86.5l-2.03.58a.75.75 0 0 1-.93-.93l.58-2.03a2 2 0 0 1 .5-.86l5.42-5.42Z" />
+    </svg>
+  );
+}
+
+export function ShieldCheckFilled({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path fillRule="evenodd" clipRule="evenodd" d="M11.67 2.08a1 1 0 0 1 .66 0l7 2.5A1 1 0 0 1 20 5.52V11c0 5.2-3.25 8.85-7.65 10.9a.82.82 0 0 1-.7 0C7.25 19.85 4 16.2 4 11V5.52a1 1 0 0 1 .67-.94l7-2.5Zm4.86 7.7a.75.75 0 0 0-1.06-1.06L10.75 13.44l-2.22-2.22a.75.75 0 1 0-1.06 1.06l2.75 2.75c.3.3.77.3 1.06 0l5.25-5.25Z" />
+    </svg>
+  );
+}
+
+export function MessageSquareFilled({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M5.5 4A3.5 3.5 0 0 0 2 7.5v7A3.5 3.5 0 0 0 5.5 18H6v2.25a.75.75 0 0 0 1.2.6L11 18h7.5a3.5 3.5 0 0 0 3.5-3.5v-7A3.5 3.5 0 0 0 18.5 4h-13Z" />
+    </svg>
+  );
+}
+
 export function AddMessage({ className, ...props }: IconProps) {
   return (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" {...props}>

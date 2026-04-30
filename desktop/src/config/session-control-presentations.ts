@@ -10,13 +10,12 @@ export type SessionControlTone =
   | "info";
 
 export type SessionControlIconKey =
-  | "ask"
+  | "chat"
   | "edit"
-  | "inspect"
   | "plan"
-  | "permission"
-  | "unknown"
-  | "unrestricted";
+  | "read"
+  | "shieldCheck"
+  | "zap";
 
 export interface ConfiguredSessionControlValue {
   value: string;
@@ -41,7 +40,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Default",
         description: "Ask before each action.",
         tone: "info",
-        icon: "ask",
+        icon: "read",
         isDefault: true,
       },
       {
@@ -66,7 +65,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Don't Ask",
         description: "Auto-approve most actions.",
         tone: "warning",
-        icon: "permission",
+        icon: "shieldCheck",
       },
       {
         value: "bypassPermissions",
@@ -74,7 +73,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Bypass",
         description: "Skip permission checks.",
         tone: "destructive",
-        icon: "unrestricted",
+        icon: "zap",
       },
     ],
   },
@@ -86,7 +85,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Read Only",
         description: "Inspect and plan without editing.",
         tone: "info",
-        icon: "inspect",
+        icon: "read",
         isDefault: true,
       },
       {
@@ -103,7 +102,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Full Access",
         description: "Allow unrestricted changes.",
         tone: "destructive",
-        icon: "unrestricted",
+        icon: "zap",
       },
     ],
     collaboration_mode: [
@@ -113,7 +112,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Default",
         description: "Standard collaboration behavior.",
         tone: "info",
-        icon: "ask",
+        icon: "chat",
         isDefault: true,
       },
       {
@@ -134,7 +133,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "Default",
         description: "Ask before each action.",
         tone: "info",
-        icon: "ask",
+        icon: "read",
         isDefault: true,
       },
       {
@@ -151,7 +150,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         shortLabel: "YOLO",
         description: "Skip permission checks.",
         tone: "destructive",
-        icon: "unrestricted",
+        icon: "zap",
       },
       {
         value: "plan",

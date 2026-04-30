@@ -1,6 +1,8 @@
-import type { ConfiguredSessionControlValue } from "@/config/session-control-presentations";
+import type {
+  ConfiguredSessionControlValue,
+  SessionControlIconKey,
+} from "@/config/session-control-presentations";
 import type { AutomationModeResolution } from "@/lib/domain/automations/mode-selection";
-import type { SessionModeIconKey } from "@/lib/domain/chat/session-mode-control";
 import { PickerEmptyRow, PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
 import { PillControlButton } from "@/components/ui/PillControlButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
@@ -40,12 +42,7 @@ export function AutomationModePicker({
         <PillControlButton
           aria-label="Mode"
           disabled={disabled || options.length === 0}
-          icon={(
-            <SessionControlIcon
-              icon={trigger.icon}
-              className="size-3.5 shrink-0 text-muted-foreground"
-            />
-          )}
+          icon={<SessionControlIcon icon={trigger.icon} className="size-3.5 shrink-0 text-muted-foreground" />}
           label={trigger.label}
           disclosure
           className="max-w-[12rem]"
@@ -62,12 +59,7 @@ export function AutomationModePicker({
             <>
               <PopoverMenuItem
                 label="Default mode"
-                icon={(
-                  <SessionControlIcon
-                    icon="unknown"
-                    className="size-3.5 text-muted-foreground"
-                  />
-                )}
+                icon={<SessionControlIcon icon="read" className="size-3.5 text-muted-foreground" />}
                 onClick={() => {
                   onDefaultSelect();
                   close();
@@ -86,12 +78,7 @@ export function AutomationModePicker({
                   <PopoverMenuItem
                     key={option.value}
                     label={option.shortLabel ?? option.label}
-                    icon={(
-                      <SessionControlIcon
-                        icon={option.icon}
-                        className="size-3.5 text-muted-foreground"
-                      />
-                    )}
+                    icon={<SessionControlIcon icon={option.icon} className="size-3.5 text-muted-foreground" />}
                     onClick={() => {
                       onSelect(option.value);
                       close();
@@ -118,7 +105,7 @@ export function AutomationModePicker({
 
 function resolveTrigger(
   resolution: AutomationModeResolution,
-): { label: string; icon: SessionModeIconKey } {
+): { label: string; icon: SessionControlIconKey | null } {
   if (resolution.state === "selected") {
     return {
       label: resolution.value.shortLabel ?? resolution.value.label,
@@ -130,11 +117,11 @@ function resolveTrigger(
       label: resolution.source === "savedNull" || resolution.source === "overrideNull"
         ? "Default mode"
         : resolution.value?.shortLabel ?? resolution.value?.label ?? "Default mode",
-      icon: resolution.value?.icon ?? "unknown",
+      icon: resolution.value?.icon ?? "read",
     };
   }
   if (resolution.state === "savedUnavailable") {
-    return { label: "Saved mode unavailable", icon: "unknown" };
+    return { label: "Saved mode unavailable", icon: null };
   }
-  return { label: "Mode", icon: "unknown" };
+  return { label: "Mode", icon: null };
 }

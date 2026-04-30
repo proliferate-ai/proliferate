@@ -124,6 +124,19 @@ export function buildWorkspaceCollections(
   };
 }
 
+export function workspaceCollectionsNeedActivityRefresh(
+  collections: WorkspaceCollections | undefined,
+): boolean {
+  if (!collections) {
+    return false;
+  }
+
+  return collections.localWorkspaces.some((workspace) => {
+    const phase = workspace.executionSummary?.phase;
+    return phase === "running" || phase === "awaiting_interaction";
+  });
+}
+
 export function upsertLocalWorkspaceCollections(
   collections: WorkspaceCollections | undefined,
   workspace: Workspace,

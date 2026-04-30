@@ -1,7 +1,10 @@
 import type { GitStatusSnapshot, RepoRoot, Workspace } from "@anyharness/sdk";
 import type { SidebarSessionActivityState } from "@/lib/domain/sessions/activity";
 import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud-workspace-creation";
-import type { LogicalWorkspace } from "@/lib/domain/workspaces/logical-workspaces";
+import {
+  latestLogicalWorkspaceTimestamp,
+  type LogicalWorkspace,
+} from "@/lib/domain/workspaces/logical-workspaces";
 import type {
   CloudWorkspaceStatus,
   CloudWorkspaceSummary,
@@ -110,7 +113,7 @@ export interface SidebarWorkspaceItemState {
   detailIndicators: SidebarDetailIndicator[];
   cloudStatus: CloudWorkspaceStatus | null;
   lastInteracted: string | null;
-  unread: boolean;
+  needsReview: boolean;
 }
 
 export interface SidebarGroupState {
@@ -129,8 +132,7 @@ function logicalGroupName(workspace: LogicalWorkspace): string {
     ?? workspace.sourceRoot;
 }
 
-interface WorkspaceUnreadInput {
-  isActive: boolean;
+interface WorkspaceNeedsReviewInput {
   isArchived: boolean;
   lastInteracted: string | null | undefined;
   lastViewedAt: string | null | undefined;
@@ -239,13 +241,12 @@ export function sidebarEntryIsCloud(
   return entry.source === "cloud";
 }
 
-export function isWorkspaceUnread({
-  isActive,
+export function isWorkspaceNeedsReview({
   isArchived,
   lastInteracted,
   lastViewedAt,
-}: WorkspaceUnreadInput): boolean {
-  if (isActive || isArchived || !lastInteracted) {
+}: WorkspaceNeedsReviewInput): boolean {
+  if (isArchived || !lastInteracted) {
     return false;
   }
 
@@ -381,7 +382,10 @@ export function buildSidebarGroupStates(args: {
       const items = groupWorkspaces.map((entry) => {
         const active = entry.id === args.selectedLogicalWorkspaceId;
         const archived = args.archivedSet.has(entry.id);
-        const lastInteracted = args.workspaceLastInteracted[entry.id] ?? null;
+        const lastInteracted = latestLogicalWorkspaceTimestamp(
+          args.workspaceLastInteracted,
+          entry,
+        );
         const preferredLocalWorkspace = entry.localWorkspace;
         const preferredCloudWorkspace = entry.cloudWorkspace;
         const variant = sidebarWorkspaceVariantForLogicalWorkspace(entry);
@@ -403,11 +407,10 @@ export function buildSidebarGroupStates(args: {
               workspace: preferredCloudWorkspace,
             })
             : entry.displayName;
-        const unread = isWorkspaceUnread({
-          isActive: active,
+        const needsReview = isWorkspaceNeedsReview({
           isArchived: archived,
           lastInteracted,
-          lastViewedAt: args.lastViewedAt[entry.id],
+          lastViewedAt: latestLogicalWorkspaceTimestamp(args.lastViewedAt, entry),
         });
         const activity = activeWorkspaceActivity(entry, args.workspaceActivities);
 
@@ -423,7 +426,7 @@ export function buildSidebarGroupStates(args: {
           variant,
           statusIndicator: sidebarStatusIndicatorFromActivity({
             activity,
-            unread,
+            needsReview,
             pendingPromptCount: args.pendingPromptCounts?.[entry.id] ?? 0,
             errorAction: { kind: "open_workspace", workspaceId: entry.id },
           }),
@@ -432,7 +435,7 @@ export function buildSidebarGroupStates(args: {
             ? preferredCloudWorkspace.status as CloudWorkspaceStatus
             : null,
           lastInteracted,
-          unread,
+          needsReview,
         };
       });
       const visibleItems = items.filter((item) =>

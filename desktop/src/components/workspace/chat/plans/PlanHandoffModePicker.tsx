@@ -38,10 +38,7 @@ export function PlanHandoffModePicker({
             aria-label={`Handoff mode: ${selectedLabel}`}
           >
             <span className="flex min-w-0 items-center gap-2">
-              <SessionControlIcon
-                icon={selected?.icon ?? "unknown"}
-                className="size-3.5 shrink-0 text-muted-foreground"
-              />
+              <SessionControlIcon icon={selected?.icon} className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="truncate">{selectedLabel}</span>
             </span>
             <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
@@ -68,10 +65,7 @@ export function PlanHandoffModePicker({
                   }}
                   className="h-auto w-full justify-start rounded-lg px-2.5 py-2 text-left"
                 >
-                  <SessionControlIcon
-                    icon={option.icon}
-                    className="size-3.5 shrink-0 text-muted-foreground"
-                  />
+                  <SessionControlIcon icon={option.icon} className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm text-foreground">
                       {option.shortLabel ?? option.label}

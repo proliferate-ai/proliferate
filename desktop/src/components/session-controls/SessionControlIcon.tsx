@@ -2,32 +2,32 @@ import type { ComponentType } from "react";
 import type { SessionControlIconKey } from "@/config/session-control-presentations";
 import {
   CircleQuestion,
-  FileText,
-  Pencil,
+  EditModeFilled,
+  MessageSquareFilled,
   PlanningIcon,
-  Shield,
+  ReadModeFilled,
+  ShieldCheckFilled,
   Zap,
 } from "@/components/ui/icons";
 
-type IconComponent = ComponentType<{ className?: string }>;
+interface SessionControlIconProps {
+  icon: SessionControlIconKey | null | undefined;
+  className?: string;
+}
 
-const SESSION_CONTROL_ICONS: Record<SessionControlIconKey, IconComponent> = {
-  ask: CircleQuestion,
-  edit: Pencil,
-  inspect: FileText,
-  permission: Shield,
+const SESSION_CONTROL_ICONS: Record<SessionControlIconKey, ComponentType<{ className?: string }>> = {
+  chat: MessageSquareFilled,
+  edit: EditModeFilled,
   plan: PlanningIcon,
-  unknown: CircleQuestion,
-  unrestricted: Zap,
+  read: ReadModeFilled,
+  shieldCheck: ShieldCheckFilled,
+  zap: Zap,
 };
 
 export function SessionControlIcon({
   icon,
-  className,
-}: {
-  icon: SessionControlIconKey;
-  className?: string;
-}) {
-  const Icon = SESSION_CONTROL_ICONS[icon];
+  className = "size-3.5",
+}: SessionControlIconProps) {
+  const Icon = icon ? SESSION_CONTROL_ICONS[icon] : CircleQuestion;
   return <Icon className={className} />;
 }
