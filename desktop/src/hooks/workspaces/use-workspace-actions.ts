@@ -29,6 +29,7 @@ import {
   resolveWorktreeCreationParams,
 } from "@/lib/domain/workspaces/workspace-creation";
 import { ensureRuntimeReady } from "./runtime-ready";
+import { DESKTOP_ORIGIN } from "@/lib/integrations/anyharness/origin";
 import {
   elapsedMs,
   logLatency,
@@ -109,6 +110,7 @@ export function useWorkspaceActions() {
       const readyRuntimeUrl = await ensureRuntimeReady();
       const response = await getAnyHarnessClient({ runtimeUrl: readyRuntimeUrl }).workspaces.create({
         path: sourceRoot,
+        origin: DESKTOP_ORIGIN,
       });
       return response.workspace;
     },
@@ -147,6 +149,7 @@ export function useWorkspaceActions() {
         newBranchName: params.branchName,
         baseBranch: params.baseRef || undefined,
         setupScript: params.setupScript?.trim() || undefined,
+        origin: DESKTOP_ORIGIN,
       }, latencyFlowId
         ? { headers: getLatencyFlowRequestHeaders(latencyFlowId) }
         : undefined);

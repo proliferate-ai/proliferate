@@ -1,6 +1,7 @@
 use rusqlite::{params, Connection, OptionalExtension};
 
 use super::model::WorkspaceRecord;
+use crate::origin::{decode_origin_json, encode_origin_json};
 use crate::persistence::Db;
 
 #[derive(Clone)]
@@ -154,12 +155,13 @@ impl WorkspaceStore {
 }
 
 fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<()> {
+    let origin_json = encode_origin_json(&r.origin)?;
     conn.execute(
         "INSERT INTO workspaces (
             id, kind, repo_root_id, path, surface, source_repo_root_path, source_workspace_id,
             git_provider, git_owner, git_repo_name, original_branch, current_branch, display_name,
-            created_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+            origin_json, created_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
         params![
             r.id,
             r.kind,
@@ -174,6 +176,7 @@ fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<
             r.original_branch,
             r.current_branch,
             r.display_name,
+            origin_json,
             r.created_at,
             r.updated_at,
         ],
@@ -182,8 +185,10 @@ fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<
 }
 
 fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceRecord> {
+    let id: String = row.get("id")?;
+    let origin_json: Option<String> = row.get("origin_json")?;
     Ok(WorkspaceRecord {
-        id: row.get("id")?,
+        id: id.clone(),
         kind: row.get("kind")?,
         repo_root_id: row.get("repo_root_id")?,
         path: row.get("path")?,
@@ -196,6 +201,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceRecord> {
         original_branch: row.get("original_branch")?,
         current_branch: row.get("current_branch")?,
         display_name: row.get("display_name")?,
+        origin: decode_origin_json("workspaces", &id, origin_json),
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
@@ -204,6 +210,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceRecord> {
 #[cfg(test)]
 mod tests {
     use super::{WorkspaceRecord, WorkspaceStore};
+    use crate::origin::OriginContext;
     use crate::persistence::Db;
     use crate::sessions::model::SessionRecord;
     use crate::sessions::store::SessionStore;
@@ -223,6 +230,7 @@ mod tests {
             original_branch: Some("main".to_string()),
             current_branch: Some("main".to_string()),
             display_name: None,
+            origin: None,
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         }
@@ -250,7 +258,53 @@ mod tests {
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
             system_prompt_append: None,
+            origin: None,
         }
+    }
+
+    #[test]
+    fn stores_and_loads_workspace_origin() {
+        let db = Db::open_in_memory().expect("open db");
+        let store = WorkspaceStore::new(db);
+
+        let mut workspace = workspace_record("workspace-1", "worktree", "/tmp/workspace-1");
+        workspace.origin = Some(OriginContext::human_desktop());
+
+        store.insert(&workspace).expect("insert workspace");
+        let stored = store
+            .find_by_id(&workspace.id)
+            .expect("find workspace")
+            .expect("workspace record");
+
+        assert_eq!(stored.origin, Some(OriginContext::human_desktop()));
+    }
+
+    #[test]
+    fn malformed_workspace_origin_is_omitted() {
+        let db = Db::open_in_memory().expect("open db");
+        let store = WorkspaceStore::new(db.clone());
+
+        let workspace = workspace_record("workspace-1", "worktree", "/tmp/workspace-1");
+        store.insert(&workspace).expect("insert workspace");
+
+        db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE workspaces SET origin_json = ?1 WHERE id = ?2",
+                [
+                    "{\"kind\":\"automation\",\"entrypoint\":\"cloud\"}",
+                    &workspace.id,
+                ],
+            )?;
+            Ok(())
+        })
+        .expect("corrupt origin JSON");
+
+        let stored = store
+            .find_by_id(&workspace.id)
+            .expect("find workspace")
+            .expect("workspace record");
+
+        assert_eq!(stored.origin, None);
     }
 
     #[test]

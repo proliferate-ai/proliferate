@@ -3,6 +3,7 @@ import type { ReplayRecordingSummary } from "@anyharness/sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveSessionViewState } from "@/lib/domain/sessions/activity";
 import { createEmptySessionSlot } from "@/lib/integrations/anyharness/session-runtime";
+import { DESKTOP_ORIGIN } from "@/lib/integrations/anyharness/origin";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 
@@ -234,9 +235,10 @@ async function resolveReplayWorkspaceId(
     }
   }
 
-  const response = await client.workspaces.resolveFromPath(
-    PLAYGROUND_REPLAY_WORKSPACE_PATH,
-  );
+  const response = await client.workspaces.resolveFromPath({
+    path: PLAYGROUND_REPLAY_WORKSPACE_PATH,
+    origin: DESKTOP_ORIGIN,
+  });
   return response.workspace.id;
 }
 

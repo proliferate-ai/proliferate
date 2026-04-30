@@ -419,6 +419,10 @@ fn to_contract_session_record(record: SessionRecord) -> MobilitySessionRecord {
         closed_at: record.closed_at,
         dismissed_at: record.dismissed_at,
         system_prompt_append: record.system_prompt_append,
+        origin: record
+            .origin
+            .as_ref()
+            .map(crate::origin::OriginContext::to_contract),
     }
 }
 
@@ -613,6 +617,9 @@ fn from_contract_session_record(
         mcp_bindings_ciphertext: None,
         mcp_binding_summaries_json: None,
         system_prompt_append: record.system_prompt_append,
+        origin: record
+            .origin
+            .map(crate::origin::OriginContext::from_contract),
     }
 }
 

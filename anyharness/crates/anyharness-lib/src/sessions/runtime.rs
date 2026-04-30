@@ -37,6 +37,7 @@ use crate::agents::registry::built_in_registry;
 use crate::agents::resolver::resolve_agent;
 use crate::api::http::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::cowork::runtime::CoworkSessionHooks;
+use crate::origin::OriginContext;
 use crate::plans::model::PlanRecord;
 use crate::plans::service::{PlanDecisionError, PlanService};
 use crate::sessions::model::PromptAttachmentState;
@@ -329,6 +330,7 @@ impl SessionRuntime {
         system_prompt_append: Option<Vec<String>>,
         mcp_servers: Vec<SessionMcpServer>,
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+        origin: OriginContext,
         latency: Option<&LatencyRequestContext>,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
         self.access_gate
@@ -362,6 +364,7 @@ impl SessionRuntime {
             system_prompt_append,
             mcp_servers,
             mcp_binding_summaries,
+            origin,
         )?;
         tracing::info!(
             workspace_id = %workspace_id,
@@ -470,6 +473,7 @@ impl SessionRuntime {
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
             system_prompt_append: None,
+            origin: Some(OriginContext::system_local_runtime()),
         };
         self.session_service
             .store()
@@ -517,6 +521,7 @@ impl SessionRuntime {
         system_prompt_append: Option<Vec<String>>,
         mcp_servers: Vec<SessionMcpServer>,
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+        origin: OriginContext,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
         let system_prompt_append = join_system_prompt_append(system_prompt_append);
         let mcp_bindings_ciphertext =
@@ -533,6 +538,7 @@ impl SessionRuntime {
                 mcp_bindings_ciphertext,
                 mcp_binding_summaries_json,
                 system_prompt_append,
+                origin,
             )
             .map_err(map_create_session_service_error)
     }
@@ -1921,6 +1927,7 @@ mod tests {
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
             system_prompt_append: None,
+            origin: None,
         }
     }
 

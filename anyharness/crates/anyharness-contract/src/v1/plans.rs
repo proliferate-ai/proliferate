@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::{ProposedPlanDecisionState, ProposedPlanNativeResolutionState, Session};
+use super::{OriginContext, ProposedPlanDecisionState, ProposedPlanNativeResolutionState, Session};
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -78,6 +78,8 @@ pub struct HandoffPlanRequest {
     pub mode_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub instruction: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<OriginContext>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]

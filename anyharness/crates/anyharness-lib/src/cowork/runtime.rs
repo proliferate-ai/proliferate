@@ -12,6 +12,7 @@ use super::mcp_auth::CoworkMcpAuth;
 use super::model::{CoworkRootRecord, CoworkThreadRecord};
 use super::service::CoworkService;
 use crate::git::GitService;
+use crate::origin::OriginContext;
 use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;
 use crate::sessions::mcp::{SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer};
@@ -296,6 +297,7 @@ impl CoworkRuntime {
             Some(repo_root.default_branch.as_deref().unwrap_or("main")),
             None,
             "cowork",
+            OriginContext::cowork(),
         )?;
         tracing::info!(
             thread_id = %thread_id,
@@ -313,6 +315,7 @@ impl CoworkRuntime {
             None,
             mcp_servers,
             mcp_binding_summaries,
+            OriginContext::cowork(),
         ) {
             Ok(session) => session,
             Err(error) => {

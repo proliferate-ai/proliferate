@@ -217,6 +217,7 @@ mod tests {
             original_branch: Some("main".to_string()),
             current_branch: Some("main".to_string()),
             display_name: None,
+            origin: None,
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         }

@@ -6,6 +6,7 @@ use super::model::{
     SessionBackgroundWorkTrackerKind, SessionEventRecord, SessionLiveConfigSnapshotRecord,
     SessionRawNotificationRecord, SessionRecord,
 };
+use crate::origin::{decode_origin_json, encode_origin_json};
 use crate::persistence::Db;
 use crate::sessions::prompt::PromptPayload;
 
@@ -972,8 +973,10 @@ impl SessionStore {
 }
 
 fn map_session(row: &rusqlite::Row) -> rusqlite::Result<SessionRecord> {
+    let id: String = row.get("id")?;
+    let origin_json: Option<String> = row.get("origin_json")?;
     Ok(SessionRecord {
-        id: row.get("id")?,
+        id: id.clone(),
         workspace_id: row.get("workspace_id")?,
         agent_kind: row.get("agent_kind")?,
         native_session_id: row.get("native_session_id")?,
@@ -993,6 +996,7 @@ fn map_session(row: &rusqlite::Row) -> rusqlite::Result<SessionRecord> {
         mcp_bindings_ciphertext: row.get("mcp_bindings_ciphertext")?,
         mcp_binding_summaries_json: row.get("mcp_binding_summaries_json")?,
         system_prompt_append: row.get("system_prompt_append")?,
+        origin: decode_origin_json("sessions", &id, origin_json),
     })
 }
 
@@ -1073,13 +1077,14 @@ fn map_prompt_attachment(row: &rusqlite::Row) -> rusqlite::Result<PromptAttachme
 }
 
 fn insert_session_row(conn: &rusqlite::Connection, record: &SessionRecord) -> rusqlite::Result<()> {
+    let origin_json = encode_origin_json(&record.origin)?;
     conn.execute(
         "INSERT INTO sessions (id, workspace_id, agent_kind, native_session_id,
          requested_model_id, current_model_id, requested_mode_id, current_mode_id,
          title, thinking_level_id, thinking_budget_tokens, status, created_at,
          updated_at, last_prompt_at, closed_at, dismissed_at, mcp_bindings_ciphertext,
-         mcp_binding_summaries_json, system_prompt_append)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+         mcp_binding_summaries_json, system_prompt_append, origin_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
         params![
             record.id,
             record.workspace_id,
@@ -1101,6 +1106,7 @@ fn insert_session_row(conn: &rusqlite::Connection, record: &SessionRecord) -> ru
             record.mcp_bindings_ciphertext,
             record.mcp_binding_summaries_json,
             record.system_prompt_append,
+            origin_json,
         ],
     )?;
     Ok(())
@@ -1272,6 +1278,7 @@ fn map_background_work(row: &rusqlite::Row) -> rusqlite::Result<SessionBackgroun
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::origin::OriginContext;
     use crate::persistence::Db;
 
     fn count_rows(db: &Db, table: &str, session_id: &str) -> i64 {
@@ -1314,7 +1321,26 @@ mod tests {
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
             system_prompt_append: None,
+            origin: None,
         }
+    }
+
+    #[test]
+    fn stores_and_loads_session_origin() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_workspace(&db);
+
+        let store = SessionStore::new(db);
+        let mut record = session_record();
+        record.origin = Some(OriginContext::cowork());
+
+        store.insert(&record).expect("insert session");
+        let stored = store
+            .find_by_id("session-1")
+            .expect("find session")
+            .expect("session record");
+
+        assert_eq!(stored.origin, Some(OriginContext::cowork()));
     }
 
     #[test]

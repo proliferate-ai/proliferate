@@ -7,6 +7,7 @@ pub mod files;
 pub mod git;
 pub mod hosting;
 pub mod mobility;
+pub mod origin;
 pub mod persistence;
 pub mod plans;
 pub mod processes;

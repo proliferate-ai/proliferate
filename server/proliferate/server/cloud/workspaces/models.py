@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from datetime import datetime
 from typing import Literal
 
@@ -14,6 +16,8 @@ from proliferate.server.cloud.credentials.models import (
     allowed_agent_kinds,
     ready_agent_kinds,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CreateCloudWorkspaceRequest(BaseModel):
@@ -55,6 +59,13 @@ class RepoRef(BaseModel):
     base_branch: str = Field(serialization_alias="baseBranch")
 
 
+class OriginContext(BaseModel):
+    """Advisory provenance metadata; not authoritative for policy decisions."""
+
+    kind: Literal["human", "cowork", "api", "system"]
+    entrypoint: Literal["desktop", "cloud", "local_runtime", "cowork"]
+
+
 class WorkspaceSummary(BaseModel):
     id: str
     display_name: str | None = Field(serialization_alias="displayName")
@@ -77,6 +88,7 @@ class WorkspaceSummary(BaseModel):
         default=None,
         serialization_alias="repoFilesLastFailedPath",
     )
+    origin: OriginContext | None = None
 
 
 class WorkspaceDetail(WorkspaceSummary):
@@ -104,6 +116,22 @@ def _repo_ref(workspace: CloudWorkspace) -> RepoRef:
     )
 
 
+def _origin_payload(workspace: CloudWorkspace) -> OriginContext | None:
+    if not workspace.origin_json:
+        return None
+    try:
+        raw = json.loads(workspace.origin_json)
+        if not isinstance(raw, dict):
+            raise ValueError("origin JSON must be an object")
+        return OriginContext.model_validate(raw)
+    except Exception as exc:
+        logger.warning(
+            "invalid cloud workspace origin JSON",
+            extra={"table": "cloud_workspace", "row_id": str(workspace.id), "error": str(exc)},
+        )
+        return None
+
+
 def workspace_summary_payload(
     workspace: CloudWorkspace,
     *,
@@ -129,6 +157,7 @@ def workspace_summary_payload(
         post_ready_started_at=_to_iso(workspace.repo_post_ready_started_at),
         post_ready_completed_at=_to_iso(workspace.repo_post_ready_completed_at),
         repo_files_last_failed_path=workspace.repo_files_last_failed_path,
+        origin=_origin_payload(workspace),
     )
 
 
@@ -158,6 +187,7 @@ def workspace_detail_payload(
         post_ready_started_at=_to_iso(workspace.repo_post_ready_started_at),
         post_ready_completed_at=_to_iso(workspace.repo_post_ready_completed_at),
         repo_files_last_failed_path=workspace.repo_files_last_failed_path,
+        origin=_origin_payload(workspace),
         allowed_agent_kinds=allowed_agent_kinds(),
         ready_agent_kinds=ready_agent_kinds(credential_statuses),
         anyharness_workspace_id=workspace.anyharness_workspace_id,

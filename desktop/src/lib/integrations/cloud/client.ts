@@ -37,6 +37,7 @@ export type BillingUrlResponse        = components["schemas"]["BillingUrlRespons
 export type OverageSettingsResponse   = components["schemas"]["OverageSettingsResponse"];
 export type CloudWorkspaceSummary     = components["schemas"]["WorkspaceSummary"];
 export type CloudWorkspaceDetail      = components["schemas"]["WorkspaceDetail"];
+export type CloudOriginContext        = components["schemas"]["OriginContext"];
 export type CloudConnectionInfo       = components["schemas"]["WorkspaceConnection"];
 export type CloudRepoBranchesResponse = components["schemas"]["RepoBranchesResponse"];
 export type CloudRepoConfigSummary    = components["schemas"]["CloudRepoConfigSummary"];

@@ -3,6 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::OriginContext;
 use super::{
     ContentPart, InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
     PermissionInteractionOption, SessionLiveConfigSnapshot, SessionMcpBindingSummary,
@@ -120,6 +121,8 @@ pub struct Session {
     pub dismissed_at: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pending_prompts: Vec<PendingPromptSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<OriginContext>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -149,6 +152,8 @@ pub struct CreateSessionRequest {
     pub mcp_servers: Option<Vec<SessionMcpServer>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<OriginContext>,
 }
 
 impl fmt::Debug for CreateSessionRequest {
@@ -176,6 +181,7 @@ impl fmt::Debug for CreateSessionRequest {
                     .as_ref()
                     .map(|summaries| summaries.len()),
             )
+            .field("origin", &self.origin)
             .finish()
     }
 }
@@ -497,6 +503,7 @@ mod tests {
                 }),
             ]),
             mcp_binding_summaries: None,
+            origin: None,
         };
 
         let json = serde_json::to_value(&request).expect("serialize create request");
@@ -607,6 +614,7 @@ mod tests {
             closed_at: None,
             dismissed_at: None,
             pending_prompts: vec![],
+            origin: None,
         };
 
         let json = serde_json::to_value(&session).expect("serialize session");

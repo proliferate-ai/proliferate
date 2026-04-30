@@ -16,10 +16,15 @@ import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
 export class WorkspacesClient {
   constructor(private readonly transport: AnyHarnessTransport) {}
 
-  async resolveFromPath(path: string): Promise<ResolveWorkspaceResponse> {
+  async resolveFromPath(
+    input: string | ResolveWorkspaceFromPathRequest,
+  ): Promise<ResolveWorkspaceResponse> {
+    const body = typeof input === "string"
+      ? ({ path: input } satisfies ResolveWorkspaceFromPathRequest)
+      : input;
     return this.transport.post<ResolveWorkspaceResponse>(
       "/v1/workspaces/resolve",
-      { path } satisfies ResolveWorkspaceFromPathRequest,
+      body,
     );
   }
 

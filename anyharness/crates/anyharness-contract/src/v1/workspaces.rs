@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::OriginContext;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkspaceExecutionPhase {
@@ -52,6 +54,8 @@ pub struct Workspace {
     pub display_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_summary: Option<WorkspaceExecutionSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<OriginContext>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -101,12 +105,16 @@ pub struct WorkspaceSessionLaunchCatalog {
 #[serde(rename_all = "camelCase")]
 pub struct ResolveWorkspaceFromPathRequest {
     pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<OriginContext>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWorkspaceRequest {
     pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<OriginContext>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -119,6 +127,8 @@ pub struct CreateWorktreeWorkspaceRequest {
     pub base_branch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub setup_script: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<OriginContext>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

@@ -38,6 +38,7 @@ import {
   cancelLatencyFlow,
   getLatencyFlowRequestHeaders,
 } from "@/lib/infra/latency-flow";
+import { DESKTOP_ORIGIN } from "@/lib/integrations/anyharness/origin";
 
 interface SessionCreationDeps {
   ensureWorkspaceSessions: (workspaceId: string) => Promise<WorkspaceSession[]>;
@@ -407,6 +408,7 @@ export function useSessionCreationActions({
             ? mcpBindingSummaries
             : undefined,
           systemPromptAppend,
+          origin: DESKTOP_ORIGIN,
         }, requestOptions);
 
         annotateLatencyFlow(options.latencyFlowId, {

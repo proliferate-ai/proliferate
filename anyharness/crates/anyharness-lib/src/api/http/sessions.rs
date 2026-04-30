@@ -20,6 +20,7 @@ use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::acp::permission_broker::PermissionDecision;
 use crate::app::AppState;
+use crate::origin::OriginContext;
 use crate::sessions::mcp::{bindings_from_contract, validate_binding_summaries};
 use crate::sessions::runtime::{
     CreateAndStartSessionError, EnsureLiveSessionError, InteractionResolutionRequest,
@@ -65,6 +66,7 @@ pub async fn create_session(
     let agent_kind = req.agent_kind.clone();
     let model_id = req.model_id.clone();
     let mode_id = req.mode_id.clone();
+    let origin = request_origin_or_api_default(req.origin.clone(), "create_session");
     let mcp_servers = bindings_from_contract(req.mcp_servers.clone().unwrap_or_default());
     if let Some(summaries) = req.mcp_binding_summaries.as_deref() {
         validate_binding_summaries(summaries)
@@ -99,6 +101,7 @@ pub async fn create_session(
             req.system_prompt_append,
             mcp_servers,
             req.mcp_binding_summaries,
+            origin,
             latency.as_ref(),
         )
         .await
@@ -1044,6 +1047,22 @@ async fn session_to_contract(
         .session_to_contract(record)
         .await
         .map_err(|error| ApiError::internal(error.to_string()))
+}
+
+fn request_origin_or_api_default(
+    origin: Option<anyharness_contract::v1::OriginContext>,
+    operation: &'static str,
+) -> OriginContext {
+    match origin {
+        Some(origin) => OriginContext::from_contract(origin),
+        None => {
+            tracing::warn!(
+                operation,
+                "AnyHarness request omitted origin; defaulting to api/local_runtime"
+            );
+            OriginContext::api_local_runtime()
+        }
+    }
 }
 
 #[cfg(test)]

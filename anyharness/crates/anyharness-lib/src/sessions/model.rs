@@ -1,5 +1,6 @@
 use anyharness_contract::v1;
 
+use crate::origin::OriginContext;
 use crate::sessions::prompt::{PromptPayload, StoredPromptBlock};
 
 #[derive(Debug, Clone)]
@@ -24,6 +25,7 @@ pub struct SessionRecord {
     pub mcp_bindings_ciphertext: Option<String>,
     pub mcp_binding_summaries_json: Option<String>,
     pub system_prompt_append: Option<String>,
+    pub origin: Option<OriginContext>,
 }
 
 impl SessionRecord {
@@ -65,6 +67,7 @@ impl SessionRecord {
             closed_at: self.closed_at.clone(),
             dismissed_at: self.dismissed_at.clone(),
             pending_prompts: Vec::new(),
+            origin: self.origin.as_ref().map(OriginContext::to_contract),
         }
     }
 }

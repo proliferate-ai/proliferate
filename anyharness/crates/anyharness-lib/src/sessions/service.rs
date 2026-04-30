@@ -12,6 +12,7 @@ use crate::agents::catalog::model_registries;
 use crate::agents::model::{ModelRegistryMetadata, ResolvedAgentStatus};
 use crate::agents::registry::built_in_registry;
 use crate::agents::resolver::resolve_agent;
+use crate::origin::OriginContext;
 use crate::workspaces::store::WorkspaceStore;
 
 pub struct SessionService {
@@ -88,6 +89,7 @@ impl SessionService {
         mcp_bindings_ciphertext: Option<String>,
         mcp_binding_summaries_json: Option<String>,
         system_prompt_append: Option<String>,
+        origin: OriginContext,
     ) -> Result<SessionRecord, CreateSessionError> {
         let started = Instant::now();
         tracing::info!(
@@ -208,6 +210,7 @@ impl SessionService {
             mcp_bindings_ciphertext,
             mcp_binding_summaries_json,
             system_prompt_append,
+            origin: Some(origin),
         };
 
         self.session_store

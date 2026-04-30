@@ -1307,6 +1307,7 @@ class TestCloudWorkspaces:
             "gitRepoName": "rocket",
             "baseBranch": "main",
             "branchName": "pure-drift",
+            "origin": {"kind": "system", "entrypoint": "local_runtime"},
         }
 
         no_github = await client.post("/v1/cloud/workspaces", headers=headers, json=request)
@@ -1344,6 +1345,19 @@ class TestCloudWorkspaces:
         assert payload["allowedAgentKinds"] == ["claude", "codex", "gemini"]
         assert payload["readyAgentKinds"] == ["claude"]
         assert payload["runtimeGeneration"] == 0
+        assert payload["origin"] == {"kind": "human", "entrypoint": "cloud"}
+
+        list_response = await client.get("/v1/cloud/workspaces", headers=headers)
+        assert list_response.status_code == 200
+        list_payload = list_response.json()
+        assert list_payload[0]["origin"] == {"kind": "human", "entrypoint": "cloud"}
+
+        detail_response = await client.get(
+            f"/v1/cloud/workspaces/{payload['id']}",
+            headers=headers,
+        )
+        assert detail_response.status_code == 200
+        assert detail_response.json()["origin"] == {"kind": "human", "entrypoint": "cloud"}
 
     @pytest.mark.asyncio
     async def test_create_workspace_requires_github_repo_access(

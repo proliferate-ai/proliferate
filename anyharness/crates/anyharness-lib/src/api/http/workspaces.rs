@@ -21,6 +21,7 @@ use super::workspaces_contract::{
     workspace_session_launch_catalog_to_contract, workspace_to_contract_with_summary,
 };
 use crate::app::AppState;
+use crate::origin::OriginContext;
 use crate::repo_roots::model::RepoRootRecord;
 use crate::sessions::execution_summary::idle_workspace_execution_summary;
 use crate::workspaces::model::WorkspaceRecord;
@@ -42,8 +43,9 @@ pub async fn resolve_workspace(
 ) -> Result<Json<ResolveWorkspaceResponse>, ApiError> {
     let workspace_runtime = state.workspace_runtime.clone();
     let path = req.path;
+    let origin = request_origin_or_api_default(req.origin, "resolve_workspace");
     let result = run_blocking("resolve", move || {
-        workspace_runtime.resolve_from_path(&path)
+        workspace_runtime.resolve_from_path_with_origin(&path, origin)
     })
     .await?
     .map_err(|e| ApiError::bad_request(e.to_string(), "WORKSPACE_RESOLVE_FAILED"))?;
@@ -68,9 +70,12 @@ pub async fn create_workspace(
 ) -> Result<Json<ResolveWorkspaceResponse>, ApiError> {
     let workspace_runtime = state.workspace_runtime.clone();
     let path = req.path;
-    let result = run_blocking("create", move || workspace_runtime.create_workspace(&path))
-        .await?
-        .map_err(|e| ApiError::bad_request(e.to_string(), "WORKSPACE_CREATE_FAILED"))?;
+    let origin = request_origin_or_api_default(req.origin, "create_workspace");
+    let result = run_blocking("create", move || {
+        workspace_runtime.create_workspace_with_origin(&path, origin)
+    })
+    .await?
+    .map_err(|e| ApiError::bad_request(e.to_string(), "WORKSPACE_CREATE_FAILED"))?;
     Ok(Json(
         resolve_workspace_response_to_contract(&state, result).await?,
     ))
@@ -102,6 +107,7 @@ pub async fn create_worktree(
     let new_branch_name = req.new_branch_name;
     let base_branch = req.base_branch.clone();
     let setup_script = req.setup_script.clone();
+    let origin = request_origin_or_api_default(req.origin, "create_worktree");
     let repo_root_id_for_task = repo_root_id.clone();
     let has_setup_script = setup_script
         .as_deref()
@@ -126,12 +132,14 @@ pub async fn create_worktree(
     let result = run_blocking("worktree", {
         let base_branch = base_branch.clone();
         move || {
-            workspace_runtime.create_worktree(
+            workspace_runtime.create_worktree_with_surface(
                 &repo_root_id_for_task,
                 &target_path,
                 &new_branch_name,
                 base_branch.as_deref(),
                 None,
+                "standard",
+                origin,
             )
         }
     })
@@ -488,6 +496,22 @@ fn repo_root_to_contract(record: RepoRootRecord) -> RepoRoot {
         remote_url: record.remote_url,
         created_at: record.created_at,
         updated_at: record.updated_at,
+    }
+}
+
+fn request_origin_or_api_default(
+    origin: Option<anyharness_contract::v1::OriginContext>,
+    operation: &'static str,
+) -> OriginContext {
+    match origin {
+        Some(origin) => OriginContext::from_contract(origin),
+        None => {
+            tracing::warn!(
+                operation,
+                "AnyHarness request omitted origin; defaulting to api/local_runtime"
+            );
+            OriginContext::api_local_runtime()
+        }
     }
 }
 

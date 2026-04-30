@@ -425,7 +425,10 @@ async def resolve_remote_workspace(
         response = await client.post(
             f"{runtime_url}/v1/workspaces/resolve",
             headers=_auth_headers(access_token),
-            json={"path": runtime_workdir},
+            json={
+                "path": runtime_workdir,
+                "origin": {"kind": "human", "entrypoint": "cloud"},
+            },
         )
         response.raise_for_status()
         try:

@@ -84,6 +84,10 @@ pub(super) fn workspace_to_contract_with_summary(
         current_branch: record.current_branch,
         display_name: record.display_name,
         execution_summary: Some(execution_summary),
+        origin: record
+            .origin
+            .as_ref()
+            .map(crate::origin::OriginContext::to_contract),
         created_at: record.created_at,
         updated_at: record.updated_at,
     }

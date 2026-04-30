@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::ContentPart;
+use super::{ContentPart, OriginContext};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -187,6 +187,8 @@ pub struct MobilitySessionRecord {
     pub dismissed_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system_prompt_append: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<OriginContext>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

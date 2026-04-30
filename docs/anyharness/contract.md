@@ -90,6 +90,10 @@ Owns workspace-facing transport types:
 - worktree creation request and response
 - setup-script execution payload
 
+Workspace and session `origin` fields are advisory provenance read models only.
+They must not be used as authority for authorization, billing, mutability,
+sandbox ownership, MCP inheritance, or policy selection.
+
 ### `sessions.rs`
 
 Owns session-facing transport types:

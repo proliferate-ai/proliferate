@@ -1817,6 +1817,22 @@ export interface components {
              */
             ok: boolean;
         };
+        /**
+         * OriginContext
+         * @description Advisory provenance metadata; not authoritative for policy decisions.
+         */
+        OriginContext: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "human" | "cowork" | "api" | "system";
+            /**
+             * Entrypoint
+             * @enum {string}
+             */
+            entrypoint: "desktop" | "cloud" | "local_runtime" | "cowork";
+        };
         /** OverageSettingsRequest */
         OverageSettingsRequest: {
             /** Enabled */
@@ -2388,6 +2404,7 @@ export interface components {
             postReadyCompletedAt: string | null;
             /** Repofileslastfailedpath */
             repoFilesLastFailedPath?: string | null;
+            origin?: components["schemas"]["OriginContext"] | null;
             /** Allowedagentkinds */
             allowedAgentKinds: string[];
             /** Readyagentkinds */
@@ -2451,6 +2468,7 @@ export interface components {
             postReadyCompletedAt: string | null;
             /** Repofileslastfailedpath */
             repoFilesLastFailedPath?: string | null;
+            origin?: components["schemas"]["OriginContext"] | null;
         };
     };
     responses: never;

@@ -2814,6 +2814,7 @@ mod tests {
                 mcp_bindings_ciphertext: None,
                 mcp_binding_summaries_json: None,
                 system_prompt_append: None,
+                origin: None,
             })
             .expect("seed session");
         store

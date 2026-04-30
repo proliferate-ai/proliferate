@@ -88,6 +88,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0025_session_pending_prompt_blocks",
         include_str!("sql/0025_session_pending_prompt_blocks.sql"),
     ),
+    (
+        "0026_workspace_session_origin",
+        include_str!("sql/0026_workspace_session_origin.sql"),
+    ),
 ];
 
 const CUSTOM_MIGRATIONS: &[(&str, fn(&Transaction<'_>) -> rusqlite::Result<()>)] = &[(

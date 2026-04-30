@@ -15,6 +15,7 @@ use super::types::{
     CreateWorktreeResult, ProjectSetupDetectionResult, ResolveRepoRootError,
     SetWorkspaceDisplayNameError, SetupScriptExecutionResult, SetupScriptExecutionStatus,
 };
+use crate::origin::OriginContext;
 use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;
 
@@ -47,11 +48,27 @@ impl WorkspaceRuntime {
     }
 
     pub fn resolve_from_path(&self, path: &str) -> anyhow::Result<WorkspaceResolution> {
-        self.resolve_or_create_workspace(path, true)
+        self.resolve_from_path_with_origin(path, OriginContext::api_local_runtime())
+    }
+
+    pub fn resolve_from_path_with_origin(
+        &self,
+        path: &str,
+        origin: OriginContext,
+    ) -> anyhow::Result<WorkspaceResolution> {
+        self.resolve_or_create_workspace(path, true, origin)
     }
 
     pub fn create_workspace(&self, path: &str) -> anyhow::Result<WorkspaceResolution> {
-        self.resolve_or_create_workspace(path, false)
+        self.create_workspace_with_origin(path, OriginContext::api_local_runtime())
+    }
+
+    pub fn create_workspace_with_origin(
+        &self,
+        path: &str,
+        origin: OriginContext,
+    ) -> anyhow::Result<WorkspaceResolution> {
+        self.resolve_or_create_workspace(path, false, origin)
     }
 
     pub fn resolve_repo_root_from_path(
@@ -83,6 +100,7 @@ impl WorkspaceRuntime {
             base_branch,
             setup_script,
             "standard",
+            OriginContext::api_local_runtime(),
         )
     }
 
@@ -94,6 +112,7 @@ impl WorkspaceRuntime {
         base_branch: Option<&str>,
         setup_script: Option<&str>,
         surface: &str,
+        origin: OriginContext,
     ) -> anyhow::Result<CreateWorktreeResult> {
         let source = self
             .repo_root_service
@@ -125,6 +144,7 @@ impl WorkspaceRuntime {
             "worktree",
             surface,
             ctx.current_branch.clone(),
+            origin,
         );
         self.store.insert(&record)?;
 
@@ -226,6 +246,7 @@ impl WorkspaceRuntime {
             "worktree",
             "standard",
             ctx.current_branch.clone(),
+            OriginContext::system_local_runtime(),
         );
         self.store.insert(&record)?;
 
@@ -469,6 +490,7 @@ impl WorkspaceRuntime {
         &self,
         path: &str,
         allow_existing: bool,
+        origin: OriginContext,
     ) -> anyhow::Result<WorkspaceResolution> {
         let started = Instant::now();
         tracing::info!(path = %path, allow_existing, "[workspace-latency] workspace.runtime.resolve.start");
@@ -495,6 +517,7 @@ impl WorkspaceRuntime {
             workspace_kind,
             "standard",
             ctx.current_branch,
+            origin,
         );
         self.store.insert(&record)?;
         tracing::info!(
@@ -595,6 +618,7 @@ fn build_workspace_record(
     kind: &str,
     surface: &str,
     current_branch: Option<String>,
+    origin: OriginContext,
 ) -> WorkspaceRecord {
     let now = chrono::Utc::now().to_rfc3339();
     WorkspaceRecord {
@@ -611,6 +635,7 @@ fn build_workspace_record(
         original_branch: current_branch.clone(),
         current_branch,
         display_name: None,
+        origin: Some(origin),
         created_at: now.clone(),
         updated_at: now,
     }

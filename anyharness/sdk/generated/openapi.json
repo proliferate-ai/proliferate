@@ -4709,6 +4709,16 @@
               "null"
             ]
           },
+          "origin": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OriginContext"
+              }
+            ]
+          },
           "systemPromptAppend": {
             "type": [
               "array",
@@ -4729,6 +4739,16 @@
           "path"
         ],
         "properties": {
+          "origin": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OriginContext"
+              }
+            ]
+          },
           "path": {
             "type": "string"
           }
@@ -4750,6 +4770,16 @@
           },
           "newBranchName": {
             "type": "string"
+          },
+          "origin": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OriginContext"
+              }
+            ]
           },
           "repoRootId": {
             "type": "string"
@@ -5336,6 +5366,16 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "origin": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OriginContext"
+              }
             ]
           },
           "targetSessionId": {
@@ -6658,6 +6698,16 @@
               "null"
             ]
           },
+          "origin": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OriginContext"
+              }
+            ]
+          },
           "requestedModeId": {
             "type": [
               "string",
@@ -6936,6 +6986,40 @@
             ]
           }
         }
+      },
+      "OriginContext": {
+        "type": "object",
+        "description": "Advisory provenance metadata for workspace and session records.\n\nOrigin is a read-model hint. It is not authoritative for authorization,\nbilling, mutability, sandbox ownership, MCP inheritance, or policy.",
+        "required": [
+          "kind",
+          "entrypoint"
+        ],
+        "properties": {
+          "entrypoint": {
+            "$ref": "#/components/schemas/OriginEntrypoint"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/OriginKind"
+          }
+        }
+      },
+      "OriginEntrypoint": {
+        "type": "string",
+        "enum": [
+          "desktop",
+          "cloud",
+          "local_runtime",
+          "cowork"
+        ]
+      },
+      "OriginKind": {
+        "type": "string",
+        "enum": [
+          "human",
+          "cowork",
+          "api",
+          "system"
+        ]
       },
       "PendingInteractionPayloadSummary": {
         "oneOf": [
@@ -8289,6 +8373,16 @@
           "path"
         ],
         "properties": {
+          "origin": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OriginContext"
+              }
+            ]
+          },
           "path": {
             "type": "string"
           }
@@ -8481,6 +8575,16 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "origin": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OriginContext"
+              }
             ]
           },
           "pendingPrompts": {
@@ -9932,6 +10036,16 @@
           },
           "kind": {
             "$ref": "#/components/schemas/WorkspaceKind"
+          },
+          "origin": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OriginContext"
+              }
+            ]
           },
           "originalBranch": {
             "type": [

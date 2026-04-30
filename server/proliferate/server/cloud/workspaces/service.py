@@ -79,6 +79,7 @@ from proliferate.utils.crypto import decrypt_text, encrypt_json
 from proliferate.utils.time import duration_ms, utcnow
 
 MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
+CLOUD_HUMAN_ORIGIN_JSON = '{"kind":"human","entrypoint":"cloud"}'
 
 PROVISIONING_STATUSES: frozenset[WorkspaceStatus] = frozenset(
     {
@@ -401,6 +402,7 @@ async def create_cloud_workspace(
         git_repo_name=git_repo_name,
         git_branch=cleaned_branch_name,
         git_base_branch=resolved_base_branch,
+        origin_json=CLOUD_HUMAN_ORIGIN_JSON,
         template_version=get_configured_sandbox_provider().template_version,
         repo_env_vars_ciphertext=encrypt_json(repo_config.env_vars),
     )
@@ -481,6 +483,7 @@ async def ensure_cloud_workspace_for_existing_branch(
         git_repo_name=git_repo_name,
         git_branch=cleaned_branch_name,
         git_base_branch=cleaned_branch_name,
+        origin_json=CLOUD_HUMAN_ORIGIN_JSON,
         template_version=get_configured_sandbox_provider().template_version,
         repo_env_vars_ciphertext=encrypt_json(repo_config.env_vars),
     )

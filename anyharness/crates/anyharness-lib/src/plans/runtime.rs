@@ -9,6 +9,7 @@ use anyharness_contract::v1::{
 use super::document;
 use super::model::{PlanHandoffRecord, PlanRecord, DEFAULT_IMPLEMENT_INSTRUCTION};
 use super::service::{plan_to_detail, PlanDecisionError, PlanService};
+use crate::origin::OriginContext;
 use crate::sessions::runtime::{
     CreateAndStartSessionError, SendPromptError, SendPromptOutcome, SessionRuntime,
 };
@@ -165,6 +166,7 @@ impl PlanRuntime {
                     .map(str::trim)
                     .filter(|value| !value.is_empty())
                     .ok_or(HandoffPlanError::AgentKindRequired)?;
+                let origin = handoff_origin_or_api_default(request.origin);
                 let record = self
                     .session_runtime
                     .create_and_start_session(
@@ -175,6 +177,7 @@ impl PlanRuntime {
                         None,
                         Vec::new(),
                         None,
+                        origin,
                         None,
                     )
                     .await
@@ -265,6 +268,21 @@ fn format_handoff_prompt(document_path: &str, instruction: &str) -> String {
     )
 }
 
+fn handoff_origin_or_api_default(
+    origin: Option<anyharness_contract::v1::OriginContext>,
+) -> OriginContext {
+    match origin {
+        Some(origin) => OriginContext::from_contract(origin),
+        None => {
+            tracing::warn!(
+                operation = "handoff_plan",
+                "AnyHarness request omitted origin; defaulting to api/local_runtime"
+            );
+            OriginContext::api_local_runtime()
+        }
+    }
+}
+
 fn map_get_plan_error_to_decision(error: GetPlanError) -> PlanDecisionError {
     match error {
         GetPlanError::NotFound => PlanDecisionError::NotFound,
@@ -281,13 +299,35 @@ fn map_get_plan_error_to_handoff(error: GetPlanError) -> HandoffPlanError {
 
 #[cfg(test)]
 mod tests {
-    use super::format_handoff_prompt;
+    use super::{format_handoff_prompt, handoff_origin_or_api_default};
+    use crate::origin::OriginContext;
 
     #[test]
     fn handoff_prompt_references_document_without_repeating_title() {
         assert_eq!(
             format_handoff_prompt("/tmp/plan.md", "Carry out this approved plan now."),
             "Use the approved plan document as context.\n\nDocument: /tmp/plan.md\n\nInstruction:\nCarry out this approved plan now."
+        );
+    }
+
+    #[test]
+    fn handoff_origin_preserves_request_origin_for_created_sessions() {
+        let origin = anyharness_contract::v1::OriginContext {
+            kind: anyharness_contract::v1::OriginKind::Human,
+            entrypoint: anyharness_contract::v1::OriginEntrypoint::Desktop,
+        };
+
+        assert_eq!(
+            handoff_origin_or_api_default(Some(origin)),
+            OriginContext::human_desktop()
+        );
+    }
+
+    #[test]
+    fn handoff_origin_defaults_old_callers_to_api_local_runtime() {
+        assert_eq!(
+            handoff_origin_or_api_default(None),
+            OriginContext::api_local_runtime()
         );
     }
 }

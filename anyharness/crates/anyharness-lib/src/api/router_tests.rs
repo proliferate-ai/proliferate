@@ -349,6 +349,7 @@ async fn raw_notification_history_route_returns_persisted_notifications() {
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
             system_prompt_append: None,
+            origin: None,
         })
         .expect("insert session");
     store
@@ -424,6 +425,7 @@ async fn restore_route_returns_cold_visible_session_without_live_handle() {
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
             system_prompt_append: None,
+            origin: None,
         })
         .expect("insert dismissed session");
 

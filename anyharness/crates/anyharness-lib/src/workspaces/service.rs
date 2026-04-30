@@ -14,6 +14,7 @@ use super::types::{
     CreateWorktreeResult, ProjectSetupDetectionResult, RegisterRepoWorkspaceError,
     SetWorkspaceDisplayNameError, SetupScriptExecutionResult, SetupScriptExecutionStatus,
 };
+use crate::origin::OriginContext;
 
 const MAX_WORKSPACE_DISPLAY_NAME_CHARS: usize = 160;
 
@@ -88,6 +89,7 @@ impl WorkspaceService {
                 original_branch: ctx.current_branch.clone(),
                 current_branch: ctx.current_branch.clone(),
                 display_name: None,
+                origin: Some(OriginContext::api_local_runtime()),
                 created_at: now.clone(),
                 updated_at: now,
             };
@@ -201,6 +203,7 @@ impl WorkspaceService {
                 original_branch: ctx.current_branch.clone(),
                 current_branch: ctx.current_branch.clone(),
                 display_name: None,
+                origin: Some(OriginContext::api_local_runtime()),
                 created_at: now.clone(),
                 updated_at: now,
             }
@@ -330,6 +333,7 @@ impl WorkspaceService {
             original_branch: current_branch.clone(),
             current_branch,
             display_name: None,
+            origin: Some(OriginContext::api_local_runtime()),
             created_at: now.clone(),
             updated_at: now,
         };
@@ -613,6 +617,7 @@ fn build_repo_workspace_record(ctx: &ResolvedGitContext) -> WorkspaceRecord {
         original_branch: current_branch.clone(),
         current_branch,
         display_name: None,
+        origin: Some(OriginContext::system_local_runtime()),
         created_at: now.clone(),
         updated_at: now,
     }
@@ -643,6 +648,7 @@ fn build_local_workspace_record(
         original_branch: current_branch.clone(),
         current_branch,
         display_name: None,
+        origin: Some(OriginContext::api_local_runtime()),
         created_at: now.clone(),
         updated_at: now,
     }

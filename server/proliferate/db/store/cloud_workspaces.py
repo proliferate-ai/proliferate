@@ -99,6 +99,7 @@ async def create_cloud_workspace_record(
     git_repo_name: str,
     git_branch: str,
     git_base_branch: str,
+    origin_json: str | None,
     template_version: str,
     repo_env_vars_ciphertext: str | None = None,
 ) -> CloudWorkspace:
@@ -113,6 +114,7 @@ async def create_cloud_workspace_record(
         git_repo_name=git_repo_name,
         git_branch=git_branch,
         git_base_branch=git_base_branch,
+        origin_json=origin_json,
         status=WorkspaceStatus.queued,
         status_detail="Queued",
         last_error=None,
@@ -609,6 +611,7 @@ async def create_cloud_workspace_for_user(
     git_repo_name: str,
     git_branch: str,
     git_base_branch: str,
+    origin_json: str | None,
     template_version: str,
     repo_env_vars_ciphertext: str | None = None,
 ) -> CloudWorkspace:
@@ -622,6 +625,7 @@ async def create_cloud_workspace_for_user(
             git_repo_name=git_repo_name,
             git_branch=git_branch,
             git_base_branch=git_base_branch,
+            origin_json=origin_json,
             template_version=template_version,
             repo_env_vars_ciphertext=repo_env_vars_ciphertext,
         )

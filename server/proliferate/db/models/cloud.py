@@ -32,6 +32,7 @@ class CloudWorkspace(Base):
     git_repo_name: Mapped[str] = mapped_column(String(255))
     git_branch: Mapped[str] = mapped_column(String(255))
     git_base_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    origin_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     status: Mapped[str] = mapped_column(String(32))
     status_detail: Mapped[str | None] = mapped_column(String(255), nullable=True)

@@ -1413,15 +1413,18 @@ export interface components {
             mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
             modeId?: string | null;
             modelId?: string | null;
+            origin?: null | components["schemas"]["OriginContext"];
             systemPromptAppend?: string[] | null;
             workspaceId: string;
         };
         CreateWorkspaceRequest: {
+            origin?: null | components["schemas"]["OriginContext"];
             path: string;
         };
         CreateWorktreeWorkspaceRequest: {
             baseBranch?: string | null;
             newBranchName: string;
+            origin?: null | components["schemas"]["OriginContext"];
             repoRootId: string;
             setupScript?: string | null;
             targetPath: string;
@@ -1564,6 +1567,7 @@ export interface components {
             instruction?: string | null;
             modeId?: string | null;
             modelId?: string | null;
+            origin?: null | components["schemas"]["OriginContext"];
             targetSessionId?: string | null;
         };
         HandoffPlanResponse: {
@@ -1851,6 +1855,7 @@ export interface components {
             id: string;
             lastPromptAt?: string | null;
             nativeSessionId?: string | null;
+            origin?: null | components["schemas"]["OriginContext"];
             requestedModeId?: string | null;
             requestedModelId?: string | null;
             status: string;
@@ -1945,6 +1950,20 @@ export interface components {
             model?: null | components["schemas"]["NormalizedSessionControl"];
             reasoning?: null | components["schemas"]["NormalizedSessionControl"];
         };
+        /**
+         * @description Advisory provenance metadata for workspace and session records.
+         *
+         *     Origin is a read-model hint. It is not authoritative for authorization,
+         *     billing, mutability, sandbox ownership, MCP inheritance, or policy.
+         */
+        OriginContext: {
+            entrypoint: components["schemas"]["OriginEntrypoint"];
+            kind: components["schemas"]["OriginKind"];
+        };
+        /** @enum {string} */
+        OriginEntrypoint: "desktop" | "cloud" | "local_runtime" | "cowork";
+        /** @enum {string} */
+        OriginKind: "human" | "cowork" | "api" | "system";
         PendingInteractionPayloadSummary: {
             context?: null | components["schemas"]["PermissionInteractionContext"];
             options?: components["schemas"]["PermissionInteractionOption"][];
@@ -2275,6 +2294,7 @@ export interface components {
             path: string;
         };
         ResolveWorkspaceFromPathRequest: {
+            origin?: null | components["schemas"]["OriginContext"];
             path: string;
         };
         ResolveWorkspaceResponse: {
@@ -2314,6 +2334,7 @@ export interface components {
             modeId?: string | null;
             modelId?: string | null;
             nativeSessionId?: string | null;
+            origin?: null | components["schemas"]["OriginContext"];
             pendingPrompts?: components["schemas"]["PendingPromptSummary"][];
             requestedModeId?: string | null;
             requestedModelId?: string | null;
@@ -2638,6 +2659,7 @@ export interface components {
             executionSummary?: null | components["schemas"]["WorkspaceExecutionSummary"];
             id: string;
             kind: components["schemas"]["WorkspaceKind"];
+            origin?: null | components["schemas"]["OriginContext"];
             originalBranch?: string | null;
             path: string;
             repoRootId: string;

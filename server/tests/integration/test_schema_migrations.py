@@ -220,6 +220,7 @@ async def test_alembic_upgrade_creates_current_schema() -> None:
                 )
                 assert "git_base_branch" in columns
                 assert "anyharness_data_key_ciphertext" in columns
+                assert "origin_json" in columns
 
                 mcp_connection_columns = await conn.run_sync(
                     lambda sync_conn: {
