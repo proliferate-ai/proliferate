@@ -58,7 +58,7 @@ export function FilePathLink({ rawPath, children }: FilePathLinkProps) {
       onClick={handleOpen}
       onContextMenuCapture={onContextMenuCapture}
       title={absolute ?? rawPath}
-      className="m-0 inline h-auto border-0 bg-transparent p-0 align-baseline font-mono text-[inherit] leading-[inherit] text-link-foreground shadow-none hover:bg-transparent hover:text-link-foreground hover:underline focus-visible:outline-none focus-visible:underline"
+      className="m-0 inline h-auto whitespace-normal break-words border-0 bg-transparent p-0 align-baseline font-mono text-[inherit] leading-[inherit] text-link-foreground shadow-none hover:bg-transparent hover:text-link-foreground hover:underline focus-visible:outline-none focus-visible:underline"
     >
       {children ?? rawPath}
     </Button>
