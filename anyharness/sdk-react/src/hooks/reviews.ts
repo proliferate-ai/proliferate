@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   MarkReviewRevisionReadyRequest,
+  RetryReviewAssignmentRequest,
   StartCodeReviewRequest,
   StartPlanReviewRequest,
 } from "@anyharness/sdk";
@@ -172,6 +173,41 @@ export function useStopReviewMutation(options?: { workspaceId?: string | null })
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.reviews.stop(reviewRunId);
+    },
+    onSuccess: async (response) => {
+      await invalidateSessionReviews(
+        queryClient,
+        runtimeUrl,
+        workspaceId,
+        response.run.parentSessionId,
+      );
+    },
+  });
+}
+
+export function useRetryReviewAssignmentMutation(
+  options?: { workspaceId?: string | null },
+) {
+  const workspaceId = useWorkspaceId(options);
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const queryClient = useQueryClient();
+  const workspace = useAnyHarnessWorkspaceContext();
+
+  return useMutation({
+    mutationFn: async (
+      input: {
+        reviewRunId: string;
+        assignmentId: string;
+        request?: RetryReviewAssignmentRequest;
+      },
+    ) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.reviews.retryAssignment(
+        input.reviewRunId,
+        input.assignmentId,
+        input.request ?? {},
+      );
     },
     onSuccess: async (response) => {
       await invalidateSessionReviews(

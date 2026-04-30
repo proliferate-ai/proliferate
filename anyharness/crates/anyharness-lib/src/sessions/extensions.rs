@@ -1,4 +1,4 @@
-use anyharness_contract::v1::SessionMcpBindingSummary;
+use anyharness_contract::v1::{ErrorEventDetails, SessionMcpBindingSummary};
 
 use crate::sessions::mcp::SessionMcpServer;
 use crate::workspaces::model::WorkspaceRecord;
@@ -43,6 +43,7 @@ pub struct SessionTurnFinishedContext {
     pub outcome: SessionTurnOutcome,
     pub stop_reason: Option<String>,
     pub last_event_seq: i64,
+    pub error_details: Option<ErrorEventDetails>,
 }
 
 pub trait SessionExtension: Send + Sync {

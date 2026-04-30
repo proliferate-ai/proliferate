@@ -233,6 +233,10 @@ impl SessionLinkService {
             .find_link_by_relation(relation, parent_session_id, child_session_id)
     }
 
+    pub fn delete_link(&self, id: &str) -> anyhow::Result<bool> {
+        self.store.delete_by_id(id)
+    }
+
     pub fn list_children_by_relation(
         &self,
         relation: SessionLinkRelation,

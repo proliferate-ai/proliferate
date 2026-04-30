@@ -1062,6 +1062,76 @@
         }
       }
     },
+    "/v1/reviews/{review_run_id}/assignments/{assignment_id}/retry": {
+      "post": {
+        "tags": [
+          "reviews"
+        ],
+        "operationId": "retry_review_assignment",
+        "parameters": [
+          {
+            "name": "review_run_id",
+            "in": "path",
+            "description": "Review run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "description": "Review assignment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryReviewAssignmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Retried review assignment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRunResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Review or assignment not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Review assignment cannot be retried",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/reviews/{review_run_id}/revision-ready": {
       "post": {
         "tags": [
@@ -6136,10 +6206,60 @@
               "null"
             ]
           },
+          "details": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ErrorEventDetails"
+              }
+            ]
+          },
           "message": {
             "type": "string"
           }
         }
+      },
+      "ErrorEventDetails": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "provider",
+              "providerModel",
+              "limit",
+              "unit",
+              "fallbackModelId",
+              "kind"
+            ],
+            "properties": {
+              "fallbackModelId": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "provider_rate_limit"
+                ]
+              },
+              "limit": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "provider": {
+                "type": "string"
+              },
+              "providerModel": {
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            }
+          }
+        ]
       },
       "ExportReplayRecordingRequest": {
         "type": "object",
@@ -10189,6 +10309,17 @@
           }
         }
       },
+      "RetryReviewAssignmentRequest": {
+        "type": "object",
+        "properties": {
+          "modelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "ReviewAssignmentDetail": {
         "type": "object",
         "required": [
@@ -10311,6 +10442,7 @@
           "launching",
           "reviewing",
           "reminded",
+          "retryable_failed",
           "submitted",
           "cancelled",
           "timed_out",

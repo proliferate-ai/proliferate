@@ -129,6 +129,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0035_review_assignments_active_reviewer_index",
         include_str!("sql/0035_review_assignments_active_reviewer_index.sql"),
     ),
+    (
+        "0036_review_assignments_retryable_failed",
+        include_str!("sql/0036_review_assignments_retryable_failed.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
@@ -207,7 +211,7 @@ mod tests {
 
     use rusqlite::Connection;
 
-    use super::run_named_migration;
+    use super::{run_migrations, run_named_migration};
 
     #[test]
     fn review_loop_migration_accepts_legacy_0033_alias() {
@@ -237,5 +241,27 @@ mod tests {
             )
             .expect("query migration marker");
         assert!(marked);
+    }
+
+    #[test]
+    fn review_assignments_accept_retryable_failed_status() {
+        let mut conn = Connection::open_in_memory().expect("open in-memory db");
+        run_migrations(&mut conn).expect("run migrations");
+        conn.execute_batch("PRAGMA foreign_keys = OFF;")
+            .expect("disable foreign keys for constraint probe");
+
+        conn.execute(
+            "INSERT INTO review_assignments (
+                id, review_run_id, review_round_id, persona_id, persona_label,
+                persona_prompt, agent_kind, mode_verification_status, status,
+                deadline_at, reminder_count, created_at, updated_at
+             ) VALUES (
+                'assignment-1', 'run-1', 'round-1', 'persona-1', 'Reviewer',
+                'Review the work.', 'claude', 'pending', 'retryable_failed',
+                '2026-04-28T00:00:00Z', 0, '2026-04-28T00:00:00Z', '2026-04-28T00:00:00Z'
+             )",
+            [],
+        )
+        .expect("insert retryable failed assignment");
     }
 }

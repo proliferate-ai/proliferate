@@ -95,6 +95,7 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { SubagentWakeBadge } from "@/components/workspace/chat/transcript/SubagentWakeBadge";
 import { ReviewFeedbackSummary } from "@/components/workspace/reviews/ReviewFeedbackSummary";
 import { SubagentLaunchLedger } from "@/components/workspace/chat/transcript/SubagentLaunchLedger";
+import { SessionErrorItem } from "@/components/workspace/chat/transcript/SessionErrorItem";
 import { UserMessageProvenanceChrome } from "@/components/workspace/chat/transcript/UserMessageProvenanceChrome";
 import {
   getTurnDisplayBlockKey,
@@ -954,7 +955,7 @@ function TranscriptItemBlock({
 
     case "error":
       return (
-        <p className="text-xs text-destructive py-1">{item.message}</p>
+        <SessionErrorItem item={item} sessionId={sessionId} />
       );
 
     case "unknown":

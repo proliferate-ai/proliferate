@@ -303,6 +303,10 @@ pub fn build_router(state: AppState) -> Router {
             "/reviews/{review_run_id}/assignments/{assignment_id}/critique",
             get(reviews::get_review_assignment_critique),
         )
+        .route(
+            "/reviews/{review_run_id}/assignments/{assignment_id}/retry",
+            post(reviews::retry_review_assignment),
+        )
         .route("/reviews/{review_run_id}/stop", post(reviews::stop_review))
         .route(
             "/reviews/{review_run_id}/send-feedback",

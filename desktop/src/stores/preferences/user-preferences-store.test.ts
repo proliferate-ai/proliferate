@@ -186,6 +186,22 @@ describe("user preference migration", () => {
     });
   });
 
+  it("preserves pinned Claude Opus 4.6 in model maps", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      defaultChatModelIdByAgentKind: {
+        claude: "claude-opus-4-6",
+        codex: "gpt-5.4",
+      },
+    });
+
+    expect(result.changed).toBe(false);
+    expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
+      claude: "claude-opus-4-6",
+      codex: "gpt-5.4",
+    });
+  });
+
   it("orders Mono before Dominic in theme preset options", () => {
     expect(THEME_PRESETS.indexOf("mono")).toBeLessThan(THEME_PRESETS.indexOf("ship"));
   });

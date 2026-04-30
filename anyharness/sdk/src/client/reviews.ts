@@ -2,6 +2,7 @@ import type {
   MarkReviewRevisionReadyRequest,
   ReviewCritiqueResponse,
   ReviewRunResponse,
+  RetryReviewAssignmentRequest,
   SessionReviewsResponse,
   StartCodeReviewRequest,
   StartPlanReviewRequest,
@@ -28,6 +29,19 @@ export class ReviewsClient {
   ): Promise<ReviewCritiqueResponse> {
     return this.transport.get<ReviewCritiqueResponse>(
       `/v1/reviews/${encodeURIComponent(reviewRunId)}/assignments/${encodeURIComponent(assignmentId)}/critique`,
+      options,
+    );
+  }
+
+  async retryAssignment(
+    reviewRunId: string,
+    assignmentId: string,
+    input: RetryReviewAssignmentRequest = {},
+    options?: AnyHarnessRequestOptions,
+  ): Promise<ReviewRunResponse> {
+    return this.transport.post<ReviewRunResponse>(
+      `/v1/reviews/${encodeURIComponent(reviewRunId)}/assignments/${encodeURIComponent(assignmentId)}/retry`,
+      input,
       options,
     );
   }

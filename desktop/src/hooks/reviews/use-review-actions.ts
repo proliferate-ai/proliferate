@@ -3,6 +3,7 @@ import {
   useSendReviewFeedbackMutation,
   useStopReviewMutation,
   useMarkReviewRevisionReadyMutation,
+  useRetryReviewAssignmentMutation,
 } from "@anyharness/sdk-react";
 import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/prompt-content";
 import {
@@ -25,6 +26,9 @@ export function useReviewActions() {
     workspaceId: selectedWorkspaceId,
   });
   const markReviewRevisionReadyMutation = useMarkReviewRevisionReadyMutation({
+    workspaceId: selectedWorkspaceId,
+  });
+  const retryReviewAssignmentMutation = useRetryReviewAssignmentMutation({
     workspaceId: selectedWorkspaceId,
   });
 
@@ -71,16 +75,28 @@ export function useReviewActions() {
     });
   }, [markReviewRevisionReadyMutation, showToast]);
 
+  const retryReviewAssignment = useCallback((reviewRunId: string, assignmentId: string) => {
+    void retryReviewAssignmentMutation.mutateAsync({
+      reviewRunId,
+      assignmentId,
+      request: { modelId: "claude-opus-4-6" },
+    }).catch((error) => {
+      showToast(`Failed to retry reviewer: ${errorMessage(error)}`);
+    });
+  }, [retryReviewAssignmentMutation, showToast]);
+
   return {
     startPlanReview,
     startCodeReview,
     stopReview,
     sendReviewFeedback,
     markReviewRevisionReady,
+    retryReviewAssignment,
     canStartCodeReview: !!activeSessionId && !!activeSlot,
     isStoppingReview: stopReviewMutation.isPending,
     isSendingReviewFeedback: sendReviewFeedbackMutation.isPending,
     isMarkingReviewRevisionReady: markReviewRevisionReadyMutation.isPending,
+    isRetryingReviewAssignment: retryReviewAssignmentMutation.isPending,
   };
 }
 

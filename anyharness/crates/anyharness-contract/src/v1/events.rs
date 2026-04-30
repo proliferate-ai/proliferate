@@ -692,6 +692,21 @@ pub struct ErrorEvent {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<ErrorEventDetails>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ErrorEventDetails {
+    #[serde(rename_all = "camelCase")]
+    ProviderRateLimit {
+        provider: String,
+        provider_model: String,
+        limit: u64,
+        unit: String,
+        fallback_model_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

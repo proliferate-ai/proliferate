@@ -388,6 +388,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/reviews/{review_run_id}/assignments/{assignment_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["retry_review_assignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/reviews/{review_run_id}/revision-ready": {
         parameters: {
             query?: never;
@@ -1771,7 +1787,18 @@ export interface components {
         };
         ErrorEvent: {
             code?: string | null;
+            details?: null | components["schemas"]["ErrorEventDetails"];
             message: string;
+        };
+        ErrorEventDetails: {
+            fallbackModelId: string;
+            /** @enum {string} */
+            kind: "provider_rate_limit";
+            /** Format: int64 */
+            limit: number;
+            provider: string;
+            providerModel: string;
+            unit: string;
         };
         ExportReplayRecordingRequest: {
             name?: string | null;
@@ -2752,6 +2779,9 @@ export interface components {
             mcpBindingSummaries?: components["schemas"]["SessionMcpBindingSummary"][] | null;
             mcpServers?: components["schemas"]["SessionMcpServer"][] | null;
         };
+        RetryReviewAssignmentRequest: {
+            modelId?: string | null;
+        };
         ReviewAssignmentDetail: {
             actualModeId?: string | null;
             agentKind: string;
@@ -2777,7 +2807,7 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {string} */
-        ReviewAssignmentStatus: "queued" | "launching" | "reviewing" | "reminded" | "submitted" | "cancelled" | "timed_out" | "system_failed";
+        ReviewAssignmentStatus: "queued" | "launching" | "reviewing" | "reminded" | "retryable_failed" | "submitted" | "cancelled" | "timed_out" | "system_failed";
         ReviewCritiqueResponse: {
             assignmentId: string;
             critiqueArtifactPath?: string | null;
@@ -4295,6 +4325,53 @@ export interface operations {
             };
             /** @description Review or assignment not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    retry_review_assignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Review run ID */
+                review_run_id: string;
+                /** @description Review assignment ID */
+                assignment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetryReviewAssignmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Retried review assignment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRunResponse"];
+                };
+            };
+            /** @description Review or assignment not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Review assignment cannot be retried */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

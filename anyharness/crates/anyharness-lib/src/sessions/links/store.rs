@@ -97,6 +97,13 @@ impl SessionLinkStore {
         })
     }
 
+    pub fn delete_by_id(&self, id: &str) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            let deleted = conn.execute("DELETE FROM session_links WHERE id = ?1", [id])?;
+            Ok(deleted > 0)
+        })
+    }
+
     pub fn find_subagent_link(
         &self,
         parent_session_id: &str,
