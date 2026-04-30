@@ -1,7 +1,14 @@
+import { Button } from "@/components/ui/Button";
+import { ExternalLink } from "@/components/ui/icons";
+import { openExternal } from "@/platform/tauri/shell";
+
 interface RunCommandHelpProps {
   scope: string;
   className?: string;
 }
+
+const COMMAND_ENVIRONMENT_DOCS_URL =
+  "https://github.com/proliferate-ai/proliferate/blob/main/docs/reference/workspace-command-environment.md";
 
 export function RunCommandHelp({
   scope,
@@ -9,12 +16,17 @@ export function RunCommandHelp({
 }: RunCommandHelpProps) {
   return (
     <p className={className}>
-      Runs inside the {scope}. Available vars include <code>PROLIFERATE_WORKSPACE_DIR</code>,{" "}
-      <code>PROLIFERATE_REPO_DIR</code>, <code>PROLIFERATE_WORKSPACE_KIND</code>, and{" "}
-      <code>PROLIFERATE_BRANCH</code> when known. Worktree workspaces also set{" "}
-      <code>PROLIFERATE_WORKTREE_DIR</code>. Reference them with shell expansion, for example{" "}
-      <code>cd "$PROLIFERATE_WORKSPACE_DIR" && make dev</code>. For worktree-aware fallback, use{" "}
-      <code>{'cd "${PROLIFERATE_WORKTREE_DIR:-$PROLIFERATE_WORKSPACE_DIR}" && make dev'}</code>.
+      Runs inside the {scope}.{" "}
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="inline-flex h-auto gap-1 px-1 py-0 align-baseline text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        onClick={() => { void openExternal(COMMAND_ENVIRONMENT_DOCS_URL); }}
+      >
+        Command environment docs
+        <ExternalLink className="size-3" />
+      </Button>
     </p>
   );
 }
