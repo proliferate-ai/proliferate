@@ -16,7 +16,7 @@ export function ComposerFileMentionBadge({
   return (
     <span
       data-telemetry-mask
-      className="inline-flex max-w-[16rem] select-none items-center gap-1 rounded-md border border-border/70 bg-foreground/5 px-1.5 py-0.5 align-baseline text-chat leading-tight text-foreground"
+      className="inline-flex max-w-[16rem] select-none items-center gap-1 rounded-md border border-border/70 bg-foreground/5 px-1.5 py-0.5 align-baseline text-[0.6875rem] leading-tight text-foreground"
       title={path}
     >
       <FileTreeEntryIcon

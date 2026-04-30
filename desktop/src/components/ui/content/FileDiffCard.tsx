@@ -77,7 +77,7 @@ export function FileChangeInlineRow({
             }
           : undefined
       }
-      className={`group/file-change-row flex min-w-0 items-center gap-1.5 rounded-md px-0 py-0.5 text-chat leading-relaxed text-muted-foreground transition-colors ${
+      className={`group/file-change-row flex min-w-0 items-center gap-1.5 rounded-md px-0 py-0.5 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground transition-colors ${
         interactive ? "cursor-pointer hover:text-foreground" : ""
       } ${className ?? ""}`}
     >
@@ -92,7 +92,7 @@ export function FileChangeInlineRow({
             event.stopPropagation();
             onOpenFile();
           }}
-          className="h-auto min-w-0 max-w-full justify-start rounded-none bg-transparent p-0 text-start text-chat font-normal leading-relaxed text-link-foreground hover:bg-transparent hover:underline focus-visible:ring-1 focus-visible:ring-border"
+          className="h-auto min-w-0 max-w-full justify-start rounded-none bg-transparent p-0 text-start text-chat font-normal leading-[var(--text-chat--line-height)] text-link-foreground hover:bg-transparent hover:underline focus-visible:ring-1 focus-visible:ring-border"
         >
           {fileContent}
         </Button>
@@ -148,7 +148,7 @@ export function FileChangesCard({
     >
       <div className="flex items-center gap-2">
         <div className="flex w-full min-w-0 flex-nowrap items-center gap-1 pr-1 pl-3">
-          <span className="min-w-0 truncate py-2 text-chat leading-relaxed text-foreground">
+          <span className="min-w-0 truncate py-2 text-chat leading-[var(--text-chat--line-height)] text-foreground">
             {fileCount} file{fileCount !== 1 ? "s" : ""} changed
           </span>
           <div className="flex-1" />
@@ -234,7 +234,7 @@ export function FileDiffCard({
                     event.stopPropagation();
                     onOpenFile();
                   }}
-                  className="min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-start text-chat leading-relaxed text-foreground select-text [direction:rtl] hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
+                  className="min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-start text-chat leading-[var(--text-chat--line-height)] text-foreground select-text [direction:rtl] hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
                 >
                   {pathContent}
                 </button>

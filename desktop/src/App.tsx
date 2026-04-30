@@ -8,7 +8,7 @@ import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { MacWindowControlsSafeArea } from "@/components/ui/MacWindowControlsSafeArea"
 import { SessionModelAvailabilityDialog } from "@/components/workspace/chat/launch/SessionModelAvailabilityDialog"
-import { applyThemePreference, initializeTheme } from "@/config/theme"
+import { applyAppearancePreference, initializeTheme } from "@/config/theme"
 import { useExportRunningAgentCount } from "@/hooks/app/use-export-running-agent-count"
 import { useAppShortcuts } from "@/hooks/app/use-app-shortcuts"
 import { useAuthBootstrap } from "@/hooks/auth/use-auth-bootstrap"
@@ -159,26 +159,41 @@ function AppRuntime() {
     recordAppRendererEvent("app.bootstrap.start")
     logStartupDebug("app.bootstrap.start")
     initializeTheme()
-    const applyStoredTheme = () => {
-      const { themePreset, colorMode } = useUserPreferencesStore.getState()
-      applyThemePreference(themePreset, colorMode)
+    const applyStoredAppearance = () => {
+      const {
+        themePreset,
+        colorMode,
+        uiFontSizeId,
+        readableCodeFontSizeId,
+      } = useUserPreferencesStore.getState()
+      applyAppearancePreference({
+        themePreset,
+        colorMode,
+        uiFontSizeId,
+        readableCodeFontSizeId,
+      })
     }
-    applyStoredTheme()
+    applyStoredAppearance()
 
-    const unsubscribeTheme = useUserPreferencesStore.subscribe((state, prev) => {
-      if (state.themePreset !== prev.themePreset || state.colorMode !== prev.colorMode) {
-        applyStoredTheme()
+    const unsubscribeAppearance = useUserPreferencesStore.subscribe((state, prev) => {
+      if (
+        state.themePreset !== prev.themePreset
+        || state.colorMode !== prev.colorMode
+        || state.uiFontSizeId !== prev.uiFontSizeId
+        || state.readableCodeFontSizeId !== prev.readableCodeFontSizeId
+      ) {
+        applyStoredAppearance()
       }
     })
     const systemModeQuery = window.matchMedia("(prefers-color-scheme: dark)")
     const handleSystemModeChange = () => {
       if (useUserPreferencesStore.getState().colorMode === "system") {
-        applyStoredTheme()
+        applyStoredAppearance()
       }
     }
     systemModeQuery.addEventListener("change", handleSystemModeChange)
 
-    void bootstrapUserPreferences().then(applyStoredTheme)
+    void bootstrapUserPreferences().then(applyStoredAppearance)
     void bootstrapRepoPreferences()
     void bootstrapWorkspaceUi()
     void bootstrapLogicalWorkspaceSelection()
@@ -197,7 +212,7 @@ function AppRuntime() {
       })
     })
     return () => {
-      unsubscribeTheme()
+      unsubscribeAppearance()
       systemModeQuery.removeEventListener("change", handleSystemModeChange)
     }
   }, [bootstrapAuth])

@@ -2,6 +2,7 @@ import { type ReactNode, useState } from "react";
 import { ChevronRight, CloudIcon, Folder, FolderFilled, GitBranchIcon, Plus, Settings, Trash } from "@/components/ui/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PopoverButton } from "@/components/ui/PopoverButton";
+import { Button } from "@/components/ui/Button";
 import { SHORTCUTS } from "@/config/shortcuts";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import { SidebarActionButton } from "./SidebarActionButton";
@@ -23,7 +24,7 @@ interface RepoGroupProps {
 }
 
 const POPOVER_ROW =
-  "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-accent";
+  "h-auto w-full justify-start gap-2.5 rounded-lg px-2.5 py-2 text-sm text-foreground hover:bg-sidebar-accent";
 
 export function RepoGroup({
   name,
@@ -71,7 +72,7 @@ export function RepoGroup({
         </span>
 
         <div className="relative ml-auto size-6 shrink-0">
-          <span className="absolute inset-0 flex items-center justify-center font-mono text-sm text-foreground/40 transition-opacity group-hover/folder-row:opacity-0">
+          <span className="absolute inset-0 flex items-center justify-center font-mono text-[0.625rem] text-foreground/40 transition-opacity group-hover/folder-row:opacity-0">
             {count}
           </span>
           <PopoverButton
@@ -90,50 +91,58 @@ export function RepoGroup({
           >
             {(close) => (
               <>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => { close(); onNewLocalWorkspace?.(); }}
                   className={POPOVER_ROW}
                 >
                   <Folder className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="flex-1 truncate text-left">New local workspace</span>
-                  <span className="shrink-0 text-xs text-muted-foreground/60">{SHORTCUTS.newLocal.label}</span>
-                </button>
-                <button
+                  <span className="shrink-0 text-[0.5rem] text-muted-foreground/60">{SHORTCUTS.newLocal.label}</span>
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => { close(); onNewWorkspace?.(); }}
                   className={POPOVER_ROW}
                 >
                   <GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="flex-1 truncate text-left">New worktree</span>
-                  <span className="shrink-0 text-xs text-muted-foreground/60">{SHORTCUTS.newWorktree.label}</span>
-                </button>
+                  <span className="shrink-0 text-[0.5rem] text-muted-foreground/60">{SHORTCUTS.newWorktree.label}</span>
+                </Button>
                 {onCloudWorkspaceAction && cloudWorkspaceLabel && (
                   cloudWorkspaceEnabled ? (
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => { close(); onCloudWorkspaceAction(); }}
                       className={POPOVER_ROW}
                     >
                       <CloudIcon className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="flex-1 truncate text-left">{cloudWorkspaceLabel}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground/60">{getShortcutDisplayLabel(SHORTCUTS.newCloud)}</span>
-                    </button>
+                      <span className="shrink-0 text-[0.5rem] text-muted-foreground/60">{getShortcutDisplayLabel(SHORTCUTS.newCloud)}</span>
+                    </Button>
                   ) : (
                     <Tooltip
                       content={cloudWorkspaceTooltip ?? "Cloud workspaces require a reachable control plane."}
                       className="block w-full"
                     >
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
                         aria-disabled="true"
                         onClick={(event) => { event.preventDefault(); }}
                         className={`${POPOVER_ROW} cursor-not-allowed opacity-60`}
                       >
                         <CloudIcon className="size-3.5 shrink-0 text-muted-foreground" />
                         <span className="flex-1 truncate text-left">{cloudWorkspaceLabel}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground/60">{getShortcutDisplayLabel(SHORTCUTS.newCloud)}</span>
-                      </button>
+                        <span className="shrink-0 text-[0.5rem] text-muted-foreground/60">{getShortcutDisplayLabel(SHORTCUTS.newCloud)}</span>
+                      </Button>
                     </Tooltip>
                   )
                 )}
@@ -183,37 +192,43 @@ function RepoContextMenuContent({
   return (
     <>
       {onOpenSettings && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={() => { onClose(); onOpenSettings(); }}
           className={POPOVER_ROW}
         >
           <Settings className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="flex-1 truncate text-left">Settings</span>
-        </button>
+        </Button>
       )}
       {onOpenSettings && onRemoveRepo && (
         <div className="my-1 h-px bg-border" />
       )}
       {onRemoveRepo && !confirmingRemove && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={() => setConfirmingRemove(true)}
           className={`${POPOVER_ROW} text-destructive hover:text-destructive`}
         >
           <Trash className="size-3.5 shrink-0" />
           <span className="flex-1 truncate text-left">Remove repository</span>
-        </button>
+        </Button>
       )}
       {onRemoveRepo && confirmingRemove && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={() => { onClose(); onRemoveRepo(); }}
           className={`${POPOVER_ROW} text-destructive hover:text-destructive`}
         >
           <Trash className="size-3.5 shrink-0" />
           <span className="flex-1 truncate text-left">Confirm remove?</span>
-        </button>
+        </Button>
       )}
     </>
   );

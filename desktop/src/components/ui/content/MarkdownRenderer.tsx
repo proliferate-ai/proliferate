@@ -68,22 +68,22 @@ export function MarkdownRenderer({
         remarkPlugins={[remarkGfm]}
         components={{
           h1: (props) =>
-            mdHtmlElement("h1", "mb-2 mt-3 text-chat leading-relaxed font-bold text-foreground", props),
+            mdHtmlElement("h1", "mb-2 mt-3 text-chat leading-[var(--text-chat--line-height)] font-bold text-foreground", props),
           h2: (props) =>
-            mdHtmlElement("h2", "mb-2 mt-3 text-chat leading-relaxed font-bold text-foreground", props),
+            mdHtmlElement("h2", "mb-2 mt-3 text-chat leading-[var(--text-chat--line-height)] font-bold text-foreground", props),
           h3: (props) =>
-            mdHtmlElement("h3", "mb-1 mt-2 text-chat leading-relaxed font-semibold text-foreground", props),
+            mdHtmlElement("h3", "mb-1 mt-2 text-chat leading-[var(--text-chat--line-height)] font-semibold text-foreground", props),
           p: (props) =>
-            mdHtmlElement("p", "my-2 text-chat leading-relaxed text-foreground", props),
+            mdHtmlElement("p", "my-2 text-chat leading-[var(--text-chat--line-height)] text-foreground", props),
           ul: (props) =>
-            mdHtmlElement("ul", "mt-0 mb-4 list-disc pl-4 text-chat leading-relaxed text-foreground", props),
+            mdHtmlElement("ul", "mt-0 mb-4 list-disc pl-4 text-chat leading-[var(--text-chat--line-height)] text-foreground", props),
           ol: (props) =>
-            mdHtmlElement("ol", "mt-1.5 mb-3 list-decimal pl-8 text-chat leading-relaxed text-foreground", props),
-          li: (props) => mdHtmlElement("li", "mb-1.5 text-chat leading-relaxed", props),
+            mdHtmlElement("ol", "mt-1.5 mb-3 list-decimal pl-8 text-chat leading-[var(--text-chat--line-height)] text-foreground", props),
+          li: (props) => mdHtmlElement("li", "mb-1.5 text-chat leading-[var(--text-chat--line-height)]", props),
           blockquote: (props) =>
             mdHtmlElement(
               "blockquote",
-              "my-2 border-l-2 border-border pl-3 text-chat leading-relaxed text-muted-foreground",
+              "my-2 border-l-2 border-border pl-3 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground",
               props,
             ),
           a: (props) => {

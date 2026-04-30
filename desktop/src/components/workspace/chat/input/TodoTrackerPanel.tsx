@@ -57,7 +57,7 @@ function TodoEntryRow({
           <TodoStatusIcon status={status} />
         </div>
         <span
-          className={`text-chat leading-4 ${
+          className={`text-chat leading-[var(--text-chat--line-height)] ${
             isCompleted ? "text-muted-foreground/60" : ""
           }`}
         >
@@ -65,7 +65,7 @@ function TodoEntryRow({
         </span>
       </div>
       <span
-        className={`text-chat flex-1 leading-4 ${
+        className={`text-chat flex-1 leading-[var(--text-chat--line-height)] ${
           isCompleted ? "text-muted-foreground/60 line-through" : ""
         }`}
       >

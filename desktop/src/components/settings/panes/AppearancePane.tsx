@@ -7,6 +7,12 @@ import { Button } from "@/components/ui/Button";
 import { Monitor, Moon, Sun } from "@/components/ui/icons";
 import { Switch } from "@/components/ui/Switch";
 import {
+  READABLE_CODE_FONT_SIZE_LABELS,
+  READABLE_CODE_FONT_SIZE_OPTIONS,
+  UI_FONT_SIZE_LABELS,
+  UI_FONT_SIZE_OPTIONS,
+} from "@/config/appearance";
+import {
   COLOR_MODES,
   isModeLockedPreset,
   THEME_PRESETS,
@@ -53,6 +59,8 @@ export function AppearancePane() {
   const [preset, setPreset] = useThemePreset();
   const [mode, setMode] = useColorMode();
   const transparentChromeEnabled = useUserPreferencesStore((state) => state.transparentChromeEnabled);
+  const uiFontSizeId = useUserPreferencesStore((state) => state.uiFontSizeId);
+  const readableCodeFontSizeId = useUserPreferencesStore((state) => state.readableCodeFontSizeId);
   const turnEndSoundEnabled = useUserPreferencesStore((state) => state.turnEndSoundEnabled);
   const turnEndSoundId = useUserPreferencesStore((state) => state.turnEndSoundId);
   const setPreference = useUserPreferencesStore((state) => state.set);
@@ -127,6 +135,50 @@ export function AppearancePane() {
           <Switch
             checked={transparentChromeEnabled}
             onChange={(value) => setPreference("transparentChromeEnabled", value)}
+          />
+        </SettingsCardRow>
+      </SettingsCard>
+
+      <SettingsCard>
+        <SettingsCardRow
+          label="UI font size"
+          description="Scale app and chat text while preserving compact fixed controls"
+        >
+          <SettingsMenu
+            label={UI_FONT_SIZE_LABELS[uiFontSizeId]}
+            className="w-40"
+            menuClassName="w-52"
+            groups={[{
+              id: "ui-font-size",
+              options: UI_FONT_SIZE_OPTIONS.map((option) => ({
+                id: option.id,
+                label: option.label,
+                detail: option.detail,
+                selected: option.id === uiFontSizeId,
+                onSelect: () => setPreference("uiFontSizeId", option.id),
+              })),
+            }]}
+          />
+        </SettingsCardRow>
+
+        <SettingsCardRow
+          label="Code font size"
+          description="Scale editors, diffs, and readable code blocks"
+        >
+          <SettingsMenu
+            label={READABLE_CODE_FONT_SIZE_LABELS[readableCodeFontSizeId]}
+            className="w-40"
+            menuClassName="w-56"
+            groups={[{
+              id: "readable-code-font-size",
+              options: READABLE_CODE_FONT_SIZE_OPTIONS.map((option) => ({
+                id: option.id,
+                label: option.label,
+                detail: option.detail,
+                selected: option.id === readableCodeFontSizeId,
+                onSelect: () => setPreference("readableCodeFontSizeId", option.id),
+              })),
+            }]}
           />
         </SettingsCardRow>
       </SettingsCard>

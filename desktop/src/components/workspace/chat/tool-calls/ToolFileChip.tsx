@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { Button } from "@/components/ui/Button";
 import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { Copy, ExternalLink } from "@/components/ui/icons";
@@ -42,7 +43,7 @@ export function ToolFileChip({
   }, [absolute, workspacePath, pathLabel, copyPath]);
 
   const chipClass =
-    "inline-flex min-w-0 max-w-full items-center gap-0.5 rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-sm leading-none text-foreground/90 transition-colors";
+    "inline-flex min-w-0 max-w-full items-center gap-0.5 rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-[0.625rem] leading-none text-foreground/90 transition-colors";
 
   const content = (
     <>
@@ -65,17 +66,19 @@ export function ToolFileChip({
   }
 
   const trigger = (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="sm"
       title={pathLabel}
       onClick={(event) => {
         event.stopPropagation();
         handleOpen();
       }}
-      className={`${chipClass} cursor-pointer hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border`}
+      className={`${chipClass} h-auto justify-start hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border`}
     >
       {content}
-    </button>
+    </Button>
   );
 
   return (
@@ -87,29 +90,33 @@ export function ToolFileChip({
     >
       {(close) => (
         <div className="flex flex-col gap-px">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             disabled={!absolute}
             onClick={() => {
               handleOpen();
               close();
             }}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground/80 transition-colors hover:bg-accent/40 hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-foreground/80"
+            className="h-auto w-full justify-start gap-2 rounded-md px-2 py-1.5 text-[0.5rem] text-foreground/80 hover:bg-accent/40 hover:text-foreground disabled:hover:bg-transparent disabled:hover:text-foreground/80"
           >
             <ExternalLink className="size-3.5 shrink-0" />
             <span>Open file</span>
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => {
               handleCopy();
               close();
             }}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground/80 transition-colors hover:bg-accent/40 hover:text-foreground"
+            className="h-auto w-full justify-start gap-2 rounded-md px-2 py-1.5 text-[0.5rem] text-foreground/80 hover:bg-accent/40 hover:text-foreground"
           >
             <Copy className="size-3.5 shrink-0" />
             <span>Copy path</span>
-          </button>
+          </Button>
         </div>
       )}
     </PopoverButton>

@@ -4,6 +4,7 @@ import { SplitPanel } from "@/components/ui/icons";
 import { useResize } from "@/hooks/layout/use-resize";
 import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
 import { useUpdater } from "@/hooks/updater/use-updater";
+import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 import {
   WORKSPACE_SIDEBAR_MAX_WIDTH,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
@@ -11,10 +12,6 @@ import {
 } from "@/stores/preferences/workspace-ui-store";
 import { SidebarUpdatePill } from "./SidebarUpdatePill";
 import { MainSidebar } from "./sidebar/MainSidebar";
-
-const GLASS_HEADER_CLASS =
-  "flex h-10 shrink-0 items-center border-b border-foreground/10 bg-card/30 backdrop-blur-xl supports-[backdrop-filter]:bg-card/20";
-const SOLID_HEADER_CLASS = "flex h-10 shrink-0 items-center";
 
 interface MainSidebarPageShellProps {
   children: ReactNode;
@@ -26,6 +23,10 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
   const setSidebarOpen = useWorkspaceUiStore((s) => s.setSidebarOpen);
   const setSidebarWidth = useWorkspaceUiStore((s) => s.setSidebarWidth);
   const transparentChromeEnabled = useTransparentChromeEnabled();
+  const chromeClasses = resolveStandardWorkspaceChromeClasses({
+    transparent: transparentChromeEnabled,
+    sidebarOpen,
+  });
   const {
     phase: updaterPhase,
     downloadUpdate,
@@ -42,9 +43,7 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
 
   return (
     <div
-      className={`flex h-screen overflow-hidden ${
-        transparentChromeEnabled ? "bg-transparent" : "bg-sidebar"
-      }`}
+      className={`flex h-screen overflow-hidden ${chromeClasses.root}`}
       data-telemetry-block
     >
       <div
@@ -86,12 +85,10 @@ export function MainSidebarPageShell({ children }: MainSidebarPageShellProps) {
       )}
 
       <div
-        className={`flex min-w-0 flex-1 flex-col overflow-hidden ${
-          transparentChromeEnabled ? "bg-transparent" : "bg-background"
-        } ${sidebarOpen && !transparentChromeEnabled ? "rounded-tl-[22px] border-l border-t border-sidebar-border" : ""}`}
+        className={`flex min-w-0 flex-1 flex-col overflow-hidden ${chromeClasses.contentShell}`}
       >
         <div
-          className={transparentChromeEnabled ? GLASS_HEADER_CLASS : SOLID_HEADER_CLASS}
+          className={chromeClasses.header}
           data-tauri-drag-region="true"
         >
           {!sidebarOpen && (

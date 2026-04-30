@@ -24,7 +24,7 @@ export function RepoSetupScriptCard({
             value={setupScript}
             onChange={(event: ChangeEvent<HTMLTextAreaElement>) => onChange(event.target.value)}
             placeholder="pnpm install&#10;pnpm prisma generate"
-            className="min-h-44 resize-y font-mono"
+            className="min-h-44 resize-y font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)]"
           />
           <p className="text-sm text-muted-foreground">
             Available vars include <code>PROLIFERATE_WORKTREE_DIR</code>, <code>PROLIFERATE_REPO_DIR</code>, <code>PROLIFERATE_BRANCH</code>, and <code>PROLIFERATE_BASE_REF</code>.

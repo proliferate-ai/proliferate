@@ -47,6 +47,8 @@ describe("user preference migration", () => {
     const preferences = useUserPreferencesStore.getState();
     expect(preferences.themePreset).toBe("mono");
     expect(preferences.colorMode).toBe("dark");
+    expect(preferences.uiFontSizeId).toBe("default");
+    expect(preferences.readableCodeFontSizeId).toBe("default");
     expect(preferences.transparentChromeEnabled).toBe(false);
   });
 
@@ -122,6 +124,13 @@ describe("user preference migration", () => {
     expect(USER_PREFERENCE_DEFAULTS.cloudRuntimeInputSyncEnabled).toBe(false);
   });
 
+  it("defaults appearance font preferences to default", () => {
+    expect(USER_PREFERENCE_DEFAULTS.uiFontSizeId).toBe("default");
+    expect(USER_PREFERENCE_DEFAULTS.readableCodeFontSizeId).toBe("default");
+    expect(PERSISTED_RECORD_BACKFILL.uiFontSizeId).toBe("default");
+    expect(PERSISTED_RECORD_BACKFILL.readableCodeFontSizeId).toBe("default");
+  });
+
   it("migrates missing runtime input sync preference to false", () => {
     const legacy = {
       ...USER_PREFERENCE_DEFAULTS,
@@ -144,6 +153,44 @@ describe("user preference migration", () => {
 
     expect(result.changed).toBe(true);
     expect(result.preferences.transparentChromeEnabled).toBe(true);
+  });
+
+  it("migrates missing appearance font preferences to default", () => {
+    const legacy = {
+      ...USER_PREFERENCE_DEFAULTS,
+      uiFontSizeId: undefined,
+      readableCodeFontSizeId: undefined,
+    } as unknown as UserPreferences;
+
+    const result = migrateUserPreferences(legacy);
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.uiFontSizeId).toBe("default");
+    expect(result.preferences.readableCodeFontSizeId).toBe("default");
+  });
+
+  it("sanitizes invalid appearance font preferences", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      uiFontSizeId: "giant" as unknown as UserPreferences["uiFontSizeId"],
+      readableCodeFontSizeId: "tiny" as unknown as UserPreferences["readableCodeFontSizeId"],
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.uiFontSizeId).toBe("default");
+    expect(result.preferences.readableCodeFontSizeId).toBe("default");
+  });
+
+  it("preserves explicit valid appearance font preferences", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      uiFontSizeId: "xsmall",
+      readableCodeFontSizeId: "xxlarge",
+    });
+
+    expect(result.changed).toBe(false);
+    expect(result.preferences.uiFontSizeId).toBe("xsmall");
+    expect(result.preferences.readableCodeFontSizeId).toBe("xxlarge");
   });
 
   it("sanitizes partially present review defaults", () => {

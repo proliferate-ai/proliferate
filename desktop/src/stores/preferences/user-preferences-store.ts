@@ -2,6 +2,11 @@ import { create } from "zustand";
 import type { ColorMode, ThemePreset } from "@/config/theme";
 import type { OnboardingGoalId } from "@/config/onboarding";
 import {
+  resolveAppearanceSizeId,
+  type ReadableCodeFontSizeId,
+  type UiFontSizeId,
+} from "@/lib/domain/preferences/appearance";
+import {
   clampRounds,
   MAX_REVIEWERS_PER_RUN,
   type ReviewPersonalityPreference,
@@ -34,6 +39,8 @@ export type ReviewPersonalitiesByKind = StoredReviewPersonalitiesByKind;
 export interface UserPreferences {
   themePreset: ThemePreset;
   colorMode: ColorMode;
+  uiFontSizeId: UiFontSizeId;
+  readableCodeFontSizeId: ReadableCodeFontSizeId;
   defaultChatAgentKind: string;
   defaultChatModelId: string;
   defaultSessionModeByAgentKind: Record<string, string>;
@@ -59,6 +66,8 @@ const LEGACY_MODE_KEY = "proliferate-mode";
 export const NEW_USER_DEFAULTS: UserPreferences = {
   themePreset: "mono",
   colorMode: "dark",
+  uiFontSizeId: "default",
+  readableCodeFontSizeId: "default",
   defaultChatAgentKind: "",
   defaultChatModelId: "",
   defaultSessionModeByAgentKind: {},
@@ -86,6 +95,8 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
 export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   themePreset: "ship",
   colorMode: "dark",
+  uiFontSizeId: "default",
+  readableCodeFontSizeId: "default",
   defaultChatAgentKind: "",
   defaultChatModelId: "",
   defaultSessionModeByAgentKind: {},
@@ -173,6 +184,8 @@ async function readLegacyUserPreferences(): Promise<UserPreferences> {
   return {
     themePreset: legacyTheme.themePreset ?? defaults.themePreset,
     colorMode: legacyTheme.colorMode ?? defaults.colorMode,
+    uiFontSizeId: defaults.uiFontSizeId,
+    readableCodeFontSizeId: defaults.readableCodeFontSizeId,
     defaultChatAgentKind: legacyDefaultChatAgentKind ?? defaults.defaultChatAgentKind,
     defaultChatModelId: legacyDefaultChatModelId ?? defaults.defaultChatModelId,
     defaultSessionModeByAgentKind: defaults.defaultSessionModeByAgentKind,
@@ -390,6 +403,18 @@ export function migrateUserPreferences(preferences: UserPreferences): {
     changed = true;
   }
 
+  const uiFontSizeId = resolveAppearanceSizeId(next.uiFontSizeId);
+  if (uiFontSizeId !== next.uiFontSizeId) {
+    next.uiFontSizeId = uiFontSizeId;
+    changed = true;
+  }
+
+  const readableCodeFontSizeId = resolveAppearanceSizeId(next.readableCodeFontSizeId);
+  if (readableCodeFontSizeId !== next.readableCodeFontSizeId) {
+    next.readableCodeFontSizeId = readableCodeFontSizeId;
+    changed = true;
+  }
+
   const sanitizedReviewDefaultsByKind = sanitizeReviewDefaultsByKind(next.reviewDefaultsByKind);
   if (JSON.stringify(sanitizedReviewDefaultsByKind) !== JSON.stringify(next.reviewDefaultsByKind)) {
     next.reviewDefaultsByKind = sanitizedReviewDefaultsByKind;
@@ -431,6 +456,8 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
   return {
     themePreset: state.themePreset,
     colorMode: state.colorMode,
+    uiFontSizeId: state.uiFontSizeId,
+    readableCodeFontSizeId: state.readableCodeFontSizeId,
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelId: state.defaultChatModelId,
     defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,

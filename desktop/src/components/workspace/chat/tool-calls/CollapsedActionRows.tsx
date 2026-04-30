@@ -124,7 +124,7 @@ function PlainActionRow({
   return (
     <div
       title={label}
-      className={`truncate text-chat leading-relaxed ${
+      className={`truncate text-chat leading-[var(--text-chat--line-height)] ${
         tone === "failed" ? "text-destructive/80" : "text-muted-foreground/80"
       }`}
     >
@@ -155,7 +155,7 @@ function CommandActionRow({ item }: { item: ToolCallItem }) {
             <span>Shell</span>
           </div>
           <div className="px-2 pb-2">
-            <code className="block whitespace-pre-wrap break-words font-mono text-sm leading-relaxed text-muted-foreground">
+            <code className="block whitespace-pre-wrap break-words font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-muted-foreground">
               $ {command}
             </code>
           </div>
@@ -164,7 +164,7 @@ function CommandActionRow({ item }: { item: ToolCallItem }) {
             viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
             allowHorizontal
           >
-            <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-sm leading-relaxed text-muted-foreground">
+            <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-muted-foreground">
               <code>{output || "No output"}</code>
             </pre>
           </AutoHideScrollArea>
@@ -194,7 +194,7 @@ function EditActionRow({
       <div
         role={hasDetails ? "button" : undefined}
         tabIndex={hasDetails ? 0 : undefined}
-        className="group/action-row flex min-w-0 items-center gap-1 text-chat leading-relaxed text-muted-foreground/80"
+        className="group/action-row flex min-w-0 items-center gap-1 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground/80"
         onClick={() => {
           if (hasDetails) setExpanded((value) => !value);
         }}
@@ -252,7 +252,7 @@ function EditActionRow({
             />
           ) : part.preview ? (
             <AutoHideScrollArea viewportClassName="max-h-60">
-              <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-sm leading-relaxed text-muted-foreground">
+              <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-muted-foreground">
                 <code>{part.preview}</code>
               </pre>
             </AutoHideScrollArea>
@@ -327,7 +327,7 @@ function GenericActionRow({ item }: { item: ToolCallItem }) {
               viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
               allowHorizontal
             >
-              <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-sm leading-relaxed text-muted-foreground">
+              <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-muted-foreground">
                 <code>{output}</code>
               </pre>
             </AutoHideScrollArea>

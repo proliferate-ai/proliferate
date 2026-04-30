@@ -191,7 +191,7 @@ export function AutomationSchedulePopover({
                   onChange={(event) => onRruleChange(event.target.value)}
                   onBlur={onRruleBlur}
                   rows={3}
-                  className="font-mono text-xs"
+                  className="font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)]"
                 />
               </div>
             )}
