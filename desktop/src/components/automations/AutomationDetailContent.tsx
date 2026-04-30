@@ -21,6 +21,7 @@ interface AutomationDetailContentProps {
   onResume: () => void;
   onRunNow: () => void;
   onOpenCloudWorkspace: (cloudWorkspaceId: string) => void;
+  onOpenLocalWorkspace: (run: AutomationRunResponse) => void;
 }
 
 export function AutomationDetailContent({
@@ -37,6 +38,7 @@ export function AutomationDetailContent({
   onResume,
   onRunNow,
   onOpenCloudWorkspace,
+  onOpenLocalWorkspace,
 }: AutomationDetailContentProps) {
   if (loading) {
     return (
@@ -127,6 +129,7 @@ export function AutomationDetailContent({
           loading={runsLoading}
           pendingCloudWorkspaceId={pendingCloudWorkspaceId}
           onOpenCloudWorkspace={onOpenCloudWorkspace}
+          onOpenLocalWorkspace={onOpenLocalWorkspace}
         />
       </section>
     </div>

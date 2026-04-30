@@ -76,6 +76,11 @@ async def run_scheduler_loop(
             consecutive_failures = 0
             if result.created_runs:
                 logger.info("Automation scheduler created runs count=%s", result.created_runs)
+            if result.swept_dispatching_runs:
+                logger.warning(
+                    "Automation scheduler swept dispatching runs count=%s",
+                    result.swept_dispatching_runs,
+                )
             next_delay = interval_seconds
         except Exception as exc:
             consecutive_failures += 1

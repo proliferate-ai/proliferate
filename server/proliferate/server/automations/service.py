@@ -8,6 +8,9 @@ from uuid import UUID
 
 from proliferate.config import settings
 from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS
+from proliferate.db.store.automation_run_claims import (
+    sweep_expired_dispatching_runs,
+)
 from proliferate.db.store.automations import (
     AUTOMATION_EXECUTION_TARGET_CLOUD,
     AUTOMATION_EXECUTION_TARGET_LOCAL,
@@ -59,6 +62,7 @@ class AutomationServiceError(RuntimeError):
 @dataclass(frozen=True)
 class SchedulerTickResult:
     created_runs: int
+    swept_dispatching_runs: int = 0
 
 
 def require_automations_enabled() -> None:
@@ -85,6 +89,10 @@ def _normalize_required_text(value: str, *, field_name: str, max_length: int | N
             status_code=400,
         )
     return normalized
+
+
+def _normalize_repo_part(value: str, *, field_name: str) -> str:
+    return _normalize_required_text(value, field_name=field_name, max_length=255)
 
 
 def _normalize_optional_text(value: str | None, *, field_name: str) -> str | None:
@@ -138,11 +146,14 @@ def _normalize_reasoning_effort(value: str | None) -> str | None:
     return normalized
 
 
-def _require_cloud_agent_kind(execution_target: str, agent_kind: str | None) -> None:
-    if execution_target == AUTOMATION_EXECUTION_TARGET_CLOUD and agent_kind is None:
+def _require_agent_kind(execution_target: str, agent_kind: str | None) -> None:
+    if (
+        execution_target in {AUTOMATION_EXECUTION_TARGET_CLOUD, AUTOMATION_EXECUTION_TARGET_LOCAL}
+        and agent_kind is None
+    ):
         raise AutomationServiceError(
             "automation_agent_required",
-            "Choose an agent before scheduling a cloud automation.",
+            "Choose an agent before scheduling this automation.",
             status_code=400,
         )
 
@@ -201,12 +212,8 @@ async def get_automation(user_id: UUID, automation_id: UUID) -> AutomationRespon
 async def create_automation(user_id: UUID, body: CreateAutomationRequest) -> AutomationResponse:
     require_automations_enabled()
     now = utcnow()
-    git_owner = _normalize_required_text(body.git_owner, field_name="gitOwner", max_length=255)
-    git_repo_name = _normalize_required_text(
-        body.git_repo_name,
-        field_name="gitRepoName",
-        max_length=255,
-    )
+    git_owner = _normalize_repo_part(body.git_owner, field_name="gitOwner")
+    git_repo_name = _normalize_repo_part(body.git_repo_name, field_name="gitRepoName")
     repo_config_id = await _ensure_repo_config_id(
         user_id=user_id,
         git_owner=git_owner,
@@ -221,7 +228,7 @@ async def create_automation(user_id: UUID, body: CreateAutomationRequest) -> Aut
     )
     execution_target = _normalize_execution_target(body.execution_target)
     agent_kind = _normalize_agent_kind(body.agent_kind)
-    _require_cloud_agent_kind(execution_target, agent_kind)
+    _require_agent_kind(execution_target, agent_kind)
     value = await create_automation_for_user(
         user_id=user_id,
         cloud_repo_config_id=repo_config_id,
@@ -322,7 +329,7 @@ async def update_automation(
         # Executor-state PRs can add explicit cancellation/rescheduling semantics.
         updates["next_run_at"] = next_run_at if existing.enabled else None
 
-    _require_cloud_agent_kind(resolved_execution_target, resolved_agent_kind)
+    _require_agent_kind(resolved_execution_target, resolved_agent_kind)
 
     value = await update_automation_for_user(
         user_id=user_id,
@@ -365,7 +372,7 @@ async def resume_automation(user_id: UUID, automation_id: UUID) -> AutomationRes
             "Automation not found.",
             status_code=404,
         )
-    _require_cloud_agent_kind(existing.execution_target, existing.agent_kind)
+    _require_agent_kind(existing.execution_target, existing.agent_kind)
     next_run_at = next_future_occurrence(
         rrule_text=existing.schedule_rrule,
         timezone=existing.schedule_timezone,
@@ -402,7 +409,7 @@ async def run_automation_now(user_id: UUID, automation_id: UUID) -> AutomationRu
             "Resume this automation before queueing a manual run.",
             status_code=400,
         )
-    _require_cloud_agent_kind(existing.execution_target, existing.agent_kind)
+    _require_agent_kind(existing.execution_target, existing.agent_kind)
     await _ensure_repo_config_id(
         user_id=user_id,
         git_owner=existing.git_owner,
@@ -456,12 +463,16 @@ def _resolve_due_schedule(
 async def run_scheduler_tick(*, batch_size: int = 100) -> SchedulerTickResult:
     if not settings.automations_enabled:
         return SchedulerTickResult(created_runs=0)
+    swept_dispatching_runs = await sweep_expired_dispatching_runs(now=utcnow())
     created_runs = await create_due_scheduled_runs_batch(
         now=utcnow(),
         limit=max(1, batch_size),
         schedule_advance_resolver=_resolve_due_schedule,
     )
-    return SchedulerTickResult(created_runs=created_runs)
+    return SchedulerTickResult(
+        created_runs=created_runs,
+        swept_dispatching_runs=swept_dispatching_runs,
+    )
 
 
 def automation_for_tests(value: AutomationValue) -> AutomationResponse:

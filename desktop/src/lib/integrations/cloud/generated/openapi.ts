@@ -1090,6 +1090,176 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/automations/executor/local/claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Claim Local Runs Endpoint */
+        post: operations["claim_local_runs_endpoint_v1_automations_executor_local_claims_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/automations/executor/local/runs/{run_id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Heartbeat Local Run Endpoint */
+        post: operations["heartbeat_local_run_endpoint_v1_automations_executor_local_runs__run_id__heartbeat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/automations/executor/local/runs/{run_id}/creating-workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Local Run Creating Workspace Endpoint */
+        post: operations["mark_local_run_creating_workspace_endpoint_v1_automations_executor_local_runs__run_id__creating_workspace_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/automations/executor/local/runs/{run_id}/attach-workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Attach Local Run Workspace Endpoint */
+        post: operations["attach_local_run_workspace_endpoint_v1_automations_executor_local_runs__run_id__attach_workspace_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/automations/executor/local/runs/{run_id}/provisioning-workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Local Run Provisioning Workspace Endpoint */
+        post: operations["mark_local_run_provisioning_workspace_endpoint_v1_automations_executor_local_runs__run_id__provisioning_workspace_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/automations/executor/local/runs/{run_id}/creating-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Local Run Creating Session Endpoint */
+        post: operations["mark_local_run_creating_session_endpoint_v1_automations_executor_local_runs__run_id__creating_session_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/automations/executor/local/runs/{run_id}/attach-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Attach Local Run Session Endpoint */
+        post: operations["attach_local_run_session_endpoint_v1_automations_executor_local_runs__run_id__attach_session_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/automations/executor/local/runs/{run_id}/dispatching": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Local Run Dispatching Endpoint */
+        post: operations["mark_local_run_dispatching_endpoint_v1_automations_executor_local_runs__run_id__dispatching_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/automations/executor/local/runs/{run_id}/dispatched": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Local Run Dispatched Endpoint */
+        post: operations["mark_local_run_dispatched_endpoint_v1_automations_executor_local_runs__run_id__dispatched_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/automations/executor/local/runs/{run_id}/failed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Local Run Failed Endpoint */
+        post: operations["mark_local_run_failed_endpoint_v1_automations_executor_local_runs__run_id__failed_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/automations/{automation_id}": {
         parameters: {
             query?: never;
@@ -1914,6 +2084,132 @@ export interface components {
              * @default 0.1.0
              */
             version: string;
+        };
+        /** LocalAutomationAttachSessionRequest */
+        LocalAutomationAttachSessionRequest: {
+            /** Executorid */
+            executorId: string;
+            /**
+             * Claimid
+             * Format: uuid
+             */
+            claimId: string;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
+            /** Anyharnesssessionid */
+            anyharnessSessionId: string;
+        };
+        /** LocalAutomationAttachWorkspaceRequest */
+        LocalAutomationAttachWorkspaceRequest: {
+            /** Executorid */
+            executorId: string;
+            /**
+             * Claimid
+             * Format: uuid
+             */
+            claimId: string;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string;
+        };
+        /** LocalAutomationClaimActionRequest */
+        LocalAutomationClaimActionRequest: {
+            /** Executorid */
+            executorId: string;
+            /**
+             * Claimid
+             * Format: uuid
+             */
+            claimId: string;
+        };
+        /** LocalAutomationClaimListResponse */
+        LocalAutomationClaimListResponse: {
+            /** Runs */
+            runs: components["schemas"]["LocalAutomationRunClaimResponse"][];
+        };
+        /** LocalAutomationClaimRequest */
+        LocalAutomationClaimRequest: {
+            /** Executorid */
+            executorId: string;
+            /** Availablerepositories */
+            availableRepositories: components["schemas"]["LocalExecutorRepositoryIdentity"][];
+            /**
+             * Limit
+             * @default 1
+             */
+            limit: number;
+        };
+        /** LocalAutomationFailRequest */
+        LocalAutomationFailRequest: {
+            /** Executorid */
+            executorId: string;
+            /**
+             * Claimid
+             * Format: uuid
+             */
+            claimId: string;
+            /** Errorcode */
+            errorCode: string;
+        };
+        /** LocalAutomationMutationResponse */
+        LocalAutomationMutationResponse: {
+            run?: components["schemas"]["LocalAutomationRunClaimResponse"] | null;
+            /**
+             * Accepted
+             * @default true
+             */
+            accepted: boolean;
+        };
+        /** LocalAutomationRunClaimResponse */
+        LocalAutomationRunClaimResponse: {
+            /** Id */
+            id: string;
+            /** Automationid */
+            automationId: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "claimed" | "creating_workspace" | "provisioning_workspace" | "creating_session" | "dispatching" | "dispatched" | "failed" | "cancelled";
+            /**
+             * Executiontarget
+             * @enum {string}
+             */
+            executionTarget: "cloud" | "local";
+            /** Titlesnapshot */
+            titleSnapshot: string;
+            /** Promptsnapshot */
+            promptSnapshot: string;
+            /** Gitprovidersnapshot */
+            gitProviderSnapshot: string;
+            /** Gitownersnapshot */
+            gitOwnerSnapshot: string;
+            /** Gitreponamesnapshot */
+            gitRepoNameSnapshot: string;
+            /** Agentkindsnapshot */
+            agentKindSnapshot: string | null;
+            /** Modelidsnapshot */
+            modelIdSnapshot: string | null;
+            /** Modeidsnapshot */
+            modeIdSnapshot: string | null;
+            /** Reasoningeffortsnapshot */
+            reasoningEffortSnapshot: string | null;
+            /** Claimid */
+            claimId: string;
+            /** Claimexpiresat */
+            claimExpiresAt: string;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string | null;
+            /** Anyharnesssessionid */
+            anyharnessSessionId: string | null;
+        };
+        /** LocalExecutorRepositoryIdentity */
+        LocalExecutorRepositoryIdentity: {
+            /** Provider */
+            provider: string;
+            /** Owner */
+            owner: string;
+            /** Name */
+            name: string;
         };
         /** LocalStdioArgTemplateModel */
         LocalStdioArgTemplateModel: {
@@ -5102,6 +5398,354 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AutomationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_local_runs_endpoint_v1_automations_executor_local_claims_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalAutomationClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalAutomationClaimListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    heartbeat_local_run_endpoint_v1_automations_executor_local_runs__run_id__heartbeat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalAutomationClaimActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_local_run_creating_workspace_endpoint_v1_automations_executor_local_runs__run_id__creating_workspace_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalAutomationClaimActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_local_run_workspace_endpoint_v1_automations_executor_local_runs__run_id__attach_workspace_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalAutomationAttachWorkspaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_local_run_provisioning_workspace_endpoint_v1_automations_executor_local_runs__run_id__provisioning_workspace_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalAutomationClaimActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_local_run_creating_session_endpoint_v1_automations_executor_local_runs__run_id__creating_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalAutomationAttachWorkspaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_local_run_session_endpoint_v1_automations_executor_local_runs__run_id__attach_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalAutomationAttachSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_local_run_dispatching_endpoint_v1_automations_executor_local_runs__run_id__dispatching_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalAutomationClaimActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_local_run_dispatched_endpoint_v1_automations_executor_local_runs__run_id__dispatched_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalAutomationAttachSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_local_run_failed_endpoint_v1_automations_executor_local_runs__run_id__failed_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalAutomationFailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalAutomationMutationResponse"];
                 };
             };
             /** @description Validation Error */

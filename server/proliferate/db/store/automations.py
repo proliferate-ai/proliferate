@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -444,7 +444,10 @@ async def create_due_scheduled_runs_batch(
                         Automation.enabled.is_(True),
                         Automation.next_run_at.is_not(None),
                         Automation.next_run_at <= now,
-                        CloudRepoConfig.configured.is_(True),
+                        or_(
+                            Automation.execution_target == AUTOMATION_EXECUTION_TARGET_LOCAL,
+                            CloudRepoConfig.configured.is_(True),
+                        ),
                     )
                     .order_by(Automation.next_run_at.asc())
                     .limit(limit)

@@ -9,12 +9,31 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from proliferate.auth.dependencies import current_active_user
 from proliferate.db.models.auth import User
+from proliferate.server.automations.local_executor_service import (
+    attach_local_run_session,
+    attach_local_run_workspace,
+    claim_local_runs,
+    heartbeat_local_run,
+    mark_local_run_creating_session,
+    mark_local_run_creating_workspace,
+    mark_local_run_dispatched,
+    mark_local_run_dispatching,
+    mark_local_run_failed,
+    mark_local_run_provisioning_workspace,
+)
 from proliferate.server.automations.models import (
     AutomationListResponse,
     AutomationResponse,
     AutomationRunListResponse,
     AutomationRunResponse,
     CreateAutomationRequest,
+    LocalAutomationAttachSessionRequest,
+    LocalAutomationAttachWorkspaceRequest,
+    LocalAutomationClaimActionRequest,
+    LocalAutomationClaimListResponse,
+    LocalAutomationClaimRequest,
+    LocalAutomationFailRequest,
+    LocalAutomationMutationResponse,
     UpdateAutomationRequest,
 )
 from proliferate.server.automations.service import (
@@ -56,6 +75,152 @@ async def create_automation_endpoint(
 ) -> AutomationResponse:
     try:
         return await create_automation(user.id, body)
+    except AutomationServiceError as error:
+        _raise_automation_error(error)
+
+
+@router.post("/executor/local/claims", response_model=LocalAutomationClaimListResponse)
+async def claim_local_runs_endpoint(
+    body: LocalAutomationClaimRequest,
+    user: User = Depends(current_active_user),
+) -> LocalAutomationClaimListResponse:
+    try:
+        return await claim_local_runs(user.id, body)
+    except AutomationServiceError as error:
+        _raise_automation_error(error)
+
+
+@router.post(
+    "/executor/local/runs/{run_id}/heartbeat",
+    response_model=LocalAutomationMutationResponse,
+)
+async def heartbeat_local_run_endpoint(
+    run_id: UUID,
+    body: LocalAutomationClaimActionRequest,
+    user: User = Depends(current_active_user),
+) -> LocalAutomationMutationResponse:
+    try:
+        return await heartbeat_local_run(user.id, run_id, body)
+    except AutomationServiceError as error:
+        _raise_automation_error(error)
+
+
+@router.post(
+    "/executor/local/runs/{run_id}/creating-workspace",
+    response_model=LocalAutomationMutationResponse,
+)
+async def mark_local_run_creating_workspace_endpoint(
+    run_id: UUID,
+    body: LocalAutomationClaimActionRequest,
+    user: User = Depends(current_active_user),
+) -> LocalAutomationMutationResponse:
+    try:
+        return await mark_local_run_creating_workspace(user.id, run_id, body)
+    except AutomationServiceError as error:
+        _raise_automation_error(error)
+
+
+@router.post(
+    "/executor/local/runs/{run_id}/attach-workspace",
+    response_model=LocalAutomationMutationResponse,
+)
+async def attach_local_run_workspace_endpoint(
+    run_id: UUID,
+    body: LocalAutomationAttachWorkspaceRequest,
+    user: User = Depends(current_active_user),
+) -> LocalAutomationMutationResponse:
+    try:
+        return await attach_local_run_workspace(user.id, run_id, body)
+    except AutomationServiceError as error:
+        _raise_automation_error(error)
+
+
+@router.post(
+    "/executor/local/runs/{run_id}/provisioning-workspace",
+    response_model=LocalAutomationMutationResponse,
+)
+async def mark_local_run_provisioning_workspace_endpoint(
+    run_id: UUID,
+    body: LocalAutomationClaimActionRequest,
+    user: User = Depends(current_active_user),
+) -> LocalAutomationMutationResponse:
+    try:
+        return await mark_local_run_provisioning_workspace(user.id, run_id, body)
+    except AutomationServiceError as error:
+        _raise_automation_error(error)
+
+
+@router.post(
+    "/executor/local/runs/{run_id}/creating-session",
+    response_model=LocalAutomationMutationResponse,
+)
+async def mark_local_run_creating_session_endpoint(
+    run_id: UUID,
+    body: LocalAutomationAttachWorkspaceRequest,
+    user: User = Depends(current_active_user),
+) -> LocalAutomationMutationResponse:
+    try:
+        return await mark_local_run_creating_session(user.id, run_id, body)
+    except AutomationServiceError as error:
+        _raise_automation_error(error)
+
+
+@router.post(
+    "/executor/local/runs/{run_id}/attach-session",
+    response_model=LocalAutomationMutationResponse,
+)
+async def attach_local_run_session_endpoint(
+    run_id: UUID,
+    body: LocalAutomationAttachSessionRequest,
+    user: User = Depends(current_active_user),
+) -> LocalAutomationMutationResponse:
+    try:
+        return await attach_local_run_session(user.id, run_id, body)
+    except AutomationServiceError as error:
+        _raise_automation_error(error)
+
+
+@router.post(
+    "/executor/local/runs/{run_id}/dispatching",
+    response_model=LocalAutomationMutationResponse,
+)
+async def mark_local_run_dispatching_endpoint(
+    run_id: UUID,
+    body: LocalAutomationClaimActionRequest,
+    user: User = Depends(current_active_user),
+) -> LocalAutomationMutationResponse:
+    try:
+        return await mark_local_run_dispatching(user.id, run_id, body)
+    except AutomationServiceError as error:
+        _raise_automation_error(error)
+
+
+@router.post(
+    "/executor/local/runs/{run_id}/dispatched",
+    response_model=LocalAutomationMutationResponse,
+)
+async def mark_local_run_dispatched_endpoint(
+    run_id: UUID,
+    body: LocalAutomationAttachSessionRequest,
+    user: User = Depends(current_active_user),
+) -> LocalAutomationMutationResponse:
+    try:
+        return await mark_local_run_dispatched(user.id, run_id, body)
+    except AutomationServiceError as error:
+        _raise_automation_error(error)
+
+
+@router.post(
+    "/executor/local/runs/{run_id}/failed",
+    response_model=LocalAutomationMutationResponse,
+)
+async def mark_local_run_failed_endpoint(
+    run_id: UUID,
+    body: LocalAutomationFailRequest,
+    user: User = Depends(current_active_user),
+) -> LocalAutomationMutationResponse:
+    try:
+        return await mark_local_run_failed(user.id, run_id, body)
     except AutomationServiceError as error:
         _raise_automation_error(error)
 

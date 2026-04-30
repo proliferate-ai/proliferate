@@ -89,6 +89,22 @@ export type AutomationRunResponse = components["schemas"]["AutomationRunResponse
 export type AutomationRunListResponse = components["schemas"]["AutomationRunListResponse"];
 export type CreateAutomationRequest = components["schemas"]["CreateAutomationRequest"];
 export type UpdateAutomationRequest = components["schemas"]["UpdateAutomationRequest"];
+export type LocalAutomationClaimRequest =
+  components["schemas"]["LocalAutomationClaimRequest"];
+export type LocalAutomationClaimListResponse =
+  components["schemas"]["LocalAutomationClaimListResponse"];
+export type LocalAutomationClaimActionRequest =
+  components["schemas"]["LocalAutomationClaimActionRequest"];
+export type LocalAutomationAttachWorkspaceRequest =
+  components["schemas"]["LocalAutomationAttachWorkspaceRequest"];
+export type LocalAutomationAttachSessionRequest =
+  components["schemas"]["LocalAutomationAttachSessionRequest"];
+export type LocalAutomationFailRequest =
+  components["schemas"]["LocalAutomationFailRequest"];
+export type LocalAutomationMutationResponse =
+  components["schemas"]["LocalAutomationMutationResponse"];
+export type LocalAutomationRunClaimResponse =
+  components["schemas"]["LocalAutomationRunClaimResponse"];
 export type CloudMcpConnectionSyncStatus = components["schemas"]["CloudMcpConnectionSyncStatus"];
 export type SyncCloudMcpConnectionRequest = components["schemas"]["SyncCloudMcpConnectionRequest"];
 export type CloudMcpCatalogResponse = components["schemas"]["ConnectorCatalogResponse"];

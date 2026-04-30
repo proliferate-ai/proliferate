@@ -8,20 +8,39 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from proliferate.db import engine as engine_module
 from proliferate.db.models.automations import Automation, AutomationRun
 from proliferate.db.models.cloud import CloudRepoConfig
-from proliferate.db.store.automation_run_claims import (
+from proliferate.db.store.automation_run_claim_values import (
     AUTOMATION_ERROR_AGENT_NOT_CONFIGURED,
     AUTOMATION_ERROR_DISPATCH_UNCERTAIN,
+    LocalAutomationRepoIdentity,
+)
+from proliferate.db.store.automation_run_claims import (
+    attach_anyharness_workspace_to_run,
     claim_cloud_automation_runs,
+    claim_local_automation_runs,
     heartbeat_run_claim,
     mark_run_creating_workspace,
+    mark_run_provisioning_workspace,
     sweep_expired_dispatching_runs,
 )
 from proliferate.db.store.automations import (
     AUTOMATION_EXECUTION_TARGET_CLOUD,
+    AUTOMATION_EXECUTION_TARGET_LOCAL,
+    AUTOMATION_EXECUTOR_KIND_DESKTOP,
     AUTOMATION_RUN_STATUS_DISPATCHING,
     create_manual_run_for_user,
 )
+from proliferate.server.automations.local_executor_service import (
+    MAX_LOCAL_CLAIM_LIMIT,
+    _normalize_local_error_code,
+)
 from proliferate.server.automations.worker import _parse_args
+
+
+def test_local_executor_service_caps_claims_and_allowlists_error_codes() -> None:
+    assert MAX_LOCAL_CLAIM_LIMIT == 1
+    assert _normalize_local_error_code("dispatch_uncertain") == "dispatch_uncertain"
+    assert _normalize_local_error_code("local_prompt_send_failed") == "local_prompt_send_failed"
+    assert _normalize_local_error_code("raw/path/leak") == "local_unexpected_executor_error"
 
 
 def test_cloud_executor_cli_rejects_non_positive_values() -> None:
@@ -67,6 +86,50 @@ async def _create_cloud_automation(user_id: uuid.UUID, now: datetime) -> uuid.UU
             model_id="gpt-5.4",
             mode_id="code",
             reasoning_effort="medium",
+            enabled=True,
+            paused_at=None,
+            next_run_at=now,
+            last_scheduled_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(automation)
+        await session.commit()
+        return automation.id
+
+
+async def _create_local_automation(user_id: uuid.UUID, now: datetime) -> uuid.UUID:
+    async with engine_module.async_session_factory() as session:
+        repo = CloudRepoConfig(
+            user_id=user_id,
+            git_owner="Proliferate-AI",
+            git_repo_name="Proliferate",
+            configured=False,
+            configured_at=None,
+            default_branch="main",
+            env_vars_ciphertext="",
+            env_vars_version=0,
+            setup_script="",
+            setup_script_version=0,
+            files_version=0,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(repo)
+        await session.flush()
+        automation = Automation(
+            user_id=user_id,
+            cloud_repo_config_id=repo.id,
+            title="Local check",
+            prompt="Check locally",
+            schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
+            schedule_timezone="UTC",
+            schedule_summary="Daily at 09:00 in UTC",
+            execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
+            agent_kind="codex",
+            model_id=None,
+            mode_id=None,
+            reasoning_effort=None,
             enabled=True,
             paused_at=None,
             next_run_at=now,
@@ -205,6 +268,191 @@ async def test_stale_claim_cannot_mutate_after_reclaim(
 
         assert stale_heartbeat is None
         assert stale_transition is None
+    finally:
+        engine_module.async_session_factory = original_factory
+
+
+@pytest.mark.asyncio
+async def test_local_claim_matches_user_and_canonical_repo_identity(
+    test_engine,  # type: ignore[no-untyped-def]
+) -> None:
+    original_factory = engine_module.async_session_factory
+    engine_module.async_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    now = datetime(2026, 4, 20, 12, 0, tzinfo=UTC)
+    user_id = uuid.uuid4()
+
+    try:
+        automation_id = await _create_local_automation(user_id, now)
+        run = await create_manual_run_for_user(user_id=user_id, automation_id=automation_id)
+        assert run is not None
+
+        wrong_user_claims = await claim_local_automation_runs(
+            user_id=uuid.uuid4(),
+            executor_id="desktop-1",
+            available_repositories=[
+                LocalAutomationRepoIdentity(
+                    provider="github",
+                    owner="proliferate-ai",
+                    name="proliferate",
+                )
+            ],
+            claim_ttl=timedelta(minutes=5),
+            limit=1,
+            now=now,
+        )
+        claims = await claim_local_automation_runs(
+            user_id=user_id,
+            executor_id="desktop-1",
+            available_repositories=[
+                LocalAutomationRepoIdentity(
+                    provider="github",
+                    owner="proliferate-ai",
+                    name="proliferate",
+                )
+            ],
+            claim_ttl=timedelta(minutes=5),
+            limit=1,
+            now=now,
+        )
+
+        assert wrong_user_claims == []
+        assert len(claims) == 1
+        assert claims[0].id == run.id
+        assert claims[0].executor_kind == AUTOMATION_EXECUTOR_KIND_DESKTOP
+        assert claims[0].execution_target == AUTOMATION_EXECUTION_TARGET_LOCAL
+    finally:
+        engine_module.async_session_factory = original_factory
+
+
+@pytest.mark.asyncio
+async def test_local_claim_transition_requires_local_target_and_workspace_attachment(
+    test_engine,  # type: ignore[no-untyped-def]
+) -> None:
+    original_factory = engine_module.async_session_factory
+    engine_module.async_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    now = datetime(2026, 4, 20, 12, 0, tzinfo=UTC)
+    user_id = uuid.uuid4()
+
+    try:
+        automation_id = await _create_local_automation(user_id, now)
+        run = await create_manual_run_for_user(user_id=user_id, automation_id=automation_id)
+        assert run is not None
+        claim = (
+            await claim_local_automation_runs(
+                user_id=user_id,
+                executor_id="desktop-1",
+                available_repositories=[
+                    LocalAutomationRepoIdentity(
+                        provider="github",
+                        owner="proliferate-ai",
+                        name="proliferate",
+                    )
+                ],
+                claim_ttl=timedelta(minutes=5),
+                limit=1,
+                now=now,
+            )
+        )[0]
+
+        cloud_transition = await mark_run_creating_workspace(
+            run_id=claim.id,
+            claim_id=claim.claim_id,
+            now=now,
+        )
+        local_creating = await mark_run_creating_workspace(
+            run_id=claim.id,
+            claim_id=claim.claim_id,
+            now=now,
+            execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
+            executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
+            user_id=user_id,
+        )
+        local_without_workspace = await mark_run_provisioning_workspace(
+            run_id=claim.id,
+            claim_id=claim.claim_id,
+            now=now,
+            execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
+            executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
+            user_id=user_id,
+        )
+        attached = await attach_anyharness_workspace_to_run(
+            run_id=claim.id,
+            claim_id=claim.claim_id,
+            anyharness_workspace_id="workspace-1",
+            now=now,
+            execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
+            executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
+            user_id=user_id,
+        )
+        local_with_workspace = await mark_run_provisioning_workspace(
+            run_id=claim.id,
+            claim_id=claim.claim_id,
+            now=now,
+            execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
+            executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
+            user_id=user_id,
+        )
+
+        assert cloud_transition is None
+        assert local_creating is not None
+        assert local_without_workspace is None
+        assert attached is not None
+        assert local_with_workspace is not None
+        assert local_with_workspace.anyharness_workspace_id == "workspace-1"
+    finally:
+        engine_module.async_session_factory = original_factory
+
+
+@pytest.mark.asyncio
+async def test_local_reclaimed_attached_workspace_can_resume_provisioning(
+    test_engine,  # type: ignore[no-untyped-def]
+) -> None:
+    original_factory = engine_module.async_session_factory
+    engine_module.async_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    now = datetime(2026, 4, 20, 12, 0, tzinfo=UTC)
+    user_id = uuid.uuid4()
+
+    try:
+        automation_id = await _create_local_automation(user_id, now)
+        run = await create_manual_run_for_user(user_id=user_id, automation_id=automation_id)
+        assert run is not None
+        claim = (
+            await claim_local_automation_runs(
+                user_id=user_id,
+                executor_id="desktop-1",
+                available_repositories=[
+                    LocalAutomationRepoIdentity(
+                        provider="github",
+                        owner="proliferate-ai",
+                        name="proliferate",
+                    )
+                ],
+                claim_ttl=timedelta(minutes=5),
+                limit=1,
+                now=now,
+            )
+        )[0]
+        attached = await attach_anyharness_workspace_to_run(
+            run_id=claim.id,
+            claim_id=claim.claim_id,
+            anyharness_workspace_id="workspace-1",
+            now=now,
+            execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
+            executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
+            user_id=user_id,
+        )
+        resumed = await mark_run_provisioning_workspace(
+            run_id=claim.id,
+            claim_id=claim.claim_id,
+            now=now,
+            execution_target=AUTOMATION_EXECUTION_TARGET_LOCAL,
+            executor_kind=AUTOMATION_EXECUTOR_KIND_DESKTOP,
+            user_id=user_id,
+        )
+
+        assert attached is not None
+        assert resumed is not None
+        assert resumed.anyharness_workspace_id == "workspace-1"
     finally:
         engine_module.async_session_factory = original_factory
 

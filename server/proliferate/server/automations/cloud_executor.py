@@ -12,11 +12,13 @@ from datetime import timedelta
 
 from proliferate.config import settings
 from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS, CloudWorkspaceStatus
-from proliferate.db.store.automation_run_claims import (
+from proliferate.db.store.automation_run_claim_values import (
     AUTOMATION_ERROR_DISPATCH_UNCERTAIN,
     AutomationRunClaimValue,
-    attach_anyharness_session_to_run,
     automation_error_message,
+)
+from proliferate.db.store.automation_run_claims import (
+    attach_anyharness_session_to_run,
     claim_cloud_automation_runs,
     heartbeat_run_claim,
     load_current_run_claim,
@@ -26,7 +28,6 @@ from proliferate.db.store.automation_run_claims import (
     mark_run_dispatching,
     mark_run_failed,
     mark_run_provisioning_workspace,
-    sweep_expired_dispatching_runs,
 )
 from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
@@ -505,13 +506,6 @@ async def run_cloud_executor_loop(
                 logger.exception("automation cloud executor task crashed")
 
         try:
-            swept = await sweep_expired_dispatching_runs(
-                now=utcnow(),
-                limit=resolved.sweep_limit,
-            )
-            if swept:
-                logger.warning("automation cloud executor swept dispatching runs count=%s", swept)
-
             available = max(0, resolved.concurrency - len(tasks))
             if available:
                 claims = await claim_cloud_automation_runs(

@@ -98,7 +98,7 @@ describe("validateAutomationTimezone", () => {
 });
 
 describe("automationRunStatusLabel", () => {
-  it("uses local executor-unavailable copy and plain Queued for cloud", () => {
+  it("uses executor-unavailable copy for cloud and local queued runs", () => {
     expect(automationRunStatusLabel(run({ executionTarget: "cloud" }))).toBe(
       "Queued",
     );
@@ -115,6 +115,17 @@ describe("automationRunStatusLabel", () => {
     expect(automationRunStatusLabel(run({ status: "dispatched" }))).toBe("Session started");
   });
 
+  it("uses local worktree copy for local executor setup states", () => {
+    expect(automationRunStatusLabel(run({
+      executionTarget: "local",
+      status: "creating_workspace",
+    }))).toBe("Creating local worktree");
+    expect(automationRunStatusLabel(run({
+      executionTarget: "local",
+      status: "provisioning_workspace",
+    }))).toBe("Preparing worktree");
+  });
+
   it("uses sanitized failure copy for failed runs", () => {
     expect(automationRunStatusLabel(run({
       status: "failed",
@@ -122,18 +133,22 @@ describe("automationRunStatusLabel", () => {
     }))).toBe("The requested cloud agent is not ready in the runtime.");
   });
 
-  it("compacts multiline failure copy", () => {
-    const message = `${"x".repeat(180)}\nsecond line`;
+  it("compacts multiline and long failure copy", () => {
+    expect(automationRunStatusLabel(run({
+      status: "failed",
+      lastErrorMessage: `First line\nSecond line`,
+    }))).toBe("First line");
 
+    const message = "x".repeat(160);
     expect(automationRunStatusLabel(run({
       status: "failed",
       lastErrorMessage: message,
-    }))).toBe(`${"x".repeat(139)}…`);
+    }))).toHaveLength(140);
   });
 
-  it("surfaces unknown server statuses instead of treating them as queued", () => {
+  it("keeps unknown statuses visible", () => {
     expect(automationRunStatusLabel(run({
-      status: "retrying" as AutomationRunResponse["status"],
-    }))).toBe("Unknown status: retrying");
+      status: "bogus" as AutomationRunResponse["status"],
+    }))).toBe("Unknown status: bogus");
   });
 });

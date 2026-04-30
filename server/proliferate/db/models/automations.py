@@ -139,6 +139,46 @@ class AutomationRun(Base):
                 "AND claim_expires_at IS NOT NULL"
             ),
         ),
+        Index(
+            "ix_automation_run_local_claimable",
+            "user_id",
+            "git_provider_snapshot",
+            "git_owner_snapshot",
+            "git_repo_name_snapshot",
+            "created_at",
+            postgresql_where=text(
+                "execution_target = 'local' "
+                "AND status IN ("
+                "'queued', "
+                "'claimed', "
+                "'creating_workspace', "
+                "'provisioning_workspace', "
+                "'creating_session'"
+                ")"
+            ),
+        ),
+        Index(
+            "ix_automation_run_local_claim_expiry",
+            "claim_expires_at",
+            postgresql_where=text(
+                "execution_target = 'local' "
+                "AND status IN ("
+                "'claimed', "
+                "'creating_workspace', "
+                "'provisioning_workspace', "
+                "'creating_session', "
+                "'dispatching'"
+                ") "
+                "AND claim_expires_at IS NOT NULL"
+            ),
+        ),
+        Index(
+            "ix_automation_run_dispatching_expiry",
+            "claim_expires_at",
+            postgresql_where=text(
+                "status = 'dispatching' AND claim_expires_at IS NOT NULL"
+            ),
+        ),
         Index("ix_automation_run_cloud_workspace_id", "cloud_workspace_id"),
     )
 
@@ -167,7 +207,10 @@ class AutomationRun(Base):
     executor_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     claim_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    claim_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    claim_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     last_heartbeat_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

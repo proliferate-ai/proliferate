@@ -21,7 +21,7 @@ from proliferate.constants.cloud import (
 )
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud import CloudWorkspace
-from proliferate.db.store.automation_run_claims import (
+from proliferate.db.store.automation_cloud_workspace_claims import (
     create_cloud_workspace_for_claimed_run,
 )
 from proliferate.db.store.billing import (

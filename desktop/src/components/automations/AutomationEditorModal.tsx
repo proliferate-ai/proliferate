@@ -125,8 +125,8 @@ export function AutomationEditorModal({
       setError("Add a GitHub-backed repository before creating an automation.");
       return;
     }
-    if (executionTarget === "cloud" && !agentKind.trim()) {
-      setError("Choose an agent before saving a cloud automation.");
+    if (!agentKind.trim()) {
+      setError("Choose an agent before saving an automation.");
       return;
     }
     const timezoneError = validateAutomationTimezone(timezone);

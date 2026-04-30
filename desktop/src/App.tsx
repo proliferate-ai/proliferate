@@ -12,6 +12,7 @@ import { useExportRunningAgentCount } from "@/hooks/app/use-export-running-agent
 import { useAppShortcuts } from "@/hooks/app/use-app-shortcuts"
 import { useAuthBootstrap } from "@/hooks/auth/use-auth-bootstrap"
 import { useAgentAutoReconcile } from "@/hooks/agents/use-agent-auto-reconcile"
+import { useLocalAutomationExecutor } from "@/hooks/automations/use-local-automation-executor"
 import { useRuntimeInputSyncRuntime } from "@/hooks/cloud/use-runtime-input-sync-runtime"
 import { useHomeDeferredLaunchRunner } from "@/hooks/home/use-home-deferred-launch-runner"
 import { useOnboardingFinalizer } from "@/hooks/onboarding/use-onboarding-finalizer"
@@ -138,6 +139,7 @@ function AppRuntime() {
   useAppShortcuts()
   useTurnEndSound()
   useAgentAutoReconcile()
+  useLocalAutomationExecutor()
   useOnboardingFinalizer()
   useHomeDeferredLaunchRunner()
 

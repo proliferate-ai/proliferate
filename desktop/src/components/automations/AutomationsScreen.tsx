@@ -22,6 +22,7 @@ import { useSettingsRepositories } from "@/hooks/settings/use-settings-repositor
 import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
 import { useUpdater } from "@/hooks/updater/use-updater";
 import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
+import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { buildAutomationRepositoryOptions } from "@/lib/domain/automations/repositories";
 import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import type {
@@ -37,6 +38,7 @@ import {
   useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 
 const EMPTY_AUTOMATIONS: AutomationResponse[] = [];
@@ -61,7 +63,9 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   const { phase: updaterPhase, downloadUpdate, openRestartPrompt } = useUpdater();
   const showToast = useToastStore((state) => state.show);
   const { selectWorkspace } = useWorkspaceSelection();
+  const { selectSession } = useSessionActions();
   const { refreshCloudWorkspace } = useCloudWorkspaceActions();
+  const { refetch: refetchWorkspaces } = useWorkspaces();
   const [editingAutomation, setEditingAutomation] = useState<AutomationResponse | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [pendingCloudWorkspaceId, setPendingCloudWorkspaceId] = useState<string | null>(null);
@@ -143,6 +147,23 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
       setPendingCloudWorkspaceId(null);
     }
   }, [navigate, refreshCloudWorkspace, selectWorkspace, showToast]);
+
+  const handleOpenLocalWorkspace = async (run: AutomationRunResponse) => {
+    if (!run.anyharnessWorkspaceId) {
+      return;
+    }
+    try {
+      await refetchWorkspaces();
+      navigate("/");
+      await selectWorkspace(run.anyharnessWorkspaceId, { force: true });
+      if (run.anyharnessSessionId) {
+        await selectSession(run.anyharnessSessionId);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to open workspace.";
+      showToast(message);
+    }
+  };
 
   const busy = actions.isCreatingAutomation
     || actions.isUpdatingAutomation
@@ -272,6 +293,9 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
                 }}
                 onOpenCloudWorkspace={(cloudWorkspaceId) => {
                   void handleOpenCloudWorkspace(cloudWorkspaceId);
+                }}
+                onOpenLocalWorkspace={(run) => {
+                  void handleOpenLocalWorkspace(run);
                 }}
               />
             ) : (

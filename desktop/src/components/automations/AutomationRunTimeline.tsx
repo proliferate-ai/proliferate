@@ -10,25 +10,36 @@ interface AutomationRunTimelineProps {
   runs: AutomationRunResponse[];
   loading: boolean;
   pendingCloudWorkspaceId?: string | null;
+  openableLocalWorkspaceIds?: ReadonlySet<string>;
   onOpenCloudWorkspace?: (cloudWorkspaceId: string) => void;
+  onOpenLocalWorkspace?: (run: AutomationRunResponse) => void;
 }
 
 interface AutomationRunTimelineRowProps {
   run: AutomationRunResponse;
   pendingCloudWorkspaceId?: string | null;
+  openableLocalWorkspaceIds: ReadonlySet<string>;
   onOpenCloudWorkspace?: (cloudWorkspaceId: string) => void;
+  onOpenLocalWorkspace?: (run: AutomationRunResponse) => void;
 }
+
+const EMPTY_LOCAL_WORKSPACE_IDS = new Set<string>();
 
 const AutomationRunTimelineRow = memo(function AutomationRunTimelineRow({
   run,
   pendingCloudWorkspaceId,
+  openableLocalWorkspaceIds,
   onOpenCloudWorkspace,
+  onOpenLocalWorkspace,
 }: AutomationRunTimelineRowProps) {
   const statusLabel = automationRunStatusLabel(run);
   const opening = run.cloudWorkspaceId === pendingCloudWorkspaceId;
   const statusTitle = run.status === "failed"
     ? run.lastErrorMessage ?? statusLabel
     : statusLabel;
+  const canOpenLocalWorkspace = run.anyharnessWorkspaceId
+    ? openableLocalWorkspaceIds.has(run.anyharnessWorkspaceId)
+    : false;
 
   return (
     <div className="rounded-lg border border-border bg-foreground/5 p-3">
@@ -45,7 +56,7 @@ const AutomationRunTimelineRow = memo(function AutomationRunTimelineRow({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {run.cloudWorkspaceId && onOpenCloudWorkspace && (
+          {run.cloudWorkspaceId && onOpenCloudWorkspace ? (
             <Button
               variant="ghost"
               size="sm"
@@ -54,7 +65,15 @@ const AutomationRunTimelineRow = memo(function AutomationRunTimelineRow({
             >
               {opening ? "Opening..." : "Open workspace"}
             </Button>
-          )}
+          ) : canOpenLocalWorkspace && onOpenLocalWorkspace ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onOpenLocalWorkspace(run)}
+            >
+              Open workspace
+            </Button>
+          ) : null}
           <span className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">
             {run.triggerKind}
           </span>
@@ -68,7 +87,9 @@ export function AutomationRunTimeline({
   runs,
   loading,
   pendingCloudWorkspaceId = null,
+  openableLocalWorkspaceIds = EMPTY_LOCAL_WORKSPACE_IDS,
   onOpenCloudWorkspace,
+  onOpenLocalWorkspace,
 }: AutomationRunTimelineProps) {
   if (loading) {
     return (
@@ -93,7 +114,9 @@ export function AutomationRunTimeline({
           key={run.id}
           run={run}
           pendingCloudWorkspaceId={pendingCloudWorkspaceId}
+          openableLocalWorkspaceIds={openableLocalWorkspaceIds}
           onOpenCloudWorkspace={onOpenCloudWorkspace}
+          onOpenLocalWorkspace={onOpenLocalWorkspace}
         />
       ))}
     </div>
