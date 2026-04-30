@@ -57,6 +57,7 @@ def _default_repo_config_response() -> CloudRepoConfigResponse:
         default_branch=None,
         env_vars={},
         setup_script="",
+        run_command="",
         files_version=0,
         tracked_files=[],
     )
@@ -166,6 +167,7 @@ async def save_repo_config(
             default_branch=default_branch,
             env_vars=env_vars,
             setup_script=body.setup_script,
+            run_command=body.run_command,
             files=files,
         )
     except CloudRepoConfigLimitExceededError as error:

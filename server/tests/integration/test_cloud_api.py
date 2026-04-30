@@ -984,12 +984,14 @@ class TestCloudRepoConfig:
                 "defaultBranch": "release",
                 "envVars": {"API_BASE_URL": "https://example.internal"},
                 "setupScript": "pnpm install",
+                "runCommand": "make dev",
                 "files": [],
             },
         )
 
         assert save_response.status_code == 200
         assert save_response.json()["defaultBranch"] == "release"
+        assert save_response.json()["runCommand"] == "make dev"
 
         get_response = await client.get(
             "/v1/cloud/repos/proliferate-ai/proliferate/config",
@@ -997,6 +999,7 @@ class TestCloudRepoConfig:
         )
         assert get_response.status_code == 200
         assert get_response.json()["defaultBranch"] == "release"
+        assert get_response.json()["runCommand"] == "make dev"
 
         record = (
             await db_session.execute(
@@ -1008,6 +1011,7 @@ class TestCloudRepoConfig:
             )
         ).scalar_one()
         assert record.default_branch == "release"
+        assert record.run_command == "make dev"
 
     @pytest.mark.asyncio
     async def test_free_plan_repo_config_limit_blocks_second_configured_repo(

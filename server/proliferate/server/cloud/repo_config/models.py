@@ -44,6 +44,7 @@ class CloudRepoConfigResponse(BaseModel):
     default_branch: str | None = Field(serialization_alias="defaultBranch")
     env_vars: dict[str, str] = Field(serialization_alias="envVars")
     setup_script: str = Field(serialization_alias="setupScript")
+    run_command: str = Field(serialization_alias="runCommand")
     files_version: int = Field(serialization_alias="filesVersion")
     tracked_files: list[CloudRepoFileMetadata] = Field(serialization_alias="trackedFiles")
 
@@ -58,6 +59,7 @@ class SaveCloudRepoConfigRequest(BaseModel):
     default_branch: str | None = Field(default=None, alias="defaultBranch")
     env_vars: dict[str, str] = Field(default_factory=dict, alias="envVars")
     setup_script: str = Field(default="", alias="setupScript")
+    run_command: str = Field(default="", alias="runCommand")
     files: list[SaveCloudRepoConfigFile] = Field(default_factory=list)
 
 
@@ -118,6 +120,7 @@ def repo_config_payload(value: CloudRepoConfigValue) -> CloudRepoConfigResponse:
         default_branch=value.default_branch,
         env_vars=value.env_vars,
         setup_script=value.setup_script,
+        run_command=value.run_command,
         files_version=value.files_version,
         tracked_files=[repo_file_metadata_payload(item) for item in value.tracked_files],
     )

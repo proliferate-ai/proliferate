@@ -44,10 +44,15 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
   );
 
   const [setupDraft, setSetupDraft] = useState(repoConfig?.setupScript ?? "");
+  const [runCommandDraft, setRunCommandDraft] = useState(repoConfig?.runCommand ?? "");
 
   useEffect(() => {
     setSetupDraft(repoConfig?.setupScript ?? "");
   }, [repoConfig?.setupScript, sourceRoot]);
+
+  useEffect(() => {
+    setRunCommandDraft(repoConfig?.runCommand ?? "");
+  }, [repoConfig?.runCommand, sourceRoot]);
 
   useEffect(() => {
     if (!sourceRoot) {
@@ -63,6 +68,20 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     return () => window.clearTimeout(timer);
   }, [repoConfig?.setupScript, setRepoConfig, setupDraft, sourceRoot]);
 
+  useEffect(() => {
+    if (!sourceRoot) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      if (runCommandDraft !== (repoConfig?.runCommand ?? "")) {
+        setRepoConfig(sourceRoot, { runCommand: runCommandDraft });
+      }
+    }, 500);
+
+    return () => window.clearTimeout(timer);
+  }, [repoConfig?.runCommand, runCommandDraft, setRepoConfig, sourceRoot]);
+
   const explicitDefaultBranch = repoConfig?.defaultBranch ?? null;
 
   return {
@@ -71,6 +90,8 @@ export function useRepositorySettings(repository: SettingsRepositoryEntry | null
     effectiveAutoDetectedBranch,
     setupDraft,
     setSetupDraft,
+    runCommandDraft,
+    setRunCommandDraft,
     setExplicitDefaultBranch: (branchName: string | null) => {
       if (!sourceRoot) {
         return;

@@ -1,24 +1,6 @@
-export type TerminalStatus = "starting" | "running" | "exited" | "failed";
+import type { components } from "../generated/openapi.js";
 
-export interface TerminalRecord {
-  id: string;
-  workspaceId: string;
-  title: string;
-  cwd: string;
-  status: TerminalStatus;
-  exitCode?: number | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreateTerminalRequest {
-  cwd?: string;
-  shell?: string;
-  cols: number;
-  rows: number;
-}
-
-export interface ResizeTerminalRequest {
-  cols: number;
-  rows: number;
-}
+export type TerminalStatus = components["schemas"]["TerminalStatus"];
+export type TerminalRecord = components["schemas"]["TerminalRecord"];
+export type CreateTerminalRequest = components["schemas"]["CreateTerminalRequest"];
+export type ResizeTerminalRequest = components["schemas"]["ResizeTerminalRequest"];

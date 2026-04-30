@@ -24,11 +24,13 @@ function buildEnvVarRows(envVars: Record<string, string>): CloudRepoEnvVarRow[] 
 interface UseCloudRepoConfigDraftArgs {
   savedConfig: CloudRepoConfigResponse | null | undefined;
   localSetupScript: string;
+  localRunCommand: string;
 }
 
 export function useCloudRepoConfigDraft({
   savedConfig,
   localSetupScript,
+  localRunCommand,
 }: UseCloudRepoConfigDraftArgs) {
   const [defaultBranch, setDefaultBranch] = useState<string | null>(
     () => savedConfig?.defaultBranch ?? null,
@@ -40,7 +42,10 @@ export function useCloudRepoConfigDraft({
     savedConfig?.trackedFiles.map((file) => file.relativePath) ?? [],
   );
   const [setupScript, setSetupScript] = useState(
-    () => savedConfig?.setupScript ?? localSetupScript,
+    () => (!savedConfig || !savedConfig.configured ? localSetupScript : savedConfig.setupScript),
+  );
+  const [runCommand, setRunCommand] = useState(
+    () => (!savedConfig || !savedConfig.configured ? localRunCommand : savedConfig.runCommand),
   );
 
   const envVars = useMemo(() => (
@@ -103,6 +108,8 @@ export function useCloudRepoConfigDraft({
     trackedFilePaths,
     setupScript,
     setSetupScript,
+    runCommand,
+    setRunCommand,
     addEnvVarRow,
     updateEnvVarRow,
     removeEnvVarRow,

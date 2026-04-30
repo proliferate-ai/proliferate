@@ -109,6 +109,9 @@ impl TerminalService {
 
         let mut cmd = CommandBuilder::new(&shell);
         cmd.cwd(&cwd);
+        for (key, value) in request.env {
+            cmd.env(key, value);
+        }
         cmd.env("TERM", "xterm-256color");
         configure_compact_prompt(&mut cmd, &shell, workspace_path);
 
@@ -134,7 +137,13 @@ impl TerminalService {
         let record = TerminalRecord {
             id: terminal_id.clone(),
             workspace_id: workspace_id.to_string(),
-            title: format!("Terminal"),
+            title: request
+                .title
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("Terminal")
+                .to_string(),
             cwd: cwd.clone(),
             status: TerminalStatus::Running,
             exit_code: None,
@@ -465,6 +474,8 @@ mod tests {
                     rows: 24,
                     cwd: Some("".to_string()),
                     shell: Some("/bin/sh".to_string()),
+                    title: None,
+                    env: Vec::new(),
                 },
             )
             .await?;
@@ -491,6 +502,50 @@ mod tests {
 
         service.close_terminal(&record.id).await?;
         let _ = PathBuf::from(workspace_path);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn terminal_receives_injected_env_vars() -> anyhow::Result<()> {
+        let service = TerminalService::new();
+        let workspace_path = std::env::current_dir()
+            .map(|path| path.to_string_lossy().to_string())
+            .unwrap_or_else(|_| ".".to_string());
+
+        let record = service
+            .create_terminal(
+                "workspace-1",
+                &workspace_path,
+                CreateTerminalOptions {
+                    cols: 80,
+                    rows: 24,
+                    cwd: Some("".to_string()),
+                    shell: Some("/bin/sh".to_string()),
+                    title: Some("Run".to_string()),
+                    env: vec![(
+                        "PROLIFERATE_TERMINAL_TEST".to_string(),
+                        "env-pass".to_string(),
+                    )],
+                },
+            )
+            .await?;
+
+        assert_eq!(record.title, "Run");
+
+        let mut rx = service
+            .subscribe_output(&record.id)
+            .await
+            .ok_or_else(|| anyhow::anyhow!("missing receiver"))?;
+        service
+            .write_input(
+                &record.id,
+                b"printf '%s\\n' \"$PROLIFERATE_TERMINAL_TEST\"\n",
+            )
+            .await?;
+        let output = read_until_contains(&mut rx, "env-pass").await?;
+        assert!(output.contains("env-pass"));
+
+        service.close_terminal(&record.id).await?;
         Ok(())
     }
 

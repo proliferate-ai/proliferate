@@ -15,6 +15,7 @@ import { useMainScreenShortcuts } from "@/hooks/main/use-main-screen-shortcuts";
 import { useMainScreenState } from "@/hooks/main/use-main-screen-state";
 import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
 import { useUpdater } from "@/hooks/updater/use-updater";
+import { useRunWorkspaceCommand } from "@/hooks/workspaces/use-run-workspace-command";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
 
 const GLASS_HEADER_CLASS =
@@ -32,7 +33,9 @@ export function StandardWorkspaceShell() {
     shouldKeepRuntimePanelsVisible,
     hasWorkspaceShell,
     isCloudWorkspaceSelected,
+    selectedWorkspaceId,
     selectedWorkspace,
+    selectedCloudWorkspace,
     gitStatus,
     existingPr,
   } = data;
@@ -58,6 +61,13 @@ export function StandardWorkspaceShell() {
     downloadUpdate,
     openRestartPrompt,
   } = useUpdater();
+  const runCommand = useRunWorkspaceCommand({
+    selectedWorkspaceId,
+    selectedWorkspace,
+    selectedCloudWorkspace,
+    isRuntimeReady: hasRuntimeReadyWorkspace,
+    openTerminalPanel: actions.openTerminalPanel,
+  });
 
   useMainScreenShortcuts({
     onOpenFilePalette: actions.handleFilePaletteOpen,
@@ -146,6 +156,11 @@ export function StandardWorkspaceShell() {
                 selectedWorkspace={selectedWorkspace}
                 rightPanelOpen={rightPanelOpen}
                 disableGitActions={!hasRuntimeReadyWorkspace}
+                runDisabled={!runCommand.canRun}
+                runLoading={runCommand.isLaunching}
+                runLabel={runCommand.runLabel}
+                runTitle={runCommand.runTitle}
+                onRun={runCommand.onRun}
                 onTogglePanel={actions.toggleRightPanel}
                 onCommit={actions.handleCommitOpen}
                 onPush={actions.handlePushOpen}

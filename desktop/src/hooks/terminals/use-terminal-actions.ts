@@ -5,12 +5,19 @@ import { useCallback } from "react";
 import { cloudWorkspaceConnectionKey } from "@/hooks/cloud/query-keys";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
+import {
+  findReusableRunTerminalId,
+  RUN_TERMINAL_TITLE,
+} from "@/lib/domain/terminals/run-terminal";
 import { resolveWorkspaceConnection } from "@/lib/integrations/anyharness/resolve-workspace-connection";
 import {
+  clearTerminalPendingStartupCommand,
   clearTerminalWsHandle,
   emitTerminalData,
   getTerminalWsHandle,
+  popTerminalPendingStartupCommand,
   setTerminalWsHandle,
+  setTerminalPendingStartupCommand,
 } from "@/lib/integrations/anyharness/terminal-handles";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -25,6 +32,7 @@ export function useTerminalActions() {
   const showToast = useToastStore((state) => state.show);
   const setWorkspaceTabs = useTerminalStore((state) => state.setWorkspaceTabs);
   const addTab = useTerminalStore((state) => state.addTab);
+  const selectTab = useTerminalStore((state) => state.selectTab);
   const removeTab = useTerminalStore((state) => state.removeTab);
   const markUnread = useTerminalStore((state) => state.markUnread);
   const updateTabStatus = useTerminalStore((state) => state.updateTabStatus);
@@ -96,6 +104,10 @@ export function useTerminalActions() {
         // The shell prompt was already printed before the WebSocket connected.
         // Ctrl+L clears the screen and redraws the prompt cleanly.
         handle.send("\x0c");
+        const startupCommand = popTerminalPendingStartupCommand(terminalId);
+        if (startupCommand !== undefined) {
+          handle.send(`${startupCommand.replace(/[\r\n]+$/, "")}\n`);
+        }
       },
       onData: (data: Uint8Array) => {
         emitTerminalData(terminalId, data);
@@ -156,6 +168,7 @@ export function useTerminalActions() {
     workspaceId: string,
     cols: number,
     rows: number,
+    options?: { title?: string },
   ) => {
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
     if (blockedReason) {
@@ -163,10 +176,62 @@ export function useTerminalActions() {
     }
     const connection = await resolveTerminalWorkspaceConnection(workspaceId);
     const client = getAnyHarnessClient(connection);
-    const record = await client.terminals.create(connection.anyharnessWorkspaceId, { cols, rows });
+    const record = await client.terminals.create(connection.anyharnessWorkspaceId, {
+      cols,
+      rows,
+      title: options?.title,
+    });
     addTab(workspaceId, record);
     return record.id;
   }, [addTab, getWorkspaceRuntimeBlockReason, resolveTerminalWorkspaceConnection]);
+
+  const createRunTabForWorkspace = useCallback(async (
+    workspaceId: string,
+    command: string,
+    cols = 120,
+    rows = 40,
+  ) => {
+    const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
+    if (blockedReason) {
+      throw new Error(blockedReason);
+    }
+
+    const connection = await resolveTerminalWorkspaceConnection(workspaceId);
+    const client = getAnyHarnessClient(connection);
+
+    try {
+      const records = await client.terminals.list(connection.anyharnessWorkspaceId);
+      setWorkspaceTabs(workspaceId, records);
+    } catch {
+      // Terminal list is best-effort; creating a tab below still gives the user a path forward.
+    }
+
+    const existingRunTabId = findReusableRunTerminalId(
+      Object.values(useTerminalStore.getState().tabsById),
+      workspaceId,
+    );
+    if (existingRunTabId) {
+      // Run commands are long-running terminal workflows. If the Run shell is still
+      // active, focus it instead of sending another command into the foreground process.
+      selectTab(existingRunTabId);
+      return existingRunTabId;
+    }
+
+    const record = await client.terminals.create(connection.anyharnessWorkspaceId, {
+      cols,
+      rows,
+      title: RUN_TERMINAL_TITLE,
+    });
+    setTerminalPendingStartupCommand(record.id, command);
+    addTab(workspaceId, record);
+    return record.id;
+  }, [
+    addTab,
+    getWorkspaceRuntimeBlockReason,
+    resolveTerminalWorkspaceConnection,
+    selectTab,
+    setWorkspaceTabs,
+  ]);
 
   const ensureTabConnection = useCallback(async (terminalId: string) => {
     if (getTerminalWsHandle(terminalId) || intentionallyClosingTerminals.has(terminalId)) {
@@ -195,6 +260,7 @@ export function useTerminalActions() {
     }
 
     intentionallyClosingTerminals.add(terminalId);
+    clearTerminalPendingStartupCommand(terminalId);
     clearTerminalWsHandle(terminalId);
     bumpConnectionVersion(terminalId);
 
@@ -240,6 +306,7 @@ export function useTerminalActions() {
   return {
     loadWorkspaceTabs,
     createTab: createTabForWorkspace,
+    createRunTab: createRunTabForWorkspace,
     ensureTabConnection,
     closeTab,
     resizeTab: resizeTabForWorkspace,

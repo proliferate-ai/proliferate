@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { CloudDefaultBranchCard } from "@/components/cloud/repo-settings/CloudDefaultBranchCard";
 import { RepoEnvVarsCard } from "@/components/cloud/repo-settings/RepoEnvVarsCard";
+import { RepoRunCommandCard } from "@/components/cloud/repo-settings/RepoRunCommandCard";
 import { RepoSetupScriptCard } from "@/components/cloud/repo-settings/RepoSetupScriptCard";
 import { RepoTrackedFilesCard } from "@/components/cloud/repo-settings/RepoTrackedFilesCard";
 import { useCloudRepoBranches } from "@/hooks/cloud/use-cloud-repo-branches";
@@ -26,6 +27,7 @@ interface CloudRepoSettingsEditorProps {
   repository: CloudSettingsRepositoryEntry;
   savedConfig: CloudRepoConfigResponse | null | undefined;
   localSetupScript: string;
+  localRunCommand: string;
   suggestedPaths: string[];
   isLoadingConfig: boolean;
 }
@@ -34,12 +36,14 @@ function CloudRepoSettingsEditor({
   repository,
   savedConfig,
   localSetupScript,
+  localRunCommand,
   suggestedPaths,
   isLoadingConfig,
 }: CloudRepoSettingsEditorProps) {
   const draft = useCloudRepoConfigDraft({
     savedConfig,
     localSetupScript,
+    localRunCommand,
   });
   const saveMutation = useSaveCloudRepoConfig(repository);
   const resyncFileMutation = useResyncCloudRepoFile(repository);
@@ -86,6 +90,7 @@ function CloudRepoSettingsEditor({
                     envVars: {},
                     trackedFilePaths: [],
                     setupScript: "",
+                    runCommand: "",
                   });
                 }}
               >
@@ -101,6 +106,7 @@ function CloudRepoSettingsEditor({
                   envVars: draft.envVars,
                   trackedFilePaths: draft.trackedFilePaths,
                   setupScript: draft.setupScript,
+                  runCommand: draft.runCommand,
                 });
               }}
             >
@@ -147,6 +153,11 @@ function CloudRepoSettingsEditor({
         onRemoveRow={draft.removeEnvVarRow}
       />
 
+      <RepoRunCommandCard
+        runCommand={draft.runCommand}
+        onChange={draft.setRunCommand}
+      />
+
       <RepoSetupScriptCard
         setupScript={draft.setupScript}
         onChange={draft.setSetupScript}
@@ -158,6 +169,9 @@ function CloudRepoSettingsEditor({
 export function CloudRepoSection({ repository }: CloudRepoSectionProps) {
   const localSetupScript = useRepoPreferencesStore(
     (state) => state.repoConfigs[repository.sourceRoot]?.setupScript ?? "",
+  );
+  const localRunCommand = useRepoPreferencesStore(
+    (state) => state.repoConfigs[repository.sourceRoot]?.runCommand ?? "",
   );
   const {
     data: savedConfig,
@@ -191,6 +205,7 @@ export function CloudRepoSection({ repository }: CloudRepoSectionProps) {
       repository={repository}
       savedConfig={savedConfig}
       localSetupScript={localSetupScript}
+      localRunCommand={localRunCommand}
       suggestedPaths={suggestedPaths}
       isLoadingConfig={isLoadingConfig}
     />

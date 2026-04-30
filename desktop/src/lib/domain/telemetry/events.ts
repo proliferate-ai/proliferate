@@ -93,6 +93,7 @@ export interface DesktopProductEventMap {
     tracked_file_count: number;
     tracked_file_source?: TrackedFileTelemetrySource;
     has_setup_script: boolean;
+    has_run_command: boolean;
   };
   cloud_repo_file_resynced: {
     tracked_file_count: number;

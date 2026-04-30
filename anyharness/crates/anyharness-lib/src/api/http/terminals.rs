@@ -9,12 +9,13 @@ use crate::terminals::model::{
     CreateTerminalOptions, ResizeTerminalOptions, TerminalRecord as InternalTerminalRecord,
     TerminalStatus as InternalTerminalStatus,
 };
+use crate::workspaces::model::WorkspaceRecord;
 use anyharness_contract::v1::terminals::{
     CreateTerminalRequest, ResizeTerminalRequest, TerminalRecord as ContractTerminalRecord,
     TerminalStatus as ContractTerminalStatus,
 };
 
-fn resolve_workspace(state: &AppState, workspace_id: &str) -> Result<(String, String), ApiError> {
+fn resolve_workspace(state: &AppState, workspace_id: &str) -> Result<WorkspaceRecord, ApiError> {
     let ws = state
         .workspace_runtime
         .get_workspace(workspace_id)
@@ -25,15 +26,25 @@ fn resolve_workspace(state: &AppState, workspace_id: &str) -> Result<(String, St
                 "WORKSPACE_NOT_FOUND",
             )
         })?;
-    Ok((ws.id.clone(), ws.path.clone()))
+    Ok(ws)
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/workspaces/{workspace_id}/terminals",
+    params(("workspace_id" = String, Path, description = "Workspace ID")),
+    responses(
+        (status = 200, description = "Workspace terminals", body = Vec<ContractTerminalRecord>),
+        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "terminals"
+)]
 pub async fn list_terminals(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let (ws_id, _) = resolve_workspace(&state, &workspace_id)?;
-    let terminals = state.terminal_service.list_terminals(&ws_id).await;
+    let ws = resolve_workspace(&state, &workspace_id)?;
+    let terminals = state.terminal_service.list_terminals(&ws.id).await;
     Ok(Json(
         terminals
             .into_iter()
@@ -42,21 +53,60 @@ pub async fn list_terminals(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/workspaces/{workspace_id}/terminals",
+    params(("workspace_id" = String, Path, description = "Workspace ID")),
+    request_body = CreateTerminalRequest,
+    responses(
+        (status = 200, description = "Terminal created", body = ContractTerminalRecord),
+        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+        (status = 500, description = "Terminal creation failed", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "terminals"
+)]
 pub async fn create_terminal(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
     Json(request): Json<CreateTerminalRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     assert_workspace_mutable(&state, &workspace_id)?;
-    let (ws_id, ws_path) = resolve_workspace(&state, &workspace_id)?;
+    let ws = resolve_workspace(&state, &workspace_id)?;
+    let env_vars = match tokio::task::spawn_blocking({
+        let workspace_runtime = state.workspace_runtime.clone();
+        let ws_for_env = ws.clone();
+        move || workspace_runtime.build_workspace_env(&ws_for_env, None)
+    })
+    .await
+    {
+        Ok(Ok(env_vars)) => env_vars,
+        Ok(Err(error)) => {
+            tracing::warn!(
+                workspace_id = %ws.id,
+                error = %error,
+                "failed to build terminal workspace env; creating terminal without workspace env"
+            );
+            Vec::new()
+        }
+        Err(error) => {
+            tracing::warn!(
+                workspace_id = %ws.id,
+                error = %error,
+                "terminal workspace env task failed; creating terminal without workspace env"
+            );
+            Vec::new()
+        }
+    };
     let record = state
         .terminal_service
         .create_terminal(
-            &ws_id,
-            &ws_path,
+            &ws.id,
+            &ws.path,
             CreateTerminalOptions {
                 cwd: request.cwd,
                 shell: request.shell,
+                title: request.title,
+                env: env_vars,
                 cols: request.cols,
                 rows: request.rows,
             },
@@ -66,6 +116,16 @@ pub async fn create_terminal(
     Ok(Json(terminal_record_to_contract(record)))
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/terminals/{terminal_id}",
+    params(("terminal_id" = String, Path, description = "Terminal ID")),
+    responses(
+        (status = 200, description = "Terminal", body = ContractTerminalRecord),
+        (status = 404, description = "Terminal not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "terminals"
+)]
 pub async fn get_terminal(
     State(state): State<AppState>,
     Path(terminal_id): Path<String>,
@@ -78,6 +138,17 @@ pub async fn get_terminal(
     Ok(Json(terminal_record_to_contract(record)))
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/terminals/{terminal_id}/resize",
+    params(("terminal_id" = String, Path, description = "Terminal ID")),
+    request_body = ResizeTerminalRequest,
+    responses(
+        (status = 200, description = "Terminal resized", body = ContractTerminalRecord),
+        (status = 404, description = "Terminal not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "terminals"
+)]
 pub async fn resize_terminal(
     State(state): State<AppState>,
     Path(terminal_id): Path<String>,
@@ -98,6 +169,16 @@ pub async fn resize_terminal(
     Ok(Json(terminal_record_to_contract(record)))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/v1/terminals/{terminal_id}",
+    params(("terminal_id" = String, Path, description = "Terminal ID")),
+    responses(
+        (status = 204, description = "Terminal closed"),
+        (status = 404, description = "Terminal not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "terminals"
+)]
 pub async fn delete_terminal(
     State(state): State<AppState>,
     Path(terminal_id): Path<String>,

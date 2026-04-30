@@ -22,6 +22,8 @@ pub struct TerminalRecord {
 pub struct CreateTerminalOptions {
     pub cwd: Option<String>,
     pub shell: Option<String>,
+    pub title: Option<String>,
+    pub env: Vec<(String, String)>,
     pub cols: u16,
     pub rows: u16,
 }

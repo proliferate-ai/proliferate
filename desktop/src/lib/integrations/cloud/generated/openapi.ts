@@ -1746,6 +1746,8 @@ export interface components {
             };
             /** Setupscript */
             setupScript: string;
+            /** Runcommand */
+            runCommand: string;
             /** Filesversion */
             filesVersion: number;
             /** Trackedfiles */
@@ -2568,6 +2570,11 @@ export interface components {
              * @default
              */
             setupScript: string;
+            /**
+             * Runcommand
+             * @default
+             */
+            runCommand: string;
             /** Files */
             files?: components["schemas"]["SaveCloudRepoConfigFile"][];
         };

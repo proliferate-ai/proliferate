@@ -31,6 +31,8 @@ pub struct CreateTerminalRequest {
     pub cwd: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shell: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     pub cols: u16,
     pub rows: u16,
 }

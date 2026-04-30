@@ -438,6 +438,7 @@ class CloudRepoConfig(Base):
     env_vars_version: Mapped[int] = mapped_column(Integer, default=0)
     setup_script: Mapped[str] = mapped_column(Text, default="")
     setup_script_version: Mapped[int] = mapped_column(Integer, default=0)
+    run_command: Mapped[str] = mapped_column(Text, default="")
     files_version: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(

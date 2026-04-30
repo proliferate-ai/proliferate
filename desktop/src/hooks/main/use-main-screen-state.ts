@@ -27,6 +27,7 @@ import {
 } from "@/stores/preferences/workspace-ui-store";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import type { CloudWorkspaceSummary } from "@/lib/integrations/cloud/client";
 import type { RightPanelMode } from "@/components/workspace/shell/right-panel/RightPanel";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
@@ -65,6 +66,7 @@ export interface MainScreenDataState {
   isCloudWorkspaceSelected: boolean;
   selectedWorkspaceId: string | null;
   selectedWorkspace: Workspace | undefined;
+  selectedCloudWorkspace: CloudWorkspaceSummary | undefined;
   gitStatus: GitStatusSnapshot | undefined;
   existingPr: NonNullable<CurrentPullRequestResponse["pullRequest"]> | null;
 }
@@ -140,6 +142,12 @@ export function useMainScreenState(): MainScreenState {
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId),
     [selectedWorkspaceId, workspaces],
   );
+  const selectedCloudWorkspace = useMemo(
+    () => workspaceCollections?.cloudWorkspaces.find(
+      (workspace) => workspace.id === selectedCloudWorkspaceId,
+    ),
+    [selectedCloudWorkspaceId, workspaceCollections?.cloudWorkspaces],
+  );
 
   useEffect(() => {
     if (pendingWorkspaceEntry) {
@@ -193,6 +201,7 @@ export function useMainScreenState(): MainScreenState {
       isCloudWorkspaceSelected: selectedCloudWorkspaceId !== null,
       selectedWorkspaceId,
       selectedWorkspace,
+      selectedCloudWorkspace,
       gitStatus,
       existingPr: currentPullRequest?.pullRequest ?? null,
     },

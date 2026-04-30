@@ -1,0 +1,34 @@
+import type { ChangeEvent } from "react";
+import { SettingsCard } from "@/components/settings/SettingsCard";
+import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
+import { RunCommandHelp } from "@/components/settings/RunCommandHelp";
+import { Input } from "@/components/ui/Input";
+
+interface RepoRunCommandCardProps {
+  runCommand: string;
+  onChange: (value: string) => void;
+}
+
+export function RepoRunCommandCard({
+  runCommand,
+  onChange,
+}: RepoRunCommandCardProps) {
+  return (
+    <SettingsCard>
+      <SettingsCardRow
+        label="Cloud run command"
+        description="Command launched by the workspace header Run button for cloud workspaces in this repository."
+      >
+        <div className="w-[32rem] max-w-full space-y-2">
+          <Input
+            value={runCommand}
+            onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value)}
+            placeholder="make dev PROFILE=my-profile"
+            className="font-mono"
+          />
+          <RunCommandHelp scope="selected cloud workspace" />
+        </div>
+      </SettingsCardRow>
+    </SettingsCard>
+  );
+}

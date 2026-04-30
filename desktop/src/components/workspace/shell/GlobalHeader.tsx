@@ -16,6 +16,7 @@ import {
   type OpenTarget,
 } from "@/platform/tauri/shell";
 import {
+  Play,
   SplitPanelRight,
 } from "@/components/ui/icons";
 import type { GitStatusSnapshot, Workspace } from "@anyharness/sdk";
@@ -30,6 +31,11 @@ interface GlobalHeaderProps {
   selectedWorkspace: Workspace | undefined;
   rightPanelOpen: boolean;
   disableGitActions?: boolean;
+  runDisabled?: boolean;
+  runLoading?: boolean;
+  runLabel?: string;
+  runTitle?: string;
+  onRun: () => void;
   onTogglePanel: () => void;
   onCommit: () => void;
   onPush: () => void;
@@ -47,6 +53,11 @@ export function GlobalHeader({
   selectedWorkspace,
   rightPanelOpen,
   disableGitActions = false,
+  runDisabled = false,
+  runLoading = false,
+  runLabel = "Run",
+  runTitle = "Run workspace command",
+  onRun,
   onTogglePanel,
   onCommit,
   onPush,
@@ -94,6 +105,19 @@ export function GlobalHeader({
         {branchName && (
           <BranchBadge branchName={branchName} />
         )}
+        <Button
+          variant="secondary"
+          size="sm"
+          loading={runLoading}
+          disabled={runDisabled}
+          onClick={onRun}
+          aria-label={runTitle}
+          title={runTitle}
+          className="h-6 gap-1.5 rounded-lg bg-background px-2 text-xs font-medium"
+        >
+          <Play className="size-3.5" />
+          <span>{runLabel}</span>
+        </Button>
         {workspacePath && (
           <SplitButton
             label={preferredTarget?.label ?? "Open"}

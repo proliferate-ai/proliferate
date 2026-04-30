@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { useDetectRepoRootSetupQuery } from "@anyharness/sdk-react";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
+import { RunCommandHelp } from "@/components/settings/RunCommandHelp";
+import { Input } from "@/components/ui/Input";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { SetupCommandEditor } from "@/components/workspace/repo-setup/SetupCommandEditor";
 import { useRepositorySettings } from "@/hooks/settings/use-repository-settings";
@@ -17,7 +19,9 @@ export function LocalRepoSection({ repository }: LocalRepoSectionProps) {
     explicitDefaultBranch,
     effectiveAutoDetectedBranch,
     setupDraft,
+    runCommandDraft,
     setSetupDraft,
+    setRunCommandDraft,
     setExplicitDefaultBranch,
   } = useRepositorySettings(repository);
 
@@ -78,6 +82,21 @@ export function LocalRepoSection({ repository }: LocalRepoSectionProps) {
             })),
           }]}
         />
+      </SettingsCardRow>
+
+      <SettingsCardRow
+        label="Local run command"
+        description="Command launched by the workspace header Run button for this repository"
+      >
+        <div className="w-[24rem] max-w-full space-y-2">
+          <Input
+            value={runCommandDraft}
+            onChange={(event) => setRunCommandDraft(event.target.value)}
+            placeholder="make dev PROFILE=my-profile"
+            className="font-mono"
+          />
+          <RunCommandHelp scope="selected workspace" className="text-sm text-muted-foreground/80" />
+        </div>
       </SettingsCardRow>
 
       <SettingsCardRow

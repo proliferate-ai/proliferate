@@ -340,6 +340,61 @@ async fn repo_root_file_read_route_rejects_unsafe_paths() {
 }
 
 #[tokio::test]
+async fn terminal_create_tolerates_missing_workspace_repo_root_id() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let repo_root = TempDirGuard::new("terminal-no-repo-root");
+    init_repo(repo_root.path());
+    let state = test_state(false);
+    let workspace_path = repo_root.path().display().to_string();
+
+    state
+        .db
+        .with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
+                 VALUES (?1, 'repo', ?2, ?2, ?3, ?3)",
+                rusqlite::params![
+                    "workspace-without-repo-root",
+                    workspace_path,
+                    "2026-03-25T00:00:00Z"
+                ],
+            )?;
+            Ok(())
+        })
+        .expect("seed workspace");
+
+    let app = build_router(state.clone());
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/workspaces/workspace-without-repo-root/terminals")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json!({ "cols": 80, "rows": 24 }).to_string()))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    let terminal_id = payload["id"].as_str().expect("terminal id");
+    assert_eq!(payload["title"], "Terminal");
+    state
+        .terminal_service
+        .close_terminal(terminal_id)
+        .await
+        .expect("close terminal");
+}
+
+#[tokio::test]
 async fn workspace_mobility_preflight_warns_for_active_terminals_without_blocking() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
@@ -371,6 +426,8 @@ async fn workspace_mobility_preflight_warns_for_active_terminals_without_blockin
             CreateTerminalOptions {
                 cwd: None,
                 shell: Some("/bin/sh".to_string()),
+                title: None,
+                env: Vec::new(),
                 cols: 80,
                 rows: 24,
             },

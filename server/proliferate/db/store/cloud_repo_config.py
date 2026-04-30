@@ -54,6 +54,7 @@ class CloudRepoConfigValue:
     env_vars_version: int
     setup_script: str
     setup_script_version: int
+    run_command: str
     files_version: int
     tracked_files: tuple[CloudRepoFileValue, ...]
     created_at: datetime
@@ -107,6 +108,7 @@ def _repo_config_value(
         env_vars_version=record.env_vars_version,
         setup_script=record.setup_script,
         setup_script_version=record.setup_script_version,
+        run_command=record.run_command,
         files_version=record.files_version,
         tracked_files=tuple(
             sorted(
@@ -199,6 +201,7 @@ async def _get_or_create_repo_config_record(
             env_vars_version=0,
             setup_script="",
             setup_script_version=0,
+            run_command="",
             files_version=0,
             created_at=now,
             updated_at=now,
@@ -280,6 +283,7 @@ async def save_cloud_repo_config(
     default_branch: str | None,
     env_vars: dict[str, str],
     setup_script: str,
+    run_command: str,
     files: list[CloudRepoFileInput],
 ) -> CloudRepoConfigValue:
     record = await _get_or_create_repo_config_record(
@@ -317,6 +321,8 @@ async def save_cloud_repo_config(
     if record.setup_script != setup_script:
         record.setup_script_version += 1
         record.setup_script = setup_script
+    if record.run_command != run_command:
+        record.run_command = run_command
     record.configured = configured
     record.configured_at = now if configured else None
     record.default_branch = (
@@ -482,6 +488,7 @@ async def persist_cloud_repo_config(
     default_branch: str | None,
     env_vars: dict[str, str],
     setup_script: str,
+    run_command: str,
     files: list[CloudRepoFileInput],
 ) -> CloudRepoConfigValue:
     async with db_engine.async_session_factory() as db:
@@ -495,6 +502,7 @@ async def persist_cloud_repo_config(
             default_branch=default_branch,
             env_vars=env_vars,
             setup_script=setup_script,
+            run_command=run_command,
             files=files,
         )
 
