@@ -31,6 +31,7 @@ import { serializeChatDraftToPrompt } from "@/lib/domain/chat/file-mentions";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerAddActionPopover } from "./ComposerAddActionPopover";
 import { ComposerMentionEditor } from "./ComposerMentionEditor";
@@ -39,6 +40,7 @@ import { ModelSelector } from "./ModelSelector";
 import { SessionConfigControls } from "./SessionConfigControls";
 import { ChatComposerSurface } from "./ChatComposerSurface";
 import { DraftAttachmentPreviewList } from "@/components/workspace/chat/content/PromptContentRenderer";
+import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 
 /**
  * The composer surface: mention-aware editor + model / session controls +
@@ -51,6 +53,7 @@ export function ChatInput({
 }: {
   attachments: PromptAttachmentController;
 }) {
+  useDebugRenderCount("chat-composer");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mentionSearchHost, setMentionSearchHost] = useState<HTMLDivElement | null>(null);
@@ -257,7 +260,8 @@ export function ChatInput({
   }, [editDraft, isEditingQueuedPrompt]);
 
   return (
-    <div className="relative">
+    <DebugProfiler id="chat-composer">
+      <div className="relative">
       <div ref={setMentionSearchHost} className="relative z-20 flex flex-col px-5" />
       <ChatComposerSurface
         onClick={() => {
@@ -379,6 +383,7 @@ export function ChatInput({
           </div>
         </form>
       </ChatComposerSurface>
-    </div>
+      </div>
+    </DebugProfiler>
   );
 }

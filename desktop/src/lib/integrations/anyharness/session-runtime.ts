@@ -24,6 +24,12 @@ import {
   logLatency,
 } from "@/lib/infra/debug-latency";
 import {
+  getMeasurementRequestOptions,
+  recordMeasurementWorkflowStep,
+  type MeasurementOperationId,
+  type MeasurementWorkflowStep,
+} from "@/lib/infra/debug-measurement";
+import {
   resolveRuntimeTargetForWorkspace,
   type RuntimeTarget,
 } from "@/lib/integrations/anyharness/runtime-target";
@@ -44,10 +50,39 @@ interface SessionStreamCallbacks {
   onEvent: (envelope: SessionEventEnvelope) => void;
   onError: () => void;
   onClose: () => void;
+  measurementOperationId?: MeasurementOperationId | null;
 }
+
+const SESSION_HISTORY_FETCH_TIMEOUT_MS = 10_000;
 
 function buildConnection(baseUrl: string, authToken?: string): AnyHarnessClientConnection {
   return { runtimeUrl: baseUrl, authToken };
+}
+
+async function measureSessionWorkflowStep<T>(
+  operationId: MeasurementOperationId | null | undefined,
+  step: MeasurementWorkflowStep,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const startedAt = performance.now();
+  try {
+    const result = await fn();
+    recordMeasurementWorkflowStep({
+      operationId,
+      step,
+      startedAt,
+      outcome: "completed",
+    });
+    return result;
+  } catch (error) {
+    recordMeasurementWorkflowStep({
+      operationId,
+      step,
+      startedAt,
+      outcome: "error_sanitized",
+    });
+    throw error;
+  }
 }
 
 export function logDevSSEEvent(
@@ -260,33 +295,81 @@ export async function fetchSessionHistory(
   sessionId: string,
   options?: {
     afterSeq?: number;
+    beforeSeq?: number;
+    limit?: number;
+    turnLimit?: number;
     requestHeaders?: HeadersInit;
+    measurementOperationId?: MeasurementOperationId | null;
+    timeoutMs?: number;
   },
 ) {
-  const { connection } = await getSessionClientAndWorkspace(sessionId);
-  const client = getAnyHarnessClient(connection);
-
-  return client.sessions.listEvents(
-    sessionId,
-    options?.afterSeq != null || options?.requestHeaders
-      ? {
-        ...(options?.afterSeq != null ? { afterSeq: options.afterSeq } : {}),
-        ...(options?.requestHeaders
-          ? { request: { headers: options.requestHeaders } }
-          : {}),
-      }
-      : undefined,
+  const { connection } = await measureSessionWorkflowStep(
+    options?.measurementOperationId,
+    "session.history.resolve_target",
+    () => getSessionClientAndWorkspace(sessionId),
   );
+  const client = getAnyHarnessClient(connection);
+  const request = getMeasurementRequestOptions({
+    operationId: options?.measurementOperationId,
+    category: "session.events.list",
+    headers: options?.requestHeaders,
+  });
+  const timeoutMs = options?.timeoutMs ?? SESSION_HISTORY_FETCH_TIMEOUT_MS;
+  const abortController =
+    timeoutMs > 0 && typeof AbortController !== "undefined"
+      ? new AbortController()
+      : null;
+  const timeoutId = abortController
+    ? globalThis.setTimeout(() => abortController.abort(), timeoutMs)
+    : null;
+  const requestWithTimeout = abortController
+    ? { ...request, signal: abortController.signal }
+    : request;
+  const hasHistoryOptions = options?.afterSeq != null
+    || options?.beforeSeq != null
+    || options?.limit != null
+    || options?.turnLimit != null
+    || !!requestWithTimeout;
+
+  try {
+    return await client.sessions.listEvents(
+      sessionId,
+      hasHistoryOptions
+        ? {
+          ...(options?.afterSeq != null ? { afterSeq: options.afterSeq } : {}),
+          ...(options?.beforeSeq != null ? { beforeSeq: options.beforeSeq } : {}),
+          ...(options?.limit != null ? { limit: options.limit } : {}),
+          ...(options?.turnLimit != null ? { turnLimit: options.turnLimit } : {}),
+          ...(requestWithTimeout ? { request: requestWithTimeout } : {}),
+        }
+        : undefined,
+    );
+  } finally {
+    if (timeoutId !== null) {
+      globalThis.clearTimeout(timeoutId);
+    }
+  }
 }
 
 export async function fetchSessionSummary(
   sessionId: string,
-  options?: { requestHeaders?: HeadersInit },
+  options?: {
+    requestHeaders?: HeadersInit;
+    measurementOperationId?: MeasurementOperationId | null;
+  },
 ) {
-  const { connection } = await getSessionClientAndWorkspace(sessionId);
+  const { connection } = await measureSessionWorkflowStep(
+    options?.measurementOperationId,
+    "session.summary.resolve_target",
+    () => getSessionClientAndWorkspace(sessionId),
+  );
   return getAnyHarnessClient(connection).sessions.get(
     sessionId,
-    options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
+    getMeasurementRequestOptions({
+      operationId: options?.measurementOperationId,
+      category: "session.get",
+      headers: options?.requestHeaders,
+    }),
   );
 }
 
@@ -295,27 +378,53 @@ export async function resumeSession(
   options?: {
     pluginsInCodingSessionsEnabled: boolean;
     requestHeaders?: HeadersInit;
+    measurementOperationId?: MeasurementOperationId | null;
   },
 ) {
-  const { connection, target } = await getSessionClientAndWorkspace(sessionId);
+  const measurementOperationId = options?.measurementOperationId;
+  const { connection, target } = await measureSessionWorkflowStep(
+    measurementOperationId,
+    "session.resume.resolve_target",
+    () => getSessionClientAndWorkspace(sessionId),
+  );
   const client = getAnyHarnessClient(connection);
-  const workspace = await client.workspaces.get(
-    target.anyharnessWorkspaceId,
-    options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
+  const workspace = await measureSessionWorkflowStep(
+    measurementOperationId,
+    "session.resume.workspace_get",
+    () => client.workspaces.get(
+      target.anyharnessWorkspaceId,
+      getMeasurementRequestOptions({
+        operationId: measurementOperationId,
+        category: "workspace.get",
+        headers: options?.requestHeaders,
+      }),
+    ),
   );
   const isCowork = workspace.surface === "cowork";
   const shouldResolveLaunchMcp = isCowork || options?.pluginsInCodingSessionsEnabled === true;
   const { mcpServers, mcpBindingSummaries } = shouldResolveLaunchMcp
-    ? await resolveSessionMcpServersForLaunch({
-      targetLocation: target.location,
-      workspacePath: workspace.path ?? null,
-      policy: {
-        workspaceSurface: isCowork ? "cowork" : "coding",
-        lifecycle: "resume",
-        enabled: shouldResolveLaunchMcp,
-      },
-    })
+    ? await measureSessionWorkflowStep(
+      measurementOperationId,
+      "session.resume.resolve_mcp",
+      () => resolveSessionMcpServersForLaunch({
+        targetLocation: target.location,
+        workspacePath: workspace.path ?? null,
+        policy: {
+          workspaceSurface: isCowork ? "cowork" : "coding",
+          lifecycle: "resume",
+          enabled: shouldResolveLaunchMcp,
+        },
+      }),
+    )
     : { mcpServers: [], mcpBindingSummaries: [] };
+  if (!shouldResolveLaunchMcp) {
+    recordMeasurementWorkflowStep({
+      operationId: measurementOperationId,
+      step: "session.resume.resolve_mcp",
+      startedAt: performance.now(),
+      outcome: "skipped",
+    });
+  }
   return client.sessions.resume(
     sessionId,
     {
@@ -324,7 +433,11 @@ export async function resumeSession(
         ? mcpBindingSummaries
         : undefined,
     },
-    options?.requestHeaders ? { headers: options.requestHeaders } : undefined,
+    getMeasurementRequestOptions({
+      operationId: measurementOperationId,
+      category: "session.resume",
+      headers: options?.requestHeaders,
+    }),
   );
 }
 
@@ -357,6 +470,41 @@ export function collectInactiveSessionStreamIds(
   return prunableSessionIds;
 }
 
+export function detachAndCloseSessionSlotStreams(
+  sessionIds: Iterable<string>,
+): number {
+  const uniqueSessionIds = Array.from(new Set(sessionIds));
+  if (uniqueSessionIds.length === 0) {
+    return 0;
+  }
+
+  const state = useHarnessStore.getState();
+  const nextSlots = { ...state.sessionSlots };
+  const handles: SessionStreamHandle[] = [];
+  for (const sessionId of uniqueSessionIds) {
+    const slot = nextSlots[sessionId];
+    if (!slot?.sseHandle) {
+      continue;
+    }
+    handles.push(slot.sseHandle);
+    nextSlots[sessionId] = {
+      ...slot,
+      sseHandle: null,
+      streamConnectionState: "disconnected",
+    };
+  }
+
+  if (handles.length === 0) {
+    return 0;
+  }
+
+  useHarnessStore.setState({ sessionSlots: nextSlots });
+  for (const handle of handles) {
+    handle.close();
+  }
+  return handles.length;
+}
+
 export function pruneInactiveSessionStreams(
   options?: {
     preserveSessionIds?: Iterable<string>;
@@ -371,21 +519,7 @@ export function pruneInactiveSessionStreams(
     return [];
   }
 
-  const nextSlots = { ...state.sessionSlots };
-  for (const sessionId of prunableSessionIds) {
-    const slot = nextSlots[sessionId];
-    if (!slot?.sseHandle) {
-      continue;
-    }
-    slot.sseHandle.close();
-    nextSlots[sessionId] = {
-      ...slot,
-      sseHandle: null,
-      streamConnectionState: "disconnected",
-    };
-  }
-
-  useHarnessStore.setState({ sessionSlots: nextSlots });
+  detachAndCloseSessionSlotStreams(prunableSessionIds);
   logLatency("session.stream.pruned", {
     closedSessionCount: prunableSessionIds.length,
   });
@@ -399,7 +533,11 @@ export async function openSessionStream(
     requestHeaders?: HeadersInit;
   } & SessionStreamCallbacks,
 ): Promise<SessionStreamHandle> {
-  const { connection } = await getSessionClientAndWorkspace(sessionId);
+  const { connection } = await measureSessionWorkflowStep(
+    options.measurementOperationId,
+    "session.stream.resolve_target",
+    () => getSessionClientAndWorkspace(sessionId),
+  );
 
   const handle = streamSession({
     baseUrl: connection.runtimeUrl,
@@ -407,6 +545,12 @@ export async function openSessionStream(
     headers: options.requestHeaders,
     sessionId,
     afterSeq: options.afterSeq ?? 0,
+    timing: options.measurementOperationId
+      ? {
+        category: "session.stream",
+        measurementOperationId: options.measurementOperationId,
+      }
+      : undefined,
     onOpen: options.onOpen,
     onEvent: options.onEvent,
     onError: options.onError,

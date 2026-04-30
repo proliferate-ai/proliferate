@@ -47,6 +47,7 @@ interface WorkspaceItemProps {
   onArchive?: () => void;
   onUnarchive?: () => void;
   onIndicatorAction?: (action: SidebarIndicatorAction) => void;
+  onHover?: () => void;
   /**
    * Persist a display name override. `null` clears it. Omit to disable the
    * Rename context menu item (e.g. for cloud entries).
@@ -70,6 +71,7 @@ export function WorkspaceItem({
   onArchive,
   onUnarchive,
   onIndicatorAction,
+  onHover,
   onRename,
 }: WorkspaceItemProps) {
   const hasArchiveAction = !!(onArchive || onUnarchive);
@@ -100,6 +102,7 @@ export function WorkspaceItem({
       active={active}
       onPress={onSelect}
       onContextMenuCapture={onContextMenuCapture}
+      onPointerEnter={onHover}
       className="h-[30px] px-2 py-1 gap-1.5 text-sm leading-4 focus-visible:outline-offset-[-2px]"
     >
       {/* Archive button — absolutely positioned right edge, visible on hover */}

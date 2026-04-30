@@ -1,6 +1,7 @@
 import type { SearchWorkspaceFilesResponse } from "@anyharness/sdk";
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -23,6 +24,12 @@ import {
   type MentionTrigger,
 } from "@/lib/domain/chat/file-mentions";
 import { formatMarkdownFileLink } from "@/lib/domain/chat/file-mention-links";
+import {
+  finishOrCancelMeasurementOperation,
+  markOperationForNextCommit,
+  startMeasurementOperation,
+  type MeasurementOperationId,
+} from "@/lib/infra/debug-measurement";
 import { ComposerFileMentionSearch } from "./ComposerFileMentionSearch";
 import { ComposerTextarea } from "./ComposerTextarea";
 
@@ -55,6 +62,7 @@ export function ComposerMentionEditor({
 }: ComposerMentionEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pendingSelectionRef = useRef<number | null>(null);
+  const typingOperationRef = useRef<MeasurementOperationId | null>(null);
   const text = serializeChatDraftToPrompt(draft);
   const [selectionOffset, setSelectionOffset] = useState(text.length);
   const [searchSuppressed, setSearchSuppressed] = useState(false);
@@ -114,6 +122,32 @@ export function ComposerMentionEditor({
   }, [onDraftChange]);
 
   const handleChange = useCallback((value: string) => {
+    const operationId = startMeasurementOperation({
+      kind: "composer_typing",
+      sampleKey: "composer",
+      surfaces: [
+        "chat-composer",
+        "chat-composer-dock",
+        "chat-surface",
+        "transcript-list",
+        "header-tabs",
+        "workspace-sidebar",
+      ],
+      idleTimeoutMs: 1500,
+      maxDurationMs: 8000,
+      cooldownMs: 2000,
+    });
+    if (operationId) {
+      typingOperationRef.current = operationId;
+      markOperationForNextCommit(operationId, [
+        "chat-composer",
+        "chat-composer-dock",
+        "chat-surface",
+        "transcript-list",
+        "header-tabs",
+        "workspace-sidebar",
+      ]);
+    }
     onDraftChange(createTextDraft(value));
     setSearchSuppressed(false);
     window.requestAnimationFrame(() => {
@@ -121,6 +155,11 @@ export function ComposerMentionEditor({
       resizeTextarea();
     });
   }, [onDraftChange, resizeTextarea, updateSelection]);
+
+  useEffect(() => () => {
+    finishOrCancelMeasurementOperation(typingOperationRef.current, "unmount");
+    typingOperationRef.current = null;
+  }, []);
 
   const handleSelectSearchResult = useCallback((result: FileSearchResult) => {
     if (!trigger) {

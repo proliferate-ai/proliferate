@@ -255,17 +255,55 @@ impl SessionService {
         &self,
         session_id: &str,
         after_seq: Option<i64>,
+        before_seq: Option<i64>,
+        limit: Option<i64>,
+        turn_limit: Option<i64>,
     ) -> anyhow::Result<Option<Vec<SessionEventRecord>>> {
         if self.session_store.find_by_id(session_id)?.is_none() {
             return Ok(None);
         }
 
-        match after_seq {
-            Some(seq) => self
+        match (after_seq, before_seq, limit, turn_limit) {
+            (Some(_), Some(_), _, _) | (Some(_), _, _, Some(_)) => anyhow::bail!(
+                "after_seq cannot be combined with before_seq or turn_limit"
+            ),
+            (Some(seq), None, Some(limit), None) => self
+                .session_store
+                .list_events_after_limited(session_id, seq, limit)
+                .map(Some),
+            (Some(seq), None, None, None) => self
                 .session_store
                 .list_events_after(session_id, seq)
                 .map(Some),
-            None => self.session_store.list_events(session_id).map(Some),
+            (None, Some(seq), Some(limit), Some(turn_limit)) => self
+                .session_store
+                .list_events_before_for_latest_turns(session_id, seq, turn_limit, limit)
+                .map(Some),
+            (None, Some(seq), Some(limit), None) => self
+                .session_store
+                .list_events_before_limited(session_id, seq, limit)
+                .map(Some),
+            (None, Some(seq), None, Some(turn_limit)) => self
+                .session_store
+                .list_events_before_for_latest_turns(session_id, seq, turn_limit, 5_000)
+                .map(Some),
+            (None, Some(seq), None, None) => self
+                .session_store
+                .list_events_before_limited(session_id, seq, 5_000)
+                .map(Some),
+            (None, None, Some(limit), Some(turn_limit)) => self
+                .session_store
+                .list_events_for_latest_turns(session_id, turn_limit, limit)
+                .map(Some),
+            (None, None, None, Some(turn_limit)) => self
+                .session_store
+                .list_events_for_latest_turns(session_id, turn_limit, 5_000)
+                .map(Some),
+            (None, None, Some(limit), None) => self
+                .session_store
+                .list_events_limited(session_id, limit)
+                .map(Some),
+            (None, None, None, None) => self.session_store.list_events(session_id).map(Some),
         }
     }
 

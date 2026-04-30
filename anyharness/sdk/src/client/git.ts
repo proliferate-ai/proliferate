@@ -14,14 +14,18 @@ import type {
   StagePathsRequest,
   UnstagePathsRequest,
 } from "../types/git.js";
-import type { AnyHarnessTransport } from "./core.js";
+import { withTimingCategory, type AnyHarnessRequestOptions, type AnyHarnessTransport } from "./core.js";
 
 export class GitClient {
   constructor(private readonly transport: AnyHarnessTransport) {}
 
-  async getStatus(workspaceId: string): Promise<GitStatusSnapshot> {
+  async getStatus(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<GitStatusSnapshot> {
     return this.transport.get<GitStatusSnapshot>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/git/status`,
+      withTimingCategory(options, "git.status"),
     );
   }
 

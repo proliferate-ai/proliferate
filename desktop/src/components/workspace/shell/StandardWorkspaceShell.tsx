@@ -11,11 +11,13 @@ import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel"
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
 import { SidebarUpdatePill } from "@/components/workspace/shell/SidebarUpdatePill";
 import { IconButton } from "@/components/ui/IconButton";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { SplitPanel } from "@/components/ui/icons";
 import { useMainScreenActions } from "@/hooks/main/use-main-screen-actions";
 import { useMainScreenShortcuts } from "@/hooks/main/use-main-screen-shortcuts";
 import { useMainScreenState } from "@/hooks/main/use-main-screen-state";
 import { useTransparentChromeEnabled } from "@/hooks/theme/use-transparent-chrome";
+import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useUpdater } from "@/hooks/updater/use-updater";
 import { useRunWorkspaceCommand } from "@/hooks/workspaces/use-run-workspace-command";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
@@ -28,6 +30,7 @@ import {
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 
 export function StandardWorkspaceShell() {
+  useDebugRenderCount("workspace-shell");
   const { layout, data } = useMainScreenState();
   const actions = useMainScreenActions({
     layout,
@@ -118,9 +121,10 @@ export function StandardWorkspaceShell() {
   ]);
 
   return (
-    <WorkspaceShellActionsProvider value={shellActions}>
-      <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? null}>
-        <div
+    <DebugProfiler id="workspace-shell">
+      <WorkspaceShellActionsProvider value={shellActions}>
+        <WorkspacePathProvider workspacePath={selectedWorkspace?.path ?? null}>
+          <div
         className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
         data-telemetry-block
       >
@@ -272,8 +276,9 @@ export function StandardWorkspaceShell() {
             )}
           </div>
         </div>
-        </div>
-      </WorkspacePathProvider>
-    </WorkspaceShellActionsProvider>
+          </div>
+        </WorkspacePathProvider>
+      </WorkspaceShellActionsProvider>
+    </DebugProfiler>
   );
 }

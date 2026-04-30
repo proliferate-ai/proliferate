@@ -3,6 +3,7 @@ import {
   useState,
 } from "react";
 import { Button } from "@/components/ui/Button";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { ListFilter, Plus } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { ChatTabWithMenu } from "@/components/workspace/shell/tabs/ChatTabWithMenu";
@@ -20,6 +21,7 @@ import {
 import { useShortcutHandler } from "@/hooks/shortcuts/use-shortcut-handler";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { useSessionTitleActions } from "@/hooks/sessions/use-session-title-actions";
+import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useResizeObserverWidth } from "@/hooks/ui/use-resize-observer-width";
 import { useHeaderTabsCloseActions } from "@/hooks/workspaces/tabs/use-header-tabs-close-actions";
 import { useHeaderTabsGroupEditor } from "@/hooks/workspaces/tabs/use-header-tabs-group-editor";
@@ -48,8 +50,10 @@ import {
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useWorkspaceTabsStore } from "@/stores/workspaces/workspace-tabs-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { startMeasurementOperation } from "@/lib/infra/debug-measurement";
 
 export function HeaderTabs() {
+  useDebugRenderCount("header-tabs");
   const viewModel = useWorkspaceHeaderTabsViewModel();
   const chatVisibilityActions = useChatTabVisibilityActions({
     visibleIds: viewModel.visibleChatSessionIds,
@@ -141,9 +145,19 @@ export function HeaderTabs() {
     onDragStart: multiSelect.clearSelection,
     onReorder: shellTabOrderActions.reorderShellTabs,
   });
+  const handleHeaderTabHover = useCallback(() => {
+    startMeasurementOperation({
+      kind: "hover_sample",
+      sampleKey: "header_tab",
+      surfaces: ["header-tab", "header-tabs"],
+      maxDurationMs: 750,
+      cooldownMs: 2000,
+    });
+  }, []);
 
   return (
-    <div className="flex h-full min-w-0 flex-1 items-end gap-1 overflow-hidden px-1">
+    <DebugProfiler id="header-tabs">
+      <div className="flex h-full min-w-0 flex-1 items-end gap-1 overflow-hidden px-1">
       <WorkspaceTabStrip
         label="Workspace tabs"
         stripRef={shellStrip.ref}
@@ -180,6 +194,7 @@ export function HeaderTabs() {
               <div
                 key={path}
                 {...shellDrag.getRowDragProps(rowId)}
+                onPointerEnter={handleHeaderTabHover}
                 className={`absolute bottom-0 h-9 app-region-no-drag ${
                   isDragging
                     ? "z-[20] cursor-grabbing opacity-80"
@@ -294,6 +309,7 @@ export function HeaderTabs() {
             <div
               key={tab.id}
               {...(canDragTab ? shellDrag.getRowDragProps(rowId) : {})}
+              onPointerEnter={handleHeaderTabHover}
               className={`absolute bottom-0 h-9 app-region-no-drag ${
                 isDragging
                   ? "z-[20] cursor-grabbing opacity-80"
@@ -419,7 +435,8 @@ export function HeaderTabs() {
           onConfirm={groupEditorWorkflow.confirmGroupEditor}
         />
       )}
-    </div>
+      </div>
+    </DebugProfiler>
   );
 }
 

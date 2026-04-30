@@ -10,7 +10,9 @@ export function useChatLaunchIntentActions() {
   const activeIntent = useChatLaunchIntentStore((state) => state.activeIntent);
   const clearIfActive = useChatLaunchIntentStore((state) => state.clearIfActive);
   const setHomeDraftText = useHomeDraftHandoffStore((state) => state.setDraftText);
-  const clearSelection = useHarnessStore((state) => state.clearSelection);
+  const deselectWorkspacePreservingSlots = useHarnessStore(
+    (state) => state.deselectWorkspacePreservingSlots,
+  );
   const setSelectedWorkspace = useHarnessStore((state) => state.setSelectedWorkspace);
   const setSelectedLogicalWorkspaceId =
     useLogicalWorkspaceStore((state) => state.setSelectedLogicalWorkspaceId);
@@ -32,12 +34,12 @@ export function useChatLaunchIntentActions() {
 
     setHomeDraftText(activeIntent.text);
     setSelectedLogicalWorkspaceId(null);
-    clearSelection();
+    deselectWorkspacePreservingSlots();
     clearIfActive(activeIntent.id);
   }, [
     activeIntent,
     clearIfActive,
-    clearSelection,
+    deselectWorkspacePreservingSlots,
     setHomeDraftText,
     setSelectedLogicalWorkspaceId,
   ]);

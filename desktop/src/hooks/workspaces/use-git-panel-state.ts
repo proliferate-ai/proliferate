@@ -4,6 +4,9 @@ import {
   useGitStatusQuery,
 } from "@anyharness/sdk-react";
 import { useMemo } from "react";
+import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
+import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
+import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/collections";
 import {
   buildLogicalWorkspaces,
@@ -22,8 +25,6 @@ import {
 import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
-import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
-import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 
 const EMPTY_STATUS_FILES: GitChangedFile[] = [];
 const EMPTY_BRANCH_FILES: GitDiffFile[] = [];
@@ -47,6 +48,7 @@ export function useGitPanelState(mode: GitPanelMode) {
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const runtimeBlockedReason = getWorkspaceRuntimeBlockReason(runtimeBlockWorkspaceId);
   const isRuntimeReady = runtimeBlockedReason === null;
+  const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const { data: workspaceCollections } = useWorkspaces();
 
   const workspaceContext = useMemo(
@@ -66,7 +68,7 @@ export function useGitPanelState(mode: GitPanelMode) {
 
   const gitStatusQuery = useGitStatusQuery({
     workspaceId: activeWorkspaceId,
-    enabled: isRuntimeReady,
+    enabled: isRuntimeReady && !hotPaintPending,
   });
 
   const baseRef = resolveGitPanelBaseRef({
@@ -78,7 +80,7 @@ export function useGitPanelState(mode: GitPanelMode) {
   const branchFilesQuery = useGitBranchDiffFilesQuery({
     workspaceId: activeWorkspaceId,
     baseRef,
-    enabled: isRuntimeReady && mode === "branch",
+    enabled: isRuntimeReady && !hotPaintPending && mode === "branch",
   });
 
   const statusFiles = gitStatusQuery.data?.files ?? EMPTY_STATUS_FILES;

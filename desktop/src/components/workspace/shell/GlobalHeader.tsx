@@ -7,6 +7,7 @@ import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-s
 import { resolvePreferredOpenTarget } from "@/lib/domain/chat/preference-resolvers";
 import { HeaderTabs } from "@/components/workspace/shell/HeaderTabs";
 import { Button } from "@/components/ui/Button";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { GitActionsButton } from "@/components/workspace/git/GitActionsButton";
 import { SplitButton } from "@/components/workspace/open-target/SplitButton";
 import {
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/icons";
 import type { GitStatusSnapshot, Workspace } from "@anyharness/sdk";
 import type { CurrentPullRequestResponse } from "@anyharness/sdk";
+import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 
 interface GlobalHeaderProps {
   gitStatus: GitStatusSnapshot | null;
@@ -58,6 +60,7 @@ export function GlobalHeader({
   onViewPr,
   onRenameBranch: _onRenameBranch,
 }: GlobalHeaderProps) {
+  useDebugRenderCount("global-header");
 
   const [targets, setTargets] = useState<OpenTarget[]>([]);
   const defaultOpenInTargetId = useUserPreferencesStore((s) => s.defaultOpenInTargetId);
@@ -83,7 +86,8 @@ export function GlobalHeader({
   );
 
   return (
-    <div className="flex h-full min-w-0 flex-1 items-stretch gap-2 px-2">
+    <DebugProfiler id="global-header">
+      <div className="flex h-full min-w-0 flex-1 items-stretch gap-2 px-2">
       {/* Tabs */}
       <div className="flex min-w-0 flex-1 items-center overflow-hidden">
         <HeaderTabs />
@@ -133,6 +137,7 @@ export function GlobalHeader({
           <SplitPanel className="size-3.5 text-muted-foreground" />
         </Button>
       </div>
-    </div>
+      </div>
+    </DebugProfiler>
   );
 }

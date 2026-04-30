@@ -11,6 +11,10 @@ export type {
 
 export { getAnyHarnessClient } from "./lib/client-cache.js";
 export type { AnyHarnessClientConnection } from "./lib/client-cache.js";
+export type {
+  AnyHarnessCacheDecisionEvent,
+  AnyHarnessQueryTimingOptions,
+} from "./lib/timing-options.js";
 
 export {
   anyHarnessRuntimeKey,

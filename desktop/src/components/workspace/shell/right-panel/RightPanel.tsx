@@ -162,20 +162,28 @@ export function RightPanel({
               current,
             )
           : value;
-        return rightPanelStateEqual(current, next) ? current : next;
+        if (!rightPanelStateEqual(current, next)) {
+          return next;
+        }
+        return rightPanelStateEqual(previous, current) ? previous : current;
       });
     },
     [isCloudWorkspaceSelected, onStateChange],
   );
 
   useEffect(() => {
-    updateState((previous) => reconcileRightPanelWorkspaceState(previous, {
+    const next = reconcileRightPanelWorkspaceState(state, {
       isCloudWorkspaceSelected,
       liveTerminalIds: terminalsQuery.isSuccess ? liveTerminalIds : undefined,
-    }));
+    });
+    if (rightPanelStateEqual(state, next)) {
+      return;
+    }
+    updateState(next);
   }, [
     isCloudWorkspaceSelected,
     liveTerminalIds,
+    state,
     terminalsQuery.isSuccess,
     updateState,
   ]);

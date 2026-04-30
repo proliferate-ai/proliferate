@@ -495,6 +495,18 @@
   description: Extra latency logging in dev
   tags: [local-dev]
 
+- name: VITE_PROLIFERATE_DEBUG_MAIN_THREAD
+  secret: false
+  default: ""
+  description: Dev-only renderer main-thread measurement for React commits, render counts, long tasks, and frame gaps
+  tags: [local-dev, desktop]
+
+- name: VITE_PROLIFERATE_DEBUG_ANYHARNESS_TIMING
+  secret: false
+  default: ""
+  description: Dev-only privacy-safe AnyHarness/cloud request and stream timing measurement
+  tags: [local-dev, desktop]
+
 - name: VITE_PROLIFERATE_SENTRY_DSN
   secret: false
   default: ""

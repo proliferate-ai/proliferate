@@ -438,7 +438,7 @@ impl SessionRuntime {
             .ok_or_else(|| ReplayError::SessionNotFound(session_id.to_string()))?;
         let records = self
             .session_service
-            .list_session_event_records(session_id, None)
+            .list_session_event_records(session_id, None, None, None, None)
             .map_err(ReplayError::Internal)?
             .ok_or_else(|| ReplayError::SessionNotFound(session_id.to_string()))?;
 

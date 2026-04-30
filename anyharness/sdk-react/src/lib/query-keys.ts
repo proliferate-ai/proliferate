@@ -159,8 +159,31 @@ export function anyHarnessSessionEventsKey(
   workspaceId: string | null | undefined,
   sessionId: string | null | undefined,
   afterSeq?: number,
+  limit?: number,
+  beforeSeq?: number,
+  turnLimit?: number,
 ) {
-  return [...anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId), "events", afterSeq ?? null] as const;
+  const scopeKey = [
+    ...anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId),
+    "events",
+  ] as const;
+  if (
+    afterSeq == null
+    && beforeSeq == null
+    && limit == null
+    && turnLimit == null
+  ) {
+    return scopeKey;
+  }
+  return [
+    ...scopeKey,
+    {
+      afterSeq: afterSeq ?? null,
+      beforeSeq: beforeSeq ?? null,
+      limit: limit ?? null,
+      turnLimit: turnLimit ?? null,
+    },
+  ] as const;
 }
 
 export function anyHarnessSessionSubagentsKey(

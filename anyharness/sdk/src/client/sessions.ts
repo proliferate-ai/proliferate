@@ -23,7 +23,7 @@ import {
   normalizeSession,
   normalizeSessionLiveConfigSnapshot,
 } from "../types/sessions.js";
-import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
+import { withTimingCategory, type AnyHarnessRequestOptions, type AnyHarnessTransport } from "./core.js";
 
 export class SessionsClient {
   constructor(private readonly transport: AnyHarnessTransport) {}
@@ -47,7 +47,10 @@ export class SessionsClient {
     }
     const query = params.size > 0 ? `?${params.toString()}` : "";
     return (
-      await this.transport.get<Session[]>(`/v1/sessions${query}`, options)
+      await this.transport.get<Session[]>(
+        `/v1/sessions${query}`,
+        withTimingCategory(options, "session.list"),
+      )
     ).map(normalizeSession);
   }
 
@@ -71,10 +74,12 @@ export class SessionsClient {
   async updateTitle(
     sessionId: string,
     input: UpdateSessionTitleRequest,
+    options?: AnyHarnessRequestOptions,
   ): Promise<Session> {
     return normalizeSession(await this.transport.patch<Session>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/title`,
       input,
+      withTimingCategory(options, "session.title.update"),
     ));
   }
 
@@ -238,12 +243,23 @@ export class SessionsClient {
     sessionId: string,
     options?: ListSessionEventsOptions & { request?: AnyHarnessRequestOptions },
   ): Promise<SessionEventEnvelope[]> {
-    const query = options?.afterSeq != null
-      ? `?after_seq=${encodeURIComponent(String(options.afterSeq))}`
-      : "";
+    const params = new URLSearchParams();
+    if (options?.afterSeq != null) {
+      params.set("after_seq", String(options.afterSeq));
+    }
+    if (options?.beforeSeq != null) {
+      params.set("before_seq", String(options.beforeSeq));
+    }
+    if (options?.limit != null) {
+      params.set("limit", String(options.limit));
+    }
+    if (options?.turnLimit != null) {
+      params.set("turn_limit", String(options.turnLimit));
+    }
+    const query = params.size > 0 ? `?${params.toString()}` : "";
     const envelopes = await this.transport.get<SessionEventEnvelope[]>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/events${query}`,
-      options?.request,
+      withTimingCategory(options?.request, "session.events.list"),
     );
     return envelopes.map(normalizeSessionEventEnvelope);
   }
@@ -252,9 +268,11 @@ export class SessionsClient {
     sessionId: string,
     options?: ListSessionEventsOptions,
   ): Promise<SessionRawNotificationEnvelope[]> {
-    const query = options?.afterSeq != null
-      ? `?after_seq=${encodeURIComponent(String(options.afterSeq))}`
-      : "";
+    const params = new URLSearchParams();
+    if (options?.afterSeq != null) {
+      params.set("after_seq", String(options.afterSeq));
+    }
+    const query = params.size > 0 ? `?${params.toString()}` : "";
     return this.transport.get<SessionRawNotificationEnvelope[]>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/raw-notifications${query}`,
     );
@@ -287,7 +305,12 @@ function isResumeRequestOptions(
 ): value is AnyHarnessRequestOptions {
   return Boolean(
     value
-    && "headers" in value
+    && (
+      "headers" in value
+      || "measurementOperationId" in value
+      || "timingCategory" in value
+      || "timingScope" in value
+    )
     && !("mcpServers" in value)
     && !("mcpBindingSummaries" in value),
   );

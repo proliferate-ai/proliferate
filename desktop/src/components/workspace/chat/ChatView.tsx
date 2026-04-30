@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type DragEvent, type JSX } from "react";
 import { ChatInput } from "@/components/workspace/chat/input/ChatInput";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
+import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { WorkspaceMobilityFooterRow } from "@/components/workspace/chat/input/WorkspaceMobilityFooterRow";
 import { ChatLaunchIntentPane } from "@/components/workspace/chat/surface/ChatLaunchIntentPane";
 import { ChatLoadingHero } from "@/components/workspace/chat/surface/ChatLoadingHero";
@@ -17,6 +18,7 @@ import { useChatPromptAttachments } from "@/hooks/chat/use-chat-prompt-attachmen
 import { useCloudWorkspacePolling } from "@/hooks/chat/use-cloud-workspace-polling";
 import { useComposerDockSlots } from "@/hooks/chat/use-composer-dock-slots";
 import { useQueuedPromptEditStatus } from "@/hooks/chat/use-queued-prompt-edit";
+import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useSessionErrorAcknowledgement } from "@/hooks/sessions/use-session-error-acknowledgement";
 import { useSelectedCloudRuntimeRehydration } from "@/hooks/workspaces/use-selected-cloud-runtime-rehydration";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
@@ -87,6 +89,7 @@ function shouldShowSessionInputChrome(mode: ChatSurfaceState): boolean {
 }
 
 export function ChatView() {
+  useDebugRenderCount("chat-surface");
   const { mode } = useChatSurfaceState();
   const {
     activeSessionId,
@@ -169,13 +172,14 @@ export function ChatView() {
   }, [isSessionMode, mode.kind]);
 
   return (
-    <div
-      className="chat-selection-root relative flex h-full min-h-0 flex-1 flex-col select-none overflow-hidden"
-      onDragEnter={handleFileDrag}
-      onDragOver={handleFileDrag}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
+    <DebugProfiler id="chat-surface">
+      <div
+        className="chat-selection-root relative flex h-full min-h-0 flex-1 flex-col select-none overflow-hidden"
+        onDragEnter={handleFileDrag}
+        onDragOver={handleFileDrag}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
       <div className="flex flex-1 min-h-0 flex-col">
         <ChatContent
           dockSafeAreaPx={dockSafeAreaPx}
@@ -206,6 +210,7 @@ export function ChatView() {
       >
         <ChatInput attachments={promptAttachments} />
       </ChatComposerDock>
-    </div>
+      </div>
+    </DebugProfiler>
   );
 }

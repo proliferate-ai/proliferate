@@ -45,6 +45,7 @@ interface SidebarWorkspaceContentProps {
   onOpenCloudRepoSettings: (target: CloudWorkspaceRepoTarget) => void;
   onSelectWorkspace: (workspaceId: string) => void;
   onIndicatorAction: (action: SidebarIndicatorAction) => void;
+  onWorkspaceHover?: () => void;
   onArchiveWorkspace: (workspaceId: string) => void;
   onUnarchiveWorkspace: (workspaceId: string) => void;
   onRenameWorkspace: (
@@ -83,6 +84,7 @@ export function SidebarWorkspaceContent({
   onOpenCloudRepoSettings,
   onSelectWorkspace,
   onIndicatorAction,
+  onWorkspaceHover,
   onArchiveWorkspace,
   onUnarchiveWorkspace,
   onRenameWorkspace,
@@ -200,6 +202,7 @@ export function SidebarWorkspaceContent({
                 lastInteracted={item.lastInteracted}
                 onSelect={() => onSelectWorkspace(item.id)}
                 onIndicatorAction={onIndicatorAction}
+                onHover={onWorkspaceHover}
                 onArchive={item.archived ? undefined : () => onArchiveWorkspace(item.id)}
                 onUnarchive={item.archived ? () => onUnarchiveWorkspace(item.id) : undefined}
                 onRename={

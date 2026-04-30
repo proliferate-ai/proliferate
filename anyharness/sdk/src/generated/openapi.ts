@@ -4834,6 +4834,12 @@ export interface operations {
             query?: {
                 /** @description Return only events with seq greater than this value */
                 after_seq?: number;
+                /** @description Return only events with seq less than this value */
+                before_seq?: number;
+                /** @description Return at most this many newest matching events, or use as the event budget when turn_limit is set */
+                limit?: number;
+                /** @description Return complete newest turns, bounded by the limit event budget */
+                turn_limit?: number;
             };
             header?: never;
             path: {
@@ -4851,6 +4857,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionEventEnvelope"][];
+                };
+            };
+            /** @description Unsupported event history window */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Session not found */

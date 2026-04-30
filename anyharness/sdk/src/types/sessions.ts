@@ -105,6 +105,9 @@ export type McpElicitationUrlRevealResponse =
 
 export interface ListSessionEventsOptions {
   afterSeq?: number;
+  beforeSeq?: number;
+  limit?: number;
+  turnLimit?: number;
 }
 
 export function normalizeSessionControls(

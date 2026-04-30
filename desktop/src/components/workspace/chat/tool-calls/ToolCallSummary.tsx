@@ -6,7 +6,8 @@ interface ToolCallSummaryProps {
   label?: string;
   summary: string;
   typeIcons: React.ReactNode[];
-  children: React.ReactNode;
+  children?: React.ReactNode;
+  renderChildren?: () => React.ReactNode;
   itemCount?: number;
   defaultExpanded?: boolean;
   /** When true, shows a "Final message" separator after the expanded content. */
@@ -19,14 +20,18 @@ export function ToolCallSummary({
   summary,
   typeIcons: _typeIcons,
   children,
+  renderChildren,
   itemCount,
   defaultExpanded = false,
   showFinalSeparator = false,
 }: ToolCallSummaryProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const renderedChildren = expanded || (itemCount !== undefined && itemCount <= 1)
+    ? renderChildren?.() ?? children
+    : null;
 
   if (itemCount !== undefined && itemCount <= 1) {
-    return <>{children}</>;
+    return <>{renderedChildren}</>;
   }
 
   return (
@@ -40,7 +45,7 @@ export function ToolCallSummary({
       {expanded && (
         <>
           <div className="mt-2 space-y-1.5">
-            {children}
+            {renderedChildren}
           </div>
           {showFinalSeparator && (
             <TurnSeparator label="Final message" />

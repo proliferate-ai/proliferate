@@ -9,6 +9,12 @@ import {
   logLatency,
   startLatencyTimer,
 } from "@/lib/infra/debug-latency";
+import {
+  finishMeasurementOperation,
+  getMeasurementRequestOptions,
+  recordMeasurementMetric,
+  startMeasurementOperation,
+} from "@/lib/infra/debug-measurement";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { fileWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceFileTreeUiStore } from "@/stores/editor/workspace-file-tree-ui-store";
@@ -149,19 +155,58 @@ export function useWorkspaceFileActions() {
     skipIfCached?: boolean;
     treatMissingAsIdle?: boolean;
   }): Promise<DirectoryLoadResult> => {
+    const operationId = startMeasurementOperation({
+      kind: "file_tree_expand",
+      surfaces: ["file-tree", "workspace-shell"],
+      maxDurationMs: 10_000,
+    });
     if (skipIfCached && useWorkspaceFilesStore.getState().directoryEntriesByPath[dirPath]) {
+      if (operationId) {
+        recordMeasurementMetric({
+          type: "cache",
+          category: "file.list",
+          operationId,
+          decision: "hit",
+          source: "workflow",
+        });
+        finishMeasurementOperation(operationId, "completed");
+      }
       return "cached";
+    }
+    if (operationId) {
+      recordMeasurementMetric({
+        type: "cache",
+        category: "file.list",
+        operationId,
+        decision: "miss",
+        source: "workflow",
+      });
     }
 
     setDirectoryLoadState(dirPath, "loading");
 
     try {
       const client = getAnyHarnessClient(buildConnection(runtimeUrl, authToken));
-      const result = await client.files.list(runtimeWorkspaceId, dirPath);
+      const result = await client.files.list(
+        runtimeWorkspaceId,
+        dirPath,
+        getMeasurementRequestOptions({ operationId, category: "file.list" }),
+      );
       if (!isWorkspaceFilesContextCurrent(workspaceId, initVersion)) {
         return "stale";
       }
+      const storeStartedAt = performance.now();
       setDirectoryEntries(dirPath, result.entries);
+      if (operationId) {
+        recordMeasurementMetric({
+          type: "store",
+          category: "file.list",
+          operationId,
+          durationMs: performance.now() - storeStartedAt,
+          count: result.entries.length,
+        });
+        finishMeasurementOperation(operationId, "completed");
+      }
       return "loaded";
     } catch (error) {
       if (!isWorkspaceFilesContextCurrent(workspaceId, initVersion)) {

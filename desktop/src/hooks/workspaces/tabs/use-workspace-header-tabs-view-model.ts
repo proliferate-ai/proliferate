@@ -43,6 +43,7 @@ import {
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore, type SessionSlot } from "@/stores/sessions/harness-store";
+import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
 
 export interface HeaderChatTabEntry extends GroupedChatTab {
   id: string;
@@ -75,6 +76,7 @@ export function useWorkspaceHeaderTabsViewModel() {
   const tabModes = useWorkspaceFilesStore((s) => s.tabModes);
 
   const selectedWorkspaceId = useHarnessStore((s) => s.selectedWorkspaceId);
+  const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const activeSessionId = useHarnessStore((s) => s.activeSessionId);
   const sessionSlots = useHarnessStore((s) => s.sessionSlots);
 
@@ -97,7 +99,7 @@ export function useWorkspaceHeaderTabsViewModel() {
 
   const workspaceSessionsQuery = useWorkspaceSessionsQuery({
     workspaceId: selectedWorkspaceId,
-    enabled: !!selectedWorkspaceId,
+    enabled: !!selectedWorkspaceId && !hotPaintPending,
   });
 
   const liveSlots = useMemo(

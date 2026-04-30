@@ -7,13 +7,16 @@ import type {
   ResolveRepoRootFromPathRequest,
 } from "../types/repo-roots.js";
 import type { ReadWorkspaceFileResponse } from "../types/files.js";
-import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
+import { withTimingCategory, type AnyHarnessRequestOptions, type AnyHarnessTransport } from "./core.js";
 
 export class RepoRootsClient {
   constructor(private readonly transport: AnyHarnessTransport) {}
 
-  async list(): Promise<RepoRoot[]> {
-    return this.transport.get<RepoRoot[]>("/v1/repo-roots");
+  async list(options?: AnyHarnessRequestOptions): Promise<RepoRoot[]> {
+    return this.transport.get<RepoRoot[]>(
+      "/v1/repo-roots",
+      withTimingCategory(options, "repo_root.list"),
+    );
   }
 
   async resolveFromPath(path: string): Promise<RepoRoot> {
