@@ -1,8 +1,9 @@
 import { Fragment } from "react";
 import type { ContentPart } from "@anyharness/sdk";
-import { FileIcon, FileText, Link2, LoaderCircle, X } from "@/components/ui/icons";
+import { FileIcon, Link2, LoaderCircle, X } from "@/components/ui/icons";
 import { Button } from "@/components/ui/Button";
 import { FilePathLink } from "@/components/ui/content/FilePathLink";
+import { FileTreeEntryIcon } from "@/components/ui/file-icons";
 import { usePromptAttachmentUrl } from "@/hooks/chat/use-prompt-attachment-url";
 import {
   normalizeContentParts,
@@ -140,17 +141,19 @@ function PromptAttachmentCard({
   variant: PromptAttachmentCardVariant;
   onRemove?: (id: string) => void;
 }) {
-  const metadata = [part.mimeType, part.sizeLabel].filter(Boolean).join(" - ");
   const isDraft = variant === "draft";
   const isCompact = variant === "compact";
+  const metadata = [attachmentKindLabel(part), part.mimeType, part.sizeLabel]
+    .filter(Boolean)
+    .join(" - ");
   const className = isDraft
     ? "group flex max-w-full items-center gap-2 rounded-md border border-border/70 bg-muted/35 px-2 py-1 text-xs text-foreground"
     : isCompact
-      ? "flex min-w-0 items-center gap-2 rounded-md border border-border/70 bg-background/40 px-2 py-1.5 text-xs text-foreground"
-      : "flex min-w-0 items-start gap-2 rounded-md border border-border/70 bg-background/40 px-2 py-1.5 text-xs text-foreground";
+      ? "flex min-w-0 items-center gap-2 rounded-md border border-border/60 bg-muted/45 px-2 py-1.5 text-xs text-foreground"
+      : "flex min-w-0 items-start gap-2 rounded-lg border border-border/60 bg-muted/45 px-2.5 py-2 text-xs text-foreground shadow-sm";
 
   return (
-    <div className={className}>
+    <div className={className} data-telemetry-mask>
       <PromptAttachmentPreview
         sessionId={sessionId}
         part={part}
@@ -213,10 +216,18 @@ function PromptAttachmentPreview({
     );
   }
 
-  const Icon = part.type === "link" ? Link2 : FileText;
   return (
     <div className={previewFrameClassName(variant)}>
-      <Icon className="size-4 text-muted-foreground" />
+      {part.type === "link" ? (
+        <Link2 className="size-4 text-muted-foreground" />
+      ) : (
+        <FileTreeEntryIcon
+          name={part.name}
+          path={part.uri ?? part.name}
+          kind="file"
+          className="size-4 text-muted-foreground"
+        />
+      )}
     </div>
   );
 }
@@ -276,4 +287,15 @@ function imageClassName(variant: PromptAttachmentCardVariant): string {
     return "size-8 shrink-0 rounded object-cover";
   }
   return "size-10 shrink-0 rounded-md object-cover";
+}
+
+function attachmentKindLabel(part: PromptDisplayAttachmentPart): string {
+  switch (part.type) {
+    case "image":
+      return "Image";
+    case "file":
+      return "File";
+    case "link":
+      return "Link";
+  }
 }
