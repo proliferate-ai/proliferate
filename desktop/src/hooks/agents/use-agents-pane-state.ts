@@ -42,6 +42,7 @@ interface AgentsPaneState {
   selectedAgent: AgentSummary | null;
   reconcileState: AgentReconcileState;
   isReconciling: boolean;
+  isAgentSeedHydrating: boolean;
   isEmpty: boolean;
   openAgent: (agent: AgentSummary) => void;
   closeAgent: () => void;
@@ -54,6 +55,7 @@ export function useAgentsPaneState(): AgentsPaneState {
     runtimeError: state.error,
   })));
   const { data: health } = useRuntimeHealthQuery();
+  const isAgentSeedHydrating = health?.agentSeed?.status === "hydrating";
   const {
     agents,
     agentsByKind,
@@ -144,6 +146,7 @@ export function useAgentsPaneState(): AgentsPaneState {
     selectedAgent,
     reconcileState,
     isReconciling: reconcileState === "reconciling",
+    isAgentSeedHydrating,
     isEmpty: rows.length === 0,
     openAgent,
     closeAgent,

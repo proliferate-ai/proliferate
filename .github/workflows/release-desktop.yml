@@ -46,10 +46,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
+          - os: macos-15
             target: aarch64-apple-darwin
             runner_os: macos
-          - os: macos-latest
+          - os: macos-15-intel
             target: x86_64-apple-darwin
             runner_os: macos
 
@@ -89,6 +89,20 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Resolve release metadata
+        if: steps.filter.outputs.skip != 'true'
+        shell: bash
+        run: |
+          package_version=$(node -p "require('./desktop/package.json').version")
+          if [[ "${GITHUB_REF_NAME:-}" == desktop-v* ]]; then
+            release_version="${GITHUB_REF_NAME#desktop-v}"
+          else
+            safe_ref=$(printf '%s' "${GITHUB_REF_NAME:-$GITHUB_SHA}" | sed 's/[^A-Za-z0-9._-]/-/g')
+            release_version="${package_version}-${safe_ref}-${GITHUB_SHA::12}"
+          fi
+          echo "PROLIFERATE_RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
+          echo "Using release version $release_version"
+
       - name: Setup pnpm
         if: steps.filter.outputs.skip != 'true'
         uses: pnpm/action-setup@v4
@@ -113,6 +127,36 @@ jobs:
             cp "target/${{ matrix.target }}/release/anyharness" "desktop/src-tauri/binaries/anyharness-${{ matrix.target }}"
             chmod +x "desktop/src-tauri/binaries/anyharness-${{ matrix.target }}"
           fi
+
+      - name: Install seed packaging tools
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
+        shell: bash
+        run: brew install zstd
+
+      - name: Build bundled agent seed
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
+        shell: bash
+        run: |
+          TMP_SEED_RUNTIME="$(mktemp -d)"
+          node scripts/build-agent-seed.mjs \
+            --target "${{ matrix.target }}" \
+            --anyharness-bin "$PWD/target/${{ matrix.target }}/release/anyharness" \
+            --runtime-home "$TMP_SEED_RUNTIME" \
+            --output-dir "$PWD/desktop/src-tauri/agent-seeds"
+
+          test -s "desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.tar.zst"
+          test -s "desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.sha256"
+          seed_count=$(find desktop/src-tauri/agent-seeds -maxdepth 1 -type f -name 'agent-seed-*.tar.zst' | wc -l | tr -d ' ')
+          [[ "$seed_count" == "1" ]] || { echo "::error::Expected one target seed archive, found $seed_count"; exit 1; }
+          NODE_BIN="$TMP_SEED_RUNTIME/node/${{ matrix.target }}/bin/node"
+          codesign --verify --verbose "$NODE_BIN"
+          spctl --assess --verbose=4 --type open --context context:primary-signature "$NODE_BIN"
+
+          TMP_SEED_EXTRACT="$(mktemp -d)"
+          zstd -dc "desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.tar.zst" | tar -xf - -C "$TMP_SEED_EXTRACT"
+          EXTRACTED_NODE_BIN="$TMP_SEED_EXTRACT/node/${{ matrix.target }}/bin/node"
+          codesign --verify --verbose "$EXTRACTED_NODE_BIN"
+          spctl --assess --verbose=4 --type open --context context:primary-signature "$EXTRACTED_NODE_BIN"
 
       - name: Build Proliferate debug helper for target
         if: steps.filter.outputs.skip != 'true'
@@ -149,7 +193,7 @@ jobs:
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
         run: |
-          export VITE_PROLIFERATE_RELEASE="proliferate-desktop@${GITHUB_REF_NAME:-$GITHUB_SHA}"
+          export VITE_PROLIFERATE_RELEASE="proliferate-desktop@${PROLIFERATE_RELEASE_VERSION}"
           pnpm run build
 
       - name: Import Apple Developer Certificate
@@ -184,8 +228,8 @@ jobs:
             echo "No App Store Connect API key configured, skipping notarization setup"
             exit 0
           fi
-          mkdir -p ~/private_keys
-          echo "$APPLE_API_KEY_CONTENT" > ~/private_keys/AuthKey_${APPLE_API_KEY}.p8
+          mkdir -p "$HOME/private_keys"
+          echo "$APPLE_API_KEY_CONTENT" > "$HOME/private_keys/AuthKey_${APPLE_API_KEY}.p8"
 
       - name: Build Tauri app
         if: steps.filter.outputs.skip != 'true'
@@ -196,9 +240,9 @@ jobs:
           _API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           _API_KEY: ${{ secrets.APPLE_API_KEY }}
         run: |
-          export VITE_PROLIFERATE_RELEASE="${VITE_PROLIFERATE_RELEASE:-proliferate-desktop@${GITHUB_REF_NAME:-$GITHUB_SHA}}"
-          export PROLIFERATE_DESKTOP_SENTRY_RELEASE="${PROLIFERATE_DESKTOP_SENTRY_RELEASE:-proliferate-desktop-native@${GITHUB_REF_NAME:-$GITHUB_SHA}}"
-          export ANYHARNESS_SENTRY_RELEASE="${ANYHARNESS_SENTRY_RELEASE:-anyharness-sidecar@${GITHUB_REF_NAME:-$GITHUB_SHA}}"
+          export VITE_PROLIFERATE_RELEASE="${VITE_PROLIFERATE_RELEASE:-proliferate-desktop@${PROLIFERATE_RELEASE_VERSION}}"
+          export PROLIFERATE_DESKTOP_SENTRY_RELEASE="${PROLIFERATE_DESKTOP_SENTRY_RELEASE:-proliferate-desktop-native@${PROLIFERATE_RELEASE_VERSION}}"
+          export ANYHARNESS_SENTRY_RELEASE="${ANYHARNESS_SENTRY_RELEASE:-anyharness-sidecar@${PROLIFERATE_RELEASE_VERSION}}"
 
           if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
             export ANYHARNESS_BIN="$PWD/src-tauri/binaries/anyharness-${{ matrix.target }}.exe"
@@ -246,7 +290,7 @@ jobs:
         shell: bash
         run: |
           base="../target/${{ matrix.target }}/release/bundle/macos"
-          version="${GITHUB_REF_NAME#desktop-v}"
+          version="${PROLIFERATE_RELEASE_VERSION}"
 
           if [[ "${{ matrix.target }}" == "aarch64-apple-darwin" ]]; then
             suffix="aarch64"
@@ -284,16 +328,40 @@ jobs:
           compgen -G "$base/*_${suffix}.app.tar.gz" > /dev/null || { echo "::error::Missing normalized macOS updater tarball"; exit 1; }
           compgen -G "$base/*_${suffix}.app.tar.gz.sig" > /dev/null || { echo "::error::Missing normalized macOS updater signature"; exit 1; }
 
+      - name: Stage release artifacts (macOS)
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
+        working-directory: desktop
+        shell: bash
+        run: |
+          stage="../target/${{ matrix.target }}/release/release-artifacts"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+
+          cp ../target/${{ matrix.target }}/release/bundle/dmg/*.dmg "$stage/"
+          cp ../target/${{ matrix.target }}/release/bundle/macos/*_*.app.tar.gz "$stage/"
+          cp ../target/${{ matrix.target }}/release/bundle/macos/*_*.app.tar.gz.sig "$stage/"
+
+          find "$stage" -maxdepth 1 -type f | sort
+
       - name: Upload build artifacts (macOS)
         if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
         uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.target }}
           path: |
-            target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            target/${{ matrix.target }}/release/bundle/macos/*_*.app.tar.gz
-            target/${{ matrix.target }}/release/bundle/macos/*_*.app.tar.gz.sig
+            target/${{ matrix.target }}/release/release-artifacts/*
           if-no-files-found: error
+          compression-level: 0
+
+      - name: Upload DMG-only artifact (macOS)
+        if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: proliferate-dmg-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/release-artifacts/*.dmg
+          if-no-files-found: error
+          compression-level: 0
 
   create-release:
     needs: build-desktop

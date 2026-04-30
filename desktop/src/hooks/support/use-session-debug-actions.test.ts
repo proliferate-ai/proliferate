@@ -18,6 +18,18 @@ import {
 const now = new Date("2026-04-16T18:30:05.000Z");
 const runtimeUrl = "http://127.0.0.1:7007";
 const health = {
+  agentSeed: {
+    lastAction: "none",
+    ownership: "not_configured",
+    repairedArtifactCount: 0,
+    seedOwnedArtifactCount: 0,
+    seedVersion: null,
+    seededAgents: [],
+    skippedExistingArtifactCount: 0,
+    source: "none",
+    status: "not_configured_dev",
+    target: null,
+  },
   capabilities: { replay: false },
   runtimeHome: "/Users/pablo/.proliferate/anyharness",
   status: "ok",

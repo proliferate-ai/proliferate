@@ -4250,6 +4250,124 @@
           "error"
         ]
       },
+      "AgentSeedFailureKind": {
+        "type": "string",
+        "enum": [
+          "missing_archive",
+          "invalid_checksum",
+          "invalid_manifest",
+          "invalid_archive",
+          "io",
+          "unsupported_target",
+          "verification_failed"
+        ]
+      },
+      "AgentSeedHealth": {
+        "type": "object",
+        "required": [
+          "status",
+          "source",
+          "ownership",
+          "seededAgents",
+          "lastAction",
+          "seedOwnedArtifactCount",
+          "skippedExistingArtifactCount",
+          "repairedArtifactCount"
+        ],
+        "properties": {
+          "failureKind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentSeedFailureKind"
+              }
+            ]
+          },
+          "lastAction": {
+            "$ref": "#/components/schemas/AgentSeedLastAction"
+          },
+          "ownership": {
+            "$ref": "#/components/schemas/AgentSeedOwnership"
+          },
+          "repairedArtifactCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "seedOwnedArtifactCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "seedVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seededAgents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skippedExistingArtifactCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "source": {
+            "$ref": "#/components/schemas/AgentSeedSource"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentSeedStatus"
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "AgentSeedLastAction": {
+        "type": "string",
+        "enum": [
+          "none",
+          "hydrated",
+          "repaired"
+        ]
+      },
+      "AgentSeedOwnership": {
+        "type": "string",
+        "enum": [
+          "full_seed",
+          "partial_seed",
+          "user_owned_existing",
+          "not_configured"
+        ]
+      },
+      "AgentSeedSource": {
+        "type": "string",
+        "enum": [
+          "bundled",
+          "external_dev",
+          "none"
+        ]
+      },
+      "AgentSeedStatus": {
+        "type": "string",
+        "enum": [
+          "not_configured_dev",
+          "missing_bundled_seed",
+          "hydrating",
+          "ready",
+          "partial",
+          "failed"
+        ]
+      },
       "AgentSummary": {
         "type": "object",
         "required": [
@@ -6458,9 +6576,13 @@
           "status",
           "version",
           "runtimeHome",
-          "capabilities"
+          "capabilities",
+          "agentSeed"
         ],
         "properties": {
+          "agentSeed": {
+            "$ref": "#/components/schemas/AgentSeedHealth"
+          },
           "capabilities": {
             "$ref": "#/components/schemas/RuntimeCapabilities"
           },

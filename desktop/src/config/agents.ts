@@ -13,6 +13,7 @@ export const AGENTS_PAGE_COPY = {
   empty: "No agents available",
   reconcileAction: "Reinstall All",
   reconcileLoadingAction: "Installing...",
+  reconcileSeedHydratingAction: "Finishing setup...",
   reconcileError: "Could not reinstall the available agents.",
 } as const;
 
@@ -23,6 +24,7 @@ export const AGENT_SETUP_COPY = {
   installFailed: "Install failed",
   justInstalled: "Just installed",
   installing: "Installing...",
+  seedHydrating: "Finishing setup...",
   apiKeys: "API Keys",
   cliLogin: "CLI Login",
   saveCredential: "Save",

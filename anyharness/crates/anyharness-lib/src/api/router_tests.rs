@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use super::router::build_router;
 use crate::{
+    agents::seed::AgentSeedStore,
     app::{test_support, AppState},
     persistence::Db,
     sessions::{model::SessionRecord, store::SessionStore},
@@ -52,6 +53,7 @@ fn test_state(require_bearer_auth: bool) -> AppState {
         "http://127.0.0.1:8457".to_string(),
         Db::open_in_memory().expect("expected in-memory db"),
         require_bearer_auth,
+        AgentSeedStore::not_configured_dev(),
     )
     .expect("expected app state")
 }

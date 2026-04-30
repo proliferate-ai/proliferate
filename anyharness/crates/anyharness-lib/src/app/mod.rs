@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::acp::manager::AcpManager;
 use crate::agents::reconcile_execution::AgentReconcileService;
+use crate::agents::seed::AgentSeedStore;
 use crate::cowork::artifacts::CoworkArtifactRuntime;
 use crate::cowork::delegation::service::CoworkDelegationService;
 use crate::cowork::mcp_auth::CoworkMcpAuth;
@@ -61,6 +62,7 @@ pub struct AppState {
     pub runtime_base_url: String,
     pub db: Db,
     pub bearer_token: Option<String>,
+    pub agent_seed_store: AgentSeedStore,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
@@ -93,6 +95,7 @@ impl AppState {
         runtime_base_url: String,
         db: Db,
         require_bearer_auth: bool,
+        agent_seed_store: AgentSeedStore,
     ) -> Result<Self, AppStateInitError> {
         let bearer_token = load_bearer_token(require_bearer_auth)?;
         let session_data_cipher =
@@ -240,6 +243,7 @@ impl AppState {
             runtime_base_url,
             db,
             bearer_token,
+            agent_seed_store,
             agent_reconcile_service,
             repo_root_service,
             workspace_runtime,
@@ -398,10 +402,10 @@ mod tests {
     use std::sync::Mutex;
 
     use super::{proliferate_home_dir_name, test_support, AppState};
-    use crate::persistence::Db;
+    use crate::{agents::seed::AgentSeedStore, persistence::Db};
 
-    #[test]
-    fn app_state_allows_missing_bearer_token_when_not_required() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn app_state_allows_missing_bearer_token_when_not_required() {
         let _lock = test_support::ENV_MUTEX
             .get_or_init(|| Mutex::new(()))
             .lock()
@@ -414,14 +418,15 @@ mod tests {
             "http://127.0.0.1:8457".to_string(),
             Db::open_in_memory().expect("expected in-memory db"),
             false,
+            AgentSeedStore::not_configured_dev(),
         )
         .expect("expected app state");
 
         assert_eq!(state.bearer_token, None);
     }
 
-    #[test]
-    fn app_state_rejects_missing_bearer_token_when_required() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn app_state_rejects_missing_bearer_token_when_required() {
         let _lock = test_support::ENV_MUTEX
             .get_or_init(|| Mutex::new(()))
             .lock()
@@ -434,6 +439,7 @@ mod tests {
             "http://127.0.0.1:8457".to_string(),
             Db::open_in_memory().expect("expected in-memory db"),
             true,
+            AgentSeedStore::not_configured_dev(),
         )
         .err()
         .expect("expected missing bearer token error");
@@ -445,8 +451,8 @@ environment variable is missing or empty. Refusing to start without authenticati
         );
     }
 
-    #[test]
-    fn app_state_rejects_blank_bearer_token_when_required() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn app_state_rejects_blank_bearer_token_when_required() {
         let _lock = test_support::ENV_MUTEX
             .get_or_init(|| Mutex::new(()))
             .lock()
@@ -459,6 +465,7 @@ environment variable is missing or empty. Refusing to start without authenticati
             "http://127.0.0.1:8457".to_string(),
             Db::open_in_memory().expect("expected in-memory db"),
             true,
+            AgentSeedStore::not_configured_dev(),
         )
         .err()
         .expect("expected blank bearer token error");
@@ -470,8 +477,8 @@ environment variable is missing or empty. Refusing to start without authenticati
         );
     }
 
-    #[test]
-    fn app_state_rejects_invalid_data_key() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn app_state_rejects_invalid_data_key() {
         let _lock = test_support::ENV_MUTEX
             .get_or_init(|| Mutex::new(()))
             .lock()
@@ -484,6 +491,7 @@ environment variable is missing or empty. Refusing to start without authenticati
             "http://127.0.0.1:8457".to_string(),
             Db::open_in_memory().expect("expected in-memory db"),
             false,
+            AgentSeedStore::not_configured_dev(),
         )
         .err()
         .expect("expected invalid data key error");

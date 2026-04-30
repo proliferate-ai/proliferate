@@ -107,7 +107,11 @@ export function AgentSetupModal({
               onClick={() => {
                 void state.handleInstall();
               }}
-              disabled={state.isBusy || reconcileState === "reconciling"}
+              disabled={
+                state.isBusy
+                || state.isAgentSeedHydrating
+                || reconcileState === "reconciling"
+              }
               className="w-full"
             >
               {state.installButtonLabel}

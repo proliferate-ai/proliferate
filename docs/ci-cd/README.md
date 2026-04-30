@@ -27,6 +27,7 @@ server/
   infra/main.tf              # ECR, ECS, RDS, and server runtime infra
   deploy/                    # self-hosted production compose + update scripts
 scripts/
+  build-agent-seed.mjs
   generate-updater-manifest.mjs
 ```
 
@@ -119,6 +120,9 @@ Flow:
 3. The workflow:
    - validates version consistency on tag pushes
    - builds the AnyHarness sidecar for each desktop target
+   - builds exactly one bundled agent seed for that target from
+     `desktop/src-tauri/agent-seed.inputs.json`
+   - verifies the bundled Node binary with `codesign` and `spctl` on macOS
    - regenerates and builds `@anyharness/sdk`
    - builds the frontend
    - builds and signs the Tauri desktop packages
@@ -137,6 +141,37 @@ Note:
 - The current desktop release matrix is macOS-only. Windows packaging and
   updater entries are temporarily disabled until the SDK generation step is
   Windows-safe.
+- Agent seeds are target-specific Tauri resources under
+  `desktop/src-tauri/agent-seeds/`. The seed builder cleans previous generated
+  seed files before writing the current target archive, and the workflow asserts
+  that exactly one non-empty `agent-seed-*.tar.zst` plus matching `.sha256`
+  exists before `pnpm tauri build`.
+- Release workflow artifacts are staged into a flat
+  `target/<target>/release/release-artifacts/` directory before upload. The
+  downloadable GitHub Actions artifact should contain the user-facing DMG plus
+  updater archive/signature at its top level; raw seed archives stay embedded in
+  the app bundle and are not uploaded as separate release assets.
+- The workflow also uploads a separate `proliferate-dmg-<target>` Actions
+  artifact for manual PR-build testing. GitHub Actions artifacts still download
+  as ZIP files, but this DMG-only artifact avoids downloading the updater
+  archive/signature when a tester only needs the installer.
+- Desktop releases currently bundle Claude Code, Codex, and a target-specific
+  Node runtime. Other agents are still installed through normal background
+  reconcile after seed hydration.
+- Seed hydration runs in the AnyHarness background after the HTTP runtime starts.
+  A local arm64 smoke with a 170 MB compressed seed reported `/health` in
+  roughly 50 ms with `agentSeed.status=hydrating`, then completed hydration in
+  roughly 98 seconds on the test machine. Treat this as a measurement point, not
+  a release promise.
+- Seed updates are tied to desktop releases. Because Tauri updater artifacts are
+  full archives rather than binary deltas, bundling agents increases both first
+  download size and every desktop update payload until a separate delta/updater
+  strategy exists.
+- A notarized macOS DMG install on a clean user account is a release gate for
+  bundled seed changes. CI `codesign`/`spctl` checks catch the pinned Node
+  tarball, but only a clean-account install catches Gatekeeper, quarantine, and
+  hydrated-executable behavior end to end. This gate is manual until the
+  release pipeline has a self-hosted clean macOS runner or VM lane.
 - `dry_run: true` exercises the build matrix but skips `create-release` and
   `publish-updater`.
 - The release workflow is intentionally fail-closed now: manifest generation

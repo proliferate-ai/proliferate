@@ -22,11 +22,13 @@ export function AgentsPane() {
       onClick={() => {
         void state.handleReconcile();
       }}
-      disabled={state.isReconciling}
+      disabled={state.isReconciling || state.isAgentSeedHydrating}
     >
-      {state.isReconciling
-        ? AGENTS_PAGE_COPY.reconcileLoadingAction
-        : AGENTS_PAGE_COPY.reconcileAction}
+      {state.isAgentSeedHydrating
+        ? AGENTS_PAGE_COPY.reconcileSeedHydratingAction
+        : state.isReconciling
+          ? AGENTS_PAGE_COPY.reconcileLoadingAction
+          : AGENTS_PAGE_COPY.reconcileAction}
     </Button>
   ) : undefined;
 

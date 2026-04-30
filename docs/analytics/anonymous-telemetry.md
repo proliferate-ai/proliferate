@@ -61,6 +61,7 @@ payloads to third-party vendors.
       - `first_cloud_workspace_created`
       - `first_credential_synced`
       - `first_connector_installed`
+      - `first_bundled_agent_seed_hydrated`
   - failure behavior: milestones are written to local pending state and retried
     on the next bootstrap and hourly housekeeping cycle until they succeed
 - Desktop daily usage aggregate
@@ -160,6 +161,26 @@ Runtime config, not env:
   - `cloud_workspace_created`
   - `cloud_credential_synced`
   - `connector_install_succeeded`
+  - `agent_seed_hydrated`
+  - `agent_seed_hydration_failed`
+- Bundled agent seed telemetry:
+  - trigger: desktop observes runtime health reporting seed status
+  - code path:
+    - `desktop/src/hooks/telemetry/use-telemetry-agent-seed.ts`
+    - `desktop/src/lib/domain/telemetry/events.ts`
+    - `desktop/src/lib/domain/telemetry/anonymous-events.ts`
+  - sends product events only with low-cardinality fields:
+    - `status`
+    - `source`
+    - `ownership`
+    - `lastAction`
+    - `failureKind`
+    - artifact counts
+    - seeded agent count
+  - does not send absolute paths, raw errors, prompts, repo names, or file
+    contents
+  - anonymous activation is recorded only when `agent_seed_hydrated` reports
+    `status=ready`
 - Vendor relationship:
   - `hosted_product` sends both vendor telemetry and anonymous telemetry
   - `local_dev` and `self_managed` send anonymous telemetry only

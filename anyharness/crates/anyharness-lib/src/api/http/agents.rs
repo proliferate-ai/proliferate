@@ -139,19 +139,45 @@ pub async fn install_agent(
         "installing agent"
     );
 
-    let installed_artifacts = installer::install_agent(desc, &state.runtime_home, &options)
-        .map_err(|error| {
-            tracing::error!(
-                agent = %kind,
-                reinstall = options.reinstall,
-                native_version = ?options.native_version,
-                agent_process_version = ?options.agent_process_version,
-                runtime_home = %state.runtime_home.display(),
-                error = %error,
-                "agent install failed"
-            );
-            install_error_to_problem(error)
-        })?;
+    let install_runtime_home = state.runtime_home.clone();
+    let install_desc = desc.clone();
+    let install_options = options.clone();
+    let installed_artifacts = tokio::task::spawn_blocking(move || {
+        installer::install_agent(&install_desc, &install_runtime_home, &install_options)
+    })
+    .await
+    .map_err(|error| {
+        tracing::error!(
+            agent = %kind,
+            reinstall = options.reinstall,
+            native_version = ?options.native_version,
+            agent_process_version = ?options.agent_process_version,
+            runtime_home = %state.runtime_home.display(),
+            error = %error,
+            "agent install task failed"
+        );
+        problem(
+            500,
+            "Install failed",
+            Some(format!("Agent install task failed: {error}")),
+            Some("INSTALL_FAILED"),
+        )
+    })?
+    .map_err(|error| {
+        tracing::error!(
+            agent = %kind,
+            reinstall = options.reinstall,
+            native_version = ?options.native_version,
+            agent_process_version = ?options.agent_process_version,
+            runtime_home = %state.runtime_home.display(),
+            error = %error,
+            "agent install failed"
+        );
+        install_error_to_problem(error)
+    })?;
+    state
+        .agent_seed_store
+        .refresh_from_state(&state.runtime_home);
     let resolved = resolve_agent(desc, &state.runtime_home);
     let summary = to_summary(&resolved, None);
     let already_installed = installed_artifacts.is_empty();
@@ -186,6 +212,7 @@ pub async fn install_agent(
     tag = "agents"
 )]
 pub async fn start_agent_login(
+    State(state): State<AppState>,
     Path(kind): Path<String>,
     Json(_req): Json<StartAgentLoginRequest>,
 ) -> Result<Json<StartAgentLoginResponse>, ProblemResponse> {
@@ -201,10 +228,12 @@ pub async fn start_agent_login(
             kind: desc.kind.as_str().into(),
             label: login.label.clone(),
             mode: "terminal_command".into(),
-            command: LoginCommand {
-                program: login.command.program.clone(),
-                args: login.command.args.clone(),
-            },
+            command: managed_login_command(desc, &state.runtime_home).unwrap_or_else(|| {
+                LoginCommand {
+                    program: login.command.program.clone(),
+                    args: login.command.args.clone(),
+                }
+            }),
             reuses_user_state: login.reuses_user_state,
             message: login.message.clone(),
         })),
@@ -215,6 +244,23 @@ pub async fn start_agent_login(
             Some("LOGIN_NOT_SUPPORTED"),
         )),
     }
+}
+
+fn managed_login_command(
+    desc: &AgentDescriptor,
+    runtime_home: &std::path::Path,
+) -> Option<LoginCommand> {
+    let login = desc.auth.login.as_ref()?;
+    let resolved = resolve_agent(desc, runtime_home);
+    let native = resolved.native.as_ref()?;
+    if native.source.as_deref() == Some("path") {
+        return None;
+    }
+    let path = native.path.as_ref()?;
+    Some(LoginCommand {
+        program: path.display().to_string(),
+        args: login.command.args.clone(),
+    })
 }
 
 #[utoipa::path(
@@ -249,6 +295,7 @@ pub async fn reconcile_agents(
             built_in_registry(),
             state.runtime_home.clone(),
             req.reinstall,
+            Some(state.agent_seed_store.clone()),
         )
         .await;
     (

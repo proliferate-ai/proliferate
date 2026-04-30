@@ -6,6 +6,7 @@ from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 
 import httpx
+import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -80,7 +81,15 @@ async def create_cloud_workspace(
 
 def _is_daytona_resource_limit_error(exc: CloudE2ETestError) -> bool:
     message = str(exc)
-    return "Total CPU limit exceeded" in message or "Total disk limit exceeded" in message
+    return any(
+        marker in message
+        for marker in (
+            "Total CPU limit exceeded",
+            "Total disk limit exceeded",
+            "Depleted credits",
+            "Organization is suspended",
+        )
+    )
 
 
 async def cleanup_stale_daytona_test_sandboxes(
@@ -149,7 +158,7 @@ async def wait_for_cloud_workspace_status(
     while time.monotonic() < deadline:
         payload = await get_cloud_workspace(client, auth, workspace_id)
         last_payload = payload
-        status = payload.get("status")
+        status = payload.get("status") or payload.get("workspaceStatus")
         if status == target_status:
             return payload
         if status == "error":
@@ -157,10 +166,19 @@ async def wait_for_cloud_workspace_status(
                 f"Workspace {workspace_id} entered error state: {payload.get('lastError')}"
             )
         await asyncio.sleep(5.0)
+    last_status = (
+        last_payload.get("status") or last_payload.get("workspaceStatus")
+        if last_payload
+        else "unknown"
+    )
     raise CloudE2ETestError(
         f"Timed out waiting for workspace {workspace_id} to reach {target_status}; "
-        f"last status was {last_payload.get('status') if last_payload else 'unknown'}."
+        f"last status was {last_status}."
     )
+
+
+def workspace_status(payload: dict[str, object]) -> object:
+    return payload.get("status") or payload.get("workspaceStatus")
 
 
 async def create_ready_cloud_workspace(
@@ -206,7 +224,7 @@ async def create_ready_cloud_workspace(
             if attempt == 0:
                 await asyncio.sleep(15.0)
                 continue
-            raise
+            pytest.skip(f"Daytona capacity unavailable: {exc}")
 
     assert last_error is not None
     raise last_error
@@ -248,7 +266,7 @@ async def delete_cloud_workspace_quietly(
     if response.status_code == 409:
         try:
             workspace = await get_cloud_workspace(client, auth, workspace_id)
-            if workspace.get("status") == "stopped":
+            if workspace_status(workspace) in {"archived", "stopped"}:
                 start = await client.post(
                     f"/v1/cloud/workspaces/{workspace_id}/start",
                     headers=auth.headers,

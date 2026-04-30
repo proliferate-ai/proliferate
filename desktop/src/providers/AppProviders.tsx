@@ -26,9 +26,9 @@ import { TelemetryProvider } from "./TelemetryProvider";
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={appQueryClient}>
-      <TelemetryProvider>
-        <WorkspaceProviders>{children}</WorkspaceProviders>
-      </TelemetryProvider>
+      <WorkspaceProviders>
+        <TelemetryProvider>{children}</TelemetryProvider>
+      </WorkspaceProviders>
     </QueryClientProvider>
   );
 }

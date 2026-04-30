@@ -26,11 +26,21 @@ async def load_active_sandbox_record(
     workspace_id: str,
 ) -> CloudSandbox:
     workspace = await load_workspace_record(db_session, workspace_id)
-    if workspace.active_sandbox_id is None:
+    sandbox_id = workspace.active_sandbox_id
+    if sandbox_id is None and workspace.runtime_environment_id is not None:
+        environment = await db_session.get(
+            CloudRuntimeEnvironment,
+            workspace.runtime_environment_id,
+        )
+        if environment is not None:
+            await db_session.refresh(environment)
+            sandbox_id = environment.active_sandbox_id
+
+    if sandbox_id is None:
         raise CloudE2ETestError(f"Workspace {workspace_id} does not have an active sandbox.")
-    sandbox = await db_session.get(CloudSandbox, workspace.active_sandbox_id)
+    sandbox = await db_session.get(CloudSandbox, sandbox_id)
     if sandbox is None:
-        raise CloudE2ETestError(f"Sandbox {workspace.active_sandbox_id} was not found.")
+        raise CloudE2ETestError(f"Sandbox {sandbox_id} was not found.")
     await db_session.refresh(sandbox)
     return sandbox
 

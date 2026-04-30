@@ -15,7 +15,13 @@ import {
 } from "./scrub";
 import type { DesktopTelemetryConfig } from "./config";
 
-const InstrumentedRoutes = Sentry.withSentryReactRouterV7Routing(Routes);
+const InstrumentedRoutes = (() => {
+  try {
+    return Sentry.withSentryReactRouterV7Routing(Routes);
+  } catch {
+    return Routes;
+  }
+})();
 
 let sentryInitialized = false;
 

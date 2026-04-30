@@ -4,6 +4,12 @@ export type { AnyHarnessClientOptions, AnyHarnessRequestOptions } from "./client
 export type {
   HealthResponse,
   RuntimeCapabilities,
+  AgentSeedHealth,
+  AgentSeedStatus,
+  AgentSeedSource,
+  AgentSeedOwnership,
+  AgentSeedLastAction,
+  AgentSeedFailureKind,
   ProblemDetails,
 } from "./types/runtime.js";
 

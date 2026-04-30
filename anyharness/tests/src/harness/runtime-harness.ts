@@ -173,11 +173,16 @@ async function createRemoteWorkspaceFixture(
     sourceWorkspacePath,
     fixturePath,
     [
-      "import pathlib, shutil, sys",
+      "import pathlib, shutil, subprocess, sys",
       "src = pathlib.Path(sys.argv[1])",
       "dst = pathlib.Path(sys.argv[2])",
       "dst.parent.mkdir(parents=True, exist_ok=True)",
-      "shutil.copytree(src, dst, symlinks=True)",
+      "shutil.rmtree(dst, ignore_errors=True)",
+      "head = subprocess.check_output(['git', '-C', str(src), 'rev-parse', 'HEAD'], text=True).strip()",
+      "subprocess.check_call(['git', 'clone', str(src), str(dst)])",
+      "subprocess.check_call(['git', '-C', str(dst), 'checkout', head])",
+      "subprocess.check_call(['git', '-C', str(dst), 'config', 'user.name', 'Proliferate Cloud Test'])",
+      "subprocess.check_call(['git', '-C', str(dst), 'config', 'user.email', 'user@e2b.local'])",
     ].join("; "),
   );
 

@@ -35,6 +35,7 @@ from tests.e2e.cloud.helpers import (
     usage_segment_count,
     wait_for_cloud_workspace_status,
     wait_for_sandbox_event_receipt,
+    workspace_status,
 )
 
 
@@ -506,10 +507,10 @@ async def test_e2b_live_webhook_delivery_via_ngrok(
                 client,
                 handle.auth,
                 handle.workspace["id"],
-                target_status="stopped",
+                target_status="archived",
                 timeout_seconds=180.0,
             )
-            assert stopped["status"] == "stopped"
+            assert workspace_status(stopped) == "archived"
             print("[cloud-e2e] workspace transitioned to stopped", flush=True)
         finally:
             # Always clean up the live sandbox to avoid leaving provider

@@ -21,6 +21,15 @@ pub struct RendererDiagnosticInput {
     pub route: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RendererEventInput {
+    pub source: String,
+    pub message: String,
+    pub route: Option<String>,
+    pub elapsed_ms: Option<u32>,
+}
+
 fn runtime_status_label(status: &RuntimeStatus) -> &'static str {
     match status {
         RuntimeStatus::Starting => "starting",
@@ -39,6 +48,18 @@ pub fn log_renderer_diagnostic(input: RendererDiagnosticInput) -> Result<(), Str
         stack = %scrub_diagnostic_text(input.stack.as_deref().unwrap_or_default()),
         component_stack = %scrub_diagnostic_text(input.component_stack.as_deref().unwrap_or_default()),
         "Renderer diagnostic"
+    );
+    Ok(())
+}
+
+#[tauri::command]
+pub fn log_renderer_event(input: RendererEventInput) -> Result<(), String> {
+    tracing::info!(
+        source = %input.source,
+        route = %input.route.unwrap_or_default(),
+        elapsed_ms = input.elapsed_ms.unwrap_or_default(),
+        message = %scrub_diagnostic_text(&input.message),
+        "Renderer event"
     );
     Ok(())
 }

@@ -27,6 +27,7 @@ import { bootstrapHarnessRuntime } from "@/lib/integrations/anyharness/runtime-b
 import { AppErrorBoundary } from "@/components/ui/AppErrorBoundary"
 import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"
 import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
+import { logRendererEvent } from "@/platform/tauri/diagnostics"
 import { AutomationDetailPage } from "@/pages/AutomationDetailPage"
 import { AutomationsPage } from "@/pages/AutomationsPage"
 import { LoginPage } from "@/pages/LoginPage"
@@ -89,6 +90,16 @@ function cloudSettingsDeepLink(search: string): string {
   return url.toString()
 }
 
+function recordAppRendererEvent(message: string, elapsedMs?: number): void {
+  void logRendererEvent({
+    source: "app_bootstrap",
+    message,
+    elapsedMs,
+  }).catch(() => {
+    // Native logging is diagnostic-only; app startup should never depend on it.
+  })
+}
+
 function StripeReturnHandoff({ deepLinkUrl }: { deepLinkUrl: string }) {
   useEffect(() => {
     window.location.replace(deepLinkUrl)
@@ -144,6 +155,7 @@ function AppRuntime() {
   useHomeDeferredLaunchRunner()
 
   useEffect(() => {
+    recordAppRendererEvent("app.bootstrap.start")
     logStartupDebug("app.bootstrap.start")
     initializeTheme()
     const applyStoredTheme = () => {
@@ -171,8 +183,13 @@ function AppRuntime() {
     void bootstrapLogicalWorkspaceSelection()
 
     const authBootstrapStartedAt = startStartupTimer()
+    recordAppRendererEvent("app.auth_bootstrap.start")
     logStartupDebug("app.auth_bootstrap.start")
     void bootstrapAuth().finally(() => {
+      recordAppRendererEvent(
+        "app.auth_bootstrap.completed",
+        elapsedStartupMs(authBootstrapStartedAt),
+      )
       logStartupDebug("app.auth_bootstrap.completed", {
         elapsedMs: elapsedStartupMs(authBootstrapStartedAt),
         authStatus: useAuthStore.getState().status,
@@ -187,8 +204,13 @@ function AppRuntime() {
   useEffect(() => {
     if (authStatus !== "bootstrapping") {
       const runtimeBootstrapStartedAt = startStartupTimer()
+      recordAppRendererEvent("app.runtime_bootstrap.start")
       logStartupDebug("app.runtime_bootstrap.start", { authStatus })
       void bootstrapHarnessRuntime().finally(() => {
+        recordAppRendererEvent(
+          "app.runtime_bootstrap.completed",
+          elapsedStartupMs(runtimeBootstrapStartedAt),
+        )
         logStartupDebug("app.runtime_bootstrap.completed", {
           elapsedMs: elapsedStartupMs(runtimeBootstrapStartedAt),
           authStatus,
@@ -203,6 +225,7 @@ function AppRuntime() {
       <UpdateRestartDialog />
       <RuntimeInputSyncGate />
       <InstrumentedRoutes>
+        <Route path="/index.html" element={<Navigate to="/" replace />} />
         <Route path="/settings/cloud" element={<SettingsCloudRedirect />} />
         <Route element={<PublicOnlyRoute />}>
           <Route path="/login" element={<LoginPage />} />
@@ -241,6 +264,7 @@ function AppRuntime() {
             }
           />
         )}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </InstrumentedRoutes>
       <RepoSetupModalHost />
       <ToastContainer />

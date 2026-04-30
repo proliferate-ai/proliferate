@@ -8,6 +8,7 @@ use uuid::Uuid;
 use super::installer::InstallOptions;
 use super::model::{AgentDescriptor, AgentKind};
 use super::reconcile::{reconcile_agent, AgentReconcileOutcome, AgentReconcileResult};
+use super::seed::AgentSeedStore;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentReconcileJobStatus {
@@ -80,6 +81,7 @@ impl AgentReconcileService {
         registry: Vec<AgentDescriptor>,
         runtime_home: PathBuf,
         reinstall: bool,
+        agent_seed_store: Option<AgentSeedStore>,
     ) -> AgentReconcileJobSnapshot {
         let snapshot = {
             let mut current = self.job.lock().await;
@@ -125,7 +127,15 @@ impl AgentReconcileService {
 
         let jobs = self.job.clone();
         tokio::spawn(async move {
-            run_reconcile_job(jobs, job_id, registry, runtime_home, reinstall).await;
+            run_reconcile_job(
+                jobs,
+                job_id,
+                registry,
+                runtime_home,
+                reinstall,
+                agent_seed_store,
+            )
+            .await;
         });
 
         snapshot
@@ -153,6 +163,7 @@ async fn run_reconcile_job(
     registry: Vec<AgentDescriptor>,
     runtime_home: PathBuf,
     reinstall: bool,
+    agent_seed_store: Option<AgentSeedStore>,
 ) {
     let started = Instant::now();
     if update_job(&jobs, &job_id, |job| {
@@ -195,10 +206,10 @@ async fn run_reconcile_job(
             "agent reconcile install started"
         );
 
-        let runtime_home = runtime_home.clone();
+        let agent_runtime_home = runtime_home.clone();
         let options = options.clone();
         let result = match tokio::task::spawn_blocking(move || {
-            reconcile_agent(&descriptor, &runtime_home, &options)
+            reconcile_agent(&descriptor, &agent_runtime_home, &options)
         })
         .await
         {
@@ -229,6 +240,12 @@ async fn run_reconcile_job(
             elapsed_ms = agent_started.elapsed().as_millis(),
             "agent reconcile install completed"
         );
+
+        if !result.installed_artifacts.is_empty() {
+            if let Some(store) = &agent_seed_store {
+                store.refresh_from_state(&runtime_home);
+            }
+        }
 
         if update_job(&jobs, &job_id, |job| {
             job.results.push(result);
@@ -327,7 +344,12 @@ mod tests {
         }
 
         let snapshot = service
-            .start_or_get(Vec::new(), PathBuf::from("/tmp/anyharness-test"), true)
+            .start_or_get(
+                Vec::new(),
+                PathBuf::from("/tmp/anyharness-test"),
+                true,
+                None,
+            )
             .await;
 
         assert_eq!(snapshot.job_id.as_deref(), Some("existing-job"));
@@ -341,7 +363,12 @@ mod tests {
         let service = AgentReconcileService::new();
 
         let snapshot = service
-            .start_or_get(Vec::new(), PathBuf::from("/tmp/anyharness-empty"), true)
+            .start_or_get(
+                Vec::new(),
+                PathBuf::from("/tmp/anyharness-empty"),
+                true,
+                None,
+            )
             .await;
         assert_eq!(snapshot.status, AgentReconcileJobStatus::Queued);
 

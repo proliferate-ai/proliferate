@@ -8,6 +8,18 @@ import {
 
 const generatedAt = "2026-04-16T18:30:00.000Z";
 const localHealth = {
+  agentSeed: {
+    lastAction: "none",
+    ownership: "not_configured",
+    repairedArtifactCount: 0,
+    seedOwnedArtifactCount: 0,
+    seedVersion: null,
+    seededAgents: [],
+    skippedExistingArtifactCount: 0,
+    source: "none",
+    status: "not_configured_dev",
+    target: null,
+  },
   capabilities: { replay: false },
   runtimeHome: "/Users/pablo/.proliferate/anyharness",
   status: "ok",
@@ -74,6 +86,18 @@ describe("buildSessionDebugLocator", () => {
         location: "cloud",
         url: "https://runtime.example.test",
         health: {
+          agentSeed: {
+            lastAction: "none",
+            ownership: "not_configured",
+            repairedArtifactCount: 0,
+            seedOwnedArtifactCount: 0,
+            seedVersion: null,
+            seededAgents: [],
+            skippedExistingArtifactCount: 0,
+            source: "none",
+            status: "not_configured_dev",
+            target: null,
+          },
           capabilities: { replay: false },
           runtimeHome: "/srv/anyharness",
           status: "ok",

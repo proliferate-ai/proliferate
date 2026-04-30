@@ -1,3 +1,4 @@
+mod agent_seed_env;
 mod app_config;
 mod commands;
 mod desktop_telemetry_mode;
@@ -171,6 +172,7 @@ pub fn run() {
             config::get_app_config,
             diagnostics_commands::export_debug_bundle,
             diagnostics_commands::log_renderer_diagnostic,
+            diagnostics_commands::log_renderer_event,
             diagnostics_commands::save_diagnostic_json,
             runtime::get_runtime_info,
             runtime::restart_runtime,
@@ -237,10 +239,12 @@ pub fn run() {
             let _ = app;
 
             let sc = sc.clone();
+            let agent_seed_env = agent_seed_env::launch_env(app.handle());
             tauri::async_runtime::spawn(async move {
                 {
                     let mut guard = sc.lock().await;
                     guard.launch_env = keychain::load_all_secrets_for_sidecar();
+                    guard.launch_env.extend(agent_seed_env);
                 }
                 sidecar::boot(&sc).await;
             });

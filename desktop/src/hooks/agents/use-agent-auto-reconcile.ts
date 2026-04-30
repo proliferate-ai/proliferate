@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import {
   anyHarnessAgentsKey,
   anyHarnessProviderConfigsKey,
+  useRuntimeHealthQuery,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -31,11 +32,31 @@ export function useAgentAutoReconcile() {
   const hasTriggered = useRef(false);
   const previousReconcileStatus = useRef<string>("idle");
   const isHealthy = connectionState === "healthy" && runtimeUrl.trim().length > 0;
+  const {
+    data: runtimeHealth,
+    isLoading: runtimeHealthLoading,
+  } = useRuntimeHealthQuery({
+    enabled: isHealthy,
+    pollWhileAgentSeedHydrating: true,
+  });
+  const agentSeedStatus = runtimeHealth?.agentSeed?.status;
+  // `partial` can mean the seed preserved a user-owned Claude/Codex install.
+  // Normal reconcile is still safe because non-reinstall installs short-circuit
+  // when managed launchers already exist.
+  const seedAllowsReconcile =
+    !agentSeedStatus
+    || agentSeedStatus === "ready"
+    || agentSeedStatus === "partial"
+    || agentSeedStatus === "failed"
+    || agentSeedStatus === "not_configured_dev";
 
   // Auto-trigger reconcile when agents need installation
   useEffect(() => {
     if (
       !isHealthy
+      || runtimeHealthLoading
+      || agentSeedStatus === "hydrating"
+      || !seedAllowsReconcile
       || agentsLoading
       || !hasAgents
       || hasTriggered.current
@@ -53,6 +74,9 @@ export function useAgentAutoReconcile() {
     void reconcileAgents();
   }, [
     isHealthy,
+    runtimeHealthLoading,
+    agentSeedStatus,
+    seedAllowsReconcile,
     agentsLoading,
     hasAgents,
     agentsNeedingSetup,

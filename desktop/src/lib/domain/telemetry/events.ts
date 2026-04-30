@@ -44,6 +44,23 @@ export type ConnectorSkipReasonKind =
   | "workspace_path_unresolved"
   | "unsupported_target"
   | "resolver_error";
+export type AgentSeedTelemetryStatus = "ready" | "partial";
+export type AgentSeedTelemetryFailureStatus = "failed" | "missing_bundled_seed";
+export type AgentSeedTelemetrySource = "bundled" | "external_dev" | "none";
+export type AgentSeedTelemetryOwnership =
+  | "full_seed"
+  | "partial_seed"
+  | "user_owned_existing"
+  | "not_configured";
+export type AgentSeedTelemetryLastAction = "none" | "hydrated" | "repaired";
+export type AgentSeedTelemetryFailureKind =
+  | "missing_archive"
+  | "invalid_checksum"
+  | "invalid_manifest"
+  | "invalid_archive"
+  | "io"
+  | "unsupported_target"
+  | "verification_failed";
 
 export interface DesktopProductEventMap {
   app_update_available: { version: string };
@@ -64,6 +81,21 @@ export interface DesktopProductEventMap {
   };
   auth_signed_out: {
     provider: AuthTelemetryProvider;
+  };
+  agent_seed_hydrated: {
+    status: AgentSeedTelemetryStatus;
+    source: AgentSeedTelemetrySource;
+    ownership: AgentSeedTelemetryOwnership;
+    last_action: AgentSeedTelemetryLastAction;
+    seeded_agent_count: number;
+    seed_owned_artifact_count: number;
+    skipped_existing_artifact_count: number;
+    repaired_artifact_count: number;
+  };
+  agent_seed_hydration_failed: {
+    status: AgentSeedTelemetryFailureStatus;
+    source: AgentSeedTelemetrySource;
+    failure_kind: AgentSeedTelemetryFailureKind | "unknown";
   };
   chat_pending_prompt_deleted: {
     agent_kind: string;

@@ -11,7 +11,8 @@ export type AnonymousTelemetryActivationMilestone =
   | "first_local_workspace_created"
   | "first_cloud_workspace_created"
   | "first_credential_synced"
-  | "first_connector_installed";
+  | "first_connector_installed"
+  | "first_bundled_agent_seed_hydrated";
 
 export interface AnonymousUsageCounters {
   sessionsStarted: number;
@@ -134,6 +135,18 @@ export function deriveAnonymousTelemetryDirectives<
         { kind: "mark_activation", milestone: "first_connector_installed" },
         { kind: "increment_usage", counter: "connectorsInstalled" },
       ];
+    case "agent_seed_hydrated": {
+      const properties =
+        _properties as DesktopProductEventMap["agent_seed_hydrated"];
+      return properties.status === "ready"
+        ? [
+            {
+              kind: "mark_activation",
+              milestone: "first_bundled_agent_seed_hydrated",
+            },
+          ]
+        : [];
+    }
     default:
       return [];
   }

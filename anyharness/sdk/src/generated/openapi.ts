@@ -1361,6 +1361,32 @@ export interface components {
         AgentInstallState: "installed" | "install_required" | "installing" | "failed";
         /** @enum {string} */
         AgentReadinessState: "ready" | "install_required" | "credentials_required" | "login_required" | "unsupported" | "error";
+        /** @enum {string} */
+        AgentSeedFailureKind: "missing_archive" | "invalid_checksum" | "invalid_manifest" | "invalid_archive" | "io" | "unsupported_target" | "verification_failed";
+        AgentSeedHealth: {
+            failureKind?: null | components["schemas"]["AgentSeedFailureKind"];
+            lastAction: components["schemas"]["AgentSeedLastAction"];
+            ownership: components["schemas"]["AgentSeedOwnership"];
+            /** Format: int32 */
+            repairedArtifactCount: number;
+            /** Format: int32 */
+            seedOwnedArtifactCount: number;
+            seedVersion?: string | null;
+            seededAgents: string[];
+            /** Format: int32 */
+            skippedExistingArtifactCount: number;
+            source: components["schemas"]["AgentSeedSource"];
+            status: components["schemas"]["AgentSeedStatus"];
+            target?: string | null;
+        };
+        /** @enum {string} */
+        AgentSeedLastAction: "none" | "hydrated" | "repaired";
+        /** @enum {string} */
+        AgentSeedOwnership: "full_seed" | "partial_seed" | "user_owned_existing" | "not_configured";
+        /** @enum {string} */
+        AgentSeedSource: "bundled" | "external_dev" | "none";
+        /** @enum {string} */
+        AgentSeedStatus: "not_configured_dev" | "missing_bundled_seed" | "hydrating" | "ready" | "partial" | "failed";
         AgentSummary: {
             agentProcess: components["schemas"]["ArtifactStatus"];
             credentialState: components["schemas"]["AgentCredentialState"];
@@ -1852,6 +1878,7 @@ export interface components {
             targetSessionId: string;
         };
         HealthResponse: {
+            agentSeed: components["schemas"]["AgentSeedHealth"];
             capabilities: components["schemas"]["RuntimeCapabilities"];
             runtimeHome: string;
             status: string;
