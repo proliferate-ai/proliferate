@@ -787,6 +787,7 @@ impl SessionRuntime {
             .get_live_config_snapshot(session_id)
             .map_err(SendPromptError::Internal)?;
         let prepared = prepare_prompt(
+            self.session_service.store(),
             session_id,
             blocks,
             capabilities_from_live_config(live_config.as_ref()),
@@ -951,6 +952,7 @@ impl SessionRuntime {
             .get_live_config_snapshot(session_id)
             .map_err(PendingPromptMutationError::Internal)?;
         let prepared = prepare_prompt(
+            self.session_service.store(),
             session_id,
             blocks,
             capabilities_from_live_config(live_config.as_ref()),

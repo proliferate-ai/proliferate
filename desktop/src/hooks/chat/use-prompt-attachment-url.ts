@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { getSessionClientAndWorkspace } from "@/lib/integrations/anyharness/session-runtime";
@@ -18,15 +18,27 @@ export function usePromptAttachmentUrl(
         sessionId!,
         attachmentId!,
       );
-      return URL.createObjectURL(blob);
+      return blob;
     },
   });
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
 
-  useEffect(() => () => {
-    if (query.data) {
-      URL.revokeObjectURL(query.data);
+  useEffect(() => {
+    if (!query.data) {
+      setObjectUrl(null);
+      return;
     }
+
+    const nextObjectUrl = URL.createObjectURL(query.data);
+    setObjectUrl(nextObjectUrl);
+    return () => {
+      URL.revokeObjectURL(nextObjectUrl);
+    };
   }, [query.data]);
 
-  return query;
+  return {
+    ...query,
+    data: objectUrl,
+    isLoading: query.isLoading || (query.isSuccess && !objectUrl),
+  };
 }

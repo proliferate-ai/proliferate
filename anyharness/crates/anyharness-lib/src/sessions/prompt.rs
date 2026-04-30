@@ -360,6 +360,7 @@ pub fn capabilities_from_live_config(
 }
 
 pub fn prepare_prompt(
+    store: &SessionStore,
     session_id: &str,
     blocks: Vec<PromptInputBlock>,
     capabilities: PromptCapabilities,
@@ -381,6 +382,7 @@ pub fn prepare_prompt(
     let mut stored_blocks = Vec::with_capacity(blocks.len());
     let mut attachments = Vec::new();
     let mut total_attachment_bytes = 0usize;
+    let mut attachment_count = 0usize;
 
     for block in blocks {
         match block {
@@ -429,7 +431,7 @@ pub fn prepare_prompt(
                             bytes.len(),
                             MAX_TOTAL_ATTACHMENT_BYTES,
                         )?;
-                        ensure_attachment_count(attachments.len() + 1)?;
+                        attachment_count = checked_attachment_count(attachment_count + 1)?;
                         let attachment_id = uuid::Uuid::new_v4().to_string();
                         let size = bytes.len() as u64;
                         attachments.push(new_attachment(
@@ -451,12 +453,39 @@ pub fn prepare_prompt(
                         });
                     }
                     (None, Some(attachment_id)) => {
+                        let attachment = validate_referenced_attachment(
+                            store,
+                            session_id,
+                            &attachment_id,
+                            PromptAttachmentKind::Image,
+                        )?;
+                        if attachment.mime_type.as_deref() != Some(mime_type.as_str()) {
+                            return Err(PromptValidationError::new(
+                                "PROMPT_INVALID_ATTACHMENT",
+                                "image attachment MIME type does not match the prompt block",
+                            ));
+                        }
+                        let byte_len = attachment.content.len();
+                        if byte_len > MAX_IMAGE_BYTES {
+                            return Err(PromptValidationError::new(
+                                "PROMPT_IMAGE_TOO_LARGE",
+                                format!(
+                                    "image attachments must be {MAX_IMAGE_BYTES} bytes or smaller"
+                                ),
+                            ));
+                        }
+                        total_attachment_bytes = checked_total(
+                            total_attachment_bytes,
+                            byte_len,
+                            MAX_TOTAL_ATTACHMENT_BYTES,
+                        )?;
+                        attachment_count = checked_attachment_count(attachment_count + 1)?;
                         stored_blocks.push(StoredPromptBlock::Image {
                             attachment_id,
                             mime_type,
                             name,
                             uri,
-                            size: 0,
+                            size: byte_len as u64,
                         });
                     }
                     (Some(_), Some(_)) => {
@@ -509,7 +538,7 @@ pub fn prepare_prompt(
                             bytes.len(),
                             MAX_TOTAL_ATTACHMENT_BYTES,
                         )?;
-                        ensure_attachment_count(attachments.len() + 1)?;
+                        attachment_count = checked_attachment_count(attachment_count + 1)?;
                         let attachment_id = uuid::Uuid::new_v4().to_string();
                         let size = bytes.len() as u64;
                         let preview = bounded_preview(&text);
@@ -533,12 +562,33 @@ pub fn prepare_prompt(
                         });
                     }
                     (None, Some(attachment_id)) => {
+                        let attachment = validate_referenced_attachment(
+                            store,
+                            session_id,
+                            &attachment_id,
+                            PromptAttachmentKind::TextResource,
+                        )?;
+                        let byte_len = attachment.content.len();
+                        if byte_len > MAX_TEXT_RESOURCE_BYTES {
+                            return Err(PromptValidationError::new(
+                                "PROMPT_RESOURCE_TOO_LARGE",
+                                format!(
+                                    "text resources must be {MAX_TEXT_RESOURCE_BYTES} bytes or smaller"
+                                ),
+                            ));
+                        }
+                        total_attachment_bytes = checked_total(
+                            total_attachment_bytes,
+                            byte_len,
+                            MAX_TOTAL_ATTACHMENT_BYTES,
+                        )?;
+                        attachment_count = checked_attachment_count(attachment_count + 1)?;
                         stored_blocks.push(StoredPromptBlock::Resource {
                             attachment_id: Some(attachment_id),
                             uri,
                             name,
-                            mime_type,
-                            size: declared_size.unwrap_or_default(),
+                            mime_type: mime_type.or_else(|| attachment.mime_type.clone()),
+                            size: declared_size.unwrap_or(byte_len as u64),
                             preview: None,
                         });
                     }
@@ -610,14 +660,46 @@ fn checked_total(current: usize, next: usize, max: usize) -> Result<usize, Promp
     Ok(total)
 }
 
-fn ensure_attachment_count(count: usize) -> Result<(), PromptValidationError> {
+fn checked_attachment_count(count: usize) -> Result<usize, PromptValidationError> {
     if count > MAX_ATTACHMENTS_PER_PROMPT {
         return Err(PromptValidationError::new(
             "PROMPT_TOO_MANY_ATTACHMENTS",
             format!("prompt cannot include more than {MAX_ATTACHMENTS_PER_PROMPT} attachments"),
         ));
     }
-    Ok(())
+    Ok(count)
+}
+
+fn validate_referenced_attachment(
+    store: &SessionStore,
+    session_id: &str,
+    attachment_id: &str,
+    expected_kind: PromptAttachmentKind,
+) -> Result<PromptAttachmentRecord, PromptValidationError> {
+    let attachment = store
+        .find_prompt_attachment(session_id, attachment_id)
+        .map_err(|error| {
+            PromptValidationError::internal(format!("failed to load prompt attachment: {error}"))
+        })?
+        .ok_or_else(|| {
+            PromptValidationError::new("PROMPT_ATTACHMENT_NOT_FOUND", "prompt attachment not found")
+        })?;
+
+    if attachment.kind != expected_kind {
+        return Err(PromptValidationError::new(
+            "PROMPT_INVALID_ATTACHMENT",
+            "prompt attachment kind does not match the prompt block",
+        ));
+    }
+
+    if attachment.state != PromptAttachmentState::Pending {
+        return Err(PromptValidationError::new(
+            "PROMPT_INVALID_ATTACHMENT_STATE",
+            "prompt attachments can only be referenced while pending",
+        ));
+    }
+
+    Ok(attachment)
 }
 
 fn new_attachment(

@@ -209,11 +209,23 @@ export function buildSessionDebugExport(
 function sanitizeExportedSession(session: SessionDebugExportedSession): SessionDebugExportedSession {
   return {
     ...session,
+    session: session.session ? sanitizeSessionSummary(session.session) : null,
     normalizedEvents: session.normalizedEvents?.map(sanitizeEventEnvelope) ?? null,
     rawNotifications: session.rawNotifications?.map((notification) => ({
       ...notification,
       notification: { redacted: true },
     })) ?? null,
+  };
+}
+
+function sanitizeSessionSummary(session: Session): Session {
+  return {
+    ...session,
+    pendingPrompts: (session.pendingPrompts ?? []).map((prompt) => ({
+      ...prompt,
+      text: `[content:${prompt.text.length}]`,
+      contentParts: sanitizeContentParts(prompt.contentParts ?? []),
+    })),
   };
 }
 

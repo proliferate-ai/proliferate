@@ -740,6 +740,19 @@ fn validate_archive_size(archive: &WorkspaceMobilityArchiveData) -> Result<(), M
         }
     }
 
+    for attachment in archive
+        .sessions
+        .iter()
+        .flat_map(|bundle| bundle.prompt_attachments.iter())
+    {
+        if attachment.content.len() > MAX_MOBILITY_FILE_BYTES {
+            return Err(MobilityError::SizeLimitExceeded(format!(
+                "prompt attachment {} exceeded the {} byte limit",
+                attachment.attachment_id, MAX_MOBILITY_FILE_BYTES
+            )));
+        }
+    }
+
     Ok(())
 }
 
@@ -810,7 +823,7 @@ fn session_bundle_size_bytes(bundle: &WorkspaceMobilitySessionBundleData) -> u64
                         + option_string_size(&record.mime_type)
                         + option_string_size(&record.display_name)
                         + option_string_size(&record.source_uri)
-                        + record.size_bytes.max(0) as u64
+                        + base64_size(record.content.len())
                         + string_size(&record.sha256)
                         + string_size(&record.created_at)
                         + string_size(&record.updated_at)

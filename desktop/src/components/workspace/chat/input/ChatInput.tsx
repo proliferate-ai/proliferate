@@ -68,7 +68,7 @@ export function ChatInput() {
     commitEdit,
   } = useQueuedPromptEdit();
   const promptCapabilities = activeSlot?.liveConfig?.promptCapabilities ?? null;
-  const attachments = usePromptAttachments(promptCapabilities);
+  const attachments = usePromptAttachments(activeSessionId, promptCapabilities);
   const supportsAttachments = canAttachPromptContent(promptCapabilities);
   const canAttach = !isEditingQueuedPrompt && !isDisabled && supportsAttachments;
   const attachControlTitle = supportsAttachments

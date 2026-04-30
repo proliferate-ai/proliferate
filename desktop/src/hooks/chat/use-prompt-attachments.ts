@@ -12,8 +12,16 @@ interface AttachmentEntry {
   file: File;
 }
 
+const MAX_PROMPT_ATTACHMENTS = 10;
+
 function createAttachmentId(): string {
   return `attachment:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function revokeAttachmentObjectUrl(entry: AttachmentEntry): void {
+  if (entry.descriptor.objectUrl) {
+    URL.revokeObjectURL(entry.descriptor.objectUrl);
+  }
 }
 
 function readAsBase64(file: File): Promise<string> {
@@ -37,7 +45,10 @@ function readAsText(file: File): Promise<string> {
   });
 }
 
-export function usePromptAttachments(capabilities: PromptCapabilities | null | undefined) {
+export function usePromptAttachments(
+  scopeKey: string | null | undefined,
+  capabilities: PromptCapabilities | null | undefined,
+) {
   const [entries, setEntries] = useState<AttachmentEntry[]>([]);
   const entriesRef = useRef<AttachmentEntry[]>([]);
 
@@ -47,11 +58,18 @@ export function usePromptAttachments(capabilities: PromptCapabilities | null | u
 
   useEffect(() => () => {
     for (const entry of entriesRef.current) {
-      if (entry.descriptor.objectUrl) {
-        URL.revokeObjectURL(entry.descriptor.objectUrl);
-      }
+      revokeAttachmentObjectUrl(entry);
     }
   }, []);
+
+  useEffect(() => {
+    setEntries((current) => {
+      for (const entry of current) {
+        revokeAttachmentObjectUrl(entry);
+      }
+      return [];
+    });
+  }, [scopeKey, capabilities?.embeddedContext, capabilities?.image]);
 
   const descriptors = useMemo(
     () => entries.map((entry) => entry.descriptor),
@@ -60,7 +78,12 @@ export function usePromptAttachments(capabilities: PromptCapabilities | null | u
 
   const addFiles = useCallback((files: Iterable<File>) => {
     const next: AttachmentEntry[] = [];
+    let remainingSlots = Math.max(0, MAX_PROMPT_ATTACHMENTS - entriesRef.current.length);
     for (const file of files) {
+      if (remainingSlots <= 0) {
+        break;
+      }
+
       if (file.type.startsWith("image/")) {
         if (!capabilities?.image || file.size > PROMPT_IMAGE_MAX_BYTES) {
           continue;
@@ -76,6 +99,7 @@ export function usePromptAttachments(capabilities: PromptCapabilities | null | u
             objectUrl: URL.createObjectURL(file),
           },
         });
+        remainingSlots -= 1;
         continue;
       }
 
@@ -94,6 +118,7 @@ export function usePromptAttachments(capabilities: PromptCapabilities | null | u
             objectUrl: null,
           },
         });
+        remainingSlots -= 1;
       }
     }
 
@@ -101,14 +126,14 @@ export function usePromptAttachments(capabilities: PromptCapabilities | null | u
       return;
     }
 
-    setEntries((current) => [...current, ...next].slice(0, 10));
+    setEntries((current) => [...current, ...next].slice(0, MAX_PROMPT_ATTACHMENTS));
   }, [capabilities?.embeddedContext, capabilities?.image]);
 
   const removeAttachment = useCallback((id: string) => {
     setEntries((current) => {
       const removed = current.find((entry) => entry.descriptor.id === id);
-      if (removed?.descriptor.objectUrl) {
-        URL.revokeObjectURL(removed.descriptor.objectUrl);
+      if (removed) {
+        revokeAttachmentObjectUrl(removed);
       }
       return current.filter((entry) => entry.descriptor.id !== id);
     });
@@ -117,9 +142,7 @@ export function usePromptAttachments(capabilities: PromptCapabilities | null | u
   const clearAttachments = useCallback(() => {
     setEntries((current) => {
       for (const entry of current) {
-        if (entry.descriptor.objectUrl) {
-          URL.revokeObjectURL(entry.descriptor.objectUrl);
-        }
+        revokeAttachmentObjectUrl(entry);
       }
       return [];
     });

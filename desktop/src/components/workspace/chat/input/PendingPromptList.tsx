@@ -92,10 +92,14 @@ interface PendingPromptRowProps {
 
 function PendingPromptRow({ entry, sessionId, onBeginEdit, onDelete }: PendingPromptRowProps) {
   const { seq, text, isBeingEdited } = entry;
+  const hasStructuredAttachments = entry.contentParts.some((part) => part.type !== "text");
 
   const handleBeginEdit = useCallback(() => {
+    if (hasStructuredAttachments) {
+      return;
+    }
     onBeginEdit({ seq, text });
-  }, [onBeginEdit, seq, text]);
+  }, [hasStructuredAttachments, onBeginEdit, seq, text]);
 
   const handleDelete = useCallback(() => {
     onDelete(seq);
@@ -123,9 +127,15 @@ function PendingPromptRow({ entry, sessionId, onBeginEdit, onDelete }: PendingPr
         <Button
           variant="ghost"
           size="icon-sm"
+          disabled={hasStructuredAttachments}
           onClick={handleBeginEdit}
           className="shrink-0 opacity-60 hover:opacity-100"
-          aria-label="Edit queued message"
+          aria-label={hasStructuredAttachments
+            ? "Queued messages with attachments cannot be edited"
+            : "Edit queued message"}
+          title={hasStructuredAttachments
+            ? "Queued messages with attachments cannot be edited"
+            : "Edit queued message"}
         >
           <Pencil className="size-3.5" />
         </Button>

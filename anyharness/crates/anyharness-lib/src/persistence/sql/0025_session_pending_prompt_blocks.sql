@@ -7,7 +7,7 @@ CREATE TABLE session_prompt_attachments (
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     state TEXT NOT NULL,
     kind TEXT NOT NULL,
-    mime_type TEXT NOT NULL,
+    mime_type TEXT,
     display_name TEXT,
     source_uri TEXT,
     size_bytes INTEGER NOT NULL,

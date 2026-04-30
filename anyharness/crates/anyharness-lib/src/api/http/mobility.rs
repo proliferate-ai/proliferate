@@ -657,6 +657,12 @@ fn from_contract_prompt_attachment(
     let content = STANDARD.decode(record.content_base64).map_err(|_| {
         ApiError::bad_request("Invalid prompt attachment content", "INVALID_ARCHIVE")
     })?;
+    if record.size_bytes != content.len() as u64 {
+        return Err(ApiError::bad_request(
+            "Prompt attachment size does not match decoded content",
+            "INVALID_ARCHIVE",
+        ));
+    }
     Ok(PromptAttachmentRecord {
         attachment_id: record.attachment_id,
         session_id: record.session_id,
