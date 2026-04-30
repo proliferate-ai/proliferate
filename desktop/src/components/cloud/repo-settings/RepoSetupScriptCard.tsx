@@ -1,6 +1,6 @@
 import type { ChangeEvent } from "react";
 import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
+import { SettingsEditorRow } from "@/components/settings/SettingsEditorRow";
 import { Textarea } from "@/components/ui/Textarea";
 
 interface RepoSetupScriptCardProps {
@@ -14,11 +14,11 @@ export function RepoSetupScriptCard({
 }: RepoSetupScriptCardProps) {
   return (
     <SettingsCard>
-      <SettingsCardRow
+      <SettingsEditorRow
         label="Cloud setup script"
         description="Runs after a new cloud workspace reaches ready. This script is separate from the local worktree setup script."
       >
-        <div className="w-[32rem] max-w-full space-y-2">
+        <div className="space-y-2">
           <Textarea
             rows={8}
             value={setupScript}
@@ -30,7 +30,7 @@ export function RepoSetupScriptCard({
             Available vars include <code>PROLIFERATE_WORKTREE_DIR</code>, <code>PROLIFERATE_REPO_DIR</code>, <code>PROLIFERATE_BRANCH</code>, and <code>PROLIFERATE_BASE_REF</code>.
           </p>
         </div>
-      </SettingsCardRow>
+      </SettingsEditorRow>
     </SettingsCard>
   );
 }

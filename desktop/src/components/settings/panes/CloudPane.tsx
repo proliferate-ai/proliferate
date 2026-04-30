@@ -126,7 +126,7 @@ export function CloudPane({ repositories }: CloudPaneProps) {
       <SettingsCard>
         <SettingsCardRow
           label="Runtime input sync"
-          description="Keep agent credentials and plugin API keys synced to cloud in the background. Repo tracked files can be manually resynced from repo settings."
+          description="Keep agent credentials and plugin API keys synced to cloud in the background. Repo tracked files can be manually resynced from environment settings."
         >
           <Switch
             checked={runtimeInputSync.enabled}
@@ -219,9 +219,9 @@ export function CloudPane({ repositories }: CloudPaneProps) {
 
       <SettingsCard>
         <div className="space-y-1.5 p-3">
-          <p className="text-sm font-medium text-foreground">Repo cloud settings</p>
+          <p className="text-sm font-medium text-foreground">Cloud environments</p>
           <p className="text-sm text-muted-foreground">
-            Configure tracked files, repo env vars, and a cloud-only setup script for each GitHub repo.
+            Configure tracked files, environment variables, and cloud-only setup scripts for each GitHub repo.
           </p>
         </div>
         {cloudRepositories.length === 0 ? (

@@ -39,6 +39,8 @@ const NAV_ITEM_BASE =
 const NAV_ITEM_ACTIVE = `${NAV_ITEM_BASE} bg-sidebar-accent font-medium text-sidebar-foreground`;
 const NAV_ITEM_INACTIVE = `${NAV_ITEM_BASE} text-sidebar-muted-foreground`;
 const NAV_STATUS_CLASS = "ml-auto shrink-0 text-xs text-sidebar-muted-foreground";
+const NAV_GROUP_CLASS = "flex flex-col gap-0.5";
+const NAV_GROUP_SPACING_CLASS = "mt-3";
 
 export function SettingsSidebar({
   repositories,
@@ -129,6 +131,42 @@ export function SettingsSidebar({
     );
   }
 
+  function renderEnvironmentGroup() {
+    if (repositories.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className={`${NAV_GROUP_CLASS} ${NAV_GROUP_SPACING_CLASS}`}>
+        <div className="px-2 py-1.5 text-sm text-sidebar-muted-foreground">
+          Environments
+        </div>
+        {repositories.map((repository) => {
+          const active =
+            activeSection === "repo" &&
+            activeRepoSourceRoot === repository.sourceRoot;
+          const letter = (repository.name[0] ?? "?").toUpperCase();
+          return (
+            <Button
+              key={`${repository.sourceRoot}:${repository.repoRootId}`}
+              type="button"
+              variant="ghost"
+              onClick={() => onSelectRepo(repository.sourceRoot)}
+              className={active ? NAV_ITEM_ACTIVE : NAV_ITEM_INACTIVE}
+              aria-current={active ? "page" : undefined}
+              title={repository.sourceRoot}
+            >
+              <div className="flex size-4 shrink-0 items-center justify-center rounded-sm bg-sidebar-accent text-[10px] font-medium text-sidebar-muted-foreground">
+                {letter}
+              </div>
+              <span className="w-0 flex-1 truncate">{repository.name}</span>
+            </Button>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div className="flex w-64 flex-col border-r border-sidebar-border bg-sidebar">
       <SupportDialog
@@ -155,90 +193,60 @@ export function SettingsSidebar({
       <nav className="flex-1 overflow-y-auto px-1.5 pb-4">
         <div className="flex flex-col">
           {SETTINGS_NAV_GROUPS.map((group, index) => (
-            <div
-              key={group.id}
-              className={`flex flex-col gap-0.5 ${index > 0 && group.heading ? "mt-3" : ""}`}
-            >
-              {group.heading && (
+            <Fragment key={group.id}>
+              {group.id === "help" ? renderEnvironmentGroup() : null}
+              <div
+                className={`${NAV_GROUP_CLASS} ${index > 0 ? NAV_GROUP_SPACING_CLASS : ""}`}
+              >
                 <div className="px-2 py-1.5 text-sm text-sidebar-muted-foreground">
                   {group.heading}
                 </div>
-              )}
-              {group.items.map((item) => {
-                const active = isItemActive(item);
-                const sectionDisabled =
-                  item.kind === "section" && !!disabledSections?.[item.id];
-                const Icon = item.icon;
-                const actionDisabled =
-                  item.kind === "action"
-                  && item.id === "checkForUpdates"
-                  && !updateActionState.updatesSupported;
-                const disabled = sectionDisabled || actionDisabled;
-                return (
-                  <Fragment key={item.id}>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => handleItemClick(item)}
-                      className={`${active ? NAV_ITEM_ACTIVE : NAV_ITEM_INACTIVE} ${
-                        disabled ? "cursor-not-allowed opacity-60 hover:bg-transparent" : ""
-                      }`}
-                      aria-current={active ? "page" : undefined}
-                      aria-disabled={disabled || undefined}
-                      disabled={disabled}
-                    >
-                      <Icon className="size-4 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                      {item.kind === "action" && item.id === "checkForUpdates" && (
-                        <span className={NAV_STATUS_CLASS}>
-                          {!updateActionState.updatesSupported
-                            ? "Packaged only"
-                            : updateActionState.isChecking
-                              ? "Checking..."
-                              : updateActionState.hasAvailableUpdate
-                                ? "Available"
-                                : ""}
-                        </span>
-                      )}
-                    </Button>
-                    {item.kind === "action" && item.id === "checkForUpdates"
-                      ? renderUpdateCommand()
-                      : null}
-                  </Fragment>
-                );
-              })}
-            </div>
-          ))}
-
-          {repositories.length > 0 && (
-            <div className="mt-3 flex flex-col gap-0.5">
-              <div className="px-2 py-1.5 text-sm text-sidebar-muted-foreground">
-                Repos
+                {group.items.map((item) => {
+                  const active = isItemActive(item);
+                  const sectionDisabled =
+                    item.kind === "section" && !!disabledSections?.[item.id];
+                  const Icon = item.icon;
+                  const actionDisabled =
+                    item.kind === "action"
+                    && item.id === "checkForUpdates"
+                    && !updateActionState.updatesSupported;
+                  const disabled = sectionDisabled || actionDisabled;
+                  return (
+                    <Fragment key={item.id}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => handleItemClick(item)}
+                        className={`${active ? NAV_ITEM_ACTIVE : NAV_ITEM_INACTIVE} ${
+                          disabled ? "cursor-not-allowed opacity-60 hover:bg-transparent" : ""
+                        }`}
+                        aria-current={active ? "page" : undefined}
+                        aria-disabled={disabled || undefined}
+                        disabled={disabled}
+                      >
+                        <Icon className="size-4 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                        {item.kind === "action" && item.id === "checkForUpdates" && (
+                          <span className={NAV_STATUS_CLASS}>
+                            {!updateActionState.updatesSupported
+                              ? "Packaged only"
+                              : updateActionState.isChecking
+                                ? "Checking..."
+                                : updateActionState.hasAvailableUpdate
+                                  ? "Available"
+                                  : ""}
+                          </span>
+                        )}
+                      </Button>
+                      {item.kind === "action" && item.id === "checkForUpdates"
+                        ? renderUpdateCommand()
+                        : null}
+                    </Fragment>
+                  );
+                })}
               </div>
-              {repositories.map((repository) => {
-                const active =
-                  activeSection === "repo" &&
-                  activeRepoSourceRoot === repository.sourceRoot;
-                const letter = (repository.name[0] ?? "?").toUpperCase();
-                return (
-                  <Button
-                    key={`${repository.sourceRoot}:${repository.repoRootId}`}
-                    type="button"
-                    variant="ghost"
-                    onClick={() => onSelectRepo(repository.sourceRoot)}
-                    className={active ? NAV_ITEM_ACTIVE : NAV_ITEM_INACTIVE}
-                    aria-current={active ? "page" : undefined}
-                    title={repository.sourceRoot}
-                  >
-                    <div className="flex size-4 shrink-0 items-center justify-center rounded-sm bg-sidebar-accent text-[10px] font-medium text-sidebar-muted-foreground">
-                      {letter}
-                    </div>
-                    <span className="w-0 flex-1 truncate">{repository.name}</span>
-                  </Button>
-                );
-              })}
-            </div>
-          )}
+            </Fragment>
+          ))}
         </div>
       </nav>
       {appVersion ? (

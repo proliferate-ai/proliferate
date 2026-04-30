@@ -21,6 +21,10 @@ import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-s
 
 interface CloudRepoSectionProps {
   repository: SettingsRepositoryEntry;
+  cloudEnabled: boolean;
+  cloudActive: boolean;
+  cloudSignInChecking: boolean;
+  cloudSignInAvailable: boolean;
 }
 
 interface CloudRepoSettingsEditorProps {
@@ -30,6 +34,7 @@ interface CloudRepoSettingsEditorProps {
   localRunCommand: string;
   suggestedPaths: string[];
   isLoadingConfig: boolean;
+  cloudActive: boolean;
 }
 
 function CloudRepoSettingsEditor({
@@ -39,11 +44,13 @@ function CloudRepoSettingsEditor({
   localRunCommand,
   suggestedPaths,
   isLoadingConfig,
+  cloudActive,
 }: CloudRepoSettingsEditorProps) {
   const draft = useCloudRepoConfigDraft({
     savedConfig,
     localSetupScript,
     localRunCommand,
+    sourceKey: `${repository.sourceRoot}:${repository.repoRootId}`,
   });
   const saveMutation = useSaveCloudRepoConfig(repository);
   const resyncFileMutation = useResyncCloudRepoFile(repository);
@@ -51,18 +58,36 @@ function CloudRepoSettingsEditor({
     data: branchInfo,
     isLoading: isLoadingBranches,
     error: branchError,
-  } = useCloudRepoBranches(repository.gitOwner, repository.gitRepoName);
+  } = useCloudRepoBranches(repository.gitOwner, repository.gitRepoName, cloudActive);
   const configured = savedConfig?.configured ?? false;
   const repoLabel = `${repository.gitOwner}/${repository.gitRepoName}`;
   const errorMessage = saveMutation.error?.message ?? resyncFileMutation.error?.message ?? null;
+  const saveDisabled =
+    !cloudActive || isLoadingConfig || saveMutation.isPending || !draft.canSave;
+  const revertDisabled =
+    saveMutation.isPending || (!draft.dirty && !draft.configurable);
+  const statusLabel = !draft.configured && configured
+    ? "Will disable"
+    : configured
+      ? draft.dirty
+        ? "Unsaved changes"
+        : "Saved"
+      : draft.configured
+        ? "Not saved yet"
+        : "Disabled";
+
+  async function handleSave() {
+    const response = await saveMutation.mutateAsync(draft.savePayload);
+    draft.resetFromSavedConfig(response);
+  }
 
   return (
     <div className="space-y-6">
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <p className="text-sm font-medium text-foreground">Cloud configuration</p>
+          <p className="text-sm font-medium text-foreground">Cloud environment</p>
           <p className="text-sm text-muted-foreground">
-            Saved to Proliferate Cloud and used when creating cloud workspaces for this repository.
+            Saved to Proliferate Cloud and used when creating cloud workspaces for this repo.
           </p>
         </div>
 
@@ -70,7 +95,7 @@ function CloudRepoSettingsEditor({
           <div className="min-w-0 space-y-1">
             <div className="flex items-center gap-2">
               <p className="text-sm font-medium text-foreground">Cloud save state</p>
-              <Badge>{configured ? "Saved" : "Not saved yet"}</Badge>
+              <Badge>{statusLabel}</Badge>
             </div>
             <p className="truncate text-sm text-muted-foreground">
               {repoLabel}
@@ -82,35 +107,27 @@ function CloudRepoSettingsEditor({
               <Button
                 type="button"
                 variant="outline"
-                loading={saveMutation.isPending}
-                onClick={() => {
-                  void saveMutation.mutateAsync({
-                    configured: false,
-                    defaultBranch: null,
-                    envVars: {},
-                    trackedFilePaths: [],
-                    setupScript: "",
-                    runCommand: "",
-                  });
-                }}
+                disabled={!draft.configured || saveMutation.isPending}
+                onClick={draft.disable}
               >
-                Disable cloud config
+                {draft.configured ? "Disable cloud environment" : "Disable pending"}
               </Button>
             )}
             <Button
               type="button"
-              loading={saveMutation.isPending}
-              onClick={() => {
-                void saveMutation.mutateAsync({
-                  defaultBranch: draft.defaultBranch,
-                  envVars: draft.envVars,
-                  trackedFilePaths: draft.trackedFilePaths,
-                  setupScript: draft.setupScript,
-                  runCommand: draft.runCommand,
-                });
-              }}
+              variant="ghost"
+              disabled={revertDisabled}
+              onClick={draft.revert}
             >
-              Save cloud config
+              Revert
+            </Button>
+            <Button
+              type="button"
+              loading={saveMutation.isPending}
+              disabled={saveDisabled}
+              onClick={() => { void handleSave(); }}
+            >
+              Save cloud environment
             </Button>
           </div>
         </div>
@@ -133,7 +150,7 @@ function CloudRepoSettingsEditor({
         trackedFilePaths={draft.trackedFilePaths}
         trackedFiles={savedConfig?.trackedFiles ?? []}
         suggestedPaths={suggestedPaths}
-        canSyncTrackedFiles={configured}
+        canSyncTrackedFiles={cloudActive && configured && draft.configured}
         syncPathInFlight={
           resyncFileMutation.isPending
             ? (resyncFileMutation.variables?.relativePath ?? null)
@@ -166,26 +183,55 @@ function CloudRepoSettingsEditor({
   );
 }
 
-export function CloudRepoSection({ repository }: CloudRepoSectionProps) {
+export function CloudRepoSection({
+  repository,
+  cloudEnabled,
+  cloudActive,
+  cloudSignInChecking,
+  cloudSignInAvailable,
+}: CloudRepoSectionProps) {
   const localSetupScript = useRepoPreferencesStore(
     (state) => state.repoConfigs[repository.sourceRoot]?.setupScript ?? "",
   );
   const localRunCommand = useRepoPreferencesStore(
     (state) => state.repoConfigs[repository.sourceRoot]?.runCommand ?? "",
   );
+  const cloudRepository = isCloudRepository(repository) ? repository : null;
+  const cloudQueryEnabled = cloudActive && Boolean(cloudRepository);
   const {
     data: savedConfig,
     isLoading: isLoadingConfig,
-  } = useCloudRepoConfig(repository.gitOwner, repository.gitRepoName);
+  } = useCloudRepoConfig(
+    cloudRepository?.gitOwner,
+    cloudRepository?.gitRepoName,
+    cloudQueryEnabled,
+  );
   const { suggestedPaths } = useCloudRepoSetupSuggestions(repository.repoRootId);
 
-  if (!isCloudRepository(repository)) {
+  if (!cloudRepository) {
     return (
       <div className="space-y-1.5 rounded-lg border border-border bg-card/50 p-3">
-        <p className="text-sm font-medium text-foreground">Cloud configuration</p>
+        <p className="text-sm font-medium text-foreground">Cloud environment</p>
         <p className="text-sm text-muted-foreground">
-          Cloud repo settings are available for GitHub-backed repositories.
+          Cloud environments are available for GitHub-backed repositories.
         </p>
+      </div>
+    );
+  }
+
+  if (!cloudEnabled || !cloudActive) {
+    const description = !cloudEnabled
+      ? "Cloud environments are unavailable in this build or deployment."
+      : cloudSignInChecking
+        ? "Checking cloud sign-in before loading this environment."
+        : cloudSignInAvailable
+          ? "Sign in to configure this cloud environment."
+          : "GitHub sign-in is unavailable, so cloud environment settings cannot load.";
+
+    return (
+      <div className="space-y-1.5 rounded-lg border border-border bg-card/50 p-3">
+        <p className="text-sm font-medium text-foreground">Cloud environment</p>
+        <p className="text-sm text-muted-foreground">{description}</p>
       </div>
     );
   }
@@ -193,8 +239,8 @@ export function CloudRepoSection({ repository }: CloudRepoSectionProps) {
   if (isLoadingConfig) {
     return (
       <div className="space-y-1.5 rounded-lg border border-border bg-card/50 p-3">
-        <p className="text-sm font-medium text-foreground">Cloud configuration</p>
-        <p className="text-sm text-muted-foreground">Loading saved cloud config...</p>
+        <p className="text-sm font-medium text-foreground">Cloud environment</p>
+        <p className="text-sm text-muted-foreground">Loading saved cloud environment...</p>
       </div>
     );
   }
@@ -202,12 +248,13 @@ export function CloudRepoSection({ repository }: CloudRepoSectionProps) {
   return (
     <CloudRepoSettingsEditor
       key={`${repository.sourceRoot}:${repository.repoRootId}`}
-      repository={repository}
+      repository={cloudRepository}
       savedConfig={savedConfig}
       localSetupScript={localSetupScript}
       localRunCommand={localRunCommand}
       suggestedPaths={suggestedPaths}
       isLoadingConfig={isLoadingConfig}
+      cloudActive={cloudActive}
     />
   );
 }

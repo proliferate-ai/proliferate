@@ -1,4 +1,15 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  buildCloudEnvironmentSavePayload,
+  buildDisabledCloudEnvironmentDraft,
+  buildInitialCloudEnvironmentDraftState,
+  buildSavedCloudEnvironmentDraftState,
+  isCloudEnvironmentDraftConfigurable,
+  isCloudEnvironmentDraftDirty,
+  normalizeCloudEnvironmentDraft,
+  type CloudEnvironmentDraft,
+  type CloudEnvironmentDraftState,
+} from "@/lib/domain/settings/environment-draft";
 import type { CloudRepoConfigResponse } from "@/lib/integrations/cloud/client";
 
 export interface CloudRepoEnvVarRow {
@@ -25,27 +36,29 @@ interface UseCloudRepoConfigDraftArgs {
   savedConfig: CloudRepoConfigResponse | null | undefined;
   localSetupScript: string;
   localRunCommand: string;
+  sourceKey: string;
 }
 
 export function useCloudRepoConfigDraft({
   savedConfig,
   localSetupScript,
   localRunCommand,
+  sourceKey,
 }: UseCloudRepoConfigDraftArgs) {
-  const [defaultBranch, setDefaultBranch] = useState<string | null>(
-    () => savedConfig?.defaultBranch ?? null,
+  const localSeed = useMemo(() => ({
+    setupScript: localSetupScript,
+    runCommand: localRunCommand,
+  }), [localRunCommand, localSetupScript]);
+  const initialDraftState = useMemo(
+    () => buildInitialCloudEnvironmentDraftState(savedConfig, localSeed),
+    [localSeed, savedConfig],
   );
+  const [draftState, setDraftState] = useState<CloudEnvironmentDraftState>(
+    () => initialDraftState,
+  );
+  const [activeSourceKey, setActiveSourceKey] = useState(sourceKey);
   const [envVarRows, setEnvVarRows] = useState<CloudRepoEnvVarRow[]>(() =>
-    buildEnvVarRows(savedConfig?.envVars ?? {}),
-  );
-  const [trackedFilePaths, setTrackedFilePaths] = useState<string[]>(() =>
-    savedConfig?.trackedFiles.map((file) => file.relativePath) ?? [],
-  );
-  const [setupScript, setSetupScript] = useState(
-    () => (!savedConfig || !savedConfig.configured ? localSetupScript : savedConfig.setupScript),
-  );
-  const [runCommand, setRunCommand] = useState(
-    () => (!savedConfig || !savedConfig.configured ? localRunCommand : savedConfig.runCommand),
+    buildEnvVarRows(initialDraftState.draft.envVars),
   );
 
   const envVars = useMemo(() => (
@@ -58,6 +71,40 @@ export function useCloudRepoConfigDraft({
       return accumulator;
     }, {})
   ), [envVarRows]);
+  const currentDraft = useMemo(
+    () => normalizeCloudEnvironmentDraft({
+      ...draftState.draft,
+      envVars,
+    }),
+    [draftState.draft, envVars],
+  );
+  const dirty = isCloudEnvironmentDraftDirty(currentDraft, draftState.baseline);
+  const configurable = isCloudEnvironmentDraftConfigurable(currentDraft, draftState.baseline);
+  const savePayload = useMemo(
+    () => buildCloudEnvironmentSavePayload(currentDraft),
+    [currentDraft],
+  );
+
+  useEffect(() => {
+    const sourceChanged = activeSourceKey !== sourceKey;
+    if (!sourceChanged && dirty) {
+      return;
+    }
+
+    setDraftState(initialDraftState);
+    setEnvVarRows(buildEnvVarRows(initialDraftState.draft.envVars));
+    setActiveSourceKey(sourceKey);
+  }, [activeSourceKey, dirty, initialDraftState, sourceKey]);
+
+  const updateDraft = useCallback((patch: Partial<CloudEnvironmentDraft>) => {
+    setDraftState((current) => ({
+      ...current,
+      draft: normalizeCloudEnvironmentDraft({
+        ...current.draft,
+        ...patch,
+      }),
+    }));
+  }, []);
 
   const addEnvVarRow = useCallback(() => {
     setEnvVarRows((current) => [
@@ -86,34 +133,76 @@ export function useCloudRepoConfigDraft({
     }
 
     let added = false;
-    setTrackedFilePaths((current) => {
-      if (current.includes(normalizedPath)) {
+    setDraftState((current) => {
+      if (current.draft.trackedFilePaths.includes(normalizedPath)) {
         return current;
       }
       added = true;
-      return [...current, normalizedPath];
+      return {
+        ...current,
+        draft: {
+          ...current.draft,
+          trackedFilePaths: [...current.draft.trackedFilePaths, normalizedPath],
+        },
+      };
     });
     return added;
   }, []);
 
   const removeTrackedFile = useCallback((relativePath: string) => {
-    setTrackedFilePaths((current) => current.filter((path) => path !== relativePath));
+    setDraftState((current) => ({
+      ...current,
+      draft: {
+        ...current.draft,
+        trackedFilePaths: current.draft.trackedFilePaths.filter((path) => path !== relativePath),
+      },
+    }));
+  }, []);
+
+  const revert = useCallback(() => {
+    setDraftState((current) => ({
+      ...current,
+      draft: current.baseline,
+    }));
+    setEnvVarRows(buildEnvVarRows(draftState.baseline.envVars));
+  }, [draftState.baseline]);
+
+  const disable = useCallback(() => {
+    setDraftState((current) => ({
+      ...current,
+      draft: buildDisabledCloudEnvironmentDraft(),
+    }));
+    setEnvVarRows([]);
+  }, []);
+
+  const resetFromSavedConfig = useCallback((nextSavedConfig: CloudRepoConfigResponse | null | undefined) => {
+    const nextState = buildSavedCloudEnvironmentDraftState(nextSavedConfig);
+    setDraftState(nextState);
+    setEnvVarRows(buildEnvVarRows(nextState.draft.envVars));
   }, []);
 
   return {
-    defaultBranch,
-    setDefaultBranch,
+    configured: currentDraft.configured,
+    defaultBranch: currentDraft.defaultBranch,
+    setDefaultBranch: (defaultBranch: string | null) => updateDraft({ defaultBranch }),
     envVarRows,
     envVars,
-    trackedFilePaths,
-    setupScript,
-    setSetupScript,
-    runCommand,
-    setRunCommand,
+    trackedFilePaths: currentDraft.trackedFilePaths,
+    setupScript: currentDraft.setupScript,
+    setSetupScript: (setupScript: string) => updateDraft({ setupScript }),
+    runCommand: currentDraft.runCommand,
+    setRunCommand: (runCommand: string) => updateDraft({ runCommand }),
+    dirty,
+    configurable,
+    canSave: dirty || configurable,
+    savePayload,
     addEnvVarRow,
     updateEnvVarRow,
     removeEnvVarRow,
     addTrackedFile,
     removeTrackedFile,
+    revert,
+    disable,
+    resetFromSavedConfig,
   };
 }

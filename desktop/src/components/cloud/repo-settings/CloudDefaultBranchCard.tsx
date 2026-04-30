@@ -1,5 +1,5 @@
 import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
+import { SettingsEditorRow } from "@/components/settings/SettingsEditorRow";
 import { Label } from "@/components/ui/Label";
 import { Select } from "@/components/ui/Select";
 
@@ -27,11 +27,11 @@ export function CloudDefaultBranchCard({
 
   return (
     <SettingsCard>
-      <SettingsCardRow
+      <SettingsEditorRow
         label="Cloud default branch"
         description="Base branch for new cloud workspaces when create runs without an explicit branch override."
       >
-        <div className="w-[32rem] max-w-full space-y-2">
+        <div className="space-y-2">
           <div className="space-y-1.5">
             <Label htmlFor="cloud-default-branch">Default branch</Label>
             <Select
@@ -72,7 +72,7 @@ export function CloudDefaultBranchCard({
             </p>
           )}
         </div>
-      </SettingsCardRow>
+      </SettingsEditorRow>
     </SettingsCard>
   );
 }

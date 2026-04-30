@@ -74,7 +74,15 @@ function renderSettingsSection(
 
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
-  return <RepositoryPane repository={repository} />;
+  return (
+    <RepositoryPane
+      repository={repository}
+      cloudEnabled={cloudEnabled}
+      cloudActive={cloudActive}
+      cloudSignInChecking={cloudSignInChecking}
+      cloudSignInAvailable={cloudSignInAvailable}
+    />
+  );
 }
 
 export function SettingsScreen({

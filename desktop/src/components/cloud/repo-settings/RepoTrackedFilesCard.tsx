@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { CloudRepoFileMetadata } from "@/lib/integrations/cloud/client";
 import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
+import { SettingsEditorRow } from "@/components/settings/SettingsEditorRow";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
@@ -37,11 +37,11 @@ export function RepoTrackedFilesCard({
 
   return (
     <SettingsCard>
-      <SettingsCardRow
+      <SettingsEditorRow
         label="Cloud tracked files"
         description="Saving syncs every tracked path from your local repo into cloud storage. Existing cloud workspaces only get updated when you re-sync files from that workspace."
       >
-        <div className="w-[32rem] max-w-full space-y-4">
+        <div className="space-y-4">
           <div className="space-y-2">
             {trackedFilePaths.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -144,7 +144,7 @@ export function RepoTrackedFilesCard({
             </div>
           )}
         </div>
-      </SettingsCardRow>
+      </SettingsEditorRow>
     </SettingsCard>
   );
 }

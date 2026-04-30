@@ -67,4 +67,25 @@ describe("buildSettingsRepositoryEntries", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0].workspaceCount).toBe(1);
   });
+
+  it("uses the source root as a secondary label when display names collide", () => {
+    const entries = buildSettingsRepositoryEntries([], [
+      makeRepoRoot({
+        id: "repo-root-1",
+        path: "/tmp/a/proliferate",
+        displayName: "proliferate",
+      }),
+      makeRepoRoot({
+        id: "repo-root-2",
+        path: "/tmp/b/proliferate",
+        displayName: "proliferate",
+      }),
+    ]);
+
+    expect(entries).toHaveLength(2);
+    expect(entries.map((entry) => entry.secondaryLabel)).toEqual([
+      "/tmp/a/proliferate",
+      "/tmp/b/proliferate",
+    ]);
+  });
 });

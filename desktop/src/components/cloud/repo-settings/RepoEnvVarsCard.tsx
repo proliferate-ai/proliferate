@@ -1,6 +1,6 @@
 import type { ChangeEvent } from "react";
 import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
+import { SettingsEditorRow } from "@/components/settings/SettingsEditorRow";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
@@ -24,14 +24,14 @@ export function RepoEnvVarsCard({
 }: RepoEnvVarsCardProps) {
   return (
     <SettingsCard>
-      <SettingsCardRow
-        label="Cloud repo env vars"
+      <SettingsEditorRow
+        label="Environment variables"
         description="Injected broadly into new cloud workspaces. Existing workspaces do not re-sync env vars in v1."
       >
-        <div className="w-[32rem] max-w-full space-y-3">
+        <div className="space-y-3">
           {rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No repo env vars yet. These apply to newly created cloud workspaces.
+              No environment variables yet. These apply to newly created cloud workspaces.
             </p>
           ) : (
             <div className="space-y-3">
@@ -78,7 +78,7 @@ export function RepoEnvVarsCard({
             Add variable
           </Button>
         </div>
-      </SettingsCardRow>
+      </SettingsEditorRow>
     </SettingsCard>
   );
 }

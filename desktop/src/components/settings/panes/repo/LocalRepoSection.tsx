@@ -1,8 +1,9 @@
 import { useMemo } from "react";
 import { useDetectRepoRootSetupQuery } from "@anyharness/sdk-react";
 import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
+import { SettingsEditorRow } from "@/components/settings/SettingsEditorRow";
 import { RunCommandHelp } from "@/components/settings/RunCommandHelp";
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { SetupCommandEditor } from "@/components/workspace/repo-setup/SetupCommandEditor";
@@ -23,6 +24,10 @@ export function LocalRepoSection({ repository }: LocalRepoSectionProps) {
     setSetupDraft,
     setRunCommandDraft,
     setExplicitDefaultBranch,
+    canSave,
+    canRevert,
+    save,
+    revert,
   } = useRepositorySettings(repository);
 
   const { data: detectionResult, isLoading: isDetecting } = useDetectRepoRootSetupQuery({
@@ -54,14 +59,34 @@ export function LocalRepoSection({ repository }: LocalRepoSectionProps) {
 
   return (
     <SettingsCard>
-      <div className="space-y-1.5 p-3">
-        <p className="text-sm font-medium text-foreground">Local configuration</p>
-        <p className="text-sm text-muted-foreground">
-          Stored on this desktop and used when creating local worktrees for this repository.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3 p-3">
+        <div className="space-y-1.5">
+          <p className="text-sm font-medium text-foreground">Local environment</p>
+          <p className="text-sm text-muted-foreground">
+            Stored on this desktop and used when creating local worktrees for this repo.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={!canRevert}
+            onClick={revert}
+          >
+            Revert
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!canSave}
+            onClick={save}
+          >
+            Save
+          </Button>
+        </div>
       </div>
 
-      <SettingsCardRow
+      <SettingsEditorRow
         label="Local default branch"
         description={`Base branch for new worktrees and pull requests. Effective branch: ${effectiveBranchLabel}`}
       >
@@ -82,13 +107,13 @@ export function LocalRepoSection({ repository }: LocalRepoSectionProps) {
             })),
           }]}
         />
-      </SettingsCardRow>
+      </SettingsEditorRow>
 
-      <SettingsCardRow
+      <SettingsEditorRow
         label="Local run command"
-        description="Command launched by the workspace header Run button for this repository"
+        description="Command launched by the workspace header Run button for this environment"
       >
-        <div className="w-[24rem] max-w-full space-y-2">
+        <div className="space-y-2">
           <Input
             value={runCommandDraft}
             onChange={(event) => setRunCommandDraft(event.target.value)}
@@ -97,13 +122,13 @@ export function LocalRepoSection({ repository }: LocalRepoSectionProps) {
           />
           <RunCommandHelp scope="selected workspace" className="text-sm text-muted-foreground/80" />
         </div>
-      </SettingsCardRow>
+      </SettingsEditorRow>
 
-      <SettingsCardRow
+      <SettingsEditorRow
         label="Local setup commands"
         description="Commands to run after creating a new worktree (one per line)"
       >
-        <div className="w-[24rem] max-w-full">
+        <div>
           <SetupCommandEditor
             hints={detectionResult?.hints ?? []}
             currentScript={setupDraft}
@@ -116,7 +141,7 @@ export function LocalRepoSection({ repository }: LocalRepoSectionProps) {
             <code>PROLIFERATE_BRANCH</code>, and <code>PROLIFERATE_BASE_REF</code>.
           </p>
         </div>
-      </SettingsCardRow>
+      </SettingsEditorRow>
     </SettingsCard>
   );
 }

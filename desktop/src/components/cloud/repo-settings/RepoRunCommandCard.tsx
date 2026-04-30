@@ -1,6 +1,6 @@
 import type { ChangeEvent } from "react";
 import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
+import { SettingsEditorRow } from "@/components/settings/SettingsEditorRow";
 import { RunCommandHelp } from "@/components/settings/RunCommandHelp";
 import { Input } from "@/components/ui/Input";
 
@@ -15,11 +15,11 @@ export function RepoRunCommandCard({
 }: RepoRunCommandCardProps) {
   return (
     <SettingsCard>
-      <SettingsCardRow
+      <SettingsEditorRow
         label="Cloud run command"
-        description="Command launched by the workspace header Run button for cloud workspaces in this repository."
+        description="Command launched by the workspace header Run button for cloud workspaces in this environment."
       >
-        <div className="w-[32rem] max-w-full space-y-2">
+        <div className="space-y-2">
           <Input
             value={runCommand}
             onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value)}
@@ -28,7 +28,7 @@ export function RepoRunCommandCard({
           />
           <RunCommandHelp scope="selected cloud workspace" />
         </div>
-      </SettingsCardRow>
+      </SettingsEditorRow>
     </SettingsCard>
   );
 }
