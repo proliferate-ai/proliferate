@@ -32,6 +32,7 @@ import { useToastStore } from "@/stores/toast/toast-store";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
 
 const intentionallyClosingTerminals = new Set<string>();
+type CloseTerminalResult = "closed" | "missing" | "blocked" | "failed";
 
 export function useTerminalActions() {
   const queryClient = useQueryClient();
@@ -280,22 +281,30 @@ export function useTerminalActions() {
     bumpConnectionVersion(terminalId);
   }, [bumpConnectionVersion, clearTerminalState]);
 
-  const closeTab = useCallback(async (terminalId: string, workspaceId: string) => {
+  const closeTab = useCallback(async (
+    terminalId: string,
+    workspaceId: string,
+  ): Promise<CloseTerminalResult> => {
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
     if (blockedReason) {
       showToast(blockedReason);
-      return;
+      return "blocked";
     }
 
     intentionallyClosingTerminals.add(terminalId);
-    clearClosedTerminalState(terminalId);
 
     try {
       const connection = await resolveTerminalWorkspaceConnection(workspaceId);
       const client = getAnyHarnessClient(connection);
       await client.terminals.close(terminalId);
-    } catch {
-      // Best effort. Missing terminals are reconciled by the terminal list refresh.
+      clearClosedTerminalState(terminalId);
+      return "closed";
+    } catch (error) {
+      if (isMissingTerminalError(error)) {
+        clearClosedTerminalState(terminalId);
+        return "missing";
+      }
+      return "failed";
     } finally {
       intentionallyClosingTerminals.delete(terminalId);
       await invalidateWorkspaceTerminals(workspaceId);

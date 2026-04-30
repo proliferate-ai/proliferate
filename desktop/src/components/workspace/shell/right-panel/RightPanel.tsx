@@ -222,15 +222,12 @@ export function RightPanel({
       return;
     }
 
-    let records = terminalsQuery.data;
-    if (!terminalsQuery.isSuccess || !records) {
-      const result = await terminalsQuery.refetch();
-      if (!result.data) {
-        showToast("Failed to load terminals.");
-        return;
-      }
-      records = result.data;
+    const result = await terminalsQuery.refetch();
+    if (!result.data) {
+      showToast("Failed to load terminals.");
+      return;
     }
+    const records = result.data;
 
     const next = reconcileRightPanelWorkspaceState({ ...state, activeTool: "terminal" }, {
       isCloudWorkspaceSelected,
@@ -327,12 +324,17 @@ export function RightPanel({
     if (!workspaceId) {
       return;
     }
-    updateState((previous) => removeTerminalFromRightPanelState(
-      previous,
-      terminalId,
-      isCloudWorkspaceSelected,
-    ));
-    void closeTab(terminalId, workspaceId);
+
+    void closeTab(terminalId, workspaceId).then((result) => {
+      if (result !== "closed" && result !== "missing") {
+        return;
+      }
+      updateState((previous) => removeTerminalFromRightPanelState(
+        previous,
+        terminalId,
+        isCloudWorkspaceSelected,
+      ));
+    });
   }, [closeTab, isCloudWorkspaceSelected, updateState, workspaceId]);
 
   const handleRenameTerminal = useCallback(async (terminalId: string, title: string) => {
