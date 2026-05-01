@@ -7,6 +7,11 @@ const mocks = vi.hoisted(() => ({
   patchCloudMcpConnectionMock: vi.fn(),
   putCloudMcpSecretAuthMock: vi.fn(),
   deleteCloudMcpConnectionV2Mock: vi.fn(),
+  startGoogleWorkspaceMcpAuthMock: vi.fn(),
+  cancelGoogleWorkspaceMcpAuthMock: vi.fn(),
+  deleteGoogleWorkspaceMcpLocalDataMock: vi.fn(),
+  reconcileGoogleWorkspaceMcpPendingSetupsMock: vi.fn(),
+  getGoogleWorkspaceMcpCredentialStatusMock: vi.fn(),
 }));
 
 vi.mock("@/lib/integrations/cloud/mcp_catalog", () => ({
@@ -31,7 +36,20 @@ vi.mock("@/platform/tauri/shell", () => ({
   openExternal: vi.fn(),
 }));
 
+vi.mock("@/platform/tauri/google-workspace-mcp", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/platform/tauri/google-workspace-mcp")>();
+  return {
+    ...actual,
+    startGoogleWorkspaceMcpAuth: mocks.startGoogleWorkspaceMcpAuthMock,
+    cancelGoogleWorkspaceMcpAuth: mocks.cancelGoogleWorkspaceMcpAuthMock,
+    deleteGoogleWorkspaceMcpLocalData: mocks.deleteGoogleWorkspaceMcpLocalDataMock,
+    reconcileGoogleWorkspaceMcpPendingSetups: mocks.reconcileGoogleWorkspaceMcpPendingSetupsMock,
+    getGoogleWorkspaceMcpCredentialStatus: mocks.getGoogleWorkspaceMcpCredentialStatusMock,
+  };
+});
+
 import {
+  cancelLocalOAuthConnectorConnect,
   deleteConnector,
   installConnector,
   loadConnectorPaneData,
@@ -167,6 +185,46 @@ function noAuthHttpCatalogEntry() {
   };
 }
 
+function gmailCatalogEntry() {
+  return {
+    id: "gmail",
+    name: "Gmail",
+    oneLiner: "Gmail",
+    description: "Gmail",
+    docsUrl: "https://example.com",
+    availability: "local_only",
+    cloudSecretSync: false,
+    setupKind: "local_oauth",
+    transport: "stdio",
+    command: "uvx",
+    args: [],
+    env: [
+      { name: "GOOGLE_OAUTH_CLIENT_ID", source: { kind: "static", value: "client-id" } },
+      { name: "GOOGLE_OAUTH_CLIENT_SECRET", source: { kind: "static", value: "client-secret" } },
+    ],
+    serverNameBase: "gmail",
+    iconId: "gmail",
+    displayUrl: "",
+    secretFields: [],
+    requiredFields: [],
+    settingsSchema: [
+      {
+        id: "userGoogleEmail",
+        kind: "string",
+        label: "Google account email",
+        placeholder: "name@example.com",
+        helperText: "The Gmail account authorized on this desktop.",
+        required: true,
+        defaultValue: null,
+        options: [],
+        affectsUrl: false,
+      },
+    ],
+    capabilities: ["Search Gmail"],
+    version: 1,
+  };
+}
+
 function cloudConnection() {
   return {
     connectionId: "conn_1",
@@ -192,6 +250,11 @@ describe("cloud MCP connector persistence", () => {
     mocks.patchCloudMcpConnectionMock.mockReset();
     mocks.putCloudMcpSecretAuthMock.mockReset();
     mocks.deleteCloudMcpConnectionV2Mock.mockReset();
+    mocks.startGoogleWorkspaceMcpAuthMock.mockReset();
+    mocks.cancelGoogleWorkspaceMcpAuthMock.mockReset();
+    mocks.deleteGoogleWorkspaceMcpLocalDataMock.mockReset();
+    mocks.reconcileGoogleWorkspaceMcpPendingSetupsMock.mockReset();
+    mocks.getGoogleWorkspaceMcpCredentialStatusMock.mockReset();
     mocks.getCloudMcpCatalogMock.mockResolvedValue({
       catalogVersion: "test",
       entries: [
@@ -205,6 +268,15 @@ describe("cloud MCP connector persistence", () => {
       connections: [cloudConnection()],
     });
     mocks.createCloudMcpConnectionMock.mockResolvedValue(cloudConnection());
+    mocks.deleteCloudMcpConnectionV2Mock.mockResolvedValue(undefined);
+    mocks.startGoogleWorkspaceMcpAuthMock.mockResolvedValue({
+      status: "completed",
+      userGoogleEmail: "user@example.com",
+    });
+    mocks.cancelGoogleWorkspaceMcpAuthMock.mockResolvedValue({ ok: true });
+    mocks.deleteGoogleWorkspaceMcpLocalDataMock.mockResolvedValue({ status: "deleted" });
+    mocks.reconcileGoogleWorkspaceMcpPendingSetupsMock.mockResolvedValue({ ok: true });
+    mocks.getGoogleWorkspaceMcpCredentialStatusMock.mockResolvedValue({ status: "ready" });
   });
 
   it("loads catalog and installed connectors from cloud", async () => {
@@ -276,6 +348,43 @@ describe("cloud MCP connector persistence", () => {
       enabled: true,
     });
     expect(mocks.putCloudMcpSecretAuthMock).not.toHaveBeenCalled();
+  });
+
+  it("rolls back Gmail if local OAuth is canceled while cloud connection creation is in flight", async () => {
+    mocks.getCloudMcpCatalogMock.mockResolvedValue({
+      catalogVersion: "test",
+      entries: [gmailCatalogEntry()],
+    });
+    mocks.listCloudMcpConnectionsMock.mockResolvedValue({ connections: [] });
+    let resolveCreate: ((connection: ReturnType<typeof cloudConnection>) => void) | undefined;
+    mocks.createCloudMcpConnectionMock.mockImplementation(() => new Promise((resolve) => {
+      resolveCreate = resolve;
+    }));
+
+    const installPromise = installConnector("gmail", {});
+    await vi.waitFor(() => {
+      expect(mocks.createCloudMcpConnectionMock).toHaveBeenCalled();
+    });
+    await cancelLocalOAuthConnectorConnect();
+    resolveCreate?.({
+      ...cloudConnection(),
+      connectionId: "conn_gmail",
+      catalogEntryId: "gmail",
+      serverName: "gmail",
+      authKind: "none",
+      settings: { userGoogleEmail: "user@example.com" },
+    });
+
+    await expect(installPromise).rejects.toMatchObject({ code: "cancelled" });
+    expect(mocks.cancelGoogleWorkspaceMcpAuthMock).toHaveBeenCalledWith({
+      setupId: expect.any(String),
+    });
+    expect(mocks.deleteCloudMcpConnectionV2Mock).toHaveBeenCalledWith("conn_gmail");
+    expect(mocks.deleteGoogleWorkspaceMcpLocalDataMock).toHaveBeenCalledWith({
+      setupId: expect.any(String),
+      userGoogleEmail: "user@example.com",
+    });
+    expect(mocks.reconcileGoogleWorkspaceMcpPendingSetupsMock).not.toHaveBeenCalled();
   });
 
   it("updates connector secret in cloud", async () => {

@@ -89,6 +89,10 @@ class ConnectorCatalogEntryModel(BaseModel):
     docs_url: str = Field(serialization_alias="docsUrl")
     availability: Literal["universal", "local_only", "cloud_only"]
     cloud_secret_sync: bool = Field(serialization_alias="cloudSecretSync")
+    setup_kind: Literal["none", "local_oauth"] = Field(
+        default="none",
+        serialization_alias="setupKind",
+    )
     transport: Literal["http", "stdio"]
     auth_kind: Literal["secret", "oauth", "none"] = Field(serialization_alias="authKind")
     oauth_client_mode: Literal["dcr", "static"] | None = Field(
@@ -221,6 +225,7 @@ def catalog_entry_payload(entry: CatalogEntry) -> ConnectorCatalogEntryModel:
         docs_url=entry.docs_url,
         availability=entry.availability,
         cloud_secret_sync=entry.cloud_secret_sync,
+        setup_kind=entry.setup_kind,
         transport=entry.transport,
         auth_kind=entry.auth_kind,
         oauth_client_mode=entry.oauth_client_mode,

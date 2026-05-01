@@ -5,10 +5,13 @@ import type {
 import { finalizeLocalStdioCandidates } from "@/lib/domain/mcp/local-stdio-finalizer";
 import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
 import { materializeCloudMcpServers } from "@/lib/integrations/cloud/mcp_materialization";
+import { resolveGoogleWorkspaceMcpRuntimeEnv } from "@/platform/tauri/google-workspace-mcp";
+import { commandExists } from "@/platform/tauri/process";
 
 export interface ConnectorLaunchContext {
   targetLocation: "local" | "cloud";
   workspacePath: string | null;
+  launchId: string;
 }
 
 export interface SessionMcpLaunchPolicy {
@@ -45,7 +48,8 @@ export async function resolveSessionMcpServersForLaunch(
   });
   const finalizedStdio = await finalizeLocalStdioCandidates(
     materialized.localStdioCandidates,
-    { workspacePath: launchContext.workspacePath },
+    { workspacePath: launchContext.workspacePath, launchId: launchContext.launchId },
+    { commandExists, resolveGoogleWorkspaceMcpRuntimeEnv },
   );
   const finalizedStdioIds = new Set(
     materialized.localStdioCandidates.map((candidate) => candidate.connectionId),

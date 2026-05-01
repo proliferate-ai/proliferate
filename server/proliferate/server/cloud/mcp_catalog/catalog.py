@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from proliferate.config import settings
 from proliferate.server.cloud.mcp_catalog.builders import (
     _bearer,
     _secret_field,
@@ -32,7 +33,8 @@ from proliferate.server.cloud.mcp_catalog.types import (
     UrlVariant,
 )
 
-CATALOG_VERSION = "2026-04-22.4"
+CATALOG_VERSION = "2026-04-30.1"
+GOOGLE_WORKSPACE_MCP_PACKAGE = "workspace-mcp==1.20.1"
 
 __all__ = [
     "ArgTemplate",
@@ -51,6 +53,7 @@ __all__ = [
     "UrlBySetting",
     "UrlVariant",
     "get_catalog_entry",
+    "build_connector_catalog",
     "connector_supports_target",
     "normalize_settings",
     "parse_settings",
@@ -61,7 +64,7 @@ __all__ = [
 ]
 
 
-CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
+BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
     CatalogEntry(
         id="github",
         version=1,
@@ -488,8 +491,79 @@ CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
     ),
 )
 
-CATALOG_BY_ID = {entry.id: entry for entry in CONNECTOR_CATALOG}
+# Backwards-compatible static catalog for tests and code that only needs the
+# deployment-independent entries. Runtime paths must call build_connector_catalog().
+CONNECTOR_CATALOG = BASE_CONNECTOR_CATALOG
+
+
+def _google_workspace_catalog_entry() -> CatalogEntry | None:
+    if not settings.cloud_mcp_google_workspace_enabled:
+        return None
+    client_id = settings.cloud_mcp_google_workspace_oauth_client_id.strip()
+    client_secret = settings.cloud_mcp_google_workspace_oauth_client_secret.strip()
+    if not client_id or not client_secret:
+        return None
+    return CatalogEntry(
+        id="gmail",
+        version=1,
+        name="Gmail",
+        one_liner="Search and read Gmail messages locally through Google Workspace MCP.",
+        description=(
+            "Use Gmail when Proliferate needs read-only access to mail context. "
+            "OAuth tokens and Gmail content stay on this desktop."
+        ),
+        docs_url="https://developers.google.com/workspace/gmail/api/auth/scopes",
+        availability="local_only",
+        transport="stdio",
+        auth_kind="none",
+        setup_kind="local_oauth",
+        command="uvx",
+        args=(
+            ArgTemplate(kind="static", value="--from"),
+            ArgTemplate(kind="static", value=GOOGLE_WORKSPACE_MCP_PACKAGE),
+            ArgTemplate(kind="static", value="workspace-mcp"),
+            ArgTemplate(kind="static", value="--transport"),
+            ArgTemplate(kind="static", value="stdio"),
+            ArgTemplate(kind="static", value="--permissions"),
+            ArgTemplate(kind="static", value="gmail:readonly"),
+            ArgTemplate(kind="static", value="--tool-tier"),
+            ArgTemplate(kind="static", value="core"),
+        ),
+        env=(
+            EnvTemplate(name="GOOGLE_OAUTH_CLIENT_ID", kind="static", value=client_id),
+            EnvTemplate(
+                name="GOOGLE_OAUTH_CLIENT_SECRET",
+                kind="static",
+                value=client_secret,
+            ),
+            EnvTemplate(name="OAUTHLIB_INSECURE_TRANSPORT", kind="static", value="1"),
+        ),
+        settings_fields=(
+            CatalogSettingField(
+                id="userGoogleEmail",
+                label="Google account email",
+                kind="string",
+                required=True,
+                placeholder="name@example.com",
+                helper_text="The Gmail account to authorize on this desktop.",
+            ),
+        ),
+        server_name_base="gmail",
+        icon_id="gmail",
+        capabilities=(
+            "Search Gmail messages",
+            "Read message and thread content",
+            "Use local-only Google OAuth credentials",
+        ),
+    )
+
+
+def build_connector_catalog() -> tuple[CatalogEntry, ...]:
+    dynamic_entries = tuple(
+        entry for entry in (_google_workspace_catalog_entry(),) if entry is not None
+    )
+    return (*BASE_CONNECTOR_CATALOG, *dynamic_entries)
 
 
 def get_catalog_entry(catalog_entry_id: str) -> CatalogEntry | None:
-    return CATALOG_BY_ID.get(catalog_entry_id)
+    return {entry.id: entry for entry in build_connector_catalog()}.get(catalog_entry_id)

@@ -11,8 +11,8 @@ mod telemetry;
 mod telemetry_file_logging;
 
 use commands::{
-    anonymous_telemetry, config, diagnostics as diagnostics_commands, keychain, process, runtime,
-    shell, window_chrome,
+    anonymous_telemetry, config, diagnostics as diagnostics_commands, google_workspace_mcp,
+    keychain, process, runtime, shell, window_chrome,
 };
 use quit_flow::QuitFlowState;
 use tauri::Manager;
@@ -184,6 +184,12 @@ pub fn run() {
             shell::reveal_in_finder,
             shell::open_in_terminal,
             shell::open_external,
+            google_workspace_mcp::start_google_workspace_mcp_auth,
+            google_workspace_mcp::cancel_google_workspace_mcp_auth,
+            google_workspace_mcp::get_google_workspace_mcp_credential_status,
+            google_workspace_mcp::delete_google_workspace_mcp_local_data,
+            google_workspace_mcp::reconcile_google_workspace_mcp_pending_setups,
+            google_workspace_mcp::resolve_google_workspace_mcp_runtime_env,
             window_chrome::apply_macos_window_chrome,
             process::command_exists,
             keychain::list_configured_env_var_names,

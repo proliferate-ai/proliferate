@@ -1,6 +1,7 @@
 export type ConnectorCatalogId = string;
 
 export type ConnectorAvailability = "universal" | "local_only" | "cloud_only";
+export type ConnectorSetupKind = "none" | "local_oauth";
 
 export interface ConnectorCatalogField {
   id: string;
@@ -62,6 +63,7 @@ interface ConnectorCatalogEntryBase {
   docsUrl: string;
   availability: ConnectorAvailability;
   cloudSecretSync: boolean;
+  setupKind: ConnectorSetupKind;
   serverNameBase: string;
   iconId: ConnectorIconId;
   displayUrl: string;

@@ -49,7 +49,7 @@ class CloudMcpConnectionResponse(BaseModel):
     enabled: bool
     auth_kind: CloudMcpAuthKind = Field(serialization_alias="authKind")
     auth_status: CloudMcpAuthStatus = Field(serialization_alias="authStatus")
-    settings: dict[str, object]
+    settings: dict[str, object] = Field(repr=False)
     config_version: int = Field(serialization_alias="configVersion")
     auth_version: int | None = Field(default=None, serialization_alias="authVersion")
     created_at: str = Field(serialization_alias="createdAt")

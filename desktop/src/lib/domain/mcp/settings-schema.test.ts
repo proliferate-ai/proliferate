@@ -14,6 +14,7 @@ const POSTHOG_ENTRY: ConnectorCatalogEntry = {
   docsUrl: "https://posthog.com/docs/model-context-protocol",
   availability: "universal",
   cloudSecretSync: false,
+  setupKind: "none",
   transport: "http",
   authKind: "secret",
   url: "https://mcp.posthog.com/mcp",

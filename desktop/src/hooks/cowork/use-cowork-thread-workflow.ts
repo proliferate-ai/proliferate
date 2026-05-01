@@ -79,7 +79,6 @@ export function useCoworkThreadWorkflow() {
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
-    pluginsInCodingSessionsEnabled: state.pluginsInCodingSessionsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
   })));
   const showToast = useToastStore((state) => state.show);
@@ -134,20 +133,19 @@ export function useCoworkThreadWorkflow() {
 
     try {
       const resolveStartedAt = startLatencyTimer();
-      const { mcpServers, mcpBindingSummaries } = preferences.pluginsInCodingSessionsEnabled
-        ? await resolveSessionMcpServersForLaunch({
-          targetLocation: "local",
-          workspacePath: COWORK_WORKSPACE_PATH_PLACEHOLDER,
-          policy: {
-            workspaceSurface: "cowork",
-            lifecycle: "create",
-            enabled: true,
-          },
-        })
-        : { mcpServers: [], mcpBindingSummaries: [] };
+      const { mcpServers, mcpBindingSummaries } = await resolveSessionMcpServersForLaunch({
+        targetLocation: "local",
+        workspacePath: COWORK_WORKSPACE_PATH_PLACEHOLDER,
+        launchId: entry.attemptId,
+        policy: {
+          workspaceSurface: "cowork",
+          lifecycle: "create",
+          enabled: true,
+        },
+      });
       logLatency("workspace.cowork.create.mcp_resolved", {
         attemptId: entry.attemptId,
-        pluginsEnabled: preferences.pluginsInCodingSessionsEnabled,
+        pluginsEnabled: true,
         mcpServerCount: mcpServers.length,
         elapsedMs: elapsedMs(resolveStartedAt),
       });
@@ -303,7 +301,6 @@ export function useCoworkThreadWorkflow() {
     navigateToWorkspaceShell,
     putSessionSlot,
     preferences.coworkWorkspaceDelegationEnabled,
-    preferences.pluginsInCodingSessionsEnabled,
     queryClient,
     requestComposerFocus,
     runtimeUrl,

@@ -27,6 +27,7 @@ const persistedKeys = [
   "PROLIFERATE_API_PORT",
   "PROLIFERATE_WEB_PORT",
   "PROLIFERATE_WEB_HMR_PORT",
+  "PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE",
   "ANYHARNESS_PORT",
   "ANYHARNESS_RUNTIME_HOME",
   "PROLIFERATE_DEV_HOME",
@@ -37,8 +38,13 @@ const portKeys = [
   ["PROLIFERATE_API_PORT", 8000],
   ["PROLIFERATE_WEB_PORT", 1420],
   ["PROLIFERATE_WEB_HMR_PORT", 1421],
+  ["PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE", 49321],
   ["ANYHARNESS_PORT", 8457],
 ];
+const googleWorkspaceMcpPortPoolSize = 64;
+const portPoolSizes = new Map([
+  ["PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE", googleWorkspaceMcpPortPoolSize],
+]);
 
 function usage() {
   console.error(`Usage:
@@ -217,17 +223,62 @@ function canBindPort(port) {
   });
 }
 
-async function pickPort(preferred, reservedPorts) {
-  for (let port = preferred; port < 65535; port += 1) {
-    if (reservedPorts.has(port)) {
+function portPoolSize(key) {
+  return portPoolSizes.get(key) ?? 1;
+}
+
+function addReservedPortRange(reservedPorts, basePort, poolSize) {
+  for (let offset = 0; offset < poolSize; offset += 1) {
+    reservedPorts.add(basePort + offset);
+  }
+}
+
+function portRangeOverlapsReserved(reservedPorts, basePort, poolSize) {
+  for (let offset = 0; offset < poolSize; offset += 1) {
+    if (reservedPorts.has(basePort + offset)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function canBindPortRange(basePort, poolSize) {
+  for (let offset = 0; offset < poolSize; offset += 1) {
+    if (!(await canBindPort(basePort + offset))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function reservePortRangeOrThrow(key, reservedPorts, rawPort) {
+  const port = Number(rawPort);
+  const poolSize = portPoolSize(key);
+  if (!Number.isInteger(port)) {
+    return;
+  }
+  if (port + poolSize - 1 > 65535) {
+    throw new Error(`${key} range would exceed TCP port 65535.`);
+  }
+  if (portRangeOverlapsReserved(reservedPorts, port, poolSize)) {
+    const end = port + poolSize - 1;
+    throw new Error(`${key} range ${port}-${end} overlaps another dev profile.`);
+  }
+  addReservedPortRange(reservedPorts, port, poolSize);
+}
+
+async function pickPort(key, preferred, reservedPorts) {
+  const poolSize = portPoolSize(key);
+  for (let port = preferred; port <= 65535 - poolSize + 1; port += 1) {
+    if (portRangeOverlapsReserved(reservedPorts, port, poolSize)) {
       continue;
     }
-    if (await canBindPort(port)) {
-      reservedPorts.add(port);
+    if (await canBindPortRange(port, poolSize)) {
+      addReservedPortRange(reservedPorts, port, poolSize);
       return port;
     }
   }
-  throw new Error(`No free port found at or above ${preferred}.`);
+  throw new Error(`No free ${poolSize}-port range found at or above ${preferred} for ${key}.`);
 }
 
 function profileEnvFiles() {
@@ -251,11 +302,18 @@ function usedPortsExcept(profile) {
     for (const [key] of portKeys) {
       const port = Number(env[key]);
       if (Number.isInteger(port)) {
-        ports.add(port);
+        addReservedPortRange(ports, port, portPoolSize(key));
       }
     }
   }
   return ports;
+}
+
+function ensureProfilePortRangesUnique(profile, env) {
+  const reserved = usedPortsExcept(profile);
+  for (const [key] of portKeys) {
+    reservePortRangeOrThrow(key, reserved, env[key]);
+  }
 }
 
 function ensureDbNameIsUnique(profile, dbName) {
@@ -379,7 +437,12 @@ async function resolveProfileEnv(profile, paths) {
         PROLIFERATE_DEV_DB_NAME: persisted.PROLIFERATE_DEV_DB_NAME ?? dbNameForProfile(profile),
       };
       for (const [key, preferred] of portKeys) {
-        allocated[key] = persisted[key] ?? String(await pickPort(preferred, reserved));
+        if (persisted[key]) {
+          reservePortRangeOrThrow(key, reserved, persisted[key]);
+          allocated[key] = persisted[key];
+        } else {
+          allocated[key] = String(await pickPort(key, preferred, reserved));
+        }
       }
       writeEnvFile(paths.profileEnv, orderedEnv(allocated, persistedKeys));
       persisted = allocated;
@@ -406,6 +469,7 @@ async function resolveProfileEnv(profile, paths) {
     }
   }
   effective.PROLIFERATE_DEV_PROFILE = profile;
+  ensureProfilePortRangesUnique(profile, effective);
   validateDbName(effective.PROLIFERATE_DEV_DB_NAME);
   ensureDbNameIsUnique(profile, effective.PROLIFERATE_DEV_DB_NAME);
   return effective;

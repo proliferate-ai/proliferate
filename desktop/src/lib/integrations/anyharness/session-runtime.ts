@@ -421,6 +421,7 @@ export async function resumeSession(
       () => resolveSessionMcpServersForLaunch({
         targetLocation: target.location,
         workspacePath: workspace.path ?? null,
+        launchId: `${sessionId}:${crypto.randomUUID()}`,
         policy: {
           workspaceSurface: isCowork ? "cowork" : "coding",
           lifecycle: "resume",

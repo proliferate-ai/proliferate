@@ -337,6 +337,7 @@ export function useSessionCreationActions() {
       } = await resolveSessionMcpServersForLaunch({
         targetLocation: target.location,
         workspacePath: targetWorkspace?.path ?? null,
+        launchId: crypto.randomUUID(),
         policy: {
           workspaceSurface: "coding",
           lifecycle: "create",

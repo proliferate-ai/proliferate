@@ -287,7 +287,16 @@ describe("resumeSession", () => {
       pluginsInCodingSessionsEnabled: false,
     });
 
-    expect(mocks.resolveSessionMcpServersForLaunch).not.toHaveBeenCalled();
+    expect(mocks.resolveSessionMcpServersForLaunch).toHaveBeenCalledWith({
+      targetLocation: "local",
+      workspacePath: "/cowork/thread-1",
+      launchId: expect.stringMatching(/^session-1:/),
+      policy: {
+        workspaceSurface: "cowork",
+        lifecycle: "resume",
+        enabled: true,
+      },
+    });
   });
 
   it("resolves launch MCP when Plugins are enabled for resume", async () => {
@@ -315,6 +324,7 @@ describe("resumeSession", () => {
     expect(mocks.resolveSessionMcpServersForLaunch).toHaveBeenCalledWith({
       targetLocation: "local",
       workspacePath: "/repo",
+      launchId: expect.stringMatching(/^session-1:/),
       policy: {
         workspaceSurface: "coding",
         lifecycle: "resume",
