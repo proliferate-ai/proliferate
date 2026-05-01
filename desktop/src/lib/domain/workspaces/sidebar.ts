@@ -5,6 +5,10 @@ import {
   latestLogicalWorkspaceTimestamp,
   type LogicalWorkspace,
 } from "@/lib/domain/workspaces/logical-workspaces";
+import {
+  compareLogicalWorkspaceRecency,
+  resolveLogicalWorkspaceRecency,
+} from "@/lib/domain/workspaces/recency";
 import type {
   CloudWorkspaceStatus,
   CloudWorkspaceSummary,
@@ -373,7 +377,15 @@ export function buildSidebarGroupStates(args: {
 
   return Array.from(groupKeys)
     .map((repoKey): { group: SidebarGroupState; sortTimestamp: string } | null => {
-      const groupWorkspaces = groups.get(repoKey) ?? [];
+      const rawGroupWorkspaces = groups.get(repoKey) ?? [];
+      const groupWorkspaces = groupHasWorkActivity(
+        rawGroupWorkspaces,
+        args.workspaceLastInteracted,
+      )
+        ? [...rawGroupWorkspaces].sort((left, right) =>
+          compareLogicalWorkspaceRecency(left, right, args.workspaceLastInteracted)
+        )
+        : rawGroupWorkspaces;
       const representative = groupWorkspaces[0] ?? null;
       const repoRoot = representative?.repoRoot ?? repoRootsByKey.get(repoKey) ?? null;
       if (repoRoot && args.hiddenRepoRootIds.has(repoRoot.id)) {
@@ -382,10 +394,8 @@ export function buildSidebarGroupStates(args: {
       const items = groupWorkspaces.map((entry) => {
         const active = entry.id === args.selectedLogicalWorkspaceId;
         const archived = args.archivedSet.has(entry.id);
-        const lastInteracted = latestLogicalWorkspaceTimestamp(
-          args.workspaceLastInteracted,
-          entry,
-        );
+        const recency = resolveLogicalWorkspaceRecency(entry, args.workspaceLastInteracted);
+        const lastInteracted = recency.displayAt;
         const preferredLocalWorkspace = entry.localWorkspace;
         const preferredCloudWorkspace = entry.cloudWorkspace;
         const variant = sidebarWorkspaceVariantForLogicalWorkspace(entry);
@@ -465,7 +475,9 @@ export function buildSidebarGroupStates(args: {
       const repoName = repoRoot?.remoteRepoName ?? representative?.repoName ?? null;
 
       return {
-        sortTimestamp: groupWorkspaces[0]?.updatedAt ?? repoRoot?.updatedAt ?? "",
+        sortTimestamp: representative
+          ? resolveLogicalWorkspaceRecency(representative, args.workspaceLastInteracted).sortAt
+          : repoRoot?.updatedAt ?? "",
         group: {
           sourceRoot,
           name,
@@ -492,6 +504,15 @@ export function buildSidebarGroupStates(args: {
     .filter((entry): entry is { group: SidebarGroupState; sortTimestamp: string } => entry !== null)
     .sort((a, b) => new Date(b.sortTimestamp).getTime() - new Date(a.sortTimestamp).getTime())
     .map((entry) => entry.group);
+}
+
+function groupHasWorkActivity(
+  workspaces: LogicalWorkspace[],
+  workspaceActivityAt: Record<string, string>,
+): boolean {
+  return workspaces.some((workspace) =>
+    resolveLogicalWorkspaceRecency(workspace, workspaceActivityAt).activityAt !== null
+  );
 }
 
 function sidebarEntryGroupName(entry: SidebarWorkspaceEntry): string {

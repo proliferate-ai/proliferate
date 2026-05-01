@@ -288,6 +288,65 @@ describe("sidebar workspace filters", () => {
     ]);
   });
 
+  it("orders workspace items by work activity before record freshness", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "renamed-but-older-work",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          updatedAt: "2026-04-13T12:00:00.000Z",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "older-record-newer-work",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          updatedAt: "2026-04-13T11:00:00.000Z",
+        }),
+      ],
+      workspaceLastInteracted: {
+        "renamed-but-older-work": "2026-04-13T10:00:00.000Z",
+        "older-record-newer-work": "2026-04-13T11:30:00.000Z",
+      },
+    });
+
+    expect(groups[0]?.items.map((item) => item.id)).toEqual([
+      "older-record-newer-work",
+      "renamed-but-older-work",
+    ]);
+    expect(groups[0]?.items.map((item) => item.lastInteracted)).toEqual([
+      "2026-04-13T11:30:00.000Z",
+      "2026-04-13T10:00:00.000Z",
+    ]);
+  });
+
+  it("orders repo groups by their latest visible work activity", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "repo-a-workspace",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          updatedAt: "2026-04-13T12:00:00.000Z",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "repo-b-workspace",
+          repoKey: "/tmp/repo-b",
+          repoName: "repo-b",
+          updatedAt: "2026-04-13T11:00:00.000Z",
+        }),
+      ],
+      workspaceLastInteracted: {
+        "repo-a-workspace": "2026-04-13T10:00:00.000Z",
+        "repo-b-workspace": "2026-04-13T11:30:00.000Z",
+      },
+    });
+
+    expect(groups.map((group) => group.name)).toEqual(["repo-b", "repo-a"]);
+  });
+
   it("force-expands a repo group when the selected logical workspace is past the item cap", () => {
     const groups = buildGroups({
       logicalWorkspaces: Array.from({ length: 7 }, (_, index) =>
