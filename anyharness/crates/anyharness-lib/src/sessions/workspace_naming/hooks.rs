@@ -94,7 +94,7 @@ impl SessionExtension for WorkspaceNamingSessionHooks {
 }
 
 fn workspace_naming_system_prompt_append() -> Vec<String> {
-    vec![r#"Your first action in this first turn MUST be a call to the workspace naming MCP tool. If MCP tools are namespaced, the exact tool name is mcp__workspace_naming__set_workspace_display_name. Call it with a concise human-readable task title derived from the user's request. Do not send a user-visible response, clarification, plan, subagent request, or any other tool call before naming the workspace. Do not use subagents to name the workspace. After the workspace is named, continue with the user's request. Do not rename the git branch for naming alone."#.to_string()]
+    vec![r#"Your first action in this first turn MUST be a direct call to the workspace naming MCP tool. If MCP tools are namespaced, the exact tool name is mcp__workspace_naming__set_workspace_display_name. The tool is already available in your active tool list; do not use ToolSearch, subagents, or any other tool to find or invoke it. Call it with a concise human-readable task title derived from the user's request. Do not send a user-visible response, clarification, plan, or any other tool call before naming the workspace. After the workspace is named, continue with the user's request. Do not rename the git branch for naming alone."#.to_string()]
 }
 
 #[cfg(test)]
@@ -197,10 +197,11 @@ mod tests {
         assert_eq!(extras.system_prompt_append.len(), 1);
         assert!(extras.system_prompt_append[0].contains("Your first action"));
         assert!(
-            extras.system_prompt_append[0].contains("MUST be a call to")
+            extras.system_prompt_append[0].contains("MUST be a direct call to")
                 && extras.system_prompt_append[0]
                     .contains("mcp__workspace_naming__set_workspace_display_name")
         );
+        assert!(extras.system_prompt_append[0].contains("do not use ToolSearch"));
         assert_eq!(extras.mcp_servers.len(), 1);
         let crate::sessions::mcp::SessionMcpServer::Http(server) = &extras.mcp_servers[0] else {
             panic!("expected http server");

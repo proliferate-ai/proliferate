@@ -44,7 +44,7 @@ pub async fn handle_json_rpc(
                         "name": "proliferate-workspace-naming",
                         "version": env!("CARGO_PKG_VERSION"),
                     },
-                    "instructions": "Your first action in this first turn MUST be a call to set_workspace_display_name with a concise task title for the workspace. If MCP tools are namespaced, the exact tool name is mcp__workspace_naming__set_workspace_display_name. Do not send a user-visible response, clarification, plan, subagent request, or other tool call before naming the workspace. Do not use subagents to name the workspace. After the workspace is named, continue with the user's request. Do not rename the git branch for naming."
+                    "instructions": "Your first action in this first turn MUST be a direct call to set_workspace_display_name with a concise task title for the workspace. If MCP tools are namespaced, the exact tool name is mcp__workspace_naming__set_workspace_display_name. This tool is already available in the active tool list; do not use ToolSearch, subagents, or any other tool to find or invoke it. Do not send a user-visible response, clarification, plan, or other tool call before naming the workspace. After the workspace is named, continue with the user's request. Do not rename the git branch for naming."
                 }),
             )))
         }

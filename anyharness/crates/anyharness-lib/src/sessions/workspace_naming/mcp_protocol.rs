@@ -89,7 +89,7 @@ pub(super) fn jsonrpc_tool_result(id: Option<Value>, result: anyhow::Result<Valu
 pub(super) fn build_tool_list() -> Vec<Value> {
     vec![tool_definition(
         "set_workspace_display_name",
-        "Set a concise human-readable display name for this workspace. During the first turn, call this before any user-visible response, clarification, plan, subagent request, or other tool call. If tools are namespaced, this is mcp__workspace_naming__set_workspace_display_name. Do not use subagents for workspace naming and do not use this to rename git branches.",
+        "Set a concise human-readable display name for this workspace. During the first turn, call this directly before any user-visible response, clarification, plan, or other tool call. If tools are namespaced, this is mcp__workspace_naming__set_workspace_display_name. This tool is already available in the active tool list; do not use ToolSearch or subagents for workspace naming, and do not use this to rename git branches.",
         json!({
             "type": "object",
             "properties": {
@@ -122,6 +122,7 @@ mod tests {
 
         assert_eq!(tools[0]["name"], "set_workspace_display_name");
         assert!(description.contains("mcp__workspace_naming__set_workspace_display_name"));
-        assert!(description.contains("Do not use subagents"));
+        assert!(description.contains("do not use ToolSearch"));
+        assert!(description.contains("subagents"));
     }
 }
