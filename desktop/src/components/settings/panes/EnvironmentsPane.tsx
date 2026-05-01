@@ -5,7 +5,7 @@ import {
   EnvironmentPanel,
   EnvironmentPanelRow,
   EnvironmentSection,
-} from "@/components/settings/EnvironmentSettingsLayout";
+} from "@/components/ui/EnvironmentLayout";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { LocalRepoSection } from "./repo/LocalRepoSection";

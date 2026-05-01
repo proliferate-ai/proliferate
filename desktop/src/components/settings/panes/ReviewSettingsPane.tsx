@@ -3,7 +3,7 @@ import type { ReviewKind } from "@anyharness/sdk";
 import {
   EnvironmentField,
   EnvironmentSection,
-} from "@/components/settings/EnvironmentSettingsLayout";
+} from "@/components/ui/EnvironmentLayout";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";

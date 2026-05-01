@@ -2,30 +2,16 @@ import type { SetupHint } from "@anyharness/sdk";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Label } from "@/components/ui/Label";
 import { Textarea } from "@/components/ui/Textarea";
+import {
+  isSetupHintEnabled,
+  toggleSetupHint,
+} from "@/lib/domain/settings/setup-hints";
 
 interface SetupCommandEditorProps {
   hints: SetupHint[];
   currentScript: string;
   onChange: (script: string) => void;
   isLoading: boolean;
-}
-
-function isHintEnabled(script: string, command: string): boolean {
-  return script.split("\n").some(
-    (line) => line.trim() === command.trim(),
-  );
-}
-
-function toggleHint(script: string, command: string, enable: boolean): string {
-  const trimmedCommand = command.trim();
-  if (enable) {
-    const existing = script.trim();
-    return existing ? `${existing}\n${trimmedCommand}` : trimmedCommand;
-  }
-  return script
-    .split("\n")
-    .filter((line) => line.trim() !== trimmedCommand)
-    .join("\n");
 }
 
 function HintRow({
@@ -77,7 +63,7 @@ export function SetupCommandEditor({
   const secretSyncHints = hints.filter((h) => h.category === "secret_sync");
 
   const handleToggle = (command: string, enabled: boolean) => {
-    onChange(toggleHint(currentScript, command, enabled));
+    onChange(toggleSetupHint(currentScript, command, enabled));
   };
 
   return (
@@ -94,7 +80,7 @@ export function SetupCommandEditor({
                   <HintRow
                     key={hint.id}
                     hint={hint}
-                    checked={isHintEnabled(currentScript, hint.suggestedCommand)}
+                    checked={isSetupHintEnabled(currentScript, hint.suggestedCommand)}
                     onToggle={(enabled) => handleToggle(hint.suggestedCommand, enabled)}
                   />
                 ))}
@@ -109,7 +95,7 @@ export function SetupCommandEditor({
                   <HintRow
                     key={hint.id}
                     hint={hint}
-                    checked={isHintEnabled(currentScript, hint.suggestedCommand)}
+                    checked={isSetupHintEnabled(currentScript, hint.suggestedCommand)}
                     onToggle={(enabled) => handleToggle(hint.suggestedCommand, enabled)}
                   />
                 ))}

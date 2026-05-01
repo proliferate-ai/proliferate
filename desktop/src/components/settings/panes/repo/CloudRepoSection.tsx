@@ -5,7 +5,7 @@ import {
   EnvironmentPanel,
   EnvironmentPanelRow,
   EnvironmentSection,
-} from "@/components/settings/EnvironmentSettingsLayout";
+} from "@/components/ui/EnvironmentLayout";
 import { CloudDefaultBranchCard } from "@/components/cloud/repo-settings/CloudDefaultBranchCard";
 import { RepoEnvVarsCard } from "@/components/cloud/repo-settings/RepoEnvVarsCard";
 import { RepoRunCommandCard } from "@/components/cloud/repo-settings/RepoRunCommandCard";

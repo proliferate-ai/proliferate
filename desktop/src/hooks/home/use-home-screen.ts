@@ -8,7 +8,6 @@ import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspac
 import {
   type HomeActionId,
   buildHomeActionCards,
-  buildHomeStatusMessage,
 } from "@/lib/domain/home/home-screen";
 import { compareLogicalWorkspaceRecency } from "@/lib/domain/workspaces/recency";
 import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
@@ -19,8 +18,6 @@ export function useHomeScreen() {
   const { addRepoFromPicker, isAddingRepo } = useAddRepo();
   const {
     readyAgents,
-    agentsNeedingSetup,
-    isReconciling,
     isLoading: agentsLoading,
   } = useAgentCatalog();
   const { logicalWorkspaces } = useLogicalWorkspaces();
@@ -67,16 +64,6 @@ export function useHomeScreen() {
     }),
     [agentsLoading, latestWorkspace, readyAgents.length],
   );
-  const statusMessage = useMemo(
-    () => buildHomeStatusMessage({
-      readyAgentNames: readyAgents.map((agent) => agent.displayName),
-      agentsNeedingSetupNames: agentsNeedingSetup.map((agent) => agent.displayName),
-      agentsLoading,
-      isReconcilingAgents: isReconciling,
-    }),
-    [agentsLoading, agentsNeedingSetup, isReconciling, readyAgents],
-  );
-
   function handleHomeAction(actionId: HomeActionId) {
     switch (actionId) {
       case "resume-last-workspace":
@@ -104,9 +91,7 @@ export function useHomeScreen() {
   }
 
   return {
-    agentsLoading,
     actionCards,
-    statusMessage,
     isAddingRepo,
     handleHomeAction,
   };
