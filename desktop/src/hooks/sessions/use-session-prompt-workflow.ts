@@ -24,7 +24,6 @@ interface PromptSessionInput {
   latencyFlowId?: string | null;
   promptId?: string | null;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
-  onBeforePrompt?: (workspaceId: string) => Promise<void> | void;
   onBeforePromptRequest?: (workspaceId: string) => Promise<void> | void;
 }
 
@@ -43,7 +42,6 @@ export function useSessionPromptWorkflow() {
     latencyFlowId,
     promptId,
     onBeforeOptimisticPrompt,
-    onBeforePrompt,
     onBeforePromptRequest,
   }: PromptSessionInput) => {
     const slot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
@@ -73,9 +71,6 @@ export function useSessionPromptWorkflow() {
       finishLatencyFlow(latencyFlowId, "optimistic_visible");
 
       const shouldGenerateTitle = !slot?.lastPromptAt;
-      if (resolvedWorkspaceId && onBeforePrompt) {
-        await onBeforePrompt(resolvedWorkspaceId);
-      }
 
       const { connection, workspaceId: promptWorkspaceId } = await getSessionClientAndWorkspace(
         sessionId,

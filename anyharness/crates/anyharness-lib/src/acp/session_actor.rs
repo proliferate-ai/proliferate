@@ -580,6 +580,7 @@ pub struct SessionActorConfig {
     pub startup_strategy: SessionStartupStrategy,
     pub last_seq: i64,
     pub system_prompt_append: Option<String>,
+    pub first_prompt_system_prompt_append: Option<String>,
     pub on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync + 'static>>,
     pub latency: Option<LatencyRequestContext>,
     /// Called after the actor loop exits (normal or error). The bool indicates
@@ -1585,9 +1586,9 @@ async fn run_actor(
                                 };
                                 match store.has_turn_started_event(&session_id) {
                                     Ok(has_turn_started) => {
-                                        if let Some(append) = system_prompt_append_for_codex_prompt(
+                                        if let Some(append) = first_prompt_system_prompt_append_for_codex_prompt(
                                             &source_agent_kind,
-                                            config.system_prompt_append.as_deref(),
+                                            config.first_prompt_system_prompt_append.as_deref(),
                                             has_turn_started,
                                         ) {
                                             prepend_system_prompt_append_to_acp_blocks(
@@ -3442,16 +3443,16 @@ fn build_system_prompt_meta(system_prompt_append: Option<&str>) -> Option<acp::M
     )]))
 }
 
-fn system_prompt_append_for_codex_prompt<'a>(
+fn first_prompt_system_prompt_append_for_codex_prompt<'a>(
     source_agent_kind: &str,
-    system_prompt_append: Option<&'a str>,
+    first_prompt_system_prompt_append: Option<&'a str>,
     has_turn_started: bool,
 ) -> Option<&'a str> {
     if source_agent_kind != AgentKind::Codex.as_str() || has_turn_started {
         return None;
     }
 
-    let append = system_prompt_append?.trim();
+    let append = first_prompt_system_prompt_append?.trim();
     if append.is_empty() {
         return None;
     }
@@ -4614,13 +4615,13 @@ mod tests {
     use super::{
         build_client_capabilities, build_system_prompt_meta, classify_agent_stderr_line,
         extract_tagged_proposed_plan, finalize_established_actor_exit,
-        find_select_option_for_request, handle_notification,
-        handle_notification_with_resume_replay_filter, is_missing_load_session_resource,
-        is_mode_config_request, is_model_config_request, load_startup_restore_snapshot,
-        merge_spawn_env, normalized_key_rank, pending_config_rank, persisted_control_values,
-        prepend_system_prompt_append_to_acp_blocks, resolve_pending_interactions,
-        sanitize_agent_stderr_line, serialize_meta, should_try_direct_claude_model_setter,
-        system_prompt_append_for_codex_prompt, title_from_markdown, tracked_config_purpose,
+        find_select_option_for_request, first_prompt_system_prompt_append_for_codex_prompt,
+        handle_notification, handle_notification_with_resume_replay_filter,
+        is_missing_load_session_resource, is_mode_config_request, is_model_config_request,
+        load_startup_restore_snapshot, merge_spawn_env, normalized_key_rank, pending_config_rank,
+        persisted_control_values, prepend_system_prompt_append_to_acp_blocks,
+        resolve_pending_interactions, sanitize_agent_stderr_line, serialize_meta,
+        should_try_direct_claude_model_setter, title_from_markdown, tracked_config_purpose,
         ActorExitDisposition, AgentStderrSeverity, InteractionResolution,
         LiveSessionExecutionSnapshot, LiveSessionHandle, NativeSessionStartupDisposition,
         PersistedSessionConfigState, ResumeReplayFilter, SessionCommand, SessionStartupState,
@@ -5750,19 +5751,31 @@ mod tests {
     }
 
     #[test]
-    fn codex_prompt_inlines_system_prompt_append_only_before_first_turn() {
+    fn codex_prompt_inlines_first_prompt_append_only_before_first_turn() {
         assert_eq!(
-            system_prompt_append_for_codex_prompt("codex", Some("  Name workspace  "), false),
+            first_prompt_system_prompt_append_for_codex_prompt(
+                "codex",
+                Some("  Name workspace  "),
+                false
+            ),
             Some("Name workspace")
         );
+        assert!(first_prompt_system_prompt_append_for_codex_prompt(
+            "codex",
+            Some("Name workspace"),
+            true
+        )
+        .is_none());
+        assert!(first_prompt_system_prompt_append_for_codex_prompt(
+            "claude",
+            Some("Name workspace"),
+            false
+        )
+        .is_none());
         assert!(
-            system_prompt_append_for_codex_prompt("codex", Some("Name workspace"), true).is_none()
-        );
-        assert!(
-            system_prompt_append_for_codex_prompt("claude", Some("Name workspace"), false)
+            first_prompt_system_prompt_append_for_codex_prompt("codex", Some("   "), false)
                 .is_none()
         );
-        assert!(system_prompt_append_for_codex_prompt("codex", Some("   "), false).is_none());
     }
 
     #[test]

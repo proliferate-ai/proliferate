@@ -81,6 +81,7 @@ impl SessionExtension for WorkspaceNamingSessionHooks {
 
         Ok(SessionLaunchExtras {
             system_prompt_append: workspace_naming_system_prompt_append(),
+            first_prompt_system_prompt_append: workspace_naming_system_prompt_append(),
             mcp_servers: vec![SessionMcpServer::Http(SessionMcpHttpServer {
                 connection_id: "workspace-naming".to_string(),
                 catalog_entry_id: None,
@@ -195,6 +196,7 @@ mod tests {
             .expect("extras");
 
         assert_eq!(extras.system_prompt_append.len(), 1);
+        assert_eq!(extras.first_prompt_system_prompt_append.len(), 1);
         assert!(extras.system_prompt_append[0].contains("Your first action"));
         assert!(
             extras.system_prompt_append[0].contains("MUST be a direct call to")
@@ -202,6 +204,10 @@ mod tests {
                     .contains("mcp__workspace_naming__set_workspace_display_name")
         );
         assert!(extras.system_prompt_append[0].contains("do not use ToolSearch"));
+        assert_eq!(
+            extras.first_prompt_system_prompt_append[0],
+            extras.system_prompt_append[0]
+        );
         assert_eq!(extras.mcp_servers.len(), 1);
         let crate::sessions::mcp::SessionMcpServer::Http(server) = &extras.mcp_servers[0] else {
             panic!("expected http server");
