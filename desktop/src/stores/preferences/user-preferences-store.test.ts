@@ -345,7 +345,7 @@ describe("user preference migration", () => {
       ...USER_PREFERENCE_DEFAULTS,
       reviewDefaultsByKind: {
         plan: {
-          maxRounds: 9,
+          maxRounds: 99,
           autoIterate: true,
           reviewers: [
             {
@@ -363,7 +363,7 @@ describe("user preference migration", () => {
     });
 
     expect(result.changed).toBe(true);
-    expect(result.preferences.reviewDefaultsByKind.plan?.maxRounds).toBe(5);
+    expect(result.preferences.reviewDefaultsByKind.plan?.maxRounds).toBe(10);
     expect(result.preferences.reviewDefaultsByKind.plan?.reviewers).toHaveLength(1);
     expect(result.preferences.reviewDefaultsByKind.code).toBeNull();
   });
