@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS worktree_retention_policy (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     max_materialized_worktrees_per_repo INTEGER NOT NULL
-        CHECK (max_materialized_worktrees_per_repo BETWEEN 1 AND 100),
+        CHECK (max_materialized_worktrees_per_repo BETWEEN 10 AND 100),
     updated_at TEXT NOT NULL
 );
 

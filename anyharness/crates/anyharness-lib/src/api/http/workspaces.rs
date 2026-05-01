@@ -732,6 +732,20 @@ pub async fn retry_purge_workspace(
     Path(workspace_id): Path<String>,
 ) -> Result<Json<WorkspacePurgeResponse>, ApiError> {
     let preflight = Some(build_purge_preflight(&state, &workspace_id).await?);
+    if let Some(preflight) = preflight.as_ref() {
+        if !preflight.can_purge {
+            let workspace = workspace_contract_by_id(&state, &workspace_id).await?;
+            return Ok(Json(WorkspacePurgeResponse {
+                outcome: WorkspacePurgeOutcome::Blocked,
+                workspace: Some(workspace),
+                preflight: Some(preflight.clone()),
+                already_deleted: false,
+                cleanup_attempted: false,
+                cleanup_succeeded: false,
+                cleanup_message: None,
+            }));
+        }
+    }
     purge_response_from_service_outcome(
         &state,
         preflight,
@@ -1038,27 +1052,6 @@ async fn build_purge_preflight(
         .check_workspace(workspace.clone(), RetirePreflightMode::Purge)
         .await
         .map_err(|error| ApiError::internal(error.to_string()))?;
-    let mut blockers = preflight.blockers;
-    if workspace.kind != "worktree" || workspace.surface != "standard" {
-        blockers.push(WorkspaceRetireBlocker {
-            code: WorkspaceRetireBlockerCode::UnsupportedWorkspace,
-            message: "Purge is only available for standard worktree workspaces.".to_string(),
-            severity: WorkspaceRetireBlockerSeverity::Blocking,
-            retryable: false,
-            session_id: None,
-            terminal_id: None,
-            command_run_id: None,
-            path: Some(workspace.path.clone()),
-            paths: None,
-            operation: None,
-        });
-    }
-    let can_purge = blockers.is_empty()
-        && workspace.kind == "worktree"
-        && workspace.surface == "standard"
-        && (workspace.lifecycle_state == "active"
-            || workspace.cleanup_operation.as_deref() == Some("purge")
-            || workspace.cleanup_state == "complete");
     Ok(WorkspacePurgePreflightResponse {
         workspace_id: workspace.id,
         workspace_kind: workspace_kind_to_contract(&workspace.kind),
@@ -1067,9 +1060,9 @@ async fn build_purge_preflight(
         cleanup_operation: workspace_cleanup_operation_to_contract(
             workspace.cleanup_operation.as_deref(),
         ),
-        can_purge,
+        can_purge: preflight.can_purge,
         materialized: preflight.materialized,
-        blockers,
+        blockers: preflight.blockers,
     })
 }
 
@@ -1287,6 +1280,90 @@ mod tests {
         assert!(preflight.blockers.is_empty());
     }
 
+    #[tokio::test(flavor = "current_thread")]
+    async fn purge_preflight_allows_dirty_active_workspace() {
+        let checkout = TempDirGuard::new("purge-dirty-active");
+        run_git(checkout.path(), ["init"]);
+        std::fs::write(checkout.path().join("dirty.txt"), "delete me").expect("write dirty file");
+
+        let state = test_state("purge-dirty-active");
+        let workspace = workspace_record_with_path(
+            "workspace-dirty-active",
+            "active",
+            "none",
+            None,
+            checkout.path().to_string_lossy().as_ref(),
+        );
+        WorkspaceStore::new(state.db.clone())
+            .insert(&workspace)
+            .expect("insert workspace");
+
+        let preflight = match build_purge_preflight(&state, &workspace.id).await {
+            Ok(preflight) => preflight,
+            Err(_) => panic!("purge preflight failed"),
+        };
+
+        assert!(preflight.can_purge);
+        assert!(preflight.blockers.iter().all(|blocker| {
+            blocker.code != WorkspaceRetireBlockerCode::DirtyWorkingTree
+                && blocker.code != WorkspaceRetireBlockerCode::ConflictedFiles
+                && blocker.code != WorkspaceRetireBlockerCode::ActiveGitOperation
+        }));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn purge_preflight_reports_single_unsupported_workspace_blocker() {
+        let state = test_state("purge-unsupported");
+        let workspace = workspace_record_with_kind_surface(
+            "workspace-local",
+            "local",
+            "standard",
+            "active",
+            "none",
+            None,
+            "/tmp/anyharness-local-workspace",
+        );
+        WorkspaceStore::new(state.db.clone())
+            .insert(&workspace)
+            .expect("insert workspace");
+
+        let preflight = match build_purge_preflight(&state, &workspace.id).await {
+            Ok(preflight) => preflight,
+            Err(_) => panic!("purge preflight failed"),
+        };
+
+        assert!(!preflight.can_purge);
+        assert_eq!(preflight.blockers.len(), 1);
+        assert_eq!(
+            preflight.blockers[0].message,
+            "Purge is only available for standard worktree workspaces."
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn purge_preflight_still_blocks_active_workspace_operations() {
+        let state = test_state("purge-active-operation");
+        let workspace = workspace_record("workspace-active-operation", "active", "none", None);
+        WorkspaceStore::new(state.db.clone())
+            .insert(&workspace)
+            .expect("insert workspace");
+        let _lease = state
+            .workspace_operation_gate
+            .acquire_shared(&workspace.id, WorkspaceOperationKind::ProcessRun)
+            .await;
+
+        let preflight = match build_purge_preflight(&state, &workspace.id).await {
+            Ok(preflight) => preflight,
+            Err(_) => panic!("purge preflight failed"),
+        };
+
+        assert!(!preflight.can_purge);
+        assert!(preflight
+            .blockers
+            .iter()
+            .any(|blocker| blocker.code == WorkspaceRetireBlockerCode::RunningCommand));
+    }
+
     fn test_state(name: &str) -> AppState {
         let _lock = test_support::ENV_MUTEX
             .get_or_init(|| Mutex::new(()))
@@ -1310,13 +1387,49 @@ mod tests {
         cleanup_state: &str,
         cleanup_operation: Option<&str>,
     ) -> WorkspaceRecord {
+        workspace_record_with_path(
+            id,
+            lifecycle_state,
+            cleanup_state,
+            cleanup_operation,
+            &format!("/tmp/anyharness-nonexistent-{id}"),
+        )
+    }
+
+    fn workspace_record_with_path(
+        id: &str,
+        lifecycle_state: &str,
+        cleanup_state: &str,
+        cleanup_operation: Option<&str>,
+        path: &str,
+    ) -> WorkspaceRecord {
+        workspace_record_with_kind_surface(
+            id,
+            "worktree",
+            "standard",
+            lifecycle_state,
+            cleanup_state,
+            cleanup_operation,
+            path,
+        )
+    }
+
+    fn workspace_record_with_kind_surface(
+        id: &str,
+        kind: &str,
+        surface: &str,
+        lifecycle_state: &str,
+        cleanup_state: &str,
+        cleanup_operation: Option<&str>,
+        path: &str,
+    ) -> WorkspaceRecord {
         WorkspaceRecord {
             id: id.to_string(),
-            kind: "worktree".to_string(),
+            kind: kind.to_string(),
             repo_root_id: None,
-            path: format!("/tmp/anyharness-nonexistent-{id}"),
-            surface: "standard".to_string(),
-            source_repo_root_path: format!("/tmp/anyharness-source-{id}"),
+            path: path.to_string(),
+            surface: surface.to_string(),
+            source_repo_root_path: path.to_string(),
             source_workspace_id: None,
             git_provider: None,
             git_owner: None,
@@ -1334,6 +1447,46 @@ mod tests {
             cleanup_attempted_at: None,
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    fn run_git<const N: usize>(cwd: &std::path::Path, args: [&str; N]) {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(cwd)
+            .args(args)
+            .output()
+            .expect("run git");
+        assert!(
+            output.status.success(),
+            "git failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    struct TempDirGuard {
+        path: PathBuf,
+    }
+
+    impl TempDirGuard {
+        fn new(name: &str) -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "anyharness-{name}-{}-{}",
+                std::process::id(),
+                chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+            ));
+            std::fs::create_dir_all(&path).expect("temp dir");
+            Self { path }
+        }
+
+        fn path(&self) -> &std::path::Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDirGuard {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
         }
     }
 }

@@ -3,7 +3,7 @@ use rusqlite::{params, OptionalExtension};
 use crate::persistence::Db;
 
 pub const DEFAULT_MAX_MATERIALIZED_WORKTREES_PER_REPO: u32 = 20;
-pub const MIN_MAX_MATERIALIZED_WORKTREES_PER_REPO: u32 = 1;
+pub const MIN_MAX_MATERIALIZED_WORKTREES_PER_REPO: u32 = 10;
 pub const MAX_MAX_MATERIALIZED_WORKTREES_PER_REPO: u32 = 100;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,16 +138,17 @@ mod tests {
         let db = Db::open_in_memory().expect("open db");
         let store = WorktreeRetentionPolicyStore::new(db);
 
-        let updated = store.update_policy(7).expect("update policy");
-        assert_eq!(updated.max_materialized_worktrees_per_repo, 7);
+        let updated = store.update_policy(10).expect("update policy");
+        assert_eq!(updated.max_materialized_worktrees_per_repo, 10);
         assert_eq!(
             store
                 .get_policy()
                 .expect("policy")
                 .max_materialized_worktrees_per_repo,
-            7
+            10
         );
 
+        assert!(store.update_policy(9).is_err());
         assert!(store.update_policy(0).is_err());
         assert!(store
             .update_policy(MAX_MAX_MATERIALIZED_WORKTREES_PER_REPO + 1)

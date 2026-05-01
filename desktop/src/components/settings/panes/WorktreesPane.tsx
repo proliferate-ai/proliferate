@@ -6,15 +6,17 @@ import { GitBranch, RefreshCw, Trash } from "@/components/ui/icons";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import {
+  EnvironmentField,
   EnvironmentPanel,
   EnvironmentPanelRow,
   EnvironmentSection,
-} from "@/components/settings/EnvironmentSettingsLayout";
+} from "@/components/ui/EnvironmentLayout";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import {
   useWorktreeSettingsTargets,
   type WorktreeSettingsTargetState,
 } from "@/hooks/workspaces/use-worktree-settings-targets";
+import { worktreeSettingsActionFailureMessage } from "@/lib/domain/workspaces/worktree-settings-actions";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 const EMPTY_ROWS: WorktreeInventoryRow[] = [];
@@ -38,6 +40,11 @@ export function WorktreesPane() {
         showToast("Cleanup is already running.");
         return;
       }
+      const failureMessage = worktreeSettingsActionFailureMessage(result);
+      if (failureMessage) {
+        showToast(failureMessage);
+        return;
+      }
       showToast(success);
     }).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -48,8 +55,8 @@ export function WorktreesPane() {
   return (
     <section className="space-y-6">
       <SettingsPageHeader
-        title="Worktrees"
-        description="Review checkout materialization and remove worktree state that is no longer needed."
+        title="Worktree storage"
+        description="Recommended for most users. Automatic cleanup only removes clean Proliferate-managed checkouts; it does not snapshot, push, or back up work before deleting a checkout."
       />
 
       {settings.targets.length === 0 ? (
@@ -95,7 +102,7 @@ export function WorktreesPane() {
       <ConfirmationDialog
         open={confirmDelete !== null}
         title="Delete workspace history?"
-        description="This removes the workspace checkout and AnyHarness workspace/session history from the owning runtime. Git branches are preserved."
+        description="This removes the workspace checkout, AnyHarness workspace/session history, and local agent artifacts from the owning runtime. Uncommitted changes in the checkout will be lost. Git commits, branches, and pull requests are preserved."
         confirmLabel="Delete"
         confirmVariant="destructive"
         onClose={() => setConfirmDelete(null)}
@@ -134,38 +141,53 @@ function RuntimeWorktreesSection({
 }) {
   const policy = targetState.policy;
   const rows = targetState.inventory?.rows ?? EMPTY_ROWS;
-  const [draftValue, setDraftValue] = useState("");
+  const [draftValue, setDraftValue] = useState<string | null>(null);
   const currentValue = policy?.maxMaterializedWorktreesPerRepo ?? 20;
-  const parsedDraft = Number.parseInt(draftValue, 10);
-  const nextValue = Number.isFinite(parsedDraft) ? parsedDraft : currentValue;
+  const effectiveValue = draftValue ?? String(currentValue);
+  const parsedDraft = Number.parseInt(effectiveValue, 10);
+  const canApply = Number.isInteger(parsedDraft) && parsedDraft >= 10 && parsedDraft <= 100;
 
   return (
     <EnvironmentSection
-      title={`${targetState.target.label} ${targetState.target.location === "cloud" ? "(cloud)" : "(local)"}`}
+      title={targetState.target.label}
+      description={targetState.target.location === "cloud" ? "Cloud runtime" : "Local runtime"}
     >
       <EnvironmentPanel>
         <EnvironmentPanelRow>
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="w-full max-w-56 space-y-1.5">
-              <Label htmlFor={`worktree-policy-${targetState.target.key}`}>Max active checkouts per repo</Label>
-              <Input
-                id={`worktree-policy-${targetState.target.key}`}
-                type="number"
-                min={1}
-                max={100}
-                value={draftValue || String(currentValue)}
-                onChange={(event) => setDraftValue(event.target.value)}
-              />
-            </div>
+            <EnvironmentField
+              label="Automatic cleanup"
+              description="When a repo has more managed checkouts than the limit below, Proliferate retires the oldest clean checkouts first. Workspace and session history stay available unless you explicitly delete the workspace."
+            >
+              <div className="w-full max-w-64 space-y-1.5">
+                <Label htmlFor={`worktree-policy-${targetState.target.key}`}>Auto-delete limit</Label>
+                <Input
+                  id={`worktree-policy-${targetState.target.key}`}
+                  type="number"
+                  min={10}
+                  max={100}
+                  value={effectiveValue}
+                  onChange={(event) => setDraftValue(event.target.value)}
+                />
+                <p className="text-xs leading-4 text-muted-foreground">
+                  Default is 20 active checkouts per repo; minimum is 10. Commits, branches, and
+                  pull requests are preserved by Git; uncommitted work is not saved, so dirty
+                  worktrees are skipped.
+                </p>
+              </div>
+            </EnvironmentField>
             <div className="flex shrink-0 gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={nextValue < 1 || nextValue > 100}
+                disabled={!canApply}
                 onClick={() => {
-                  onUpdatePolicy(nextValue);
-                  setDraftValue("");
+                  if (!canApply) {
+                    return;
+                  }
+                  onUpdatePolicy(parsedDraft);
+                  setDraftValue(null);
                 }}
               >
                 Apply
@@ -175,6 +197,17 @@ function RuntimeWorktreesSection({
                 Run cleanup
               </Button>
             </div>
+          </div>
+        </EnvironmentPanelRow>
+      </EnvironmentPanel>
+
+      <EnvironmentPanel>
+        <EnvironmentPanelRow>
+          <div className="space-y-1">
+            <h3 className="text-sm font-medium text-foreground">Current worktrees</h3>
+            <p className="text-sm text-muted-foreground">
+              Review managed checkouts, orphaned paths, and workspace history in this runtime.
+            </p>
           </div>
         </EnvironmentPanelRow>
         {targetState.isLoading ? (

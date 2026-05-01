@@ -6,6 +6,7 @@ use crate::sessions::store::SessionStore;
 use crate::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::operation_gate::WorkspaceOperationGate;
+use crate::workspaces::retire_preflight::{RetirePreflightChecker, RetirePreflightMode};
 use crate::workspaces::runtime::WorkspaceRuntime;
 use crate::workspaces::store::WorkspaceStore;
 
@@ -32,6 +33,7 @@ pub struct WorkspacePurgeService {
     session_store: SessionStore,
     operation_gate: Arc<WorkspaceOperationGate>,
     checkout_gate: Arc<CheckoutDeletionGate>,
+    preflight_checker: Arc<RetirePreflightChecker>,
 }
 
 impl WorkspacePurgeService {
@@ -41,6 +43,7 @@ impl WorkspacePurgeService {
         session_store: SessionStore,
         operation_gate: Arc<WorkspaceOperationGate>,
         checkout_gate: Arc<CheckoutDeletionGate>,
+        preflight_checker: Arc<RetirePreflightChecker>,
     ) -> Self {
         Self {
             workspace_runtime,
@@ -48,6 +51,7 @@ impl WorkspacePurgeService {
             session_store,
             operation_gate,
             checkout_gate,
+            preflight_checker,
         }
     }
 
@@ -56,33 +60,6 @@ impl WorkspacePurgeService {
         workspace_id: &str,
         retry_only: bool,
     ) -> anyhow::Result<WorkspacePurgeServiceOutcome> {
-        let Some(workspace) = self.workspace_runtime.get_workspace(workspace_id)? else {
-            return Ok(WorkspacePurgeServiceOutcome::Deleted {
-                already_deleted: true,
-                cleanup_attempted: false,
-            });
-        };
-
-        if workspace.kind != "worktree" || workspace.surface != "standard" {
-            return Ok(WorkspacePurgeServiceOutcome::Blocked {
-                workspace,
-                message: "purge is only available for standard worktree workspaces".to_string(),
-            });
-        }
-
-        if retry_only {
-            let is_retryable_purge = workspace.lifecycle_state == "retired"
-                && matches!(workspace.cleanup_state.as_str(), "pending" | "failed")
-                && workspace.cleanup_operation.as_deref() == Some("purge");
-            if !is_retryable_purge {
-                return Ok(WorkspacePurgeServiceOutcome::Blocked {
-                    workspace,
-                    message: "purge retry is only available for pending or failed purge tombstones"
-                        .to_string(),
-                });
-            }
-        }
-
         let _workspace_lease = self.operation_gate.acquire_exclusive(workspace_id).await;
         let Some(workspace) = self.workspace_runtime.get_workspace(workspace_id)? else {
             return Ok(WorkspacePurgeServiceOutcome::Deleted {
@@ -90,6 +67,25 @@ impl WorkspacePurgeService {
                 cleanup_attempted: false,
             });
         };
+        if retry_only && !is_retryable_purge(&workspace) {
+            return Ok(WorkspacePurgeServiceOutcome::Blocked {
+                workspace,
+                message: "purge retry is only available for pending or failed purge tombstones"
+                    .to_string(),
+            });
+        }
+        let preflight = self
+            .preflight_checker
+            .check_workspace(workspace.clone(), RetirePreflightMode::Purge)
+            .await?;
+        // HTTP preflight is advisory for response shape; this under-lease pass
+        // is the authoritative race-sensitive safety check.
+        if !preflight.can_purge {
+            return Ok(WorkspacePurgeServiceOutcome::Blocked {
+                workspace,
+                message: display_preflight_message(&preflight.blockers),
+            });
+        }
         let Some(_path_lease) = self.acquire_checkout_lease(&workspace) else {
             return Ok(WorkspacePurgeServiceOutcome::Blocked {
                 workspace,
@@ -208,4 +204,19 @@ impl WorkspacePurgeService {
             }
         }
     }
+}
+
+fn is_retryable_purge(workspace: &WorkspaceRecord) -> bool {
+    workspace.lifecycle_state == "retired"
+        && matches!(workspace.cleanup_state.as_str(), "pending" | "failed")
+        && workspace.cleanup_operation.as_deref() == Some("purge")
+}
+
+fn display_preflight_message(
+    blockers: &[anyharness_contract::v1::WorkspaceRetireBlocker],
+) -> String {
+    blockers
+        .first()
+        .map(|blocker| blocker.message.clone())
+        .unwrap_or_else(|| "workspace is not ready to delete".to_string())
 }

@@ -10,6 +10,8 @@ import type {
   UpdateWorktreeRetentionPolicyRequest,
   WorktreeInventoryResponse,
   WorktreeRetentionPolicy,
+  WorkspacePurgeResponse,
+  WorkspaceRetireResponse,
 } from "@anyharness/sdk";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -178,17 +180,29 @@ export function useWorktreeSettingsTargets() {
       await clientForTarget(target).worktrees.pruneOrphan(input);
       await refreshTarget(target);
     },
-    pruneWorkspaceCheckout: async (target: WorktreeSettingsTarget, workspaceId: string) => {
-      await clientForTarget(target).workspaces.retire(workspaceId);
+    pruneWorkspaceCheckout: async (
+      target: WorktreeSettingsTarget,
+      workspaceId: string,
+    ): Promise<WorkspaceRetireResponse> => {
+      const result = await clientForTarget(target).workspaces.retire(workspaceId);
       await refreshTarget(target);
+      return result;
     },
-    purgeWorkspace: async (target: WorktreeSettingsTarget, workspaceId: string) => {
-      await clientForTarget(target).workspaces.purge(workspaceId);
+    purgeWorkspace: async (
+      target: WorktreeSettingsTarget,
+      workspaceId: string,
+    ): Promise<WorkspacePurgeResponse> => {
+      const result = await clientForTarget(target).workspaces.purge(workspaceId);
       await refreshTarget(target);
+      return result;
     },
-    retryPurge: async (target: WorktreeSettingsTarget, workspaceId: string) => {
-      await clientForTarget(target).workspaces.retryPurge(workspaceId);
+    retryPurge: async (
+      target: WorktreeSettingsTarget,
+      workspaceId: string,
+    ): Promise<WorkspacePurgeResponse> => {
+      const result = await clientForTarget(target).workspaces.retryPurge(workspaceId);
       await refreshTarget(target);
+      return result;
     },
   };
 }

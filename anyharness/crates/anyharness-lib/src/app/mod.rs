@@ -156,13 +156,6 @@ impl AppState {
             TerminalStore::new(db.clone()),
             runtime_home.clone(),
         ));
-        let workspace_purge_service = Arc::new(WorkspacePurgeService::new(
-            workspace_runtime.clone(),
-            WorkspaceStore::new(db.clone()),
-            SessionStore::new(db.clone()),
-            workspace_operation_gate.clone(),
-            checkout_deletion_gate.clone(),
-        ));
         let worktree_inventory_service = Arc::new(WorktreeInventoryService::new(
             WorkspaceStore::new(db.clone()),
             SessionStore::new(db.clone()),
@@ -256,6 +249,14 @@ impl AppState {
             session_runtime.clone(),
             session_service.clone(),
             terminal_service.clone(),
+        ));
+        let workspace_purge_service = Arc::new(WorkspacePurgeService::new(
+            workspace_runtime.clone(),
+            WorkspaceStore::new(db.clone()),
+            SessionStore::new(db.clone()),
+            workspace_operation_gate.clone(),
+            checkout_deletion_gate.clone(),
+            retire_preflight_checker.clone(),
         ));
         let workspace_retention_service = Arc::new(WorkspaceRetentionService::new(
             workspace_runtime.clone(),
