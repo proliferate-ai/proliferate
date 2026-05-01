@@ -1,34 +1,18 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/Button";
 import { Pencil, X } from "@/components/ui/icons";
-import type { ContentPart, PromptProvenance } from "@anyharness/sdk";
 import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
 import { useQueuedPromptEditReader } from "@/hooks/chat/use-queued-prompt-edit";
 import { useDeletePendingPrompt } from "@/hooks/sessions/use-delete-pending-prompt";
-import { PromptContentRenderer } from "@/components/workspace/chat/content/PromptContentRenderer";
-import { ReviewFeedbackSummary } from "@/components/workspace/reviews/ReviewFeedbackSummary";
 import {
-  formatWakePromptQueueText,
-  resolveReviewFeedbackPromptReference,
-  isSubagentWakeProvenance,
-} from "@/lib/domain/chat/subagents/provenance";
-import { useSessionSelectionActions } from "@/hooks/sessions/use-session-selection-actions";
-import { useToastStore } from "@/stores/toast/toast-store";
-
-export interface PendingPromptListEntry {
-  seq: number;
-  text: string;
-  contentParts: ContentPart[];
-  isBeingEdited: boolean;
-  promptProvenance?: PromptProvenance | null;
-}
+  derivePendingPromptQueueRow,
+  type PendingPromptQueueRow,
+} from "@/lib/domain/chat/pending-prompt-queue";
 
 export interface PendingPromptListProps {
-  sessionId: string | null;
-  entries: PendingPromptListEntry[];
-  onBeginEdit: (args: { seq: number; text: string }) => void;
+  entries: PendingPromptQueueRow[];
+  onBeginEdit: (seq: number) => void;
   onDelete: (seq: number) => void;
-  onOpenSession?: (sessionId: string) => void;
 }
 
 /**
@@ -38,11 +22,9 @@ export interface PendingPromptListProps {
  * store and the pending-prompt projection.
  */
 export function PendingPromptList({
-  sessionId,
   entries,
   onBeginEdit,
   onDelete,
-  onOpenSession,
 }: PendingPromptListProps) {
   if (entries.length === 0) {
     return null;
@@ -57,11 +39,9 @@ export function PendingPromptList({
       {entries.map((entry) => (
         <PendingPromptRow
           key={entry.seq}
-          sessionId={sessionId}
           entry={entry}
           onBeginEdit={onBeginEdit}
           onDelete={onDelete}
-          onOpenSession={onOpenSession}
         />
       ))}
     </div>
@@ -72,8 +52,10 @@ export function ConnectedPendingPromptList() {
   const { activeSessionId } = useActiveChatSessionState();
   const { visiblePendingPrompts, beginEdit } = useQueuedPromptEditReader();
   const deletePendingPrompt = useDeletePendingPrompt();
-  const { selectSession } = useSessionSelectionActions();
-  const showToast = useToastStore((state) => state.show);
+  const rows = useMemo(
+    () => visiblePendingPrompts.map(derivePendingPromptQueueRow),
+    [visiblePendingPrompts],
+  );
 
   const handleDelete = useCallback(
     (seq: number) => {
@@ -82,11 +64,14 @@ export function ConnectedPendingPromptList() {
     },
     [activeSessionId, deletePendingPrompt],
   );
-  const handleOpenSession = useCallback((sessionId: string) => {
-    void selectSession(sessionId).catch((error) => {
-      showToast(`Failed to open reviewer session: ${errorMessage(error)}`);
-    });
-  }, [selectSession, showToast]);
+  const handleBeginEdit = useCallback(
+    (seq: number) => {
+      const entry = visiblePendingPrompts.find((candidate) => candidate.seq === seq);
+      if (!entry) return;
+      beginEdit({ seq: entry.seq, text: entry.text });
+    },
+    [beginEdit, visiblePendingPrompts],
+  );
 
   if (!activeSessionId) {
     return null;
@@ -94,120 +79,73 @@ export function ConnectedPendingPromptList() {
 
   return (
     <PendingPromptList
-      entries={visiblePendingPrompts}
-      sessionId={activeSessionId}
-      onBeginEdit={beginEdit}
+      entries={rows}
+      onBeginEdit={handleBeginEdit}
       onDelete={handleDelete}
-      onOpenSession={handleOpenSession}
     />
   );
 }
 
 interface PendingPromptRowProps {
-  entry: PendingPromptListEntry;
-  sessionId: string | null;
-  onBeginEdit: (args: { seq: number; text: string }) => void;
+  entry: PendingPromptQueueRow;
+  onBeginEdit: (seq: number) => void;
   onDelete: (seq: number) => void;
-  onOpenSession?: (sessionId: string) => void;
 }
 
 function PendingPromptRow({
   entry,
-  sessionId,
   onBeginEdit,
   onDelete,
-  onOpenSession,
 }: PendingPromptRowProps) {
-  const { seq, text, isBeingEdited } = entry;
-  const hasStructuredAttachments = entry.contentParts.some((part) => part.type !== "text");
-  const wakeProvenance = isSubagentWakeProvenance(entry.promptProvenance)
-    ? entry.promptProvenance
-    : null;
-  const reviewFeedbackReference = resolveReviewFeedbackPromptReference(
-    entry.promptProvenance,
-    entry.text,
-  );
+  const { seq, label, isBeingEdited, canEdit, canDelete } = entry;
+  const showEditAction = canEdit && !isBeingEdited;
 
   const handleBeginEdit = useCallback(() => {
-    if (hasStructuredAttachments) {
-      return;
-    }
-    onBeginEdit({ seq, text });
-  }, [hasStructuredAttachments, onBeginEdit, seq, text]);
+    if (!showEditAction) return;
+    onBeginEdit(seq);
+  }, [onBeginEdit, seq, showEditAction]);
 
   const handleDelete = useCallback(() => {
     onDelete(seq);
   }, [onDelete, seq]);
 
-  if (wakeProvenance) {
-    return (
-      <div className="flex items-center rounded-md px-2 py-1 text-sm text-foreground">
-        <div className="min-w-0 flex-1 truncate text-sm leading-snug text-foreground/90">
-          {formatWakePromptQueueText(wakeProvenance)}
-        </div>
-      </div>
-    );
-  }
-
-  if (reviewFeedbackReference) {
-    return (
-      <ReviewFeedbackSummary
-        reference={reviewFeedbackReference}
-        sessionId={sessionId}
-        state="queued"
-        onOpenSession={onOpenSession}
-      />
-    );
-  }
-
   return (
     <div className="flex items-center gap-2 rounded-md px-2 py-1 text-sm text-foreground hover:bg-muted/40">
       <div
-        className={`min-w-0 flex-1 text-sm leading-snug text-foreground/90 ${
+        className={`min-w-0 flex-1 truncate text-sm leading-snug text-foreground/90 ${
           isBeingEdited ? "pointer-events-none opacity-60" : ""
         }`}
+        title={label}
       >
-        <PromptContentRenderer
-          sessionId={sessionId}
-          parts={entry.contentParts}
-          fallbackText={text}
-          compact
-        />
+        {label}
       </div>
       {isBeingEdited ? (
         <div className="shrink-0 text-xs italic text-muted-foreground">
           editing in composer…
         </div>
-      ) : (
+      ) : showEditAction ? (
         <Button
           variant="ghost"
           size="icon-sm"
-          disabled={hasStructuredAttachments}
           onClick={handleBeginEdit}
           className="shrink-0 opacity-60 hover:opacity-100"
-          aria-label={hasStructuredAttachments
-            ? "Queued messages with attachments cannot be edited"
-            : "Edit queued message"}
-          title={hasStructuredAttachments
-            ? "Queued messages with attachments cannot be edited"
-            : "Edit queued message"}
+          aria-label="Edit queued message"
+          title="Edit queued message"
         >
           <Pencil className="size-3.5" />
         </Button>
+      ) : null}
+      {canDelete && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={handleDelete}
+          className="shrink-0 opacity-60 hover:opacity-100"
+          aria-label="Delete queued message"
+        >
+          <X className="size-3.5" />
+        </Button>
       )}
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        onClick={handleDelete}
-        className="shrink-0 opacity-60 hover:opacity-100"
-        aria-label="Delete queued message"
-      >
-        <X className="size-3.5" />
-      </Button>
     </div>
   );
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

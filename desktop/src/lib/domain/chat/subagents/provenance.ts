@@ -99,6 +99,31 @@ export function formatReviewFeedbackTranscriptText(
     : "Agents critiqued the plan";
 }
 
+export function formatReviewFeedbackQueueText(args: {
+  provenance: PromptProvenance | null | undefined;
+  text: string | null | undefined;
+}): string | null {
+  if (!isReviewFeedbackQueueProvenance(args.provenance)) {
+    return null;
+  }
+
+  const label = args.provenance.type === "system"
+    ? null
+    : args.provenance.label?.trim();
+  if (label) {
+    return label;
+  }
+
+  const firstLine = args.text?.split(/\r?\n/u)[0]?.trim();
+  if (firstLine === "Review is complete.") {
+    return "Review complete";
+  }
+  if (firstLine === "Review feedback is ready.") {
+    return "Review feedback ready";
+  }
+  return "Review feedback ready";
+}
+
 export function isAgentSessionProvenance(
   provenance: PromptProvenance | null | undefined,
 ): provenance is Extract<PromptProvenance, { type: "agentSession" }> {
@@ -133,6 +158,13 @@ function parseLegacyReviewFeedbackPrompt(
     reviewRunId,
     roundNumber: Number.isFinite(roundNumber) ? roundNumber : null,
   };
+}
+
+function isReviewFeedbackQueueProvenance(
+  provenance: PromptProvenance | null | undefined,
+): provenance is ReviewFeedbackPromptProvenance | Extract<PromptProvenance, { type: "system" }> {
+  return isReviewFeedbackProvenance(provenance)
+    || (provenance?.type === "system" && provenance.label === "review_feedback");
 }
 
 function formatWakeStatus(outcome: string | null | undefined): string {

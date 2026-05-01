@@ -11,6 +11,8 @@ export type ScenarioKey =
   | "pending-prompts-multi"
   | "pending-prompts-editing"
   | "pending-prompts-with-approval"
+  | "pending-review-feedback-ready"
+  | "pending-review-complete"
   | "file-mention-search"
   | "workspace-arrival-created"
   | "cloud-first-runtime"
@@ -86,6 +88,8 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "pending-prompts-multi": { label: "Queue (3 rows)" },
   "pending-prompts-editing": { label: "Queue (editing row)" },
   "pending-prompts-with-approval": { label: "Queue + approval" },
+  "pending-review-feedback-ready": { label: "Queue review feedback" },
+  "pending-review-complete": { label: "Queue review complete" },
   "file-mention-search": { label: "File mention search" },
   "workspace-arrival-created": { label: "Workspace arrival" },
   "cloud-first-runtime": { label: "Cloud first runtime" },
