@@ -14130,6 +14130,7 @@
         "type": "string",
         "enum": [
           "unsupported_workspace",
+          "workspace_access_blocked",
           "dirty_working_tree",
           "conflicted_files",
           "active_git_operation",

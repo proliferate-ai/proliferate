@@ -56,6 +56,16 @@ impl WorkspaceService {
                 );
                 return self.reconcile_current_branch(existing);
             }
+            if let Some(retired) = self
+                .store
+                .find_retired_incomplete_cleanup_by_path_and_kind(workspace_path, "worktree")?
+            {
+                anyhow::bail!(
+                    "workspace path still has pending cleanup from retired workspace {}: {}",
+                    retired.id,
+                    workspace_path
+                );
+            }
 
             let remote = ctx
                 .remote_url
@@ -183,6 +193,27 @@ impl WorkspaceService {
             .as_deref()
             .and_then(resolver::parse_remote_url);
 
+        let workspace_kind = if ctx.is_worktree { "worktree" } else { "local" };
+        if self
+            .store
+            .find_active_by_path_and_kind(workspace_path, workspace_kind)?
+            .is_some()
+        {
+            anyhow::bail!("a workspace record already exists for path: {workspace_path}");
+        }
+        if ctx.is_worktree {
+            if let Some(retired) = self
+                .store
+                .find_retired_incomplete_cleanup_by_path_and_kind(workspace_path, "worktree")?
+            {
+                anyhow::bail!(
+                    "workspace path still has pending cleanup from retired workspace {}: {}",
+                    retired.id,
+                    workspace_path
+                );
+            }
+        }
+
         let now = chrono::Utc::now().to_rfc3339();
 
         let record = if ctx.is_worktree {
@@ -304,6 +335,16 @@ impl WorkspaceService {
 
         if self.store.find_active_by_path(&canonical_str)?.is_some() {
             anyhow::bail!("a workspace record already exists for path: {canonical_str}");
+        }
+        if let Some(retired) = self
+            .store
+            .find_retired_incomplete_cleanup_by_path_and_kind(&canonical_str, "worktree")?
+        {
+            anyhow::bail!(
+                "workspace path still has pending cleanup from retired workspace {}: {}",
+                retired.id,
+                canonical_str
+            );
         }
 
         resolver::create_git_worktree(
@@ -833,6 +874,29 @@ mod tests {
 
         assert_eq!(workspace.kind, "local");
         assert!(workspace.source_workspace_id.is_some());
+    }
+
+    #[test]
+    fn create_workspace_rejects_existing_active_path() {
+        let repo_root = TempDirGuard::new("create-local-existing-root");
+        let runtime_home = TempDirGuard::new("create-local-existing-runtime");
+        init_repo(repo_root.path());
+
+        let db = Db::open_in_memory().expect("open db");
+        let service = make_service(&db, runtime_home.path());
+        let path = repo_root.path().display().to_string();
+
+        let first = service.create_workspace(&path).expect("create workspace");
+        let error = match service.create_workspace(&path) {
+            Ok(_) => panic!("second create should reject existing path"),
+            Err(error) => error,
+        };
+
+        assert!(error
+            .to_string()
+            .contains("a workspace record already exists for path"));
+        let resolved = service.resolve_from_path(&path).expect("resolve existing");
+        assert_eq!(resolved.id, first.id);
     }
 
     #[test]

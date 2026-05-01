@@ -33,7 +33,7 @@ export function useWorkspaceRetireActions() {
       const client = getAnyHarnessClient({ runtimeUrl });
       const result = await client.workspaces.retire(workspaceId);
       await refresh();
-      if (result.outcome === "retired" || result.outcome === "already_retired") {
+      if (result.workspace.lifecycleState === "retired") {
         clearFinishSuggestionDismissal(workspaceId);
         const selectedWorkspaceId = useHarnessStore.getState().selectedWorkspaceId;
         const selectedLogicalWorkspaceId =

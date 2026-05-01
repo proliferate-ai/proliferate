@@ -29,6 +29,7 @@ use crate::origin::OriginContext;
 use crate::repo_roots::model::RepoRootRecord;
 use crate::sessions::execution_summary::idle_workspace_execution_summary;
 use crate::terminals::model::TerminalStatus;
+use crate::workspaces::access_gate::WorkspaceAccessError;
 use crate::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
@@ -321,13 +322,15 @@ pub async fn retire_workspace(
         })?;
     if current.lifecycle_state == "retired" {
         let preflight = build_retire_preflight(&state, &workspace_id).await?;
+        let cleanup_succeeded = current.cleanup_state == "complete";
+        let cleanup_message = retired_cleanup_message(&current);
         return Ok(Json(WorkspaceRetireResponse {
             workspace: workspace_to_contract(&state, current).await?,
             outcome: WorkspaceRetireOutcome::AlreadyRetired,
             preflight,
             cleanup_attempted: false,
-            cleanup_succeeded: true,
-            cleanup_message: None,
+            cleanup_succeeded,
+            cleanup_message,
         }));
     }
 
@@ -357,17 +360,35 @@ pub async fn retire_workspace(
         })?;
     if workspace.lifecycle_state == "retired" {
         let preflight = build_retire_preflight(&state, &workspace_id).await?;
+        let cleanup_succeeded = workspace.cleanup_state == "complete";
+        let cleanup_message = retired_cleanup_message(&workspace);
         return Ok(Json(WorkspaceRetireResponse {
             workspace: workspace_to_contract(&state, workspace).await?,
             outcome: WorkspaceRetireOutcome::AlreadyRetired,
             preflight,
             cleanup_attempted: false,
-            cleanup_succeeded: true,
+            cleanup_succeeded,
+            cleanup_message,
+        }));
+    }
+    if state
+        .workspace_access_gate
+        .assert_can_mutate_for_workspace(&workspace_id)
+        .is_err()
+    {
+        let preflight = build_retire_preflight(&state, &workspace_id).await?;
+        let workspace = workspace_contract_by_id(&state, &workspace_id).await?;
+        return Ok(Json(WorkspaceRetireResponse {
+            workspace,
+            outcome: WorkspaceRetireOutcome::Blocked,
+            preflight,
+            cleanup_attempted: false,
+            cleanup_succeeded: false,
             cleanup_message: None,
         }));
     }
 
-    let preflight = build_retire_preflight(&state, &workspace_id).await?;
+    let mut preflight = build_retire_preflight(&state, &workspace_id).await?;
     if !preflight.can_retire {
         let workspace = workspace_contract_by_id(&state, &workspace_id).await?;
         return Ok(Json(WorkspaceRetireResponse {
@@ -377,6 +398,27 @@ pub async fn retire_workspace(
             cleanup_attempted: false,
             cleanup_succeeded: false,
             cleanup_message: None,
+        }));
+    }
+    if let Some(active) = state
+        .workspace_runtime
+        .find_active_workspace_by_path_excluding_id(&workspace.path, &workspace.id)
+        .map_err(|e| ApiError::internal(e.to_string()))?
+    {
+        preflight.can_retire = false;
+        preflight
+            .blockers
+            .push(active_path_owner_retire_blocker(&active));
+        return Ok(Json(WorkspaceRetireResponse {
+            workspace: workspace_to_contract(&state, workspace).await?,
+            outcome: WorkspaceRetireOutcome::Blocked,
+            preflight,
+            cleanup_attempted: false,
+            cleanup_succeeded: false,
+            cleanup_message: Some(format!(
+                "cleanup blocked because active workspace {} also owns path {}",
+                active.id, active.path
+            )),
         }));
     }
 
@@ -489,6 +531,27 @@ pub async fn retry_retire_cleanup(
         .workspace_operation_gate
         .acquire_exclusive(&workspace_id)
         .await;
+    if let Some(active) = state
+        .workspace_runtime
+        .find_active_workspace_by_path_excluding_id(&workspace.path, &workspace.id)
+        .map_err(|e| ApiError::internal(e.to_string()))?
+    {
+        let mut preflight = build_retire_preflight(&state, &workspace_id).await?;
+        preflight
+            .blockers
+            .push(active_path_owner_retire_blocker(&active));
+        return Ok(Json(WorkspaceRetireResponse {
+            workspace: workspace_to_contract(&state, workspace).await?,
+            outcome: WorkspaceRetireOutcome::Blocked,
+            preflight,
+            cleanup_attempted: false,
+            cleanup_succeeded: false,
+            cleanup_message: Some(format!(
+                "cleanup retry blocked because active workspace {} now owns path {}",
+                active.id, active.path
+            )),
+        }));
+    }
     let attempted_at = chrono::Utc::now().to_rfc3339();
     let _ = state
         .workspace_runtime
@@ -812,6 +875,21 @@ async fn build_retire_preflight(
             "Only worktree workspaces can be marked done.",
         ));
     }
+    if workspace.lifecycle_state != "retired" {
+        if let Err(error) = state
+            .workspace_access_gate
+            .assert_can_mutate_for_workspace(workspace_id)
+        {
+            blockers.push(workspace_access_retire_blocker(error));
+        }
+        if let Some(active) = state
+            .workspace_runtime
+            .find_active_workspace_by_path_excluding_id(&workspace.path, &workspace.id)
+            .map_err(|e| ApiError::internal(e.to_string()))?
+        {
+            blockers.push(active_path_owner_retire_blocker(&active));
+        }
+    }
 
     if workspace.kind == "worktree" && workspace.lifecycle_state != "retired" && materialized {
         let workspace_id_for_task = workspace.id.clone();
@@ -1060,6 +1138,69 @@ fn retire_blocker(code: WorkspaceRetireBlockerCode, message: &str) -> WorkspaceR
         path: None,
         paths: None,
         operation: None,
+    }
+}
+
+fn active_path_owner_retire_blocker(active: &WorkspaceRecord) -> WorkspaceRetireBlocker {
+    WorkspaceRetireBlocker {
+        code: WorkspaceRetireBlockerCode::WorkspaceAccessBlocked,
+        message: format!(
+            "Another active workspace ({}) owns checkout path {}.",
+            active.id, active.path
+        ),
+        severity: WorkspaceRetireBlockerSeverity::Blocking,
+        retryable: true,
+        session_id: None,
+        terminal_id: None,
+        command_run_id: None,
+        path: Some(active.path.clone()),
+        paths: None,
+        operation: None,
+    }
+}
+
+fn workspace_access_retire_blocker(error: WorkspaceAccessError) -> WorkspaceRetireBlocker {
+    let message = match error {
+        WorkspaceAccessError::MutationBlocked { mode, .. } => {
+            format!(
+                "Workspace cannot be marked done while access mode is {}.",
+                mode.as_str()
+            )
+        }
+        WorkspaceAccessError::LiveSessionStartBlocked { mode, .. } => {
+            format!(
+                "Workspace cannot be marked done while access mode is {}.",
+                mode.as_str()
+            )
+        }
+        WorkspaceAccessError::WorkspaceRetired(_) => "Workspace is already retired.".to_string(),
+        WorkspaceAccessError::WorkspaceNotFound(_)
+        | WorkspaceAccessError::SessionNotFound(_)
+        | WorkspaceAccessError::TerminalNotFound(_) => {
+            "Workspace access state could not be verified.".to_string()
+        }
+    };
+    WorkspaceRetireBlocker {
+        message,
+        ..retire_blocker(
+            WorkspaceRetireBlockerCode::WorkspaceAccessBlocked,
+            "Workspace access is blocked.",
+        )
+    }
+}
+
+fn retired_cleanup_message(workspace: &WorkspaceRecord) -> Option<String> {
+    match workspace.cleanup_state.as_str() {
+        "complete" => None,
+        "failed" => workspace
+            .cleanup_error_message
+            .clone()
+            .or_else(|| Some("retired workspace cleanup failed".to_string())),
+        "pending" => Some("retired workspace cleanup is still pending".to_string()),
+        _ => Some(format!(
+            "retired workspace cleanup is not complete: {}",
+            workspace.cleanup_state
+        )),
     }
 }
 

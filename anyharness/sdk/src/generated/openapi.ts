@@ -3636,7 +3636,7 @@ export interface components {
             terminalId?: string | null;
         };
         /** @enum {string} */
-        WorkspaceRetireBlockerCode: "unsupported_workspace" | "dirty_working_tree" | "conflicted_files" | "active_git_operation" | "live_session" | "pending_prompt" | "pending_interaction" | "active_terminal" | "running_command";
+        WorkspaceRetireBlockerCode: "unsupported_workspace" | "workspace_access_blocked" | "dirty_working_tree" | "conflicted_files" | "active_git_operation" | "live_session" | "pending_prompt" | "pending_interaction" | "active_terminal" | "running_command";
         /** @enum {string} */
         WorkspaceRetireBlockerSeverity: "blocking";
         /** @enum {string} */

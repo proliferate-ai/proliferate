@@ -130,6 +130,7 @@ pub struct Workspace {
 #[serde(rename_all = "snake_case")]
 pub enum WorkspaceRetireBlockerCode {
     UnsupportedWorkspace,
+    WorkspaceAccessBlocked,
     DirtyWorkingTree,
     ConflictedFiles,
     ActiveGitOperation,

@@ -183,72 +183,72 @@ function FinishSuggestionIndicator({
 }) {
   const [confirming, setConfirming] = useState(false);
   const trigger = (
-    <Tooltip content={indicator.tooltip} className="inline-flex shrink-0 items-center justify-center">
-      <IconButton
-        tone="sidebar"
-        size="sm"
-        title={indicator.tooltip}
-        onClick={(event: MouseEvent<HTMLButtonElement>) => {
-          event.stopPropagation();
-        }}
-        className={`!size-4 !px-0 hover:bg-transparent ${className}`}
-      >
-        <GitMerge className="size-3" />
-      </IconButton>
-    </Tooltip>
+    <IconButton
+      tone="sidebar"
+      size="sm"
+      title={indicator.tooltip}
+      onClick={(event: MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+      }}
+      className={`!size-4 !px-0 hover:bg-transparent ${className}`}
+    >
+      <GitMerge className="size-3" />
+    </IconButton>
   );
 
   return (
-    <PopoverButton
-      trigger={trigger}
-      stopPropagation
-      className="w-44 rounded-xl border border-border bg-popover p-1 shadow-floating"
-      onOpenChange={(isOpen) => {
-        if (!isOpen) setConfirming(false);
-      }}
-    >
-      {(close) => confirming ? (
-        <>
-          <PopoverMenuItem
-            label="Confirm done"
-            variant="sidebar"
-            onClick={() => {
-              close();
-              onAction?.({
-                kind: "mark_workspace_done",
-                workspaceId: indicator.workspaceId,
-                logicalWorkspaceId: indicator.logicalWorkspaceId,
-              });
-            }}
-          />
-          <PopoverMenuItem
-            label="Cancel"
-            variant="sidebar"
-            onClick={() => setConfirming(false)}
-          />
-        </>
-      ) : (
-        <>
-          <PopoverMenuItem
-            label="Mark done"
-            variant="sidebar"
-            onClick={() => setConfirming(true)}
-          />
-          <PopoverMenuItem
-            label="Keep active"
-            variant="sidebar"
-            onClick={() => {
-              close();
-              onAction?.({
-                kind: "keep_workspace_active",
-                workspaceId: indicator.workspaceId,
-                readinessFingerprint: indicator.readinessFingerprint,
-              });
-            }}
-          />
-        </>
-      )}
-    </PopoverButton>
+    <Tooltip content={indicator.tooltip} className="inline-flex shrink-0 items-center justify-center">
+      <PopoverButton
+        trigger={trigger}
+        stopPropagation
+        className="w-44 rounded-xl border border-border bg-popover p-1 shadow-floating"
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setConfirming(false);
+        }}
+      >
+        {(close) => confirming ? (
+          <>
+            <PopoverMenuItem
+              label="Confirm done"
+              variant="sidebar"
+              onClick={() => {
+                close();
+                onAction?.({
+                  kind: "mark_workspace_done",
+                  workspaceId: indicator.workspaceId,
+                  logicalWorkspaceId: indicator.logicalWorkspaceId,
+                });
+              }}
+            />
+            <PopoverMenuItem
+              label="Cancel"
+              variant="sidebar"
+              onClick={() => setConfirming(false)}
+            />
+          </>
+        ) : (
+          <>
+            <PopoverMenuItem
+              label="Mark done"
+              variant="sidebar"
+              onClick={() => setConfirming(true)}
+            />
+            <PopoverMenuItem
+              label="Keep active"
+              variant="sidebar"
+              onClick={() => {
+                close();
+                onAction?.({
+                  kind: "keep_workspace_active",
+                  workspaceId: indicator.workspaceId,
+                  readinessFingerprint: indicator.readinessFingerprint,
+                });
+              }}
+            />
+          </>
+        )}
+      </PopoverButton>
+    </Tooltip>
   );
 }
 

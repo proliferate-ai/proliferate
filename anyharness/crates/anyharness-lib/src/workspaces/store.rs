@@ -41,6 +41,23 @@ impl WorkspaceStore {
         })
     }
 
+    pub fn find_active_by_path_excluding_id(
+        &self,
+        path: &str,
+        excluded_id: &str,
+    ) -> anyhow::Result<Option<WorkspaceRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM workspaces
+                 WHERE path = ?1 AND id <> ?2 AND lifecycle_state = 'active'
+                 ORDER BY created_at ASC LIMIT 1",
+                params![path, excluded_id],
+                |row| map_row(row),
+            )
+            .optional()
+        })
+    }
+
     pub fn find_by_path_and_kind(
         &self,
         path: &str,
@@ -66,6 +83,27 @@ impl WorkspaceStore {
                 "SELECT * FROM workspaces
                  WHERE path = ?1 AND kind = ?2 AND lifecycle_state = 'active'
                  ORDER BY created_at ASC LIMIT 1",
+                params![path, kind],
+                |row| map_row(row),
+            )
+            .optional()
+        })
+    }
+
+    pub fn find_retired_incomplete_cleanup_by_path_and_kind(
+        &self,
+        path: &str,
+        kind: &str,
+    ) -> anyhow::Result<Option<WorkspaceRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM workspaces
+                 WHERE path = ?1
+                   AND kind = ?2
+                   AND lifecycle_state = 'retired'
+                   AND cleanup_state IN ('pending', 'failed')
+                 ORDER BY updated_at DESC
+                 LIMIT 1",
                 params![path, kind],
                 |row| map_row(row),
             )
@@ -506,6 +544,68 @@ mod tests {
             .find_active_by_path_and_kind("/tmp/workspace", "local")
             .expect("find active local path")
             .is_none());
+    }
+
+    #[test]
+    fn active_path_lookup_can_exclude_current_workspace() {
+        let db = Db::open_in_memory().expect("open db");
+        let store = WorkspaceStore::new(db);
+
+        let current = workspace_record("workspace-current", "worktree", "/tmp/workspace");
+        let sibling = workspace_record("workspace-sibling", "local", "/tmp/workspace");
+        let mut retired = workspace_record("workspace-retired", "worktree", "/tmp/workspace");
+        retired.lifecycle_state = "retired".to_string();
+        retired.cleanup_state = "complete".to_string();
+
+        store.insert(&current).expect("insert current workspace");
+        store.insert(&sibling).expect("insert sibling workspace");
+        store.insert(&retired).expect("insert retired workspace");
+
+        assert_eq!(
+            store
+                .find_active_by_path_excluding_id("/tmp/workspace", "workspace-current")
+                .expect("find active path excluding current")
+                .expect("sibling active workspace")
+                .id,
+            "workspace-sibling"
+        );
+        assert!(store
+            .find_active_by_path_excluding_id("/tmp/workspace", "workspace-sibling")
+            .expect("find active path excluding sibling")
+            .is_some());
+        assert!(store
+            .find_active_by_path_excluding_id("/tmp/other", "workspace-current")
+            .expect("find active path for missing path")
+            .is_none());
+    }
+
+    #[test]
+    fn retired_incomplete_cleanup_lookup_tracks_path_ownership() {
+        let db = Db::open_in_memory().expect("open db");
+        let store = WorkspaceStore::new(db);
+
+        let mut complete = workspace_record("workspace-complete", "worktree", "/tmp/complete");
+        complete.lifecycle_state = "retired".to_string();
+        complete.cleanup_state = "complete".to_string();
+        let mut failed = workspace_record("workspace-failed", "worktree", "/tmp/failed");
+        failed.lifecycle_state = "retired".to_string();
+        failed.cleanup_state = "failed".to_string();
+
+        store.insert(&complete).expect("insert complete workspace");
+        store.insert(&failed).expect("insert failed workspace");
+
+        assert!(store
+            .find_retired_incomplete_cleanup_by_path_and_kind("/tmp/complete", "worktree")
+            .expect("lookup complete path")
+            .is_none());
+        assert_eq!(
+            store
+                .find_retired_incomplete_cleanup_by_path_and_kind("/tmp/failed", "worktree")
+                .expect("lookup failed path")
+                .expect("failed retired workspace")
+                .id,
+            "workspace-failed"
+        );
     }
 
     #[test]
