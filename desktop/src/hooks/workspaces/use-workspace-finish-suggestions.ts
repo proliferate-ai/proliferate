@@ -1,5 +1,8 @@
 import type { WorkspaceRetirePreflightResponse } from "@anyharness/sdk";
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
+import {
+  anyHarnessWorkspaceRetirePreflightKey,
+  getAnyHarnessClient,
+} from "@anyharness/sdk-react";
 import { useQueries } from "@tanstack/react-query";
 import type { WorkspaceCollections } from "@/lib/domain/workspaces/collections";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
@@ -22,7 +25,7 @@ export function useWorkspaceFinishSuggestions(
 
   const queries = useQueries({
     queries: workspaces.map((workspace) => ({
-      queryKey: ["workspaces", runtimeUrl, workspace.id, "finish-suggestion"],
+      queryKey: anyHarnessWorkspaceRetirePreflightKey(runtimeUrl, workspace.id),
       enabled: runtimeUrl.trim().length > 0,
       staleTime: 60_000,
       queryFn: async () => {
