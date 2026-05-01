@@ -36,6 +36,14 @@ function ShortcutRow({ description, label }: ShortcutRowProps) {
   );
 }
 
+function ShortcutGroupHeader({ title }: { title: string }) {
+  return (
+    <div className="rounded-t-lg bg-muted/60 px-3 py-2">
+      <h3 className="text-sm font-medium text-foreground">{title}</h3>
+    </div>
+  );
+}
+
 function searchTermsForShortcut(
   shortcutKey: ShortcutKey,
   shortcut: ShortcutDef,
@@ -130,9 +138,7 @@ export function KeyboardShortcutsPane() {
 
       {shortcutGroups.map((group) => (
         <SettingsCard key={group.title}>
-          <div className="px-3 py-2">
-            <h3 className="text-sm font-medium text-foreground">{group.title}</h3>
-          </div>
+          <ShortcutGroupHeader title={group.title} />
           {group.shortcutKeys.map((shortcutKey) => {
             const shortcut = SHORTCUTS[shortcutKey];
             return (
@@ -148,9 +154,7 @@ export function KeyboardShortcutsPane() {
 
       {composerShortcutGroups.map((group) => (
         <SettingsCard key={group.title}>
-          <div className="px-3 py-2">
-            <h3 className="text-sm font-medium text-foreground">{group.title}</h3>
-          </div>
+          <ShortcutGroupHeader title={group.title} />
           {group.shortcutKeys.map((shortcutKey) => {
             const shortcut = COMPOSER_SHORTCUTS[shortcutKey];
             return (
