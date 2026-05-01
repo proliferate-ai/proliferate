@@ -1,28 +1,16 @@
-import {
-  getAnyHarnessClient,
-  type AnyHarnessClientConnection,
-} from "@anyharness/sdk-react";
+import { getAnyHarnessClient, type AnyHarnessClientConnection } from "@anyharness/sdk-react";
 import {
   createTranscriptState,
   type ContentPart,
   type PendingPromptEntry,
   streamSession,
 } from "@anyharness/sdk";
-import type {
-  Session,
-  SessionEventEnvelope,
-  SessionExecutionSummary,
-  SessionLiveConfigSnapshot,
-  SessionMcpBindingSummary,
-  SessionStreamHandle,
-} from "@anyharness/sdk";
+import type { Session, SessionEventEnvelope, SessionExecutionSummary, SessionLiveConfigSnapshot, SessionMcpBindingSummary, SessionStreamHandle } from "@anyharness/sdk";
 import {
   resolveSessionViewState,
   resolveStatusFromExecutionSummary,
 } from "@/lib/domain/sessions/activity";
-import {
-  logLatency,
-} from "@/lib/infra/debug-latency";
+import { logLatency } from "@/lib/infra/debug-latency";
 import {
   getMeasurementRequestOptions,
   recordMeasurementWorkflowStep,

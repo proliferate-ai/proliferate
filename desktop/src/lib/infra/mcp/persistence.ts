@@ -6,10 +6,7 @@ import {
 import {
   validateOAuthConnectorSettings,
 } from "@/lib/domain/mcp/oauth";
-import {
-  connectorSettingsToCloud as domainConnectorSettingsToCloud,
-  normalizeConnectorSettings,
-} from "@/lib/domain/mcp/settings-schema";
+import { connectorSettingsToCloud as domainConnectorSettingsToCloud } from "@/lib/domain/mcp/settings-schema";
 import { normalizeConnectorSecretValue, validateConnectorSecretValue } from "@/lib/domain/mcp/validation";
 import type {
   ConnectorCatalogEntry,
@@ -32,13 +29,14 @@ import {
 import { getCloudMcpCatalog } from "@/lib/integrations/cloud/mcp_catalog";
 import type { CloudMcpCatalogEntry, CloudMcpConnection } from "@/lib/integrations/cloud/client";
 import {
-  cancelGoogleWorkspaceMcpAuth,
-  deleteGoogleWorkspaceMcpLocalData,
-  getGoogleWorkspaceMcpCredentialStatus,
-  LocalMcpOAuthError,
-  reconcileGoogleWorkspaceMcpPendingSetups,
-  startGoogleWorkspaceMcpAuth,
-} from "@/platform/tauri/google-workspace-mcp";
+  augmentLocalOAuthInstalledStatus,
+  deleteLocalOAuthConnectorDataBeforeCloudDelete,
+  installLocalOAuthConnector,
+  reconnectLocalOAuthConnector,
+  reconcileLocalOAuthPendingSetups,
+  sanitizeCloudConnectorSettings,
+  unavailableInstalledCatalogEntry,
+} from "./local-oauth-persistence";
 import { openExternal } from "@/platform/tauri/shell";
 
 export interface ConnectorPaneData {
@@ -47,7 +45,6 @@ export interface ConnectorPaneData {
 }
 
 const pendingCloudOAuthFlows = new Map<string, string>();
-const pendingLocalOAuthSetups = new Map<string, { cancelled: boolean }>();
 
 export async function loadConnectorPaneData(): Promise<ConnectorPaneData> {
   return loadCloudConnectorPaneData();
@@ -66,15 +63,7 @@ async function loadCloudConnectorPaneData(): Promise<ConnectorPaneData> {
     .map((connection) => cloudConnectionToInstalledRecord(connection, entriesById))
     .filter((record): record is InstalledConnectorRecord => record !== null);
   const installed = await augmentLocalOAuthInstalledStatus(installedBase);
-  void reconcileGoogleWorkspaceMcpPendingSetups({
-    gmailConnections: installed
-      .filter((record) => record.catalogEntry.id === "gmail")
-      .map((record) => ({
-        connectionId: record.metadata.connectionId,
-        userGoogleEmail: readUserGoogleEmail(record.metadata.settings) ?? "",
-      }))
-      .filter((item) => item.userGoogleEmail.length > 0),
-  }).catch(() => undefined);
+  void reconcileLocalOAuthPendingSetups(installed);
   const installedEntryIds = new Set(installed.map((record) => record.catalogEntry.id));
   return {
     installed,
@@ -240,86 +229,6 @@ function cloudConnectionToInstalledRecord(
   };
 }
 
-async function augmentLocalOAuthInstalledStatus(
-  records: InstalledConnectorRecord[],
-): Promise<InstalledConnectorRecord[]> {
-  return Promise.all(records.map(async (record) => {
-    if (record.catalogEntry.setupKind !== "local_oauth") {
-      return record;
-    }
-    const userGoogleEmail = readUserGoogleEmail(record.metadata.settings);
-    if (!userGoogleEmail) {
-      return { ...record, broken: true };
-    }
-    const status = await getGoogleWorkspaceMcpCredentialStatus({ userGoogleEmail })
-      .catch(() => ({ status: "not_ready" as const, code: "credential_invalid" as const }));
-    return {
-      ...record,
-      broken: record.broken || status.status !== "ready",
-    };
-  }));
-}
-
-function unavailableInstalledCatalogEntry(
-  connection: CloudMcpConnection,
-): ConnectorCatalogEntry | null {
-  if (connection.catalogEntryId !== "gmail") {
-    return null;
-  }
-  return {
-    id: "gmail",
-    name: "Gmail",
-    oneLiner: "Local Gmail MCP setup is unavailable in this deployment.",
-    description: "Gmail is installed on this desktop, but setup is currently disabled. You can remove local Gmail data and delete the connector.",
-    docsUrl: "https://developers.google.com/workspace/gmail/api/auth/scopes",
-    availability: "local_only",
-    cloudSecretSync: false,
-    setupKind: "local_oauth",
-    serverNameBase: "gmail",
-    iconId: "gmail",
-    displayUrl: "",
-    secretFields: [],
-    requiredFields: [],
-    settingsSchema: [gmailEmailSettingField()],
-    capabilities: ["Search and read Gmail messages locally"],
-    transport: "stdio",
-    command: "",
-    args: [],
-    env: [],
-  };
-}
-
-function gmailEmailSettingField() {
-  return {
-    id: "userGoogleEmail",
-    kind: "string" as const,
-    label: "Google account email",
-    placeholder: "name@example.com",
-    helperText: "The Gmail account authorized on this desktop.",
-    required: true,
-    defaultValue: undefined,
-    options: [],
-    affectsUrl: false,
-  };
-}
-
-function sanitizeCloudConnectorSettings(
-  catalogEntry: ConnectorCatalogEntry,
-  settings: Record<string, unknown>,
-): ConnectorSettings | undefined {
-  if (catalogEntry.settingsSchema.length === 0) {
-    return undefined;
-  }
-  return normalizeConnectorSettings(catalogEntry, settings);
-}
-
-function readUserGoogleEmail(settings: ConnectorSettings | undefined): string | null {
-  const value = settings?.userGoogleEmail;
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim().toLowerCase()
-    : null;
-}
-
 export async function installConnector(
   catalogEntryId: string,
   secretValues: Record<string, string>,
@@ -349,55 +258,6 @@ export async function installConnector(
     await putCloudMcpSecretAuth(connection.connectionId, {
       secretFields: normalizedSecrets,
     });
-  }
-}
-
-async function installLocalOAuthConnector(
-  catalogEntry: ConnectorCatalogEntry,
-  _settings?: ConnectorSettings,
-): Promise<void> {
-  if (catalogEntry.id !== "gmail") {
-    throw new LocalMcpOAuthError("process_failed");
-  }
-  const oauthClientId = staticEnvValue(catalogEntry, "GOOGLE_OAUTH_CLIENT_ID");
-  const oauthClientSecret = staticEnvValue(catalogEntry, "GOOGLE_OAUTH_CLIENT_SECRET");
-  if (!oauthClientId || !oauthClientSecret) {
-    throw new LocalMcpOAuthError("process_failed");
-  }
-  const setupId = crypto.randomUUID();
-  let userGoogleEmail: string | null = null;
-  let createdConnectionId: string | null = null;
-  pendingLocalOAuthSetups.set(setupId, { cancelled: false });
-  try {
-    const authResult = await startGoogleWorkspaceMcpAuth({
-      setupId,
-      oauthClientId,
-      oauthClientSecret,
-    });
-    userGoogleEmail = authResult.userGoogleEmail;
-    throwIfLocalOAuthCancelled(setupId);
-    const normalizedSettings = normalizeConnectorSettings(catalogEntry, { userGoogleEmail });
-    const connection = await createCloudMcpConnection({
-      catalogEntryId: catalogEntry.id,
-      settings: domainConnectorSettingsToCloud(catalogEntry, normalizedSettings),
-      enabled: true,
-    });
-    createdConnectionId = connection.connectionId;
-    throwIfLocalOAuthCancelled(setupId);
-    await reconcileGoogleWorkspaceMcpPendingSetups({
-      gmailConnections: [{ connectionId: connection.connectionId, userGoogleEmail }],
-    }).catch(() => undefined);
-    throwIfLocalOAuthCancelled(setupId);
-  } catch (error) {
-    if (createdConnectionId) {
-      await deleteCloudMcpConnectionV2(createdConnectionId).catch(() => undefined);
-    }
-    if (userGoogleEmail) {
-      await deleteGoogleWorkspaceMcpLocalData({ setupId, userGoogleEmail }).catch(() => undefined);
-    }
-    throw error;
-  } finally {
-    pendingLocalOAuthSetups.delete(setupId);
   }
 }
 
@@ -431,32 +291,13 @@ export async function connectOAuthConnector(
   return result;
 }
 
+export { cancelLocalOAuthConnectorConnect } from "./local-oauth-persistence";
+
 export async function cancelOAuthConnectorConnect(connectionId: string): Promise<void> {
   const flowId = pendingCloudOAuthFlows.get(connectionId);
   if (flowId) {
     await cancelCloudMcpOAuthFlow(flowId);
     clearPendingCloudOAuthFlowByFlowId(flowId);
-  }
-}
-
-export async function cancelLocalOAuthConnectorConnect(): Promise<void> {
-  const setupIds = [...pendingLocalOAuthSetups.keys()];
-  for (const setupId of setupIds) {
-    const pending = pendingLocalOAuthSetups.get(setupId);
-    if (pending) {
-      pending.cancelled = true;
-    }
-  }
-  await Promise.all(
-    setupIds.map((setupId) =>
-      cancelGoogleWorkspaceMcpAuth({ setupId }).catch(() => undefined)
-    ),
-  );
-}
-
-function throwIfLocalOAuthCancelled(setupId: string): void {
-  if (pendingLocalOAuthSetups.get(setupId)?.cancelled) {
-    throw new LocalMcpOAuthError("cancelled");
   }
 }
 
@@ -545,46 +386,6 @@ export async function reconnectOAuthConnector(
   return runCloudOAuthFlow(connectionId);
 }
 
-async function reconnectLocalOAuthConnector(
-  connection: CloudMcpConnection,
-  catalogEntry: ConnectorCatalogEntry,
-): Promise<ConnectOAuthConnectorResult> {
-  if (catalogEntry.id !== "gmail") {
-    throw new LocalMcpOAuthError("process_failed");
-  }
-  const settings = sanitizeCloudConnectorSettings(catalogEntry, connection.settings);
-  const userGoogleEmail = readUserGoogleEmail(settings);
-  if (!userGoogleEmail) {
-    throw new LocalMcpOAuthError("credential_invalid");
-  }
-  const oauthClientId = staticEnvValue(catalogEntry, "GOOGLE_OAUTH_CLIENT_ID");
-  const oauthClientSecret = staticEnvValue(catalogEntry, "GOOGLE_OAUTH_CLIENT_SECRET");
-  if (!oauthClientId || !oauthClientSecret) {
-    throw new LocalMcpOAuthError("process_failed");
-  }
-  const setupId = crypto.randomUUID();
-  pendingLocalOAuthSetups.set(setupId, { cancelled: false });
-  try {
-    await startGoogleWorkspaceMcpAuth({
-      setupId,
-      userGoogleEmail,
-      oauthClientId,
-      oauthClientSecret,
-    });
-    throwIfLocalOAuthCancelled(setupId);
-    await reconcileGoogleWorkspaceMcpPendingSetups({
-      gmailConnections: [{
-        connectionId: connection.connectionId,
-        userGoogleEmail,
-      }],
-    }).catch(() => undefined);
-    throwIfLocalOAuthCancelled(setupId);
-    return { kind: "completed" };
-  } finally {
-    pendingLocalOAuthSetups.delete(setupId);
-  }
-}
-
 export async function updateConnectorSecret(
   connectionId: string,
   secretValues: Record<string, string>,
@@ -645,27 +446,6 @@ export async function setConnectorEnabled(
 export async function deleteConnector(connectionId: string): Promise<void> {
   const connection = (await listCloudMcpConnections()).connections
     .find((item) => item.connectionId === connectionId);
-  if (connection?.catalogEntryId === "gmail") {
-    const userGoogleEmail = typeof connection.settings.userGoogleEmail === "string"
-      ? connection.settings.userGoogleEmail.trim().toLowerCase()
-      : "";
-    if (userGoogleEmail) {
-      const result = await deleteGoogleWorkspaceMcpLocalData({
-        connectionId,
-        userGoogleEmail,
-      });
-      if (result.status === "retryable_failure") {
-        throw new LocalMcpOAuthError(result.code);
-      }
-    }
-  }
+  await deleteLocalOAuthConnectorDataBeforeCloudDelete(connection);
   await deleteCloudMcpConnectionV2(connectionId);
-}
-
-function staticEnvValue(catalogEntry: ConnectorCatalogEntry, name: string): string | null {
-  if (catalogEntry.transport !== "stdio") {
-    return null;
-  }
-  const item = catalogEntry.env.find((candidate) => candidate.name === name);
-  return item?.source.kind === "static" ? item.source.value : null;
 }

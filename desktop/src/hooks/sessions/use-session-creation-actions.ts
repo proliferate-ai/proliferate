@@ -1,9 +1,5 @@
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
-import type {
-  ContentPart,
-  PromptInputBlock,
-  WorkspaceSessionLaunchCatalog,
-} from "@anyharness/sdk";
+import type { ContentPart, PromptInputBlock, WorkspaceSessionLaunchCatalog } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
@@ -11,18 +7,12 @@ import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness
 import { resolveRuntimeTargetForWorkspace } from "@/lib/integrations/anyharness/runtime-target";
 import { restartHarnessRuntime } from "@/lib/integrations/anyharness/runtime-bootstrap";
 import { resolveStatusFromExecutionSummary } from "@/lib/domain/sessions/activity";
-import {
-  captureTelemetryException,
-  trackProductEvent,
-} from "@/lib/integrations/telemetry/client";
+import { captureTelemetryException, trackProductEvent } from "@/lib/integrations/telemetry/client";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
 import { useAgentInstallationActions } from "@/hooks/agents/use-agent-installation-actions";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import {
-  type SessionSlot,
-  useHarnessStore,
-} from "@/stores/sessions/harness-store";
+import { type SessionSlot, useHarnessStore } from "@/stores/sessions/harness-store";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
