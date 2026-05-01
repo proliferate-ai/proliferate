@@ -30,10 +30,10 @@ import {
 import {
   DEFAULT_RIGHT_PANEL_DURABLE_STATE,
   DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
-  DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
   RIGHT_PANEL_DEFAULT_WIDTH,
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
+  clampRightPanelWidth,
   mergeRightPanelState,
   reconcileRightPanelWorkspaceState,
   splitLegacyRightPanelWorkspaceState,
@@ -129,12 +129,6 @@ export function useMainScreenState(): MainScreenState {
   const setRightPanelMaterializedForWorkspace = useWorkspaceUiStore(
     (state) => state.setRightPanelMaterializedForWorkspace,
   );
-  const setRightPanelOpenForWorkspace = useWorkspaceUiStore(
-    (state) => state.setRightPanelOpenForWorkspace,
-  );
-  const setRightPanelWidthForWorkspace = useWorkspaceUiStore(
-    (state) => state.setRightPanelWidthForWorkspace,
-  );
   const rightPanelDurableFallback = resolveWithWorkspaceFallback(
     rightPanelDurableByWorkspace,
     workspaceUiKey,
@@ -150,7 +144,7 @@ export function useMainScreenState(): MainScreenState {
   const rightPanelState = useMemo(
     () => reconcileRightPanelWorkspaceState(
       mergeRightPanelState({
-        durableState: rightPanelDurableState ?? DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+        durableState: rightPanelDurableState,
         materializedState: rightPanelMaterializedState,
         isCloudWorkspaceSelected,
       }),
@@ -158,6 +152,21 @@ export function useMainScreenState(): MainScreenState {
     ),
     [isCloudWorkspaceSelected, rightPanelDurableState, rightPanelMaterializedState],
   );
+  useEffect(() => {
+    if (
+      !workspaceUiKey
+      || !rightPanelDurableFallback.shouldWriteBack
+      || !rightPanelDurableFallback.value
+    ) {
+      return;
+    }
+    setRightPanelDurableForWorkspace(workspaceUiKey, rightPanelDurableFallback.value);
+  }, [
+    rightPanelDurableFallback.shouldWriteBack,
+    rightPanelDurableFallback.value,
+    setRightPanelDurableForWorkspace,
+    workspaceUiKey,
+  ]);
   const setRightPanelState = useCallback<Dispatch<SetStateAction<RightPanelWorkspaceState>>>(
     (value) => {
       if (!workspaceUiKey) {
@@ -200,9 +209,19 @@ export function useMainScreenState(): MainScreenState {
       if (!workspaceUiKey) {
         return;
       }
-      setRightPanelWidthForWorkspace(workspaceUiKey, value);
+      const nextWidth = typeof value === "function"
+        ? (value as (previous: number) => number)(rightPanelDurableState.width)
+        : value;
+      setRightPanelDurableForWorkspace(workspaceUiKey, {
+        ...rightPanelDurableState,
+        width: clampRightPanelWidth(nextWidth),
+      });
     },
-    [setRightPanelWidthForWorkspace, workspaceUiKey],
+    [
+      rightPanelDurableState,
+      setRightPanelDurableForWorkspace,
+      workspaceUiKey,
+    ],
   );
   const setRightPanelOpen = useCallback<Dispatch<SetStateAction<boolean>>>(
     (value) => {
@@ -212,7 +231,10 @@ export function useMainScreenState(): MainScreenState {
       const nextOpen = typeof value === "function"
         ? (value as (previous: boolean) => boolean)(rightPanelDurableState.open)
         : value;
-      setRightPanelOpenForWorkspace(workspaceUiKey, nextOpen);
+      setRightPanelDurableForWorkspace(workspaceUiKey, {
+        ...rightPanelDurableState,
+        open: nextOpen,
+      });
       if (nextOpen && materializedWorkspaceId) {
         setRightPanelUserOpenOverride((current) => ({
           materializedWorkspaceId,
@@ -225,7 +247,8 @@ export function useMainScreenState(): MainScreenState {
     [
       materializedWorkspaceId,
       rightPanelDurableState.open,
-      setRightPanelOpenForWorkspace,
+      rightPanelDurableState,
+      setRightPanelDurableForWorkspace,
       workspaceUiKey,
     ],
   );

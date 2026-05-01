@@ -162,26 +162,30 @@ export function useWorkspaceHeaderTabsViewModel() {
     [liveVisibilityCandidates],
   );
 
-  const persistedVisibleIds = resolveWithWorkspaceFallback(
+  const persistedVisibleFallback = resolveWithWorkspaceFallback(
     visibleByWorkspace,
     workspaceUiKey,
     materializedWorkspaceId,
-  ).value;
-  const recentlyHiddenIds = resolveWithWorkspaceFallback(
+  );
+  const recentlyHiddenFallback = resolveWithWorkspaceFallback(
     hiddenByWorkspace,
     workspaceUiKey,
     materializedWorkspaceId,
-  ).value ?? [];
-  const collapsedParentIds = resolveWithWorkspaceFallback(
+  );
+  const collapsedParentFallback = resolveWithWorkspaceFallback(
     collapsedGroupsByWorkspace,
     workspaceUiKey,
     materializedWorkspaceId,
-  ).value ?? [];
-  const persistedManualGroups = resolveWithWorkspaceFallback(
+  );
+  const manualGroupsFallback = resolveWithWorkspaceFallback(
     manualGroupsByWorkspace,
     workspaceUiKey,
     materializedWorkspaceId,
-  ).value ?? [];
+  );
+  const persistedVisibleIds = persistedVisibleFallback.value;
+  const recentlyHiddenIds = recentlyHiddenFallback.value ?? [];
+  const collapsedParentIds = collapsedParentFallback.value ?? [];
+  const persistedManualGroups = manualGroupsFallback.value ?? [];
   const activeChatSessionIdForTabs = useWorkspaceActiveChatTabId({
     workspaceUiKey,
     materializedWorkspaceId,
@@ -223,6 +227,61 @@ export function useWorkspaceHeaderTabsViewModel() {
   );
 
   const workspaceSessionsLoaded = workspaceSessionsQuery.data !== undefined;
+
+  useEffect(() => {
+    if (!workspaceUiKey) {
+      return;
+    }
+    const shouldMaterialize =
+      (persistedVisibleFallback.shouldWriteBack && persistedVisibleFallback.value !== undefined)
+      || (recentlyHiddenFallback.shouldWriteBack && recentlyHiddenFallback.value !== undefined)
+      || (collapsedParentFallback.shouldWriteBack && collapsedParentFallback.value !== undefined)
+      || (manualGroupsFallback.shouldWriteBack && manualGroupsFallback.value !== undefined);
+    if (!shouldMaterialize) {
+      return;
+    }
+
+    useWorkspaceUiStore.setState((state) => ({
+      visibleChatSessionIdsByWorkspace:
+        persistedVisibleFallback.shouldWriteBack && persistedVisibleFallback.value !== undefined
+          ? {
+              ...state.visibleChatSessionIdsByWorkspace,
+              [workspaceUiKey]: persistedVisibleFallback.value,
+            }
+          : state.visibleChatSessionIdsByWorkspace,
+      recentlyHiddenChatSessionIdsByWorkspace:
+        recentlyHiddenFallback.shouldWriteBack && recentlyHiddenFallback.value !== undefined
+          ? {
+              ...state.recentlyHiddenChatSessionIdsByWorkspace,
+              [workspaceUiKey]: recentlyHiddenFallback.value,
+            }
+          : state.recentlyHiddenChatSessionIdsByWorkspace,
+      collapsedChatGroupsByWorkspace:
+        collapsedParentFallback.shouldWriteBack && collapsedParentFallback.value !== undefined
+          ? {
+              ...state.collapsedChatGroupsByWorkspace,
+              [workspaceUiKey]: collapsedParentFallback.value,
+            }
+          : state.collapsedChatGroupsByWorkspace,
+      manualChatGroupsByWorkspace:
+        manualGroupsFallback.shouldWriteBack && manualGroupsFallback.value !== undefined
+          ? {
+              ...state.manualChatGroupsByWorkspace,
+              [workspaceUiKey]: manualGroupsFallback.value,
+            }
+          : state.manualChatGroupsByWorkspace,
+    }));
+  }, [
+    collapsedParentFallback.shouldWriteBack,
+    collapsedParentFallback.value,
+    manualGroupsFallback.shouldWriteBack,
+    manualGroupsFallback.value,
+    persistedVisibleFallback.shouldWriteBack,
+    persistedVisibleFallback.value,
+    recentlyHiddenFallback.shouldWriteBack,
+    recentlyHiddenFallback.value,
+    workspaceUiKey,
+  ]);
 
   useEffect(() => {
     if (!workspaceUiKey) {
