@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect } from "react"
 import { Navigate, Route, useLocation } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { AuthRequiredGate } from "@/components/auth/AuthRequiredGate"
-import { OnboardingGate, OnboardingRoute } from "@/components/onboarding/OnboardingGate"
+import { UserPreferencesGate } from "@/components/app/UserPreferencesGate"
 import { ToastContainer } from "@/components/feedback/Toast"
 import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
@@ -15,7 +15,6 @@ import { useAgentAutoReconcile } from "@/hooks/agents/use-agent-auto-reconcile"
 import { useLocalAutomationExecutor } from "@/hooks/automations/use-local-automation-executor"
 import { useRuntimeInputSyncRuntime } from "@/hooks/cloud/use-runtime-input-sync-runtime"
 import { useHomeDeferredLaunchRunner } from "@/hooks/home/use-home-deferred-launch-runner"
-import { useOnboardingFinalizer } from "@/hooks/onboarding/use-onboarding-finalizer"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/use-shortcut-dispatcher"
 import { useTurnEndSound } from "@/hooks/sessions/use-turn-end-sound"
 import {
@@ -31,7 +30,6 @@ import { AutomationDetailPage } from "@/pages/AutomationDetailPage"
 import { AutomationsPage } from "@/pages/AutomationsPage"
 import { LoginPage } from "@/pages/LoginPage"
 import { MainPage } from "@/pages/MainPage"
-import { OnboardingPage } from "@/pages/OnboardingPage"
 import { PowersPage } from "@/pages/PowersPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { useAuthStore } from "@/stores/auth/auth-store"
@@ -140,7 +138,6 @@ function AppRuntime() {
   useTurnEndSound()
   useAgentAutoReconcile()
   useLocalAutomationExecutor()
-  useOnboardingFinalizer()
   useHomeDeferredLaunchRunner()
 
   useEffect(() => {
@@ -209,10 +206,8 @@ function AppRuntime() {
         </Route>
         <Route element={<BootstrappedRoute />}>
           <Route element={<AuthRequiredGate />}>
-            <Route element={<OnboardingRoute />}>
-              <Route path="/setup" element={<OnboardingPage />} />
-            </Route>
-            <Route element={<OnboardingGate />}>
+            <Route path="/setup" element={<Navigate to="/" replace />} />
+            <Route element={<UserPreferencesGate />}>
               <Route path="/" element={<MainPage />} />
               <Route path="/powers" element={<PowersPage />} />
               <Route path="/automations" element={<AutomationsPage />} />

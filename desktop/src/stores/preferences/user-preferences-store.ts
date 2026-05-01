@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import type { ColorMode, ThemePreset } from "@/config/theme";
-import type { OnboardingGoalId } from "@/config/onboarding";
 import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persistence";
 
 export type BranchPrefixType = "none" | "proliferate" | "github_username";
@@ -21,8 +20,6 @@ export interface UserPreferences {
   subagentsEnabled: boolean;
   coworkWorkspaceDelegationEnabled: boolean;
   cloudRuntimeInputSyncEnabled: boolean;
-  onboardingCompletedVersion: number;
-  onboardingPrimaryGoalId: OnboardingGoalId | "";
 }
 
 const USER_PREFERENCES_KEY = "user_preferences";
@@ -44,8 +41,6 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
-  onboardingCompletedVersion: 0,
-  onboardingPrimaryGoalId: "",
 };
 
 export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
@@ -65,11 +60,37 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   subagentsEnabled: true,
   coworkWorkspaceDelegationEnabled: true,
   cloudRuntimeInputSyncEnabled: false,
-  onboardingCompletedVersion: 0,
-  onboardingPrimaryGoalId: "",
 };
 
 export const USER_PREFERENCE_DEFAULTS = NEW_USER_DEFAULTS;
+
+const USER_PREFERENCE_KEYS = [
+  "themePreset",
+  "colorMode",
+  "defaultChatAgentKind",
+  "defaultChatModelId",
+  "defaultSessionModeByAgentKind",
+  "defaultOpenInTargetId",
+  "branchPrefixType",
+  "turnEndSoundEnabled",
+  "turnEndSoundId",
+  "transparentChromeEnabled",
+  "powersInCodingSessionsEnabled",
+  "subagentsEnabled",
+  "coworkWorkspaceDelegationEnabled",
+  "cloudRuntimeInputSyncEnabled",
+] as const satisfies readonly (keyof UserPreferences)[];
+
+const USER_PREFERENCE_KEY_SET = new Set<string>(USER_PREFERENCE_KEYS);
+
+const DEPRECATED_USER_PREFERENCE_KEYS = [
+  "onboardingCompletedVersion",
+  "onboardingPrimaryGoalId",
+] as const;
+
+const DEPRECATED_USER_PREFERENCE_KEY_SET = new Set<string>(DEPRECATED_USER_PREFERENCE_KEYS);
+
+let persistedPreferenceExtras: Record<string, unknown> = {};
 
 const LEGACY_CLAUDE_MODEL_IDS: Record<string, string> = {
   "claude-sonnet-4-5": "sonnet",
@@ -142,9 +163,41 @@ async function readLegacyUserPreferences(): Promise<UserPreferences> {
     subagentsEnabled: defaults.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: defaults.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: defaults.cloudRuntimeInputSyncEnabled,
-    onboardingCompletedVersion: defaults.onboardingCompletedVersion,
-    onboardingPrimaryGoalId: defaults.onboardingPrimaryGoalId,
   };
+}
+
+function pickUserPreferences(preferences: UserPreferences): UserPreferences {
+  return {
+    themePreset: preferences.themePreset,
+    colorMode: preferences.colorMode,
+    defaultChatAgentKind: preferences.defaultChatAgentKind,
+    defaultChatModelId: preferences.defaultChatModelId,
+    defaultSessionModeByAgentKind: preferences.defaultSessionModeByAgentKind,
+    defaultOpenInTargetId: preferences.defaultOpenInTargetId,
+    branchPrefixType: preferences.branchPrefixType,
+    turnEndSoundEnabled: preferences.turnEndSoundEnabled,
+    turnEndSoundId: preferences.turnEndSoundId,
+    transparentChromeEnabled: preferences.transparentChromeEnabled,
+    powersInCodingSessionsEnabled: preferences.powersInCodingSessionsEnabled,
+    subagentsEnabled: preferences.subagentsEnabled,
+    coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
+    cloudRuntimeInputSyncEnabled: preferences.cloudRuntimeInputSyncEnabled,
+  };
+}
+
+function hasDeprecatedUserPreferenceKeys(value: Record<string, unknown>): boolean {
+  return DEPRECATED_USER_PREFERENCE_KEYS.some((key) => key in value);
+}
+
+function getForwardCompatibleUserPreferenceExtras(
+  value: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) => (
+      !USER_PREFERENCE_KEY_SET.has(key)
+      && !DEPRECATED_USER_PREFERENCE_KEY_SET.has(key)
+    )),
+  );
 }
 
 function sanitizeDefaultSessionModeByAgentKind(
@@ -163,16 +216,28 @@ function sanitizeDefaultSessionModeByAgentKind(
   );
 }
 
-async function readAll(): Promise<UserPreferences> {
-  const persisted = await readPersistedValue<UserPreferences>(USER_PREFERENCES_KEY);
-  if (persisted) {
+async function readAll(): Promise<{
+  preferences: UserPreferences;
+  shouldPersist: boolean;
+  extras: Record<string, unknown>;
+}> {
+  const persisted = await readPersistedValue<Record<string, unknown>>(USER_PREFERENCES_KEY);
+  if (persisted && typeof persisted === "object" && !Array.isArray(persisted)) {
     return {
-      ...PERSISTED_RECORD_BACKFILL,
-      ...persisted,
+      preferences: pickUserPreferences({
+        ...PERSISTED_RECORD_BACKFILL,
+        ...persisted,
+      } as UserPreferences),
+      shouldPersist: hasDeprecatedUserPreferenceKeys(persisted),
+      extras: getForwardCompatibleUserPreferenceExtras(persisted),
     };
   }
 
-  return readLegacyUserPreferences();
+  return {
+    preferences: await readLegacyUserPreferences(),
+    shouldPersist: false,
+    extras: {},
+  };
 }
 
 export function migrateUserPreferences(preferences: UserPreferences): {
@@ -260,8 +325,15 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
     subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
     cloudRuntimeInputSyncEnabled: state.cloudRuntimeInputSyncEnabled,
-    onboardingCompletedVersion: state.onboardingCompletedVersion,
-    onboardingPrimaryGoalId: state.onboardingPrimaryGoalId,
+  };
+}
+
+function buildPersistedPreferencesRecord(
+  preferences: UserPreferences,
+): Record<string, unknown> {
+  return {
+    ...persistedPreferenceExtras,
+    ...preferences,
   };
 }
 
@@ -281,18 +353,19 @@ useUserPreferencesStore.subscribe((state, prev) => {
   const currentSlice = selectPersistedSlice(state);
   const previousSlice = selectPersistedSlice(prev);
   if (JSON.stringify(currentSlice) !== JSON.stringify(previousSlice)) {
-    void persistValue(USER_PREFERENCES_KEY, currentSlice);
+    void persistValue(USER_PREFERENCES_KEY, buildPersistedPreferencesRecord(currentSlice));
   }
 });
 
 export async function bootstrapUserPreferences(): Promise<void> {
   const persisted = await readAll();
-  const migrated = migrateUserPreferences(persisted);
+  persistedPreferenceExtras = persisted.extras;
+  const migrated = migrateUserPreferences(persisted.preferences);
   useUserPreferencesStore.setState({
     ...migrated.preferences,
     _hydrated: true,
   });
-  if (migrated.changed) {
-    void persistValue(USER_PREFERENCES_KEY, migrated.preferences);
+  if (migrated.changed || persisted.shouldPersist) {
+    void persistValue(USER_PREFERENCES_KEY, buildPersistedPreferencesRecord(migrated.preferences));
   }
 }

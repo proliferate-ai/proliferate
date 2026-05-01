@@ -9,7 +9,6 @@ import {
 function routeName(pathname: string): DesktopTelemetryRoute {
   if (pathname === "/") return "main";
   if (pathname === "/login") return "login";
-  if (pathname === "/setup") return "setup";
   if (pathname === "/settings") return "settings";
   if (pathname === "/automations" || pathname.startsWith("/automations/")) {
     return "automations";

@@ -3,7 +3,6 @@ import { useResolveRepoRootFromPathMutation } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { useOnboardingRequirement } from "@/hooks/onboarding/use-onboarding-requirement";
 import { runAddRepoWorkflow } from "@/lib/domain/workspaces/add-repo-workflow";
 import { pickFolder } from "@/platform/tauri/shell";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -30,20 +29,19 @@ function describeAddRepoFailure(error: unknown): string {
 }
 
 function isRepoEntryBlockedPath(pathname: string): boolean {
-  // Global shortcuts can invoke this hook outside SetupGate, so block public/setup routes here.
-  return pathname === "/login" || pathname === "/setup";
+  // Global shortcuts can invoke this hook outside authenticated app surfaces.
+  return pathname === "/login";
 }
 
 export function useAddRepo() {
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { isHydrated, requiresOnboarding } = useOnboardingRequirement();
   const resolveRepoRootFromPath = useResolveRepoRootFromPathMutation().mutateAsync;
   const unhideRepoRoot = useWorkspaceUiStore((state) => state.unhideRepoRoot);
   const openRepoSetupModal = useRepoSetupModalStore((state) => state.open);
   const showToast = useToastStore((state) => state.show);
   const [isAddingRepo, setIsAddingRepo] = useState(false);
-  const canAddRepo = isHydrated && !requiresOnboarding && !isRepoEntryBlockedPath(location.pathname);
+  const canAddRepo = !isRepoEntryBlockedPath(location.pathname);
 
   const addRepoFromPath = useCallback(async (path: string) => {
     if (!canAddRepo) {

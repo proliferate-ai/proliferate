@@ -88,6 +88,73 @@ describe("user preference migration", () => {
     expect(preferences.transparentChromeEnabled).toBe(true);
   });
 
+  it("strips deprecated onboarding keys from existing unified preferences", async () => {
+    storeMocks.values.set("user_preferences", {
+      ...USER_PREFERENCE_DEFAULTS,
+      futurePreference: true,
+      onboardingCompletedVersion: 1,
+      onboardingPrimaryGoalId: "build",
+    } as unknown as UserPreferences);
+
+    await bootstrapUserPreferences();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const state = useUserPreferencesStore.getState() as unknown as Record<string, unknown>;
+    expect(state.onboardingCompletedVersion).toBeUndefined();
+    expect(state.onboardingPrimaryGoalId).toBeUndefined();
+
+    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    expect(persisted.futurePreference).toBe(true);
+    expect(persisted.onboardingCompletedVersion).toBeUndefined();
+    expect(persisted.onboardingPrimaryGoalId).toBeUndefined();
+  });
+
+  it("does not rewrite records only because they contain unrelated unknown keys", async () => {
+    storeMocks.values.set("user_preferences", {
+      ...USER_PREFERENCE_DEFAULTS,
+      futurePreference: true,
+    } as unknown as UserPreferences);
+
+    await bootstrapUserPreferences();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(storeMocks.set).not.toHaveBeenCalled();
+  });
+
+  it("preserves unrelated unknown keys when hydration rewrites known preferences", async () => {
+    storeMocks.values.set("user_preferences", {
+      ...USER_PREFERENCE_DEFAULTS,
+      themePreset: "ship",
+      futurePreference: true,
+    } as unknown as UserPreferences);
+
+    await bootstrapUserPreferences();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    expect(persisted.themePreset).toBe("ship");
+    expect(persisted.futurePreference).toBe(true);
+  });
+
+  it("preserves unrelated unknown keys when migrating known preferences", async () => {
+    storeMocks.values.set("user_preferences", {
+      ...USER_PREFERENCE_DEFAULTS,
+      branchPrefixType: "invalid",
+      futurePreference: true,
+    } as unknown as UserPreferences);
+
+    await bootstrapUserPreferences();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    expect(persisted.branchPrefixType).toBe(PERSISTED_RECORD_BACKFILL.branchPrefixType);
+    expect(persisted.futurePreference).toBe(true);
+  });
+
   it("orders Mono before Dominic in theme preset options", () => {
     expect(THEME_PRESETS.indexOf("mono")).toBeLessThan(THEME_PRESETS.indexOf("ship"));
   });
