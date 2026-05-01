@@ -17,6 +17,7 @@ use super::runtime_helpers::{
     reviewers_from_contract, verify_mode,
 };
 use super::service::{ReviewError, ReviewService, StartReviewInput};
+use super::store_feedback::PendingPromptExecutionLookup;
 use crate::acp::provider_errors::OPUS_4_6_FALLBACK_MODEL_ID;
 use crate::origin::OriginContext;
 use crate::sessions::extensions::SessionTurnOutcome;
@@ -928,19 +929,47 @@ impl ReviewRuntime {
             let Some(seq) = job.sent_prompt_seq else {
                 continue;
             };
-            let Some((turn_id, executed_at)) = self
+            match self
                 .service
                 .store()
-                .find_pending_prompt_execution(&job.parent_session_id, seq)
+                .find_pending_prompt_execution(&job.parent_session_id, seq, &job.id)
                 .map_err(ReviewError::Internal)?
-            else {
-                continue;
-            };
-            self.service
-                .store()
-                .mark_feedback_job_sent(&job.id, Some(seq), Some(&turn_id), Some(&executed_at))
-                .map_err(ReviewError::Internal)?;
-            self.emit_review_run_updated_for_job(&job).await;
+            {
+                PendingPromptExecutionLookup::Pending => continue,
+                PendingPromptExecutionLookup::Executed {
+                    turn_id,
+                    executed_at,
+                } => {
+                    self.service
+                        .store()
+                        .mark_feedback_job_sent(
+                            &job.id,
+                            Some(seq),
+                            Some(&turn_id),
+                            Some(&executed_at),
+                        )
+                        .map_err(ReviewError::Internal)?;
+                    self.emit_review_run_updated_for_job(&job).await;
+                }
+                PendingPromptExecutionLookup::Removed { reason } => {
+                    let detail = format!(
+                        "Queued review feedback prompt seq {seq} was removed before execution ({reason:?}).",
+                    );
+                    if let Some(updated_job) = self
+                        .service
+                        .store()
+                        .reset_queued_feedback_job_for_retry(
+                            &job.id,
+                            seq,
+                            "queued_prompt_removed",
+                            Some(&detail),
+                        )
+                        .map_err(ReviewError::Internal)?
+                    {
+                        self.emit_review_run_updated_for_job(&updated_job).await;
+                    }
+                }
+            }
         }
         Ok(())
     }

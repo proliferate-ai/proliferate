@@ -1,9 +1,21 @@
-use anyharness_contract::v1::{PendingPromptRemovalReason, SessionEvent};
+use anyharness_contract::v1::{PendingPromptRemovalReason, PromptProvenance, SessionEvent};
 use rusqlite::{params, OptionalExtension};
 
 use super::model::{ReviewFeedbackJobRecord, ReviewRunStatus};
 use super::store::ReviewStore;
 use super::store_rows::{insert_feedback_job, map_feedback_job};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum PendingPromptExecutionLookup {
+    Pending,
+    Executed {
+        turn_id: String,
+        executed_at: String,
+    },
+    Removed {
+        reason: PendingPromptRemovalReason,
+    },
+}
 
 impl ReviewStore {
     pub fn create_feedback_job(
@@ -94,6 +106,42 @@ impl ReviewStore {
                 params![prompt_seq, now, job_id],
             )?;
             Ok(Some(job))
+        })
+    }
+
+    pub fn reset_queued_feedback_job_for_retry(
+        &self,
+        job_id: &str,
+        prompt_seq: i64,
+        reason: &str,
+        detail: Option<&str>,
+    ) -> anyhow::Result<Option<ReviewFeedbackJobRecord>> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.db.with_tx(|tx| {
+            let changed = tx.execute(
+                "UPDATE review_feedback_jobs
+                 SET state = 'pending',
+                     sent_prompt_seq = NULL,
+                     feedback_turn_id = NULL,
+                     next_attempt_at = NULL,
+                     failure_reason = ?1,
+                     failure_detail = ?2,
+                     updated_at = ?3
+                 WHERE id = ?4
+                   AND state = 'pending'
+                   AND sent_prompt_seq = ?5
+                   AND feedback_turn_id IS NULL",
+                params![reason, detail, now, job_id, prompt_seq],
+            )?;
+            if changed == 0 {
+                return Ok(None);
+            }
+            tx.query_row(
+                "SELECT * FROM review_feedback_jobs WHERE id = ?1",
+                [job_id],
+                map_feedback_job,
+            )
+            .optional()
         })
     }
 
@@ -270,6 +318,7 @@ impl ReviewStore {
                  WHERE job.state = 'sent'
                    AND job.feedback_turn_id IS NOT NULL
                    AND run.status = 'parent_revising'
+                   AND job.review_round_id = run.active_round_id
                  ORDER BY job.updated_at ASC, job.id ASC",
             )?;
             let rows = stmt.query_map([], map_feedback_job)?;
@@ -277,14 +326,15 @@ impl ReviewStore {
         })
     }
 
-    pub fn find_pending_prompt_execution(
+    pub(super) fn find_pending_prompt_execution(
         &self,
         session_id: &str,
         pending_prompt_seq: i64,
-    ) -> anyhow::Result<Option<(String, String)>> {
+        feedback_job_id: &str,
+    ) -> anyhow::Result<PendingPromptExecutionLookup> {
         self.db.with_conn(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT seq, event_type, turn_id, payload_json
+                "SELECT seq, timestamp, event_type, turn_id, payload_json
                  FROM session_events
                  WHERE session_id = ?1
                  ORDER BY seq ASC",
@@ -293,13 +343,40 @@ impl ReviewStore {
                 Ok((
                     row.get::<_, i64>(0)?,
                     row.get::<_, String>(1)?,
-                    row.get::<_, Option<String>>(2)?,
-                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, String>(4)?,
                 ))
             })?;
             let mut current_turn_id: Option<String> = None;
+            let mut tracking_current_attempt = false;
+            let mut latest_lookup = PendingPromptExecutionLookup::Pending;
             for row in rows {
-                let (seq, event_type, turn_id, payload_json) = row?;
+                let (_seq, timestamp, event_type, turn_id, payload_json) = row?;
+                if event_type == "pending_prompt_added" {
+                    let Ok(SessionEvent::PendingPromptAdded(payload)) =
+                        serde_json::from_str::<SessionEvent>(&payload_json)
+                    else {
+                        continue;
+                    };
+                    let is_current_feedback_prompt = payload.seq == pending_prompt_seq
+                        && matches!(
+                            payload.prompt_provenance,
+                            Some(PromptProvenance::ReviewFeedback {
+                                feedback_job_id: ref payload_feedback_job_id,
+                                ..
+                            }) if payload_feedback_job_id == feedback_job_id
+                        );
+                    if is_current_feedback_prompt {
+                        tracking_current_attempt = true;
+                        latest_lookup = PendingPromptExecutionLookup::Pending;
+                        current_turn_id = None;
+                    }
+                    continue;
+                }
+                if !tracking_current_attempt {
+                    continue;
+                }
                 if event_type == "turn_started" {
                     current_turn_id = turn_id;
                     continue;
@@ -312,22 +389,27 @@ impl ReviewStore {
                 else {
                     continue;
                 };
-                if payload.seq == pending_prompt_seq
-                    && payload.reason == PendingPromptRemovalReason::Executed
-                {
-                    let executed_at = conn.query_row(
-                        "SELECT timestamp
-                         FROM session_events
-                         WHERE session_id = ?1 AND seq = ?2",
-                        params![session_id, seq],
-                        |timestamp_row| timestamp_row.get::<_, String>(0),
-                    )?;
-                    return Ok(current_turn_id
-                        .clone()
-                        .map(|turn_id| (turn_id, executed_at)));
+                if payload.seq != pending_prompt_seq {
+                    continue;
                 }
+                if payload.reason != PendingPromptRemovalReason::Executed {
+                    latest_lookup = PendingPromptExecutionLookup::Removed {
+                        reason: payload.reason,
+                    };
+                    tracking_current_attempt = false;
+                    current_turn_id = None;
+                    continue;
+                }
+                if let Some(turn_id) = current_turn_id.clone() {
+                    latest_lookup = PendingPromptExecutionLookup::Executed {
+                        turn_id,
+                        executed_at: timestamp,
+                    };
+                };
+                tracking_current_attempt = false;
+                current_turn_id = None;
             }
-            Ok(None)
+            Ok(latest_lookup)
         })
     }
 
@@ -380,6 +462,7 @@ impl ReviewStore {
                          SELECT 1
                          FROM review_feedback_jobs job
                          WHERE job.review_run_id = review_runs.id
+                           AND job.review_round_id = review_runs.active_round_id
                            AND job.feedback_turn_id = ?2
                            AND job.state = 'sent'
                        )
