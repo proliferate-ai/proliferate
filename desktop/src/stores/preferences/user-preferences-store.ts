@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import type { ColorMode, ThemePreset } from "@/config/theme";
-import type { OnboardingGoalId } from "@/config/onboarding";
 import {
   resolveAppearanceSizeId,
   type ReadableCodeFontSizeId,
@@ -55,8 +54,6 @@ export interface UserPreferences {
   cloudRuntimeInputSyncEnabled: boolean;
   reviewDefaultsByKind: ReviewDefaultsByKind;
   reviewPersonalitiesByKind: ReviewPersonalitiesByKind;
-  onboardingCompletedVersion: number;
-  onboardingPrimaryGoalId: OnboardingGoalId | "";
 }
 
 const USER_PREFERENCES_KEY = "user_preferences";
@@ -82,8 +79,6 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   cloudRuntimeInputSyncEnabled: false,
   reviewDefaultsByKind: { plan: null, code: null },
   reviewPersonalitiesByKind: { plan: [], code: [] },
-  onboardingCompletedVersion: 0,
-  onboardingPrimaryGoalId: "",
 };
 
 export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
@@ -107,11 +102,48 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   cloudRuntimeInputSyncEnabled: false,
   reviewDefaultsByKind: { plan: null, code: null },
   reviewPersonalitiesByKind: { plan: [], code: [] },
-  onboardingCompletedVersion: 0,
-  onboardingPrimaryGoalId: "",
 };
 
 export const USER_PREFERENCE_DEFAULTS = NEW_USER_DEFAULTS;
+
+const USER_PREFERENCE_KEYS = [
+  "themePreset",
+  "colorMode",
+  "uiFontSizeId",
+  "readableCodeFontSizeId",
+  "defaultChatAgentKind",
+  "defaultChatModelIdByAgentKind",
+  "defaultSessionModeByAgentKind",
+  "defaultOpenInTargetId",
+  "branchPrefixType",
+  "turnEndSoundEnabled",
+  "turnEndSoundId",
+  "transparentChromeEnabled",
+  "pluginsInCodingSessionsEnabled",
+  "subagentsEnabled",
+  "coworkWorkspaceDelegationEnabled",
+  "cloudRuntimeInputSyncEnabled",
+  "reviewDefaultsByKind",
+  "reviewPersonalitiesByKind",
+] as const satisfies readonly (keyof UserPreferences)[];
+
+const USER_PREFERENCE_KEY_SET = new Set<string>(USER_PREFERENCE_KEYS);
+
+const MIGRATED_USER_PREFERENCE_KEYS = [
+  "defaultChatModelId",
+  "powersInCodingSessionsEnabled",
+] as const;
+
+const MIGRATED_USER_PREFERENCE_KEY_SET = new Set<string>(MIGRATED_USER_PREFERENCE_KEYS);
+
+const DEPRECATED_USER_PREFERENCE_KEYS = [
+  "onboardingCompletedVersion",
+  "onboardingPrimaryGoalId",
+] as const;
+
+const DEPRECATED_USER_PREFERENCE_KEY_SET = new Set<string>(DEPRECATED_USER_PREFERENCE_KEYS);
+
+let persistedPreferenceExtras: Record<string, unknown> = {};
 
 const LEGACY_CLAUDE_MODEL_IDS: Record<string, string> = {
   "claude-sonnet-4-5": "sonnet",
@@ -200,9 +232,34 @@ async function readLegacyUserPreferences(): Promise<LegacyUserPreferencesInput> 
     cloudRuntimeInputSyncEnabled: defaults.cloudRuntimeInputSyncEnabled,
     reviewDefaultsByKind: defaults.reviewDefaultsByKind,
     reviewPersonalitiesByKind: defaults.reviewPersonalitiesByKind,
-    onboardingCompletedVersion: defaults.onboardingCompletedVersion,
-    onboardingPrimaryGoalId: defaults.onboardingPrimaryGoalId,
   };
+}
+
+function pickLegacyUserPreferencesInput(
+  value: Record<string, unknown>,
+): LegacyUserPreferencesInput {
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) => (
+      USER_PREFERENCE_KEY_SET.has(key)
+      || MIGRATED_USER_PREFERENCE_KEY_SET.has(key)
+    )),
+  ) as LegacyUserPreferencesInput;
+}
+
+function hasDeprecatedUserPreferenceKeys(value: Record<string, unknown>): boolean {
+  return DEPRECATED_USER_PREFERENCE_KEYS.some((key) => key in value);
+}
+
+function getForwardCompatibleUserPreferenceExtras(
+  value: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) => (
+      !USER_PREFERENCE_KEY_SET.has(key)
+      && !MIGRATED_USER_PREFERENCE_KEY_SET.has(key)
+      && !DEPRECATED_USER_PREFERENCE_KEY_SET.has(key)
+    )),
+  );
 }
 
 function sanitizeDefaultSessionModeByAgentKind(
@@ -370,13 +427,25 @@ function dedupeReviewPersonalityPreferences(
   });
 }
 
-async function readAll(): Promise<LegacyUserPreferencesInput> {
-  const persisted = await readPersistedValue<LegacyUserPreferencesInput>(USER_PREFERENCES_KEY);
-  if (persisted) {
-    return persisted;
+async function readAll(): Promise<{
+  preferences: LegacyUserPreferencesInput;
+  shouldPersist: boolean;
+  extras: Record<string, unknown>;
+}> {
+  const persisted = await readPersistedValue<Record<string, unknown>>(USER_PREFERENCES_KEY);
+  if (persisted && typeof persisted === "object" && !Array.isArray(persisted)) {
+    return {
+      preferences: pickLegacyUserPreferencesInput(persisted),
+      shouldPersist: hasDeprecatedUserPreferenceKeys(persisted),
+      extras: getForwardCompatibleUserPreferenceExtras(persisted),
+    };
   }
 
-  return readLegacyUserPreferences();
+  return {
+    preferences: await readLegacyUserPreferences(),
+    shouldPersist: false,
+    extras: {},
+  };
 }
 
 export function migrateUserPreferences(preferences: LegacyUserPreferencesInput): {
@@ -553,8 +622,15 @@ function selectPersistedSlice(state: UserPreferencesState): UserPreferences {
     cloudRuntimeInputSyncEnabled: state.cloudRuntimeInputSyncEnabled,
     reviewDefaultsByKind: state.reviewDefaultsByKind,
     reviewPersonalitiesByKind: state.reviewPersonalitiesByKind,
-    onboardingCompletedVersion: state.onboardingCompletedVersion,
-    onboardingPrimaryGoalId: state.onboardingPrimaryGoalId,
+  };
+}
+
+function buildPersistedPreferencesRecord(
+  preferences: UserPreferences,
+): Record<string, unknown> {
+  return {
+    ...persistedPreferenceExtras,
+    ...preferences,
   };
 }
 
@@ -574,18 +650,19 @@ useUserPreferencesStore.subscribe((state, prev) => {
   const currentSlice = selectPersistedSlice(state);
   const previousSlice = selectPersistedSlice(prev);
   if (JSON.stringify(currentSlice) !== JSON.stringify(previousSlice)) {
-    void persistValue(USER_PREFERENCES_KEY, currentSlice);
+    void persistValue(USER_PREFERENCES_KEY, buildPersistedPreferencesRecord(currentSlice));
   }
 });
 
 export async function bootstrapUserPreferences(): Promise<void> {
   const persisted = await readAll();
-  const migrated = migrateUserPreferences(persisted);
+  persistedPreferenceExtras = persisted.extras;
+  const migrated = migrateUserPreferences(persisted.preferences);
   useUserPreferencesStore.setState({
     ...migrated.preferences,
     _hydrated: true,
   });
-  if (migrated.changed) {
-    void persistValue(USER_PREFERENCES_KEY, migrated.preferences);
+  if (migrated.changed || persisted.shouldPersist) {
+    void persistValue(USER_PREFERENCES_KEY, buildPersistedPreferencesRecord(migrated.preferences));
   }
 }
