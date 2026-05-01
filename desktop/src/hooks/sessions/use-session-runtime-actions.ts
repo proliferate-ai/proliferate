@@ -1045,6 +1045,10 @@ export function useSessionRuntimeActions() {
           });
         }
 
+        if (slotState.workspaceId && shouldTrackWorkspaceWorkActivity(event.type)) {
+          trackWorkspaceInteraction(slotState.workspaceId, envelope.timestamp);
+        }
+
         if (event.type === "turn_ended" || event.type === "error") {
           if (hasQueuedPendingConfigChanges(reconcileResult.pendingConfigChanges)) {
             schedulePendingConfigRollbackCheck(
@@ -1061,7 +1065,6 @@ export function useSessionRuntimeActions() {
                 slotState.workspaceId,
               ),
             });
-            trackWorkspaceInteraction(slotState.workspaceId, envelope.timestamp);
           }
 
           notifyTurnEnd(sessionId, event.type);
@@ -1204,6 +1207,25 @@ function shouldScheduleActiveSummaryRefresh(eventType: string): boolean {
     case "item_completed":
     case "usage_update":
     case "interaction_resolved":
+      return true;
+    default:
+      return false;
+  }
+}
+
+function shouldTrackWorkspaceWorkActivity(eventType: string): boolean {
+  switch (eventType) {
+    case "turn_started":
+    case "item_started":
+    case "item_completed":
+    case "interaction_requested":
+    case "interaction_resolved":
+    case "turn_ended":
+    case "error":
+    case "session_ended":
+    case "subagent_turn_completed":
+    case "session_link_turn_completed":
+    case "review_run_updated":
       return true;
     default:
       return false;

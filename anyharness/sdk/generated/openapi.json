@@ -13604,6 +13604,12 @@
           "totalSessionCount": {
             "type": "integer",
             "minimum": 0
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },

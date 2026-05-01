@@ -524,6 +524,11 @@ impl LiveSessionHandle {
         execution.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
+    pub async fn mark_activity_at(&self, updated_at: String) {
+        let mut execution = self.execution.write().await;
+        execution.updated_at = updated_at;
+    }
+
     pub async fn execution_snapshot(&self) -> LiveSessionExecutionSnapshot {
         self.execution.read().await.clone()
     }
@@ -1781,7 +1786,13 @@ async fn run_actor(
                                                 let _ = respond_to.send(result);
                                             }
                                             Some(SessionCommand::InjectRuntimeEvent { event, respond_to }) => {
+                                                let touch_session_activity = event.updates_session_activity_at();
                                                 let result = event_sink.lock().await.inject_runtime_event(event);
+                                                if touch_session_activity {
+                                                    if let Ok(envelope) = &result {
+                                                        handle.mark_activity_at(envelope.timestamp.clone()).await;
+                                                    }
+                                                }
                                                 let _ = respond_to.send(result);
                                             }
                                             Some(SessionCommand::SetConfigOption { config_id, value, respond_to }) => {
@@ -2135,7 +2146,13 @@ async fn run_actor(
                         let _ = respond_to.send(result);
                     }
                     Some(SessionCommand::InjectRuntimeEvent { event, respond_to }) => {
+                        let touch_session_activity = event.updates_session_activity_at();
                         let result = event_sink.lock().await.inject_runtime_event(event);
+                        if touch_session_activity {
+                            if let Ok(envelope) = &result {
+                                handle.mark_activity_at(envelope.timestamp.clone()).await;
+                            }
+                        }
                         let _ = respond_to.send(result);
                     }
                     Some(SessionCommand::SetConfigOption {

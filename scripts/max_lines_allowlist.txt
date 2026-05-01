@@ -20,6 +20,7 @@ anyharness/crates/anyharness-lib/src/sessions/prompt.rs
 anyharness/crates/anyharness-lib/src/sessions/runtime.rs
 anyharness/crates/anyharness-lib/src/sessions/service.rs
 anyharness/crates/anyharness-lib/src/sessions/store.rs
+anyharness/crates/anyharness-lib/src/terminals/service.rs
 anyharness/crates/anyharness-lib/src/cowork/runtime.rs
 anyharness/crates/anyharness-lib/src/mobility/service.rs
 anyharness/crates/anyharness-lib/src/workspaces/service.rs
@@ -31,7 +32,10 @@ desktop/src/components/playground/PlaygroundComposer.tsx
 desktop/src/components/workspace/chat/transcript/MessageList.tsx
 desktop/src/hooks/sessions/use-session-control-actions.ts
 desktop/src/hooks/sessions/use-session-runtime-actions.ts
+desktop/src/hooks/sessions/use-session-selection-actions.ts
+desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts
 desktop/src/lib/domain/chat/__fixtures__/playground.ts
+desktop/src/lib/infra/debug-measurement.ts
 desktop/src/stores/preferences/workspace-ui-store.ts
 server/tests/integration/test_cloud_api.py
 server/proliferate/db/store/billing.py
