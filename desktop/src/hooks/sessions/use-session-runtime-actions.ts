@@ -644,6 +644,7 @@ export function useSessionRuntimeActions() {
       allowColdIdleNoStream?: boolean;
       skipInitialRefresh?: boolean;
       refreshOnStartupReady?: boolean;
+      forceReconnect?: boolean;
       requestHeaders?: HeadersInit;
       measurementOperationId?: MeasurementOperationId | null;
       isCurrent?: () => boolean;
@@ -692,8 +693,11 @@ export function useSessionRuntimeActions() {
     }
 
     if (
-      slot.streamConnectionState === "connecting"
-      || slot.streamConnectionState === "open"
+      !options?.forceReconnect
+      && (
+        slot.streamConnectionState === "connecting"
+        || slot.streamConnectionState === "open"
+      )
     ) {
       return;
     }

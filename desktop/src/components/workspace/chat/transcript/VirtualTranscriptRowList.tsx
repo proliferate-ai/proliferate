@@ -2,14 +2,12 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
-  type RefObject,
-  type ReactNode,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
-import { LoaderCircle } from "@/components/ui/icons";
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,
@@ -19,25 +17,36 @@ import {
   type TranscriptVirtualRow,
 } from "@/lib/domain/chat/transcript-virtual-rows";
 import {
+  parseTranscriptVirtualizationMode,
+  resolveTranscriptVirtualizationEnabled,
+  TRANSCRIPT_VIRTUALIZATION_STORAGE_KEY,
+  type TranscriptVirtualizationMode,
+} from "@/lib/domain/chat/transcript-virtualization-config";
+import {
   hashMeasurementScope,
   isMainThreadMeasurementEnabled,
 } from "@/lib/infra/debug-measurement";
+import { FullTranscriptRowList } from "@/components/workspace/chat/transcript/FullTranscriptRowList";
+import {
+  HISTORY_PREFETCH_TOP_THRESHOLD_PX,
+  STICKY_BOTTOM_THRESHOLD_PX,
+  TRANSCRIPT_TOP_PADDING_PX,
+  TranscriptHistoryLoadingRow,
+  type TranscriptRowListBaseProps,
+} from "@/components/workspace/chat/transcript/TranscriptRowListShared";
 
-const TRANSCRIPT_TOP_PADDING_PX = 16;
-const STICKY_BOTTOM_THRESHOLD_PX = 96;
 const ESTIMATED_TURN_HEIGHT_PX = 360;
+const ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX = 32;
 const VIRTUALIZER_OVERSCAN = 8;
 const BLANK_VIEWPORT_MIN_SCROLLABLE_PX = 32;
-const HISTORY_PREFETCH_TOP_THRESHOLD_PX = 480;
-const DEBUG_ENABLE_VIRTUALIZATION_STORAGE_KEY =
+const LEGACY_ENABLE_VIRTUALIZATION_STORAGE_KEY =
   "proliferate:enableTranscriptVirtualization";
-
-// Dark launch only: production currently relies on bounded transcript history
-// plus full rendering. Enable this in dev with the localStorage key above when
-// profiling the virtualizer path without changing shipped behavior.
+const LEGACY_DISABLE_VIRTUALIZATION_STORAGE_KEY =
+  "proliferate:disableTranscriptVirtualization";
+const HISTORY_LOADING_ROW_KEY = "history-loader";
 
 interface VirtualScrollAnchor {
-  key: TranscriptVirtualRow["key"];
+  key: TranscriptRenderableRow["key"];
   offsetWithinRowPx: number;
   rowIndex: number;
   rowCount: number;
@@ -49,26 +58,24 @@ interface PrependScrollAnchor {
   scrollTop: number;
 }
 
-interface VirtualTurnListProps {
-  rows: readonly TranscriptVirtualRow[];
-  selectionRootRef: RefObject<HTMLDivElement | null>;
-  hasOlderHistory: boolean;
-  isLoadingOlderHistory: boolean;
-  bottomInsetPx: number;
-  selectedWorkspaceId: string | null;
-  activeSessionId: string;
-  isSessionBusy: boolean;
-  pendingPromptText: string | null;
-  onLoadOlderHistory: () => void;
-  onScrollSample: () => void;
-  renderRow: (row: TranscriptVirtualRow, rowIndex: number) => ReactNode;
-}
+type TranscriptRenderableRow =
+  | {
+    kind: "history_loader";
+    key: typeof HISTORY_LOADING_ROW_KEY;
+  }
+  | {
+    kind: "transcript";
+    key: TranscriptVirtualRow["key"];
+    row: TranscriptVirtualRow;
+    rowIndex: number;
+  };
 
-export function VirtualTurnList({
+export function VirtualTranscriptRowList({
   rows,
   selectionRootRef,
   hasOlderHistory,
   isLoadingOlderHistory,
+  olderHistoryCursor,
   bottomInsetPx,
   selectedWorkspaceId,
   activeSessionId,
@@ -77,8 +84,12 @@ export function VirtualTurnList({
   onLoadOlderHistory,
   onScrollSample,
   renderRow,
-}: VirtualTurnListProps) {
-  const virtualizationEnabled = isTranscriptVirtualizationDarkLaunchEnabled();
+}: TranscriptRowListBaseProps) {
+  const [virtualizationMode] = useState(readTranscriptVirtualizationMode);
+  const virtualizationEnabled = resolveTranscriptVirtualizationEnabled({
+    mode: virtualizationMode,
+    rowCount: rows.length,
+  });
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
 
   useLayoutEffect(() => {
@@ -87,28 +98,33 @@ export function VirtualTurnList({
 
   if (!virtualizationEnabled || fallbackReason !== null) {
     return (
-      <FullTurnList
+      <FullTranscriptRowList
         rows={rows}
         selectionRootRef={selectionRootRef}
         hasOlderHistory={hasOlderHistory}
         isLoadingOlderHistory={isLoadingOlderHistory}
+        olderHistoryCursor={olderHistoryCursor}
         bottomInsetPx={bottomInsetPx}
         selectedWorkspaceId={selectedWorkspaceId}
         activeSessionId={activeSessionId}
+        isSessionBusy={isSessionBusy}
+        pendingPromptText={pendingPromptText}
         onLoadOlderHistory={onLoadOlderHistory}
         onScrollSample={onScrollSample}
         renderRow={renderRow}
         fallbackReason={fallbackReason}
+        virtualizationMode={virtualizationMode}
       />
     );
   }
 
   return (
-    <VirtualizedTurnList
+    <VirtualizedTranscriptRowList
       rows={rows}
       selectionRootRef={selectionRootRef}
       hasOlderHistory={hasOlderHistory}
       isLoadingOlderHistory={isLoadingOlderHistory}
+      olderHistoryCursor={olderHistoryCursor}
       bottomInsetPx={bottomInsetPx}
       selectedWorkspaceId={selectedWorkspaceId}
       activeSessionId={activeSessionId}
@@ -118,165 +134,22 @@ export function VirtualTurnList({
       onScrollSample={onScrollSample}
       renderRow={renderRow}
       onFallback={setFallbackReason}
+      virtualizationMode={virtualizationMode}
     />
   );
 }
 
-interface FullTurnListProps extends Omit<VirtualTurnListProps, "isSessionBusy" | "pendingPromptText"> {
-  fallbackReason: string | null;
-}
-
-function FullTurnList({
-  rows,
-  selectionRootRef,
-  hasOlderHistory,
-  isLoadingOlderHistory,
-  bottomInsetPx,
-  selectedWorkspaceId,
-  activeSessionId,
-  onLoadOlderHistory,
-  onScrollSample,
-  renderRow,
-  fallbackReason,
-}: FullTurnListProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const shouldStickToBottomRef = useRef(true);
-  const pendingPrependAnchorRef = useRef<PrependScrollAnchor | null>(null);
-
-  const scrollToBottom = useCallback(() => {
-    const viewport = scrollRef.current;
-    if (!viewport) {
-      return;
-    }
-    viewport.scrollTop = viewport.scrollHeight;
-  }, []);
-
-  const updateStickiness = useCallback((viewport: HTMLDivElement) => {
-    shouldStickToBottomRef.current = shouldStickToVirtualBottom({
-      scrollOffset: viewport.scrollTop,
-      viewportSize: viewport.clientHeight,
-      totalVirtualSize: viewport.scrollHeight,
-      thresholdPx: STICKY_BOTTOM_THRESHOLD_PX,
-    });
-  }, []);
-
-  const handleViewportScroll = useCallback((viewport: HTMLDivElement) => {
-    updateStickiness(viewport);
-    if (
-      hasOlderHistory
-      && !isLoadingOlderHistory
-      && viewport.scrollTop <= HISTORY_PREFETCH_TOP_THRESHOLD_PX
-      && pendingPrependAnchorRef.current === null
-    ) {
-      pendingPrependAnchorRef.current = {
-        rowCount: rows.length,
-        scrollHeight: viewport.scrollHeight,
-        scrollTop: viewport.scrollTop,
-      };
-      onLoadOlderHistory();
-    }
-    onScrollSample();
-  }, [
-    hasOlderHistory,
-    isLoadingOlderHistory,
-    onLoadOlderHistory,
-    onScrollSample,
-    rows.length,
-    updateStickiness,
-  ]);
-
-  useLayoutEffect(() => {
-    shouldStickToBottomRef.current = true;
-    pendingPrependAnchorRef.current = null;
-  }, [activeSessionId, selectedWorkspaceId]);
-
-  useLayoutEffect(() => {
-    shouldStickToBottomRef.current = true;
-    scrollToBottom();
-    // This is intentionally keyed to session identity and row availability.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSessionId, selectedWorkspaceId]);
-
-  useLayoutEffect(() => {
-    const anchor = pendingPrependAnchorRef.current;
-    if (!anchor || anchor.rowCount >= rows.length) {
-      return;
-    }
-
-    const viewport = scrollRef.current;
-    pendingPrependAnchorRef.current = null;
-    if (!viewport) {
-      return;
-    }
-
-    shouldStickToBottomRef.current = false;
-    const scrollDelta = viewport.scrollHeight - anchor.scrollHeight;
-    viewport.scrollTop = anchor.scrollTop + scrollDelta;
-  }, [rows.length]);
-
-  useEffect(() => {
-    const anchor = pendingPrependAnchorRef.current;
-    if (!isLoadingOlderHistory && anchor?.rowCount === rows.length) {
-      pendingPrependAnchorRef.current = null;
-    }
-  }, [isLoadingOlderHistory, rows.length]);
-
-  useLayoutEffect(() => {
-    if (!shouldStickToBottomRef.current) {
-      return;
-    }
-    scrollToBottom();
-  }, [bottomInsetPx, rows.length, scrollToBottom]);
-
-  return (
-    <AutoHideScrollArea
-      className="h-full"
-      ref={scrollRef}
-      onViewportScroll={handleViewportScroll}
-    >
-      <div
-        className={`${CHAT_SURFACE_GUTTER_CLASSNAME} min-h-full`}
-        data-transcript-virtualization-mode="disabled"
-        data-transcript-virtualization-fallback={fallbackReason ?? undefined}
-      >
-        <div
-          ref={selectionRootRef}
-          data-chat-transcript-root="true"
-          tabIndex={-1}
-          className={`${CHAT_COLUMN_CLASSNAME} select-none outline-none`}
-        >
-          {TRANSCRIPT_TOP_PADDING_PX > 0 && (
-            <div aria-hidden="true" style={{ height: TRANSCRIPT_TOP_PADDING_PX }} />
-          )}
-          {isLoadingOlderHistory && <HistoryLoadingRow />}
-          {rows.map((row, rowIndex) => (
-            <div
-              key={row.key}
-              data-transcript-virtual-row="true"
-              data-index={rowIndex}
-              className="w-full"
-            >
-              {renderRow(row, rowIndex)}
-            </div>
-          ))}
-          {bottomInsetPx > 0 && (
-            <div aria-hidden="true" style={{ height: bottomInsetPx }} />
-          )}
-        </div>
-      </div>
-    </AutoHideScrollArea>
-  );
-}
-
-interface VirtualizedTurnListProps extends VirtualTurnListProps {
+interface VirtualizedTranscriptRowListProps extends TranscriptRowListBaseProps {
   onFallback: (reason: string) => void;
+  virtualizationMode: TranscriptVirtualizationMode;
 }
 
-function VirtualizedTurnList({
+function VirtualizedTranscriptRowList({
   rows,
   selectionRootRef,
   hasOlderHistory,
   isLoadingOlderHistory,
+  olderHistoryCursor,
   bottomInsetPx,
   selectedWorkspaceId,
   activeSessionId,
@@ -286,22 +159,28 @@ function VirtualizedTurnList({
   onScrollSample,
   renderRow,
   onFallback,
-}: VirtualizedTurnListProps) {
+  virtualizationMode,
+}: VirtualizedTranscriptRowListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldStickToBottomRef = useRef(true);
   const pendingAnchorRef = useRef<VirtualScrollAnchor | null>(null);
   const pendingPrependAnchorRef = useRef<PrependScrollAnchor | null>(null);
+  const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
   const lastBlankReportSignatureRef = useRef<string | null>(null);
+  const renderableRows = useMemo(
+    () => buildRenderableRows(rows, isLoadingOlderHistory),
+    [isLoadingOlderHistory, rows],
+  );
   const estimatedInitialBottomOffset =
     TRANSCRIPT_TOP_PADDING_PX
-    + rows.length * ESTIMATED_TURN_HEIGHT_PX
+    + estimateRenderableRowsHeight(renderableRows)
     + bottomInsetPx;
 
   const virtualizer = useVirtualizer({
-    count: rows.length,
+    count: renderableRows.length,
     getScrollElement: () => scrollRef.current,
-    getItemKey: (index) => rows[index]?.key ?? index,
-    estimateSize: () => ESTIMATED_TURN_HEIGHT_PX,
+    getItemKey: (index) => renderableRows[index]?.key ?? index,
+    estimateSize: (index) => estimateRenderableRowHeight(renderableRows[index]),
     overscan: VIRTUALIZER_OVERSCAN,
     paddingStart: TRANSCRIPT_TOP_PADDING_PX,
     paddingEnd: bottomInsetPx,
@@ -322,12 +201,12 @@ function VirtualizedTurnList({
     if (!viewport) {
       return;
     }
-    if (rows.length > 0) {
-      virtualizer.scrollToIndex(rows.length - 1, { align: "end" });
+    if (renderableRows.length > 0) {
+      virtualizer.scrollToIndex(renderableRows.length - 1, { align: "end" });
       return;
     }
     viewport.scrollTop = viewport.scrollHeight;
-  }, [rows.length, virtualizer]);
+  }, [renderableRows.length, virtualizer]);
 
   const updateStickiness = useCallback((viewport: HTMLDivElement) => {
     shouldStickToBottomRef.current = shouldStickToVirtualBottom({
@@ -340,12 +219,18 @@ function VirtualizedTurnList({
 
   const handleViewportScroll = useCallback((viewport: HTMLDivElement) => {
     updateStickiness(viewport);
+    if (viewport.scrollTop > HISTORY_PREFETCH_TOP_THRESHOLD_PX) {
+      lastOlderHistoryCursorRequestRef.current = null;
+    }
     if (
       hasOlderHistory
       && !isLoadingOlderHistory
+      && olderHistoryCursor !== null
+      && lastOlderHistoryCursorRequestRef.current !== olderHistoryCursor
       && viewport.scrollTop <= HISTORY_PREFETCH_TOP_THRESHOLD_PX
       && pendingPrependAnchorRef.current === null
     ) {
+      lastOlderHistoryCursorRequestRef.current = olderHistoryCursor;
       pendingPrependAnchorRef.current = {
         rowCount: rows.length,
         scrollHeight: viewport.scrollHeight,
@@ -357,6 +242,7 @@ function VirtualizedTurnList({
   }, [
     hasOlderHistory,
     isLoadingOlderHistory,
+    olderHistoryCursor,
     onLoadOlderHistory,
     onScrollSample,
     rows.length,
@@ -367,6 +253,7 @@ function VirtualizedTurnList({
     shouldStickToBottomRef.current = true;
     lastBlankReportSignatureRef.current = null;
     pendingPrependAnchorRef.current = null;
+    lastOlderHistoryCursorRequestRef.current = null;
   }, [activeSessionId, selectedWorkspaceId]);
 
   useLayoutEffect(() => {
@@ -406,11 +293,14 @@ function VirtualizedTurnList({
     if (!anchor || shouldStickToBottomRef.current) {
       return;
     }
-    if (anchor.rowCount === rows.length && rows[anchor.rowIndex]?.key === anchor.key) {
+    if (
+      anchor.rowCount === renderableRows.length
+      && renderableRows[anchor.rowIndex]?.key === anchor.key
+    ) {
       return;
     }
 
-    const nextIndex = rows.findIndex((row) => row.key === anchor.key);
+    const nextIndex = renderableRows.findIndex((row) => row.key === anchor.key);
     if (nextIndex < 0) {
       return;
     }
@@ -420,7 +310,7 @@ function VirtualizedTurnList({
       return;
     }
     virtualizer.scrollToOffset(offsetInfo[0] + anchor.offsetWithinRowPx);
-  }, [rows, virtualizer]);
+  }, [renderableRows, rows.length, virtualizer]);
 
   useLayoutEffect(() => {
     if (!shouldStickToBottomRef.current) {
@@ -431,7 +321,7 @@ function VirtualizedTurnList({
     bottomInsetPx,
     isSessionBusy,
     pendingPromptText,
-    rows.length,
+    renderableRows.length,
     scrollToBottom,
     totalContentHeight,
   ]);
@@ -451,7 +341,7 @@ function VirtualizedTurnList({
       return;
     }
 
-    const row = rows[firstVisibleVirtualRow.index];
+    const row = renderableRows[firstVisibleVirtualRow.index];
     if (!row) {
       pendingAnchorRef.current = null;
       return;
@@ -461,7 +351,7 @@ function VirtualizedTurnList({
       key: row.key,
       offsetWithinRowPx: Math.max(viewport.scrollTop - firstVisibleVirtualRow.start, 0),
       rowIndex: firstVisibleVirtualRow.index,
-      rowCount: rows.length,
+      rowCount: renderableRows.length,
     };
   });
 
@@ -513,6 +403,7 @@ function VirtualizedTurnList({
           activeSessionHash: hashMeasurementScope(activeSessionId),
           selectedWorkspaceHash: selectedWorkspaceId ? hashMeasurementScope(selectedWorkspaceId) : null,
           rowCount: rows.length,
+          renderableRowCount: renderableRows.length,
           virtualItemCount: virtualItems.length,
           firstVirtualItemIndex,
           lastVirtualItemIndex,
@@ -538,6 +429,7 @@ function VirtualizedTurnList({
     bottomSpacerHeight,
     firstVirtualItem,
     lastVirtualItem,
+    renderableRows.length,
     rows.length,
     selectedWorkspaceId,
     topSpacerHeight,
@@ -555,6 +447,7 @@ function VirtualizedTurnList({
       <div
         className={`${CHAT_SURFACE_GUTTER_CLASSNAME} min-h-full`}
         data-transcript-virtualization-mode="virtual"
+        data-transcript-virtualization-setting={virtualizationMode}
       >
         <div
           ref={selectionRootRef}
@@ -565,9 +458,23 @@ function VirtualizedTurnList({
           {topSpacerHeight > 0 && (
             <div aria-hidden="true" style={{ height: topSpacerHeight }} />
           )}
-          {isLoadingOlderHistory && <HistoryLoadingRow />}
           {virtualItems.map((virtualRow) => {
-            const row = rows[virtualRow.index];
+            const renderableRow = renderableRows[virtualRow.index];
+            if (renderableRow?.kind === "history_loader") {
+              return (
+                <div
+                  key={renderableRow.key}
+                  ref={virtualizer.measureElement}
+                  data-transcript-virtual-row="true"
+                  data-index={virtualRow.index}
+                  className="w-full"
+                >
+                  <TranscriptHistoryLoadingRow />
+                </div>
+              );
+            }
+
+            const row = renderableRow?.row;
             if (!row) {
               return null;
             }
@@ -580,7 +487,7 @@ function VirtualizedTurnList({
                 data-index={virtualRow.index}
                 className="w-full"
               >
-                {renderRow(row, virtualRow.index)}
+                {renderRow(row, renderableRow.rowIndex)}
               </div>
             );
           })}
@@ -593,17 +500,58 @@ function VirtualizedTurnList({
   );
 }
 
-function HistoryLoadingRow() {
-  return (
-    <div className="flex justify-center pb-3 text-muted-foreground" role="status">
-      <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-      <span className="sr-only">Loading earlier messages</span>
-    </div>
+function buildRenderableRows(
+  rows: readonly TranscriptVirtualRow[],
+  isLoadingOlderHistory: boolean,
+): TranscriptRenderableRow[] {
+  const renderableRows: TranscriptRenderableRow[] = [];
+  if (isLoadingOlderHistory) {
+    renderableRows.push({
+      kind: "history_loader",
+      key: HISTORY_LOADING_ROW_KEY,
+    });
+  }
+  rows.forEach((row, rowIndex) => {
+    renderableRows.push({
+      kind: "transcript",
+      key: row.key,
+      row,
+      rowIndex,
+    });
+  });
+  return renderableRows;
+}
+
+function estimateRenderableRowsHeight(rows: readonly TranscriptRenderableRow[]): number {
+  return rows.reduce(
+    (sum, row) => sum + estimateRenderableRowHeight(row),
+    0,
   );
 }
 
-function isTranscriptVirtualizationDarkLaunchEnabled(): boolean {
-  return import.meta.env.DEV
-    && typeof window !== "undefined"
-    && window.localStorage.getItem(DEBUG_ENABLE_VIRTUALIZATION_STORAGE_KEY) === "1";
+function estimateRenderableRowHeight(row: TranscriptRenderableRow | undefined): number {
+  return row?.kind === "history_loader"
+    ? ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX
+    : ESTIMATED_TURN_HEIGHT_PX;
+}
+
+function readTranscriptVirtualizationMode(): TranscriptVirtualizationMode {
+  if (typeof window === "undefined") {
+    return "auto";
+  }
+
+  const explicitMode = window.localStorage.getItem(
+    TRANSCRIPT_VIRTUALIZATION_STORAGE_KEY,
+  );
+  if (explicitMode !== null) {
+    return parseTranscriptVirtualizationMode(explicitMode);
+  }
+
+  if (window.localStorage.getItem(LEGACY_DISABLE_VIRTUALIZATION_STORAGE_KEY) === "1") {
+    return "off";
+  }
+  if (window.localStorage.getItem(LEGACY_ENABLE_VIRTUALIZATION_STORAGE_KEY) === "1") {
+    return "on";
+  }
+  return "auto";
 }

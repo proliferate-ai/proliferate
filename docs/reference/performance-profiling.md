@@ -135,6 +135,25 @@ Use the `workflow` rows to separate fetch time from `session.history.replay`,
 with a slow child `session_history_tail_reconcile` usually means the expensive
 work is transcript apply/commit, not workspace selection itself.
 
+## Transcript Virtualization Controls
+
+Transcript virtualization uses one local override key:
+
+```js
+localStorage.setItem("proliferate:transcriptVirtualization", "auto")
+localStorage.setItem("proliferate:transcriptVirtualization", "on")
+localStorage.setItem("proliferate:transcriptVirtualization", "off")
+```
+
+`auto` is the default and virtualizes only larger transcripts. Use `on` to force
+the virtual path while profiling scroll behavior, and `off` to verify the full
+render path. The older `proliferate:enableTranscriptVirtualization` and
+`proliferate:disableTranscriptVirtualization` keys are still read only as
+fallbacks when the tri-state key is absent.
+
+When virtualization is active, browser/webview find is limited to mounted
+transcript rows. Set the override to `off` for full-history find while debugging.
+
 Rows must not contain prompts, transcript text, terminal output, raw errors,
 file contents, file names, repo names, workspace/session titles, paths, raw
 URLs, endpoint paths, query strings, request/response bodies, or SSE payloads.

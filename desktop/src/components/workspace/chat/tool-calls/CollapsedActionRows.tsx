@@ -127,9 +127,8 @@ function PlainActionRow({
   return (
     <div
       title={label}
-      className={`truncate text-chat leading-[var(--text-chat--line-height)] ${
-        tone === "failed" ? "text-destructive/80" : "text-muted-foreground/80"
-      }`}
+      className={`truncate text-chat leading-[var(--text-chat--line-height)] ${tone === "failed" ? "text-destructive/80" : "text-muted-foreground/80"
+        }`}
     >
       {label}
     </div>
@@ -203,11 +202,12 @@ function EditActionRow({
 
   return (
     <div>
+      { }
       <div
         role={hasDetails ? "button" : undefined}
         tabIndex={hasDetails ? 0 : undefined}
         {...(hasDetails ? { "data-chat-transcript-ignore": true } : {})}
-        className="group/action-row flex min-w-0 items-center gap-1 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground/80"
+        className={`group/action-row flex min-w-0 items-center gap-1 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground/80 ${action == 'Edited' ? "my-2" : ""}`}
         onClick={() => {
           if (hasDetails) setExpanded((value) => !value);
         }}
@@ -238,9 +238,8 @@ function EditActionRow({
         )}
         {hasDetails && (
           <ChevronRight
-            className={`ml-0.5 size-3 shrink-0 text-faint opacity-0 transition-all duration-200 group-hover/action-row:opacity-100 ${
-              expanded ? "rotate-90 opacity-100" : ""
-            }`}
+            className={`ml-0.5 size-3 shrink-0 text-faint opacity-0 transition-all duration-200 group-hover/action-row:opacity-100 ${expanded ? "rotate-90 opacity-100" : ""
+              }`}
           />
         )}
       </div>
@@ -295,16 +294,14 @@ function ActionDisclosureRow({
       variant="ghost"
       size="sm"
       data-chat-transcript-ignore
-      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal hover:bg-transparent focus-visible:ring-0 ${
-        failed ? "text-destructive/80 hover:text-destructive" : "text-muted-foreground/80 hover:text-foreground"
-      }`}
+      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal hover:bg-transparent focus-visible:ring-0 ${failed ? "text-destructive/80 hover:text-destructive" : "text-muted-foreground/80 hover:text-foreground"
+        }`}
       onClick={onToggle}
     >
       <span className="min-w-0 truncate">{label}</span>
       <ChevronRight
-        className={`size-3 shrink-0 text-faint opacity-0 transition-all duration-200 group-hover/action-row:opacity-100 group-focus-visible/action-row:opacity-100 ${
-          expanded ? "rotate-90 opacity-100" : ""
-        }`}
+        className={`size-3 shrink-0 text-faint opacity-0 transition-all duration-200 group-hover/action-row:opacity-100 group-focus-visible/action-row:opacity-100 ${expanded ? "rotate-90 opacity-100" : ""
+          }`}
       />
     </Button>
   );

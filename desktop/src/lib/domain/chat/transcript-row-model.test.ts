@@ -7,6 +7,10 @@ import {
 import {
   shouldStickToVirtualBottom,
 } from "@/lib/domain/chat/transcript-virtual-rows";
+import {
+  parseTranscriptVirtualizationMode,
+  resolveTranscriptVirtualizationEnabled,
+} from "@/lib/domain/chat/transcript-virtualization-config";
 
 describe("buildTranscriptRowModel", () => {
   it("creates stable turn rows for large transcripts", () => {
@@ -140,6 +144,42 @@ describe("shouldStickToVirtualBottom", () => {
       viewportSize: 500,
       totalVirtualSize: 1500,
       thresholdPx: 96,
+    })).toBe(false);
+  });
+});
+
+describe("transcript virtualization config", () => {
+  it("parses the single tri-state localStorage value", () => {
+    expect(parseTranscriptVirtualizationMode("auto")).toBe("auto");
+    expect(parseTranscriptVirtualizationMode("on")).toBe("on");
+    expect(parseTranscriptVirtualizationMode("off")).toBe("off");
+    expect(parseTranscriptVirtualizationMode("1")).toBe("auto");
+    expect(parseTranscriptVirtualizationMode(null)).toBe("auto");
+  });
+
+  it("enables virtualization automatically only for large row counts", () => {
+    expect(resolveTranscriptVirtualizationEnabled({
+      mode: "auto",
+      rowCount: 79,
+      autoRowThreshold: 80,
+    })).toBe(false);
+    expect(resolveTranscriptVirtualizationEnabled({
+      mode: "auto",
+      rowCount: 80,
+      autoRowThreshold: 80,
+    })).toBe(true);
+  });
+
+  it("allows explicit on/off overrides", () => {
+    expect(resolveTranscriptVirtualizationEnabled({
+      mode: "on",
+      rowCount: 1,
+      autoRowThreshold: 80,
+    })).toBe(true);
+    expect(resolveTranscriptVirtualizationEnabled({
+      mode: "off",
+      rowCount: 1000,
+      autoRowThreshold: 80,
     })).toBe(false);
   });
 });

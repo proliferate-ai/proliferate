@@ -101,6 +101,7 @@ export function useSessionPromptWorkflow() {
 
       void ensureSessionStreamConnected(sessionId, {
         resumeIfActive: false,
+        forceReconnect: response.status === "running",
         requestHeaders,
       });
     } catch (error) {

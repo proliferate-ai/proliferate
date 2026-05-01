@@ -127,7 +127,7 @@ All three sit inside the composer area. They differ by lifecycle and role, and t
 There is **one** `ApprovalCard` component with two exports:
 
 - `ApprovalCard` — pure presentational, takes `title / actions / onSelectOption / onAllow / onDeny` props. Usable from the dev playground.
-- `ConnectedApprovalCard` — wraps the above with `useActiveChatSessionState()` + `useChatPermissionActions()`. Used in production by `useComposerDockSlots`.
+- `ConnectedApprovalCard` — wraps the above with `useActivePendingApproval()` + `useChatPermissionActions()`. Used in production by `useComposerDockSlots`.
 
 Do not split this into `ExecuteApprovalCard` / `EditApprovalCard` / `SwitchModeApprovalCard`. All three kinds use the same shell and the same button row. If a variant ever needs genuinely different rendering (e.g. a radio group with an inline rejection textarea for switch_mode), add a branch inside `ApprovalCard` on `pendingApproval.toolKind` — do not fork the component.
 

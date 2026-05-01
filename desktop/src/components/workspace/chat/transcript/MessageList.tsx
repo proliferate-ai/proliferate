@@ -94,7 +94,6 @@ import {
   resolveReviewFeedbackPromptReference,
   isSubagentWakeProvenance,
 } from "@/lib/domain/chat/subagents/provenance";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { SubagentWakeBadge } from "@/components/workspace/chat/transcript/SubagentWakeBadge";
 import { ReviewFeedbackSummary } from "@/components/workspace/reviews/ReviewFeedbackSummary";
 import { SubagentLaunchLedger } from "@/components/workspace/chat/transcript/SubagentLaunchLedger";
@@ -137,7 +136,7 @@ import type {
   TerminalOutputContentPart,
 } from "@anyharness/sdk";
 import type { SessionViewState } from "@/lib/domain/sessions/activity";
-import { VirtualTurnList } from "@/components/workspace/chat/transcript/VirtualTurnList";
+import { VirtualTranscriptRowList } from "@/components/workspace/chat/transcript/VirtualTranscriptRowList";
 import {
   resolvePendingPromptTrailingStatus,
   resolveTurnTrailingStatus,
@@ -165,6 +164,7 @@ interface MessageListProps {
   sessionViewState: SessionViewState;
   hasOlderHistory?: boolean;
   isLoadingOlderHistory?: boolean;
+  olderHistoryCursor?: number | null;
   bottomInsetPx?: number;
   onLoadOlderHistory?: () => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
@@ -179,6 +179,7 @@ export function MessageList({
   sessionViewState,
   hasOlderHistory = false,
   isLoadingOlderHistory = false,
+  olderHistoryCursor = null,
   bottomInsetPx = CHAT_SCROLL_BASE_BOTTOM_PADDING_PX,
   onLoadOlderHistory,
   onHandOffPlanToNewSession,
@@ -353,7 +354,6 @@ export function MessageList({
                   <div className="flex justify-end">
                     <SubagentWakeBadge
                       label={visibleOptimisticPrompt.promptProvenance.label ?? null}
-                      color={resolveSubagentColor(visibleOptimisticPrompt.promptProvenance.sessionLinkId)}
                     />
                   </div>
                 );
@@ -364,7 +364,6 @@ export function MessageList({
                     reference={reviewFeedbackReference}
                     sessionId={activeSessionId}
                     state="queued"
-                    onOpenSession={onOpenSession}
                   />
                 );
               }
@@ -490,12 +489,13 @@ export function MessageList({
       <div className="flex-1 min-h-0" data-telemetry-block>
         <TranscriptSessionIdContext.Provider value={activeSessionId}>
           <TranscriptOpenSessionContext.Provider value={onOpenSession ?? null}>
-            <VirtualTurnList
+            <VirtualTranscriptRowList
               key={`${selectedWorkspaceId ?? "workspace"}:${activeSessionId}`}
               rows={virtualRows}
               selectionRootRef={selectionRootRef}
               hasOlderHistory={hasOlderHistory}
               isLoadingOlderHistory={isLoadingOlderHistory}
+              olderHistoryCursor={olderHistoryCursor}
               bottomInsetPx={bottomInsetPx}
               selectedWorkspaceId={selectedWorkspaceId}
               activeSessionId={activeSessionId}
@@ -886,11 +886,6 @@ function TranscriptItemBlock({
       ? transcript.linkCompletionsByCompletionId[item.promptProvenance.completionId] ?? null
       : null;
   const subagentWakeChildSessionId = subagentWakeCompletion?.childSessionId ?? null;
-  const subagentWakeChildAgentKind = useHarnessStore((state) =>
-    subagentWakeChildSessionId
-      ? state.sessionSlots[subagentWakeChildSessionId]?.agentKind ?? null
-      : null,
-  );
 
   switch (item.kind) {
     case "user_message": {
@@ -901,8 +896,6 @@ function TranscriptItemBlock({
               label={item.promptProvenance.label ?? subagentWakeCompletion?.label ?? null}
               childSessionId={subagentWakeChildSessionId}
               outcome={subagentWakeCompletion?.outcome ?? null}
-              color={resolveSubagentColor(item.promptProvenance.sessionLinkId)}
-              agentKind={subagentWakeChildAgentKind}
               titleFallback={
                 item.promptProvenance.type === "linkWake"
                 && item.promptProvenance.relation === "cowork_coding_session"
@@ -924,7 +917,6 @@ function TranscriptItemBlock({
           <ReviewFeedbackSummary
             reference={reviewFeedbackReference}
             sessionId={sessionId}
-            onOpenSession={openSession ?? undefined}
           />
         );
       }
@@ -941,7 +933,6 @@ function TranscriptItemBlock({
               <UserMessageProvenanceChrome
                 sourceSessionId={item.promptProvenance.sourceSessionId}
                 label={item.promptProvenance.label ?? null}
-                color={resolveSubagentColor(item.promptProvenance.sessionLinkId ?? item.promptProvenance.sourceSessionId)}
                 onOpenParent={openSession ?? undefined}
               />
             )}

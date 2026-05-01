@@ -6,6 +6,7 @@ import { replaySessionHistory } from "@/lib/integrations/anyharness/session-stre
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { clearPendingConfigRollbackCheck } from "@/hooks/sessions/session-runtime-pending-config";
 import {
+  animationFrameSessionStreamFlushScheduler,
   createSessionStreamFlushController,
   type SessionStreamFlushScheduler,
 } from "@/hooks/sessions/use-session-stream-flush";
@@ -149,6 +150,41 @@ describe("session stream flush controller", () => {
     expect(patchSpy).toHaveBeenCalledTimes(1);
     const slot = useHarnessStore.getState().sessionSlots["session-1"];
     expect(slot.events.map((event) => event.seq)).toEqual([1, 2]);
+  });
+
+  it("flushes with a max-delay timer when animation frames do not run", () => {
+    vi.useFakeTimers();
+    const callback = vi.fn();
+    const requestAnimationFrame = vi.fn(() => 42);
+    const cancelAnimationFrame = vi.fn();
+    vi.stubGlobal("requestAnimationFrame", requestAnimationFrame);
+    vi.stubGlobal("cancelAnimationFrame", cancelAnimationFrame);
+
+    animationFrameSessionStreamFlushScheduler.schedule(callback);
+
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+    expect(callback).not.toHaveBeenCalled();
+
+    vi.runOnlyPendingTimers();
+
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(42);
+  });
+
+  it("cancels both the frame and max-delay timer", () => {
+    vi.useFakeTimers();
+    const callback = vi.fn();
+    const requestAnimationFrame = vi.fn(() => 42);
+    const cancelAnimationFrame = vi.fn();
+    vi.stubGlobal("requestAnimationFrame", requestAnimationFrame);
+    vi.stubGlobal("cancelAnimationFrame", cancelAnimationFrame);
+
+    const cancel = animationFrameSessionStreamFlushScheduler.schedule(callback);
+    cancel();
+    vi.runOnlyPendingTimers();
+
+    expect(callback).not.toHaveBeenCalled();
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(42);
   });
 });
 

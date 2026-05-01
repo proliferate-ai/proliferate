@@ -33,7 +33,6 @@ anyharness/sdk/src/reducer/__tests__/transcript.test.ts
 desktop/src/components/ui/icons.tsx
 desktop/src/components/playground/PlaygroundComposer.tsx
 desktop/src/components/workspace/chat/transcript/MessageList.tsx
-desktop/src/components/workspace/chat/transcript/VirtualTurnList.tsx
 desktop/src/hooks/sessions/use-session-runtime-actions.ts
 desktop/src/hooks/sessions/use-session-selection-actions.ts
 desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts

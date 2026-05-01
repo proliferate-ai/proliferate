@@ -5,12 +5,14 @@ import {
   createEmptySessionSlot,
   createSessionSlotFromSummary,
   detachAndCloseSessionSlotStreams,
+  fetchSessionHistory,
   pruneInactiveSessionStreams,
   resumeSession,
 } from "./session-runtime";
 import type { Session, SessionStreamHandle } from "@anyharness/sdk";
 
 const mocks = vi.hoisted(() => ({
+  listEvents: vi.fn(),
   resume: vi.fn(),
   resolveRuntimeTargetForWorkspace: vi.fn(),
   resolveSessionMcpServersForLaunch: vi.fn(),
@@ -20,6 +22,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@anyharness/sdk-react", () => ({
   getAnyHarnessClient: () => ({
     sessions: {
+      listEvents: mocks.listEvents,
       resume: mocks.resume,
     },
     workspaces: {
@@ -37,6 +40,7 @@ vi.mock("@/lib/integrations/anyharness/mcp_launch", () => ({
 }));
 
 beforeEach(() => {
+  mocks.listEvents.mockReset();
   mocks.resume.mockReset();
   mocks.resolveRuntimeTargetForWorkspace.mockReset();
   mocks.resolveSessionMcpServersForLaunch.mockReset();
@@ -49,6 +53,58 @@ beforeEach(() => {
         workspaceId: "workspace-1",
       }),
     },
+  });
+});
+
+describe("fetchSessionHistory", () => {
+  it("times out while resolving the runtime target", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.resolveRuntimeTargetForWorkspace.mockImplementation(() => new Promise(() => {}));
+
+      const history = fetchSessionHistory("session-1", { timeoutMs: 50 });
+      const historyExpectation = expect(history).rejects.toMatchObject({ name: "AbortError" });
+      await vi.advanceTimersByTimeAsync(50);
+
+      await historyExpectation;
+      expect(mocks.listEvents).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("aborts event listing when the history timeout elapses", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.resolveRuntimeTargetForWorkspace.mockResolvedValue({
+        anyharnessWorkspaceId: "runtime-workspace-1",
+        baseUrl: "http://runtime.local",
+        location: "local",
+        runtimeGeneration: 0,
+      });
+      let signal: AbortSignal | undefined;
+      mocks.listEvents.mockImplementation((
+        _sessionId: string,
+        options?: { request?: { signal?: AbortSignal } },
+      ) => {
+        signal = options?.request?.signal;
+        return new Promise(() => {});
+      });
+
+      const history = fetchSessionHistory("session-1", { timeoutMs: 50 });
+      const historyExpectation = expect(history).rejects.toMatchObject({ name: "AbortError" });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(signal).toBeDefined();
+      expect(signal?.aborted).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(50);
+
+      await historyExpectation;
+      expect(signal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

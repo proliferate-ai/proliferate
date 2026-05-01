@@ -125,10 +125,9 @@ export function reduceEvent(
     }
 
     case "item_started": {
-      ensureTurn(s, turnId, ts);
       const item = createItemFromPayload(itemId, turnId, evt.item, ts, envelope.seq);
       setItem(s, itemId, item);
-      addItemToTurn(s, turnId, itemId);
+      addItemToTurn(s, turnId, itemId, ts);
       openStreamingItem(s, itemId, item);
       s.isStreaming = s.isStreaming || item.status === "in_progress";
       break;
@@ -148,13 +147,12 @@ export function reduceEvent(
     }
 
     case "item_completed": {
-      ensureTurn(s, turnId, ts);
       const existing = s.itemsById[itemId];
       const item = existing && existing.kind !== "unknown"
         ? applyCompletion(cloneKnownTranscriptItem(existing), evt, ts, envelope.seq)
         : createCompletedItem(itemId, turnId, evt, ts, envelope.seq);
       setItem(s, itemId, item);
-      addItemToTurn(s, turnId, itemId);
+      addItemToTurn(s, turnId, itemId, ts);
       closeStreamingPointer(s, itemId);
       break;
     }
@@ -265,7 +263,6 @@ export function reduceEvent(
       break;
 
     case "error": {
-      ensureTurn(s, turnId, ts);
       closeStreamingItems(s);
       clearPendingInteractions(s, "none");
       const item: ErrorItem = {
@@ -291,7 +288,7 @@ export function reduceEvent(
         details: evt.details ?? null,
       };
       setItem(s, itemId, item);
-      addItemToTurn(s, turnId, itemId);
+      addItemToTurn(s, turnId, itemId, ts);
       s.isStreaming = false;
       break;
     }
@@ -744,12 +741,17 @@ function ensureMutableTurn(s: TranscriptState, turnId: string, ts: string): Turn
   return turn;
 }
 
-function addItemToTurn(s: TranscriptState, turnId: string, itemId: string): void {
-  const existing = s.turnsById[turnId];
-  if (!existing) return;
+function addItemToTurn(
+  s: TranscriptState,
+  turnId: string,
+  itemId: string,
+  ts: string,
+): void {
+  const existing = ensureTurn(s, turnId, ts);
   if (existing.itemOrder.includes(itemId)) {
     return;
   }
+
   const turn = cloneTurn(existing);
   setTurn(s, turnId, turn);
   turn.itemOrder = [...turn.itemOrder, itemId];
@@ -836,8 +838,7 @@ function recordUnknown(
   };
   setItem(s, itemId, item);
   if (turnId) {
-    ensureTurn(s, turnId, ts);
-    addItemToTurn(s, turnId, itemId);
+    addItemToTurn(s, turnId, itemId, ts);
   }
   s.unknownEvents = [...s.unknownEvents, envelope];
 }

@@ -30,6 +30,7 @@ import {
   type MeasurementWorkflowStep,
 } from "@/lib/infra/debug-measurement";
 import { clearSessionReconnectTimer } from "@/lib/integrations/anyharness/session-reconnect-state";
+import { waitForSessionHistoryTimeout } from "@/lib/integrations/anyharness/session-history-timeout";
 import {
   resolveRuntimeTargetForWorkspace,
   type RuntimeTarget,
@@ -308,17 +309,6 @@ export async function fetchSessionHistory(
     timeoutMs?: number;
   },
 ) {
-  const { connection } = await measureSessionWorkflowStep(
-    options?.measurementOperationId,
-    "session.history.resolve_target",
-    () => getSessionClientAndWorkspace(sessionId),
-  );
-  const client = getAnyHarnessClient(connection);
-  const request = getMeasurementRequestOptions({
-    operationId: options?.measurementOperationId,
-    category: "session.events.list",
-    headers: options?.requestHeaders,
-  });
   const timeoutMs = options?.timeoutMs ?? SESSION_HISTORY_FETCH_TIMEOUT_MS;
   const abortController =
     timeoutMs > 0 && typeof AbortController !== "undefined"
@@ -327,17 +317,33 @@ export async function fetchSessionHistory(
   const timeoutId = abortController
     ? globalThis.setTimeout(() => abortController.abort(), timeoutMs)
     : null;
-  const requestWithTimeout = abortController
-    ? { ...request, signal: abortController.signal }
-    : request;
-  const hasHistoryOptions = options?.afterSeq != null
-    || options?.beforeSeq != null
-    || options?.limit != null
-    || options?.turnLimit != null
-    || !!requestWithTimeout;
+  const signal = abortController?.signal ?? null;
 
   try {
-    return await client.sessions.listEvents(
+    const { connection } = await measureSessionWorkflowStep(
+      options?.measurementOperationId,
+      "session.history.resolve_target",
+      () => waitForSessionHistoryTimeout(
+        getSessionClientAndWorkspace(sessionId),
+        signal,
+      ),
+    );
+    const client = getAnyHarnessClient(connection);
+    const request = getMeasurementRequestOptions({
+      operationId: options?.measurementOperationId,
+      category: "session.events.list",
+      headers: options?.requestHeaders,
+    });
+    const requestWithTimeout = signal
+      ? { ...request, signal }
+      : request;
+    const hasHistoryOptions = options?.afterSeq != null
+      || options?.beforeSeq != null
+      || options?.limit != null
+      || options?.turnLimit != null
+      || !!requestWithTimeout;
+
+    const eventsPromise = client.sessions.listEvents(
       sessionId,
       hasHistoryOptions
         ? {
@@ -349,6 +355,7 @@ export async function fetchSessionHistory(
         }
         : undefined,
     );
+    return await waitForSessionHistoryTimeout(eventsPromise, signal);
   } finally {
     if (timeoutId !== null) {
       globalThis.clearTimeout(timeoutId);

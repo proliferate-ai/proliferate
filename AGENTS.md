@@ -442,6 +442,31 @@ Rules:
   the data consumer the child. This avoids hooks-after-early-return issues
   and makes the child's hooks safe.
 
+### Transcript and stream performance
+
+The chat transcript is a performance-sensitive surface. Changes that touch
+session streams, transcript replay, transcript row models, or long-history
+scrolling must preserve these invariants:
+
+- SSE events should be batched into at most one Zustand store write per
+  animation frame during normal streaming. Do not reintroduce per-event store
+  patches for the live stream path.
+- Any deliberate stream close, detach, prune, or reconnect path must flush
+  pending batched stream events before discarding the current handle. Never
+  clear `sseHandle` before queued envelopes have a chance to apply.
+- Transcript reducers must preserve structural sharing and must not mutate
+  prior transcript state, turns, items, or content-part arrays in place.
+  Batched replay relies on unchanged references staying stable.
+- Long transcripts must stay virtualized on the normal render path. Avoid
+  adding whole-transcript maps, full-store subscriptions, or new object/array
+  props that invalidate memoized row rendering on every stream event.
+- Older-history loading must be bounded and retry-safe: use event/turn limits,
+  keep requests abortable, key top-of-scroll prefetches by the oldest loaded
+  sequence, and do not spin forever when a page returns no new rows.
+- Before merging transcript or stream-runtime changes, run focused coverage for
+  stream flushing, session runtime/history loading, transcript row modeling,
+  and SDK transcript reducer immutability, plus `pnpm --dir desktop exec tsc --noEmit`.
+
 ## 7. Folder Guide
 
 Use these folder-level guidelines after the ownership model above has already

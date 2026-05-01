@@ -91,6 +91,7 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
         sessionViewState={sessionViewState}
         hasOlderHistory={hasOlderHistory}
         isLoadingOlderHistory={isLoadingOlderHistory}
+        olderHistoryCursor={oldestLoadedEventSeq}
         bottomInsetPx={bottomInsetPx}
         onLoadOlderHistory={loadOlderHistory}
         onHandOffPlanToNewSession={handoff.open}
