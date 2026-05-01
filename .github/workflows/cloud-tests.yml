@@ -1,26 +1,6 @@
 name: Cloud Tests
 
 on:
-  push:
-    paths:
-      - ".github/workflows/cloud-tests.yml"
-      - "Makefile"
-      - "pnpm-workspace.yaml"
-      - "package.json"
-      - "anyharness/**"
-      - "server/**"
-      - "docs/ci-cd/README.md"
-  pull_request:
-    paths:
-      - ".github/workflows/cloud-tests.yml"
-      - "Makefile"
-      - "pnpm-workspace.yaml"
-      - "package.json"
-      - "anyharness/**"
-      - "server/**"
-      - "docs/ci-cd/README.md"
-  schedule:
-    - cron: "0 9 * * *"
   workflow_dispatch:
 
 permissions:

@@ -38,8 +38,8 @@ scripts/
   surface. Do not update one without checking the others.
 - Desktop releases ship off the `desktop-v*` tag line. Runtime releases ship off
   the `runtime-v*` tag line.
-- Cloud template releases ship from `main` into immutable `sha-*` tags, then
-  move the rolling `staging` and `production` tags separately.
+- Cloud template releases are manually dispatched. They publish immutable
+  `sha-*` tags, then move rolling `staging` and `production` tags separately.
 - Desktop versioning must stay consistent across
   `desktop/package.json`, `desktop/src-tauri/tauri.conf.json`, and
   `desktop/src-tauri/Cargo.toml`. The desktop release workflow enforces this on
@@ -57,9 +57,10 @@ scripts/
   `installers.json`, not the Tauri updater `latest.json` feed.
 - Only packaged desktop builds should auto-check for updates. Development builds
   should remain updater-free.
-- `server-ci.yml` currently builds and pushes the cloud API image, but this repo
-  does not yet contain the final ECS rollout workflow. Do not document a fully
-  automated API deploy path unless it actually exists.
+- `server-ci.yml` validates the server on normal pushes and pull requests.
+  Publishing remains tag-gated; this repo does not yet contain the final ECS
+  rollout workflow. Do not document a fully automated API deploy path unless it
+  actually exists.
 - Self-hosted production should center on `server/deploy/**` and GHCR-published
   server images. Do not create a parallel self-hosted deploy path that drifts
   from those files.
@@ -79,7 +80,8 @@ Source of truth:
 
 Flow:
 
-1. `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests.
+1. `.github/workflows/ci.yml` runs on pushes to `main`, on pull requests, and
+   by manual dispatch.
 2. It validates:
    - the Rust workspace with `cargo check` and `cargo test`
    - `@anyharness/sdk` generation and build
@@ -87,20 +89,19 @@ Flow:
 3. `.github/workflows/server-ci.yml` validates the server slice separately with:
    - Ruff
    - pytest against Postgres
-   - container build and push on `main`
+   - versioned GHCR image publishing only on `server-v*` tags
 4. Direct, non-provider E2B webhook handler coverage stays in
    `.github/workflows/server-ci.yml` because those tests run against the local
    ASGI app and do not need live provider credentials.
-5. `.github/workflows/cloud-tests.yml` runs the real-provider cloud suites on
-   `main`, nightly, and manual dispatch:
+5. `.github/workflows/cloud-tests.yml` runs the real-provider cloud suites by
+   manual dispatch only:
    - cloud lifecycle/provisioning coverage for E2B and Daytona
    - the shared AnyHarness runtime scenarios against cloud-provisioned backends
 6. `.github/workflows/cloud-live-webhook.yml` is separate because the live E2B
    webhook smoke depends on an externally reachable ngrok target and should not
    block the base cloud lane.
-7. `.github/workflows/agent-runtime-compat.yml` runs on pushes to `main`,
-   pull requests targeting `main`, and manual dispatch. Stacked cloud PRs
-   should not own that local-runtime compatibility lane.
+7. `.github/workflows/agent-runtime-compat.yml` runs by manual dispatch only.
+   It consumes live agent credentials and should be enabled intentionally.
 
 ### Desktop Release
 
@@ -251,7 +252,7 @@ Source of truth:
 
 Flow:
 
-1. Push to `main` or run `Release Cloud Template` manually.
+1. Run `Release Cloud Template` manually.
 2. The workflow:
    - builds the Linux `anyharness` binary
    - builds the shared E2B template family from the current repo state
@@ -285,21 +286,15 @@ Source of truth:
 
 Flow today:
 
-1. Changes under `server/**` trigger `Server CI`.
+1. Changes under `server/**` trigger `Server CI` on `main` and pull requests.
 2. The workflow runs lint and tests.
-3. On `main`, the workflow builds and pushes the server image to ECR with:
-   - `${git_sha}`
-   - `latest`
-4. On `main`, the workflow also publishes the server image to GHCR with:
-   - `${git_sha}`
-   - `stable`
-5. On `server-v*` tags, the workflow publishes a versioned GHCR tag for
+3. On `server-v*` tags, the workflow publishes a versioned GHCR tag for
    self-hosted pinning.
-6. On `server-v*` tags, the workflow also publishes the self-hosted AWS assets:
+4. On `server-v*` tags, the workflow also publishes the self-hosted AWS assets:
    - `anyharness-x86_64-unknown-linux-musl.tar.gz`
    - `proliferate-self-hosted-aws-template.yaml`
    - `self-hosted-assets.SHA256SUMS`
-6. `server/infra/main.tf` defines the cloud resources around that image:
+5. `server/infra/main.tf` defines the cloud resources around that image:
    - ECR
    - ECS
    - RDS
@@ -308,7 +303,8 @@ Flow today:
 
 Current boundary:
 
-- This repo currently automates image publication.
+- This repo currently automates versioned GHCR image publication on
+  `server-v*` tags.
 - This repo now also publishes the versioned AWS self-hosted stack template and
   Linux runtime tarball on `server-v*` tags so a CloudFormation launch can
   bootstrap the same `server/deploy/**` surface.
@@ -327,7 +323,7 @@ Current boundary:
 | Manual public E2B cloud template production promote | `.github/workflows/promote-cloud-template.yml` |
 | Desktop packaging and release creation | `.github/workflows/release-desktop.yml` |
 | Runtime binary release and npm publish | `.github/workflows/release-runtime.yml` |
-| Server CI and image publish | `.github/workflows/server-ci.yml` |
+| Server CI and tag-gated image publish | `.github/workflows/server-ci.yml` |
 | Cloud template builder and publish surface | `scripts/build-template.mjs` |
 | Cloud template smoke test | `scripts/smoke-cloud-template.mjs` |
 | Cloud template rolling-tag promotion | `scripts/promote-cloud-template.mjs` |

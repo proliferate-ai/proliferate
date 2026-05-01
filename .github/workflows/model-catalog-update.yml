@@ -1,13 +1,6 @@
 name: Model Catalog Update
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "server/model-catalog/v1/catalog.json"
-  schedule:
-    - cron: "23 15 * * 1"
   workflow_dispatch:
 
 permissions:
