@@ -1,5 +1,4 @@
 import { useCallback, useMemo } from "react";
-import { useShallow } from "zustand/react/shallow";
 import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/use-configured-launch-readiness";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
@@ -12,8 +11,9 @@ import {
   resolveRelativeWorkspaceShellTab,
   type WorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
-import { useWorkspaceTabsStore } from "@/stores/workspaces/workspace-tabs-store";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   failLatencyFlow,
@@ -25,15 +25,25 @@ const EMPTY_SHELL_TAB_ORDER_KEYS: readonly string[] = [];
 export function useWorkspaceCommandPaletteTabs() {
   const model = useWorkspaceHeaderTabsModel();
   const selectedWorkspaceId = model.selectedWorkspaceId;
-  const tabStore = useWorkspaceTabsStore(useShallow((state) => ({
-    storedActiveShellTabKey: selectedWorkspaceId
-      ? state.activeShellTabKeyByWorkspace[selectedWorkspaceId] ?? null
-      : null,
-    persistedShellOrderKeys: selectedWorkspaceId
-      ? state.shellTabOrderByWorkspace[selectedWorkspaceId] ?? EMPTY_SHELL_TAB_ORDER_KEYS
-      : EMPTY_SHELL_TAB_ORDER_KEYS,
-    setActiveShellTabKey: state.setActiveShellTabKey,
-  })));
+  const activeShellTabKeyByWorkspace = useWorkspaceUiStore(
+    (state) => state.activeShellTabKeyByWorkspace,
+  );
+  const shellTabOrderByWorkspace = useWorkspaceUiStore(
+    (state) => state.shellTabOrderByWorkspace,
+  );
+  const setActiveShellTabKey = useWorkspaceUiStore(
+    (state) => state.setActiveShellTabKeyForWorkspace,
+  );
+  const storedActiveShellTabKey = resolveWithWorkspaceFallback(
+    activeShellTabKeyByWorkspace,
+    model.workspaceUiKey,
+    model.materializedWorkspaceId,
+  ).value ?? null;
+  const persistedShellOrderKeys = resolveWithWorkspaceFallback(
+    shellTabOrderByWorkspace,
+    model.workspaceUiKey,
+    model.materializedWorkspaceId,
+  ).value ?? EMPTY_SHELL_TAB_ORDER_KEYS;
   const setActiveTab = useWorkspaceFilesStore((state) => state.setActiveTab);
   const showToast = useToastStore((state) => state.show);
   const visibilityActions = useChatTabVisibilityActions({
@@ -49,8 +59,8 @@ export function useWorkspaceCommandPaletteTabs() {
     () => resolveWorkspaceShellTabsState({
       selectedWorkspaceId,
       activeSessionId: model.activeSessionId,
-      storedActiveShellTabKey: tabStore.storedActiveShellTabKey,
-      persistedShellOrderKeys: tabStore.persistedShellOrderKeys,
+      storedActiveShellTabKey,
+      persistedShellOrderKeys,
       shellChatSessionIds: model.stripVisibleChatSessionIds,
       openTabs: model.openTabs,
       stripRows: model.stripRows,
@@ -62,11 +72,11 @@ export function useWorkspaceCommandPaletteTabs() {
       model.displayManualGroups,
       model.hierarchyChildIdsByParentSessionId,
       model.openTabs,
+      persistedShellOrderKeys,
       model.stripRows,
       model.stripVisibleChatSessionIds,
       selectedWorkspaceId,
-      tabStore.persistedShellOrderKeys,
-      tabStore.storedActiveShellTabKey,
+      storedActiveShellTabKey,
     ],
   );
 
@@ -74,19 +84,20 @@ export function useWorkspaceCommandPaletteTabs() {
     if (tab.kind === "chat") {
       return visibilityActions.showChatSessionTab(tab.sessionId, { select: true });
     }
-    if (!selectedWorkspaceId) {
+    if (!model.workspaceUiKey || !selectedWorkspaceId) {
       return false;
     }
     setActiveTab(tab.path);
-    tabStore.setActiveShellTabKey(
-      selectedWorkspaceId,
+    setActiveShellTabKey(
+      model.workspaceUiKey,
       fileWorkspaceShellTabKey(tab.path),
     );
     return true;
   }, [
+    model.workspaceUiKey,
     selectedWorkspaceId,
     setActiveTab,
-    tabStore,
+    setActiveShellTabKey,
     visibilityActions,
   ]);
 

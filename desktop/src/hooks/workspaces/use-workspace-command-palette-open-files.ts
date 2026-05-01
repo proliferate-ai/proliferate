@@ -14,13 +14,13 @@ export function useWorkspaceCommandPaletteOpenFiles(
   selectedWorkspaceId: string | null,
 ): CommandPaletteOpenFileEntry[] {
   const fileState = useWorkspaceFilesStore(useShallow((state) => ({
-    workspaceId: state.workspaceId,
+    materializedWorkspaceId: state.materializedWorkspaceId,
     openTabs: state.openTabs,
     activeFilePath: state.activeFilePath,
   })));
 
   return useMemo(() => {
-    if (!selectedWorkspaceId || fileState.workspaceId !== selectedWorkspaceId) {
+    if (!selectedWorkspaceId || fileState.materializedWorkspaceId !== selectedWorkspaceId) {
       return [];
     }
     return fileState.openTabs.map((path) => {
@@ -32,5 +32,10 @@ export function useWorkspaceCommandPaletteOpenFiles(
         isActive: path === fileState.activeFilePath,
       };
     });
-  }, [fileState.activeFilePath, fileState.openTabs, fileState.workspaceId, selectedWorkspaceId]);
+  }, [
+    fileState.activeFilePath,
+    fileState.openTabs,
+    fileState.materializedWorkspaceId,
+    selectedWorkspaceId,
+  ]);
 }
