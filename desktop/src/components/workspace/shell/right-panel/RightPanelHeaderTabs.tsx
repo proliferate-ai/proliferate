@@ -356,6 +356,7 @@ export function RightPanelHeaderTabs({
             <Tooltip
               content="Repo's settings"
               className="right-panel-repo-settings-tooltip"
+              singleLine
             >
               <IconButton
                 size="xs"

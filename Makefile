@@ -228,11 +228,15 @@ db-local:
 		echo "psql is required for \`make db-local\`. Install Postgres client tools and retry."; \
 		exit 1; \
 	}
-	@PGPASSWORD="$(LOCAL_PGPASSWORD)" psql \
+	@db_name="$(LOCAL_PGDATABASE)"; \
+	if [ -n "$(PROFILE)" ]; then \
+		db_name="proliferate_dev_$$(echo "$(PROFILE)" | tr '-' '_')"; \
+	fi; \
+	PGPASSWORD="$(LOCAL_PGPASSWORD)" psql \
 		-h "$(LOCAL_PGHOST)" \
 		-p "$(LOCAL_PGPORT)" \
 		-U "$(LOCAL_PGUSER)" \
-		-d "$(LOCAL_PGDATABASE)"
+		-d "$$db_name"
 
 db-ah:
 	@sqlite3 -cmd ".headers on" -cmd ".mode column" $(HOME)/.proliferate-local/anyharness/db.sqlite
