@@ -23,6 +23,7 @@ import { useRunWorkspaceCommand } from "@/hooks/workspaces/use-run-workspace-com
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
+import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 import {
   buildCloudRepoSettingsHref,
   buildSettingsHref,
@@ -64,6 +65,14 @@ export function StandardWorkspaceShell() {
     sidebarOpen,
   });
   const activePublishWorkspaceId = selectedWorkspaceId;
+  const publishSourceRootPath = publishDialog.open
+    ? selectedWorkspace?.sourceRepoRootPath?.trim() || null
+    : null;
+  const publishRepoDefaultBranch = useRepoPreferencesStore((state) => (
+    publishSourceRootPath
+      ? state.repoConfigs[publishSourceRootPath]?.defaultBranch ?? null
+      : null
+  ));
   const {
     phase: updaterPhase,
     downloadProgress,
@@ -282,11 +291,10 @@ export function StandardWorkspaceShell() {
                       open={publishDialog.open}
                       workspaceId={publishDialog.workspaceId}
                       initialIntent={publishDialog.initialIntent}
-                      selectedWorkspace={selectedWorkspace}
                       runtimeBlockedReason={runtimeBlockedReason}
+                      repoDefaultBranch={publishRepoDefaultBranch}
                       onClose={actions.closePublishDialog}
-                      onReviewDiffs={actions.reviewDiffsFromPublish}
-                      onViewPr={actions.handleViewPr}
+                      onViewPr={actions.handlePublishDialogViewPr}
                     />
                     <ConnectedReviewSetupDialog />
                     <ConnectedReviewCritiqueDialog />

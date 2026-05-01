@@ -1,5 +1,5 @@
-import { useEffect, useId, useMemo, useRef } from "react";
-import type { CurrentPullRequestResponse, Workspace } from "@anyharness/sdk";
+import { useId, type ReactNode } from "react";
+import type { CurrentPullRequestResponse } from "@anyharness/sdk";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -7,24 +7,16 @@ import { Label } from "@/components/ui/Label";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Switch } from "@/components/ui/Switch";
 import { Textarea } from "@/components/ui/Textarea";
-import {
-  CloudUpload,
-  GitBranchIcon,
-  GitCommit,
-  GitHub,
-  SplitPanelRight,
-} from "@/components/ui/icons";
+import { GitHub } from "@/components/ui/icons";
 import { useWorkspacePublishWorkflow } from "@/hooks/workspaces/use-workspace-publish-workflow";
-import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-store";
 
 interface PublishDialogProps {
   open: boolean;
   workspaceId: string | null;
   initialIntent: "commit" | "publish" | "pull_request";
-  selectedWorkspace: Workspace | undefined;
   runtimeBlockedReason: string | null;
+  repoDefaultBranch: string | null;
   onClose: () => void;
-  onReviewDiffs: () => void;
   onViewPr: (pullRequest: NonNullable<CurrentPullRequestResponse["pullRequest"]>) => void;
 }
 
@@ -32,18 +24,11 @@ export function PublishDialog({
   open,
   workspaceId,
   initialIntent,
-  selectedWorkspace,
   runtimeBlockedReason,
+  repoDefaultBranch,
   onClose,
-  onReviewDiffs,
   onViewPr,
 }: PublishDialogProps) {
-  const repoConfigs = useRepoPreferencesStore((state) => state.repoConfigs);
-  const repoDefaultBranch = useMemo(() => {
-    const sourceRoot = selectedWorkspace?.sourceRepoRootPath?.trim();
-    if (!sourceRoot) return null;
-    return repoConfigs[sourceRoot]?.defaultBranch ?? null;
-  }, [repoConfigs, selectedWorkspace?.sourceRepoRootPath]);
   const workflow = useWorkspacePublishWorkflow({
     workspaceId,
     initialIntent,
@@ -60,7 +45,6 @@ export function PublishDialog({
     isLoading,
     isSubmitting,
     error,
-    resetDrafts,
     submit,
   } = workflow;
 
@@ -70,23 +54,6 @@ export function PublishDialog({
   const prBodyId = useId();
   const prBaseBranchId = useId();
   const prDraftId = useId();
-  const draftWorkspaceIdRef = useRef<string | null>(workspaceId);
-  const runtimeReadyRef = useRef(runtimeBlockedReason === null);
-
-  useEffect(() => {
-    if (workspaceId && draftWorkspaceIdRef.current !== workspaceId) {
-      draftWorkspaceIdRef.current = workspaceId;
-      resetDrafts();
-    }
-  }, [resetDrafts, workspaceId]);
-
-  useEffect(() => {
-    const runtimeReady = runtimeBlockedReason === null;
-    if (runtimeReadyRef.current && !runtimeReady) {
-      resetDrafts();
-    }
-    runtimeReadyRef.current = runtimeReady;
-  }, [resetDrafts, runtimeBlockedReason]);
 
   const title = initialIntent === "pull_request"
     ? "Publish pull request"
@@ -126,22 +93,11 @@ export function PublishDialog({
       onClose={onClose}
       disableClose={isSubmitting}
       title={title}
-      description="Review, commit, and publish this workspace without opening the changes panel."
-      sizeClassName="max-h-[88vh] max-w-2xl"
+      description="Commit, publish, and create pull requests for this workspace."
+      sizeClassName="max-h-[88vh] max-w-xl"
       bodyClassName="min-h-0 px-0 pb-0 pt-0"
       footer={(
-        <div className="flex w-full items-center gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onReviewDiffs}
-            disabled={isSubmitting}
-            className="mr-auto"
-          >
-            <SplitPanelRight className="size-3.5" />
-            Review diffs
-          </Button>
+        <div className="flex w-full items-center justify-end gap-2">
           {viewState.existingPr && viewState.workflowSteps.length > 0 && (
             <Button
               type="button"
@@ -171,51 +127,22 @@ export function PublishDialog({
       )}
     >
       <div className="flex min-h-0 flex-col">
-        <div className="border-y border-border/60 bg-foreground/5 px-5 py-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-background">
-              {initialIntent === "pull_request" ? (
-                <GitHub className="size-4 text-foreground" />
-              ) : initialIntent === "publish" ? (
-                <CloudUpload className="size-4 text-foreground" />
-              ) : (
-                <GitCommit className="size-4 text-foreground" />
-              )}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center gap-2 text-sm text-foreground">
-                <GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate">{viewState.branchName ?? "Unknown branch"}</span>
-              </div>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {stats.files === 0
-                  ? "Working tree clean"
-                  : `${stats.files} changed file${stats.files === 1 ? "" : "s"}`}
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2 text-xs tabular-nums">
-              <span className="text-git-green">+{stats.additions}</span>
-              <span className="text-git-red">-{stats.deletions}</span>
-            </div>
-          </div>
-        </div>
-
-        <AutoHideScrollArea className="min-h-0 flex-1" viewportClassName="max-h-[52vh] px-5 py-4">
+        <AutoHideScrollArea className="min-h-0 flex-1" viewportClassName="max-h-[56vh] px-5 pb-4">
           <div className="space-y-4">
             {initialIntent === "publish" && !hasDirtyChanges && viewState.publishStatus && (
-              <div className="rounded-lg border border-border bg-foreground/5 p-3">
+              <PublishSection flush>
                 <p className="text-sm font-medium text-foreground">Publish branch</p>
                 <p className="mt-1 text-xs text-muted-foreground">{viewState.publishStatus}</p>
-              </div>
+              </PublishSection>
             )}
 
             {hasDirtyChanges && (
-              <div className="space-y-3 rounded-lg border border-border bg-foreground/5 p-3">
+              <PublishSection flush>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-foreground">Changed files</p>
                     <p className="text-xs text-muted-foreground">
-                      Review staged, partial, and unstaged files in this workspace.
+                      Staged, partial, and unstaged files in this workspace.
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2 text-xs tabular-nums">
@@ -227,11 +154,11 @@ export function PublishDialog({
                   groups={viewState.fileGroups}
                   scroll={shouldScrollChangedFiles}
                 />
-              </div>
+              </PublishSection>
             )}
 
             {hasDirtyChanges && (
-              <div className="space-y-3 rounded-lg border border-border bg-foreground/5 p-3">
+              <PublishSection>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-foreground">Commit message</p>
@@ -263,15 +190,15 @@ export function PublishDialog({
                   disabled={isSubmitting}
                 />
                 {viewState.partialWarning && (
-                  <p className="rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+                  <p className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
                     {viewState.partialWarning}
                   </p>
                 )}
-              </div>
+              </PublishSection>
             )}
 
             {initialIntent === "pull_request" && !viewState.existingPr && (
-              <div className="space-y-3 rounded-lg border border-border bg-foreground/5 p-3">
+              <PublishSection>
                 <div>
                   <p className="text-sm font-medium text-foreground">Pull request</p>
                   <p className="text-xs text-muted-foreground">Create a pull request after publishing the branch.</p>
@@ -318,11 +245,11 @@ export function PublishDialog({
                     <Label htmlFor={prDraftId} className="mb-0">Draft</Label>
                   </div>
                 </div>
-              </div>
+              </PublishSection>
             )}
 
             {(error || viewState.disabledReason) && (
-              <p className="rounded-md border border-border bg-foreground/5 px-3 py-2 text-xs text-muted-foreground">
+              <p className="border-t border-border/60 pt-4 text-xs text-destructive">
                 {error ?? viewState.disabledReason}
               </p>
             )}
@@ -330,6 +257,20 @@ export function PublishDialog({
         </AutoHideScrollArea>
       </div>
     </ModalShell>
+  );
+}
+
+function PublishSection({
+  children,
+  flush = false,
+}: {
+  children: ReactNode;
+  flush?: boolean;
+}) {
+  return (
+    <section className={flush ? "space-y-3" : "space-y-3 border-t border-border/60 pt-4"}>
+      {children}
+    </section>
   );
 }
 
