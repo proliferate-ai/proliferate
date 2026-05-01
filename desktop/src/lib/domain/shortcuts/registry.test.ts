@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearShortcutHandlerRegistryForTests,
   getShortcutHandler,
   registerShortcutHandler,
+  runShortcutHandler,
 } from "@/lib/domain/shortcuts/registry";
 
 describe("shortcut registry", () => {
@@ -45,5 +46,38 @@ describe("shortcut registry", () => {
 
     cleanupB();
     expect(getShortcutHandler("app.open-settings")).toBeNull();
+  });
+
+  it("returns false when running a missing handler", () => {
+    expect(runShortcutHandler("app.open-settings", { source: "palette" })).toBe(false);
+  });
+
+  it("treats void handler returns as consumed", () => {
+    const handler = vi.fn();
+    registerShortcutHandler("app.open-settings", handler);
+
+    expect(runShortcutHandler("app.open-settings", { source: "palette" })).toBe(true);
+    expect(handler).toHaveBeenCalledWith({ source: "palette" });
+  });
+
+  it("preserves false handler returns as unconsumed", () => {
+    registerShortcutHandler("app.open-settings", () => false);
+
+    expect(runShortcutHandler("app.open-settings", { source: "keyboard" })).toBe(false);
+  });
+
+  it("catches thrown handler errors and returns unconsumed", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    registerShortcutHandler("app.open-settings", () => {
+      throw new Error("boom");
+    });
+
+    expect(runShortcutHandler("app.open-settings", { source: "menu" })).toBe(false);
+    expect(consoleError).toHaveBeenCalledWith(
+      "Failed to handle shortcut app.open-settings",
+      expect.any(Error),
+    );
+
+    consoleError.mockRestore();
   });
 });

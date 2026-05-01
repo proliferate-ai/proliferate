@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { SHORTCUTS, type ShortcutId } from "@/config/shortcuts";
 import {
-  getShortcutHandler,
+  runShortcutHandler,
   type ShortcutTrigger,
 } from "@/lib/domain/shortcuts/registry";
 import {
@@ -15,20 +15,6 @@ const SHORTCUT_IDS = new Set<ShortcutId>(DISPATCH_SHORTCUTS.map((shortcut) => sh
 
 function isShortcutId(id: string): id is ShortcutId {
   return SHORTCUT_IDS.has(id as ShortcutId);
-}
-
-function dispatchShortcut(id: ShortcutId, trigger: ShortcutTrigger): boolean {
-  const handler = getShortcutHandler(id);
-  if (!handler) {
-    return false;
-  }
-
-  try {
-    return handler(trigger) !== false;
-  } catch (error) {
-    console.error(`Failed to handle shortcut ${id}`, error);
-    return false;
-  }
 }
 
 export function resolveKeyboardShortcut(
@@ -70,7 +56,7 @@ export function useShortcutDispatcher(): void {
         return;
       }
 
-      const consumed = dispatchShortcut(resolved.id, resolved.trigger);
+      const consumed = runShortcutHandler(resolved.id, resolved.trigger);
       if (consumed) {
         event.preventDefault();
       }
@@ -84,7 +70,7 @@ export function useShortcutDispatcher(): void {
         return;
       }
 
-      dispatchShortcut(id, { source: "menu" });
+      runShortcutHandler(id, { source: "menu" });
     }).then((dispose) => {
       if (disposed) {
         dispose();

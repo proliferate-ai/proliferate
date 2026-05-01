@@ -58,8 +58,8 @@ export interface MainScreenLayoutState {
   setTerminalActivationRequestToken: Dispatch<SetStateAction<number>>;
   publishDialog: PublishDialogState;
   setPublishDialog: Dispatch<SetStateAction<PublishDialogState>>;
-  filePaletteOpen: boolean;
-  setFilePaletteOpen: Dispatch<SetStateAction<boolean>>;
+  commandPaletteOpen: boolean;
+  setCommandPaletteOpen: Dispatch<SetStateAction<boolean>>;
   rightPanelWidth: number;
   setRightPanelWidth: Dispatch<SetStateAction<number>>;
   onLeftSeparatorDown: (event: MouseEvent) => void;
@@ -89,7 +89,7 @@ export function useMainScreenState(): MainScreenState {
   const [publishDialog, setPublishDialog] = useState<PublishDialogState>(
     CLOSED_PUBLISH_DIALOG_STATE,
   );
-  const [filePaletteOpen, setFilePaletteOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const pendingWorkspaceEntry = useHarnessStore((state) => state.pendingWorkspaceEntry);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
@@ -228,8 +228,8 @@ export function useMainScreenState(): MainScreenState {
       setTerminalActivationRequestToken,
       publishDialog,
       setPublishDialog,
-      filePaletteOpen,
-      setFilePaletteOpen,
+      commandPaletteOpen,
+      setCommandPaletteOpen,
       rightPanelWidth,
       setRightPanelWidth,
       onLeftSeparatorDown,
