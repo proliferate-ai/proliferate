@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   bindMeasurementCategories,
   finishMeasurementOperation,
+  getDebugMeasurementDump,
   getMeasurementRequestOptions,
   hashMeasurementScope,
   recordMeasurementMetric,
@@ -85,5 +86,90 @@ describe("debug measurement registry", () => {
 
     const row = (table.mock.calls[0]?.[0] as Array<Record<string, unknown>>)[0];
     expect(row.requestCount).toBe(1);
+  });
+
+  it("emits state-count breakdown rows for apply-size diagnostics", () => {
+    vi.stubEnv("VITE_PROLIFERATE_DEBUG_ANYHARNESS_TIMING", "1");
+    const table = vi.spyOn(console, "table").mockImplementation(() => undefined);
+    const operationId = startMeasurementOperation({
+      kind: "session_history_initial_hydrate",
+      surfaces: ["transcript-list"],
+    });
+    expect(operationId).not.toBeNull();
+
+    recordMeasurementMetric({
+      type: "state_count",
+      operationId: operationId!,
+      target: "session.history.events_after",
+      count: 12,
+    });
+    recordMeasurementMetric({
+      type: "state_count",
+      operationId: operationId!,
+      target: "session.history.events_after",
+      count: 18,
+    });
+    finishMeasurementOperation(operationId!, "completed");
+
+    const rows = table.mock.calls[0]?.[0] as Array<Record<string, unknown>>;
+    const stateCountRow = rows.find((row) => row.rowKind === "state_count");
+    expect(stateCountRow).toMatchObject({
+      operationKind: "session_history_initial_hydrate",
+      target: "session.history.events_after",
+      count: 18,
+      maxCount: 18,
+      samples: 2,
+    });
+  });
+
+  it("keeps a rolling dump of active operations, metrics, and summaries", () => {
+    vi.stubEnv("VITE_PROLIFERATE_DEBUG_ANYHARNESS_TIMING", "1");
+    vi.spyOn(console, "table").mockImplementation(() => undefined);
+    const operationId = startMeasurementOperation({
+      kind: "workspace_background_reconcile",
+      surfaces: ["workspace-shell"],
+    });
+    expect(operationId).not.toBeNull();
+
+    recordMeasurementMetric({
+      type: "workflow",
+      operationId: operationId!,
+      step: "session.history.replay",
+      durationMs: 8.4,
+      count: 20,
+    });
+    const activeDump = getDebugMeasurementDump();
+    expect(activeDump.activeOperations).toHaveLength(1);
+    expect(
+      activeDump.recentMetrics[activeDump.recentMetrics.length - 1],
+    ).toMatchObject({
+      tag: "measurement_metric",
+      operationIds: [operationId],
+      metric: {
+        type: "workflow",
+        step: "session.history.replay",
+        count: 20,
+      },
+    });
+
+    finishMeasurementOperation(operationId!, "completed");
+    const finishedDump = getDebugMeasurementDump();
+    expect(finishedDump.activeOperations).toHaveLength(0);
+    expect(
+      finishedDump.recentOperationEvents[
+        finishedDump.recentOperationEvents.length - 1
+      ],
+    ).toMatchObject({
+      phase: "finish",
+      operationId,
+      operationKind: "workspace_background_reconcile",
+    });
+    expect(
+      finishedDump.recentSummaries[finishedDump.recentSummaries.length - 1],
+    ).toMatchObject({
+      tag: "measurement_summary_json",
+      operationId,
+      operationKind: "workspace_background_reconcile",
+    });
   });
 });

@@ -25,6 +25,7 @@ export {
 export type TurnDisplayBlock =
   | { kind: "item"; itemId: string }
   | { kind: "inline_tool"; itemId: string }
+  | { kind: "inline_tools"; blockId: string; itemIds: string[] }
   | { kind: "collapsed_actions"; blockId: string; itemIds: string[] };
 
 export interface CompletedHistorySummary {
@@ -55,6 +56,7 @@ export function buildTranscriptDisplayBlocks({
 }): TurnDisplayBlock[] {
   const blocks: TurnDisplayBlock[] = [];
   let pendingActionIds: string[] = [];
+  let pendingInlineActionIds: string[] = [];
   const trailingInlineActionIds = collectTrailingInlineActionIds(
     rootIds,
     transcript,
@@ -73,6 +75,22 @@ export function buildTranscriptDisplayBlocks({
     });
     pendingActionIds = [];
   };
+  const flushInlineActions = () => {
+    if (pendingInlineActionIds.length === 0) return;
+    const firstId = pendingInlineActionIds[0];
+    if (!firstId) return;
+    if (pendingInlineActionIds.length === 1) {
+      blocks.push({ kind: "inline_tool", itemId: firstId });
+    } else {
+      const lastId = pendingInlineActionIds[pendingInlineActionIds.length - 1] ?? firstId;
+      blocks.push({
+        kind: "inline_tools",
+        blockId: `${firstId}-${lastId}`,
+        itemIds: pendingInlineActionIds,
+      });
+    }
+    pendingInlineActionIds = [];
+  };
 
   for (const itemId of rootIds) {
     const item = transcript.itemsById[itemId];
@@ -84,18 +102,21 @@ export function buildTranscriptDisplayBlocks({
         || (isActiveToolCall(item) && (isKnownRealAction(item) || isPendingCommand(item)))
       ) {
         flushActions();
-        blocks.push({ kind: "inline_tool", itemId });
+        pendingInlineActionIds.push(itemId);
       } else {
+        flushInlineActions();
         pendingActionIds.push(itemId);
       }
       continue;
     }
 
     flushActions();
+    flushInlineActions();
     blocks.push({ kind: "item", itemId });
   }
 
   flushActions();
+  flushInlineActions();
   return blocks;
 }
 

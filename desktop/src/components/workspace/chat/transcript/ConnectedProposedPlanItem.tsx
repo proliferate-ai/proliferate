@@ -32,7 +32,7 @@ export function ConnectedProposedPlanItem({
 
   return (
     <div className="flex justify-start relative">
-      <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
+      <div className="flex flex-col w-full max-w-full space-y-1 break-words">
         <ProposedPlanCard
           title={item.plan.title}
           content={item.plan.bodyMarkdown}

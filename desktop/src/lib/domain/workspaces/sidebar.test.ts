@@ -288,6 +288,99 @@ describe("sidebar workspace filters", () => {
     ]);
   });
 
+  it("orders workspace items by work activity before record freshness", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "renamed-but-older-work",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          updatedAt: "2026-04-13T12:00:00.000Z",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "older-record-newer-work",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          updatedAt: "2026-04-13T11:00:00.000Z",
+        }),
+      ],
+      workspaceLastInteracted: {
+        "renamed-but-older-work": "2026-04-13T10:00:00.000Z",
+        "older-record-newer-work": "2026-04-13T11:30:00.000Z",
+      },
+    });
+
+    expect(groups[0]?.items.map((item) => item.id)).toEqual([
+      "older-record-newer-work",
+      "renamed-but-older-work",
+    ]);
+    expect(groups[0]?.items.map((item) => item.lastInteracted)).toEqual([
+      "2026-04-13T11:30:00.000Z",
+      "2026-04-13T10:00:00.000Z",
+    ]);
+  });
+
+  it("orders repo groups by their latest visible work activity", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "repo-a-workspace",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          updatedAt: "2026-04-13T12:00:00.000Z",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "repo-b-workspace",
+          repoKey: "/tmp/repo-b",
+          repoName: "repo-b",
+          updatedAt: "2026-04-13T11:00:00.000Z",
+        }),
+      ],
+      workspaceLastInteracted: {
+        "repo-a-workspace": "2026-04-13T10:00:00.000Z",
+        "repo-b-workspace": "2026-04-13T11:30:00.000Z",
+      },
+    });
+
+    expect(groups.map((group) => group.name)).toEqual(["repo-b", "repo-a"]);
+  });
+
+  it("ignores type-hidden workspace activity when ordering visible repo groups", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "repo-a-visible",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          updatedAt: "2026-04-13T09:00:00.000Z",
+        }),
+        makeCloudLogicalWorkspace({
+          id: "repo-a-hidden-cloud",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          updatedAt: "2026-04-13T09:00:00.000Z",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "repo-b-visible",
+          repoKey: "/tmp/repo-b",
+          repoName: "repo-b",
+          updatedAt: "2026-04-13T09:00:00.000Z",
+        }),
+      ],
+      workspaceTypes: ["local"],
+      workspaceLastInteracted: {
+        "repo-a-visible": "2026-04-13T10:00:00.000Z",
+        "repo-a-hidden-cloud": "2026-04-13T12:00:00.000Z",
+        "repo-b-visible": "2026-04-13T11:00:00.000Z",
+      },
+    });
+
+    expect(groups.map((group) => group.name)).toEqual(["repo-b", "repo-a"]);
+    expect(groups[1]?.items.map((item) => item.id)).toEqual(["repo-a-visible"]);
+  });
+
   it("force-expands a repo group when the selected logical workspace is past the item cap", () => {
     const groups = buildGroups({
       logicalWorkspaces: Array.from({ length: 7 }, (_, index) =>
@@ -310,6 +403,55 @@ describe("sidebar workspace filters", () => {
     });
 
     expect(Array.from(expandedKeys)).toEqual(["/tmp/repo-a"]);
+  });
+
+  it("carries the runtime workspace id for worktree done actions", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "path:/tmp/repo-a/worktree",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          branch: "feature/worktree",
+        }),
+      ],
+    });
+
+    const item = groups[0]?.items[0];
+    expect(item?.id).toBe("path:/tmp/repo-a/worktree");
+    expect(item?.localWorkspaceId).toBe("path:/tmp/repo-a/worktree-materialization");
+  });
+
+  it("uses runtime workspace ids and logical workspace ids for finish suggestion actions", () => {
+    const logicalWorkspace = makeLocalLogicalWorkspace({
+      id: "path:/tmp/repo-a/worktree",
+      repoKey: "/tmp/repo-a",
+      repoName: "repo-a",
+      kind: "worktree",
+      branch: "feature/worktree",
+    });
+    const materializationId = logicalWorkspace.localWorkspace?.id ?? "";
+    const groups = buildGroups({
+      logicalWorkspaces: [logicalWorkspace],
+      finishSuggestionsByWorkspaceId: {
+        [materializationId]: {
+          workspaceId: materializationId,
+          readinessFingerprint: "fingerprint-1",
+        },
+      },
+    });
+
+    const finishSuggestion = groups[0]?.items[0]?.detailIndicators.find(
+      (indicator) => indicator.kind === "finish_suggestion",
+    );
+    expect(finishSuggestion).toEqual({
+      kind: "finish_suggestion",
+      workspaceId: materializationId,
+      logicalWorkspaceId: "path:/tmp/repo-a/worktree",
+      readinessFingerprint: "fingerprint-1",
+      tooltip: "Ready to mark done",
+    });
   });
 
   it("normalizes all selected workspace types back to the default order", () => {

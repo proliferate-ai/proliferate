@@ -2,7 +2,7 @@ import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { twMerge } from "tailwind-merge";
 
 type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "destructive" | "inverted";
-type ButtonSize = "sm" | "md" | "pill" | "icon" | "icon-sm";
+type ButtonSize = "sm" | "md" | "pill" | "icon" | "icon-sm" | "unstyled";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -31,6 +31,7 @@ const sizeClasses: Record<ButtonSize, string> = {
   icon: "h-8 w-8 rounded-md",
   pill: "h-auto px-2.5 py-0.5 text-sm rounded-full",
   "icon-sm": "h-7 w-7 rounded-full px-0",
+  unstyled: "",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(

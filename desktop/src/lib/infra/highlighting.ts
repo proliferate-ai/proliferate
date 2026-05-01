@@ -14,24 +14,24 @@ const PROLIFERATE_DARK_THEME = {
   name: "proliferate-dark",
   type: "dark" as const,
   settings: [
-    { settings: { foreground: "#ffffff", background: "#181818" } },
-    { scope: ["comment", "punctuation.definition.comment"], settings: { foreground: "rgba(255,255,255,0.5)" } },
-    { scope: ["string", "string.quoted"], settings: { foreground: "#40c977" } },
-    { scope: ["constant.numeric", "constant.language"], settings: { foreground: "#ffd240" } },
-    { scope: ["keyword", "keyword.control", "keyword.operator.expression", "keyword.operator.new"], settings: { foreground: "#ff6764" } },
-    { scope: ["storage.type", "storage.modifier"], settings: { foreground: "#ad7bf9" } },
-    { scope: ["entity.name.type", "support.type", "support.class"], settings: { foreground: "#ad7bf9" } },
-    { scope: ["entity.name.function", "support.function", "meta.function-call entity.name.function"], settings: { foreground: "#ad7bf9" } },
-    { scope: ["variable", "variable.other", "variable.other.readwrite", "variable.other.property", "variable.parameter"], settings: { foreground: "#ffd240" } },
-    { scope: ["keyword.operator.assignment"], settings: { foreground: "#339cff" } },
-    { scope: ["entity.name.tag"], settings: { foreground: "#ff6764" } },
-    { scope: ["entity.other.attribute-name"], settings: { foreground: "#ad7bf9" } },
-    { scope: ["punctuation", "meta.brace"], settings: { foreground: "rgba(255,255,255,0.6)" } },
-    { scope: ["markup.heading"], settings: { foreground: "#ff6764", fontStyle: "bold" } },
+    { settings: { foreground: "#FCFCFC", background: "#181818" } },
+    { scope: ["comment", "punctuation.definition.comment"], settings: { foreground: "#999999" } },
+    { scope: ["string", "string.quoted", "markup.inline.raw", "markup.raw.inline"], settings: { foreground: "#85DF7B" } },
+    { scope: ["constant.numeric", "constant.language"], settings: { foreground: "#6DCBF4" } },
+    { scope: ["keyword", "keyword.control", "keyword.operator.expression", "keyword.operator.new"], settings: { foreground: "#F67576" } },
+    { scope: ["storage.type", "storage.modifier"], settings: { foreground: "#B06DFF" } },
+    { scope: ["entity.name.type", "support.type", "support.class"], settings: { foreground: "#B06DFF" } },
+    { scope: ["entity.name.function", "support.function", "meta.function-call entity.name.function"], settings: { foreground: "#B06DFF" } },
+    { scope: ["variable", "variable.other", "variable.other.readwrite", "variable.other.property", "variable.parameter"], settings: { foreground: "#FA994C" } },
+    { scope: ["keyword.operator", "keyword.operator.assignment"], settings: { foreground: "#6DCBF4" } },
+    { scope: ["entity.name.tag"], settings: { foreground: "#F67576" } },
+    { scope: ["entity.other.attribute-name"], settings: { foreground: "#B06DFF" } },
+    { scope: ["punctuation", "meta.brace"], settings: { foreground: "#999999" } },
+    { scope: ["markup.heading"], settings: { foreground: "#F67576", fontStyle: "bold" } },
     { scope: ["markup.bold"], settings: { fontStyle: "bold" } },
     { scope: ["markup.italic"], settings: { fontStyle: "italic" } },
-    { scope: ["markup.inserted"], settings: { foreground: "#40c977" } },
-    { scope: ["markup.deleted"], settings: { foreground: "#ff6764" } },
+    { scope: ["markup.inserted"], settings: { foreground: "#40C977" } },
+    { scope: ["markup.deleted"], settings: { foreground: "#F67576" } },
   ],
 };
 
@@ -129,12 +129,131 @@ export interface HighlightedToken {
   color?: string;
 }
 
+const CODEX_MARKDOWN_COLORS = {
+  dark: {
+    foreground: "#FCFCFC",
+    muted: "#999999",
+    string: "#85DF7B",
+    heading: "#F67576",
+    emphasis: "#FA994C",
+  },
+  light: {
+    foreground: "#0d0d0d",
+    muted: "#666666",
+    string: "#008809",
+    heading: "#d53538",
+    emphasis: "#bd5800",
+  },
+} satisfies Record<HighlightTheme, Record<string, string>>;
+
+function token(content: string, color?: string): HighlightedToken {
+  return color ? { content, color } : { content };
+}
+
+function tokenizeInlineMarkdown(
+  line: string,
+  colors: typeof CODEX_MARKDOWN_COLORS.dark,
+): HighlightedToken[] {
+  const tokens: HighlightedToken[] = [];
+  const pattern = /(`[^`]+`)|(\[[^\]]+\]\([^)]+\))/g;
+  let index = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(line)) !== null) {
+    if (match.index > index) {
+      tokens.push(token(line.slice(index, match.index), colors.foreground));
+    }
+
+    const value = match[0];
+    if (value.startsWith("`")) {
+      tokens.push(token("`", colors.muted));
+      tokens.push(token(value.slice(1, -1), colors.string));
+      tokens.push(token("`", colors.muted));
+    } else {
+      const closingBracket = value.indexOf("]");
+      const openingParen = value.indexOf("(", closingBracket);
+      tokens.push(token("[", colors.muted));
+      tokens.push(...tokenizeInlineMarkdown(value.slice(1, closingBracket), colors));
+      tokens.push(token("]", colors.muted));
+      tokens.push(token(value.slice(openingParen), colors.heading));
+    }
+
+    index = match.index + value.length;
+  }
+
+  if (index < line.length) {
+    tokens.push(token(line.slice(index), colors.foreground));
+  }
+
+  return tokens.length > 0 ? tokens : [token(line, colors.foreground)];
+}
+
+function tokenizeMarkdownFenceLine(
+  line: string,
+  colors: typeof CODEX_MARKDOWN_COLORS.dark,
+): HighlightedToken[] {
+  const fenceMatch = line.match(/^(\s*)(`{3,}|~{3,})(.*)$/);
+  if (!fenceMatch) return [token(line, colors.foreground)];
+
+  const [, indent, fence, rest] = fenceMatch;
+  return [
+    ...(indent ? [token(indent, colors.foreground)] : []),
+    token(fence, colors.muted),
+    ...(rest ? [token(rest, colors.foreground)] : []),
+  ];
+}
+
+export function highlightMarkdownDiffLines(
+  lines: string[],
+  theme: HighlightTheme = "dark",
+): HighlightedToken[][] {
+  const colors = CODEX_MARKDOWN_COLORS[theme];
+  let inFence = false;
+
+  return lines.map((line) => {
+    const isFenceLine = /^\s*(`{3,}|~{3,})/.test(line);
+    if (isFenceLine) {
+      const tokens = tokenizeMarkdownFenceLine(line, colors);
+      inFence = !inFence;
+      return tokens;
+    }
+
+    if (inFence) {
+      return [token(line, colors.foreground)];
+    }
+
+    if (/^#{1,6}(?:\s|$)/.test(line)) {
+      return [token(line, colors.heading)];
+    }
+
+    if (/^\*\*[^*].*\*\*$/.test(line)) {
+      return [token(line, colors.emphasis)];
+    }
+
+    const listMatch = line.match(/^(\s*)([-*+])(\s+.*)$/);
+    if (listMatch) {
+      const [, indent, marker, rest] = listMatch;
+      return [
+        ...(indent ? [token(indent, colors.foreground)] : []),
+        token(marker, colors.heading),
+        ...tokenizeInlineMarkdown(rest, colors),
+      ];
+    }
+
+    return tokenizeInlineMarkdown(line, colors);
+  });
+}
+
 export async function highlightLines(
   lines: string[],
   languageOrFilename: string,
   theme: HighlightTheme = "dark",
 ): Promise<HighlightedToken[][]> {
   const lang = inferLanguage(languageOrFilename);
+  if (lang === "markdown") {
+    return highlightMarkdownDiffLines(lines, theme);
+  }
+
   try {
     const highlighter = await getHighlighter();
     const { tokens } = highlighter.codeToTokens(lines.join("\n"), {

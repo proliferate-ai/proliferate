@@ -6,15 +6,11 @@ import { useSessionSelectionActions } from "@/hooks/sessions/use-session-selecti
 export function useSessionActions() {
   const runtimeActions = useSessionRuntimeActions();
   const selectionActions = useSessionSelectionActions();
-  const creationActions = useSessionCreationActions({
-    ensureWorkspaceSessions: selectionActions.ensureWorkspaceSessions,
-  });
+  const creationActions = useSessionCreationActions();
   const controlActions = useSessionControlActions({
     activateSession: runtimeActions.activateSession,
     createSessionWithResolvedConfig: creationActions.createSessionWithResolvedConfig,
     ensureWorkspaceSessions: selectionActions.ensureWorkspaceSessions,
-    maybeStartFirstSessionBranchRenameTracking:
-      creationActions.maybeStartFirstSessionBranchRenameTracking,
     selectSession: selectionActions.selectSession,
   });
 

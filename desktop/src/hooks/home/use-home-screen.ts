@@ -10,7 +10,7 @@ import {
   buildHomeActionCards,
   buildHomeStatusMessage,
 } from "@/lib/domain/home/home-screen";
-import { latestLogicalWorkspaceTimestamp } from "@/lib/domain/workspaces/logical-workspaces";
+import { compareLogicalWorkspaceRecency } from "@/lib/domain/workspaces/recency";
 import { buildSettingsRepositoryEntries } from "@/lib/domain/settings/repositories";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
@@ -44,15 +44,7 @@ export function useHomeScreen() {
           && hiddenRepoRootIdSet.has(workspace.localWorkspace.repoRootId)
         )
       )
-      .sort((a, b) => {
-        const aTime = new Date(
-          latestLogicalWorkspaceTimestamp(workspaceLastInteracted, a) ?? a.updatedAt,
-        ).getTime();
-        const bTime = new Date(
-          latestLogicalWorkspaceTimestamp(workspaceLastInteracted, b) ?? b.updatedAt,
-        ).getTime();
-        return bTime - aTime;
-      })
+      .sort((a, b) => compareLogicalWorkspaceRecency(a, b, workspaceLastInteracted))
       .slice(0, 4);
   }, [archivedWorkspaceIds, hiddenRepoRootIds, logicalWorkspaces, workspaceLastInteracted]);
 

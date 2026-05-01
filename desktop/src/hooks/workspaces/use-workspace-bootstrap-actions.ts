@@ -494,7 +494,7 @@ export function useWorkspaceBootstrapActions() {
       }
 
       const measurementOperationId = startMeasurementOperation({
-        kind: "workspace_open",
+        kind: "workspace_background_reconcile",
         surfaces: [
           "workspace-shell",
           "workspace-sidebar",

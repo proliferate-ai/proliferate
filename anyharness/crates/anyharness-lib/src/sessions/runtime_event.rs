@@ -23,6 +23,15 @@ pub(crate) enum RuntimeInjectedSessionEvent {
 }
 
 impl RuntimeInjectedSessionEvent {
+    pub(crate) fn updates_session_activity_at(&self) -> bool {
+        matches!(
+            self,
+            Self::SubagentTurnCompleted(_)
+                | Self::SessionLinkTurnCompleted(_)
+                | Self::ReviewRunUpdated(_)
+        )
+    }
+
     pub(crate) fn into_session_event(self) -> SessionEvent {
         match self {
             Self::SessionInfoUpdate { title, updated_at } => {

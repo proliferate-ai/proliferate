@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, MouseEvent, ReactNode } from "react";
 
 type PopoverMenuItemVariant = "default" | "sidebar";
 
@@ -17,6 +17,7 @@ export function PopoverMenuItem({
   className = "",
   children,
   type = "button",
+  onClick,
   ...props
 }: PopoverMenuItemProps) {
   const hoverClassName = variant === "sidebar"
@@ -28,6 +29,10 @@ export function PopoverMenuItem({
       type={type}
       className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-foreground transition-colors ${hoverClassName} disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent ${className}`}
       {...props}
+      onClick={(event: MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        onClick?.(event);
+      }}
     >
       {icon && <span className="flex shrink-0 items-center justify-center">{icon}</span>}
       <span className="min-w-0 flex-1 text-left">

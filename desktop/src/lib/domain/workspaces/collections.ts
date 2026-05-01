@@ -103,9 +103,12 @@ export function workspaceFileTreeStateKey(workspace: Workspace): string {
 
 export interface WorkspaceCollections {
   localWorkspaces: Workspace[];
+  retiredLocalWorkspaces: Workspace[];
   repoRoots: RepoRoot[];
   cloudWorkspaces: CloudWorkspaceSummary[];
   workspaces: Workspace[];
+  allWorkspaces: Workspace[];
+  cleanupAttentionWorkspaces: Workspace[];
 }
 
 export function buildWorkspaceCollections(
@@ -116,12 +119,24 @@ export function buildWorkspaceCollections(
   const enrichedLocalWorkspaces = sortWorkspacesByUpdatedAtDesc(
     enrichLocalWorkspaces(localWorkspaces, repoRoots),
   );
+  const activeLocalWorkspaces = enrichedLocalWorkspaces.filter(
+    (workspace) => workspace.lifecycleState !== "retired",
+  );
+  const retiredLocalWorkspaces = enrichedLocalWorkspaces.filter(
+    (workspace) => workspace.lifecycleState === "retired",
+  );
+  const cleanupAttentionWorkspaces = retiredLocalWorkspaces.filter(
+    (workspace) => workspace.cleanupState === "pending" || workspace.cleanupState === "failed",
+  );
 
   return {
-    localWorkspaces: enrichedLocalWorkspaces,
+    localWorkspaces: activeLocalWorkspaces,
+    retiredLocalWorkspaces,
     repoRoots,
     cloudWorkspaces,
-    workspaces: enrichedLocalWorkspaces,
+    workspaces: activeLocalWorkspaces,
+    allWorkspaces: enrichedLocalWorkspaces,
+    cleanupAttentionWorkspaces,
   };
 }
 
@@ -161,7 +176,7 @@ export function upsertLocalWorkspaceCollections(
 
   const localWorkspaces = [
     workspace,
-    ...collections.localWorkspaces.filter((existing) => existing.id !== workspace.id),
+    ...collections.allWorkspaces.filter((existing) => existing.id !== workspace.id),
   ];
 
   return buildWorkspaceCollections(localWorkspaces, repoRoots, collections.cloudWorkspaces);
@@ -181,7 +196,7 @@ export function upsertCloudWorkspaceCollections(
   ];
 
   return buildWorkspaceCollections(
-    collections.localWorkspaces,
+    collections.allWorkspaces,
     collections.repoRoots,
     cloudWorkspaces,
   );
@@ -196,7 +211,7 @@ export function upsertRepoRootCollections(
   }
 
   return buildWorkspaceCollections(
-    collections.localWorkspaces,
+    collections.allWorkspaces,
     [
       repoRoot,
       ...collections.repoRoots.filter((existing) => existing.id !== repoRoot.id),

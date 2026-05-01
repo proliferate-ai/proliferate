@@ -84,6 +84,7 @@ impl SessionExtension for ReviewSessionHooks {
 
         Ok(SessionLaunchExtras {
             system_prompt_append: review_system_prompt_append(),
+            first_prompt_system_prompt_append: Vec::new(),
             mcp_servers: vec![SessionMcpServer::Http(SessionMcpHttpServer {
                 connection_id: "reviews".to_string(),
                 catalog_entry_id: None,

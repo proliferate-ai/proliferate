@@ -7,6 +7,7 @@ use axum::{
     Json,
 };
 
+use super::access::{assert_workspace_mutable, assert_workspace_not_retired};
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::hosting::types::{
@@ -14,6 +15,7 @@ use crate::hosting::types::{
     PullRequestState as InternalPullRequestState, PullRequestSummary as InternalPullRequestSummary,
 };
 use crate::hosting::HostingService;
+use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 fn resolve_workspace_path(
     workspace_runtime: &crate::workspaces::runtime::WorkspaceRuntime,
@@ -27,9 +29,16 @@ fn resolve_workspace_path(
     Ok(std::path::PathBuf::from(workspace.path))
 }
 
+#[derive(Clone, Copy)]
+enum HostingTaskAccess {
+    Read,
+    Write,
+}
+
 async fn run_hosting_task<T, F>(
     state: &AppState,
     workspace_id: String,
+    access: HostingTaskAccess,
     task_label: &'static str,
     task: F,
 ) -> Result<T, ApiError>
@@ -37,6 +46,20 @@ where
     T: Send + 'static,
     F: FnOnce(std::path::PathBuf) -> Result<T, ApiError> + Send + 'static,
 {
+    // Acquire exactly one operation lease per request. Nested read leases can
+    // deadlock behind a queued exclusive retire lease.
+    let operation_kind = match access {
+        HostingTaskAccess::Read => WorkspaceOperationKind::MaterializationRead,
+        HostingTaskAccess::Write => WorkspaceOperationKind::HostingWrite,
+    };
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, operation_kind)
+        .await;
+    match access {
+        HostingTaskAccess::Read => assert_workspace_not_retired(state, &workspace_id)?,
+        HostingTaskAccess::Write => assert_workspace_mutable(state, &workspace_id)?,
+    }
     let workspace_runtime = state.workspace_runtime.clone();
     tokio::task::spawn_blocking(move || {
         let workspace_path = resolve_workspace_path(&workspace_runtime, &workspace_id)?;
@@ -64,6 +87,7 @@ pub async fn get_current_pull_request(
     let response = run_hosting_task(
         &state,
         workspace_id,
+        HostingTaskAccess::Read,
         "get current pull request",
         move |workspace_path| {
             HostingService::get_current_pull_request(&workspace_path)
@@ -100,6 +124,7 @@ pub async fn create_pull_request(
     let response = run_hosting_task(
         &state,
         workspace_id,
+        HostingTaskAccess::Write,
         "create pull request",
         move |workspace_path| {
             HostingService::create_pull_request(

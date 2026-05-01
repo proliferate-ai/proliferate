@@ -9,6 +9,8 @@ import type {
 } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { DiffViewer } from "@/components/ui/content/DiffViewer";
+import { FileDiffCard } from "@/components/ui/content/FileDiffCard";
+import { HighlightedCodePanel } from "@/components/ui/content/HighlightedCodePanel";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { ChevronRight } from "@/components/ui/icons";
 import { useOpenInDefaultEditor } from "@/hooks/editor/use-open-in-default-editor";
@@ -183,12 +185,21 @@ function EditActionRow({
   failed: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [diffExpanded, setDiffExpanded] = useState(true);
   const pathLabel = part.newWorkspacePath ?? part.workspacePath ?? part.newPath ?? part.path;
   const displayName = part.newBasename ?? part.basename ?? basename(pathLabel);
   const action = failed ? "Failed editing" : formatEditVerb(part.operation);
   const additions = part.additions ?? 0;
   const deletions = part.deletions ?? 0;
   const hasDetails = !!part.patch || !!part.preview;
+  const { resolveAbsolute } = useWorkspacePath();
+  const { openInDefaultEditor } = useOpenInDefaultEditor();
+  const workspacePath = part.newWorkspacePath ?? part.workspacePath ?? null;
+  const absolute = workspacePath ? resolveAbsolute(workspacePath) : null;
+  const handleOpen = useCallback(() => {
+    if (!absolute) return;
+    void openInDefaultEditor(absolute);
+  }, [absolute, openInDefaultEditor]);
 
   return (
     <div>
@@ -234,32 +245,34 @@ function EditActionRow({
         )}
       </div>
       {expanded && hasDetails && (
-        <div className="mt-1.5 overflow-hidden rounded-lg border border-border/60 bg-foreground/[0.04]">
-          <div className="flex min-w-0 items-center gap-2 border-b border-border/60 bg-foreground/[0.04] px-2.5 py-1 text-sm text-muted-foreground/80">
-            <span className="min-w-0 truncate">{displayName}</span>
-            {(additions > 0 || deletions > 0) && (
-              <span className="ml-auto inline-flex shrink-0 items-center gap-1 tabular-nums tracking-tight">
-                {additions > 0 && <span className="text-git-green">+{additions}</span>}
-                {deletions > 0 && <span className="text-git-red">-{deletions}</span>}
-              </span>
-            )}
-          </div>
-          {part.patch ? (
-            <DiffViewer
-              patch={part.patch}
+        part.patch ? (
+          <div className="mt-1.5">
+            <FileDiffCard
               filePath={pathLabel}
-              className="w-full"
-              viewportClassName="max-h-60"
-              variant="chat"
-            />
-          ) : part.preview ? (
-            <AutoHideScrollArea viewportClassName="max-h-60">
-              <pre className="m-0 whitespace-pre-wrap p-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-muted-foreground">
-                <code>{part.preview}</code>
-              </pre>
-            </AutoHideScrollArea>
-          ) : null}
-        </div>
+              additions={additions}
+              deletions={deletions}
+              isExpanded={diffExpanded}
+              onToggleExpand={() => setDiffExpanded((value) => !value)}
+              onOpenFile={absolute ? handleOpen : undefined}
+            >
+              <DiffViewer
+                patch={part.patch}
+                filePath={pathLabel}
+                className="w-full"
+                viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+                variant="chat"
+              />
+            </FileDiffCard>
+          </div>
+        ) : part.preview ? (
+          <HighlightedCodePanel
+            code={part.preview}
+            filename={pathLabel}
+            showLanguageLabel={false}
+            className="mt-1.5 border-border/60 bg-foreground/[0.04]"
+            contentClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+          />
+        ) : null
       )}
     </div>
   );

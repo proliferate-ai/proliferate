@@ -157,7 +157,7 @@ type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
  * the trailing status should stay compact instead of creating an empty block
  * between the prose and future tool activity.
  */
-const TRAILING_STATUS_MIN_HEIGHT = "min-h-[2.625rem]";
+const TRAILING_STATUS_MIN_HEIGHT = "min-h-[calc(var(--text-chat--line-height)+1.5rem)]";
 const LIVE_STATUS_GRACE_MS = 700;
 
 interface MessageListProps {
@@ -625,7 +625,7 @@ function collectToolCallIdsWithProposedPlanForBlocks(
 ): Set<string> {
   const toolCallIds = new Set<string>();
   for (const block of displayBlocks) {
-    if (block.kind === "collapsed_actions") {
+    if (block.kind === "collapsed_actions" || block.kind === "inline_tools") {
       for (const itemId of block.itemIds) {
         collectToolCallIdsWithProposedPlanFromItem(
           itemId,
@@ -853,6 +853,9 @@ function blockContainsActiveToolWork(
   if (block.kind === "collapsed_actions") {
     return block.itemIds.some((itemId) => isActiveToolItem(transcript.itemsById[itemId]));
   }
+  if (block.kind === "inline_tools") {
+    return block.itemIds.some((itemId) => isActiveToolItem(transcript.itemsById[itemId]));
+  }
 
   return isActiveToolItem(transcript.itemsById[block.itemId]);
 }
@@ -868,6 +871,9 @@ function blockBelongsToCompletedHistory(
   completedHistoryRootIds: Set<string>,
 ): boolean {
   if (block.kind === "collapsed_actions") {
+    return block.itemIds.every((itemId) => completedHistoryRootIds.has(itemId));
+  }
+  if (block.kind === "inline_tools") {
     return block.itemIds.every((itemId) => completedHistoryRootIds.has(itemId));
   }
   return completedHistoryRootIds.has(block.itemId);
@@ -1040,7 +1046,7 @@ function TranscriptItemBlock({
     case "thought":
       return (
         <div className="flex justify-start relative">
-          <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
+          <div className="flex flex-col w-full max-w-full space-y-1 break-words">
             <ReasoningBlock content={item.text || undefined} />
           </div>
         </div>
@@ -1054,7 +1060,7 @@ function TranscriptItemBlock({
         const body = extractClaudePlanBody(item) ?? "";
         return (
           <div className="flex justify-start relative">
-            <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
+            <div className="flex flex-col w-full max-w-full space-y-1 break-words">
               <ClaudePlanCard
                 content={body}
                 isStreaming={item.status === "in_progress"}
@@ -1065,7 +1071,7 @@ function TranscriptItemBlock({
       }
       return (
         <div className="flex justify-start relative">
-          <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
+          <div className="flex flex-col w-full max-w-full space-y-1 break-words">
             <ToolCallItemBlock
               item={item}
               workspaceId={workspaceId}
@@ -1350,7 +1356,16 @@ function ToolCallItemBlock({
     );
   }
 
-  return rows.length === 1 ? <>{rows[0]}</> : <div className="space-y-1.5">{rows}</div>;
+  if (rows.length === 1) {
+    return <>{rows[0]}</>;
+  }
+
+  const hasOnlyFileChangeRows = rows.length === fileChanges.length;
+  return (
+    <div className={hasOnlyFileChangeRows ? "flex flex-col" : "space-y-1.5"}>
+      {rows}
+    </div>
+  );
 }
 
 function ToolCallGroupBlock({

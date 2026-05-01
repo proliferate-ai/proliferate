@@ -65,12 +65,11 @@
   --text-sm--line-height: 1rem;
   --text-base: 0.6875rem;             /* 11px — body, buttons, tabs, sidebar */
   --text-base--line-height: 1rem;
-  --text-chat: 0.6875rem;             /* 11px — chat messages */
+  --text-chat: 12px;                  /* default chat/message text */
   /* NOTE: --text-chat--line-height is load-bearing for the no-scroll-bump
-     streaming handoff in MessageList.tsx. Its value is baked into
-     TRAILING_STATUS_MIN_HEIGHT (= line-height + copy-button slot h-6).
-     If you change this, update TRAILING_STATUS_MIN_HEIGHT to match. */
-  --text-chat--line-height: 1.125rem; /* ~18px — relaxed ratio (1.625×) for readable chat */
+     streaming handoff in MessageList.tsx. TRAILING_STATUS_MIN_HEIGHT derives
+     from this token, so keep the two in sync structurally. */
+  --text-chat--line-height: 20px;     /* font size + 8px */
   --text-lg: 0.875rem;                /* 14px — emphasis, section labels */
   --text-lg--line-height: 1.25rem;
   --text-xl: 1.125rem;                /* 18px — unchanged */
@@ -262,28 +261,39 @@
   --git-removed-line-bg: color-mix(in oklab, hsl(0 100% 45%) 10%, transparent);
   --git-removed-line-border: color-mix(in oklab, hsl(0 100% 45%) 60%, transparent);
   --git-removed-line-highlight: color-mix(in oklab, hsl(0 100% 45%) 20%, transparent);
-  --color-diff-surface: color-mix(in oklab, var(--color-foreground) 5%, transparent);
-  --color-diff-header-surface: color-mix(in oklab, var(--color-foreground) 8%, transparent);
+  --color-diff-main-surface: var(--color-background);
+  --color-diff-code-surface: var(--color-diff-main-surface);
+  --color-diff-surface: color-mix(in srgb, var(--color-diff-main-surface) 94%, var(--color-foreground));
+  --color-diff-panel-surface: color-mix(in oklab, var(--color-foreground) 3%, transparent);
+  --color-diff-header-surface: var(--color-diff-surface);
+  --color-code-block-background: var(--color-diff-surface);
   --color-diff-added: var(--color-git-new-line);
   --color-diff-deleted: var(--color-git-removed-line);
   --diffs-font-family: var(--font-mono);
-  --diffs-font-size: 10px;
-  --diffs-line-height: calc(var(--diffs-font-size, 12px) * 1.8);
-  --readable-code-font-size: 0.625rem;
+  --diffs-font-size: 11px;
+  --diffs-line-height: calc(var(--diffs-font-size, 11px) * 1.8);
+  --readable-code-font-size: 0.6875rem;
   --readable-code-line-height: 1.625;
   --diffs-min-number-column-width: 4ch;
   --diffs-fg: var(--color-foreground);
+  --diffs-mixer: var(--diffs-fg);
   --diffs-addition-color-override: var(--color-diff-added);
   --diffs-deletion-color-override: var(--color-diff-deleted);
   --codex-diffs-surface: var(--color-diff-surface);
+  --codex-diffs-context-surface: color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-diff-main-surface));
+  --codex-diffs-separator-surface: color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-link-foreground));
+  --codex-diffs-hover-surface: color-mix(in srgb, var(--codex-diffs-surface) 92%, var(--color-diff-main-surface));
   --codex-diffs-header-surface: var(--color-diff-header-surface);
-  --diffs-bg-context-override: color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-background));
-  --diffs-bg-separator-override: color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-link-foreground));
-  --diffs-bg-hover-override: color-mix(in srgb, var(--codex-diffs-surface) 92%, var(--color-background));
-  --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 88%, var(--diffs-addition-color-override));
-  --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 88%, var(--diffs-deletion-color-override));
-  --diffs-bg-addition-number-override: color-mix(in srgb, var(--codex-diffs-surface) 91%, var(--diffs-addition-color-override));
-  --diffs-bg-deletion-number-override: color-mix(in srgb, var(--codex-diffs-surface) 91%, var(--diffs-deletion-color-override));
+  --codex-diffs-context-number: color-mix(in lab, var(--codex-diffs-surface) 98.5%, var(--diffs-mixer));
+  --codex-diffs-addition-number: color-mix(in srgb, var(--codex-diffs-surface) 91%, var(--diffs-addition-color-override));
+  --codex-diffs-deletion-number: color-mix(in srgb, var(--codex-diffs-surface) 91%, var(--diffs-deletion-color-override));
+  --diffs-bg-context-override: var(--codex-diffs-context-surface);
+  --diffs-bg-separator-override: var(--codex-diffs-separator-surface);
+  --diffs-bg-hover-override: var(--codex-diffs-hover-surface);
+  --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-addition-color-override));
+  --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-deletion-color-override));
+  --diffs-bg-addition-number-override: var(--codex-diffs-addition-number);
+  --diffs-bg-deletion-number-override: var(--codex-diffs-deletion-number);
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
@@ -459,6 +469,16 @@
   --git-removed-line-bg: color-mix(in oklab, #fa423e 15%, transparent);
   --git-removed-line-border: color-mix(in oklab, #fa423e 60%, transparent);
   --git-removed-line-highlight: color-mix(in oklab, #fa423e 23%, transparent);
+  --color-diff-main-surface: #181818;
+  --color-diff-surface: color-mix(in srgb, #181818 94%, #ffffff);
+  --color-diff-panel-surface: color-mix(in oklab, #ffffff 3%, transparent);
+  --color-diff-header-surface: var(--color-diff-surface);
+  --color-diff-added: #40c977;
+  --color-diff-deleted: #fa423e;
+  --diffs-fg: #fcfcfc;
+  --diffs-mixer: #fcfcfc;
+  --color-diff-added-bg: var(--diffs-bg-addition-override);
+  --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
 
 /* Mono dark tracks Codex Electron dark while `original` keeps the legacy dark preset above. */
@@ -517,16 +537,21 @@
   --color-git-new-line: #40c977;
   --color-git-removed-line: #fa423e;
 
-  --git-new-line-bg: color-mix(in oklab, #40c977 15%, transparent);
-  --git-new-line-border: color-mix(in oklab, #40c977 60%, transparent);
-  --git-new-line-highlight: color-mix(in oklab, #40c977 23%, transparent);
-  --git-removed-line-bg: color-mix(in oklab, #fa423e 15%, transparent);
-  --git-removed-line-border: color-mix(in oklab, #fa423e 60%, transparent);
-  --git-removed-line-highlight: color-mix(in oklab, #fa423e 23%, transparent);
+  --git-new-line-bg: color-mix(in srgb, #181818 88%, #00a240);
+  --git-new-line-border: #00a240;
+  --git-new-line-highlight: color-mix(in srgb, #181818 82%, #00a240);
+  --git-removed-line-bg: color-mix(in srgb, #181818 88%, #e02e2a);
+  --git-removed-line-border: #e02e2a;
+  --git-removed-line-highlight: color-mix(in srgb, #181818 82%, #e02e2a);
+  --color-diff-main-surface: #181818;
+  --color-diff-code-surface: #111111;
   --color-diff-surface: color-mix(in srgb, #181818 94%, #ffffff);
-  --color-diff-header-surface: color-mix(in srgb, #181818 90%, #ffffff);
-  --color-diff-added: #40c977;
-  --color-diff-deleted: #fa423e;
+  --color-diff-panel-surface: color-mix(in oklab, #ffffff 3%, transparent);
+  --color-diff-header-surface: var(--color-diff-surface);
+  --color-diff-added: #00a240;
+  --color-diff-deleted: #e02e2a;
+  --diffs-fg: #fcfcfc;
+  --diffs-mixer: #fcfcfc;
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
@@ -706,6 +731,16 @@
   --git-removed-line-bg: color-mix(in oklab, #ff6b7a 14%, transparent);
   --git-removed-line-border: color-mix(in oklab, #ff6b7a 56%, transparent);
   --git-removed-line-highlight: color-mix(in oklab, #ff6b7a 22%, transparent);
+  --color-diff-main-surface: #0b1412;
+  --color-diff-surface: color-mix(in srgb, #0b1412 94%, #f0f5f2);
+  --color-diff-panel-surface: color-mix(in oklab, #f0f5f2 3%, transparent);
+  --color-diff-header-surface: var(--color-diff-surface);
+  --color-diff-added: #59e5bf;
+  --color-diff-deleted: #ff6b7a;
+  --diffs-fg: #f0f5f2;
+  --diffs-mixer: #f0f5f2;
+  --color-diff-added-bg: var(--diffs-bg-addition-override);
+  --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
 
 :root[data-theme="tbpn"] body {
@@ -864,6 +899,16 @@
   --git-removed-line-bg: color-mix(in oklab, hsl(0 100% 45%) 10%, transparent);
   --git-removed-line-border: color-mix(in oklab, hsl(0 100% 45%) 60%, transparent);
   --git-removed-line-highlight: color-mix(in oklab, hsl(0 100% 45%) 20%, transparent);
+  --color-diff-main-surface: hsl(44 0% 100%);
+  --color-diff-surface: color-mix(in srgb, hsl(44 0% 100%) 94%, hsl(39 8% 16%));
+  --color-diff-panel-surface: color-mix(in oklab, hsl(39 8% 16%) 3%, transparent);
+  --color-diff-header-surface: var(--color-diff-surface);
+  --color-diff-added: hsl(142 76% 44%);
+  --color-diff-deleted: hsl(0 100% 45%);
+  --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-addition-color-override));
+  --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-deletion-color-override));
+  --color-diff-added-bg: var(--diffs-bg-addition-override);
+  --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
 
 
@@ -1008,10 +1053,14 @@
   --git-removed-line-bg: color-mix(in oklab, #ba2623 10%, transparent);
   --git-removed-line-border: color-mix(in oklab, #ba2623 60%, transparent);
   --git-removed-line-highlight: color-mix(in oklab, #ba2623 15%, transparent);
+  --color-diff-main-surface: #ffffff;
   --color-diff-surface: color-mix(in srgb, #ffffff 94%, #0d0d0d);
-  --color-diff-header-surface: color-mix(in srgb, #ffffff 90%, #0d0d0d);
+  --color-diff-panel-surface: color-mix(in oklab, #0d0d0d 3%, transparent);
+  --color-diff-header-surface: var(--color-diff-surface);
   --color-diff-added: #00a240;
   --color-diff-deleted: #ba2623;
+  --diffs-fg: #0d0d0d;
+  --diffs-mixer: #0d0d0d;
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
@@ -1131,11 +1180,11 @@
   --color-app-switcher-bg: rgba(13, 13, 13, 0.1);
 
   --color-git-green: #00a240;
-  --color-git-red: #e02e2a;
+  --color-git-red: #ba2623;
   --color-git-yellow: #ffc300;
   --color-git-gray: rgba(13, 13, 13, 0.5);
   --color-git-new-line: #00a240;
-  --color-git-removed-line: #e02e2a;
+  --color-git-removed-line: #ba2623;
 
   --color-terminal-black: rgba(13, 13, 13, 0.5);
   --color-terminal-red: #d53538;
@@ -1158,13 +1207,17 @@
   --git-new-line-bg: color-mix(in oklab, #00a240 15%, transparent);
   --git-new-line-border: color-mix(in oklab, #00a240 60%, transparent);
   --git-new-line-highlight: color-mix(in oklab, #00a240 15%, transparent);
-  --git-removed-line-bg: color-mix(in oklab, #e02e2a 15%, transparent);
-  --git-removed-line-border: color-mix(in oklab, #e02e2a 60%, transparent);
-  --git-removed-line-highlight: color-mix(in oklab, #e02e2a 15%, transparent);
+  --git-removed-line-bg: color-mix(in oklab, #ba2623 15%, transparent);
+  --git-removed-line-border: color-mix(in oklab, #ba2623 60%, transparent);
+  --git-removed-line-highlight: color-mix(in oklab, #ba2623 15%, transparent);
+  --color-diff-main-surface: #ffffff;
   --color-diff-surface: color-mix(in srgb, #ffffff 94%, #0d0d0d);
-  --color-diff-header-surface: color-mix(in srgb, #ffffff 90%, #0d0d0d);
+  --color-diff-panel-surface: color-mix(in oklab, #0d0d0d 3%, transparent);
+  --color-diff-header-surface: var(--color-diff-surface);
   --color-diff-added: #00a240;
-  --color-diff-deleted: #e02e2a;
+  --color-diff-deleted: #ba2623;
+  --diffs-fg: #0d0d0d;
+  --diffs-mixer: #0d0d0d;
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
@@ -1189,8 +1242,9 @@
 }
 
 .composer-diff-simple-line {
-  --codex-diffs-surface: var(--color-diff-surface);
-  --codex-diffs-header-surface: var(--color-diff-header-surface);
+  --codex-diffs-surface: var(--color-diff-code-surface);
+  --codex-diffs-header-surface: var(--codex-diffs-surface);
+  --diffs-bg: var(--codex-diffs-surface);
   background-color: var(--codex-diffs-surface);
   scrollbar-color: var(--color-scrollbar-thumb) transparent;
 }
@@ -1200,12 +1254,12 @@
 }
 
 .composer-diff-simple-line [data-diff] {
-  background-color: var(--codex-diffs-surface);
+  background-color: var(--diffs-bg);
   color: var(--diffs-fg);
 }
 
 .composer-diff-simple-line [data-code] {
-  background-color: var(--codex-diffs-surface);
+  background-color: var(--diffs-bg);
 }
 
 .composer-diff-simple-line [data-line-type="context"] {
@@ -1225,6 +1279,7 @@
 }
 
 .composer-diff-simple-line [data-gutter] [data-line-type="context"] {
+  background-color: var(--codex-diffs-context-number);
   color: color-mix(in srgb, var(--diffs-fg) 35%, transparent);
 }
 
@@ -1236,6 +1291,28 @@
 .composer-diff-simple-line [data-gutter] [data-line-type="change-deletion"] {
   background-color: var(--diffs-bg-deletion-number-override);
   color: var(--color-diff-deleted);
+}
+
+.composer-diff-simple-line [data-gutter] .diff-gutter-cell[data-line-type="change-addition"],
+.composer-diff-simple-line [data-gutter] .diff-gutter-cell[data-line-type="change-deletion"] {
+  position: relative;
+}
+
+.composer-diff-simple-line [data-gutter] .diff-gutter-cell[data-line-type="change-addition"]::before,
+.composer-diff-simple-line [data-gutter] .diff-gutter-cell[data-line-type="change-deletion"]::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 2px;
+}
+
+.composer-diff-simple-line [data-gutter] .diff-gutter-cell[data-line-type="change-addition"]::before {
+  background-color: var(--diffs-addition-color-override);
+}
+
+.composer-diff-simple-line [data-gutter] .diff-gutter-cell[data-line-type="change-deletion"]::before {
+  background-color: var(--diffs-deletion-color-override);
 }
 
 .composer-diff-simple-line [data-separator]:empty {

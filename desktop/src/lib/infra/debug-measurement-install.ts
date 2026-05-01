@@ -3,6 +3,7 @@ import {
 } from "@anyharness/sdk";
 import { installDebugMainThreadDetectors } from "@/lib/infra/debug-main-thread";
 import {
+  installDebugMeasurementExport,
   isAnyHarnessTimingEnabled,
   recordMeasurementMetric,
   type MeasurementOperationId,
@@ -16,6 +17,7 @@ export function installDebugMeasurement(): () => void {
   }
 
   const uninstallMainThread = installDebugMainThreadDetectors();
+  const uninstallExport = installDebugMeasurementExport();
   const uninstallAnyHarness = isAnyHarnessTimingEnabled()
     ? setAnyHarnessTimingObserver((event) => {
       if (event.type === "request") {
@@ -48,6 +50,7 @@ export function installDebugMeasurement(): () => void {
 
   uninstallMeasurement = () => {
     uninstallAnyHarness();
+    uninstallExport();
     uninstallMainThread();
     uninstallMeasurement = null;
   };

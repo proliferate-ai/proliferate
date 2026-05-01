@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from "react";
 import {
   CollapsedActions,
   InlineToolAction,
+  InlineToolActions,
 } from "@/components/workspace/chat/tool-calls/CollapsedActions";
 import type {
   TranscriptState,
@@ -63,6 +64,15 @@ export function TurnDisplayBlockNode({
     return <InlineToolAction item={item} />;
   }
 
+  if (block.kind === "inline_tools") {
+    return (
+      <InlineToolActions
+        itemIds={block.itemIds}
+        transcript={transcript}
+      />
+    );
+  }
+
   return (
     <Fragment>
       {renderItem(block.itemId)}
@@ -76,6 +86,9 @@ export function getTurnDisplayBlockKey(block: TurnDisplayBlock): string {
   }
   if (block.kind === "inline_tool") {
     return `inline-tool-${block.itemId}`;
+  }
+  if (block.kind === "inline_tools") {
+    return `inline-tools-${block.blockId}`;
   }
   return `item-${block.itemId}`;
 }

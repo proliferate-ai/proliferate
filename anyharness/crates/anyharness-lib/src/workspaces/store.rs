@@ -28,6 +28,36 @@ impl WorkspaceStore {
         })
     }
 
+    pub fn find_active_by_path(&self, path: &str) -> anyhow::Result<Option<WorkspaceRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM workspaces
+                 WHERE path = ?1 AND lifecycle_state = 'active'
+                 ORDER BY created_at ASC LIMIT 1",
+                [path],
+                |row| map_row(row),
+            )
+            .optional()
+        })
+    }
+
+    pub fn find_active_by_path_excluding_id(
+        &self,
+        path: &str,
+        excluded_id: &str,
+    ) -> anyhow::Result<Option<WorkspaceRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM workspaces
+                 WHERE path = ?1 AND id <> ?2 AND lifecycle_state = 'active'
+                 ORDER BY created_at ASC LIMIT 1",
+                params![path, excluded_id],
+                |row| map_row(row),
+            )
+            .optional()
+        })
+    }
+
     pub fn find_by_path_and_kind(
         &self,
         path: &str,
@@ -36,6 +66,44 @@ impl WorkspaceStore {
         self.db.with_conn(|conn| {
             conn.query_row(
                 "SELECT * FROM workspaces WHERE path = ?1 AND kind = ?2 ORDER BY created_at ASC LIMIT 1",
+                params![path, kind],
+                |row| map_row(row),
+            )
+            .optional()
+        })
+    }
+
+    pub fn find_active_by_path_and_kind(
+        &self,
+        path: &str,
+        kind: &str,
+    ) -> anyhow::Result<Option<WorkspaceRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM workspaces
+                 WHERE path = ?1 AND kind = ?2 AND lifecycle_state = 'active'
+                 ORDER BY created_at ASC LIMIT 1",
+                params![path, kind],
+                |row| map_row(row),
+            )
+            .optional()
+        })
+    }
+
+    pub fn find_retired_incomplete_cleanup_by_path_and_kind(
+        &self,
+        path: &str,
+        kind: &str,
+    ) -> anyhow::Result<Option<WorkspaceRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM workspaces
+                 WHERE path = ?1
+                   AND kind = ?2
+                   AND lifecycle_state = 'retired'
+                   AND cleanup_state IN ('pending', 'failed')
+                 ORDER BY updated_at DESC
+                 LIMIT 1",
                 params![path, kind],
                 |row| map_row(row),
             )
@@ -98,6 +166,55 @@ impl WorkspaceStore {
             )?;
             let rows = stmt.query_map([repo_root_id], map_row)?;
             rows.collect()
+        })
+    }
+
+    pub fn list_active_by_repo_root_id(
+        &self,
+        repo_root_id: &str,
+    ) -> anyhow::Result<Vec<WorkspaceRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT * FROM workspaces
+                 WHERE repo_root_id = ?1 AND lifecycle_state = 'active'
+                 ORDER BY updated_at DESC",
+            )?;
+            let rows = stmt.query_map([repo_root_id], map_row)?;
+            rows.collect()
+        })
+    }
+
+    pub fn update_lifecycle_cleanup_state(
+        &self,
+        workspace_id: &str,
+        lifecycle_state: &str,
+        cleanup_state: &str,
+        cleanup_error_message: Option<&str>,
+        cleanup_failed_at: Option<&str>,
+        cleanup_attempted_at: Option<&str>,
+        updated_at: &str,
+    ) -> anyhow::Result<()> {
+        self.db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE workspaces
+                 SET lifecycle_state = ?2,
+                     cleanup_state = ?3,
+                     cleanup_error_message = ?4,
+                     cleanup_failed_at = ?5,
+                     cleanup_attempted_at = ?6,
+                     updated_at = ?7
+                 WHERE id = ?1",
+                params![
+                    workspace_id,
+                    lifecycle_state,
+                    cleanup_state,
+                    cleanup_error_message,
+                    cleanup_failed_at,
+                    cleanup_attempted_at,
+                    updated_at,
+                ],
+            )?;
+            Ok(())
         })
     }
 
@@ -176,8 +293,9 @@ fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<
         "INSERT INTO workspaces (
             id, kind, repo_root_id, path, surface, source_repo_root_path, source_workspace_id,
             git_provider, git_owner, git_repo_name, original_branch, current_branch, display_name,
-            origin_json, creator_context_json, lifecycle_state, cleanup_state, created_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+            origin_json, creator_context_json, lifecycle_state, cleanup_state,
+            cleanup_error_message, cleanup_failed_at, cleanup_attempted_at, created_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
         params![
             r.id,
             r.kind,
@@ -196,6 +314,9 @@ fn insert_workspace(conn: &Connection, r: &WorkspaceRecord) -> rusqlite::Result<
             creator_context_json,
             r.lifecycle_state,
             r.cleanup_state,
+            r.cleanup_error_message,
+            r.cleanup_failed_at,
+            r.cleanup_attempted_at,
             r.created_at,
             r.updated_at,
         ],
@@ -225,6 +346,9 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceRecord> {
         creator_context: decode_creator_context_json("workspaces", &id, creator_context_json),
         lifecycle_state: row.get("lifecycle_state")?,
         cleanup_state: row.get("cleanup_state")?,
+        cleanup_error_message: row.get("cleanup_error_message")?,
+        cleanup_failed_at: row.get("cleanup_failed_at")?,
+        cleanup_attempted_at: row.get("cleanup_attempted_at")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
@@ -258,6 +382,9 @@ mod tests {
             creator_context: None,
             lifecycle_state: "active".to_string(),
             cleanup_state: "none".to_string(),
+            cleanup_error_message: None,
+            cleanup_failed_at: None,
+            cleanup_attempted_at: None,
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
         }
@@ -382,6 +509,170 @@ mod tests {
             .expect("workspace record");
 
         assert_eq!(stored.creator_context, None);
+    }
+
+    #[test]
+    fn active_path_lookup_ignores_retired_rows() {
+        let db = Db::open_in_memory().expect("open db");
+        let store = WorkspaceStore::new(db);
+
+        let mut retired = workspace_record("workspace-retired", "worktree", "/tmp/workspace");
+        retired.lifecycle_state = "retired".to_string();
+        retired.cleanup_state = "complete".to_string();
+        let active = workspace_record("workspace-active", "worktree", "/tmp/workspace");
+
+        store.insert(&retired).expect("insert retired workspace");
+        store.insert(&active).expect("insert active workspace");
+
+        assert_eq!(
+            store
+                .find_by_path("/tmp/workspace")
+                .expect("find any path")
+                .expect("historical workspace")
+                .id,
+            "workspace-retired"
+        );
+        assert_eq!(
+            store
+                .find_active_by_path("/tmp/workspace")
+                .expect("find active path")
+                .expect("active workspace")
+                .id,
+            "workspace-active"
+        );
+        assert!(store
+            .find_active_by_path_and_kind("/tmp/workspace", "local")
+            .expect("find active local path")
+            .is_none());
+    }
+
+    #[test]
+    fn active_path_lookup_can_exclude_current_workspace() {
+        let db = Db::open_in_memory().expect("open db");
+        let store = WorkspaceStore::new(db);
+
+        let current = workspace_record("workspace-current", "worktree", "/tmp/workspace");
+        let sibling = workspace_record("workspace-sibling", "local", "/tmp/workspace");
+        let mut retired = workspace_record("workspace-retired", "worktree", "/tmp/workspace");
+        retired.lifecycle_state = "retired".to_string();
+        retired.cleanup_state = "complete".to_string();
+
+        store.insert(&current).expect("insert current workspace");
+        store.insert(&sibling).expect("insert sibling workspace");
+        store.insert(&retired).expect("insert retired workspace");
+
+        assert_eq!(
+            store
+                .find_active_by_path_excluding_id("/tmp/workspace", "workspace-current")
+                .expect("find active path excluding current")
+                .expect("sibling active workspace")
+                .id,
+            "workspace-sibling"
+        );
+        assert!(store
+            .find_active_by_path_excluding_id("/tmp/workspace", "workspace-sibling")
+            .expect("find active path excluding sibling")
+            .is_some());
+        assert!(store
+            .find_active_by_path_excluding_id("/tmp/other", "workspace-current")
+            .expect("find active path for missing path")
+            .is_none());
+    }
+
+    #[test]
+    fn retired_incomplete_cleanup_lookup_tracks_path_ownership() {
+        let db = Db::open_in_memory().expect("open db");
+        let store = WorkspaceStore::new(db);
+
+        let mut complete = workspace_record("workspace-complete", "worktree", "/tmp/complete");
+        complete.lifecycle_state = "retired".to_string();
+        complete.cleanup_state = "complete".to_string();
+        let mut failed = workspace_record("workspace-failed", "worktree", "/tmp/failed");
+        failed.lifecycle_state = "retired".to_string();
+        failed.cleanup_state = "failed".to_string();
+
+        store.insert(&complete).expect("insert complete workspace");
+        store.insert(&failed).expect("insert failed workspace");
+
+        assert!(store
+            .find_retired_incomplete_cleanup_by_path_and_kind("/tmp/complete", "worktree")
+            .expect("lookup complete path")
+            .is_none());
+        assert_eq!(
+            store
+                .find_retired_incomplete_cleanup_by_path_and_kind("/tmp/failed", "worktree")
+                .expect("lookup failed path")
+                .expect("failed retired workspace")
+                .id,
+            "workspace-failed"
+        );
+    }
+
+    #[test]
+    fn active_repo_root_listing_ignores_retired_rows() {
+        let db = Db::open_in_memory().expect("open db");
+        let store = WorkspaceStore::new(db);
+
+        let mut retired = workspace_record("workspace-retired", "worktree", "/tmp/retired");
+        retired.repo_root_id = Some("repo-root-1".to_string());
+        retired.lifecycle_state = "retired".to_string();
+        retired.cleanup_state = "complete".to_string();
+        let mut active = workspace_record("workspace-active", "worktree", "/tmp/active");
+        active.repo_root_id = Some("repo-root-1".to_string());
+
+        store.insert(&retired).expect("insert retired workspace");
+        store.insert(&active).expect("insert active workspace");
+
+        let workspaces = store
+            .list_active_by_repo_root_id("repo-root-1")
+            .expect("list active repo-root workspaces");
+        assert_eq!(
+            workspaces
+                .iter()
+                .map(|workspace| workspace.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["workspace-active"]
+        );
+    }
+
+    #[test]
+    fn lifecycle_cleanup_update_preserves_workspace_and_persists_failure_detail() {
+        let db = Db::open_in_memory().expect("open db");
+        let store = WorkspaceStore::new(db);
+
+        let workspace = workspace_record("workspace-1", "worktree", "/tmp/workspace-1");
+        store.insert(&workspace).expect("insert workspace");
+        store
+            .update_lifecycle_cleanup_state(
+                &workspace.id,
+                "retired",
+                "failed",
+                Some("permission denied"),
+                Some("2026-04-29T12:00:00Z"),
+                Some("2026-04-29T11:59:00Z"),
+                "2026-04-29T12:00:01Z",
+            )
+            .expect("update lifecycle cleanup");
+
+        let stored = store
+            .find_by_id(&workspace.id)
+            .expect("find workspace")
+            .expect("workspace should still exist");
+        assert_eq!(stored.lifecycle_state, "retired");
+        assert_eq!(stored.cleanup_state, "failed");
+        assert_eq!(
+            stored.cleanup_error_message.as_deref(),
+            Some("permission denied")
+        );
+        assert_eq!(
+            stored.cleanup_failed_at.as_deref(),
+            Some("2026-04-29T12:00:00Z")
+        );
+        assert_eq!(
+            stored.cleanup_attempted_at.as_deref(),
+            Some("2026-04-29T11:59:00Z")
+        );
+        assert_eq!(stored.updated_at, "2026-04-29T12:00:01Z");
     }
 
     #[test]

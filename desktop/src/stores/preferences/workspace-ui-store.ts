@@ -49,6 +49,7 @@ export interface WorkspaceUiState {
   lastViewedSessionErrorAtBySession: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
   dismissedSetupFailures: Record<string, boolean>;
+  finishSuggestionDismissalsByWorkspaceId: Record<string, string>;
   visibleChatSessionIdsByWorkspace: Record<string, string[]>;
   recentlyHiddenChatSessionIdsByWorkspace: Record<string, string[]>;
   collapsedChatGroupsByWorkspace: Record<string, string[]>;
@@ -82,6 +83,8 @@ export interface WorkspaceUiState {
   updateWorkspaceLastInteracted: (workspaceId: string, timestamp: string) => void;
   dismissSetupFailure: (workspaceId: string) => void;
   clearSetupFailureDismissal: (workspaceId: string) => void;
+  dismissFinishSuggestion: (workspaceId: string, readinessFingerprint: string) => void;
+  clearFinishSuggestionDismissal: (workspaceId: string) => void;
   setVisibleChatSessionIdsForWorkspace: (workspaceId: string, sessionIds: string[]) => void;
   rememberHiddenChatSessionForWorkspace: (workspaceId: string, sessionId: string) => void;
   clearHiddenChatSessionsForWorkspace: (workspaceId: string, sessionIds: string[]) => void;
@@ -112,7 +115,7 @@ export interface WorkspaceUiState {
  * v4: add workspace-scoped right-panel preferences.
  * v5: add unified right-panel header order hints.
  */
-const WORKSPACE_UI_MIGRATION_VERSION = 5;
+const WORKSPACE_UI_MIGRATION_VERSION = 6;
 export const WORKSPACE_SIDEBAR_DEFAULT_WIDTH = 280;
 export const WORKSPACE_SIDEBAR_MIN_WIDTH = 220;
 export const WORKSPACE_SIDEBAR_MAX_WIDTH = 420;
@@ -133,6 +136,7 @@ export interface PersistedWorkspaceUiState {
   lastViewedSessionErrorAtBySession: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
   dismissedSetupFailures: Record<string, boolean>;
+  finishSuggestionDismissalsByWorkspaceId: Record<string, string>;
   visibleChatSessionIdsByWorkspace: Record<string, string[]>;
   recentlyHiddenChatSessionIdsByWorkspace: Record<string, string[]>;
   collapsedChatGroupsByWorkspace: Record<string, string[]>;
@@ -155,6 +159,7 @@ export const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
   lastViewedSessionErrorAtBySession: {},
   workspaceLastInteracted: {},
   dismissedSetupFailures: {},
+  finishSuggestionDismissalsByWorkspaceId: {},
   visibleChatSessionIdsByWorkspace: {},
   recentlyHiddenChatSessionIdsByWorkspace: {},
   collapsedChatGroupsByWorkspace: {},
@@ -205,6 +210,8 @@ async function readAll(): Promise<{ state: PersistedWorkspaceUiState; didMigrate
       collapsedRepoGroups: WORKSPACE_UI_DEFAULTS.collapsedRepoGroups,
       threadsCollapsed: WORKSPACE_UI_DEFAULTS.threadsCollapsed,
       dismissedSetupFailures: WORKSPACE_UI_DEFAULTS.dismissedSetupFailures,
+      finishSuggestionDismissalsByWorkspaceId:
+        WORKSPACE_UI_DEFAULTS.finishSuggestionDismissalsByWorkspaceId,
       visibleChatSessionIdsByWorkspace: WORKSPACE_UI_DEFAULTS.visibleChatSessionIdsByWorkspace,
       recentlyHiddenChatSessionIdsByWorkspace:
         WORKSPACE_UI_DEFAULTS.recentlyHiddenChatSessionIdsByWorkspace,
@@ -284,6 +291,12 @@ export function migrateWorkspaceUiState(
     didMigrate = true;
   }
 
+  if (!isStringRecord(state.finishSuggestionDismissalsByWorkspaceId)) {
+    state.finishSuggestionDismissalsByWorkspaceId =
+      WORKSPACE_UI_DEFAULTS.finishSuggestionDismissalsByWorkspaceId;
+    didMigrate = true;
+  }
+
   if (!isStringArrayRecord(state.recentlyHiddenChatSessionIdsByWorkspace)) {
     state.recentlyHiddenChatSessionIdsByWorkspace =
       WORKSPACE_UI_DEFAULTS.recentlyHiddenChatSessionIdsByWorkspace;
@@ -338,6 +351,7 @@ function selectPersistedSlice(state: WorkspaceUiState): PersistedWorkspaceUiStat
     lastViewedSessionErrorAtBySession: state.lastViewedSessionErrorAtBySession,
     workspaceLastInteracted: state.workspaceLastInteracted,
     dismissedSetupFailures: state.dismissedSetupFailures,
+    finishSuggestionDismissalsByWorkspaceId: state.finishSuggestionDismissalsByWorkspaceId,
     visibleChatSessionIdsByWorkspace: state.visibleChatSessionIdsByWorkspace,
     recentlyHiddenChatSessionIdsByWorkspace: state.recentlyHiddenChatSessionIdsByWorkspace,
     collapsedChatGroupsByWorkspace: state.collapsedChatGroupsByWorkspace,
@@ -730,6 +744,21 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
     const current = { ...get().dismissedSetupFailures };
     delete current[workspaceId];
     set({ dismissedSetupFailures: current });
+  },
+
+  dismissFinishSuggestion: (workspaceId, readinessFingerprint) => {
+    set({
+      finishSuggestionDismissalsByWorkspaceId: {
+        ...get().finishSuggestionDismissalsByWorkspaceId,
+        [workspaceId]: readinessFingerprint,
+      },
+    });
+  },
+
+  clearFinishSuggestionDismissal: (workspaceId) => {
+    const current = { ...get().finishSuggestionDismissalsByWorkspaceId };
+    delete current[workspaceId];
+    set({ finishSuggestionDismissalsByWorkspaceId: current });
   },
 
   setVisibleChatSessionIdsForWorkspace: (workspaceId, sessionIds) => {

@@ -20,7 +20,7 @@ use crate::sessions::store::SessionStore;
 
 pub const REVIEWER_DEADLINE_MINUTES: i64 = 30;
 pub const MAX_REVIEWERS_PER_RUN: usize = 4;
-pub const MAX_REVIEW_ROUNDS: u32 = 5;
+pub const MAX_REVIEW_ROUNDS: u32 = 10;
 pub const MAX_REVIEW_SUMMARY_BYTES: usize = 4 * 1024;
 pub const MAX_REVIEW_CRITIQUE_BYTES: usize = 64 * 1024;
 
@@ -660,7 +660,9 @@ mod tests {
     use crate::plans::service::PlanService;
     use crate::plans::store::PlanStore;
     use crate::sessions::links::store::SessionLinkStore;
-    use crate::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
+    use crate::sessions::model::{SessionEventRecord, SessionMcpBindingPolicy, SessionRecord};
+
+    use super::super::store_feedback::PendingPromptExecutionLookup;
 
     fn seed_workspace(db: &Db) {
         db.with_conn(|conn| {
@@ -732,6 +734,65 @@ mod tests {
             model_id: Some("opus".to_string()),
             mode_id: Some("bypassPermissions".to_string()),
         }
+    }
+
+    fn append_session_event(
+        session_store: &SessionStore,
+        seq: i64,
+        timestamp: &str,
+        event_type: &str,
+        turn_id: Option<&str>,
+        payload_json: String,
+    ) {
+        session_store
+            .append_event(&SessionEventRecord {
+                id: 0,
+                session_id: "parent-1".to_string(),
+                seq,
+                timestamp: timestamp.to_string(),
+                event_type: event_type.to_string(),
+                turn_id: turn_id.map(str::to_string),
+                item_id: None,
+                payload_json,
+            })
+            .expect("append session event");
+    }
+
+    fn pending_prompt_removed_json(seq: i64) -> String {
+        pending_prompt_removed_json_with_reason(seq, v1::PendingPromptRemovalReason::Executed)
+    }
+
+    fn pending_prompt_removed_json_with_reason(
+        seq: i64,
+        reason: v1::PendingPromptRemovalReason,
+    ) -> String {
+        serde_json::to_string(&v1::SessionEvent::PendingPromptRemoved(
+            v1::PendingPromptRemovedPayload { seq, reason },
+        ))
+        .expect("serialize pending prompt removed event")
+    }
+
+    fn review_feedback_pending_prompt_added_json(
+        seq: i64,
+        queued_at: &str,
+        feedback_job_id: &str,
+    ) -> String {
+        serde_json::to_string(&v1::SessionEvent::PendingPromptAdded(
+            v1::PendingPromptAddedPayload {
+                seq,
+                prompt_id: None,
+                text: "Review feedback".to_string(),
+                content_parts: Vec::new(),
+                queued_at: queued_at.to_string(),
+                prompt_provenance: Some(v1::PromptProvenance::ReviewFeedback {
+                    review_run_id: "run-1".to_string(),
+                    review_round_id: "round-1".to_string(),
+                    feedback_job_id: feedback_job_id.to_string(),
+                    label: None,
+                }),
+            },
+        ))
+        .expect("serialize pending prompt added event")
     }
 
     #[test]
@@ -1599,6 +1660,388 @@ mod tests {
         assert_eq!(first.current_round_number, 2);
         assert_eq!(second.current_round_number, 2);
         assert_eq!(rounds.len(), 2);
+    }
+
+    #[test]
+    fn stale_feedback_turn_cannot_advance_later_active_round() {
+        let (service, _session_store) = service_fixture();
+        let run = service
+            .start_review(StartReviewInput {
+                workspace_id: "workspace-1".to_string(),
+                parent_session_id: "parent-1".to_string(),
+                kind: ReviewKind::Code,
+                title: "Review current changes".to_string(),
+                target_plan: None,
+                target_code_manifest: None,
+                max_rounds: 3,
+                auto_iterate: true,
+                reviewers: vec![reviewer()],
+            })
+            .expect("start review");
+        let assignment = service
+            .store()
+            .list_assignments_for_run(&run.id)
+            .expect("list assignments")
+            .pop()
+            .expect("assignment");
+        let link_id = service
+            .link_reviewer_session(
+                &run.id,
+                &assignment.id,
+                "parent-1",
+                "child-1",
+                Some("Plan skeptic".to_string()),
+                None,
+                ReviewModeVerificationStatus::Pending,
+            )
+            .expect("link reviewer");
+        let first_job = service
+            .submit_assignment_result(
+                "child-1",
+                false,
+                "Needs changes.",
+                "## Findings\n\nMissing concrete checks.",
+                "/tmp/review.md",
+            )
+            .expect("submit first review")
+            .expect("first feedback job");
+        service
+            .store()
+            .mark_feedback_job_sent(&first_job.id, None, Some("feedback-turn-1"), None)
+            .expect("mark first feedback sent");
+        service
+            .mark_parent_feedback_turn_finished("parent-1", "feedback-turn-1")
+            .expect("mark first feedback turn finished")
+            .expect("first feedback turn matched");
+        let (second_round_run, second_started) = service
+            .start_next_round_records_after_feedback_turn(&run.id, "feedback-turn-1", None, None)
+            .expect("start second round");
+        assert!(second_started);
+        let second_round_id = second_round_run
+            .active_round_id
+            .as_deref()
+            .expect("second active round");
+        let second_assignment = service
+            .store()
+            .list_assignments_for_round(second_round_id)
+            .expect("list second assignments")
+            .pop()
+            .expect("second assignment");
+        assert!(service
+            .store()
+            .update_assignment_launched(
+                &second_assignment.id,
+                "child-1",
+                &link_id,
+                None,
+                ReviewModeVerificationStatus::Pending,
+            )
+            .expect("launch second assignment"));
+        let second_job = service
+            .submit_assignment_result(
+                "child-1",
+                false,
+                "Still needs changes.",
+                "## Findings\n\nStill missing concrete checks.",
+                "/tmp/review-round-2.md",
+            )
+            .expect("submit second review")
+            .expect("second feedback job");
+        service
+            .store()
+            .mark_feedback_job_sent(&second_job.id, None, Some("feedback-turn-2"), None)
+            .expect("mark second feedback sent");
+
+        let stale_match = service
+            .mark_parent_feedback_turn_finished("parent-1", "feedback-turn-1")
+            .expect("try stale feedback turn");
+        assert!(stale_match.is_none());
+
+        let (stale_run, stale_started) = service
+            .start_next_round_records_after_feedback_turn(&run.id, "feedback-turn-1", None, None)
+            .expect("try stale auto start");
+        assert!(!stale_started);
+        assert_eq!(stale_run.current_round_number, 2);
+
+        service
+            .mark_parent_feedback_turn_finished("parent-1", "feedback-turn-2")
+            .expect("mark current feedback turn finished")
+            .expect("current feedback turn matched");
+        let (third_round_run, third_started) = service
+            .start_next_round_records_after_feedback_turn(&run.id, "feedback-turn-2", None, None)
+            .expect("start third round");
+        assert!(third_started);
+        assert_eq!(third_round_run.current_round_number, 3);
+    }
+
+    #[test]
+    fn pending_prompt_execution_lookup_uses_feedback_provenance_for_reused_seq() {
+        let (service, session_store) = service_fixture();
+        append_session_event(
+            &session_store,
+            1,
+            "2026-04-29T00:00:01+00:00",
+            "pending_prompt_added",
+            None,
+            review_feedback_pending_prompt_added_json(1, "2026-04-29T00:00:01+00:00", "old-job"),
+        );
+        append_session_event(
+            &session_store,
+            2,
+            "2026-04-29T00:00:02+00:00",
+            "turn_started",
+            Some("old-turn"),
+            r#"{"type":"turn_started"}"#.to_string(),
+        );
+        append_session_event(
+            &session_store,
+            3,
+            "2026-04-29T00:00:03+00:00",
+            "pending_prompt_removed",
+            None,
+            pending_prompt_removed_json(1),
+        );
+        append_session_event(
+            &session_store,
+            4,
+            "2026-04-29T00:00:04+00:00",
+            "pending_prompt_added",
+            None,
+            review_feedback_pending_prompt_added_json(
+                1,
+                "2026-04-29T00:00:04+00:00",
+                "feedback-job-1",
+            ),
+        );
+        append_session_event(
+            &session_store,
+            5,
+            "2026-04-29T00:00:05+00:00",
+            "turn_started",
+            Some("new-turn"),
+            r#"{"type":"turn_started"}"#.to_string(),
+        );
+        append_session_event(
+            &session_store,
+            6,
+            "2026-04-29T00:00:06+00:00",
+            "pending_prompt_removed",
+            None,
+            pending_prompt_removed_json(1),
+        );
+
+        let lookup = service
+            .store()
+            .find_pending_prompt_execution("parent-1", 1, "feedback-job-1")
+            .expect("find pending prompt execution");
+
+        assert_eq!(
+            lookup,
+            PendingPromptExecutionLookup::Executed {
+                turn_id: "new-turn".to_string(),
+                executed_at: "2026-04-29T00:00:06+00:00".to_string(),
+            },
+        );
+    }
+
+    #[test]
+    fn deleted_queued_feedback_prompt_is_reset_for_retry_without_seq_misattribution() {
+        let (service, session_store) = service_fixture();
+        let run = service
+            .start_review(StartReviewInput {
+                workspace_id: "workspace-1".to_string(),
+                parent_session_id: "parent-1".to_string(),
+                kind: ReviewKind::Code,
+                title: "Review current changes".to_string(),
+                target_plan: None,
+                target_code_manifest: None,
+                max_rounds: 2,
+                auto_iterate: true,
+                reviewers: vec![reviewer()],
+            })
+            .expect("start review");
+        let assignment = service
+            .store()
+            .list_assignments_for_run(&run.id)
+            .expect("list assignments")
+            .pop()
+            .expect("assignment");
+        service
+            .link_reviewer_session(
+                &run.id,
+                &assignment.id,
+                "parent-1",
+                "child-1",
+                Some("Plan skeptic".to_string()),
+                None,
+                ReviewModeVerificationStatus::Pending,
+            )
+            .expect("link reviewer");
+        let job = service
+            .submit_assignment_result(
+                "child-1",
+                false,
+                "Needs changes.",
+                "## Findings\n\nMissing concrete checks.",
+                "/tmp/review.md",
+            )
+            .expect("submit review")
+            .expect("feedback job");
+        service
+            .store()
+            .mark_feedback_job_sending(&job.id)
+            .expect("mark sending")
+            .expect("claimed sending job");
+        service
+            .store()
+            .mark_feedback_job_queued(&job.id, Some(1))
+            .expect("mark queued")
+            .expect("queued feedback job");
+
+        append_session_event(
+            &session_store,
+            1,
+            "2026-04-29T00:00:01+00:00",
+            "pending_prompt_added",
+            None,
+            review_feedback_pending_prompt_added_json(1, "2026-04-29T00:00:01+00:00", &job.id),
+        );
+        append_session_event(
+            &session_store,
+            2,
+            "2026-04-29T00:00:02+00:00",
+            "pending_prompt_removed",
+            None,
+            pending_prompt_removed_json_with_reason(1, v1::PendingPromptRemovalReason::Deleted),
+        );
+        append_session_event(
+            &session_store,
+            3,
+            "2026-04-29T00:00:03+00:00",
+            "pending_prompt_added",
+            None,
+            review_feedback_pending_prompt_added_json(1, "2026-04-29T00:00:03+00:00", "other-job"),
+        );
+        append_session_event(
+            &session_store,
+            4,
+            "2026-04-29T00:00:04+00:00",
+            "turn_started",
+            Some("unrelated-turn"),
+            r#"{"type":"turn_started"}"#.to_string(),
+        );
+        append_session_event(
+            &session_store,
+            5,
+            "2026-04-29T00:00:05+00:00",
+            "pending_prompt_removed",
+            None,
+            pending_prompt_removed_json(1),
+        );
+
+        let lookup = service
+            .store()
+            .find_pending_prompt_execution("parent-1", 1, &job.id)
+            .expect("find pending prompt execution");
+
+        assert_eq!(
+            lookup,
+            PendingPromptExecutionLookup::Removed {
+                reason: v1::PendingPromptRemovalReason::Deleted,
+            },
+        );
+
+        let reset_job = service
+            .store()
+            .reset_queued_feedback_job_for_retry(
+                &job.id,
+                1,
+                "queued_prompt_removed",
+                Some("deleted before execution"),
+            )
+            .expect("reset queued feedback job")
+            .expect("reset job");
+        assert_eq!(reset_job.state, ReviewFeedbackJobState::Pending);
+        assert!(reset_job.sent_prompt_seq.is_none());
+        assert!(reset_job.feedback_turn_id.is_none());
+        assert_eq!(
+            reset_job.failure_reason.as_deref(),
+            Some("queued_prompt_removed")
+        );
+
+        let due = service
+            .store()
+            .pending_feedback_jobs("9999-01-01T00:00:00Z")
+            .expect("list pending feedback jobs");
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].id, job.id);
+
+        service
+            .store()
+            .mark_feedback_job_sending(&job.id)
+            .expect("mark retry sending")
+            .expect("claimed retry job");
+        service
+            .store()
+            .mark_feedback_job_queued(&job.id, Some(1))
+            .expect("mark retry queued")
+            .expect("queued retry feedback job");
+        append_session_event(
+            &session_store,
+            6,
+            "2026-04-29T00:00:06+00:00",
+            "pending_prompt_added",
+            None,
+            review_feedback_pending_prompt_added_json(1, "2026-04-29T00:00:06+00:00", &job.id),
+        );
+        append_session_event(
+            &session_store,
+            7,
+            "2026-04-29T00:00:07+00:00",
+            "turn_started",
+            Some("retry-turn"),
+            r#"{"type":"turn_started"}"#.to_string(),
+        );
+        append_session_event(
+            &session_store,
+            8,
+            "2026-04-29T00:00:08+00:00",
+            "pending_prompt_removed",
+            None,
+            pending_prompt_removed_json(1),
+        );
+
+        let retry_lookup = service
+            .store()
+            .find_pending_prompt_execution("parent-1", 1, &job.id)
+            .expect("find retry pending prompt execution");
+
+        assert_eq!(
+            retry_lookup,
+            PendingPromptExecutionLookup::Executed {
+                turn_id: "retry-turn".to_string(),
+                executed_at: "2026-04-29T00:00:08+00:00".to_string(),
+            },
+        );
+
+        service
+            .store()
+            .mark_feedback_job_sent(
+                &job.id,
+                Some(1),
+                Some("retry-turn"),
+                Some("2026-04-29T00:00:08+00:00"),
+            )
+            .expect("mark retry sent")
+            .expect("sent retry job");
+        let sent_job = service
+            .store()
+            .find_feedback_job(&job.id)
+            .expect("find sent feedback job")
+            .expect("feedback job");
+        assert_eq!(sent_job.state, ReviewFeedbackJobState::Sent);
+        assert_eq!(sent_job.sent_prompt_seq, Some(1));
+        assert_eq!(sent_job.feedback_turn_id.as_deref(), Some("retry-turn"));
     }
 
     #[test]

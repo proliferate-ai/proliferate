@@ -4171,6 +4171,129 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/retire": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "retire_workspace",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Retire workspace result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceRetireResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/retire/cleanup-retry": {
+      "post": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "retry_retire_cleanup",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cleanup retry result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceRetireResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/retire/preflight": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "operationId": "retire_workspace_preflight",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Retire preflight",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceRetirePreflightResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/reviews/code": {
       "post": {
         "tags": [
@@ -13373,6 +13496,24 @@
           "updatedAt"
         ],
         "properties": {
+          "cleanupAttemptedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cleanupErrorMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cleanupFailedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "cleanupState": {
             "$ref": "#/components/schemas/WorkspaceCleanupState"
           },
@@ -13604,6 +13745,12 @@
           "totalSessionCount": {
             "type": "integer",
             "minimum": 0
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -13910,6 +14057,203 @@
           },
           "supported": {
             "type": "boolean"
+          }
+        }
+      },
+      "WorkspaceRetireBlocker": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "severity",
+          "retryable"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/WorkspaceRetireBlockerCode"
+          },
+          "commandRunId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "operation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GitOperation"
+              }
+            ]
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "paths": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "severity": {
+            "$ref": "#/components/schemas/WorkspaceRetireBlockerSeverity"
+          },
+          "terminalId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "WorkspaceRetireBlockerCode": {
+        "type": "string",
+        "enum": [
+          "unsupported_workspace",
+          "workspace_access_blocked",
+          "dirty_working_tree",
+          "conflicted_files",
+          "active_git_operation",
+          "live_session",
+          "pending_prompt",
+          "pending_interaction",
+          "active_terminal",
+          "running_command"
+        ]
+      },
+      "WorkspaceRetireBlockerSeverity": {
+        "type": "string",
+        "enum": [
+          "blocking"
+        ]
+      },
+      "WorkspaceRetireOutcome": {
+        "type": "string",
+        "enum": [
+          "retired",
+          "already_retired",
+          "blocked",
+          "cleanup_failed"
+        ]
+      },
+      "WorkspaceRetirePreflightResponse": {
+        "type": "object",
+        "required": [
+          "workspaceId",
+          "workspaceKind",
+          "lifecycleState",
+          "cleanupState",
+          "canRetire",
+          "materialized",
+          "mergedIntoBase",
+          "headMatchesBase",
+          "readinessFingerprint",
+          "blockers"
+        ],
+        "properties": {
+          "baseOid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "baseRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceRetireBlocker"
+            }
+          },
+          "canRetire": {
+            "type": "boolean"
+          },
+          "cleanupState": {
+            "$ref": "#/components/schemas/WorkspaceCleanupState"
+          },
+          "headMatchesBase": {
+            "type": "boolean"
+          },
+          "headOid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lifecycleState": {
+            "$ref": "#/components/schemas/WorkspaceLifecycleState"
+          },
+          "materialized": {
+            "type": "boolean"
+          },
+          "mergedIntoBase": {
+            "type": "boolean"
+          },
+          "readinessFingerprint": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "workspaceKind": {
+            "$ref": "#/components/schemas/WorkspaceKind"
+          }
+        }
+      },
+      "WorkspaceRetireResponse": {
+        "type": "object",
+        "required": [
+          "workspace",
+          "outcome",
+          "preflight",
+          "cleanupAttempted",
+          "cleanupSucceeded"
+        ],
+        "properties": {
+          "cleanupAttempted": {
+            "type": "boolean"
+          },
+          "cleanupMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cleanupSucceeded": {
+            "type": "boolean"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/WorkspaceRetireOutcome"
+          },
+          "preflight": {
+            "$ref": "#/components/schemas/WorkspaceRetirePreflightResponse"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
           }
         }
       },

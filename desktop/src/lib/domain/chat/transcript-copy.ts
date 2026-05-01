@@ -102,6 +102,7 @@ function blockIncludesCompletedHistory(
 ): boolean {
   switch (block.kind) {
     case "collapsed_actions":
+    case "inline_tools":
       return block.itemIds.some((itemId) => completedHistoryIds.has(itemId));
     case "inline_tool":
     case "item":
@@ -117,6 +118,7 @@ function serializeDisplayBlock(
 ): string[] {
   switch (block.kind) {
     case "collapsed_actions":
+    case "inline_tools":
       return serializeItemIds(
         block.itemIds,
         transcript,

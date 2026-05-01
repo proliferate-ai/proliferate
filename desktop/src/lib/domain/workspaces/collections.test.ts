@@ -193,6 +193,69 @@ describe("upsertCloudWorkspaceCollections", () => {
   });
 });
 
+describe("buildWorkspaceCollections", () => {
+  it("splits active, retired, all, and cleanup-attention local workspaces", () => {
+    const active = makeWorkspace({ id: "workspace-active" });
+    const retiredComplete = makeWorkspace({
+      id: "workspace-retired-complete",
+      lifecycleState: "retired",
+      cleanupState: "complete",
+      updatedAt: "2026-04-06T11:00:00.000Z",
+    });
+    const retiredFailed = makeWorkspace({
+      id: "workspace-retired-failed",
+      lifecycleState: "retired",
+      cleanupState: "failed",
+      updatedAt: "2026-04-06T12:00:00.000Z",
+    });
+
+    const collections = buildWorkspaceCollections([
+      active,
+      retiredComplete,
+      retiredFailed,
+    ]);
+
+    expect(collections.localWorkspaces.map((workspace) => workspace.id)).toEqual([
+      "workspace-active",
+    ]);
+    expect(collections.workspaces.map((workspace) => workspace.id)).toEqual([
+      "workspace-active",
+    ]);
+    expect(collections.retiredLocalWorkspaces.map((workspace) => workspace.id)).toEqual([
+      "workspace-retired-failed",
+      "workspace-retired-complete",
+    ]);
+    expect(collections.allWorkspaces.map((workspace) => workspace.id)).toEqual([
+      "workspace-retired-failed",
+      "workspace-retired-complete",
+      "workspace-active",
+    ]);
+    expect(collections.cleanupAttentionWorkspaces.map((workspace) => workspace.id)).toEqual([
+      "workspace-retired-failed",
+    ]);
+  });
+
+  it("does not request activity refresh for retired rows", () => {
+    const collections = buildWorkspaceCollections([
+      makeWorkspace({
+        lifecycleState: "retired",
+        cleanupState: "failed",
+        executionSummary: {
+          phase: "running",
+          totalSessionCount: 1,
+          liveSessionCount: 1,
+          runningCount: 1,
+          awaitingInteractionCount: 0,
+          idleCount: 0,
+          erroredCount: 0,
+        },
+      }),
+    ]);
+
+    expect(workspaceCollectionsNeedActivityRefresh(collections)).toBe(false);
+  });
+});
+
 describe("workspaceCollectionsNeedActivityRefresh", () => {
   it("requests refresh while a local workspace execution summary is active", () => {
     const collections = buildWorkspaceCollections([

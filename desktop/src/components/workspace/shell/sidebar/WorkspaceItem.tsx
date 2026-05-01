@@ -5,6 +5,7 @@ import {
 } from "@/config/cloud-sidebar";
 import {
   Archive,
+  GitMerge,
   Pencil,
 } from "@/components/ui/icons";
 import { PopoverButton } from "@/components/ui/PopoverButton";
@@ -46,6 +47,7 @@ interface WorkspaceItemProps {
   onSelect?: () => void;
   onArchive?: () => void;
   onUnarchive?: () => void;
+  onMarkDone?: () => void;
   onIndicatorAction?: (action: SidebarIndicatorAction) => void;
   onHover?: () => void;
   /**
@@ -70,6 +72,7 @@ export function WorkspaceItem({
   onSelect,
   onArchive,
   onUnarchive,
+  onMarkDone,
   onIndicatorAction,
   onHover,
   onRename,
@@ -84,17 +87,21 @@ export function WorkspaceItem({
       ? CLOUD_SIDEBAR_STATUS_DEFINITIONS[cloudStatus]
       : null;
   const [renameOpen, setRenameOpen] = useState(false);
+  const [doneConfirmOpen, setDoneConfirmOpen] = useState(false);
   const handleRenameCommand = () => setRenameOpen(true);
   const handleArchiveCommand = () => onArchive?.();
   const handleUnarchiveCommand = () => onUnarchive?.();
+  const handleMarkDoneCommand = () => setDoneConfirmOpen(true);
   const { onContextMenuCapture } = useWorkspaceSidebarNativeContextMenu({
     canRename: !!onRename,
     archived,
     canArchive: !!onArchive,
     canUnarchive: !!onUnarchive,
+    canMarkDone: !!onMarkDone,
     onRename: handleRenameCommand,
     onArchive: handleArchiveCommand,
     onUnarchive: handleUnarchiveCommand,
+    onMarkDone: handleMarkDoneCommand,
   });
 
   const row = (
@@ -182,10 +189,47 @@ export function WorkspaceItem({
       trigger={row}
       triggerMode="contextMenu"
       stopPropagation
-      className="w-52 rounded-xl border border-border bg-popover p-1 shadow-floating"
+      externalOpen={doneConfirmOpen}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) setDoneConfirmOpen(false);
+      }}
+      className="w-64 rounded-xl border border-border bg-popover p-1 shadow-floating"
     >
       {(close) => (
         <>
+          {doneConfirmOpen ? (
+            <>
+              <div className="px-2.5 py-2 text-sm text-foreground">
+                <div className="font-medium">Mark done?</div>
+                <div className="mt-1 text-xs leading-4 text-muted-foreground">
+                  This removes the local worktree and hides this workspace and its chats from the app.
+                  Commits, branches, and pull requests are not deleted.
+                </div>
+                <div className="mt-1 text-xs leading-4 text-muted-foreground">
+                  This cannot be undone from Proliferate.
+                </div>
+              </div>
+              <PopoverMenuItem
+                icon={<GitMerge className="size-3.5 shrink-0 text-muted-foreground" />}
+                label="Confirm done"
+                variant="sidebar"
+                onClick={() => {
+                  close();
+                  setDoneConfirmOpen(false);
+                  onMarkDone?.();
+                }}
+              />
+              <PopoverMenuItem
+                label="Cancel"
+                variant="sidebar"
+                onClick={() => {
+                  close();
+                  setDoneConfirmOpen(false);
+                }}
+              />
+            </>
+          ) : (
+            <>
           {onRename && (
             <PopoverMenuItem
               icon={<Pencil className="size-3.5 shrink-0 text-muted-foreground" />}
@@ -194,6 +238,16 @@ export function WorkspaceItem({
               onClick={() => {
                 close();
                 handleRenameCommand();
+              }}
+            />
+          )}
+          {onMarkDone && (
+            <PopoverMenuItem
+              icon={<GitMerge className="size-3.5 shrink-0 text-muted-foreground" />}
+              label="Mark done..."
+              variant="sidebar"
+              onClick={() => {
+                setDoneConfirmOpen(true);
               }}
             />
           )}
@@ -212,6 +266,8 @@ export function WorkspaceItem({
               variant="sidebar"
               onClick={() => { close(); handleUnarchiveCommand(); }}
             />
+          )}
+            </>
           )}
         </>
       )}

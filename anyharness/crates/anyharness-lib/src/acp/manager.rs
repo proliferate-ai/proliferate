@@ -66,6 +66,7 @@ impl AcpManager {
         mcp_servers: Vec<SessionMcpServer>,
         startup_strategy: SessionStartupStrategy,
         system_prompt_append: Option<String>,
+        first_prompt_system_prompt_append: Option<String>,
         on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync + 'static>>,
         latency: Option<LatencyRequestContext>,
     ) -> anyhow::Result<(Arc<LiveSessionHandle>, ActorReadyResult)> {
@@ -160,6 +161,7 @@ impl AcpManager {
             startup_strategy,
             last_seq,
             system_prompt_append,
+            first_prompt_system_prompt_append,
             on_turn_finish,
             latency,
             on_exit: Some(on_exit),
@@ -317,8 +319,13 @@ fn append_offline_runtime_event(
     session_store: &SessionStore,
     event: RuntimeInjectedSessionEvent,
 ) -> RuntimeEventInjectionResult {
+    let touch_session_activity = event.updates_session_activity_at();
     session_store
-        .append_event_with_next_seq(session_id, event.into_session_event())
+        .append_event_with_next_seq(
+            session_id,
+            event.into_session_event(),
+            touch_session_activity,
+        )
         .map_err(|error| RuntimeEventInjectionError::PersistenceFailed(error.to_string()))
 }
 
@@ -425,6 +432,7 @@ mod tests {
     use crate::sessions::store::SessionStore;
     use anyharness_contract::v1::{
         SessionEvent, SessionEventEnvelope, SessionExecutionPhase, SessionInfoUpdatePayload,
+        SubagentTurnCompletedPayload, SubagentTurnOutcome,
     };
 
     fn resolved_agent(kind: AgentKind) -> ResolvedAgent {
@@ -501,6 +509,19 @@ mod tests {
         store
     }
 
+    fn subagent_turn_completed_event() -> RuntimeInjectedSessionEvent {
+        RuntimeInjectedSessionEvent::SubagentTurnCompleted(SubagentTurnCompletedPayload {
+            completion_id: "completion-1".to_string(),
+            session_link_id: "link-1".to_string(),
+            parent_session_id: "session-1".to_string(),
+            child_session_id: "child-session-1".to_string(),
+            child_turn_id: "turn-1".to_string(),
+            child_last_event_seq: 4,
+            outcome: SubagentTurnOutcome::Completed,
+            label: Some("worker".to_string()),
+        })
+    }
+
     #[tokio::test]
     async fn reused_live_handle_reports_the_live_native_session_id() {
         let plan_db = Db::open_in_memory().expect("open plan db");
@@ -530,6 +551,7 @@ mod tests {
                 SessionStore::new(Db::open_in_memory().expect("open db")),
                 vec![],
                 SessionStartupStrategy::ResumeSeqFreshNative,
+                None,
                 None,
                 None,
                 None,
@@ -578,6 +600,7 @@ mod tests {
                     SessionStore::new(Db::open_in_memory().expect("open db")),
                     vec![],
                     SessionStartupStrategy::ResumeSeqFreshNative,
+                    None,
                     None,
                     None,
                     None,
@@ -639,6 +662,32 @@ mod tests {
             vec![1, 2]
         );
         assert_eq!(events[1].event_type, "session_info_update");
+        let session = store
+            .find_by_id("session-1")
+            .expect("find session")
+            .expect("session exists");
+        assert_eq!(session.updated_at, "2026-03-25T00:00:00Z");
+    }
+
+    #[tokio::test]
+    async fn offline_runtime_activity_event_touches_session_updated_at() {
+        let plan_db = Db::open_in_memory().expect("open plan db");
+        let manager = AcpManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+        let store = seeded_session_store();
+
+        let envelope = manager
+            .emit_runtime_event("session-1", store.clone(), subagent_turn_completed_event())
+            .await
+            .expect("emit runtime event");
+
+        let session = store
+            .find_by_id("session-1")
+            .expect("find session")
+            .expect("session exists");
+        assert_eq!(session.updated_at, envelope.timestamp);
+
+        let events = store.list_events("session-1").expect("list events");
+        assert_eq!(events[0].event_type, "subagent_turn_completed");
     }
 
     #[tokio::test]

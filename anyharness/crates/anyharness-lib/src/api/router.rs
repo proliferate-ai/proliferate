@@ -12,7 +12,8 @@ use url::form_urlencoded;
 
 use super::http::{
     agents, cowork, files, git, health, hosting, mobility, model_registries, plans, processes,
-    provider_configs, replay, repo_roots, reviews, sessions, subagents, terminals, workspaces,
+    provider_configs, replay, repo_roots, reviews, sessions, subagents, terminals,
+    workspace_naming, workspaces,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -54,6 +55,18 @@ pub fn build_router(state: AppState) -> Router {
         .route("/workspaces/resolve", post(workspaces::resolve_workspace))
         .route("/workspaces/worktrees", post(workspaces::create_worktree))
         .route("/workspaces/{workspace_id}", get(workspaces::get_workspace))
+        .route(
+            "/workspaces/{workspace_id}/retire/preflight",
+            get(workspaces::retire_workspace_preflight),
+        )
+        .route(
+            "/workspaces/{workspace_id}/retire",
+            post(workspaces::retire_workspace),
+        )
+        .route(
+            "/workspaces/{workspace_id}/retire/cleanup-retry",
+            post(workspaces::retry_retire_cleanup),
+        )
         .route(
             "/repo-roots",
             get(repo_roots::list_repo_roots).post(repo_roots::resolve_repo_root),
@@ -105,6 +118,11 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}/sessions/{session_id}/reviews/mcp",
             get(reviews::get_reviews_mcp_endpoint).post(reviews::post_reviews_mcp_endpoint),
+        )
+        .route(
+            "/workspaces/{workspace_id}/sessions/{session_id}/workspace-naming/mcp",
+            get(workspace_naming::get_workspace_naming_mcp_endpoint)
+                .post(workspace_naming::post_workspace_naming_mcp_endpoint),
         )
         .route(
             "/workspaces/{workspace_id}/display-name",

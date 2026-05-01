@@ -137,6 +137,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0037_terminal_command_runs",
         include_str!("sql/0037_terminal_command_runs.sql"),
     ),
+    (
+        "0038_workspace_cleanup_details",
+        include_str!("sql/0038_workspace_cleanup_details.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

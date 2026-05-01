@@ -10,6 +10,7 @@ import { MacWindowControlsSafeArea } from "@/components/ui/MacWindowControlsSafe
 import { SessionModelAvailabilityDialog } from "@/components/workspace/chat/launch/SessionModelAvailabilityDialog"
 import { applyAppearancePreference, initializeTheme } from "@/config/theme"
 import { APP_ROUTES, LEGACY_APP_ROUTES } from "@/config/app-routes"
+import { useAppCommandActions } from "@/hooks/app/use-app-command-actions"
 import { useExportRunningAgentCount } from "@/hooks/app/use-export-running-agent-count"
 import { useAppShortcuts } from "@/hooks/app/use-app-shortcuts"
 import { useAuthBootstrap } from "@/hooks/auth/use-auth-bootstrap"
@@ -45,6 +46,7 @@ import {
 import { bootstrapRepoPreferences } from "@/stores/preferences/repo-preferences-store"
 import { bootstrapWorkspaceUi } from "@/stores/preferences/workspace-ui-store"
 import { bootstrapLogicalWorkspaceSelection } from "@/stores/workspaces/logical-workspace-store"
+import { AppCommandActionsProvider } from "@/providers/AppCommandActionsProvider"
 
 const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"])
 
@@ -147,9 +149,10 @@ function App() {
 function AppRuntime() {
   const bootstrapAuth = useAuthBootstrap()
   const authStatus = useAuthStore((s) => s.status)
+  const appCommandActions = useAppCommandActions()
   useExportRunningAgentCount()
   useShortcutDispatcher()
-  useAppShortcuts()
+  useAppShortcuts(appCommandActions)
   useTurnEndSound()
   useAgentAutoReconcile()
   useLocalAutomationExecutor()
@@ -238,59 +241,61 @@ function AppRuntime() {
 
   return (
     <>
-      <MacWindowControlsSafeArea />
-      <UpdateRestartDialog />
-      <SessionModelAvailabilityDialog />
-      <RuntimeInputSyncGate />
-      <InstrumentedRoutes>
-        <Route path="/index.html" element={<Navigate to="/" replace />} />
-        <Route path="/settings/cloud" element={<SettingsCloudRedirect />} />
-        <Route element={<PublicOnlyRoute />}>
-          <Route path="/login" element={<LoginPage />} />
-        </Route>
-        <Route element={<BootstrappedRoute />}>
-          <Route element={<AuthRequiredGate />}>
-            <Route element={<OnboardingRoute />}>
-              <Route path="/setup" element={<OnboardingPage />} />
-            </Route>
-            <Route element={<OnboardingGate />}>
-              <Route path={APP_ROUTES.home} element={<MainPage />} />
-              <Route
-                path={LEGACY_APP_ROUTES.powers}
-                element={<Navigate to={APP_ROUTES.plugins} replace />}
-              />
-              <Route path={APP_ROUTES.plugins} element={<PluginsPage />} />
-              <Route path={APP_ROUTES.automations} element={<AutomationsPage />} />
-              <Route path="/automations/:automationId" element={<AutomationDetailPage />} />
-              <Route path={APP_ROUTES.settings} element={<SettingsPage />} />
+      <AppCommandActionsProvider value={appCommandActions}>
+        <MacWindowControlsSafeArea />
+        <UpdateRestartDialog />
+        <SessionModelAvailabilityDialog />
+        <RuntimeInputSyncGate />
+        <InstrumentedRoutes>
+          <Route path="/index.html" element={<Navigate to="/" replace />} />
+          <Route path="/settings/cloud" element={<SettingsCloudRedirect />} />
+          <Route element={<PublicOnlyRoute />}>
+            <Route path="/login" element={<LoginPage />} />
+          </Route>
+          <Route element={<BootstrappedRoute />}>
+            <Route element={<AuthRequiredGate />}>
+              <Route element={<OnboardingRoute />}>
+                <Route path="/setup" element={<OnboardingPage />} />
+              </Route>
+              <Route element={<OnboardingGate />}>
+                <Route path={APP_ROUTES.home} element={<MainPage />} />
+                <Route
+                  path={LEGACY_APP_ROUTES.powers}
+                  element={<Navigate to={APP_ROUTES.plugins} replace />}
+                />
+                <Route path={APP_ROUTES.plugins} element={<PluginsPage />} />
+                <Route path={APP_ROUTES.automations} element={<AutomationsPage />} />
+                <Route path="/automations/:automationId" element={<AutomationDetailPage />} />
+                <Route path={APP_ROUTES.settings} element={<SettingsPage />} />
+              </Route>
             </Route>
           </Route>
-        </Route>
-        {import.meta.env.DEV && ChatPlaygroundPage && (
-          <Route
-            path="/playground"
-            element={
-              <Suspense fallback={null}>
-                <ChatPlaygroundPage />
-              </Suspense>
-            }
-          />
-        )}
-        {import.meta.env.DEV && UpdatePlaygroundPage && (
-          <Route
-            path="/playground/updates"
-            element={
-              <Suspense fallback={null}>
-                <UpdatePlaygroundPage />
-              </Suspense>
-            }
-          />
-        )}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </InstrumentedRoutes>
-      <RepoSetupModalHost />
-      <ToastContainer />
-      <TurnEndCelebration />
+          {import.meta.env.DEV && ChatPlaygroundPage && (
+            <Route
+              path="/playground"
+              element={
+                <Suspense fallback={null}>
+                  <ChatPlaygroundPage />
+                </Suspense>
+              }
+            />
+          )}
+          {import.meta.env.DEV && UpdatePlaygroundPage && (
+            <Route
+              path="/playground/updates"
+              element={
+                <Suspense fallback={null}>
+                  <UpdatePlaygroundPage />
+                </Suspense>
+              }
+            />
+          )}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </InstrumentedRoutes>
+        <RepoSetupModalHost />
+        <ToastContainer />
+        <TurnEndCelebration />
+      </AppCommandActionsProvider>
     </>
   )
 }

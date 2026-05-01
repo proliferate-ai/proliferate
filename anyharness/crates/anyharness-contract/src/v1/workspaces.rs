@@ -22,6 +22,8 @@ pub struct WorkspaceExecutionSummary {
     pub awaiting_interaction_count: usize,
     pub idle_count: usize,
     pub errored_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -109,6 +111,12 @@ pub struct Workspace {
     pub lifecycle_state: WorkspaceLifecycleState,
     pub cleanup_state: WorkspaceCleanupState,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleanup_error_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleanup_failed_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleanup_attempted_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_summary: Option<WorkspaceExecutionSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<OriginContext>,
@@ -116,6 +124,90 @@ pub struct Workspace {
     pub creator_context: Option<WorkspaceCreatorContext>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceRetireBlockerCode {
+    UnsupportedWorkspace,
+    WorkspaceAccessBlocked,
+    DirtyWorkingTree,
+    ConflictedFiles,
+    ActiveGitOperation,
+    LiveSession,
+    PendingPrompt,
+    PendingInteraction,
+    ActiveTerminal,
+    RunningCommand,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceRetireBlockerSeverity {
+    Blocking,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceRetireBlocker {
+    pub code: WorkspaceRetireBlockerCode,
+    pub message: String,
+    pub severity: WorkspaceRetireBlockerSeverity,
+    pub retryable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub terminal_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command_run_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub paths: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation: Option<crate::v1::git::GitOperation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceRetirePreflightResponse {
+    pub workspace_id: String,
+    pub workspace_kind: WorkspaceKind,
+    pub lifecycle_state: WorkspaceLifecycleState,
+    pub cleanup_state: WorkspaceCleanupState,
+    pub can_retire: bool,
+    pub materialized: bool,
+    pub merged_into_base: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_ref: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_oid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub head_oid: Option<String>,
+    pub head_matches_base: bool,
+    pub readiness_fingerprint: String,
+    pub blockers: Vec<WorkspaceRetireBlocker>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceRetireOutcome {
+    Retired,
+    AlreadyRetired,
+    Blocked,
+    CleanupFailed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceRetireResponse {
+    pub workspace: Workspace,
+    pub outcome: WorkspaceRetireOutcome,
+    pub preflight: WorkspaceRetirePreflightResponse,
+    pub cleanup_attempted: bool,
+    pub cleanup_succeeded: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleanup_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

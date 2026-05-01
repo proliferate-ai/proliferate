@@ -20,6 +20,16 @@ export type SidebarIndicatorAction =
     kind: "open_source_session";
     workspaceId: string;
     sessionId: string;
+  }
+  | {
+    kind: "mark_workspace_done";
+    workspaceId: string;
+    logicalWorkspaceId?: string | null;
+  }
+  | {
+    kind: "keep_workspace_active";
+    workspaceId: string;
+    readinessFingerprint: string;
   };
 
 export type SidebarStatusIndicator =
@@ -63,6 +73,13 @@ export type SidebarDetailIndicator =
   | {
     kind: "materialization";
     variant: SidebarWorkspaceVariant;
+    tooltip: string;
+  }
+  | {
+    kind: "finish_suggestion";
+    workspaceId: string;
+    logicalWorkspaceId: string;
+    readinessFingerprint: string;
     tooltip: string;
   };
 
@@ -197,10 +214,20 @@ export function activeWorkspaceActivity(
 export function detailIndicatorsForWorkspace(
   workspace: LogicalWorkspace,
   variant: SidebarWorkspaceVariant,
+  finishSuggestion?: { workspaceId: string; readinessFingerprint: string } | null,
 ): SidebarDetailIndicator[] {
   const creator = creatorDetailIndicator(workspace);
   return [
     ...(creator ? [creator] : []),
+    ...(finishSuggestion
+      ? [{
+        kind: "finish_suggestion" as const,
+        workspaceId: finishSuggestion.workspaceId,
+        logicalWorkspaceId: workspace.id,
+        readinessFingerprint: finishSuggestion.readinessFingerprint,
+        tooltip: "Ready to mark done",
+      }]
+      : []),
     {
       kind: "materialization" as const,
       variant,

@@ -53,16 +53,16 @@ function FileDiffContent({
   if (isLoading) {
     return (
       <div className="px-3 py-2 space-y-1.5">
-        <div className="h-2.5 w-full bg-muted/50 rounded animate-pulse" />
-        <div className="h-2.5 w-3/4 bg-muted/50 rounded animate-pulse" />
-        <div className="h-2.5 w-5/6 bg-muted/50 rounded animate-pulse" />
+        <div className="h-2.5 w-full bg-sidebar-accent rounded animate-pulse" />
+        <div className="h-2.5 w-3/4 bg-sidebar-accent rounded animate-pulse" />
+        <div className="h-2.5 w-5/6 bg-sidebar-accent rounded animate-pulse" />
       </div>
     );
   }
 
   if (diff?.binary) {
     return (
-      <p className="px-3 py-2 text-xs text-muted-foreground">Binary file changed</p>
+      <p className="px-3 py-2 text-xs text-sidebar-muted-foreground">Binary file changed</p>
     );
   }
 
@@ -74,9 +74,10 @@ function FileDiffContent({
             patch={diff.patch}
             filePath={displayPath}
             viewportClassName={GIT_PANEL_DIFF_VIEWPORT_CLASS}
+            variant="chat"
           />
         )}
-        <p className="px-3 pb-1 text-[10px] text-muted-foreground">Diff truncated</p>
+        <p className="px-3 pb-1 text-[10px] text-sidebar-muted-foreground">Diff truncated</p>
       </div>
     );
   }
@@ -87,6 +88,7 @@ function FileDiffContent({
         patch={diff.patch}
         filePath={displayPath}
         viewportClassName={GIT_PANEL_DIFF_VIEWPORT_CLASS}
+        variant="chat"
       />
     );
   }
@@ -137,7 +139,7 @@ export function GitPanel() {
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between px-2 py-2 border-b border-sidebar-border/70 shrink-0">
-        <p className="px-1 text-xs text-muted-foreground">
+        <p className="px-1 text-xs text-sidebar-muted-foreground">
           {totalChangedCount === 0
             ? isBranchMode
               ? "No branch changes"
@@ -205,19 +207,19 @@ export function GitPanel() {
       <AutoHideScrollArea className="flex-1 min-h-0" viewportClassName="px-2 py-2">
         {isLoading && (
           <div className="px-2 py-4 space-y-2">
-            <div className="h-3 w-32 bg-muted/50 rounded animate-pulse" />
-            <div className="h-3 w-48 bg-muted/50 rounded animate-pulse" />
-            <div className="h-3 w-40 bg-muted/50 rounded animate-pulse" />
+            <div className="h-3 w-32 bg-sidebar-accent rounded animate-pulse" />
+            <div className="h-3 w-48 bg-sidebar-accent rounded animate-pulse" />
+            <div className="h-3 w-40 bg-sidebar-accent rounded animate-pulse" />
           </div>
         )}
         {errorMessage && (
           <p className="px-2 py-4 text-xs text-destructive">{errorMessage}</p>
         )}
         {!errorMessage && runtimeBlockedReason && (
-          <p className="px-2 py-4 text-xs text-muted-foreground">{runtimeBlockedReason}</p>
+          <p className="px-2 py-4 text-xs text-sidebar-muted-foreground">{runtimeBlockedReason}</p>
         )}
         {!isLoading && !errorMessage && visibleFiles.length === 0 && (
-          <p className="px-2 py-4 text-xs text-muted-foreground text-center">
+          <p className="px-2 py-4 text-xs text-sidebar-muted-foreground text-center">
             {gitPanelEmptyMessage(changesFilter)}
           </p>
         )}
@@ -258,7 +260,7 @@ export function GitPanel() {
                           className={`size-6 hover:bg-sidebar-accent ${
                             isStaged
                               ? "text-git-green"
-                              : "text-muted-foreground"
+                              : "text-sidebar-muted-foreground"
                           }`}
                           title={isStaged ? "Unstage" : "Stage"}
                         >
@@ -283,13 +285,14 @@ export function GitPanel() {
                         }}
                         disabled={!isRuntimeReady || openAction === "disabled"}
                         aria-label={`Open ${baseName}`}
-                        className="size-6 text-muted-foreground hover:bg-sidebar-accent"
+                        className="size-6 text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
                         title="Open file"
                       >
                         <ArrowUpRight className="size-3" />
                       </Button>
                     </>
                   }
+                  surface="sidebar"
                 >
                   <FileDiffContent
                     filePath={file.path}

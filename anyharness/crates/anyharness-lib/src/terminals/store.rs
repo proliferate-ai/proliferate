@@ -131,6 +131,21 @@ impl TerminalStore {
         })
     }
 
+    pub fn list_active_command_runs_for_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<Vec<TerminalCommandRunRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT * FROM terminal_command_runs
+                 WHERE workspace_id = ?1 AND status IN ('queued', 'running')
+                 ORDER BY created_at ASC",
+            )?;
+            let rows = stmt.query_map([workspace_id], map_command_run_row)?;
+            rows.collect()
+        })
+    }
+
     pub fn set_latest_setup_run(
         &self,
         workspace_id: &str,

@@ -7,10 +7,12 @@ use axum::{
 };
 use serde_json::Value;
 
+use super::access::assert_workspace_mutable;
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::sessions::subagents::mcp::handle_json_rpc;
 use crate::sessions::subagents::service::SubagentError;
+use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
     get,
@@ -65,6 +67,11 @@ pub async fn post_subagents_mcp_endpoint(
             "SUBAGENT_MCP_UNAUTHORIZED",
         ));
     }
+    let _operation = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::SubagentWrite)
+        .await;
+    assert_workspace_mutable(&state, &workspace_id)?;
 
     let response = handle_json_rpc(
         state.subagent_service.as_ref(),

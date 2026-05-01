@@ -75,6 +75,9 @@ export function useRunWorkspaceCommand({
   const runCommand = isCloudWorkspace
     ? cloudConfigQuery.data?.runCommand ?? ""
     : localRunCommand;
+  const runtimeBlockedReason = workspaceId
+    ? getWorkspaceRuntimeBlockReason(workspaceId)
+    : null;
 
   const configureHref = useMemo(() => {
     if (isCloudWorkspace && gitOwner && gitRepoName) {
@@ -157,12 +160,35 @@ export function useRunWorkspaceCommand({
 
   // Empty commands intentionally keep the button enabled so clicking it can route
   // to the repository settings page where the Run command is configured.
-  const canRun = Boolean(workspaceId) && isRuntimeReady && !(
-    isCloudWorkspace && (selectedCloudWorkspace === undefined || cloudConfigQuery.isLoading)
-  );
+  const disabledReason = (() => {
+    if (isLaunching) {
+      return "Action already in progress.";
+    }
+    if (!workspaceId) {
+      return "Workspace is still opening.";
+    }
+    if (runtimeBlockedReason) {
+      return runtimeBlockedReason;
+    }
+    if (!isRuntimeReady) {
+      return "Workspace runtime is not ready yet.";
+    }
+    if (isCloudWorkspace && !selectedCloudWorkspace) {
+      return "Cloud workspace metadata is still loading.";
+    }
+    if (isCloudWorkspace && cloudConfigQuery.isLoading) {
+      return "Cloud run command is still loading.";
+    }
+    if (isCloudWorkspace && cloudConfigQuery.error) {
+      return "Failed to load the cloud run command.";
+    }
+    return null;
+  })();
+  const canRun = disabledReason === null;
 
   return {
     canRun,
+    disabledReason,
     isLaunching,
     runLabel: activeRunTerminalId ? "Show Run" : "Run",
     runTitle: activeRunTerminalId ? "Show active Run terminal" : "Run workspace command",

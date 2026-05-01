@@ -140,6 +140,12 @@ export type {
   GetSetupStatusResponse,
   StartWorkspaceSetupRequest,
   UpdateWorkspaceDisplayNameRequest,
+  WorkspaceRetireBlockerCode,
+  WorkspaceRetireBlockerSeverity,
+  WorkspaceRetireBlocker,
+  WorkspaceRetireOutcome,
+  WorkspaceRetirePreflightResponse,
+  WorkspaceRetireResponse,
 } from "./types/workspaces.js";
 
 export type {

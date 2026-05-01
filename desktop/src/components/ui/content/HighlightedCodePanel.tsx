@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { highlightCode } from "@/lib/infra/highlighting";
+import { useHighlightedCode } from "@/hooks/ui/use-highlighted-code";
 
 interface HighlightedCodePanelProps {
   code: string;
@@ -25,24 +25,13 @@ export function HighlightedCodePanel({
   className = "",
   contentClassName = "",
 }: HighlightedCodePanelProps) {
-  const [html, setHtml] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const codeRef = useRef<HTMLDivElement>(null);
 
   const resolvedLang = language ?? filename ?? "text";
   const displayLang = language ?? filename?.split(".").pop() ?? "";
   const codeLines = code.split("\n");
-
-  useEffect(() => {
-    let cancelled = false;
-    setHtml(null);
-    void highlightCode(code, resolvedLang).then((result) => {
-      if (!cancelled) setHtml(result);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [code, resolvedLang]);
+  const html = useHighlightedCode(code, resolvedLang);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code);
@@ -51,11 +40,11 @@ export function HighlightedCodePanel({
   };
 
   return (
-    <div className={`group/code relative overflow-hidden rounded-md border border-border bg-card ${className}`}>
+    <div className={`group/code relative overflow-clip rounded-lg border border-input bg-[var(--color-code-block-background,var(--color-card))] ${className}`}>
       {(showLanguageLabel || showCopyButton) && (
-        <div className="flex items-center justify-between border-b border-border/50 px-3 py-1">
+        <div className="sticky top-0 z-10 flex items-center justify-between px-2 py-1 text-sm text-muted-foreground select-none">
           {showLanguageLabel && displayLang ? (
-            <span className="text-sm text-muted-foreground">{displayLang}</span>
+            <span className="min-w-0 truncate">{displayLang}</span>
           ) : <span />}
           {showCopyButton && (
             <Button
@@ -63,7 +52,8 @@ export function HighlightedCodePanel({
               variant="ghost"
               size="sm"
               onClick={handleCopy}
-              className="h-auto rounded-none bg-transparent p-0 text-sm text-muted-foreground opacity-0 transition-colors hover:bg-transparent hover:text-foreground group-hover/code:opacity-100"
+              className="h-6 rounded-md bg-transparent px-1.5 py-0 text-sm text-muted-foreground opacity-0 transition-colors hover:bg-muted hover:text-foreground group-hover/code:opacity-100"
+              aria-label="Copy"
             >
               {copied ? "Copied!" : "Copy"}
             </Button>
@@ -74,9 +64,9 @@ export function HighlightedCodePanel({
       {showLineNumbers ? (
         <div
           ref={codeRef}
-          className={`overflow-x-auto overflow-y-auto font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] font-medium ${contentClassName}`}
+          className={`overflow-x-auto overflow-y-auto p-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] font-medium ${contentClassName}`}
         >
-          <div className="min-w-full w-max py-2">
+          <div className="min-w-full w-max">
             <table className="border-collapse">
               <tbody>
                 {codeLines.map((line, index) => (
@@ -98,15 +88,15 @@ export function HighlightedCodePanel({
       ) : html ? (
         <div
           ref={codeRef}
-          className={`overflow-x-auto overflow-y-auto font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] font-medium [&_.shiki]:!bg-transparent [&_pre]:!bg-transparent [&_pre]:p-3 [&_pre]:!m-0 [&_code]:text-[length:var(--readable-code-font-size)] [&_code]:leading-[var(--readable-code-line-height)] ${contentClassName}`}
+          className={`overflow-x-auto overflow-y-auto p-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] font-medium [&_.shiki]:!bg-transparent [&_pre]:!bg-transparent [&_pre]:!m-0 [&_pre]:!p-0 [&_code]:text-[length:var(--readable-code-font-size)] [&_code]:leading-[var(--readable-code-line-height)] ${contentClassName}`}
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (
         <div
           ref={codeRef}
-          className={`overflow-x-auto overflow-y-auto font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] font-medium ${contentClassName}`}
+          className={`overflow-x-auto overflow-y-auto p-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] font-medium ${contentClassName}`}
         >
-          <pre className="p-3 m-0">
+          <pre className="m-0 p-0">
             <code className="font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] font-medium text-foreground">{code}</code>
           </pre>
         </div>

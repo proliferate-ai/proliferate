@@ -7,10 +7,10 @@ import {
 import { createManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
 
 describe("workspace ui tab persistence", () => {
-  it("preserves archived workspaces for current v5 preference blobs", () => {
+  it("preserves archived workspaces for current v6 preference blobs", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 5,
+      migrationVersion: 6,
       archivedWorkspaceIds: ["workspace-a"],
     });
 
@@ -21,7 +21,7 @@ describe("workspace ui tab persistence", () => {
   it("defaults missing visible tab fields without bumping migration", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 5,
+      migrationVersion: 6,
       visibleChatSessionIdsByWorkspace: undefined as unknown as Record<string, string[]>,
       recentlyHiddenChatSessionIdsByWorkspace: undefined as unknown as Record<string, string[]>,
       collapsedChatGroupsByWorkspace: undefined as unknown as Record<string, string[]>,
@@ -29,7 +29,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(5);
+    expect(state.migrationVersion).toBe(6);
     expect(state.visibleChatSessionIdsByWorkspace).toEqual({});
     expect(state.recentlyHiddenChatSessionIdsByWorkspace).toEqual({});
     expect(state.collapsedChatGroupsByWorkspace).toEqual({});
@@ -39,7 +39,7 @@ describe("workspace ui tab persistence", () => {
   it("defaults missing session error views without bumping migration", () => {
     const legacyState = {
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 5,
+      migrationVersion: 6,
     } as Partial<typeof WORKSPACE_UI_DEFAULTS> & { migrationVersion: number };
     delete legacyState.lastViewedSessionErrorAtBySession;
 
@@ -48,14 +48,14 @@ describe("workspace ui tab persistence", () => {
     );
 
     expect(didMigrate).toBe(false);
-    expect(state.migrationVersion).toBe(5);
+    expect(state.migrationVersion).toBe(6);
     expect(state.lastViewedSessionErrorAtBySession).toEqual({});
   });
 
   it("sanitizes malformed manual chat groups without bumping migration", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 5,
+      migrationVersion: 6,
       manualChatGroupsByWorkspace: {
         w1: [
           {
@@ -75,7 +75,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(5);
+    expect(state.migrationVersion).toBe(6);
     expect(state.manualChatGroupsByWorkspace).toEqual({
       w1: [
         {
@@ -97,7 +97,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(5);
+    expect(state.migrationVersion).toBe(6);
     expect(state.rightPanelByWorkspace).toEqual({});
     expect(state.rightPanelWidthByWorkspace).toEqual({});
   });
@@ -105,7 +105,7 @@ describe("workspace ui tab persistence", () => {
   it("sanitizes persisted right panel preferences and clamps widths", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 5,
+      migrationVersion: 6,
       rightPanelByWorkspace: {
         w1: {
           activeTool: "git",
@@ -190,6 +190,24 @@ describe("workspace ui tab persistence", () => {
       .toBeUndefined();
     expect(Object.keys(useWorkspaceUiStore.getState().lastViewedSessionErrorAtBySession))
       .toHaveLength(50);
+  });
+
+  it("stores and clears finish suggestion dismissals", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.dismissFinishSuggestion("w1", "fingerprint-1");
+    expect(
+      useWorkspaceUiStore.getState().finishSuggestionDismissalsByWorkspaceId.w1,
+    ).toBe("fingerprint-1");
+
+    store.clearFinishSuggestionDismissal("w1");
+    expect(
+      useWorkspaceUiStore.getState().finishSuggestionDismissalsByWorkspaceId.w1,
+    ).toBeUndefined();
   });
 
   it("toggles collapsed chat groups per workspace", () => {

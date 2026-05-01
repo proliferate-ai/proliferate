@@ -11,6 +11,7 @@ import {
   DEFAULT_REPO_GROUP_ITEM_LIMIT,
   SidebarWorkspaceContent,
 } from "./SidebarWorkspaceContent";
+import { WorkspaceCleanupAttentionSection } from "./WorkspaceCleanupAttentionSection";
 import { CoworkThreadsSection } from "@/components/workspace/cowork/sidebar/CoworkThreadsSection";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
@@ -102,6 +103,7 @@ export function MainSidebar() {
     groups,
     selectedWorkspaceId,
     selectedLogicalWorkspaceId,
+    cleanupAttentionWorkspaces,
     emptyState,
     isLoading,
   } = useWorkspaceSidebarState({ showArchived });
@@ -309,6 +311,10 @@ export function MainSidebar() {
             contentClassName="w-full min-w-0 flex flex-col gap-px"
           >
             <CoworkThreadsSection />
+            <WorkspaceCleanupAttentionSection
+              workspaces={cleanupAttentionWorkspaces}
+              onRetryCleanup={actions.handleRetryWorkspaceCleanup}
+            />
 
             {/* Repositories heading — text left-aligned with the row icon column (8px row-pl inside the 8px viewport gutter). */}
             <div className="text-foreground/50 text-base opacity-75 pl-2 pt-3 pb-1">
@@ -402,6 +408,7 @@ export function MainSidebar() {
               onOpenCloudRepoSettings={handleOpenCloudRepoSettings}
               onSelectWorkspace={actions.handleSelectWorkspace}
               onIndicatorAction={actions.handleSidebarIndicatorAction}
+              onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
               onWorkspaceHover={handleWorkspaceHover}
               onArchiveWorkspace={archiveWorkspace}
               onUnarchiveWorkspace={unarchiveWorkspace}

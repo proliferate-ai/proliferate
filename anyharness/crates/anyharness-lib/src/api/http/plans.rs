@@ -8,11 +8,12 @@ use axum::{
 };
 use serde::Deserialize;
 
-use super::access::map_access_error;
+use super::access::{assert_workspace_mutable, assert_workspace_not_retired, map_access_error};
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::plans::runtime::{GetPlanError, HandoffPlanError};
 use crate::plans::service::{plan_to_summary, PlanDecisionError};
+use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[derive(Debug, Deserialize)]
 pub struct PlanDocumentQuery {
@@ -82,6 +83,16 @@ pub async fn get_plan_document(
     Query(query): Query<PlanDocumentQuery>,
 ) -> Result<Json<ProposedPlanDocumentResponse>, ApiError> {
     ensure_workspace_access(&state, &workspace_id)?;
+    let _lease = if query.materialize.unwrap_or(false) {
+        let lease = state
+            .workspace_operation_gate
+            .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
+            .await;
+        assert_workspace_not_retired(&state, &workspace_id)?;
+        Some(lease)
+    } else {
+        None
+    };
     state
         .plan_runtime
         .document(&workspace_id, &plan_id, query.materialize.unwrap_or(false))
@@ -105,7 +116,11 @@ pub async fn approve_plan(
     Path((workspace_id, plan_id)): Path<(String, String)>,
     Json(req): Json<PlanDecisionRequest>,
 ) -> Result<Json<PlanDecisionResponse>, ApiError> {
-    ensure_workspace_access(&state, &workspace_id)?;
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::PlanWrite)
+        .await;
+    assert_workspace_mutable(&state, &workspace_id)?;
     state
         .plan_runtime
         .approve(&workspace_id, &plan_id, req.expected_decision_version)
@@ -130,7 +145,11 @@ pub async fn reject_plan(
     Path((workspace_id, plan_id)): Path<(String, String)>,
     Json(req): Json<PlanDecisionRequest>,
 ) -> Result<Json<PlanDecisionResponse>, ApiError> {
-    ensure_workspace_access(&state, &workspace_id)?;
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::PlanWrite)
+        .await;
+    assert_workspace_mutable(&state, &workspace_id)?;
     state
         .plan_runtime
         .reject(&workspace_id, &plan_id, req.expected_decision_version)
@@ -155,7 +174,11 @@ pub async fn handoff_plan(
     Path((workspace_id, plan_id)): Path<(String, String)>,
     Json(req): Json<HandoffPlanRequest>,
 ) -> Result<Json<HandoffPlanResponse>, ApiError> {
-    ensure_workspace_access(&state, &workspace_id)?;
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::PlanWrite)
+        .await;
+    assert_workspace_mutable(&state, &workspace_id)?;
     state
         .plan_runtime
         .handoff(&workspace_id, &plan_id, req)

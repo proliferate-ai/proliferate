@@ -11,6 +11,9 @@ export type ScenarioKey =
   | "pending-prompts-multi"
   | "pending-prompts-editing"
   | "pending-prompts-with-approval"
+  | "pending-review-feedback-ready"
+  | "pending-review-complete"
+  | "composer-long-input"
   | "file-mention-search"
   | "workspace-arrival-created"
   | "cloud-first-runtime"
@@ -54,6 +57,8 @@ export type ScenarioKey =
   | "tool-cowork-artifact"
   | "tool-generic-result"
   | "tool-subagent-task"
+  | "end-turn-multi-file-diff"
+  | "git-diff-panel"
   | "subagents-composer-few"
   | "subagents-composer-many"
   | "subagents-queued-wake"
@@ -86,6 +91,9 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "pending-prompts-multi": { label: "Queue (3 rows)" },
   "pending-prompts-editing": { label: "Queue (editing row)" },
   "pending-prompts-with-approval": { label: "Queue + approval" },
+  "pending-review-feedback-ready": { label: "Queue review feedback" },
+  "pending-review-complete": { label: "Queue review complete" },
+  "composer-long-input": { label: "Composer long input" },
   "file-mention-search": { label: "File mention search" },
   "workspace-arrival-created": { label: "Workspace arrival" },
   "cloud-first-runtime": { label: "Cloud first runtime" },
@@ -129,6 +137,8 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "tool-cowork-artifact": { label: "Tool artifact" },
   "tool-generic-result": { label: "Tool generic result" },
   "tool-subagent-task": { label: "Tool subagent task" },
+  "end-turn-multi-file-diff": { label: "End-turn diff" },
+  "git-diff-panel": { label: "Git diff panel" },
   "subagents-composer-few": { label: "Subagents composer (3)" },
   "subagents-composer-many": { label: "Subagents composer (10)" },
   "subagents-queued-wake": { label: "Subagent queued wake" },

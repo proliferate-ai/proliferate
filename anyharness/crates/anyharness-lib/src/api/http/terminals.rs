@@ -14,6 +14,7 @@ use crate::terminals::model::{
     TerminalStatus as InternalTerminalStatus,
 };
 use crate::workspaces::model::WorkspaceRecord;
+use crate::workspaces::operation_gate::WorkspaceOperationKind;
 use anyharness_contract::v1::terminals::{
     CreateTerminalRequest, ResizeTerminalRequest, StartTerminalCommandRequest,
     StartTerminalCommandResponse, TerminalCommandOutputMode as ContractTerminalCommandOutputMode,
@@ -81,6 +82,10 @@ pub async fn create_terminal(
     Path(workspace_id): Path<String>,
     Json(request): Json<CreateTerminalRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(&workspace_id, WorkspaceOperationKind::TerminalCommand)
+        .await;
     assert_workspace_mutable(&state, &workspace_id)?;
     let ws = resolve_workspace(&state, &workspace_id)?;
     let env_vars = match tokio::task::spawn_blocking({
@@ -155,6 +160,18 @@ pub async fn start_terminal_command(
     Path(terminal_id): Path<String>,
     Json(request): Json<StartTerminalCommandRequest>,
 ) -> Result<Json<StartTerminalCommandResponse>, ApiError> {
+    let terminal_for_gate = state
+        .terminal_service
+        .get_terminal(&terminal_id)
+        .await
+        .ok_or_else(|| ApiError::not_found("terminal not found", "TERMINAL_NOT_FOUND"))?;
+    let _lease = state
+        .workspace_operation_gate
+        .acquire_shared(
+            &terminal_for_gate.workspace_id,
+            WorkspaceOperationKind::TerminalCommand,
+        )
+        .await;
     assert_terminal_mutable(&state, &terminal_id).await?;
     let command = request.command.trim().to_string();
     if command.is_empty() {

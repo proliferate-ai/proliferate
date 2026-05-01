@@ -1,21 +1,16 @@
 import { useEffect, useMemo } from "react";
-import type {
-  HeaderStripRow,
-} from "@/lib/domain/workspaces/tabs/group-rows";
+import type { HeaderStripRow } from "@/lib/domain/workspaces/tabs/group-rows";
 import type { DisplayManualChatGroup } from "@/lib/domain/workspaces/tabs/manual-groups";
 import {
-  buildHeaderShellRows,
   type HeaderShellStripRow,
   type ShellChatTab,
 } from "@/lib/domain/workspaces/tabs/shell-rows";
 import {
-  buildWorkspaceShellTabs,
-  getWorkspaceShellTabKey,
   parseWorkspaceShellTabKey,
-  resolveWorkspaceShellTabFromKey,
   type WorkspaceShellTab,
   type WorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import { resolveWorkspaceShellTabsState } from "@/lib/domain/workspaces/tabs/shell-tab-state";
 import { useWorkspaceTabsStore } from "@/stores/workspaces/workspace-tabs-store";
 
 const EMPTY_SHELL_TAB_ORDER_KEYS: readonly WorkspaceShellTabKey[] = [];
@@ -80,56 +75,37 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   const setActiveShellTabKey = useWorkspaceTabsStore((state) => state.setActiveShellTabKey);
   const setShellTabOrder = useWorkspaceTabsStore((state) => state.setShellTabOrder);
 
-  const orderedTabs = useMemo(
-    () => buildWorkspaceShellTabs({
+  const resolved = useMemo(
+    () => resolveWorkspaceShellTabsState({
       selectedWorkspaceId,
-      sessionSlots: Object.fromEntries(
-        shellChatSessionIds.map((sessionId) => [
-          sessionId,
-          { sessionId, workspaceId: selectedWorkspaceId },
-        ]),
-      ),
-      visibleChatSessionIds: [...shellChatSessionIds],
+      activeSessionId,
+      storedActiveShellTabKey,
+      persistedShellOrderKeys,
+      shellChatSessionIds,
       openTabs,
-      orderKeys: persistedShellOrderKeys,
+      stripRows,
+      displayManualGroups,
+      subagentChildIdsByParentId,
     }),
     [
+      activeSessionId,
+      displayManualGroups,
       openTabs,
       persistedShellOrderKeys,
       selectedWorkspaceId,
       shellChatSessionIds,
+      storedActiveShellTabKey,
+      stripRows,
+      subagentChildIdsByParentId,
     ],
   );
-  const orderedShellTabKeys = useMemo(
-    () => orderedTabs.map(getWorkspaceShellTabKey),
-    [orderedTabs],
-  );
-  const activeShellTab = useMemo<WorkspaceShellTab | null>(() => {
-    const stored = resolveWorkspaceShellTabFromKey(storedActiveShellTabKey, orderedTabs);
-    if (stored) {
-      return stored;
-    }
-    if (activeSessionId) {
-      const activeChat = orderedTabs.find((tab) =>
-        tab.kind === "chat" && tab.sessionId === activeSessionId
-      );
-      if (activeChat) {
-        return activeChat;
-      }
-    }
-    return orderedTabs[0] ?? null;
-  }, [activeSessionId, orderedTabs, storedActiveShellTabKey]);
-  const activeShellTabKey = activeShellTab ? getWorkspaceShellTabKey(activeShellTab) : null;
-  const shellRows = useMemo<HeaderShellStripRow<TTab>[]>(
-    () => buildHeaderShellRows({
-      stripRows,
-      openTabs,
-      orderedTabs,
-      manualGroups: displayManualGroups,
-      subagentChildIdsByParentId,
-    }),
-    [displayManualGroups, openTabs, orderedTabs, stripRows, subagentChildIdsByParentId],
-  );
+  const {
+    activeShellTab,
+    activeShellTabKey,
+    shellRows,
+    orderedTabs,
+    orderedShellTabKeys,
+  } = resolved;
 
   useEffect(() => {
     if (!selectedWorkspaceId) {

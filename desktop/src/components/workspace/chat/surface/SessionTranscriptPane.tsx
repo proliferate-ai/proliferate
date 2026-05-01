@@ -16,6 +16,7 @@ interface SessionTranscriptPaneProps {
 
 const OLDER_SESSION_HISTORY_EVENT_BUDGET = 1_500;
 const OLDER_SESSION_HISTORY_TURN_LIMIT = 20;
+const OLDER_SESSION_HISTORY_TIMEOUT_MS = 60_000;
 
 export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPaneProps) {
   useDebugRenderCount("session-transcript-pane");
@@ -50,6 +51,7 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
       beforeSeq: oldestLoadedEventSeq ?? undefined,
       limit: OLDER_SESSION_HISTORY_EVENT_BUDGET,
       turnLimit: OLDER_SESSION_HISTORY_TURN_LIMIT,
+      timeoutMs: OLDER_SESSION_HISTORY_TIMEOUT_MS,
       isCurrent: () => {
         const state = useHarnessStore.getState();
         return state.workspaceSelectionNonce === selectionNonce

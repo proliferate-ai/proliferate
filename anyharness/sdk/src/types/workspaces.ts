@@ -45,3 +45,15 @@ export type DetectProjectSetupResponse =
 export type GetSetupStatusResponse = components["schemas"]["GetSetupStatusResponse"];
 export type StartWorkspaceSetupRequest =
   components["schemas"]["StartWorkspaceSetupRequest"];
+export type WorkspaceRetireBlockerCode =
+  components["schemas"]["WorkspaceRetireBlockerCode"];
+export type WorkspaceRetireBlockerSeverity =
+  components["schemas"]["WorkspaceRetireBlockerSeverity"];
+export type WorkspaceRetireBlocker =
+  components["schemas"]["WorkspaceRetireBlocker"];
+export type WorkspaceRetireOutcome =
+  components["schemas"]["WorkspaceRetireOutcome"];
+export type WorkspaceRetirePreflightResponse =
+  components["schemas"]["WorkspaceRetirePreflightResponse"];
+export type WorkspaceRetireResponse =
+  components["schemas"]["WorkspaceRetireResponse"];

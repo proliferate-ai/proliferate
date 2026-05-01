@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import type { WorkspaceRetireResponse } from "@anyharness/sdk";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { APP_ROUTES } from "@/config/app-routes";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
@@ -16,6 +17,8 @@ import {
   startLatencyFlow,
 } from "@/lib/infra/latency-flow";
 import { markWorkspaceViewed } from "@/stores/preferences/workspace-ui-store";
+import { useWorkspaceRetireActions } from "./use-workspace-retire-actions";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 export function useWorkspaceSidebarActions() {
   const location = useLocation();
@@ -39,6 +42,8 @@ export function useWorkspaceSidebarActions() {
   } = useCreateCloudWorkspace();
   const { addRepoFromPicker } = useAddRepo();
   const showToast = useToastStore((state) => state.show);
+  const { markDone, retryCleanup } = useWorkspaceRetireActions();
+  const dismissFinishSuggestion = useWorkspaceUiStore((state) => state.dismissFinishSuggestion);
 
   const handleAddRepo = useCallback(() => {
     void addRepoFromPicker();
@@ -138,17 +143,63 @@ export function useWorkspaceSidebarActions() {
           const message = error instanceof Error ? error.message : String(error);
           showToast(`Failed to open source session: ${message}`);
         });
+        return;
       }
+      case "mark_workspace_done":
+        void markDone(action.workspaceId, {
+          logicalWorkspaceId: action.logicalWorkspaceId ?? null,
+        }).then((result) => {
+          if (result.outcome === "blocked") {
+            showToast(workspaceRetireBlockedMessage(result));
+          } else if (result.outcome === "cleanup_failed") {
+            showToast("Workspace marked done, but cleanup needs attention.");
+          }
+        }).catch((error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          showToast(`Failed to mark done: ${message}`);
+        });
+        return;
+      case "keep_workspace_active":
+        dismissFinishSuggestion(action.workspaceId, action.readinessFingerprint);
+        return;
     }
   }, [
+    dismissFinishSuggestion,
     goToTopLevelRoute,
     handleSelectWorkspace,
+    markDone,
     mobility.selectedLogicalWorkspaceId,
     mobility.selectionLocked,
     navigateToWorkspaceShell,
     selectWorkspace,
     showToast,
   ]);
+
+  const handleMarkWorkspaceDone = useCallback((workspaceId: string, logicalWorkspaceId: string) => {
+    void markDone(workspaceId, { logicalWorkspaceId }).then((result) => {
+      if (result.outcome === "blocked") {
+        showToast(workspaceRetireBlockedMessage(result));
+      } else if (result.outcome === "cleanup_failed") {
+        showToast("Workspace marked done, but cleanup needs attention.");
+      }
+    }).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      showToast(`Failed to mark done: ${message}`);
+    });
+  }, [markDone, showToast]);
+
+  const handleRetryWorkspaceCleanup = useCallback((workspaceId: string) => {
+    void retryCleanup(workspaceId).then((result) => {
+      if (result.outcome === "blocked") {
+        showToast(workspaceRetireBlockedMessage(result));
+      } else if (result.outcome === "cleanup_failed") {
+        showToast("Cleanup still needs attention.");
+      }
+    }).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      showToast(`Failed to retry cleanup: ${message}`);
+    });
+  }, [retryCleanup, showToast]);
 
   const handleCreateLocalWorkspace = useCallback((
     sourceRoot: string | null,
@@ -235,9 +286,23 @@ export function useWorkspaceSidebarActions() {
     handleGoPlugins,
     handleGoAutomations,
     handleSidebarIndicatorAction,
+    handleMarkWorkspaceDone,
+    handleRetryWorkspaceCleanup,
     handleSelectWorkspace,
     handleCreateLocalWorkspace,
     handleCreateWorktreeWorkspace,
     handleCreateCloudWorkspace,
   };
+}
+
+function workspaceRetireBlockedMessage(result: WorkspaceRetireResponse): string {
+  const blocker = result.preflight.blockers[0];
+  if (blocker) {
+    const extraCount = result.preflight.blockers.length - 1;
+    return extraCount > 0
+      ? `${blocker.message} (+${extraCount} more)`
+      : blocker.message;
+  }
+
+  return result.cleanupMessage?.trim() || "Workspace is not ready to mark done.";
 }

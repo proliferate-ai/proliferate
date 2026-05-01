@@ -5,6 +5,7 @@ import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposer
 import { SCENARIOS, type ScenarioKey } from "./playground";
 import {
   renderContextSlot,
+  renderComposerSurfaceForScenario,
   renderDelegationSlot,
   renderInteractionSlot,
   renderMobilityOverlayPreview,
@@ -38,6 +39,11 @@ const TOOL_CALL_SCENARIOS: ScenarioKey[] = [
   "tool-subagent-task",
 ];
 
+const DIFF_PLAYGROUND_SCENARIOS: ScenarioKey[] = [
+  "end-turn-multi-file-diff",
+  "git-diff-panel",
+];
+
 const SUBAGENT_PLAYGROUND_SCENARIOS: ScenarioKey[] = [
   "subagents-composer-few",
   "subagents-composer-many",
@@ -62,6 +68,8 @@ const QUEUE_COMPOSER_SCENARIOS: ScenarioKey[] = [
   "pending-prompts-multi",
   "pending-prompts-editing",
   "pending-prompts-with-approval",
+  "pending-review-feedback-ready",
+  "pending-review-complete",
   "subagents-queued-wake",
   "subagents-queued-wake-with-approval",
 ];
@@ -73,6 +81,10 @@ describe("playground scenarios", () => {
 
   it("includes compact tool-call scenarios for visual iteration", () => {
     expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(TOOL_CALL_SCENARIOS));
+  });
+
+  it("includes Codex-style diff scenarios for visual iteration", () => {
+    expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(DIFF_PLAYGROUND_SCENARIOS));
   });
 
   it("includes subagent composer and wake scenarios for visual iteration", () => {
@@ -107,6 +119,38 @@ describe("playground scenarios", () => {
     const html = renderToStaticMarkup(renderQueueSlot("subagents-queued-wake"));
     expect(html).toContain("runtime-server-sdk-survey finished");
     expect(html).not.toContain("Turn Completed");
+    expect(html).not.toContain("Child session:");
+    expect(html).toContain('aria-label="Delete queued message"');
+    expect(html).not.toContain('aria-label="Edit queued message"');
+  });
+
+  it("renders review feedback prompts as single-line queue rows", () => {
+    const readyHtml = renderToStaticMarkup(renderQueueSlot("pending-review-feedback-ready"));
+    expect(readyHtml).toContain("Review feedback ready");
+    expect(readyHtml).toContain("truncate");
+    expect(readyHtml).toContain("min-w-0");
+    expect(readyHtml).toContain('aria-label="Delete queued message"');
+    expect(readyHtml).not.toContain('aria-label="Edit queued message"');
+    expect(readyHtml).not.toContain("Hidden critique body");
+    expect(readyHtml).not.toContain("Loading reviewer results");
+    expect(readyHtml).not.toContain("Open Reviewer critique");
+    expect(readyHtml).not.toContain("whitespace-pre-wrap");
+
+    const completeHtml = renderToStaticMarkup(renderQueueSlot("pending-review-complete"));
+    expect(completeHtml).toContain("Review complete");
+    expect(completeHtml).not.toContain("Final hidden reviewer note");
+  });
+
+  it("keeps queued rows single-line and hides edit on the active edit row", () => {
+    const plainHtml = renderToStaticMarkup(renderQueueSlot("pending-prompts-multi"));
+    expect(plainHtml).toContain("truncate");
+    expect(plainHtml).toContain("min-w-0");
+    expect(plainHtml).not.toContain("whitespace-pre-wrap");
+
+    const editingHtml = renderToStaticMarkup(renderQueueSlot("pending-prompts-editing"));
+    expect(editingHtml).toContain("editing in composer");
+    expect(editingHtml.match(/aria-label="Edit queued message"/g)).toHaveLength(1);
+    expect(editingHtml.match(/aria-label="Delete queued message"/g)).toHaveLength(2);
   });
 
   it("keeps queued prompts before active questions and permission approvals", () => {
@@ -169,5 +213,12 @@ describe("playground scenarios", () => {
     expect(FILE_MENTION_SEARCH_RESULTS.every((result) =>
       isValidWorkspaceRelativePath(result.path)
     )).toBe(true);
+  });
+
+  it("renders a long composer input scenario through the shared editor surface", () => {
+    expect(Object.keys(SCENARIOS)).toContain("composer-long-input");
+    const html = renderToStaticMarkup(renderComposerSurfaceForScenario("composer-long-input"));
+    expect(html).toContain("data-chat-composer-editor");
+    expect(html).toContain("data-telemetry-mask");
   });
 });

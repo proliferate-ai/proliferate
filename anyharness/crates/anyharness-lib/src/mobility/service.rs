@@ -803,6 +803,9 @@ fn map_access_error(error: WorkspaceAccessError) -> MobilityError {
                 mode.as_str()
             ))
         }
+        WorkspaceAccessError::WorkspaceRetired(workspace_id) => {
+            MobilityError::Invalid(format!("workspace {workspace_id} is retired"))
+        }
     }
 }
 

@@ -877,18 +877,20 @@ impl SessionStore {
 
     pub fn append_event(&self, event: &SessionEventRecord) -> anyhow::Result<()> {
         self.db.with_conn(|conn| {
+            insert_event_row(conn, event)?;
+            Ok(())
+        })
+    }
+
+    pub(crate) fn append_event_and_touch_session(
+        &self,
+        event: &SessionEventRecord,
+    ) -> anyhow::Result<()> {
+        self.db.with_tx(|conn| {
+            insert_event_row(conn, event)?;
             conn.execute(
-                "INSERT INTO session_events (session_id, seq, timestamp, event_type, turn_id, item_id, payload_json)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                params![
-                    event.session_id,
-                    event.seq,
-                    event.timestamp,
-                    event.event_type,
-                    event.turn_id,
-                    event.item_id,
-                    event.payload_json,
-                ],
+                "UPDATE sessions SET updated_at = ?1 WHERE id = ?2",
+                params![event.timestamp, event.session_id],
             )?;
             Ok(())
         })
@@ -908,6 +910,7 @@ impl SessionStore {
         &self,
         session_id: &str,
         event: anyharness_contract::v1::SessionEvent,
+        touch_session_activity: bool,
     ) -> anyhow::Result<anyharness_contract::v1::SessionEventEnvelope> {
         self.db.with_tx(|conn| {
             let session_exists: bool = conn.query_row(
@@ -942,6 +945,12 @@ impl SessionStore {
                  ) VALUES (?1, ?2, ?3, ?4, NULL, NULL, ?5)",
                 params![session_id, seq, timestamp, event_type, payload_json],
             )?;
+            if touch_session_activity {
+                conn.execute(
+                    "UPDATE sessions SET updated_at = ?1 WHERE id = ?2",
+                    params![timestamp, session_id],
+                )?;
+            }
             Ok(envelope)
         })
     }
@@ -1271,6 +1280,34 @@ impl SessionStore {
                      SELECT 1
                      FROM session_events
                      WHERE session_id = ?1 AND event_type = 'turn_started'
+                     LIMIT 1
+                 )",
+                [session_id],
+                |row| row.get(0),
+            )
+        })
+    }
+
+    pub fn count_turn_started_events(&self, session_id: &str) -> anyhow::Result<i64> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*)
+                 FROM session_events
+                 WHERE session_id = ?1 AND event_type = 'turn_started'",
+                [session_id],
+                |row| row.get(0),
+            )
+        })
+    }
+
+    pub fn has_terminal_turn_event(&self, session_id: &str) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT EXISTS(
+                     SELECT 1
+                     FROM session_events
+                     WHERE session_id = ?1
+                       AND event_type IN ('turn_ended', 'error', 'session_ended')
                      LIMIT 1
                  )",
                 [session_id],

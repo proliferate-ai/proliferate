@@ -1,13 +1,21 @@
 import { useCallback, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   AnyHarnessError,
   type ContentPart,
   type NormalizedSessionControl,
+  type PlanDecisionResponse,
   type PromptInputBlock,
+  type ProposedPlanDetail,
+  type ProposedPlanSummary,
 } from "@anyharness/sdk";
 import {
+  anyHarnessPlanKey,
+  anyHarnessPlansKey,
+  getAnyHarnessClient,
+  resolveWorkspaceConnectionFromContext,
   useApprovePlanMutation,
+  useAnyHarnessWorkspaceContext,
   useRejectPlanMutation,
 } from "@anyharness/sdk-react";
 import { completeChatPromptSubmitSideEffects } from "@/hooks/chat/chat-submit-effects";
@@ -18,11 +26,13 @@ import { createPromptId } from "@/lib/domain/chat/prompt-id";
 import { type PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/prompt-content";
 import { buildPlanImplementationPrompt } from "@/lib/domain/plans/implementation-prompt";
 import { resolvePlanImplementationModeSwitch } from "@/lib/domain/plans/implementation-mode";
+import { patchProposedPlanDecisionInTranscript } from "@/lib/domain/plans/proposed-plan-transcript";
 import {
   failLatencyFlow as failPromptLatencyFlow,
   startLatencyFlow as startPromptLatencyFlow,
   type StartLatencyFlowInput,
 } from "@/lib/infra/latency-flow";
+import { logLatency } from "@/lib/infra/debug-latency";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -79,6 +89,7 @@ interface ExecutePlanImplementationInput {
 
 export function useProposedPlanActions() {
   const queryClient = useQueryClient();
+  const workspaceContext = useAnyHarnessWorkspaceContext();
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
   const setWorkspaceArrivalEvent = useHarnessStore((state) => state.setWorkspaceArrivalEvent);
@@ -93,27 +104,65 @@ export function useProposedPlanActions() {
   const approvePlanMutation = approveMutation.mutateAsync;
   const rejectPlanMutation = rejectMutation.mutateAsync;
 
-  const approvePlan = useCallback((planId: string, expectedDecisionVersion: number) => {
-    void approvePlanMutation({ planId, expectedDecisionVersion }).catch((error) => {
-      if (isPlanDecisionVersionConflict(error)) {
-        showToast("Plan decision was updated. Refreshing plan state.");
-        return;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to approve plan: ${message}`);
+  const applyPlanDecision = useCallback((plan: ProposedPlanDetail) => {
+    patchCachedPlanQueries(queryClient, runtimeUrl, selectedWorkspaceId, plan);
+    patchCachedPlanTranscripts(plan);
+  }, [queryClient, runtimeUrl, selectedWorkspaceId]);
+
+  const refreshAndApplyPlanDecision = useCallback(async (planId: string) => {
+    const resolved = await resolveWorkspaceConnectionFromContext(
+      workspaceContext,
+      selectedWorkspaceId,
+    );
+    const client = getAnyHarnessClient(resolved.connection);
+    const plan = await client.plans.get(
+      resolved.connection.anyharnessWorkspaceId,
+      planId,
+    );
+    applyPlanDecision(plan);
+    logLatency("plan.decision.refreshed", {
+      planId,
+      workspaceId: selectedWorkspaceId,
+      sessionId: plan.sessionId,
+      decisionState: plan.decisionState,
+      decisionVersion: plan.decisionVersion,
     });
-  }, [approvePlanMutation, showToast]);
+    return plan;
+  }, [applyPlanDecision, selectedWorkspaceId, workspaceContext]);
+
+  const approvePlan = useCallback((planId: string, expectedDecisionVersion: number) => {
+    void runPlanDecisionMutation({
+      planId,
+      expectedDecisionVersion,
+      mutate: approvePlanMutation,
+      applyPlanDecision,
+      refreshAndApplyPlanDecision,
+      showToast,
+      failurePrefix: "Failed to approve plan",
+    });
+  }, [
+    applyPlanDecision,
+    approvePlanMutation,
+    refreshAndApplyPlanDecision,
+    showToast,
+  ]);
 
   const rejectPlan = useCallback((planId: string, expectedDecisionVersion: number) => {
-    void rejectPlanMutation({ planId, expectedDecisionVersion }).catch((error) => {
-      if (isPlanDecisionVersionConflict(error)) {
-        showToast("Plan decision was updated. Refreshing plan state.");
-        return;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      showToast(`Failed to reject plan: ${message}`);
+    void runPlanDecisionMutation({
+      planId,
+      expectedDecisionVersion,
+      mutate: rejectPlanMutation,
+      applyPlanDecision,
+      refreshAndApplyPlanDecision,
+      showToast,
+      failurePrefix: "Failed to reject plan",
     });
-  }, [rejectPlanMutation, showToast]);
+  }, [
+    applyPlanDecision,
+    refreshAndApplyPlanDecision,
+    rejectPlanMutation,
+    showToast,
+  ]);
 
   const implementPlanHere = useCallback((plan: PromptPlanAttachmentDescriptor) => {
     if (!claimPlanImplementationRun(isImplementingPlanRef)) {
@@ -165,6 +214,93 @@ export function useProposedPlanActions() {
     isRejectingPlan: rejectMutation.isPending,
     isImplementingPlan,
   };
+}
+
+async function runPlanDecisionMutation({
+  planId,
+  expectedDecisionVersion,
+  mutate,
+  applyPlanDecision,
+  refreshAndApplyPlanDecision,
+  showToast,
+  failurePrefix,
+}: {
+  planId: string;
+  expectedDecisionVersion: number;
+  mutate: (input: {
+    planId: string;
+    expectedDecisionVersion: number;
+  }) => Promise<PlanDecisionResponse>;
+  applyPlanDecision: (plan: ProposedPlanDetail) => void;
+  refreshAndApplyPlanDecision: (planId: string) => Promise<ProposedPlanDetail>;
+  showToast: (message: string) => void;
+  failurePrefix: string;
+}): Promise<void> {
+  try {
+    const response = await mutate({ planId, expectedDecisionVersion });
+    applyPlanDecision(response.plan);
+    logLatency("plan.decision.applied", {
+      planId,
+      sessionId: response.plan.sessionId,
+      decisionState: response.plan.decisionState,
+      decisionVersion: response.plan.decisionVersion,
+    });
+  } catch (error) {
+    if (isPlanDecisionRefreshConflict(error)) {
+      try {
+        await refreshAndApplyPlanDecision(planId);
+        showToast("Plan decision was updated. Refreshed plan state.");
+        return;
+      } catch (refreshError) {
+        const message = refreshError instanceof Error
+          ? refreshError.message
+          : String(refreshError);
+        showToast(`Plan decision was updated, but refresh failed: ${message}`);
+        return;
+      }
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    showToast(`${failurePrefix}: ${message}`);
+  }
+}
+
+function patchCachedPlanQueries(
+  queryClient: QueryClient,
+  runtimeUrl: string | null,
+  workspaceId: string | null,
+  plan: ProposedPlanDetail,
+): void {
+  queryClient.setQueryData(
+    anyHarnessPlanKey(runtimeUrl, workspaceId, plan.id),
+    plan,
+  );
+  queryClient.setQueryData<ProposedPlanSummary[]>(
+    anyHarnessPlansKey(runtimeUrl, workspaceId),
+    (plans) => plans?.map((cachedPlan) => (
+      cachedPlan.id === plan.id ? { ...cachedPlan, ...plan } : cachedPlan
+    )),
+  );
+}
+
+function patchCachedPlanTranscripts(plan: ProposedPlanDetail): void {
+  const state = useHarnessStore.getState();
+  const candidateSessionIds = new Set([plan.sessionId, plan.sourceSessionId]);
+  candidateSessionIds.forEach((sessionId) => {
+    const slot = state.sessionSlots[sessionId];
+    if (!slot) {
+      return;
+    }
+
+    const transcript = patchProposedPlanDecisionInTranscript(slot.transcript, plan);
+    if (transcript === slot.transcript) {
+      return;
+    }
+
+    useHarnessStore.getState().patchSessionSlot(sessionId, {
+      transcript,
+    });
+  });
 }
 
 export async function executePlanImplementation({
@@ -272,8 +408,11 @@ function showPlanImplementationFailureToast(
   showToast(`Failed to carry out plan: ${message}`);
 }
 
-function isPlanDecisionVersionConflict(error: unknown): boolean {
+function isPlanDecisionRefreshConflict(error: unknown): boolean {
   return error instanceof AnyHarnessError
     && error.problem.status === 409
-    && error.problem.code === "PLAN_DECISION_VERSION_CONFLICT";
+    && (
+      error.problem.code === "PLAN_DECISION_VERSION_CONFLICT"
+      || error.problem.code === "PLAN_DECISION_TERMINAL"
+    );
 }
