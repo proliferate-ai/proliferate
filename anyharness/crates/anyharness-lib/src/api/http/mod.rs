@@ -22,3 +22,4 @@ pub mod terminals;
 pub mod workspace_naming;
 pub mod workspaces;
 pub(crate) mod workspaces_contract;
+pub mod worktrees;

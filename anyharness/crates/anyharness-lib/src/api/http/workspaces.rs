@@ -5,7 +5,8 @@ use anyharness_contract::v1::{
     DetectProjectSetupResponse, GetSetupStatusResponse, RepoRoot, RepoRootKind,
     ResolveWorkspaceFromPathRequest, ResolveWorkspaceResponse, StartWorkspaceSetupRequest,
     UpdateWorkspaceDisplayNameRequest, Workspace, WorkspaceCleanupState, WorkspaceKind,
-    WorkspaceLifecycleState, WorkspaceRetireBlocker, WorkspaceRetireBlockerCode,
+    WorkspaceLifecycleState, WorkspacePurgeOutcome, WorkspacePurgePreflightResponse,
+    WorkspacePurgeResponse, WorkspaceRetireBlocker, WorkspaceRetireBlockerCode,
     WorkspaceRetireBlockerSeverity, WorkspaceRetireOutcome, WorkspaceRetirePreflightResponse,
     WorkspaceRetireResponse, WorkspaceSessionLaunchCatalog,
 };
@@ -21,18 +22,18 @@ use super::error::ApiError;
 use super::latency::{latency_trace_fields, LatencyRequestContext};
 use super::workspaces_contract::{
     detection_result_to_contract, map_set_workspace_display_name_error,
-    setup_command_run_to_contract, workspace_session_launch_catalog_to_contract,
-    workspace_to_contract_with_summary,
+    setup_command_run_to_contract, workspace_cleanup_operation_to_contract,
+    workspace_session_launch_catalog_to_contract, workspace_to_contract_with_summary,
 };
 use crate::app::AppState;
 use crate::origin::OriginContext;
 use crate::repo_roots::model::RepoRootRecord;
 use crate::sessions::execution_summary::idle_workspace_execution_summary;
-use crate::terminals::model::TerminalStatus;
-use crate::workspaces::access_gate::WorkspaceAccessError;
 use crate::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::workspaces::purge::WorkspacePurgeServiceOutcome;
+use crate::workspaces::retire_preflight::RetirePreflightMode;
 use crate::workspaces::runtime::WorkspaceResolution;
 
 #[utoipa::path(
@@ -215,6 +216,11 @@ pub async fn create_worktree(
         "[workspace-latency] workspace.http.worktree.completed"
     );
 
+    state
+        .workspace_retention_service
+        .clone()
+        .spawn_post_create_pass(result.workspace.id.clone());
+
     Ok(Json(CreateWorktreeWorkspaceResponse {
         workspace: workspace_to_contract(&state, result.workspace).await?,
         setup_script: None,
@@ -322,6 +328,18 @@ pub async fn retire_workspace(
         })?;
     if current.lifecycle_state == "retired" {
         let preflight = build_retire_preflight(&state, &workspace_id).await?;
+        if current.cleanup_operation.as_deref() == Some("purge") {
+            return Ok(Json(WorkspaceRetireResponse {
+                workspace: workspace_to_contract(&state, current).await?,
+                outcome: WorkspaceRetireOutcome::Blocked,
+                preflight,
+                cleanup_attempted: false,
+                cleanup_succeeded: false,
+                cleanup_message: Some(
+                    "workspace is in purge cleanup state; use purge retry instead".to_string(),
+                ),
+            }));
+        }
         let cleanup_succeeded = current.cleanup_state == "complete";
         let cleanup_message = retired_cleanup_message(&current);
         return Ok(Json(WorkspaceRetireResponse {
@@ -360,6 +378,18 @@ pub async fn retire_workspace(
         })?;
     if workspace.lifecycle_state == "retired" {
         let preflight = build_retire_preflight(&state, &workspace_id).await?;
+        if workspace.cleanup_operation.as_deref() == Some("purge") {
+            return Ok(Json(WorkspaceRetireResponse {
+                workspace: workspace_to_contract(&state, workspace).await?,
+                outcome: WorkspaceRetireOutcome::Blocked,
+                preflight,
+                cleanup_attempted: false,
+                cleanup_succeeded: false,
+                cleanup_message: Some(
+                    "workspace is in purge cleanup state; use purge retry instead".to_string(),
+                ),
+            }));
+        }
         let cleanup_succeeded = workspace.cleanup_state == "complete";
         let cleanup_message = retired_cleanup_message(&workspace);
         return Ok(Json(WorkspaceRetireResponse {
@@ -429,6 +459,7 @@ pub async fn retire_workspace(
             &workspace_id,
             "retired",
             "pending",
+            Some("retire"),
             None,
             None,
             Some(&attempted_at),
@@ -473,6 +504,7 @@ pub async fn retire_workspace(
             &workspace_id,
             "retired",
             cleanup_state,
+            Some("retire"),
             cleanup_message.as_deref(),
             error_at.as_deref(),
             Some(&attempted_at),
@@ -515,6 +547,7 @@ pub async fn retry_retire_cleanup(
         })?;
     if workspace.lifecycle_state != "retired"
         || !matches!(workspace.cleanup_state.as_str(), "failed" | "pending")
+        || workspace.cleanup_operation.as_deref() == Some("purge")
     {
         let preflight = build_retire_preflight(&state, &workspace_id).await?;
         return Ok(Json(WorkspaceRetireResponse {
@@ -559,6 +592,7 @@ pub async fn retry_retire_cleanup(
             &workspace_id,
             "retired",
             "pending",
+            Some("retire"),
             None,
             None,
             Some(&attempted_at),
@@ -598,6 +632,7 @@ pub async fn retry_retire_cleanup(
             &workspace_id,
             "retired",
             cleanup_state,
+            Some("retire"),
             cleanup_message.as_deref(),
             error_at.as_deref(),
             Some(&attempted_at),
@@ -615,6 +650,99 @@ pub async fn retry_retire_cleanup(
         cleanup_succeeded,
         cleanup_message,
     }))
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/workspaces/{workspace_id}/purge/preflight",
+    params(("workspace_id" = String, Path, description = "Workspace ID")),
+    responses(
+        (status = 200, description = "Purge preflight", body = WorkspacePurgePreflightResponse),
+        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "workspaces"
+)]
+pub async fn purge_workspace_preflight(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+) -> Result<Json<WorkspacePurgePreflightResponse>, ApiError> {
+    Ok(Json(build_purge_preflight(&state, &workspace_id).await?))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/v1/workspaces/{workspace_id}",
+    params(("workspace_id" = String, Path, description = "Workspace ID")),
+    responses(
+        (status = 200, description = "Purge workspace result", body = WorkspacePurgeResponse),
+    ),
+    tag = "workspaces"
+)]
+pub async fn purge_workspace(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+) -> Result<Json<WorkspacePurgeResponse>, ApiError> {
+    let preflight = match state
+        .workspace_runtime
+        .get_workspace(&workspace_id)
+        .map_err(|error| ApiError::internal(error.to_string()))?
+    {
+        Some(_) => Some(build_purge_preflight(&state, &workspace_id).await?),
+        None => None,
+    };
+    if let Some(preflight) = preflight.as_ref() {
+        if !preflight.can_purge {
+            let workspace = workspace_contract_by_id(&state, &workspace_id).await?;
+            return Ok(Json(WorkspacePurgeResponse {
+                outcome: WorkspacePurgeOutcome::Blocked,
+                workspace: Some(workspace),
+                preflight: Some(preflight.clone()),
+                already_deleted: false,
+                cleanup_attempted: false,
+                cleanup_succeeded: false,
+                cleanup_message: None,
+            }));
+        }
+    }
+    purge_response_from_service_outcome(
+        &state,
+        preflight,
+        state
+            .workspace_purge_service
+            .purge(&workspace_id, false)
+            .await
+            .map_err(|error| ApiError::internal(error.to_string()))?,
+    )
+    .await
+    .map(Json)
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/workspaces/{workspace_id}/purge/retry",
+    params(("workspace_id" = String, Path, description = "Workspace ID")),
+    responses(
+        (status = 200, description = "Purge retry result", body = WorkspacePurgeResponse),
+        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "workspaces"
+)]
+pub async fn retry_purge_workspace(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+) -> Result<Json<WorkspacePurgeResponse>, ApiError> {
+    let preflight = Some(build_purge_preflight(&state, &workspace_id).await?);
+    purge_response_from_service_outcome(
+        &state,
+        preflight,
+        state
+            .workspace_purge_service
+            .purge(&workspace_id, true)
+            .await
+            .map_err(|error| ApiError::internal(error.to_string()))?,
+    )
+    .await
+    .map(Json)
 }
 
 #[utoipa::path(
@@ -856,6 +984,48 @@ async fn build_retire_preflight(
     state: &AppState,
     workspace_id: &str,
 ) -> Result<WorkspaceRetirePreflightResponse, ApiError> {
+    let current = state
+        .workspace_runtime
+        .get_workspace(workspace_id)
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| {
+            ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
+        })?;
+    let mode = if current.lifecycle_state == "retired"
+        && matches!(current.cleanup_state.as_str(), "pending" | "failed")
+        && current.cleanup_operation.as_deref() != Some("purge")
+    {
+        RetirePreflightMode::RetiredCleanupRetry
+    } else {
+        RetirePreflightMode::ActiveRetire
+    };
+    let result = state
+        .retire_preflight_checker
+        .check_workspace(current, mode)
+        .await
+        .map_err(|error| ApiError::internal(error.to_string()))?;
+    Ok(WorkspaceRetirePreflightResponse {
+        workspace_id: result.workspace.id,
+        workspace_kind: result.workspace_kind,
+        lifecycle_state: result.lifecycle_state,
+        cleanup_state: result.cleanup_state,
+        cleanup_operation: result.cleanup_operation,
+        can_retire: result.can_retire && mode == RetirePreflightMode::ActiveRetire,
+        materialized: result.materialized,
+        merged_into_base: result.merged_into_base,
+        base_ref: result.base_ref,
+        base_oid: result.base_oid,
+        head_oid: result.head_oid,
+        head_matches_base: result.head_matches_base,
+        readiness_fingerprint: result.readiness_fingerprint,
+        blockers: result.blockers,
+    })
+}
+
+async fn build_purge_preflight(
+    state: &AppState,
+    workspace_id: &str,
+) -> Result<WorkspacePurgePreflightResponse, ApiError> {
     let workspace = state
         .workspace_runtime
         .get_workspace(workspace_id)
@@ -863,274 +1033,87 @@ async fn build_retire_preflight(
         .ok_or_else(|| {
             ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
         })?;
-    let mut blockers = Vec::new();
-    let materialized = std::path::Path::new(&workspace.path).exists();
-    let mut head_oid = None;
-    let mut base_ref = None;
-    let mut base_oid = None;
-    let mut head_matches_base = false;
-    let mut merged_into_base = false;
-
-    if workspace.kind != "worktree" {
-        blockers.push(retire_blocker(
-            WorkspaceRetireBlockerCode::UnsupportedWorkspace,
-            "Only worktree workspaces can be marked done.",
-        ));
-    }
-    if workspace.lifecycle_state != "retired" {
-        if let Err(error) = state
-            .workspace_access_gate
-            .assert_can_mutate_for_workspace(workspace_id)
-        {
-            blockers.push(workspace_access_retire_blocker(error));
-        }
-        if let Some(active) = state
-            .workspace_runtime
-            .find_active_workspace_by_path_excluding_id(&workspace.path, &workspace.id)
-            .map_err(|e| ApiError::internal(e.to_string()))?
-        {
-            blockers.push(active_path_owner_retire_blocker(&active));
-        }
-    }
-
-    if workspace.kind == "worktree" && workspace.lifecycle_state != "retired" && materialized {
-        let workspace_id_for_task = workspace.id.clone();
-        let workspace_path = workspace.path.clone();
-        let status = run_blocking("retire git status", move || {
-            crate::git::GitService::status(
-                &workspace_id_for_task,
-                std::path::Path::new(&workspace_path),
-            )
-        })
-        .await?
-        .map_err(|e| ApiError::bad_request(e.to_string(), "GIT_STATUS_FAILED"))?;
-        head_oid = Some(status.head_oid.clone());
-        if !status.clean {
-            blockers.push(retire_blocker(
-                WorkspaceRetireBlockerCode::DirtyWorkingTree,
-                "Working tree has uncommitted changes.",
-            ));
-        }
-        if status.conflicted {
-            blockers.push(WorkspaceRetireBlocker {
-                code: WorkspaceRetireBlockerCode::ConflictedFiles,
-                message: "Working tree has conflicted files.".to_string(),
-                severity: WorkspaceRetireBlockerSeverity::Blocking,
-                retryable: true,
-                session_id: None,
-                terminal_id: None,
-                command_run_id: None,
-                path: None,
-                paths: None,
-                operation: None,
-            });
-        }
-        if status.operation != crate::git::types::GitOperation::None {
-            blockers.push(WorkspaceRetireBlocker {
-                code: WorkspaceRetireBlockerCode::ActiveGitOperation,
-                message: "A git operation is still in progress.".to_string(),
-                severity: WorkspaceRetireBlockerSeverity::Blocking,
-                retryable: true,
-                session_id: None,
-                terminal_id: None,
-                command_run_id: None,
-                path: None,
-                paths: None,
-                operation: Some(git_operation_to_contract(status.operation.clone())),
-            });
-        }
-        if let Some(default_branch) = status.suggested_base_branch.as_deref() {
-            let remote_ref = format!("origin/{default_branch}");
-            let workspace_path = workspace.path.clone();
-            let remote_merged = run_blocking("retire merged check", {
-                let remote_ref = remote_ref.clone();
-                let workspace_path = workspace_path.clone();
-                move || {
-                    crate::git::GitService::head_is_ancestor_of(
-                        std::path::Path::new(&workspace_path),
-                        &remote_ref,
-                    )
-                }
-            })
-            .await?
-            .unwrap_or(false);
-            if remote_merged {
-                base_ref = Some(remote_ref);
-                merged_into_base = true;
-            } else {
-                let local_ref = default_branch.to_string();
-                let workspace_path = workspace.path.clone();
-                merged_into_base = run_blocking("retire merged check", {
-                    let local_ref = local_ref.clone();
-                    move || {
-                        crate::git::GitService::head_is_ancestor_of(
-                            std::path::Path::new(&workspace_path),
-                            &local_ref,
-                        )
-                    }
-                })
-                .await?
-                .unwrap_or(false);
-                base_ref = Some(local_ref);
-            }
-        }
-        if let (Some(base), Some(head)) = (base_ref.as_deref(), head_oid.as_deref()) {
-            let workspace_path = workspace.path.clone();
-            base_oid = run_blocking("retire base oid", {
-                let base = base.to_string();
-                move || {
-                    crate::git::GitService::resolve_ref_oid(
-                        std::path::Path::new(&workspace_path),
-                        &base,
-                    )
-                }
-            })
-            .await?
-            .ok();
-            head_matches_base = base_oid.as_deref() == Some(head);
-        }
-    }
-
-    let execution_summary = state
-        .session_runtime
-        .workspace_execution_summary(workspace_id)
+    let preflight = state
+        .retire_preflight_checker
+        .check_workspace(workspace.clone(), RetirePreflightMode::Purge)
         .await
-        .map_err(|e| ApiError::internal(e.to_string()))?;
-    if execution_summary.running_count > 0 || execution_summary.live_session_count > 0 {
-        blockers.push(retire_blocker(
-            WorkspaceRetireBlockerCode::LiveSession,
-            "A live session is still running.",
-        ));
-    }
-    if execution_summary.awaiting_interaction_count > 0 {
-        blockers.push(retire_blocker(
-            WorkspaceRetireBlockerCode::PendingInteraction,
-            "A session is waiting for interaction.",
-        ));
-    }
-
-    let sessions = state
-        .session_service
-        .list_sessions(Some(workspace_id), true)
-        .map_err(|e| ApiError::internal(e.to_string()))?;
-    for session in sessions {
-        let prompts = state
-            .session_service
-            .store()
-            .list_pending_prompts(&session.id)
-            .map_err(|e| ApiError::internal(e.to_string()))?;
-        if !prompts.is_empty() {
-            blockers.push(WorkspaceRetireBlocker {
-                code: WorkspaceRetireBlockerCode::PendingPrompt,
-                message: "A session has queued prompts.".to_string(),
-                severity: WorkspaceRetireBlockerSeverity::Blocking,
-                retryable: true,
-                session_id: Some(session.id),
-                terminal_id: None,
-                command_run_id: None,
-                path: None,
-                paths: None,
-                operation: None,
-            });
-            break;
-        }
-    }
-
-    let terminals = state.terminal_service.list_terminals(workspace_id).await;
-    if let Some(terminal) = terminals.iter().find(|terminal| {
-        matches!(
-            terminal.status,
-            TerminalStatus::Starting | TerminalStatus::Running
-        )
-    }) {
+        .map_err(|error| ApiError::internal(error.to_string()))?;
+    let mut blockers = preflight.blockers;
+    if workspace.kind != "worktree" || workspace.surface != "standard" {
         blockers.push(WorkspaceRetireBlocker {
-            code: WorkspaceRetireBlockerCode::ActiveTerminal,
-            message: "A terminal is still active.".to_string(),
+            code: WorkspaceRetireBlockerCode::UnsupportedWorkspace,
+            message: "Purge is only available for standard worktree workspaces.".to_string(),
             severity: WorkspaceRetireBlockerSeverity::Blocking,
-            retryable: true,
+            retryable: false,
             session_id: None,
-            terminal_id: Some(terminal.id.clone()),
+            terminal_id: None,
             command_run_id: None,
-            path: None,
+            path: Some(workspace.path.clone()),
             paths: None,
             operation: None,
         });
     }
-
-    let operation_snapshot = state.workspace_operation_gate.snapshot(workspace_id).await;
-    let has_running_command_holder = operation_snapshot.has_any(&[
-        WorkspaceOperationKind::MaterializationRead,
-        WorkspaceOperationKind::FileWrite,
-        WorkspaceOperationKind::GitWrite,
-        WorkspaceOperationKind::ProcessRun,
-        WorkspaceOperationKind::TerminalCommand,
-        WorkspaceOperationKind::SessionStart,
-        WorkspaceOperationKind::SessionPrompt,
-        WorkspaceOperationKind::SessionResume,
-        WorkspaceOperationKind::SetupCommand,
-        WorkspaceOperationKind::HostingWrite,
-        WorkspaceOperationKind::PlanWrite,
-        WorkspaceOperationKind::ReviewWrite,
-        WorkspaceOperationKind::CoworkWrite,
-        WorkspaceOperationKind::SubagentWrite,
-        WorkspaceOperationKind::MobilityWrite,
-    ]);
-    let active_runs = state
-        .terminal_service
-        .active_command_runs_for_workspace(workspace_id)
-        .map_err(|e| ApiError::internal(e.to_string()))?;
-    if has_running_command_holder || !active_runs.is_empty() {
-        let command_run = active_runs.first();
-        blockers.push(WorkspaceRetireBlocker {
-            code: WorkspaceRetireBlockerCode::RunningCommand,
-            message: "Workspace work is still in progress.".to_string(),
-            severity: WorkspaceRetireBlockerSeverity::Blocking,
-            retryable: true,
-            session_id: None,
-            terminal_id: command_run.and_then(|run| run.terminal_id.clone()),
-            command_run_id: command_run.map(|run| run.id.clone()),
-            path: None,
-            paths: None,
-            operation: None,
-        });
-    }
-
-    let can_retire = blockers.is_empty()
+    let can_purge = blockers.is_empty()
         && workspace.kind == "worktree"
-        && workspace.lifecycle_state != "retired";
-    let readiness_fingerprint = format!(
-        "v1:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
-        workspace.id,
-        workspace.lifecycle_state,
-        workspace.cleanup_state,
-        materialized,
-        head_oid.as_deref().unwrap_or(""),
-        base_ref.as_deref().unwrap_or(""),
-        base_oid.as_deref().unwrap_or(""),
-        merged_into_base,
-        head_matches_base,
-        blockers
-            .iter()
-            .map(|blocker| format!("{:?}", blocker.code))
-            .collect::<Vec<_>>()
-            .join(",")
-    );
-
-    Ok(WorkspaceRetirePreflightResponse {
+        && workspace.surface == "standard"
+        && (workspace.lifecycle_state == "active"
+            || workspace.cleanup_operation.as_deref() == Some("purge")
+            || workspace.cleanup_state == "complete");
+    Ok(WorkspacePurgePreflightResponse {
         workspace_id: workspace.id,
         workspace_kind: workspace_kind_to_contract(&workspace.kind),
         lifecycle_state: workspace_lifecycle_to_contract(&workspace.lifecycle_state),
         cleanup_state: workspace_cleanup_to_contract(&workspace.cleanup_state),
-        can_retire,
-        materialized,
-        merged_into_base,
-        base_ref,
-        base_oid,
-        head_oid,
-        head_matches_base,
-        readiness_fingerprint,
+        cleanup_operation: workspace_cleanup_operation_to_contract(
+            workspace.cleanup_operation.as_deref(),
+        ),
+        can_purge,
+        materialized: preflight.materialized,
         blockers,
     })
+}
+
+async fn purge_response_from_service_outcome(
+    state: &AppState,
+    preflight: Option<WorkspacePurgePreflightResponse>,
+    outcome: WorkspacePurgeServiceOutcome,
+) -> Result<WorkspacePurgeResponse, ApiError> {
+    match outcome {
+        WorkspacePurgeServiceOutcome::Deleted {
+            already_deleted,
+            cleanup_attempted,
+        } => Ok(WorkspacePurgeResponse {
+            outcome: WorkspacePurgeOutcome::Deleted,
+            workspace: None,
+            preflight,
+            already_deleted,
+            cleanup_attempted,
+            cleanup_succeeded: true,
+            cleanup_message: None,
+        }),
+        WorkspacePurgeServiceOutcome::Blocked { workspace, message } => {
+            Ok(WorkspacePurgeResponse {
+                outcome: WorkspacePurgeOutcome::Blocked,
+                workspace: Some(workspace_to_contract(state, workspace).await?),
+                preflight,
+                already_deleted: false,
+                cleanup_attempted: false,
+                cleanup_succeeded: false,
+                cleanup_message: Some(message),
+            })
+        }
+        WorkspacePurgeServiceOutcome::CleanupFailed { workspace, message } => {
+            Ok(WorkspacePurgeResponse {
+                outcome: WorkspacePurgeOutcome::CleanupFailed,
+                workspace: Some(workspace_to_contract(state, workspace).await?),
+                preflight,
+                already_deleted: false,
+                cleanup_attempted: true,
+                cleanup_succeeded: false,
+                cleanup_message: Some(message),
+            })
+        }
+    }
 }
 
 async fn workspace_contract_by_id(
@@ -1145,21 +1128,6 @@ async fn workspace_contract_by_id(
             ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
         })?;
     workspace_to_contract(state, record).await
-}
-
-fn retire_blocker(code: WorkspaceRetireBlockerCode, message: &str) -> WorkspaceRetireBlocker {
-    WorkspaceRetireBlocker {
-        code,
-        message: message.to_string(),
-        severity: WorkspaceRetireBlockerSeverity::Blocking,
-        retryable: true,
-        session_id: None,
-        terminal_id: None,
-        command_run_id: None,
-        path: None,
-        paths: None,
-        operation: None,
-    }
 }
 
 fn active_path_owner_retire_blocker(active: &WorkspaceRecord) -> WorkspaceRetireBlocker {
@@ -1177,36 +1145,6 @@ fn active_path_owner_retire_blocker(active: &WorkspaceRecord) -> WorkspaceRetire
         path: Some(active.path.clone()),
         paths: None,
         operation: None,
-    }
-}
-
-fn workspace_access_retire_blocker(error: WorkspaceAccessError) -> WorkspaceRetireBlocker {
-    let message = match error {
-        WorkspaceAccessError::MutationBlocked { mode, .. } => {
-            format!(
-                "Workspace cannot be marked done while access mode is {}.",
-                mode.as_str()
-            )
-        }
-        WorkspaceAccessError::LiveSessionStartBlocked { mode, .. } => {
-            format!(
-                "Workspace cannot be marked done while access mode is {}.",
-                mode.as_str()
-            )
-        }
-        WorkspaceAccessError::WorkspaceRetired(_) => "Workspace is already retired.".to_string(),
-        WorkspaceAccessError::WorkspaceNotFound(_)
-        | WorkspaceAccessError::SessionNotFound(_)
-        | WorkspaceAccessError::TerminalNotFound(_) => {
-            "Workspace access state could not be verified.".to_string()
-        }
-    };
-    WorkspaceRetireBlocker {
-        message,
-        ..retire_blocker(
-            WorkspaceRetireBlockerCode::WorkspaceAccessBlocked,
-            "Workspace access is blocked.",
-        )
     }
 }
 
@@ -1245,24 +1183,6 @@ fn workspace_cleanup_to_contract(value: &str) -> WorkspaceCleanupState {
         "complete" => WorkspaceCleanupState::Complete,
         "failed" => WorkspaceCleanupState::Failed,
         _ => WorkspaceCleanupState::None,
-    }
-}
-
-fn git_operation_to_contract(
-    operation: crate::git::types::GitOperation,
-) -> anyharness_contract::v1::git::GitOperation {
-    match operation {
-        crate::git::types::GitOperation::Merge => anyharness_contract::v1::git::GitOperation::Merge,
-        crate::git::types::GitOperation::Rebase => {
-            anyharness_contract::v1::git::GitOperation::Rebase
-        }
-        crate::git::types::GitOperation::CherryPick => {
-            anyharness_contract::v1::git::GitOperation::CherryPick
-        }
-        crate::git::types::GitOperation::Revert => {
-            anyharness_contract::v1::git::GitOperation::Revert
-        }
-        crate::git::types::GitOperation::None => anyharness_contract::v1::git::GitOperation::None,
     }
 }
 
@@ -1314,4 +1234,106 @@ pub(crate) async fn workspace_to_contract(
         record,
         execution_summary,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::sync::Mutex;
+
+    use super::*;
+    use crate::agents::seed::AgentSeedStore;
+    use crate::app::test_support;
+    use crate::persistence::Db;
+    use crate::workspaces::store::WorkspaceStore;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn purge_preflight_allows_retired_complete_workspace() {
+        let state = test_state("purge-retired-complete");
+        let workspace = workspace_record(
+            "workspace-retired-complete",
+            "retired",
+            "complete",
+            Some("retire"),
+        );
+        WorkspaceStore::new(state.db.clone())
+            .insert(&workspace)
+            .expect("insert workspace");
+
+        let preflight = match build_purge_preflight(&state, &workspace.id).await {
+            Ok(preflight) => preflight,
+            Err(_) => panic!("purge preflight failed"),
+        };
+
+        assert!(preflight.can_purge);
+        assert!(preflight.blockers.is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn purge_preflight_allows_retired_purge_retry_workspace() {
+        let state = test_state("purge-retired-retry");
+        let workspace =
+            workspace_record("workspace-purge-retry", "retired", "failed", Some("purge"));
+        WorkspaceStore::new(state.db.clone())
+            .insert(&workspace)
+            .expect("insert workspace");
+
+        let preflight = match build_purge_preflight(&state, &workspace.id).await {
+            Ok(preflight) => preflight,
+            Err(_) => panic!("purge preflight failed"),
+        };
+
+        assert!(preflight.can_purge);
+        assert!(preflight.blockers.is_empty());
+    }
+
+    fn test_state(name: &str) -> AppState {
+        let _lock = test_support::ENV_MUTEX
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("env mutex");
+        let _bearer_guard = test_support::set_bearer_token_env(None);
+        let _data_key_guard = test_support::set_data_key_env(None);
+        AppState::new(
+            PathBuf::from(format!("/tmp/anyharness-{name}-runtime")),
+            "http://127.0.0.1:8457".to_string(),
+            Db::open_in_memory().expect("open db"),
+            false,
+            AgentSeedStore::not_configured_dev(),
+        )
+        .expect("app state")
+    }
+
+    fn workspace_record(
+        id: &str,
+        lifecycle_state: &str,
+        cleanup_state: &str,
+        cleanup_operation: Option<&str>,
+    ) -> WorkspaceRecord {
+        WorkspaceRecord {
+            id: id.to_string(),
+            kind: "worktree".to_string(),
+            repo_root_id: None,
+            path: format!("/tmp/anyharness-nonexistent-{id}"),
+            surface: "standard".to_string(),
+            source_repo_root_path: format!("/tmp/anyharness-source-{id}"),
+            source_workspace_id: None,
+            git_provider: None,
+            git_owner: None,
+            git_repo_name: None,
+            original_branch: Some("main".to_string()),
+            current_branch: Some("main".to_string()),
+            display_name: None,
+            origin: None,
+            creator_context: None,
+            lifecycle_state: lifecycle_state.to_string(),
+            cleanup_state: cleanup_state.to_string(),
+            cleanup_operation: cleanup_operation.map(str::to_string),
+            cleanup_error_message: None,
+            cleanup_failed_at: None,
+            cleanup_attempted_at: None,
+            created_at: "2025-01-01T00:00:00Z".to_string(),
+            updated_at: "2025-01-01T00:00:00Z".to_string(),
+        }
+    }
 }

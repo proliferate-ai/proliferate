@@ -1,0 +1,211 @@
+use std::path::Path;
+use std::sync::Arc;
+
+use crate::agents::portability::delete_session_agent_artifacts;
+use crate::sessions::store::SessionStore;
+use crate::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};
+use crate::workspaces::model::WorkspaceRecord;
+use crate::workspaces::operation_gate::WorkspaceOperationGate;
+use crate::workspaces::runtime::WorkspaceRuntime;
+use crate::workspaces::store::WorkspaceStore;
+
+#[derive(Debug)]
+pub enum WorkspacePurgeServiceOutcome {
+    Deleted {
+        already_deleted: bool,
+        cleanup_attempted: bool,
+    },
+    Blocked {
+        workspace: WorkspaceRecord,
+        message: String,
+    },
+    CleanupFailed {
+        workspace: WorkspaceRecord,
+        message: String,
+    },
+}
+
+#[derive(Clone)]
+pub struct WorkspacePurgeService {
+    workspace_runtime: Arc<WorkspaceRuntime>,
+    workspace_store: WorkspaceStore,
+    session_store: SessionStore,
+    operation_gate: Arc<WorkspaceOperationGate>,
+    checkout_gate: Arc<CheckoutDeletionGate>,
+}
+
+impl WorkspacePurgeService {
+    pub fn new(
+        workspace_runtime: Arc<WorkspaceRuntime>,
+        workspace_store: WorkspaceStore,
+        session_store: SessionStore,
+        operation_gate: Arc<WorkspaceOperationGate>,
+        checkout_gate: Arc<CheckoutDeletionGate>,
+    ) -> Self {
+        Self {
+            workspace_runtime,
+            workspace_store,
+            session_store,
+            operation_gate,
+            checkout_gate,
+        }
+    }
+
+    pub async fn purge(
+        &self,
+        workspace_id: &str,
+        retry_only: bool,
+    ) -> anyhow::Result<WorkspacePurgeServiceOutcome> {
+        let Some(workspace) = self.workspace_runtime.get_workspace(workspace_id)? else {
+            return Ok(WorkspacePurgeServiceOutcome::Deleted {
+                already_deleted: true,
+                cleanup_attempted: false,
+            });
+        };
+
+        if workspace.kind != "worktree" || workspace.surface != "standard" {
+            return Ok(WorkspacePurgeServiceOutcome::Blocked {
+                workspace,
+                message: "purge is only available for standard worktree workspaces".to_string(),
+            });
+        }
+
+        if retry_only {
+            let is_retryable_purge = workspace.lifecycle_state == "retired"
+                && matches!(workspace.cleanup_state.as_str(), "pending" | "failed")
+                && workspace.cleanup_operation.as_deref() == Some("purge");
+            if !is_retryable_purge {
+                return Ok(WorkspacePurgeServiceOutcome::Blocked {
+                    workspace,
+                    message: "purge retry is only available for pending or failed purge tombstones"
+                        .to_string(),
+                });
+            }
+        }
+
+        let _workspace_lease = self.operation_gate.acquire_exclusive(workspace_id).await;
+        let Some(workspace) = self.workspace_runtime.get_workspace(workspace_id)? else {
+            return Ok(WorkspacePurgeServiceOutcome::Deleted {
+                already_deleted: true,
+                cleanup_attempted: false,
+            });
+        };
+        let Some(_path_lease) = self.acquire_checkout_lease(&workspace) else {
+            return Ok(WorkspacePurgeServiceOutcome::Blocked {
+                workspace,
+                message: "checkout deletion is already in progress for this path".to_string(),
+            });
+        };
+
+        let attempted_at = chrono::Utc::now().to_rfc3339();
+        let pending = if workspace.lifecycle_state == "active" {
+            self.workspace_runtime
+                .set_lifecycle_cleanup_state(
+                    workspace_id,
+                    "retired",
+                    "pending",
+                    Some("purge"),
+                    None,
+                    None,
+                    Some(&attempted_at),
+                )?
+                .unwrap_or(workspace)
+        } else {
+            workspace
+        };
+
+        let materialization = {
+            let runtime = self.workspace_runtime.clone();
+            let workspace = pending.clone();
+            tokio::task::spawn_blocking(move || runtime.retire_worktree_materialization(&workspace))
+                .await
+                .map_err(|error| anyhow::anyhow!("purge checkout cleanup task failed: {error}"))?
+        };
+        if let Err(error) = materialization {
+            return self.cleanup_failed(workspace_id, &pending, &attempted_at, error);
+        }
+
+        let artifact_cleanup = {
+            let sessions = self.session_store.list_by_workspace(workspace_id)?;
+            let workspace_path = pending.path.clone();
+            tokio::task::spawn_blocking(move || {
+                for session in sessions {
+                    delete_session_agent_artifacts(&session, Path::new(&workspace_path))?;
+                }
+                anyhow::Ok(())
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!("purge artifact cleanup task failed: {error}"))?
+        };
+        if let Err(error) = artifact_cleanup {
+            return self.cleanup_failed(workspace_id, &pending, &attempted_at, error);
+        }
+
+        if let Err(error) = self
+            .workspace_store
+            .purge_workspace_with_sessions(workspace_id)
+        {
+            return self.cleanup_failed(workspace_id, &pending, &attempted_at, error);
+        }
+
+        Ok(WorkspacePurgeServiceOutcome::Deleted {
+            already_deleted: false,
+            cleanup_attempted: true,
+        })
+    }
+
+    fn acquire_checkout_lease(
+        &self,
+        workspace: &WorkspaceRecord,
+    ) -> Option<crate::workspaces::checkout_gate::CheckoutDeletionLease> {
+        let path = Path::new(&workspace.path);
+        let key = match std::fs::canonicalize(path) {
+            Ok(canonical) => CheckoutPathLockKey::Canonical(canonical),
+            Err(_) => CheckoutPathLockKey::StoredNormalized(workspace.path.clone()),
+        };
+        self.checkout_gate.try_acquire(key)
+    }
+
+    fn cleanup_failed(
+        &self,
+        workspace_id: &str,
+        prior: &WorkspaceRecord,
+        attempted_at: &str,
+        error: anyhow::Error,
+    ) -> anyhow::Result<WorkspacePurgeServiceOutcome> {
+        let message = error.to_string();
+        let failed_at = chrono::Utc::now().to_rfc3339();
+        match self.workspace_runtime.set_lifecycle_cleanup_state(
+            workspace_id,
+            "retired",
+            "failed",
+            Some("purge"),
+            Some(&message),
+            Some(&failed_at),
+            Some(attempted_at),
+        ) {
+            Ok(Some(workspace)) => {
+                Ok(WorkspacePurgeServiceOutcome::CleanupFailed { workspace, message })
+            }
+            Ok(None) => Ok(WorkspacePurgeServiceOutcome::CleanupFailed {
+                workspace: prior.clone(),
+                message,
+            }),
+            Err(update_error) => {
+                tracing::error!(
+                    workspace_id,
+                    prior_lifecycle_state = %prior.lifecycle_state,
+                    prior_cleanup_state = %prior.cleanup_state,
+                    prior_cleanup_operation = ?prior.cleanup_operation,
+                    purge_error = %message,
+                    update_error = %update_error,
+                    "failed to record purge cleanup failure state"
+                );
+                Ok(WorkspacePurgeServiceOutcome::CleanupFailed {
+                    workspace: prior.clone(),
+                    message,
+                })
+            }
+        }
+    }
+}

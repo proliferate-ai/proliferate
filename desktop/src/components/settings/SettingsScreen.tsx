@@ -15,6 +15,7 @@ import { CloudPane } from "./panes/CloudPane";
 import { CloudSignInRequiredPane } from "./panes/CloudSignInRequiredPane";
 import { CloudUnavailablePane } from "./panes/CloudUnavailablePane";
 import { EnvironmentsPane } from "./panes/EnvironmentsPane";
+import { WorktreesPane } from "./panes/WorktreesPane";
 import {
   type SettingsRepositoryEntry,
 } from "@/lib/domain/settings/repositories";
@@ -59,6 +60,9 @@ function renderSettingsSection(
   }
   if (activeSection === "keyboard") {
     return <KeyboardShortcutsPane />;
+  }
+  if (activeSection === "worktrees") {
+    return <WorktreesPane />;
   }
   if (activeSection === "account") {
     return <AccountPane />;

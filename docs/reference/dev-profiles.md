@@ -33,6 +33,18 @@ and the desktop file-backed app home. AnyHarness runtime state lives in:
 ~/.proliferate-local/runtimes/<name>/
 ```
 
+The dev launcher also writes `ANYHARNESS_WORKTREES_ROOT` into the profile launch
+environment. By default it points at the standard local worktree checkout root:
+
+```text
+~/.proliferate-local/worktrees/
+```
+
+That keeps automatic AnyHarness checkout retention aligned with the checkout
+paths normally created by the desktop app. Worktrees outside this managed root
+remain visible as explicit workspace history/checkout actions where applicable,
+but they are excluded from automatic per-repo retention and orphan pruning.
+
 The default database is `proliferate_dev_<name>` on the local Docker Postgres
 server. On macOS, profile database URLs default to `::1` so Docker Desktop's
 Postgres listener is not confused with a Homebrew Postgres bound to

@@ -14,7 +14,7 @@ describe("WorkspaceItem", () => {
     cleanup();
   });
 
-  it("keeps the mark-done context menu open after right-clicking", async () => {
+  it("keeps the delete workspace context menu open after right-clicking", async () => {
     const onSelect = vi.fn();
 
     render(
@@ -31,12 +31,12 @@ describe("WorkspaceItem", () => {
 
     fireEvent.contextMenu(row!, { clientX: 12, clientY: 12 });
 
-    expect(await screen.findByRole("button", { name: "Mark done..." })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Confirm done" })).toBeNull();
+    expect(await screen.findByRole("button", { name: "Delete workspace..." })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Delete workspace" })).toBeNull();
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("does not select the workspace when confirming mark done from the context menu", async () => {
+  it("does not select the workspace when confirming delete from the context menu", () => {
     const onSelect = vi.fn();
     const onMarkDone = vi.fn();
 
@@ -52,9 +52,9 @@ describe("WorkspaceItem", () => {
     const row = screen.getByText("Feature worktree").closest('[role="button"]');
     expect(row).not.toBeNull();
 
-    fireEvent.contextMenu(row!, { clientX: 12, clientY: 12 });
-    fireEvent.click(await screen.findByRole("button", { name: "Mark done..." }));
-    fireEvent.click(screen.getByRole("button", { name: "Confirm done" }));
+    fireEvent.contextMenu(row!);
+    fireEvent.click(screen.getByRole("button", { name: "Delete workspace..." }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete workspace" }));
 
     expect(onMarkDone).toHaveBeenCalledTimes(1);
     expect(onSelect).not.toHaveBeenCalled();

@@ -490,13 +490,13 @@ export function detachAndCloseSessionSlotStreams(
   }
 
   const state = useHarnessStore.getState();
-  const streams: { sessionId: string; handle: SessionStreamHandle }[] = [];
+  const streams: { sessionId: string; handle: FlushAwareSessionStreamHandle }[] = [];
   for (const sessionId of uniqueSessionIds) {
     const slot = state.sessionSlots[sessionId];
     if (!slot?.sseHandle) {
       continue;
     }
-    streams.push({ sessionId, handle: slot.sseHandle });
+    streams.push({ sessionId, handle: slot.sseHandle as FlushAwareSessionStreamHandle });
   }
 
   if (streams.length === 0) {
@@ -504,7 +504,16 @@ export function detachAndCloseSessionSlotStreams(
   }
 
   for (const { sessionId, handle } of streams) {
-    handle.close();
+    try {
+      handle.flushPendingEvents?.();
+    } catch (error) {
+      console.error("Failed to flush session stream before detach", { sessionId, error });
+    }
+    try {
+      handle.close();
+    } catch (error) {
+      console.error("Failed to close session stream during detach", { sessionId, error });
+    }
     clearSessionReconnectTimer(sessionId);
   }
 

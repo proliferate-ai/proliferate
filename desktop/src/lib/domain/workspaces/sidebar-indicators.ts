@@ -225,7 +225,7 @@ export function detailIndicatorsForWorkspace(
         workspaceId: finishSuggestion.workspaceId,
         logicalWorkspaceId: workspace.id,
         readinessFingerprint: finishSuggestion.readinessFingerprint,
-        tooltip: "Ready to mark done",
+        tooltip: "Ready to delete workspace",
       }]
       : []),
     {

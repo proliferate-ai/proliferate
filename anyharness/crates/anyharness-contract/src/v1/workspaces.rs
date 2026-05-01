@@ -57,6 +57,13 @@ pub enum WorkspaceCleanupState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceCleanupOperation {
+    Retire,
+    Purge,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(
     tag = "kind",
     rename_all = "snake_case",
@@ -110,6 +117,8 @@ pub struct Workspace {
     pub display_name: Option<String>,
     pub lifecycle_state: WorkspaceLifecycleState,
     pub cleanup_state: WorkspaceCleanupState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cleanup_error_message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -175,6 +184,8 @@ pub struct WorkspaceRetirePreflightResponse {
     pub workspace_kind: WorkspaceKind,
     pub lifecycle_state: WorkspaceLifecycleState,
     pub cleanup_state: WorkspaceCleanupState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
     pub can_retire: bool,
     pub materialized: bool,
     pub merged_into_base: bool,
@@ -204,6 +215,43 @@ pub struct WorkspaceRetireResponse {
     pub workspace: Workspace,
     pub outcome: WorkspaceRetireOutcome,
     pub preflight: WorkspaceRetirePreflightResponse,
+    pub cleanup_attempted: bool,
+    pub cleanup_succeeded: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleanup_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspacePurgePreflightResponse {
+    pub workspace_id: String,
+    pub workspace_kind: WorkspaceKind,
+    pub lifecycle_state: WorkspaceLifecycleState,
+    pub cleanup_state: WorkspaceCleanupState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
+    pub can_purge: bool,
+    pub materialized: bool,
+    pub blockers: Vec<WorkspaceRetireBlocker>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspacePurgeOutcome {
+    Deleted,
+    Blocked,
+    CleanupFailed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspacePurgeResponse {
+    pub outcome: WorkspacePurgeOutcome,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<Workspace>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preflight: Option<WorkspacePurgePreflightResponse>,
+    pub already_deleted: bool,
     pub cleanup_attempted: bool,
     pub cleanup_succeeded: bool,
     #[serde(skip_serializing_if = "Option::is_none")]

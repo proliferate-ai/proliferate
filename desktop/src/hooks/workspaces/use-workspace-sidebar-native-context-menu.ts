@@ -73,7 +73,7 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
     }
     items.push({
       id: "mark-done",
-      label: "Mark done...",
+      label: "Delete workspace...",
       onSelect: onMarkDone,
     });
   }

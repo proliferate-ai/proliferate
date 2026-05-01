@@ -517,7 +517,7 @@ describe("sidebar workspace filters", () => {
       workspaceId: materializationId,
       logicalWorkspaceId: "path:/tmp/repo-a/worktree",
       readinessFingerprint: "fingerprint-1",
-      tooltip: "Ready to mark done",
+      tooltip: "Ready to delete workspace",
     });
   });
 

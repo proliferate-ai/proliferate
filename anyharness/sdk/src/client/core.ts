@@ -15,6 +15,7 @@ import { ReviewsClient } from "./reviews.js";
 import { RuntimeClient } from "./runtime.js";
 import { SessionsClient } from "./sessions.js";
 import { TerminalsClient } from "./terminals.js";
+import { WorktreesClient } from "./worktrees.js";
 import { WorkspacesClient } from "./workspaces.js";
 
 export interface AnyHarnessClientOptions {
@@ -45,6 +46,14 @@ export type AnyHarnessTimingCategory =
   | "workspace.retire.preflight"
   | "workspace.retire"
   | "workspace.retire.cleanup_retry"
+  | "workspace.purge.preflight"
+  | "workspace.purge"
+  | "workspace.purge.retry"
+  | "worktree.inventory"
+  | "worktree.orphan.prune"
+  | "worktree.retention_policy.get"
+  | "worktree.retention_policy.update"
+  | "worktree.retention.run"
   | "repo_root.list"
   | "session.get"
   | "session.list"
@@ -308,6 +317,7 @@ export class AnyHarnessClient {
   readonly replay: ReplayClient;
   readonly reviews: ReviewsClient;
   readonly workspaces: WorkspacesClient;
+  readonly worktrees: WorktreesClient;
   readonly cowork: CoworkClient;
   readonly files: FilesClient;
   readonly sessions: SessionsClient;
@@ -328,6 +338,7 @@ export class AnyHarnessClient {
     this.replay = new ReplayClient(transport);
     this.reviews = new ReviewsClient(transport);
     this.workspaces = new WorkspacesClient(transport);
+    this.worktrees = new WorktreesClient(transport);
     this.cowork = new CoworkClient(transport);
     this.files = new FilesClient(transport);
     this.sessions = new SessionsClient(transport);

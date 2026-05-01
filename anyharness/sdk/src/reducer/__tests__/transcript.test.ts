@@ -471,6 +471,89 @@ describe("transcript reducer", () => {
     expect(item.contentParts.filter((part) => part.type === "file_change")).toHaveLength(1);
   });
 
+  it("preserves file change truncation metadata through merge deltas", () => {
+    const state = reduceEvents(
+      [
+        turnStarted(1),
+        {
+          sessionId: "session-1",
+          seq: 2,
+          timestamp: "2026-04-04T00:00:02Z",
+          turnId: "turn-1",
+          itemId: "tool-1",
+          event: {
+            type: "item_started",
+            item: {
+              kind: "tool_invocation",
+              status: "in_progress",
+              sourceAgentKind: "claude",
+              toolCallId: "tool-1",
+              title: "Edit file",
+              contentParts: [
+                {
+                  type: "tool_call",
+                  toolCallId: "tool-1",
+                  title: "Edit file",
+                  toolKind: "edit",
+                },
+                {
+                  type: "file_change",
+                  operation: "edit",
+                  path: "src/app.ts",
+                  workspacePath: "src/app.ts",
+                  patch: "@@ truncated",
+                  patchTruncated: true,
+                  patchOriginalBytes: 40000,
+                  preview: "old preview",
+                  previewTruncated: true,
+                  previewOriginalBytes: 22000,
+                },
+              ],
+            },
+          },
+        },
+        {
+          sessionId: "session-1",
+          seq: 3,
+          timestamp: "2026-04-04T00:00:03Z",
+          turnId: "turn-1",
+          itemId: "tool-1",
+          event: {
+            type: "item_delta",
+            delta: {
+              replaceContentParts: [
+                {
+                  type: "tool_call",
+                  toolCallId: "tool-1",
+                  title: "Edit file",
+                  toolKind: "edit",
+                },
+                {
+                  type: "file_change",
+                  operation: "edit",
+                  path: "src/app.ts",
+                  workspacePath: "src/app.ts",
+                  additions: 5,
+                  deletions: 1,
+                },
+              ],
+            },
+          },
+        },
+      ],
+      "session-1",
+    );
+
+    const item = state.itemsById["tool-1"] as ToolCallItem;
+    const fileChange = item.contentParts.find((part) => part.type === "file_change");
+    expect(fileChange?.type).toBe("file_change");
+    if (!fileChange || fileChange.type !== "file_change") return;
+    expect(fileChange.patchTruncated).toBe(true);
+    expect(fileChange.patchOriginalBytes).toBe(40000);
+    expect(fileChange.previewTruncated).toBe(true);
+    expect(fileChange.previewOriginalBytes).toBe(22000);
+  });
+
   it("tracks permission requests and resolutions against tool items", () => {
     const state = reduceEvents(
       [
