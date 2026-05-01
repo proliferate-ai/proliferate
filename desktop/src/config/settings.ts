@@ -1,10 +1,11 @@
 import type { ComponentType } from "react";
 import {
   Blocks,
-  Brain,
+  BrainOutline,
   CircleQuestion,
   CircleUser,
   CloudIcon,
+  FolderList,
   Keyboard,
   RefreshCw,
   Settings,
@@ -31,43 +32,51 @@ export const SETTINGS_DEFAULT_SECTION: SettingsStaticSection = "general";
 // ── Grouped sidebar nav ──────────────────────────────────────────────
 
 export type SettingsNavItem =
-  | { kind: "section"; id: SettingsStaticSection; label: string; icon: ComponentType<IconProps> }
+  | { kind: "section"; id: SettingsSection; label: string; icon: ComponentType<IconProps> }
   | { kind: "action"; id: "checkForUpdates" | "support"; label: string; icon: ComponentType<IconProps> };
 
 export interface SettingsNavGroup {
-  id: "configuration" | "primary" | "cloud" | "updates";
-  heading?: string;
+  id: "preferences" | "workflows" | "account_cloud" | "help";
+  heading: string;
   items: SettingsNavItem[];
 }
 
 export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   {
-    id: "configuration",
+    id: "preferences",
+    heading: "Preferences",
     items: [
       { kind: "section", id: "general", label: "General", icon: Settings },
       { kind: "section", id: "appearance", label: "Appearance", icon: Sparkles },
-      { kind: "section", id: "account", label: "Account", icon: CircleUser },
-      { kind: "section", id: "agents", label: "Agents", icon: Blocks },
-      { kind: "section", id: "review", label: "Review", icon: Brain },
       { kind: "section", id: "keyboard", label: "Keyboard", icon: Keyboard },
-      { kind: "action", id: "support", label: "Support", icon: CircleQuestion },
     ],
   },
   {
-    id: "cloud",
-    heading: "Cloud",
+    id: "workflows",
+    heading: "Workflows",
     items: [
+      { kind: "section", id: "agents", label: "Agents", icon: Blocks },
+      { kind: "section", id: "review", label: "Review", icon: BrainOutline },
+      { kind: "section", id: "repo", label: "Environments", icon: FolderList },
+    ],
+  },
+  {
+    id: "account_cloud",
+    heading: "Account & Cloud",
+    items: [
+      { kind: "section", id: "account", label: "Account", icon: CircleUser },
       { kind: "section", id: "cloud", label: "Cloud", icon: CloudIcon },
     ],
   },
   {
-    id: "updates",
-    heading: "Updates",
+    id: "help",
+    heading: "Help",
     items: [
+      { kind: "action", id: "support", label: "Support", icon: CircleQuestion },
       {
         kind: "action",
         id: "checkForUpdates",
-        label: "Check for desktop updates",
+        label: "Desktop updates",
         icon: RefreshCw,
       },
     ],

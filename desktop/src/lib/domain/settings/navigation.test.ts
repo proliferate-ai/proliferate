@@ -68,6 +68,38 @@ describe("settings navigation", () => {
     });
   });
 
+  it("resolves a valid repo settings link", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "repo",
+      rawRepo: "/repo-a",
+      repositories: [repo({ sourceRoot: "/repo-a" })],
+    })).toEqual({
+      activeSection: "repo",
+      activeRepoSourceRoot: "/repo-a",
+    });
+  });
+
+  it("keeps the environments index when section repo has no selected repo", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "repo",
+      repositories: [repo({ sourceRoot: "/repo-a" })],
+    })).toEqual({
+      activeSection: "repo",
+      activeRepoSourceRoot: null,
+    });
+  });
+
+  it("keeps the environments index when a repo settings link has no matching repo", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "repo",
+      rawRepo: "/repo-a",
+      repositories: [],
+    })).toEqual({
+      activeSection: "repo",
+      activeRepoSourceRoot: null,
+    });
+  });
+
   it("redirects legacy cloudRepo links when exactly one local repo matches", () => {
     expect(resolveSettingsSelection({
       rawSection: "cloudRepo",

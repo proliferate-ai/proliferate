@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useModelRegistriesQuery } from "@anyharness/sdk-react";
 import type { ModelRegistry } from "@anyharness/sdk";
@@ -46,6 +46,7 @@ const TURN_END_SOUND_OPTIONS: { id: TurnEndSoundId; label: string }[] = [
   { id: "ding", label: "Ding" },
   { id: "gong", label: "Gong" },
 ];
+const CHAT_DEFAULT_SECTION_ORDER: readonly string[] = ["claude", "codex", "gemini", "cursor", "opencode"];
 
 export function GeneralPane() {
   const navigate = useNavigate();
@@ -83,6 +84,16 @@ export function GeneralPane() {
     }),
     [modelRegistries, preferences, readyAgentKinds],
   );
+  const orderedChatDefaultRows = useMemo(() => {
+    const rank = new Map(CHAT_DEFAULT_SECTION_ORDER.map((kind, index) => [kind, index]));
+    return [...chatDefaultRows].sort((a, b) => {
+      const leftRank = rank.get(a.kind) ?? Number.MAX_SAFE_INTEGER;
+      const rightRank = rank.get(b.kind) ?? Number.MAX_SAFE_INTEGER;
+      return leftRank === rightRank
+        ? a.displayName.localeCompare(b.displayName)
+        : leftRank - rightRank;
+    });
+  }, [chatDefaultRows]);
   const primaryHarnessLabel =
     chatDefaultRows.find((row) => row.isPrimary)?.displayName ?? "Choose harness";
 
@@ -104,145 +115,10 @@ export function GeneralPane() {
   )?.label ?? "None";
 
   return (
-    <section className="space-y-6">
-      <SettingsPageHeader
-        title="General"
-        description="Machine-local defaults and runtime launch behavior."
-      />
+    <section className="space-y-5">
+      <SettingsPageHeader title="General" />
 
-      <div className="space-y-3">
-        <SectionIntro
-          title="Defaults"
-          description="Defaults applied to new chats, repo actions, and local workspace behavior."
-        />
-
-        <SettingsCard>
-          {connectionState === "connecting" ? (
-            <div className="p-3">
-              <LoadingState
-                message="Connecting"
-                subtext="Waiting for the runtime before loading chat defaults..."
-              />
-            </div>
-          ) : connectionState === "failed" ? (
-            <div className="space-y-1 p-3">
-              <p className="text-sm font-medium text-foreground">Chat defaults are unavailable</p>
-              <p className="text-sm text-muted-foreground">
-                {runtimeError ?? "Reconnect the runtime to edit the default model and permissions."}
-              </p>
-            </div>
-          ) : ((agentsLoading || modelRegistriesLoading) && (agents.length === 0 || modelRegistries.length === 0)) ? (
-            <div className="p-3">
-              <LoadingState
-                message="Loading chat defaults"
-                subtext="Fetching available agents and model registries..."
-              />
-            </div>
-          ) : chatDefaultRows.length === 0 ? (
-            <div className="space-y-1 p-3">
-              <p className="text-sm font-medium text-foreground">No chat defaults are available</p>
-              <p className="text-sm text-muted-foreground">
-                Install and configure a chat harness before editing defaults.
-              </p>
-            </div>
-          ) : (
-            <>
-              <SettingsCardRow
-                label="Primary harness"
-                description="Launch identity for new chats"
-              >
-                <SettingsMenu
-                  label={primaryHarnessLabel}
-                  className="w-56"
-                  menuClassName="w-64"
-                  groups={[{
-                    id: "harnesses",
-                    options: chatDefaultRows.map((row) => ({
-                      id: row.kind,
-                      label: row.displayName,
-                      icon: <ProviderIcon kind={row.kind} className="size-3.5" />,
-                      selected: row.isPrimary,
-                      onSelect: () => {
-                        const registry = modelRegistries.find((candidate) => candidate.kind === row.kind);
-                        if (!registry) return;
-                        preferences.setMultiple(
-                          buildPrimaryHarnessPreferenceUpdate(preferences, registry),
-                        );
-                      },
-                    })),
-                  }]}
-                />
-              </SettingsCardRow>
-
-              {chatDefaultRows.map((row) => (
-                <Fragment key={row.kind}>
-                  <SettingsCardRow
-                    label={`${row.displayName} model`}
-                    description={row.isPrimary ? "Model default for the primary harness" : "Model default for this harness"}
-                  >
-                    <SettingsMenu
-                      label={row.selectedModel.displayName}
-                      className="w-60"
-                      menuClassName="w-72"
-                      groups={[{
-                        id: `${row.kind}-models`,
-                        options: row.models.map((model) => ({
-                          id: model.id,
-                          label: model.displayName,
-                          icon: <ProviderIcon kind={row.kind} className="size-3.5" />,
-                          selected: model.id === row.selectedModel.id,
-                          onSelect: () => {
-                            preferences.set(
-                              "defaultChatModelIdByAgentKind",
-                              withUpdatedDefaultModelIdByAgentKind(
-                                preferences.defaultChatModelIdByAgentKind,
-                                row.kind,
-                                model.id,
-                              ),
-                            );
-                          },
-                        })),
-                      }]}
-                    />
-                  </SettingsCardRow>
-
-                  {row.modeOptions.length > 0 && row.selectedMode ? (
-                    <SettingsCardRow
-                      label={`${row.displayName} permissions`}
-                      description={row.isPrimary ? "Permission mode for the primary harness" : "Permission mode for this harness"}
-                    >
-                      <SettingsMenu
-                        label={row.selectedMode.shortLabel ?? row.selectedMode.label}
-                        className="w-48"
-                        menuClassName="w-64"
-                        groups={[{
-                          id: `${row.kind}-permissions`,
-                          options: row.modeOptions.map((option) => ({
-                            id: option.value,
-                            label: option.shortLabel ?? option.label,
-                            detail: option.description,
-                            selected: option.value === row.selectedMode?.value,
-                            onSelect: () => {
-                              preferences.set(
-                                "defaultSessionModeByAgentKind",
-                                withUpdatedDefaultSessionModeByAgentKind(
-                                  preferences.defaultSessionModeByAgentKind,
-                                  row.kind,
-                                  option.value,
-                                ),
-                              );
-                            },
-                          })),
-                        }]}
-                      />
-                    </SettingsCardRow>
-                  ) : null}
-                </Fragment>
-              ))}
-            </>
-          )}
-        </SettingsCard>
-
+      <GeneralSection title="Preferences">
         <SettingsCard>
           <SettingsCardRow
             label="Default open in"
@@ -286,14 +162,9 @@ export function GeneralPane() {
             />
           </SettingsCardRow>
         </SettingsCard>
-      </div>
+      </GeneralSection>
 
-      <div className="space-y-3">
-        <SectionIntro
-          title="Feedback"
-          description="Local cues for completed agent work."
-        />
-
+      <GeneralSection title="Feedback">
         <SettingsCard>
           <SettingsCardRow
             label="Turn end sound"
@@ -337,14 +208,138 @@ export function GeneralPane() {
             </div>
           </SettingsCardRow>
         </SettingsCard>
-      </div>
+      </GeneralSection>
 
-      <div className="space-y-3">
-        <SectionIntro
-          title="Advanced"
-          description="Launch policy for advanced local runtime inputs."
-        />
+      <GeneralSection title="Default harness">
+        <SettingsCard>
+          {connectionState === "connecting" ? (
+            <div className="p-3">
+              <LoadingState
+                message="Connecting"
+                subtext="Waiting for the runtime before loading chat defaults..."
+              />
+            </div>
+          ) : connectionState === "failed" ? (
+            <div className="space-y-1 p-3">
+              <p className="text-sm font-medium text-foreground">Chat defaults are unavailable</p>
+              <p className="text-sm text-muted-foreground">
+                {runtimeError ?? "Reconnect the runtime to edit the default model and permissions."}
+              </p>
+            </div>
+          ) : ((agentsLoading || modelRegistriesLoading) && (agents.length === 0 || modelRegistries.length === 0)) ? (
+            <div className="p-3">
+              <LoadingState
+                message="Loading chat defaults"
+                subtext="Fetching available agents and model registries..."
+              />
+            </div>
+          ) : chatDefaultRows.length === 0 ? (
+            <div className="space-y-1 p-3">
+              <p className="text-sm font-medium text-foreground">No chat defaults are available</p>
+              <p className="text-sm text-muted-foreground">
+                Install and configure a chat harness before editing defaults.
+              </p>
+            </div>
+          ) : (
+            <SettingsCardRow
+              label="Harness"
+              description="Launch identity for new chats"
+            >
+              <SettingsMenu
+                label={primaryHarnessLabel}
+                className="w-56"
+                menuClassName="w-64"
+                groups={[{
+                  id: "harnesses",
+                  options: chatDefaultRows.map((row) => ({
+                    id: row.kind,
+                    label: row.displayName,
+                    icon: <ProviderIcon kind={row.kind} className="size-3.5" />,
+                    selected: row.isPrimary,
+                    onSelect: () => {
+                      const registry = modelRegistries.find((candidate) => candidate.kind === row.kind);
+                      if (!registry) return;
+                      preferences.setMultiple(
+                        buildPrimaryHarnessPreferenceUpdate(preferences, registry),
+                      );
+                    },
+                  })),
+                }]}
+              />
+            </SettingsCardRow>
+          )}
+        </SettingsCard>
+      </GeneralSection>
 
+      {connectionState !== "failed" && orderedChatDefaultRows.map((row) => (
+        <GeneralSection key={row.kind} title={`${row.displayName} defaults`}>
+          <SettingsCard>
+            <SettingsCardRow
+              label="Model"
+              description={row.isPrimary ? "Default model for the primary harness" : "Default model for this harness"}
+            >
+              <SettingsMenu
+                label={row.selectedModel.displayName}
+                className="w-60"
+                menuClassName="w-72"
+                groups={[{
+                  id: `${row.kind}-models`,
+                  options: row.models.map((model) => ({
+                    id: model.id,
+                    label: model.displayName,
+                    icon: <ProviderIcon kind={row.kind} className="size-3.5" />,
+                    selected: model.id === row.selectedModel.id,
+                    onSelect: () => {
+                      preferences.set(
+                        "defaultChatModelIdByAgentKind",
+                        withUpdatedDefaultModelIdByAgentKind(
+                          preferences.defaultChatModelIdByAgentKind,
+                          row.kind,
+                          model.id,
+                        ),
+                      );
+                    },
+                  })),
+                }]}
+              />
+            </SettingsCardRow>
+
+            {row.modeOptions.length > 0 && row.selectedMode ? (
+              <SettingsCardRow
+                label="Permissions"
+                description={row.isPrimary ? "Permission mode for the primary harness" : "Permission mode for this harness"}
+              >
+                <SettingsMenu
+                  label={row.selectedMode.shortLabel ?? row.selectedMode.label}
+                  className="w-48"
+                  menuClassName="w-64"
+                  groups={[{
+                    id: `${row.kind}-permissions`,
+                    options: row.modeOptions.map((option) => ({
+                      id: option.value,
+                      label: option.shortLabel ?? option.label,
+                      detail: option.description,
+                      selected: option.value === row.selectedMode?.value,
+                      onSelect: () => {
+                        preferences.set(
+                          "defaultSessionModeByAgentKind",
+                          withUpdatedDefaultSessionModeByAgentKind(
+                            preferences.defaultSessionModeByAgentKind,
+                            row.kind,
+                            option.value,
+                          ),
+                        );
+                      },
+                    })),
+                  }]}
+                />
+              </SettingsCardRow>
+            ) : null}
+          </SettingsCard>
+        </GeneralSection>
+      ))}
+
+      <GeneralSection title="Advanced">
         <SettingsCard>
           <SettingsCardRow
             label="Use plugins in coding sessions"
@@ -367,9 +362,6 @@ export function GeneralPane() {
               Open Plugins
             </Button>
           </SettingsCardRow>
-        </SettingsCard>
-
-        <SettingsCard>
           <SettingsCardRow
             label="Allow coding agents to spin up subagents"
             description="Applies to new sessions. Existing sessions keep their saved delegation policy."
@@ -389,22 +381,29 @@ export function GeneralPane() {
             />
           </SettingsCardRow>
         </SettingsCard>
-      </div>
+      </GeneralSection>
     </section>
   );
 }
 
-function SectionIntro({
+function GeneralSection({
   title,
   description,
+  children,
 }: {
   title: string;
-  description: string;
+  description?: string;
+  children: ReactNode;
 }) {
   return (
-    <div className="space-y-1">
-      <h2 className="text-sm font-medium text-foreground">{title}</h2>
-      <p className="text-sm text-muted-foreground">{description}</p>
+    <div className="space-y-2">
+      <div className="space-y-0.5">
+        <h2 className="text-sm font-medium text-foreground">{title}</h2>
+        {description ? (
+          <p className="text-sm text-muted-foreground">{description}</p>
+        ) : null}
+      </div>
+      {children}
     </div>
   );
 }

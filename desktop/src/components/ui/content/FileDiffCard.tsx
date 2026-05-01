@@ -167,11 +167,12 @@ interface FileDiffCardProps {
   additions: number;
   deletions: number;
   isExpanded: boolean;
-  onToggleExpand: () => void;
+  onToggleExpand?: () => void;
   onOpenFile?: () => void;
   actions?: ReactNode;
   children?: ReactNode;
   embedded?: boolean;
+  collapsible?: boolean;
   surface?: "chat" | "sidebar";
 }
 
@@ -185,9 +186,14 @@ export function FileDiffCard({
   actions,
   children,
   embedded = false,
+  collapsible = true,
   surface = "chat",
 }: FileDiffCardProps) {
-  const canExpand = !!children || additions > 0 || deletions > 0;
+  const canExpand =
+    collapsible
+    && !!onToggleExpand
+    && (!!children || additions > 0 || deletions > 0);
+  const showChildren = !!children && (!collapsible || isExpanded);
   const basename = extractBasename(filePath);
   const surfaceTextClass = surface === "sidebar" ? "text-sidebar-foreground" : "text-foreground";
   const surfaceActionClass = surface === "sidebar"
@@ -318,7 +324,7 @@ export function FileDiffCard({
           </div>
         </div>
 
-        {canExpand && isExpanded && children && (
+        {showChildren && (
           <div className="relative overflow-hidden">
             {children}
           </div>

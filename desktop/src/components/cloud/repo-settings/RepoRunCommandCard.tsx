@@ -1,6 +1,5 @@
 import type { ChangeEvent } from "react";
-import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
+import { EnvironmentField } from "@/components/settings/EnvironmentSettingsLayout";
 import { RunCommandHelp } from "@/components/settings/RunCommandHelp";
 import { Input } from "@/components/ui/Input";
 
@@ -14,21 +13,19 @@ export function RepoRunCommandCard({
   onChange,
 }: RepoRunCommandCardProps) {
   return (
-    <SettingsCard>
-      <SettingsCardRow
-        label="Cloud run command"
-        description="Command launched by the workspace header Run button for cloud workspaces in this repository."
-      >
-        <div className="w-[32rem] max-w-full space-y-2">
-          <Input
-            value={runCommand}
-            onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value)}
-            placeholder="make dev PROFILE=my-profile"
-            className="font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)]"
-          />
-          <RunCommandHelp scope="selected cloud workspace" />
-        </div>
-      </SettingsCardRow>
-    </SettingsCard>
+    <EnvironmentField
+      label="Cloud action command"
+      description="Command launched by the workspace header Run button for cloud workspaces in this environment."
+    >
+      <div className="space-y-2">
+        <Input
+          value={runCommand}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value)}
+          placeholder="make dev PROFILE=my-profile"
+          className="h-8 max-w-xl px-2.5 py-1.5 font-mono text-sm leading-[var(--readable-code-line-height)]"
+        />
+        <RunCommandHelp scope="selected cloud workspace" />
+      </div>
+    </EnvironmentField>
   );
 }

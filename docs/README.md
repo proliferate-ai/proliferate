@@ -65,6 +65,8 @@ start of the task, not after implementation has already started.
   - canonical list of every env var across the stack, tagged by deployment mode
 - `docs/reference/env-secrets-matrix.md`
   - operator-facing server env var surface
+- `docs/reference/workspace-command-environment.md`
+  - environment variables available to workspace run commands
 - `docs/reference/self-hosted-deploy.md`
   - canonical Docker Compose self-hosted deployment
 - `docs/reference/self-hosted-aws.md`

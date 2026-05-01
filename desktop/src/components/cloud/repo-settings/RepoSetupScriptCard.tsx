@@ -1,6 +1,5 @@
 import type { ChangeEvent } from "react";
-import { SettingsCard } from "@/components/settings/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/SettingsCardRow";
+import { EnvironmentField } from "@/components/settings/EnvironmentSettingsLayout";
 import { Textarea } from "@/components/ui/Textarea";
 
 interface RepoSetupScriptCardProps {
@@ -13,24 +12,23 @@ export function RepoSetupScriptCard({
   onChange,
 }: RepoSetupScriptCardProps) {
   return (
-    <SettingsCard>
-      <SettingsCardRow
-        label="Cloud setup script"
-        description="Runs after a new cloud workspace reaches ready. This script is separate from the local worktree setup script."
-      >
-        <div className="w-[32rem] max-w-full space-y-2">
-          <Textarea
-            rows={8}
-            value={setupScript}
-            onChange={(event: ChangeEvent<HTMLTextAreaElement>) => onChange(event.target.value)}
-            placeholder="pnpm install&#10;pnpm prisma generate"
-            className="min-h-44 resize-y font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)]"
-          />
-          <p className="text-sm text-muted-foreground">
-            Available vars include <code>PROLIFERATE_WORKTREE_DIR</code>, <code>PROLIFERATE_REPO_DIR</code>, <code>PROLIFERATE_BRANCH</code>, and <code>PROLIFERATE_BASE_REF</code>.
-          </p>
-        </div>
-      </SettingsCardRow>
-    </SettingsCard>
+    <EnvironmentField
+      label="Setup script"
+      description="Runs after a new cloud workspace reaches ready. This script is separate from the local worktree setup script."
+    >
+      <div className="space-y-2">
+        <Textarea
+          variant="code"
+          rows={6}
+          value={setupScript}
+          onChange={(event: ChangeEvent<HTMLTextAreaElement>) => onChange(event.target.value)}
+          placeholder={"pnpm install\npnpm prisma generate"}
+          className="min-h-36 px-2.5 py-2 text-sm"
+        />
+        <p className="text-sm text-muted-foreground">
+          Available vars include <code>PROLIFERATE_WORKTREE_DIR</code>, <code>PROLIFERATE_REPO_DIR</code>, <code>PROLIFERATE_BRANCH</code>, and <code>PROLIFERATE_BASE_REF</code>.
+        </p>
+      </div>
+    </EnvironmentField>
   );
 }
