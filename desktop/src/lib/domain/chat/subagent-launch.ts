@@ -36,14 +36,6 @@ export interface SubagentProvisioningStatus extends SubagentLaunchResult {
   wakeScheduleCreated: boolean | null;
 }
 
-const AGENT_KIND_LABELS: Record<string, string> = {
-  claude: "Claude",
-  codex: "Codex",
-  cursor: "Cursor",
-  gemini: "Gemini",
-  opencode: "OpenCode",
-};
-
 export function resolveSubagentExecutionState(
   item: ToolCallItem,
 ): SubagentExecutionState {
@@ -86,20 +78,14 @@ export function resolveSubagentLaunchDisplay(
 ): SubagentLaunchDisplay {
   const rawInput = isRecord(item.rawInput) ? item.rawInput : {};
   const label = readStringField(rawInput, "label");
-  const agentKind = readStringField(rawInput, "agentKind");
-  const modelId = readStringField(rawInput, "modelId");
   const prompt = readStringField(rawInput, "prompt") ?? extractToolInputText(item);
   const title = label
     ?? (isAnyHarnessSubagentTool(item) ? "Subagent" : item.title)
     ?? "Agent task";
-  const meta = [
-    agentKind ? formatAgentKind(agentKind) : null,
-    modelId,
-  ].filter((value): value is string => !!value).join(" · ");
 
   return {
     title,
-    meta: meta.length > 0 ? meta : null,
+    meta: null,
     prompt,
   };
 }
@@ -195,16 +181,6 @@ function readStringField(value: Record<string, unknown>, key: string): string | 
   }
   const trimmed = field.trim();
   return trimmed.length > 0 ? trimmed : null;
-}
-
-function formatAgentKind(agentKind: string): string {
-  const normalized = agentKind.trim().toLowerCase();
-  return AGENT_KIND_LABELS[normalized]
-    ?? normalized
-      .replace(/[_-]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function readBooleanField(value: unknown, key: string): boolean {

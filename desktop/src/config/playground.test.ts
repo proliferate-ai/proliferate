@@ -81,6 +81,11 @@ const QUEUE_COMPOSER_SCENARIOS: ScenarioKey[] = [
   "subagents-queued-wake-with-approval",
 ];
 
+const REVIEW_TRANSCRIPT_SCENARIOS: ScenarioKey[] = [
+  "review-feedback-message",
+  "review-complete-message",
+];
+
 describe("playground scenarios", () => {
   it("includes user-input card scenarios for visual iteration", () => {
     expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(USER_INPUT_SCENARIOS));
@@ -116,6 +121,7 @@ describe("playground scenarios", () => {
     const subagentComposerHtml = renderToStaticMarkup(renderDelegationSlot("subagents-composer-many"));
     expect(subagentComposerHtml).not.toContain("color-mix");
     expect(subagentComposerHtml).not.toContain("style=");
+    expect(subagentComposerHtml).not.toMatch(/Codex|Claude|Gemini|gpt-|sonnet|opus|model/i);
 
     const reviewStartingHtml = renderToStaticMarkup(renderDelegationSlot("subagents-review-starting-plan"));
     expect(reviewStartingHtml).toContain("3 agents reviewing plan");
@@ -172,6 +178,10 @@ describe("playground scenarios", () => {
     const completeHtml = renderToStaticMarkup(renderQueueSlot("pending-review-complete"));
     expect(completeHtml).toContain("Review complete");
     expect(completeHtml).not.toContain("Final hidden reviewer note");
+  });
+
+  it("includes collapsed review feedback transcript message scenarios", () => {
+    expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(REVIEW_TRANSCRIPT_SCENARIOS));
   });
 
   it("keeps queued rows single-line and hides edit on the active edit row", () => {

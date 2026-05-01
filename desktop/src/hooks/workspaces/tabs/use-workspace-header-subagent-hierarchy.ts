@@ -14,7 +14,6 @@ import type {
   SessionSubagentsResponse,
   SessionReviewsResponse,
 } from "@anyharness/sdk";
-import { getProviderDisplayName } from "@/config/providers";
 import { formatSubagentLabel } from "@/lib/domain/chat/subagents/provenance";
 import {
   reviewAssignmentHeaderStatusLabel,
@@ -159,9 +158,9 @@ function buildParentRow(parent: ParentSubagentLinkSummary): HeaderSubagentParent
     sessionId: parent.parentSessionId,
     title: parent.parentTitle?.trim()
       || parent.label?.trim()
-      || getProviderDisplayName(parent.parentAgentKind),
+      || "Parent agent",
     agentKind: parent.parentAgentKind,
-    meta: formatMeta(parent.parentModelId ? [parent.parentModelId] : []),
+    meta: null,
   };
 }
 
@@ -176,7 +175,7 @@ function buildChildRow(
     title: formatSubagentLabel(child.label ?? child.title, ordinal),
     agentKind: child.agentKind,
     source: "subagent",
-    meta: formatMeta([child.modelId, child.modeId]),
+    meta: null,
     statusLabel: formatSessionStatus(child.status),
     wakeScheduled: child.wakeScheduled,
     isActive: child.childSessionId === activeSessionId,
@@ -199,11 +198,7 @@ function buildReviewChildRows(
           title: assignment.personaLabel || reviewKindLabel(run.kind),
           agentKind: assignment.agentKind,
           source: "review",
-          meta: formatMeta([
-            reviewKindLabel(run.kind),
-            assignment.modelId,
-            assignment.requestedModeId,
-          ]),
+          meta: reviewKindLabel(run.kind),
           statusLabel: reviewAssignmentHeaderStatusLabel(assignment),
           wakeScheduled: false,
           isActive: sessionId === activeSessionId,
@@ -212,13 +207,6 @@ function buildReviewChildRows(
     }
   }
   return [...rowsBySessionId.values()];
-}
-
-function formatMeta(parts: Array<string | null | undefined>): string | null {
-  const values = parts
-    .map((part) => part?.trim())
-    .filter((part): part is string => !!part);
-  return values.length > 0 ? values.join(" · ") : null;
 }
 
 function formatSessionStatus(status: ChildSubagentSummary["status"]): string {

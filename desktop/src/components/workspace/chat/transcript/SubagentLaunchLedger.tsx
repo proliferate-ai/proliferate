@@ -38,6 +38,18 @@ export function SubagentLaunchLedger({
 
   return (
     <div className="flex flex-col gap-1">
+      <PlainSubagentActionRow
+        label={status.label}
+        tone={status.tone}
+      />
+      <SubagentSessionActionRow
+        childSessionId={childSessionId}
+        onOpenChild={onOpenChild}
+        failed={executionState === "failed"}
+      />
+      {hasWakeScheduled && (
+        <PlainSubagentActionRow label="Will wake parent when finished" />
+      )}
       {prompt && (
         <div>
           <Button
@@ -49,7 +61,7 @@ export function SubagentLaunchLedger({
             aria-expanded={promptExpanded}
             onClick={() => setPromptExpanded((next) => !next)}
           >
-            <span className="min-w-0 truncate">Sent prompt to subagent</span>
+            <span className="min-w-0 truncate">View initial prompt</span>
             <ChevronRight
               className={`size-2.5 shrink-0 text-faint transition-transform duration-200 ${
                 promptExpanded ? "rotate-90" : ""
@@ -75,18 +87,6 @@ export function SubagentLaunchLedger({
           )}
         </div>
       )}
-      <SubagentSessionActionRow
-        childSessionId={childSessionId}
-        onOpenChild={onOpenChild}
-        failed={executionState === "failed"}
-      />
-      {hasWakeScheduled && (
-        <PlainSubagentActionRow label="Wake scheduled" />
-      )}
-      <PlainSubagentActionRow
-        label={status.label}
-        tone={status.tone}
-      />
     </div>
   );
 }
@@ -101,12 +101,12 @@ function SubagentSessionActionRow({
   failed: boolean;
 }) {
   if (!childSessionId || !onOpenChild) {
-    return (
+    return failed ? (
       <PlainSubagentActionRow
-        label={failed ? "Subagent session was not created" : "Creating subagent session"}
-        tone={failed ? "failed" : "normal"}
+        label="Subagent session unavailable"
+        tone="failed"
       />
-    );
+    ) : null;
   }
 
   return (
@@ -118,7 +118,7 @@ function SubagentSessionActionRow({
       className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/80 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
       onClick={() => onOpenChild(childSessionId)}
     >
-      <span className="min-w-0 truncate">Created subagent session</span>
+      <span className="min-w-0 truncate">Open subagent</span>
       <ExternalLink className="size-2.5 shrink-0 text-faint opacity-0 transition-opacity duration-200 group-hover/action-row:opacity-100 group-focus-visible/action-row:opacity-100" />
     </Button>
   );
@@ -148,32 +148,32 @@ function formatProvisioningStatus(
   promptStatus: string | null,
 ): { label: string; tone: "normal" | "failed" } {
   if (executionState === "failed") {
-    return { label: "Subagent launch failed", tone: "failed" };
+    return { label: "Launch failed", tone: "failed" };
   }
 
   if (executionState === "expired_background") {
-    return { label: "Subagent stopped updating", tone: "failed" };
+    return { label: "Stopped updating", tone: "failed" };
   }
 
   if (executionState === "running") {
-    return { label: "Creating subagent", tone: "normal" };
+    return { label: "Creating", tone: "normal" };
   }
 
   if (promptStatus === "running") {
-    return { label: "Subagent running", tone: "normal" };
+    return { label: "Working", tone: "normal" };
   }
 
   if (promptStatus === "queued") {
-    return { label: "Subagent prompt queued", tone: "normal" };
+    return { label: "Prompt queued", tone: "normal" };
   }
 
   if (executionState === "background") {
-    return { label: "Subagent running in background", tone: "normal" };
+    return { label: "Running in background", tone: "normal" };
   }
 
   if (executionState === "completed_background") {
-    return { label: "Subagent completed in background", tone: "normal" };
+    return { label: "Completed in background", tone: "normal" };
   }
 
-  return { label: "Subagent started", tone: "normal" };
+  return { label: "Started", tone: "normal" };
 }
