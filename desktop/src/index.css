@@ -290,8 +290,8 @@
   --diffs-bg-context-override: var(--codex-diffs-context-surface);
   --diffs-bg-separator-override: var(--codex-diffs-separator-surface);
   --diffs-bg-hover-override: var(--codex-diffs-hover-surface);
-  --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 88%, var(--diffs-addition-color-override));
-  --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 88%, var(--diffs-deletion-color-override));
+  --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-addition-color-override));
+  --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-deletion-color-override));
   --diffs-bg-addition-number-override: var(--codex-diffs-addition-number);
   --diffs-bg-deletion-number-override: var(--codex-diffs-deletion-number);
   --color-diff-added-bg: var(--diffs-bg-addition-override);
@@ -905,6 +905,8 @@
   --color-diff-header-surface: var(--color-diff-surface);
   --color-diff-added: hsl(142 76% 44%);
   --color-diff-deleted: hsl(0 100% 45%);
+  --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-addition-color-override));
+  --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-deletion-color-override));
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }

@@ -54,7 +54,7 @@ export function FilePathLink({ rawPath, children }: FilePathLinkProps) {
     <Button
       type="button"
       variant="ghost"
-      size="sm"
+      size="unstyled"
       onClick={handleOpen}
       onContextMenuCapture={onContextMenuCapture}
       title={absolute ?? rawPath}

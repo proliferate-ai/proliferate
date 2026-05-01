@@ -24,6 +24,7 @@ describe("FileChangeCall", () => {
     expect(html).toContain("thread-diff-virtualized");
     expect(html).toContain("overflow-x-auto overflow-y-auto");
     expect(html).toContain("max-h-[220px]");
+    expect(html).not.toContain("flex min-w-0 flex-col gap-1");
     expect(html).not.toContain("1 file changed");
   });
 

@@ -1350,7 +1350,16 @@ function ToolCallItemBlock({
     );
   }
 
-  return rows.length === 1 ? <>{rows[0]}</> : <div className="space-y-1.5">{rows}</div>;
+  if (rows.length === 1) {
+    return <>{rows[0]}</>;
+  }
+
+  const hasOnlyFileChangeRows = rows.length === fileChanges.length;
+  return (
+    <div className={hasOnlyFileChangeRows ? "flex flex-col" : "space-y-1.5"}>
+      {rows}
+    </div>
+  );
 }
 
 function ToolCallGroupBlock({

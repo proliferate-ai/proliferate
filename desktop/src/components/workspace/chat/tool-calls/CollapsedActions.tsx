@@ -109,7 +109,7 @@ function CollapsedActionsLedger({
             autoFollow ? "max-h-[7.5rem]" : "max-h-80"
           }`}
       >
-        <div className="flex flex-col gap-1">
+        <div className={containsEdits ? "flex flex-col gap-0" : "flex flex-col gap-1"}>
           {itemIds.map((itemId) => {
             const item = transcript.itemsById[itemId];
             if (item?.kind !== "tool_call") return null;

@@ -81,7 +81,7 @@ export function FileChangeCall({
     const nextDeletions = deletions ?? 0;
 
     return (
-      <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 flex-col">
         <FileChangeInlineRow
           label={actionLabel}
           filePath={displayPath}

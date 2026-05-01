@@ -35,13 +35,14 @@ describe("DiffViewer chat variant", () => {
     expect(html).toContain("data-diff=\"\"");
     expect(html).toContain("data-code=\"\"");
     expect(html).toContain("data-gutter=\"\"");
+    expect(html).toContain("sticky left-0 z-10");
     expect(html).toContain("data-content=\"\"");
     expect(html).toContain("--diffs-min-number-column-width:4ch");
     expect(html).toContain("--diffs-min-number-column-width-default:3ch");
     expect(html).toContain("--diffs-addition-color:var(--diffs-addition-color-override)");
     expect(html).toContain("--diffs-deletion-color:var(--diffs-deletion-color-override)");
     expect(html).toContain(
-      "--diffs-column-number-width:max(36px, 5ch)",
+      "--diffs-column-number-width:max(24px, 5ch)",
     );
     expect(html).toContain("diff-content-cell relative flex");
     expect(html).not.toContain("thread-diff-virtualized");
@@ -57,6 +58,7 @@ describe("DiffViewer chat variant", () => {
     );
 
     expect(html).toContain("overflow-x-auto overflow-y-auto");
+    expect(html).toContain("sticky left-0 z-10");
     expect(html).toContain("min-w-max");
     expect(html).toContain("whitespace-pre");
     expect(html).not.toContain("overflow-clip");

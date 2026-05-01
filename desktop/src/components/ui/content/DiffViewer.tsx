@@ -348,7 +348,7 @@ function ChatDiffViewer({
   const codeStyle = useMemo(
     () => ({
       ...CHAT_DIFF_CODE_BASE_STYLE,
-      "--diffs-column-number-width": `max(36px, ${lineNumberDigits + 1}ch)`,
+      "--diffs-column-number-width": `max(24px, ${lineNumberDigits + 1}ch)`,
     }) as CSSProperties,
     [lineNumberDigits],
   );
@@ -391,7 +391,7 @@ function ChatDiffViewer({
             <div
               data-gutter=""
               style={{ gridRow: `span ${rowSpan}` }}
-              className="grid auto-rows-[var(--diffs-line-height)]"
+              className="sticky left-0 z-10 grid auto-rows-[var(--diffs-line-height)] bg-[var(--diffs-bg)]"
             >
               {rows.map((row) =>
                 row.kind === "line" ? (

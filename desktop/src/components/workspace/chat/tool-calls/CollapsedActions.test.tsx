@@ -25,6 +25,7 @@ describe("CollapsedActions", () => {
     expect(html).not.toContain("max-h-80");
     expect(html).not.toContain("max-h-[7.5rem]");
     expect(html).not.toContain("overflow-y-auto overflow-x-hidden");
+    expect(html).toContain("flex flex-col gap-0");
   });
 
   it("keeps compact scrolling for expanded non-edit action ledgers", () => {
