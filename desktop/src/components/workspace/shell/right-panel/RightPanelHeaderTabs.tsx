@@ -2,46 +2,36 @@ import {
   useCallback,
   useRef,
   useState,
-  type ComponentType,
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { Button } from "@/components/ui/Button";
+import type { TerminalRecord } from "@anyharness/sdk";
 import { IconButton } from "@/components/ui/IconButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import { Tooltip } from "@/components/ui/Tooltip";
 import {
-  FileIcon,
-  GitBranchIcon,
   Plus,
   Settings,
-  CloudIcon,
   Terminal as TerminalIcon,
-  type IconProps,
+  Globe,
 } from "@/components/ui/icons";
 import {
+  browserTabTitle,
+  type RightPanelBrowserTab,
   type RightPanelHeaderEntryKey,
   type RightPanelTool,
 } from "@/lib/domain/workspaces/right-panel";
+import { ToolHeaderButton } from "@/components/workspace/shell/right-panel/ToolHeaderButton";
+import { TerminalHeaderButton } from "@/components/workspace/shell/right-panel/TerminalHeaderButton";
+import { BrowserHeaderButton } from "@/components/workspace/shell/right-panel/BrowserHeaderButton";
 
-interface PanelToolConfig {
-  id: RightPanelTool;
-  label: string;
-  icon: ComponentType<IconProps>;
-}
-
-const PANEL_TOOLS: Record<RightPanelTool, PanelToolConfig> = {
-  files: { id: "files", label: "Files", icon: FileIcon },
-  git: { id: "git", label: "Git", icon: GitBranchIcon },
-  settings: { id: "settings", label: "Cloud environment", icon: CloudIcon },
-  terminal: { id: "terminal", label: "Terminal", icon: TerminalIcon },
-};
-
-const HEADER_STABLE_TAB_CLASS = "ui-tab-system-tab";
 const HEADER_DRAG_THRESHOLD_PX = 4;
 
-export type HeaderEntry = { kind: "tool"; key: RightPanelHeaderEntryKey; tool: RightPanelTool };
+export type HeaderEntry =
+  | { kind: "tool"; key: RightPanelHeaderEntryKey; tool: RightPanelTool }
+  | { kind: "terminal"; key: RightPanelHeaderEntryKey; terminalId: string; terminal: TerminalRecord | null }
+  | { kind: "browser"; key: RightPanelHeaderEntryKey; tab: RightPanelBrowserTab };
 
 interface HeaderDragSession {
   key: RightPanelHeaderEntryKey;
@@ -60,11 +50,18 @@ interface HeaderDragPreview {
 
 interface RightPanelHeaderTabsProps {
   entries: readonly HeaderEntry[];
-  activeTool: RightPanelTool;
-  hasTerminalUnread: boolean;
+  activeEntryKey: RightPanelHeaderEntryKey;
+  unreadByTerminal: Record<string, boolean>;
   isWorkspaceReady: boolean;
+  canCreateBrowserTab: boolean;
   onActivateTool: (tool: RightPanelTool) => void;
+  onSelectTerminal: (terminalId: string) => void;
+  onSelectBrowser: (browserId: string) => void;
+  onCloseTerminal: (terminalId: string) => void;
+  onCloseBrowser: (browserId: string) => void;
+  onRenameTerminal: (terminalId: string, title: string) => Promise<void>;
   onCreateTerminal: () => void;
+  onCreateBrowser: () => void;
   onOpenRepoSettings: () => void;
   onReorderHeaderEntry: (
     entryKey: RightPanelHeaderEntryKey,
@@ -74,11 +71,18 @@ interface RightPanelHeaderTabsProps {
 
 export function RightPanelHeaderTabs({
   entries,
-  activeTool,
-  hasTerminalUnread,
+  activeEntryKey,
+  unreadByTerminal,
   isWorkspaceReady,
+  canCreateBrowserTab,
   onActivateTool,
+  onSelectTerminal,
+  onSelectBrowser,
+  onCloseTerminal,
+  onCloseBrowser,
+  onRenameTerminal,
   onCreateTerminal,
+  onCreateBrowser,
   onOpenRepoSettings,
   onReorderHeaderEntry,
 }: RightPanelHeaderTabsProps) {
@@ -228,9 +232,81 @@ export function RightPanelHeaderTabs({
             >
               <div className="ui-tab-system-tabs__section" data-tab-section="workspace">
                 {entries.map((entry) => {
-                  const panelTool = PANEL_TOOLS[entry.tool];
-                  const Icon = panelTool.icon;
-                  const isActive = activeTool === entry.tool;
+                  if (entry.kind === "tool") {
+                    const isActive = activeEntryKey === entry.key;
+                    const isEntryDragging = headerDragPreview?.key === entry.key;
+                    return (
+                      <RightPanelHeaderEntryDropZone
+                        key={entry.key}
+                        entryKey={entry.key}
+                        isDragging={isEntryDragging}
+                        dragOffsetX={isEntryDragging ? headerDragPreview.offsetX : 0}
+                        showDropIndicator={headerDragPreview?.beforeKey === entry.key}
+                        onRegister={registerHeaderEntryNode}
+                        onPointerDown={handleHeaderPointerDown}
+                        onPointerMove={handleHeaderPointerMove}
+                        onPointerUp={finishHeaderPointerDrag}
+                        onPointerCancel={cancelHeaderPointerDrag}
+                      >
+                        <ToolHeaderButton
+                          tool={entry.tool}
+                          isActive={isActive}
+                          isDragging={draggedHeaderKey === entry.key}
+                          shouldSuppressClick={shouldSuppressHeaderClick}
+                          onSelect={() => onActivateTool(entry.tool)}
+                        />
+                      </RightPanelHeaderEntryDropZone>
+                    );
+                  }
+
+                  if (entry.kind === "terminal") {
+                    const terminalIndex = entries
+                      .filter((candidate) => candidate.kind === "terminal")
+                      .findIndex((candidate) =>
+                        candidate.kind === "terminal" && candidate.terminalId === entry.terminalId
+                      );
+                    const isActive = activeEntryKey === entry.key;
+                    const fallbackTitle = `Terminal ${terminalIndex + 1}`;
+                    const displayTitle = entry.terminal?.title === "Terminal"
+                      ? fallbackTitle
+                      : entry.terminal?.title ?? fallbackTitle;
+                    const isEntryDragging = headerDragPreview?.key === entry.key;
+                    return (
+                      <RightPanelHeaderEntryDropZone
+                        key={entry.key}
+                        entryKey={entry.key}
+                        isDragging={isEntryDragging}
+                        dragOffsetX={isEntryDragging ? headerDragPreview.offsetX : 0}
+                        showDropIndicator={headerDragPreview?.beforeKey === entry.key}
+                        onRegister={registerHeaderEntryNode}
+                        onPointerDown={handleHeaderPointerDown}
+                        onPointerMove={handleHeaderPointerMove}
+                        onPointerUp={finishHeaderPointerDrag}
+                        onPointerCancel={cancelHeaderPointerDrag}
+                      >
+                        <TerminalHeaderButton
+                          terminalId={entry.terminalId}
+                          terminal={entry.terminal}
+                          displayTitle={displayTitle}
+                          isActive={isActive}
+                          unread={unreadByTerminal[entry.terminalId] === true}
+                          isRuntimeReady={isWorkspaceReady && Boolean(entry.terminal)}
+                          isDragging={draggedHeaderKey === entry.key}
+                          shouldSuppressClick={shouldSuppressHeaderClick}
+                          onSelect={() => onSelectTerminal(entry.terminalId)}
+                          onClose={() => onCloseTerminal(entry.terminalId)}
+                          onRename={(title) => onRenameTerminal(entry.terminalId, title)}
+                        />
+                      </RightPanelHeaderEntryDropZone>
+                    );
+                  }
+
+                  const browserIndex = entries
+                    .filter((candidate) => candidate.kind === "browser")
+                    .findIndex((candidate) =>
+                      candidate.kind === "browser" && candidate.tab.id === entry.tab.id
+                    );
+                  const isActive = activeEntryKey === entry.key;
                   const isEntryDragging = headerDragPreview?.key === entry.key;
                   return (
                     <RightPanelHeaderEntryDropZone
@@ -245,42 +321,15 @@ export function RightPanelHeaderTabs({
                       onPointerUp={finishHeaderPointerDrag}
                       onPointerCancel={cancelHeaderPointerDrag}
                     >
-                      <Tooltip
-                        content={panelTool.label}
-                        className="right-panel-tab-tooltip"
-                      >
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          role="tab"
-                          aria-selected={isActive}
-                          aria-controls={`tabpanel-workspace-right-panel-${entry.tool}`}
-                          tabIndex={isActive ? 0 : -1}
-                          data-reorderable="true"
-                          data-stable="true"
-                          data-active={isActive ? true : undefined}
-                          data-app-active={isActive ? true : undefined}
-                          aria-grabbed={draggedHeaderKey === entry.key}
-                          aria-label={panelTool.label}
-                          onClick={() => {
-                            if (shouldSuppressHeaderClick()) {
-                              return;
-                            }
-                            onActivateTool(entry.tool);
-                          }}
-                          className={HEADER_STABLE_TAB_CLASS}
-                        >
-                          <span className="ui-tab-system-tab__content">
-                            <Icon className="ui-tab-system-tab__icon" />
-                            <span
-                              className="ui-tab-system-tab__dirty-indicator"
-                              data-dirty={entry.tool === "terminal" && hasTerminalUnread ? true : undefined}
-                              aria-hidden="true"
-                            />
-                          </span>
-                        </Button>
-                      </Tooltip>
+                      <BrowserHeaderButton
+                        browserId={entry.tab.id}
+                        displayTitle={browserTabTitle(entry.tab, browserIndex)}
+                        isActive={isActive}
+                        isDragging={draggedHeaderKey === entry.key}
+                        shouldSuppressClick={shouldSuppressHeaderClick}
+                        onSelect={() => onSelectBrowser(entry.tab.id)}
+                        onClose={() => onCloseBrowser(entry.tab.id)}
+                      />
                     </RightPanelHeaderEntryDropZone>
                   );
                 })}
@@ -334,16 +383,28 @@ export function RightPanelHeaderTabs({
                 className="w-40 rounded-md border border-border bg-popover p-1 shadow-floating"
               >
                 {(close) => (
-                  <PopoverMenuItem
-                    label="Terminal"
-                    variant="sidebar"
-                    icon={<TerminalIcon className="size-4" />}
-                    disabled={!isWorkspaceReady}
-                    onClick={() => {
-                      close();
-                      onCreateTerminal();
-                    }}
-                  />
+                  <>
+                    <PopoverMenuItem
+                      label="Terminal"
+                      variant="sidebar"
+                      icon={<TerminalIcon className="size-4" />}
+                      disabled={!isWorkspaceReady}
+                      onClick={() => {
+                        close();
+                        onCreateTerminal();
+                      }}
+                    />
+                    <PopoverMenuItem
+                      label="Browser"
+                      variant="sidebar"
+                      icon={<Globe className="size-4" />}
+                      disabled={!isWorkspaceReady || !canCreateBrowserTab}
+                      onClick={() => {
+                        close();
+                        onCreateBrowser();
+                      }}
+                    />
+                  </>
                 )}
               </PopoverButton>
             </Tooltip>

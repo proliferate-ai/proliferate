@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
 
 export interface CommandPaletteCloseOptions {
   restoreFocus?: boolean;
@@ -50,6 +51,7 @@ export function CommandPaletteRoot({
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const restoreFocusRef = useRef(true);
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  useNativeOverlayRegistration(open);
 
   const close = useCallback((options?: CommandPaletteCloseOptions) => {
     restoreFocusRef.current = options?.restoreFocus ?? true;

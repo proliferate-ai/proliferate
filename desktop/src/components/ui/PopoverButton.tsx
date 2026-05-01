@@ -11,6 +11,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
+import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
 
 type PopoverAlign = "start" | "end";
 type PopoverSide = "bottom" | "top" | "right" | "left";
@@ -62,6 +63,7 @@ export function PopoverButton({
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<Record<string, number>>({});
   const triggerRef = useRef<HTMLElement>(null);
+  useNativeOverlayRegistration(open);
 
   const setOpenAndNotify = useCallback((next: boolean) => {
     setOpen(next);

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { CHAT_MODEL_SELECTOR_LABELS } from "@/config/chat";
 import type {
@@ -15,6 +16,7 @@ import {
   Search,
 } from "@/components/ui/icons";
 import { useModelSelectorMenu } from "@/hooks/chat/use-model-selector-menu";
+import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
 import { ComposerControlButton } from "./ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 
@@ -42,8 +44,16 @@ export function ModelSelector({
     openSetupAgent,
     closeSetupAgent,
   } = useModelSelectorMenu({ groups });
+  const selectorEnabled = connectionState === "healthy" && !isLoading && hasAgents;
+  useNativeOverlayRegistration(selectorEnabled && open && menuPos !== null);
 
-  if (connectionState !== "healthy" || isLoading || !hasAgents) {
+  useEffect(() => {
+    if (!selectorEnabled && open) {
+      handleClose();
+    }
+  }, [handleClose, open, selectorEnabled]);
+
+  if (!selectorEnabled) {
     return (
       <ComposerControlButton
         disabled
