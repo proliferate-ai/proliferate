@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import { AgentGlyph, ChevronDown, ProliferateIcon } from "@/components/ui/icons";
+import { AgentGlyph, ChevronDown } from "@/components/ui/icons";
 import { useSubagentComposerStrip } from "@/hooks/chat/subagents/use-subagent-composer-strip";
 import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
 import { ComposerPopoverSurface } from "@/components/workspace/chat/input/ComposerPopoverSurface";
@@ -84,7 +84,6 @@ export function SubagentComposerControl({
       className="w-auto border-0 bg-transparent p-0 shadow-none"
       trigger={(
         <ComposerControlButton
-          icon={<ProliferateIcon className="size-4" />}
           label={summary.label}
           detail={summary.detail}
           trailing={<ChevronDown className="size-3 text-[color:var(--color-composer-control-muted-foreground)]" />}

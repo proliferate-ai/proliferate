@@ -79,7 +79,6 @@ function ConnectedComposerReviewRunSurface({ panel = false }: { panel?: boolean 
     const control = (
       <ReviewComposerControl
         summary={summaryForRun(run)}
-        icon={iconForRun(run)}
         active={run.status !== "passed" && run.status !== "stopped"}
       >
         {(close) => (
@@ -131,7 +130,6 @@ function ConnectedComposerReviewRunSurface({ panel = false }: { panel?: boolean 
     const control = (
       <ReviewComposerControl
         summary={summaryForStartingReview(startingReview)}
-        icon={iconForStartingReview(startingReview)}
         active
       >
         {() => <StartingReviewPopoverContent startingReview={startingReview} />}
@@ -506,28 +504,6 @@ function summaryForStartingReview(startingReview: StartingReviewState): ReviewCo
     label: `${reviewerCount} ${reviewerCount === 1 ? "agent" : "agents"} reviewing ${startingReview.kind === "plan" ? "plan" : "code"}`,
     detail: `${reviewKindLabel(startingReview.kind)} · round 1/${startingReview.maxRounds}`,
   };
-}
-
-function iconForRun(run: ReviewRunDetail): ReactNode {
-  const assignment = latestReviewRound(run)?.assignments[0] ?? null;
-  return (
-    <AgentGlyph
-      agentKind={assignment?.agentKind ?? "codex"}
-      color={resolveSubagentColor(assignment?.sessionLinkId ?? assignment?.id ?? run.id)}
-      className="size-4"
-    />
-  );
-}
-
-function iconForStartingReview(startingReview: StartingReviewState): ReactNode {
-  const reviewer = startingReview.reviewers[0] ?? null;
-  return (
-    <AgentGlyph
-      agentKind={reviewer?.agentKind ?? "codex"}
-      color={resolveSubagentColor(reviewer?.id ?? startingReview.parentSessionId)}
-      className="size-4"
-    />
-  );
 }
 
 function composerAssignmentStatusLabel(assignment: ReviewAssignmentDetail): string {

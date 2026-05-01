@@ -537,13 +537,6 @@ function PlaygroundDelegationStack() {
           label: "2 review agents reviewing code",
           detail: "Code review · 1/2",
         }}
-        icon={(
-          <AgentGlyph
-            agentKind="codex"
-            color={resolveSubagentColor("review-link-security")}
-            className="size-4"
-          />
-        )}
         active
       >
         {() => (
