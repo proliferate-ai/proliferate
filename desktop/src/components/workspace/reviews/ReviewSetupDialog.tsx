@@ -10,6 +10,7 @@ import {
 } from "@/lib/domain/reviews/review-config";
 import { Button } from "@/components/ui/Button";
 import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
+import { Plus } from "@/components/ui/icons";
 import type { ReviewSetupAnchorRect } from "@/stores/reviews/review-ui-store";
 import { ReviewSetupLoopControls } from "./ReviewSetupLoopControls";
 import { ReviewSetupReviewerList } from "./ReviewSetupReviewerList";
@@ -54,6 +55,7 @@ export function ReviewSetupDialog({
   const maxRounds = draft?.maxRounds ?? 1;
   const estimatedSessions = reviewerCount * maxRounds;
   const isSubmitDisabled = !draft || reviewerCount === 0 || hasInvalidReviewer;
+  const canAddReviewer = !!sessionDefaults && reviewerCount < MAX_REVIEWERS_PER_RUN;
   const templates = draft ? personalityTemplates : [];
   const popoverLayout = resolvePopoverLayout(anchorRect);
 
@@ -154,21 +156,32 @@ export function ReviewSetupDialog({
                 modelGroups={modelGroups}
                 personalityTemplates={templates}
                 modelsLoading={modelsLoading}
-                canAddReviewer={!!sessionDefaults && draft.reviewers.length < MAX_REVIEWERS_PER_RUN}
-                onAddReviewer={handleAddReviewer}
                 onDraftChange={onDraftChange}
                 onRemoveReviewer={handleRemoveReviewer}
                 onManagePersonalities={onManagePersonalities}
               />
             </div>
 
-            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-3 py-3">
-              <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
-                Cancel
+            <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/60 px-3 py-3">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={!canAddReviewer || isSubmitting}
+                onClick={handleAddReviewer}
+                className="h-8 px-2"
+              >
+                <Plus className="size-3.5" />
+                Add
               </Button>
-              <Button type="submit" loading={isSubmitting} disabled={isSubmitDisabled}>
-                Start review
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+                <Button type="submit" loading={isSubmitting} disabled={isSubmitDisabled}>
+                  Start review
+                </Button>
+              </div>
             </div>
           </form>
         )}

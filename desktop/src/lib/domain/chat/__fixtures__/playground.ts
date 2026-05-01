@@ -748,6 +748,165 @@ export const PLAYGROUND_SUBAGENT_WAKE_QUEUE: PendingPromptQueueEntry[] = [{
   },
 }];
 
+export type PlaygroundReviewComposerStatus =
+  | "Starting"
+  | "Reviewing"
+  | "Requests changes"
+  | "Approved"
+  | "Failed";
+
+export interface PlaygroundReviewComposerRow {
+  id: string;
+  label: string;
+  detail: string | null;
+  status: PlaygroundReviewComposerStatus;
+  hasCritique: boolean;
+}
+
+export interface PlaygroundReviewComposerState {
+  summary: {
+    label: string;
+    detail: string | null;
+    active: boolean;
+  };
+  rows: PlaygroundReviewComposerRow[];
+  deliveryLabel: string | null;
+  actionLabel: string | null;
+}
+
+export const PLAYGROUND_REVIEW_COMPOSER_STATES: Record<string, PlaygroundReviewComposerState> = {
+  "subagents-review-starting-plan": {
+    summary: {
+      label: "3 agents reviewing plan",
+      detail: "Plan review · round 1/2",
+      active: true,
+    },
+    rows: [
+      { id: "architecture", label: "Architecture reviewer", detail: null, status: "Starting", hasCritique: false },
+      { id: "ux", label: "UX reviewer", detail: null, status: "Starting", hasCritique: false },
+      { id: "risk", label: "Risk reviewer", detail: null, status: "Starting", hasCritique: false },
+    ],
+    deliveryLabel: null,
+    actionLabel: null,
+  },
+  "subagents-review-starting-code": {
+    summary: {
+      label: "2 agents reviewing code",
+      detail: "Code review · round 1/2",
+      active: true,
+    },
+    rows: [
+      { id: "correctness", label: "Correctness reviewer", detail: null, status: "Starting", hasCritique: false },
+      { id: "product", label: "Product reviewer", detail: null, status: "Starting", hasCritique: false },
+    ],
+    deliveryLabel: null,
+    actionLabel: null,
+  },
+  "subagents-reviewing-plan": {
+    summary: {
+      label: "3 agents reviewing plan",
+      detail: "Plan review · 1/3",
+      active: true,
+    },
+    rows: [
+      { id: "architecture", label: "Architecture reviewer", detail: null, status: "Reviewing", hasCritique: false },
+      {
+        id: "ux",
+        label: "UX reviewer",
+        detail: "Navigation state needs a single selected-workspace owner.",
+        status: "Requests changes",
+        hasCritique: true,
+      },
+      { id: "risk", label: "Risk reviewer", detail: null, status: "Reviewing", hasCritique: false },
+    ],
+    deliveryLabel: null,
+    actionLabel: null,
+  },
+  "subagents-reviewing-code": {
+    summary: {
+      label: "2 review agents reviewing code",
+      detail: "Code review · 1/2",
+      active: true,
+    },
+    rows: [
+      { id: "security", label: "Security reviewer", detail: null, status: "Reviewing", hasCritique: false },
+      {
+        id: "ux",
+        label: "UX reviewer",
+        detail: "Approval copy should not compete with the composer controls.",
+        status: "Requests changes",
+        hasCritique: true,
+      },
+    ],
+    deliveryLabel: null,
+    actionLabel: null,
+  },
+  "subagents-review-feedback-ready": {
+    summary: {
+      label: "3 agents critiqued plan",
+      detail: "Feedback ready · 3/3",
+      active: true,
+    },
+    rows: [
+      {
+        id: "architecture",
+        label: "Architecture reviewer",
+        detail: "Plan needs a clearer state owner before implementation.",
+        status: "Requests changes",
+        hasCritique: true,
+      },
+      {
+        id: "ux",
+        label: "UX reviewer",
+        detail: "Reduce duplicate review controls in the composer.",
+        status: "Requests changes",
+        hasCritique: true,
+      },
+      {
+        id: "risk",
+        label: "Risk reviewer",
+        detail: "No blocking workflow risk found.",
+        status: "Approved",
+        hasCritique: true,
+      },
+    ],
+    deliveryLabel: "Feedback is ready to send back to the parent agent.",
+    actionLabel: "Send feedback",
+  },
+  "subagents-review-complete": {
+    summary: {
+      label: "3 agents approved plan",
+      detail: "Passed · 3/3",
+      active: false,
+    },
+    rows: [
+      {
+        id: "architecture",
+        label: "Architecture reviewer",
+        detail: "State ownership is clear.",
+        status: "Approved",
+        hasCritique: true,
+      },
+      {
+        id: "ux",
+        label: "UX reviewer",
+        detail: "Composer flow is ready.",
+        status: "Approved",
+        hasCritique: true,
+      },
+      {
+        id: "risk",
+        label: "Risk reviewer",
+        detail: "No blocking workflow risk found.",
+        status: "Approved",
+        hasCritique: true,
+      },
+    ],
+    deliveryLabel: "All reviewers approved the latest revision.",
+    actionLabel: "Dismiss",
+  },
+};
+
 export const PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT: TranscriptState = {
   sessionMeta: {
     sessionId: "playground-subagent-wake",

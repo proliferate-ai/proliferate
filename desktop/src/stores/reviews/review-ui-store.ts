@@ -46,36 +46,36 @@ interface ReviewUiState {
   setup: ReviewSetupState | null;
   critiqueTarget: ReviewCritiqueTarget | null;
   startingReview: StartingReviewState | null;
-  dismissedTerminalRunIds: string[];
+  dismissedTerminalNoticeRunIds: string[];
   openSetup: (target: ReviewSetupTarget, anchorRect?: ReviewSetupAnchorRect | null) => void;
   closeSetup: () => void;
   beginStartingReview: (startingReview: StartingReviewState) => void;
   clearStartingReview: () => void;
   openCritique: (target: ReviewCritiqueTarget) => void;
   closeCritique: () => void;
-  dismissTerminalRun: (runId: string) => void;
+  dismissTerminalNotice: (runId: string) => void;
 }
 
-const DISMISSED_TERMINAL_RUN_LIMIT = 50;
+const DISMISSED_TERMINAL_NOTICE_RUN_LIMIT = 50;
 
 export const useReviewUiStore = create<ReviewUiState>((set) => ({
   setup: null,
   critiqueTarget: null,
   startingReview: null,
-  dismissedTerminalRunIds: [],
+  dismissedTerminalNoticeRunIds: [],
   openSetup: (target, anchorRect = null) => set({ setup: { target, anchorRect } }),
   closeSetup: () => set({ setup: null }),
   beginStartingReview: (startingReview) => set({ startingReview }),
   clearStartingReview: () => set({ startingReview: null }),
   openCritique: (target) => set({ critiqueTarget: target }),
   closeCritique: () => set({ critiqueTarget: null }),
-  // Dismissal is intentionally app-lifetime-only; terminal review cards can
+  // Dismissal is intentionally app-lifetime-only; terminal review notices can
   // reappear after reload because the authoritative run state stays on the server.
-  dismissTerminalRun: (runId) =>
+  dismissTerminalNotice: (runId) =>
     set((state) => ({
-      dismissedTerminalRunIds: [
+      dismissedTerminalNoticeRunIds: [
         runId,
-        ...state.dismissedTerminalRunIds.filter((id) => id !== runId),
-      ].slice(0, DISMISSED_TERMINAL_RUN_LIMIT),
+        ...state.dismissedTerminalNoticeRunIds.filter((id) => id !== runId),
+      ].slice(0, DISMISSED_TERMINAL_NOTICE_RUN_LIMIT),
     })),
 }));

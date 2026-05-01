@@ -1,11 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import type { ReviewAssignmentDetail, ReviewRunDetail } from "@anyharness/sdk";
-import { getProviderDisplayName } from "@/config/providers";
 import { Button } from "@/components/ui/Button";
 import {
-  AgentGlyph,
-  CheckCircleFilled,
-  CircleAlert,
   FileText,
   RefreshCw,
   StopSquare,
@@ -18,9 +14,8 @@ import {
 } from "@/components/workspace/chat/input/ReviewComposerControl";
 import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
 import { useReviewActions } from "@/hooks/reviews/use-review-actions";
-import { useSessionSelectionActions } from "@/hooks/sessions/use-session-selection-actions";
-import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
 import {
+  isReviewRunBlocking,
   latestReviewRound,
   reviewAssignmentStatusLabel,
   reviewFeedbackDeliveryLabel,
@@ -34,7 +29,6 @@ import {
   type StartingReviewState,
   useReviewUiStore,
 } from "@/stores/reviews/review-ui-store";
-import { useToastStore } from "@/stores/toast/toast-store";
 
 export function ConnectedComposerReviewRunPanel() {
   return <ConnectedComposerReviewRunSurface panel />;
@@ -47,14 +41,16 @@ export function ConnectedComposerReviewRunControl() {
 function ConnectedComposerReviewRunSurface({ panel = false }: { panel?: boolean }) {
   const { run, startingReview } = useActiveReviewRun();
   const actions = useReviewActions();
-  const { selectSession } = useSessionSelectionActions();
   const openCritique = useReviewUiStore((state) => state.openCritique);
-  const dismissTerminalRun = useReviewUiStore((state) => state.dismissTerminalRun);
+  const dismissTerminalNotice = useReviewUiStore((state) => state.dismissTerminalNotice);
   const clearStartingReview = useReviewUiStore((state) => state.clearStartingReview);
-  const showToast = useToastStore((state) => state.show);
 
   useEffect(() => {
-    if (run && startingReview?.parentSessionId === run.parentSessionId) {
+    if (
+      run
+      && startingReview?.parentSessionId === run.parentSessionId
+      && isReviewRunBlocking(run)
+    ) {
       clearStartingReview();
     }
   }, [clearStartingReview, run, startingReview?.parentSessionId]);
@@ -69,13 +65,8 @@ function ConnectedComposerReviewRunSurface({ panel = false }: { panel?: boolean 
       personaLabel: assignment.personaLabel,
     });
   };
-  const handleOpenReviewerSession = (sessionId: string) => {
-    void selectSession(sessionId).catch((error) => {
-      showToast(`Failed to open reviewer session: ${errorMessage(error)}`);
-    });
-  };
 
-  if (run) {
+  if (run && (!startingReview || isReviewRunBlocking(run))) {
     const control = (
       <ReviewComposerControl
         summary={summaryForRun(run)}
@@ -104,15 +95,11 @@ function ConnectedComposerReviewRunSurface({ panel = false }: { panel?: boolean 
               handleOpenCritique(assignment);
               close();
             }}
-            onOpenReviewerSession={(sessionId) => {
-              handleOpenReviewerSession(sessionId);
-              close();
-            }}
             onRetryAssignment={(assignmentId) => {
               actions.retryReviewAssignment(run.id, assignmentId);
             }}
             onDismiss={() => {
-              dismissTerminalRun(run.id);
+              dismissTerminalNotice(run.id);
               close();
             }}
             isStopping={actions.isStoppingReview}
@@ -154,7 +141,6 @@ function RunReviewPopoverContent({
   onReviewRevision,
   onFinishReview,
   onOpenCritique,
-  onOpenReviewerSession,
   onRetryAssignment,
   onDismiss,
   isStopping,
@@ -168,7 +154,6 @@ function RunReviewPopoverContent({
   onReviewRevision: () => void;
   onFinishReview: () => void;
   onOpenCritique: (assignment: ReviewAssignmentDetail) => void;
-  onOpenReviewerSession: (sessionId: string) => void;
   onRetryAssignment: (assignmentId: string) => void;
   onDismiss: () => void;
   isStopping: boolean;
@@ -176,7 +161,6 @@ function RunReviewPopoverContent({
   isReviewingRevision: boolean;
   isRetryingAssignment: boolean;
 }) {
-  const summary = summaryForRun(run);
   const round = latestReviewRound(run);
   const deliveryLabel = round?.feedbackDelivery
     ? reviewFeedbackDeliveryLabel(round.feedbackDelivery)
@@ -192,20 +176,12 @@ function RunReviewPopoverContent({
 
   return (
     <>
-      <div className="border-b border-border px-3 py-2">
-        <div className="text-sm font-medium text-foreground">{summary.label}</div>
-        {summary.detail && (
-          <div className="text-xs text-muted-foreground">{summary.detail}</div>
-        )}
-      </div>
-
       <div className="max-h-80 overflow-y-auto p-1">
         {round?.assignments.map((assignment) => (
           <ReviewAssignmentPopoverRow
             key={assignment.id}
             assignment={assignment}
             onOpenCritique={() => onOpenCritique(assignment)}
-            onOpenReviewerSession={onOpenReviewerSession}
             onRetryAssignment={() => onRetryAssignment(assignment.id)}
             isRetrying={isRetryingAssignment}
           />
@@ -292,42 +268,35 @@ function RunReviewPopoverContent({
 function ReviewAssignmentPopoverRow({
   assignment,
   onOpenCritique,
-  onOpenReviewerSession,
   onRetryAssignment,
   isRetrying,
 }: {
   assignment: ReviewAssignmentDetail;
   onOpenCritique: () => void;
-  onOpenReviewerSession: (sessionId: string) => void;
   onRetryAssignment: () => void;
   isRetrying: boolean;
 }) {
-  const color = resolveSubagentColor(assignment.sessionLinkId ?? assignment.id);
-  const secondaryText = assignmentSecondaryText(assignment) ?? formatAssignmentHarness(assignment);
-  const canOpenSession = !!assignment.reviewerSessionId;
+  const secondaryText = assignmentSecondaryText(assignment);
   const canRetry = assignment.status === "retryable_failed"
     && assignment.failureReason === "provider_rate_limit";
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
-      {canOpenSession ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-auto min-w-0 justify-start gap-2 rounded-lg px-2 py-2 text-left"
-          title={`Open ${assignment.personaLabel} session`}
-          onClick={() => onOpenReviewerSession(assignment.reviewerSessionId!)}
-        >
-          <AgentGlyph agentKind={assignment.agentKind} color={color} className="size-5 shrink-0" />
-          <AssignmentRowText assignment={assignment} secondaryText={secondaryText} />
-        </Button>
-      ) : (
-        <div className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left">
-          <AgentGlyph agentKind={assignment.agentKind} color={color} className="size-5 shrink-0" />
-          <AssignmentRowText assignment={assignment} secondaryText={secondaryText} />
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-lg px-2 py-2 text-left">
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="block min-w-0 truncate text-sm font-medium text-foreground">
+            {assignment.personaLabel}
+          </span>
+          <span className={`shrink-0 text-xs ${assignmentStatusClassName(assignment)}`}>
+            {composerAssignmentStatusLabel(assignment)}
+          </span>
         </div>
-      )}
+        {secondaryText && (
+          <div className="truncate text-xs text-muted-foreground">
+            {secondaryText}
+          </div>
+        )}
+      </div>
       {canRetry ? (
         <Button
           type="button"
@@ -338,7 +307,7 @@ function ReviewAssignmentPopoverRow({
           className="px-2.5 text-sm"
         >
           <RefreshCw className="size-3.5" />
-          Retry with Opus 4.6
+          Retry reviewer
         </Button>
       ) : assignment.hasCritique && (
         <Button
@@ -357,86 +326,23 @@ function ReviewAssignmentPopoverRow({
   );
 }
 
-function AssignmentRowText({
-  assignment,
-  secondaryText,
-}: {
-  assignment: ReviewAssignmentDetail;
-  secondaryText: string;
-}) {
-  return (
-    <span className="min-w-0 flex-1">
-      <span className="flex min-w-0 items-center gap-1.5">
-        <span className="block min-w-0 truncate text-sm font-medium text-foreground">
-          {assignment.personaLabel}
-        </span>
-        <ComposerAssignmentStatus assignment={assignment} />
-      </span>
-      <span className="block truncate text-xs text-muted-foreground">
-        {secondaryText}
-      </span>
-    </span>
-  );
-}
-
 function StartingReviewPopoverContent({ startingReview }: { startingReview: StartingReviewState }) {
-  const summary = summaryForStartingReview(startingReview);
-
   return (
-    <>
-      <div className="border-b border-border px-3 py-2">
-        <div className="text-sm font-medium text-foreground">{summary.label}</div>
-        {summary.detail && (
-          <div className="text-xs text-muted-foreground">{summary.detail}</div>
-        )}
-      </div>
-      <div className="max-h-80 overflow-y-auto p-1">
-        {startingReview.reviewers.map((reviewer, index) => (
-          <div
-            key={`${reviewer.id}-${index}`}
-            className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-left"
-          >
-            <AgentGlyph
-              agentKind={reviewer.agentKind}
-              color={resolveSubagentColor(`${reviewer.id}-${index}`)}
-              className="size-5 shrink-0"
-            />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium text-foreground">
-                {reviewer.label}
-              </span>
-              <span className="block truncate text-xs text-muted-foreground">
-                {formatReviewerHarness(reviewer)}
-              </span>
-            </span>
-            <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-              <RefreshCw className="size-3.5" />
-              Starting
-            </span>
-          </div>
-        ))}
-      </div>
-    </>
-  );
-}
-
-function ComposerAssignmentStatus({ assignment }: { assignment: ReviewAssignmentDetail }) {
-  return (
-    <span
-      className={`inline-flex shrink-0 items-center gap-1 text-xs ${assignmentStatusClassName(assignment)}`}
-    >
-      {assignment.status === "submitted" && assignment.pass ? (
-        <CheckCircleFilled className="size-3.5" />
-      ) : assignment.status === "submitted"
-        || assignment.status === "system_failed"
-        || assignment.status === "timed_out"
-        || assignment.status === "retryable_failed" ? (
-          <CircleAlert className="size-3.5" />
-        ) : (
-          <RefreshCw className="size-3.5" />
-        )}
-      <span>{composerAssignmentStatusLabel(assignment)}</span>
-    </span>
+    <div className="max-h-80 overflow-y-auto p-1">
+      {startingReview.reviewers.map((reviewer, index) => (
+        <div
+          key={`${reviewer.id}-${index}`}
+          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2 py-2 text-left"
+        >
+          <span className="block min-w-0 truncate text-sm font-medium text-foreground">
+            {reviewer.label}
+          </span>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            Starting
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -508,7 +414,7 @@ function summaryForStartingReview(startingReview: StartingReviewState): ReviewCo
 
 function composerAssignmentStatusLabel(assignment: ReviewAssignmentDetail): string {
   if (assignment.status === "submitted") {
-    return assignment.pass ? "Approved" : "Changes";
+    return assignment.pass ? "Approved" : "Requests changes";
   }
   return reviewAssignmentStatusLabel(assignment);
 }
@@ -524,20 +430,6 @@ function assignmentSecondaryText(assignment: ReviewAssignmentDetail): string | n
     return humanizeFailureReason(assignment.failureReason);
   }
   return null;
-}
-
-function formatAssignmentHarness(assignment: ReviewAssignmentDetail): string {
-  return [getProviderDisplayName(assignment.agentKind), assignment.modelId]
-    .filter(Boolean)
-    .join(" · ");
-}
-
-function formatReviewerHarness(
-  reviewer: StartingReviewState["reviewers"][number],
-): string {
-  return [getProviderDisplayName(reviewer.agentKind), reviewer.modelId]
-    .filter(Boolean)
-    .join(" · ");
 }
 
 function assignmentStatusClassName(assignment: ReviewAssignmentDetail): string {
@@ -557,8 +449,4 @@ function assignmentStatusClassName(assignment: ReviewAssignmentDetail): string {
 
 function humanizeFailureReason(reason: string): string {
   return reason.replaceAll("_", " ");
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

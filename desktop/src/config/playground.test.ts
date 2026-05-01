@@ -13,6 +13,7 @@ import {
 } from "@/components/playground/PlaygroundComposer";
 import {
   FILE_MENTION_SEARCH_RESULTS,
+  PLAYGROUND_REVIEW_COMPOSER_STATES,
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
 } from "@/lib/domain/chat/__fixtures__/playground";
 import { isValidWorkspaceRelativePath } from "@/lib/domain/chat/file-mention-links";
@@ -47,6 +48,12 @@ const DIFF_PLAYGROUND_SCENARIOS: ScenarioKey[] = [
 const SUBAGENT_PLAYGROUND_SCENARIOS: ScenarioKey[] = [
   "subagents-composer-few",
   "subagents-composer-many",
+  "subagents-review-starting-plan",
+  "subagents-review-starting-code",
+  "subagents-reviewing-plan",
+  "subagents-reviewing-code",
+  "subagents-review-feedback-ready",
+  "subagents-review-complete",
   "subagents-queued-wake",
   "subagents-queued-wake-with-approval",
   "subagents-coding-review-with-approval",
@@ -92,6 +99,12 @@ describe("playground scenarios", () => {
     expect(PLAYGROUND_SUBAGENT_STRIP_ROWS.length).toBeGreaterThan(6);
     expect(isValidElement(renderDelegationSlot("subagents-composer-few"))).toBe(true);
     expect(isValidElement(renderDelegationSlot("subagents-composer-many"))).toBe(true);
+    expect(isValidElement(renderDelegationSlot("subagents-review-starting-plan"))).toBe(true);
+    expect(isValidElement(renderDelegationSlot("subagents-review-starting-code"))).toBe(true);
+    expect(isValidElement(renderDelegationSlot("subagents-reviewing-plan"))).toBe(true);
+    expect(isValidElement(renderDelegationSlot("subagents-reviewing-code"))).toBe(true);
+    expect(isValidElement(renderDelegationSlot("subagents-review-feedback-ready"))).toBe(true);
+    expect(isValidElement(renderDelegationSlot("subagents-review-complete"))).toBe(true);
     expect(isValidElement(renderDelegationSlot("subagents-queued-wake"))).toBe(true);
     expect(isValidElement(renderDelegationSlot("subagents-queued-wake-with-approval"))).toBe(true);
     expect(isValidElement(renderDelegationSlot("subagents-coding-review-with-approval"))).toBe(true);
@@ -103,6 +116,22 @@ describe("playground scenarios", () => {
     const subagentComposerHtml = renderToStaticMarkup(renderDelegationSlot("subagents-composer-many"));
     expect(subagentComposerHtml).not.toContain("color-mix");
     expect(subagentComposerHtml).not.toContain("style=");
+
+    const reviewStartingHtml = renderToStaticMarkup(renderDelegationSlot("subagents-review-starting-plan"));
+    expect(reviewStartingHtml).toContain("3 agents reviewing plan");
+    expect(reviewStartingHtml).toContain("Plan review · round 1/2");
+
+    const reviewReadyHtml = renderToStaticMarkup(renderDelegationSlot("subagents-review-feedback-ready"));
+    expect(reviewReadyHtml).toContain("3 agents critiqued plan");
+    expect(reviewReadyHtml).toContain("Feedback ready · 3/3");
+    expect(reviewReadyHtml).not.toMatch(/Codex|Claude|Gemini|gpt-|sonnet|opus|model/i);
+
+    for (const state of Object.values(PLAYGROUND_REVIEW_COMPOSER_STATES)) {
+      for (const row of state.rows) {
+        expect("agentKind" in row).toBe(false);
+        expect(row.detail ?? "").not.toMatch(/Codex|Claude|Gemini|gpt-|sonnet|opus|model/i);
+      }
+    }
   });
 
   it("renders cloud composer context-slot scenarios", () => {

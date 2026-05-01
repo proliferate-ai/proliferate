@@ -76,7 +76,7 @@ export function SettingsMenu({
                   }}
                 >
                   {option.detail && (
-                    <span className="truncate text-xs text-muted-foreground">
+                    <span className="block truncate text-xs text-muted-foreground">
                       {option.detail}
                     </span>
                   )}

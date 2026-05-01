@@ -61,6 +61,12 @@ export type ScenarioKey =
   | "git-diff-panel"
   | "subagents-composer-few"
   | "subagents-composer-many"
+  | "subagents-review-starting-plan"
+  | "subagents-review-starting-code"
+  | "subagents-reviewing-plan"
+  | "subagents-reviewing-code"
+  | "subagents-review-feedback-ready"
+  | "subagents-review-complete"
   | "subagents-queued-wake"
   | "subagents-queued-wake-with-approval"
   | "subagents-coding-review-with-approval"
@@ -141,6 +147,12 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "git-diff-panel": { label: "Git diff panel" },
   "subagents-composer-few": { label: "Subagents composer (3)" },
   "subagents-composer-many": { label: "Subagents composer (10)" },
+  "subagents-review-starting-plan": { label: "Review starting (plan)" },
+  "subagents-review-starting-code": { label: "Review starting (code)" },
+  "subagents-reviewing-plan": { label: "Reviewing plan" },
+  "subagents-reviewing-code": { label: "Reviewing code" },
+  "subagents-review-feedback-ready": { label: "Review feedback ready" },
+  "subagents-review-complete": { label: "Review complete" },
   "subagents-queued-wake": { label: "Subagent queued wake" },
   "subagents-queued-wake-with-approval": { label: "Subagents + wake + approval" },
   "subagents-coding-review-with-approval": { label: "Subagents + coding + review + approval" },
