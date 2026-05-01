@@ -61,6 +61,8 @@ import {
   MCP_ELICITATION_MIXED_REQUIRED,
   MCP_ELICITATION_MULTI_SELECT,
   MCP_ELICITATION_URL,
+  PENDING_REVIEW_COMPLETE,
+  PENDING_REVIEW_FEEDBACK_READY,
   PENDING_PROMPTS_MULTI,
   PENDING_PROMPTS_SINGLE,
   PENDING_PROMPTS_WITH_EDITING,
@@ -76,6 +78,10 @@ import {
   USER_INPUT_SINGLE_FREEFORM,
   USER_INPUT_SINGLE_OPTION,
 } from "@/lib/domain/chat/__fixtures__/playground";
+import {
+  derivePendingPromptQueueRow,
+  type PendingPromptQueueEntry,
+} from "@/lib/domain/chat/pending-prompt-queue";
 
 interface PlaygroundComposerProps {
   dockRef: Ref<HTMLDivElement>;
@@ -616,8 +622,7 @@ export function renderQueueSlot(scenario: ScenarioKey): ReactNode | null {
     case "pending-prompts-with-approval":
       return (
         <PendingPromptList
-          sessionId={null}
-          entries={PENDING_PROMPTS_SINGLE}
+          entries={pendingQueueRows(PENDING_PROMPTS_SINGLE)}
           onBeginEdit={noop}
           onDelete={noop}
         />
@@ -625,8 +630,7 @@ export function renderQueueSlot(scenario: ScenarioKey): ReactNode | null {
     case "pending-prompts-multi":
       return (
         <PendingPromptList
-          sessionId={null}
-          entries={PENDING_PROMPTS_MULTI}
+          entries={pendingQueueRows(PENDING_PROMPTS_MULTI)}
           onBeginEdit={noop}
           onDelete={noop}
         />
@@ -634,8 +638,23 @@ export function renderQueueSlot(scenario: ScenarioKey): ReactNode | null {
     case "pending-prompts-editing":
       return (
         <PendingPromptList
-          sessionId={null}
-          entries={PENDING_PROMPTS_WITH_EDITING}
+          entries={pendingQueueRows(PENDING_PROMPTS_WITH_EDITING)}
+          onBeginEdit={noop}
+          onDelete={noop}
+        />
+      );
+    case "pending-review-feedback-ready":
+      return (
+        <PendingPromptList
+          entries={pendingQueueRows(PENDING_REVIEW_FEEDBACK_READY)}
+          onBeginEdit={noop}
+          onDelete={noop}
+        />
+      );
+    case "pending-review-complete":
+      return (
+        <PendingPromptList
+          entries={pendingQueueRows(PENDING_REVIEW_COMPLETE)}
           onBeginEdit={noop}
           onDelete={noop}
         />
@@ -644,8 +663,7 @@ export function renderQueueSlot(scenario: ScenarioKey): ReactNode | null {
     case "subagents-queued-wake-with-approval":
       return (
         <PendingPromptList
-          sessionId={null}
-          entries={PLAYGROUND_SUBAGENT_WAKE_QUEUE}
+          entries={pendingQueueRows(PLAYGROUND_SUBAGENT_WAKE_QUEUE)}
           onBeginEdit={noop}
           onDelete={noop}
         />
@@ -653,6 +671,10 @@ export function renderQueueSlot(scenario: ScenarioKey): ReactNode | null {
     default:
       return null;
   }
+}
+
+function pendingQueueRows(entries: PendingPromptQueueEntry[]) {
+  return entries.map(derivePendingPromptQueueRow);
 }
 
 function PlaygroundComposerSurface() {
