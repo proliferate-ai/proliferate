@@ -1,5 +1,5 @@
 import type { ChangeEvent } from "react";
-import { EnvironmentField } from "@/components/settings/EnvironmentSettingsLayout";
+import { EnvironmentField } from "@/components/ui/EnvironmentLayout";
 import { Textarea } from "@/components/ui/Textarea";
 
 interface RepoSetupScriptCardProps {

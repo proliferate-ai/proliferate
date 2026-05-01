@@ -5,8 +5,8 @@ import {
   EnvironmentAdvancedDisclosure,
   EnvironmentField,
   EnvironmentSection,
-} from "@/components/settings/EnvironmentSettingsLayout";
-import { EnvironmentSearchSelect } from "@/components/settings/EnvironmentSearchSelect";
+} from "@/components/ui/EnvironmentLayout";
+import { EnvironmentSearchSelect } from "@/components/ui/EnvironmentSearchSelect";
 import { RunCommandHelp } from "@/components/settings/RunCommandHelp";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -15,28 +15,14 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Textarea } from "@/components/ui/Textarea";
 import { useRepositorySettings } from "@/hooks/settings/use-repository-settings";
+import {
+  isSetupHintEnabled,
+  toggleSetupHint,
+} from "@/lib/domain/settings/setup-hints";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 
 interface LocalRepoSectionProps {
   repository: SettingsRepositoryEntry;
-}
-
-function isHintEnabled(script: string, command: string): boolean {
-  return script.split("\n").some(
-    (line) => line.trim() === command.trim(),
-  );
-}
-
-function toggleHint(script: string, command: string, enable: boolean): string {
-  const trimmedCommand = command.trim();
-  if (enable) {
-    const existing = script.trim();
-    return existing ? `${existing}\n${trimmedCommand}` : trimmedCommand;
-  }
-  return script
-    .split("\n")
-    .filter((line) => line.trim() !== trimmedCommand)
-    .join("\n");
 }
 
 function SetupHintRows({
@@ -59,7 +45,7 @@ function SetupHintRows({
       <p className="text-xs font-medium text-muted-foreground">{title}</p>
       <div className="flex flex-col gap-1">
         {hints.map((hint) => {
-          const checked = isHintEnabled(currentScript, hint.suggestedCommand);
+          const checked = isSetupHintEnabled(currentScript, hint.suggestedCommand);
           return (
             <Label
               key={hint.id}
@@ -67,7 +53,7 @@ function SetupHintRows({
             >
               <Checkbox
                 checked={checked}
-                onChange={(event) => onChange(toggleHint(
+                onChange={(event) => onChange(toggleSetupHint(
                   currentScript,
                   hint.suggestedCommand,
                   event.target.checked,
