@@ -347,6 +347,40 @@ describe("sidebar workspace filters", () => {
     expect(groups.map((group) => group.name)).toEqual(["repo-b", "repo-a"]);
   });
 
+  it("ignores type-hidden workspace activity when ordering visible repo groups", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "repo-a-visible",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          updatedAt: "2026-04-13T09:00:00.000Z",
+        }),
+        makeCloudLogicalWorkspace({
+          id: "repo-a-hidden-cloud",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          updatedAt: "2026-04-13T09:00:00.000Z",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "repo-b-visible",
+          repoKey: "/tmp/repo-b",
+          repoName: "repo-b",
+          updatedAt: "2026-04-13T09:00:00.000Z",
+        }),
+      ],
+      workspaceTypes: ["local"],
+      workspaceLastInteracted: {
+        "repo-a-visible": "2026-04-13T10:00:00.000Z",
+        "repo-a-hidden-cloud": "2026-04-13T12:00:00.000Z",
+        "repo-b-visible": "2026-04-13T11:00:00.000Z",
+      },
+    });
+
+    expect(groups.map((group) => group.name)).toEqual(["repo-b", "repo-a"]);
+    expect(groups[1]?.items.map((item) => item.id)).toEqual(["repo-a-visible"]);
+  });
+
   it("force-expands a repo group when the selected logical workspace is past the item cap", () => {
     const groups = buildGroups({
       logicalWorkspaces: Array.from({ length: 7 }, (_, index) =>

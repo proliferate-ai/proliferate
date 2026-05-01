@@ -1131,6 +1131,7 @@ impl SessionEventSink {
         &mut self,
         event: RuntimeInjectedSessionEvent,
     ) -> Result<SessionEventEnvelope, RuntimeEventInjectionError> {
+        let touch_session_activity = event.updates_session_activity_at();
         publish_session_event_strict(
             &self.session_id,
             &mut self.next_seq,
@@ -1139,6 +1140,7 @@ impl SessionEventSink {
             event.into_session_event(),
             None,
             None,
+            touch_session_activity,
         )
     }
 }
@@ -1200,6 +1202,7 @@ pub(crate) fn publish_session_event_strict(
     event: SessionEvent,
     turn_id: Option<String>,
     item_id: Option<String>,
+    touch_session_activity: bool,
 ) -> Result<SessionEventEnvelope, RuntimeEventInjectionError> {
     let seq = *next_seq;
     let timestamp = chrono::Utc::now().to_rfc3339();
@@ -1224,9 +1227,15 @@ pub(crate) fn publish_session_event_strict(
         item_id,
         payload_json,
     };
-    store
-        .append_event(&record)
-        .map_err(|error| RuntimeEventInjectionError::PersistenceFailed(error.to_string()))?;
+    if touch_session_activity {
+        store
+            .append_event_and_touch_session(&record)
+            .map_err(|error| RuntimeEventInjectionError::PersistenceFailed(error.to_string()))?;
+    } else {
+        store
+            .append_event(&record)
+            .map_err(|error| RuntimeEventInjectionError::PersistenceFailed(error.to_string()))?;
+    }
     *next_seq += 1;
     let _ = event_tx.send(envelope.clone());
     Ok(envelope)

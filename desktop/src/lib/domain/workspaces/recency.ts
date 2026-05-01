@@ -59,13 +59,28 @@ export function compareLogicalWorkspaceRecency(
 ): number {
   const leftRecency = resolveLogicalWorkspaceRecency(left, workspaceActivityAt);
   const rightRecency = resolveLogicalWorkspaceRecency(right, workspaceActivityAt);
-  const bySortAt = timestampMs(rightRecency.sortAt) - timestampMs(leftRecency.sortAt);
-  if (bySortAt !== 0) {
-    return bySortAt;
+  return compareResolvedLogicalWorkspaceRecency(leftRecency, rightRecency);
+}
+
+export function compareResolvedLogicalWorkspaceRecency(
+  left: LogicalWorkspaceRecency,
+  right: LogicalWorkspaceRecency,
+): number {
+  const leftHasActivity = left.activityAt !== null;
+  const rightHasActivity = right.activityAt !== null;
+  if (leftHasActivity !== rightHasActivity) {
+    return rightHasActivity ? 1 : -1;
+  }
+
+  const leftPrimaryAt = left.activityAt ?? left.recordUpdatedAt;
+  const rightPrimaryAt = right.activityAt ?? right.recordUpdatedAt;
+  const byPrimaryAt = timestampMs(rightPrimaryAt) - timestampMs(leftPrimaryAt);
+  if (byPrimaryAt !== 0) {
+    return byPrimaryAt;
   }
 
   const byRecordUpdatedAt =
-    timestampMs(rightRecency.recordUpdatedAt) - timestampMs(leftRecency.recordUpdatedAt);
+    timestampMs(right.recordUpdatedAt) - timestampMs(left.recordUpdatedAt);
   if (byRecordUpdatedAt !== 0) {
     return byRecordUpdatedAt;
   }

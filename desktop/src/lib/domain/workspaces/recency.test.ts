@@ -83,4 +83,23 @@ describe("logical workspace recency", () => {
       [olderRecordButNewerWork.id]: "2026-04-13T11:30:00.000Z",
     })).toBeGreaterThan(0);
   });
+
+  it("orders work activity ahead of record-only freshness", () => {
+    const recordOnly = makeLocalLogicalWorkspace({
+      id: "record-only",
+      repoKey: "/tmp/repo-a",
+      repoName: "repo-a",
+      updatedAt: "2026-04-13T12:00:00.000Z",
+    });
+    const activeWork = makeLocalLogicalWorkspace({
+      id: "active-work",
+      repoKey: "/tmp/repo-a",
+      repoName: "repo-a",
+      updatedAt: "2026-04-13T11:00:00.000Z",
+    });
+
+    expect(compareLogicalWorkspaceRecency(recordOnly, activeWork, {
+      [activeWork.id]: "2026-04-13T11:30:00.000Z",
+    })).toBeGreaterThan(0);
+  });
 });
