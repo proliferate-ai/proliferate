@@ -17,8 +17,13 @@ export type MeasurementOperationKind =
   | "workspace_hot_reopen"
   | "session_switch"
   | "session_hot_switch"
+  | "session_history_initial_hydrate"
+  | "session_history_tail_reconcile"
+  | "session_history_older_chunk"
   | "session_stream_sample"
+  | "session_stream_event_batch"
   | "composer_typing"
+  | "workspace_background_reconcile"
   | "transcript_scroll"
   | "file_tree_expand"
   | "file_tree_scroll"
@@ -89,6 +94,7 @@ export type MeasurementWorkflowStep =
   | "session.select.history_hydrate"
   | "session.select.stream_connect"
   | "session.select.stream_connect_scheduled"
+  | "session.history.fetch"
   | "session.history.replay"
   | "session.history.store"
   | "session.history.mount_subagents"
@@ -103,6 +109,21 @@ export type MeasurementWorkflowStep =
   | "session.resume.resolve_target"
   | "session.resume.workspace_get"
   | "session.resume.resolve_mcp";
+
+export type MeasurementStateCountTarget =
+  | "session.history.events_fetched"
+  | "session.history.events_before"
+  | "session.history.events_after"
+  | "session.history.turns_before"
+  | "session.history.turns_after"
+  | "session.history.items_before"
+  | "session.history.items_after"
+  | "session.stream.events_before"
+  | "session.stream.events_after"
+  | "session.stream.turns_before"
+  | "session.stream.turns_after"
+  | "session.stream.items_before"
+  | "session.stream.items_after";
 
 export type MeasurementWorkflowOutcome =
   | "completed"
@@ -169,6 +190,12 @@ export type MeasurementMetricInput =
       outcome?: MeasurementWorkflowOutcome;
     }
   | {
+      type: "state_count";
+      target: MeasurementStateCountTarget;
+      operationId?: MeasurementOperationId;
+      count: number;
+    }
+  | {
       type: "main_thread";
       surface: MeasurementSurface;
       operationId?: MeasurementOperationId;
@@ -176,6 +203,194 @@ export type MeasurementMetricInput =
       durationMs?: number;
       count?: number;
     };
+
+type MeasurementSummaryValue = string | number | boolean | null;
+type MeasurementSummaryRow = Record<string, MeasurementSummaryValue>;
+
+interface MeasurementSummaryPayload {
+  tag: "measurement_summary_json";
+  operationId: MeasurementOperationId;
+  operationKind: MeasurementOperationKind;
+  finishReason: MeasurementFinishReason;
+  durationMs: number;
+  rows: MeasurementSummaryRow[];
+}
+
+interface MeasurementMetricEvent {
+  tag: "measurement_metric";
+  seq: number;
+  timestampMs: number;
+  timeOriginMs: number | null;
+  operationIds: MeasurementOperationId[];
+  metric: MeasurementMetricSnapshot;
+}
+
+interface MeasurementOperationEvent {
+  tag: "measurement_operation";
+  seq: number;
+  timestampMs: number;
+  timeOriginMs: number | null;
+  phase: "start" | "finish";
+  operationId: MeasurementOperationId;
+  operationKind: MeasurementOperationKind;
+  finishReason?: MeasurementFinishReason;
+  durationMs?: number;
+  surfaces: MeasurementSurface[];
+  sampleKey: MeasurementSampleKey | null;
+}
+
+type MeasurementMetricSnapshot =
+  | {
+      type: "request";
+      transport: "anyharness" | "cloud";
+      category: MeasurementTimingCategory;
+      method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+      status: number | "network_error" | "aborted";
+      durationMs: number;
+      runtimeUrlHash: string | null;
+    }
+  | {
+      type: "stream";
+      phase: Extract<MeasurementMetricInput, { type: "stream" }>["phase"];
+      durationMs: number | null;
+      eventCount: number | null;
+      maxInterArrivalGapMs: number | null;
+      malformedEventCount: number | null;
+      runtimeUrlHash: string | null;
+    }
+  | {
+      type: "cache";
+      category: MeasurementTimingCategory;
+      decision: "hit" | "miss" | "stale" | "skipped";
+      source: "react_query" | "workflow";
+    }
+  | {
+      type: "reducer" | "store";
+      category: MeasurementTimingCategory;
+      durationMs: number;
+      count: number | null;
+    }
+  | {
+      type: "workflow";
+      step: MeasurementWorkflowStep;
+      durationMs: number;
+      count: number | null;
+      outcome: MeasurementWorkflowOutcome | null;
+    }
+  | {
+      type: "state_count";
+      target: MeasurementStateCountTarget;
+      count: number;
+    }
+  | {
+      type: "main_thread";
+      surface: MeasurementSurface;
+      metric: "react_commit" | "render_count" | "long_task" | "frame_gap";
+      durationMs: number | null;
+      count: number | null;
+    };
+
+interface MeasurementOperationSnapshot {
+  operationId: MeasurementOperationId;
+  operationKind: MeasurementOperationKind;
+  durationMs: number;
+  surfaces: MeasurementSurface[];
+  sampleKey: MeasurementSampleKey | null;
+  linkedLatencyFlowId: string | null;
+  hasMetrics: boolean;
+  aggregate: MeasurementAggregateSnapshot;
+}
+
+interface MeasurementAggregateSnapshot {
+  requestCount: number;
+  totalRequestMs: number;
+  maxRequestMs: number;
+  streamEventCount: number;
+  streamFirstEventMs: number | null;
+  maxStreamEventGapMs: number;
+  malformedStreamEventCount: number;
+  cacheHitCount: number;
+  cacheMissCount: number;
+  cacheStaleCount: number;
+  cacheSkippedCount: number;
+  reducerApplyCount: number;
+  totalReducerApplyMs: number;
+  maxReducerApplyMs: number;
+  storeApplyCount: number;
+  totalStoreApplyMs: number;
+  maxStoreApplyMs: number;
+  reactCommitCount: number;
+  totalCommitMs: number;
+  maxCommitMs: number;
+  renderCount: number;
+  longTaskCount: number;
+  maxLongTaskMs: number;
+  frameGapCount: number;
+  maxFrameGapMs: number;
+}
+
+interface MeasurementMemorySnapshot {
+  usedJSHeapSize: number | null;
+  totalJSHeapSize: number | null;
+  jsHeapSizeLimit: number | null;
+}
+
+interface MeasurementMemoryEvent extends MeasurementMemorySnapshot {
+  tag: "measurement_memory";
+  seq: number;
+  timestampMs: number;
+  timeOriginMs: number | null;
+  activeOperations: number;
+  recentMetrics: number;
+  recentSummaries: number;
+}
+
+export interface MeasurementDebugDump {
+  tag: "measurement_dump";
+  version: 1;
+  createdAt: string;
+  timestampMs: number;
+  timeOriginMs: number | null;
+  enabled: {
+    mainThread: boolean;
+    anyHarnessTiming: boolean;
+  };
+  longTaskObserverSupported: boolean;
+  memory: MeasurementMemorySnapshot;
+  counts: {
+    activeOperations: number;
+    pendingCommitMarks: number;
+    categoryBindings: number;
+    recentOperationEvents: number;
+    recentMetrics: number;
+    recentMemorySamples: number;
+    recentSummaries: number;
+  };
+  activeOperations: MeasurementOperationSnapshot[];
+  recentOperationEvents: MeasurementOperationEvent[];
+  recentMetrics: MeasurementMetricEvent[];
+  recentMemorySamples: MeasurementMemoryEvent[];
+  recentSummaries: MeasurementSummaryPayload[];
+}
+
+export interface MeasurementDebugStatus {
+  enabled: MeasurementDebugDump["enabled"];
+  counts: MeasurementDebugDump["counts"];
+}
+
+export interface MeasurementDebugApi {
+  dump: () => MeasurementDebugDump;
+  export: (fileName?: string) => MeasurementDebugDump;
+  clear: () => void;
+  status: () => MeasurementDebugStatus;
+}
+
+declare global {
+  interface Window {
+    proliferateDebugMeasurement?: MeasurementDebugApi;
+    __PROLIFERATE_DEBUG_MEASUREMENT__?: MeasurementDebugApi;
+  }
+}
 
 interface DurationAggregate {
   count: number;
@@ -226,6 +441,13 @@ interface MeasurementSurfaceBreakdown {
   maxFrameGapMs: number;
 }
 
+interface MeasurementStateCountBreakdown {
+  target: MeasurementStateCountTarget;
+  samples: number;
+  latestCount: number;
+  maxCount: number;
+}
+
 export interface MeasurementCategoryBindingInput {
   operationId: MeasurementOperationId;
   categories: readonly MeasurementTimingCategory[];
@@ -269,6 +491,7 @@ interface MeasurementOperationAggregate {
   reducerBreakdowns: Map<string, DurationAggregate>;
   storeBreakdowns: Map<string, DurationAggregate>;
   workflowBreakdowns: Map<string, MeasurementWorkflowBreakdown>;
+  stateCountBreakdowns: Map<MeasurementStateCountTarget, MeasurementStateCountBreakdown>;
   surfaceBreakdowns: Map<MeasurementSurface, MeasurementSurfaceBreakdown>;
 }
 
@@ -300,13 +523,25 @@ interface MeasurementCategoryBinding {
 }
 
 const MEASUREMENT_HEADER = "x-proliferate-measurement-operation-id";
+const RECENT_METRIC_LIMIT = 5_000;
+const RECENT_OPERATION_EVENT_LIMIT = 1_000;
+const RECENT_MEMORY_SAMPLE_LIMIT = 1_000;
+const RECENT_SUMMARY_LIMIT = 500;
+const MEMORY_SAMPLE_INTERVAL_MS = 5_000;
 const operations = new Map<MeasurementOperationId, MeasurementOperationRecord>();
 const activeSampleOperations = new Map<string, MeasurementOperationId>();
 const cooldownUntilBySample = new Map<string, number>();
 const pendingCommitMarks = new Map<MeasurementOperationId, Set<MeasurementSurface>>();
 const categoryBindings = new Map<string, MeasurementCategoryBinding>();
+const recentMetrics: MeasurementMetricEvent[] = [];
+const recentOperationEvents: MeasurementOperationEvent[] = [];
+const recentMemorySamples: MeasurementMemoryEvent[] = [];
+const recentSummaries: MeasurementSummaryPayload[] = [];
 let operationSeq = 0;
 let bindingSeq = 0;
+let metricEventSeq = 0;
+let operationEventSeq = 0;
+let memoryEventSeq = 0;
 let longTaskObserverSupported = false;
 
 function envFlagEnabled(value: string | boolean | undefined, defaultValue = false): boolean {
@@ -390,6 +625,7 @@ export function startMeasurementOperation(input: {
   if (sampleMapKey) {
     activeSampleOperations.set(sampleMapKey, id);
   }
+  recordOperationEvent(operation, "start");
   scheduleOperationTimers(operation);
   return id;
 }
@@ -418,6 +654,7 @@ export function finishMeasurementOperation(
   if (!operation) {
     return;
   }
+  recordOperationEvent(operation, "finish", reason);
   cleanupOperation(operation);
   if (operation.hasMetrics) {
     printSummaryRow(operation, reason);
@@ -432,6 +669,7 @@ export function cancelMeasurementOperation(
   if (!operation) {
     return;
   }
+  recordOperationEvent(operation, "finish", reason);
   cleanupOperation(operation);
   if (operation.hasMetrics) {
     printSummaryRow(operation, reason);
@@ -518,6 +756,7 @@ export function recordMeasurementMetric(input: MeasurementMetricInput): void {
     return;
   }
   const operationIds = resolveMetricOperationIds(input);
+  recordMetricEvent(input, operationIds);
   for (const operationId of operationIds) {
     const operation = operations.get(operationId);
     if (!operation) {
@@ -574,9 +813,298 @@ export function resetDebugMeasurementForTest(): void {
   cooldownUntilBySample.clear();
   pendingCommitMarks.clear();
   categoryBindings.clear();
+  clearDebugMeasurementBuffer();
   operationSeq = 0;
   bindingSeq = 0;
+  metricEventSeq = 0;
+  operationEventSeq = 0;
+  memoryEventSeq = 0;
   longTaskObserverSupported = false;
+}
+
+export function getDebugMeasurementDump(): MeasurementDebugDump {
+  return {
+    tag: "measurement_dump",
+    version: 1,
+    createdAt: new Date().toISOString(),
+    timestampMs: Date.now(),
+    timeOriginMs: getTimeOrigin(),
+    enabled: {
+      mainThread: isMainThreadMeasurementEnabled(),
+      anyHarnessTiming: isAnyHarnessTimingEnabled(),
+    },
+    longTaskObserverSupported,
+    memory: getMeasurementMemorySnapshot(),
+    counts: getDebugMeasurementStatus().counts,
+    activeOperations: [...operations.values()].map(operationSnapshot),
+    recentOperationEvents: [...recentOperationEvents],
+    recentMetrics: [...recentMetrics],
+    recentMemorySamples: [...recentMemorySamples],
+    recentSummaries: [...recentSummaries],
+  };
+}
+
+export function clearDebugMeasurementBuffer(): void {
+  recentMetrics.length = 0;
+  recentOperationEvents.length = 0;
+  recentMemorySamples.length = 0;
+  recentSummaries.length = 0;
+}
+
+export function installDebugMeasurementExport(): () => void {
+  if (!import.meta.env.DEV || typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  const api: MeasurementDebugApi = {
+    dump: getDebugMeasurementDump,
+    export: exportDebugMeasurementDump,
+    clear: clearDebugMeasurementBuffer,
+    status: () => getDebugMeasurementStatus(),
+  };
+  recordMemorySample();
+  const memoryTimer = window.setInterval(recordMemorySample, MEMORY_SAMPLE_INTERVAL_MS);
+  window.proliferateDebugMeasurement = api;
+  window.__PROLIFERATE_DEBUG_MEASUREMENT__ = api;
+  return () => {
+    window.clearInterval(memoryTimer);
+    if (window.proliferateDebugMeasurement === api) {
+      delete window.proliferateDebugMeasurement;
+    }
+    if (window.__PROLIFERATE_DEBUG_MEASUREMENT__ === api) {
+      delete window.__PROLIFERATE_DEBUG_MEASUREMENT__;
+    }
+  };
+}
+
+function getDebugMeasurementStatus(): MeasurementDebugStatus {
+  return {
+    enabled: {
+      mainThread: isMainThreadMeasurementEnabled(),
+      anyHarnessTiming: isAnyHarnessTimingEnabled(),
+    },
+    counts: {
+      activeOperations: operations.size,
+      pendingCommitMarks: pendingCommitMarks.size,
+      categoryBindings: categoryBindings.size,
+      recentOperationEvents: recentOperationEvents.length,
+      recentMetrics: recentMetrics.length,
+      recentMemorySamples: recentMemorySamples.length,
+      recentSummaries: recentSummaries.length,
+    },
+  };
+}
+
+function exportDebugMeasurementDump(fileName?: string): MeasurementDebugDump {
+  const dump = getDebugMeasurementDump();
+  const body = JSON.stringify(dump, null, 2);
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    console.debug("[measurement_dump_json]", body);
+    return dump;
+  }
+
+  const blob = new Blob([body], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const safeTimestamp = dump.createdAt.replace(/[:.]/g, "-");
+  link.href = url;
+  link.download = fileName ?? `proliferate-measurement-dump-${safeTimestamp}.json`;
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  return dump;
+}
+
+function recordMetricEvent(
+  input: MeasurementMetricInput,
+  operationIds: MeasurementOperationId[],
+): void {
+  pushBounded(recentMetrics, {
+    tag: "measurement_metric",
+    seq: ++metricEventSeq,
+    timestampMs: Date.now(),
+    timeOriginMs: getTimeOrigin(),
+    operationIds,
+    metric: metricSnapshot(input),
+  }, RECENT_METRIC_LIMIT);
+}
+
+function recordOperationEvent(
+  operation: MeasurementOperationRecord,
+  phase: "start" | "finish",
+  finishReason?: MeasurementFinishReason,
+): void {
+  pushBounded(recentOperationEvents, {
+    tag: "measurement_operation",
+    seq: ++operationEventSeq,
+    timestampMs: Date.now(),
+    timeOriginMs: getTimeOrigin(),
+    phase,
+    operationId: operation.id,
+    operationKind: operation.kind,
+    finishReason,
+    durationMs: phase === "finish" ? round(now() - operation.startedAt) : undefined,
+    surfaces: [...operation.surfaces],
+    sampleKey: operation.sampleKey,
+  }, RECENT_OPERATION_EVENT_LIMIT);
+}
+
+function recordMemorySample(): void {
+  const memory = getMeasurementMemorySnapshot();
+  pushBounded(recentMemorySamples, {
+    tag: "measurement_memory",
+    seq: ++memoryEventSeq,
+    timestampMs: Date.now(),
+    timeOriginMs: getTimeOrigin(),
+    activeOperations: operations.size,
+    recentMetrics: recentMetrics.length,
+    recentSummaries: recentSummaries.length,
+    ...memory,
+  }, RECENT_MEMORY_SAMPLE_LIMIT);
+}
+
+function metricSnapshot(input: MeasurementMetricInput): MeasurementMetricSnapshot {
+  switch (input.type) {
+    case "request":
+      return {
+        type: "request",
+        transport: input.transport,
+        category: input.category,
+        method: input.method,
+        status: input.status,
+        durationMs: round(input.durationMs),
+        runtimeUrlHash: input.runtimeUrlHash ?? null,
+      };
+    case "stream":
+      return {
+        type: "stream",
+        phase: input.phase,
+        durationMs: input.durationMs === undefined ? null : round(input.durationMs),
+        eventCount: input.eventCount ?? null,
+        maxInterArrivalGapMs: input.maxInterArrivalGapMs === undefined
+          ? null
+          : round(input.maxInterArrivalGapMs),
+        malformedEventCount: input.malformedEventCount ?? null,
+        runtimeUrlHash: input.runtimeUrlHash ?? null,
+      };
+    case "cache":
+      return {
+        type: "cache",
+        category: input.category,
+        decision: input.decision,
+        source: input.source,
+      };
+    case "reducer":
+    case "store":
+      return {
+        type: input.type,
+        category: input.category,
+        durationMs: round(input.durationMs),
+        count: input.count ?? null,
+      };
+    case "workflow":
+      return {
+        type: "workflow",
+        step: input.step,
+        durationMs: round(input.durationMs),
+        count: input.count ?? null,
+        outcome: input.outcome ?? null,
+      };
+    case "state_count":
+      return {
+        type: "state_count",
+        target: input.target,
+        count: input.count,
+      };
+    case "main_thread":
+      return {
+        type: "main_thread",
+        surface: input.surface,
+        metric: input.metric,
+        durationMs: input.durationMs === undefined ? null : round(input.durationMs),
+        count: input.count ?? null,
+      };
+  }
+}
+
+function operationSnapshot(operation: MeasurementOperationRecord): MeasurementOperationSnapshot {
+  return {
+    operationId: operation.id,
+    operationKind: operation.kind,
+    durationMs: round(now() - operation.startedAt),
+    surfaces: [...operation.surfaces],
+    sampleKey: operation.sampleKey,
+    linkedLatencyFlowId: operation.linkedLatencyFlowId,
+    hasMetrics: operation.hasMetrics,
+    aggregate: aggregateSnapshot(operation.aggregate),
+  };
+}
+
+function aggregateSnapshot(a: MeasurementOperationAggregate): MeasurementAggregateSnapshot {
+  return {
+    requestCount: a.requestCount,
+    totalRequestMs: round(a.totalRequestMs),
+    maxRequestMs: round(a.maxRequestMs),
+    streamEventCount: a.streamEventCount,
+    streamFirstEventMs: a.streamFirstEventMs === null ? null : round(a.streamFirstEventMs),
+    maxStreamEventGapMs: round(a.maxStreamEventGapMs),
+    malformedStreamEventCount: a.malformedStreamEventCount,
+    cacheHitCount: a.cacheHitCount,
+    cacheMissCount: a.cacheMissCount,
+    cacheStaleCount: a.cacheStaleCount,
+    cacheSkippedCount: a.cacheSkippedCount,
+    reducerApplyCount: a.reducerApplyCount,
+    totalReducerApplyMs: round(a.totalReducerApplyMs),
+    maxReducerApplyMs: round(a.maxReducerApplyMs),
+    storeApplyCount: a.storeApplyCount,
+    totalStoreApplyMs: round(a.totalStoreApplyMs),
+    maxStoreApplyMs: round(a.maxStoreApplyMs),
+    reactCommitCount: a.reactCommitCount,
+    totalCommitMs: round(a.totalCommitMs),
+    maxCommitMs: round(a.maxCommitMs),
+    renderCount: a.renderCount,
+    longTaskCount: a.longTaskCount,
+    maxLongTaskMs: round(a.maxLongTaskMs),
+    frameGapCount: a.frameGapCount,
+    maxFrameGapMs: round(a.maxFrameGapMs),
+  };
+}
+
+function getMeasurementMemorySnapshot(): MeasurementMemorySnapshot {
+  if (typeof performance === "undefined") {
+    return {
+      usedJSHeapSize: null,
+      totalJSHeapSize: null,
+      jsHeapSizeLimit: null,
+    };
+  }
+  const memory = (performance as Performance & {
+    memory?: {
+      usedJSHeapSize?: number;
+      totalJSHeapSize?: number;
+      jsHeapSizeLimit?: number;
+    };
+  }).memory;
+  return {
+    usedJSHeapSize: memory?.usedJSHeapSize ?? null,
+    totalJSHeapSize: memory?.totalJSHeapSize ?? null,
+    jsHeapSizeLimit: memory?.jsHeapSizeLimit ?? null,
+  };
+}
+
+function getTimeOrigin(): number | null {
+  return typeof performance !== "undefined" && typeof performance.timeOrigin === "number"
+    ? performance.timeOrigin
+    : null;
+}
+
+function pushBounded<T>(items: T[], item: T, limit: number): void {
+  items.push(item);
+  if (items.length > limit) {
+    items.splice(0, items.length - limit);
+  }
 }
 
 function resolveMetricOperationIds(input: MeasurementMetricInput): MeasurementOperationId[] {
@@ -725,6 +1253,9 @@ function applyMetric(
     case "workflow":
       applyWorkflowBreakdown(aggregate, input);
       break;
+    case "state_count":
+      applyStateCountBreakdown(aggregate, input);
+      break;
     case "main_thread":
       applySurfaceBreakdown(aggregate, input);
       if (input.metric === "react_commit") {
@@ -846,6 +1377,21 @@ function applyWorkflowBreakdown(
   }
 }
 
+function applyStateCountBreakdown(
+  aggregate: MeasurementOperationAggregate,
+  input: Extract<MeasurementMetricInput, { type: "state_count" }>,
+): void {
+  const breakdown = getOrCreate(aggregate.stateCountBreakdowns, input.target, () => ({
+    target: input.target,
+    samples: 0,
+    latestCount: 0,
+    maxCount: 0,
+  }));
+  breakdown.samples += 1;
+  breakdown.latestCount = input.count;
+  breakdown.maxCount = Math.max(breakdown.maxCount, input.count);
+}
+
 function applySurfaceBreakdown(
   aggregate: MeasurementOperationAggregate,
   input: Extract<MeasurementMetricInput, { type: "main_thread" }>,
@@ -928,7 +1474,7 @@ function printSummaryRow(
     strictMode: true,
     longTaskObserverSupported,
   };
-  const rows: Array<Record<string, string | number | boolean | null>> = [{
+  const rows: MeasurementSummaryRow[] = [{
     ...base,
     target: "all",
     durationMs,
@@ -1021,6 +1567,18 @@ function printSummaryRow(
     });
   }
 
+  for (const breakdown of a.stateCountBreakdowns.values()) {
+    rows.push({
+      ...base,
+      rowKind: "state_count",
+      target: breakdown.target,
+      durationMs: null,
+      count: breakdown.latestCount,
+      maxCount: breakdown.maxCount,
+      samples: breakdown.samples,
+    });
+  }
+
   for (const [category, breakdown] of a.reducerBreakdowns) {
     rows.push({
       ...base,
@@ -1062,15 +1620,17 @@ function printSummaryRow(
     });
   }
 
-  console.table(rows);
-  console.debug("[measurement_summary_json]", JSON.stringify({
+  const payload: MeasurementSummaryPayload = {
     tag: "measurement_summary_json",
     operationId: operation.id,
     operationKind: operation.kind,
     finishReason: reason,
     durationMs,
     rows,
-  }));
+  };
+  pushBounded(recentSummaries, payload, RECENT_SUMMARY_LIMIT);
+  console.table(rows);
+  console.debug("[measurement_summary_json]", JSON.stringify(payload));
 }
 
 function scheduleOperationTimers(operation: MeasurementOperationRecord): void {
@@ -1163,6 +1723,7 @@ function createEmptyAggregate(): MeasurementOperationAggregate {
     reducerBreakdowns: new Map(),
     storeBreakdowns: new Map(),
     workflowBreakdowns: new Map(),
+    stateCountBreakdowns: new Map(),
     surfaceBreakdowns: new Map(),
   };
 }

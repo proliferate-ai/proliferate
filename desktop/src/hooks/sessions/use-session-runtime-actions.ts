@@ -14,6 +14,7 @@ import {
   type Session,
   type SessionEventEnvelope,
   type SessionStreamHandle,
+  type TranscriptState,
   type ToolCallItem,
 } from "@anyharness/sdk";
 import { useCallback } from "react";
@@ -34,7 +35,10 @@ import {
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
   type MeasurementOperationId,
+  type MeasurementOperationKind,
+  type MeasurementSurface,
 } from "@/lib/infra/debug-measurement";
+import { scheduleAfterNextPaint } from "@/lib/infra/schedule-after-next-paint";
 import { markLatencyFlowLiveAttached } from "@/lib/infra/latency-flow";
 import {
   resolveSessionViewState,
@@ -81,6 +85,18 @@ import {
 import { useLinkedSessionMounting } from "@/hooks/chat/subagents/use-linked-session-mounting";
 
 const ACTIVE_SUMMARY_REFRESH_DELAY_MS = 8_000;
+const SESSION_APPLY_MEASUREMENT_SURFACES: readonly MeasurementSurface[] = [
+  "session-transcript-pane",
+  "transcript-list",
+  "chat-surface",
+  "header-tabs",
+  "workspace-sidebar",
+  "global-header",
+  "chat-composer-dock",
+];
+const SESSION_HISTORY_APPLY_MAX_DURATION_MS = 30_000;
+const SESSION_STREAM_EVENT_BATCH_IDLE_MS = 350;
+const SESSION_STREAM_EVENT_BATCH_MAX_DURATION_MS = 5_000;
 
 export function useSessionRuntimeActions() {
   const queryClient = useQueryClient();
@@ -217,6 +233,7 @@ export function useSessionRuntimeActions() {
     },
   ): Promise<boolean> => {
     const startedAt = performance.now();
+    let standaloneMeasurementOperationId: MeasurementOperationId | null = null;
     try {
       if (options?.isCurrent && !options.isCurrent()) {
         return false;
@@ -228,6 +245,26 @@ export function useSessionRuntimeActions() {
 
       const afterSeq = options?.replace ? undefined : options?.afterSeq;
       const beforeSeq = options?.replace || afterSeq != null ? undefined : options?.beforeSeq;
+      standaloneMeasurementOperationId = startMeasurementOperation({
+        kind: resolveHistoryApplyOperationKind({ afterSeq, beforeSeq }),
+        surfaces: SESSION_APPLY_MEASUREMENT_SURFACES,
+        maxDurationMs: SESSION_HISTORY_APPLY_MAX_DURATION_MS,
+      });
+      const requestMeasurementOperationId =
+        options?.measurementOperationId ?? standaloneMeasurementOperationId;
+      const historyApplyOperationIds = uniqueMeasurementOperationIds([
+        options?.measurementOperationId,
+        standaloneMeasurementOperationId,
+      ]);
+      for (const operationId of historyApplyOperationIds) {
+        recordHistoryStateCounts(
+          operationId,
+          "before",
+          slot.events,
+          slot.transcript,
+        );
+      }
+      const fetchStartedAt = performance.now();
       const events = await fetchSessionHistory(
         sessionId,
         afterSeq != null
@@ -235,7 +272,7 @@ export function useSessionRuntimeActions() {
           || options?.limit != null
           || options?.turnLimit != null
           || options?.requestHeaders
-          || options?.measurementOperationId
+          || requestMeasurementOperationId
           || options?.timeoutMs != null
           ? {
             ...(afterSeq != null ? { afterSeq } : {}),
@@ -245,15 +282,30 @@ export function useSessionRuntimeActions() {
             ...(options?.requestHeaders
               ? { requestHeaders: options.requestHeaders }
               : {}),
-            ...(options?.measurementOperationId
-              ? { measurementOperationId: options.measurementOperationId }
+            ...(requestMeasurementOperationId
+              ? { measurementOperationId: requestMeasurementOperationId }
               : {}),
             ...(options?.timeoutMs != null ? { timeoutMs: options.timeoutMs } : {}),
           }
           : undefined,
       );
+      for (const operationId of historyApplyOperationIds) {
+        recordMeasurementWorkflowStep({
+          operationId,
+          step: "session.history.fetch",
+          startedAt: fetchStartedAt,
+          count: events.length,
+        });
+        recordMeasurementMetric({
+          type: "state_count",
+          operationId,
+          target: "session.history.events_fetched",
+          count: events.length,
+        });
+      }
       const currentSlot = useHarnessStore.getState().sessionSlots[sessionId];
       if (!currentSlot || (options?.isCurrent && !options.isCurrent())) {
+        finishStandaloneApplyOperation(standaloneMeasurementOperationId, "aborted");
         return false;
       }
 
@@ -266,16 +318,16 @@ export function useSessionRuntimeActions() {
           },
           events,
         );
-        if (options?.measurementOperationId) {
+        for (const operationId of historyApplyOperationIds) {
           recordMeasurementMetric({
             type: "reducer",
             category: "session.events.list",
-            operationId: options.measurementOperationId,
+            operationId,
             durationMs: performance.now() - replayStartedAt,
             count: events.length,
           });
           recordMeasurementWorkflowStep({
-            operationId: options.measurementOperationId,
+            operationId,
             step: "session.history.replay",
             startedAt: replayStartedAt,
             count: events.length,
@@ -283,6 +335,7 @@ export function useSessionRuntimeActions() {
         }
 
         if (!nextState.applied) {
+          finishStandaloneApplyOperation(standaloneMeasurementOperationId, "completed");
           return false;
         }
 
@@ -296,18 +349,26 @@ export function useSessionRuntimeActions() {
             transcript: nextState.state.transcript,
           }),
         });
-        if (options?.measurementOperationId) {
+        for (const operationId of historyApplyOperationIds) {
           recordMeasurementMetric({
             type: "store",
             category: "session.events.list",
-            operationId: options.measurementOperationId,
+            operationId,
             durationMs: performance.now() - storeStartedAt,
           });
           recordMeasurementWorkflowStep({
-            operationId: options.measurementOperationId,
+            operationId,
             step: "session.history.store",
             startedAt: storeStartedAt,
           });
+        }
+        for (const operationId of historyApplyOperationIds) {
+          recordHistoryStateCounts(
+            operationId,
+            "after",
+            nextState.state.events,
+            nextState.state.transcript,
+          );
         }
         const mountStartedAt = performance.now();
         mountSubagentChildrenFromEvents(
@@ -315,11 +376,15 @@ export function useSessionRuntimeActions() {
           events,
           options?.requestHeaders,
         );
-        recordMeasurementWorkflowStep({
-          operationId: options?.measurementOperationId,
-          step: "session.history.mount_subagents",
-          startedAt: mountStartedAt,
-        });
+        for (const operationId of historyApplyOperationIds) {
+          recordMeasurementWorkflowStep({
+            operationId,
+            step: "session.history.mount_subagents",
+            startedAt: mountStartedAt,
+          });
+          markSessionApplyForNextCommit(operationId);
+        }
+        finishStandaloneApplyOperation(standaloneMeasurementOperationId, "completed", true);
         logLatency("session.history.rehydrate.success", {
           sessionId,
           eventCount: events.length,
@@ -336,16 +401,16 @@ export function useSessionRuntimeActions() {
           currentSlot.events,
         );
         const nextState = replaySessionHistory(sessionId, replacementEvents);
-        if (options?.measurementOperationId) {
+        for (const operationId of historyApplyOperationIds) {
           recordMeasurementMetric({
             type: "reducer",
             category: "session.events.list",
-            operationId: options.measurementOperationId,
+            operationId,
             durationMs: performance.now() - replayStartedAt,
             count: events.length,
           });
           recordMeasurementWorkflowStep({
-            operationId: options.measurementOperationId,
+            operationId,
             step: "session.history.replay",
             startedAt: replayStartedAt,
             count: events.length,
@@ -362,18 +427,26 @@ export function useSessionRuntimeActions() {
             transcript: nextState.transcript,
           }),
         });
-        if (options?.measurementOperationId) {
+        for (const operationId of historyApplyOperationIds) {
           recordMeasurementMetric({
             type: "store",
             category: "session.events.list",
-            operationId: options.measurementOperationId,
+            operationId,
             durationMs: performance.now() - storeStartedAt,
           });
           recordMeasurementWorkflowStep({
-            operationId: options.measurementOperationId,
+            operationId,
             step: "session.history.store",
             startedAt: storeStartedAt,
           });
+        }
+        for (const operationId of historyApplyOperationIds) {
+          recordHistoryStateCounts(
+            operationId,
+            "after",
+            replacementEvents,
+            nextState.transcript,
+          );
         }
         const mountStartedAt = performance.now();
         mountSubagentChildrenFromEvents(
@@ -381,11 +454,15 @@ export function useSessionRuntimeActions() {
           events,
           options?.requestHeaders,
         );
-        recordMeasurementWorkflowStep({
-          operationId: options?.measurementOperationId,
-          step: "session.history.mount_subagents",
-          startedAt: mountStartedAt,
-        });
+        for (const operationId of historyApplyOperationIds) {
+          recordMeasurementWorkflowStep({
+            operationId,
+            step: "session.history.mount_subagents",
+            startedAt: mountStartedAt,
+          });
+          markSessionApplyForNextCommit(operationId);
+        }
+        finishStandaloneApplyOperation(standaloneMeasurementOperationId, "completed", true);
         logLatency("session.history.rehydrate.success", {
           sessionId,
           eventCount: events.length,
@@ -401,16 +478,16 @@ export function useSessionRuntimeActions() {
         ? mergeFetchedHistoryWithNewerEvents(events, currentSlot.events)
         : events;
       const nextState = replaySessionHistory(sessionId, replacementEvents);
-      if (options?.measurementOperationId) {
+      for (const operationId of historyApplyOperationIds) {
         recordMeasurementMetric({
           type: "reducer",
           category: "session.events.list",
-          operationId: options.measurementOperationId,
+          operationId,
           durationMs: performance.now() - replayStartedAt,
           count: replacementEvents.length,
         });
         recordMeasurementWorkflowStep({
-          operationId: options.measurementOperationId,
+          operationId,
           step: "session.history.replay",
           startedAt: replayStartedAt,
           count: replacementEvents.length,
@@ -426,18 +503,26 @@ export function useSessionRuntimeActions() {
           transcript: nextState.transcript,
         }),
       });
-      if (options?.measurementOperationId) {
+      for (const operationId of historyApplyOperationIds) {
         recordMeasurementMetric({
           type: "store",
           category: "session.events.list",
-          operationId: options.measurementOperationId,
+          operationId,
           durationMs: performance.now() - storeStartedAt,
         });
         recordMeasurementWorkflowStep({
-          operationId: options.measurementOperationId,
+          operationId,
           step: "session.history.store",
           startedAt: storeStartedAt,
         });
+      }
+      for (const operationId of historyApplyOperationIds) {
+        recordHistoryStateCounts(
+          operationId,
+          "after",
+          nextState.events,
+          nextState.transcript,
+        );
       }
       const mountStartedAt = performance.now();
       mountSubagentChildrenFromEvents(
@@ -445,11 +530,15 @@ export function useSessionRuntimeActions() {
         replacementEvents,
         options?.requestHeaders,
       );
-      recordMeasurementWorkflowStep({
-        operationId: options?.measurementOperationId,
-        step: "session.history.mount_subagents",
-        startedAt: mountStartedAt,
-      });
+      for (const operationId of historyApplyOperationIds) {
+        recordMeasurementWorkflowStep({
+          operationId,
+          step: "session.history.mount_subagents",
+          startedAt: mountStartedAt,
+        });
+        markSessionApplyForNextCommit(operationId);
+      }
+      finishStandaloneApplyOperation(standaloneMeasurementOperationId, "completed", true);
       logLatency("session.history.rehydrate.success", {
         sessionId,
         eventCount: replacementEvents.length,
@@ -471,6 +560,7 @@ export function useSessionRuntimeActions() {
         elapsedMs: Math.round(performance.now() - startedAt),
         errorName: error instanceof Error ? error.name : "unknown",
       });
+      finishStandaloneApplyOperation(standaloneMeasurementOperationId, "error_sanitized");
       return false;
     }
   }, [mountSubagentChildrenFromEvents]);
@@ -851,6 +941,26 @@ export function useSessionRuntimeActions() {
           return;
         }
 
+        const streamEventBatchOperationId = startMeasurementOperation({
+          kind: "session_stream_event_batch",
+          sampleKey: "stream",
+          surfaces: SESSION_APPLY_MEASUREMENT_SURFACES,
+          idleTimeoutMs: SESSION_STREAM_EVENT_BATCH_IDLE_MS,
+          maxDurationMs: SESSION_STREAM_EVENT_BATCH_MAX_DURATION_MS,
+        });
+        const streamApplyOperationIds = uniqueMeasurementOperationIds([
+          streamMeasurementOperationId,
+          streamEventBatchOperationId,
+        ]);
+        for (const operationId of streamApplyOperationIds) {
+          recordStreamStateCounts(
+            operationId,
+            "before",
+            slotState.events,
+            slotState.transcript,
+          );
+        }
+
         const reducerStartedAt = performance.now();
         const result = applyStreamEnvelope(
           {
@@ -859,11 +969,11 @@ export function useSessionRuntimeActions() {
           },
           envelope,
         );
-        if (streamMeasurementOperationId) {
+        for (const operationId of streamApplyOperationIds) {
           recordMeasurementMetric({
             type: "reducer",
             category: "session.stream",
-            operationId: streamMeasurementOperationId,
+            operationId,
             durationMs: performance.now() - reducerStartedAt,
           });
         }
@@ -918,21 +1028,20 @@ export function useSessionRuntimeActions() {
             : slotState.optimisticPrompt,
           pendingConfigChanges: reconcileResult.pendingConfigChanges,
         });
-        if (streamMeasurementOperationId) {
+        for (const operationId of streamApplyOperationIds) {
           recordMeasurementMetric({
             type: "store",
             category: "session.stream",
-            operationId: streamMeasurementOperationId,
+            operationId,
             durationMs: performance.now() - storeStartedAt,
           });
-          markOperationForNextCommit(streamMeasurementOperationId, [
-            "session-transcript-pane",
-            "transcript-list",
-            "header-tabs",
-            "workspace-sidebar",
-            "global-header",
-            "chat-composer-dock",
-          ]);
+          recordStreamStateCounts(
+            operationId,
+            "after",
+            result.state.events,
+            result.state.transcript,
+          );
+          markSessionApplyForNextCommit(operationId);
         }
 
         if (shouldScheduleActiveSummaryRefresh(event.type)) {
@@ -1173,6 +1282,108 @@ function mergeFetchedHistoryWithNewerEvents(
   }
 
   return [...fetchedEvents, ...newerEvents].sort((a, b) => a.seq - b.seq);
+}
+
+function resolveHistoryApplyOperationKind(input: {
+  afterSeq?: number;
+  beforeSeq?: number;
+}): MeasurementOperationKind {
+  if (input.beforeSeq != null) {
+    return "session_history_older_chunk";
+  }
+  if (input.afterSeq != null) {
+    return "session_history_tail_reconcile";
+  }
+  return "session_history_initial_hydrate";
+}
+
+function finishStandaloneApplyOperation(
+  operationId: MeasurementOperationId | null,
+  reason: "completed" | "aborted" | "error_sanitized",
+  waitForPaint = false,
+): void {
+  if (!operationId) {
+    return;
+  }
+  const finish = () => finishOrCancelMeasurementOperation(operationId, reason);
+  if (waitForPaint) {
+    scheduleAfterNextPaint(finish);
+    return;
+  }
+  finish();
+}
+
+function markSessionApplyForNextCommit(operationId: MeasurementOperationId | null | undefined): void {
+  if (!operationId) {
+    return;
+  }
+  markOperationForNextCommit(operationId, SESSION_APPLY_MEASUREMENT_SURFACES);
+}
+
+function uniqueMeasurementOperationIds(
+  operationIds: readonly (MeasurementOperationId | null | undefined)[],
+): MeasurementOperationId[] {
+  return [...new Set(operationIds.filter((id): id is MeasurementOperationId => !!id))];
+}
+
+function recordHistoryStateCounts(
+  operationId: MeasurementOperationId | null | undefined,
+  phase: "before" | "after",
+  events: readonly SessionEventEnvelope[],
+  transcript: TranscriptState,
+): void {
+  if (!operationId) {
+    return;
+  }
+  const isBefore = phase === "before";
+  recordMeasurementMetric({
+    type: "state_count",
+    operationId,
+    target: isBefore ? "session.history.events_before" : "session.history.events_after",
+    count: events.length,
+  });
+  recordMeasurementMetric({
+    type: "state_count",
+    operationId,
+    target: isBefore ? "session.history.turns_before" : "session.history.turns_after",
+    count: transcript.turnOrder.length,
+  });
+  recordMeasurementMetric({
+    type: "state_count",
+    operationId,
+    target: isBefore ? "session.history.items_before" : "session.history.items_after",
+    count: Object.keys(transcript.itemsById).length,
+  });
+}
+
+function recordStreamStateCounts(
+  operationId: MeasurementOperationId | null | undefined,
+  phase: "before" | "after",
+  events: readonly SessionEventEnvelope[],
+  transcript: TranscriptState,
+): void {
+  if (!operationId) {
+    return;
+  }
+  const isBefore = phase === "before";
+  recordMeasurementMetric({
+    type: "state_count",
+    operationId,
+    target: isBefore ? "session.stream.events_before" : "session.stream.events_after",
+    count: events.length,
+  });
+  recordMeasurementMetric({
+    type: "state_count",
+    operationId,
+    target: isBefore ? "session.stream.turns_before" : "session.stream.turns_after",
+    count: transcript.turnOrder.length,
+  });
+  recordMeasurementMetric({
+    type: "state_count",
+    operationId,
+    target: isBefore ? "session.stream.items_before" : "session.stream.items_after",
+    count: Object.keys(transcript.itemsById).length,
+  });
 }
 
 function mergeFetchedHistoryWithExistingEvents(
