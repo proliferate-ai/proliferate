@@ -93,7 +93,7 @@ export function useWorkspaceSelection() {
     ]),
     clearWorkspaceRuntimeState: useCallback((
       workspaceId: string,
-      options?: { clearSelection?: boolean },
+      options?: { clearSelection?: boolean; clearDraftUiKey?: string | null },
     ) => {
       const currentSelectedWorkspaceId = useHarnessStore.getState().selectedWorkspaceId;
       clearWorkspaceRuntimeState(

@@ -40,7 +40,7 @@ export function useGitPanelState(mode: GitPanelMode) {
   const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
     (state) => state.selectedLogicalWorkspaceId,
   );
-  const activeWorkspaceId = selectedLogicalWorkspaceId ?? selectedWorkspaceId;
+  const activeWorkspaceId = selectedWorkspaceId;
   const runtimeBlockWorkspaceId = gitPanelRuntimeBlockWorkspaceId(
     selectedWorkspaceId,
     selectedLogicalWorkspaceId,

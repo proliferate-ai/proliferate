@@ -92,14 +92,14 @@ describe("workspace ui tab persistence", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
       migrationVersion: 3,
-      rightPanelByWorkspace: undefined as unknown as typeof WORKSPACE_UI_DEFAULTS.rightPanelByWorkspace,
-      rightPanelWidthByWorkspace: undefined as unknown as typeof WORKSPACE_UI_DEFAULTS.rightPanelWidthByWorkspace,
+      rightPanelDurableByWorkspace: undefined as unknown as typeof WORKSPACE_UI_DEFAULTS.rightPanelDurableByWorkspace,
+      rightPanelMaterializedByWorkspace: undefined as unknown as typeof WORKSPACE_UI_DEFAULTS.rightPanelMaterializedByWorkspace,
     });
 
     expect(didMigrate).toBe(true);
     expect(state.migrationVersion).toBe(6);
-    expect(state.rightPanelByWorkspace).toEqual({});
-    expect(state.rightPanelWidthByWorkspace).toEqual({});
+    expect(state.rightPanelDurableByWorkspace).toEqual({});
+    expect(state.rightPanelMaterializedByWorkspace).toEqual({});
   });
 
   it("sanitizes persisted right panel preferences and clamps widths", () => {
@@ -119,19 +119,24 @@ describe("workspace ui tab persistence", () => {
         w1: 900,
         w2: Number.NaN,
       },
-    });
+    } as never);
 
     expect(didMigrate).toBe(true);
-    expect(state.rightPanelByWorkspace).toEqual({
+    expect(state.rightPanelDurableByWorkspace).toEqual({
       w1: {
-        activeTool: "git",
+        open: false,
+        width: 700,
         toolOrder: ["files", "git", "settings"],
+      },
+    });
+    expect(state.rightPanelMaterializedByWorkspace).toEqual({
+      w1: {
+        activeEntryKey: "tool:git",
         terminalOrder: ["t1", "t2"],
         headerOrder: ["tool:files", "tool:git", "tool:settings", "terminal:t1", "terminal:t2"],
         activeTerminalId: "t2",
       },
     });
-    expect(state.rightPanelWidthByWorkspace).toEqual({ w1: 700 });
   });
 
   it("stores visible and hidden chat ids per workspace", () => {
@@ -166,8 +171,26 @@ describe("workspace ui tab persistence", () => {
     });
     store.setRightPanelWidthForWorkspace("w1", 900);
 
-    expect(useWorkspaceUiStore.getState().rightPanelByWorkspace.w1?.activeTool).toBe("terminal");
-    expect(useWorkspaceUiStore.getState().rightPanelWidthByWorkspace.w1).toBe(700);
+    expect(useWorkspaceUiStore.getState().rightPanelMaterializedByWorkspace.w1?.activeEntryKey)
+      .toBe("terminal:t1");
+    expect(useWorkspaceUiStore.getState().rightPanelDurableByWorkspace.w1?.width).toBe(700);
+  });
+
+  it("stores shell tab state without notifying on unchanged writes", () => {
+    useWorkspaceUiStore.setState({
+      ...WORKSPACE_UI_DEFAULTS,
+      _hydrated: true,
+    });
+
+    const store = useWorkspaceUiStore.getState();
+    store.setActiveShellTabKeyForWorkspace("w1", "chat:s1");
+    store.setShellTabOrderForWorkspace("w1", ["chat:s1", "file:src/App.tsx"]);
+    store.setShellTabOrderForWorkspace("w2", []);
+
+    expect(useWorkspaceUiStore.getState().activeShellTabKeyByWorkspace.w1).toBe("chat:s1");
+    expect(useWorkspaceUiStore.getState().shellTabOrderByWorkspace.w1)
+      .toEqual(["chat:s1", "file:src/App.tsx"]);
+    expect(useWorkspaceUiStore.getState().shellTabOrderByWorkspace.w2).toEqual([]);
   });
 
   it("stores and clears viewed session error keys without eviction", () => {

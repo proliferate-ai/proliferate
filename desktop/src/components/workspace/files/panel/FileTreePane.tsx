@@ -3,6 +3,7 @@ import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useWorkspaceFileActions } from "@/hooks/editor/use-workspace-file-actions";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
+import { Button } from "@/components/ui/Button";
 import { listOpenTargets, type OpenTarget } from "@/platform/tauri/shell";
 import { FileTreeNode } from "./FileTreeNode";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
@@ -18,8 +19,9 @@ export function FileTreePane() {
   const scrollSampleOperationRef = useRef<MeasurementOperationId | null>(null);
   const directoryEntriesByPath = useWorkspaceFilesStore((s) => s.directoryEntriesByPath);
   const directoryLoadStateByPath = useWorkspaceFilesStore((s) => s.directoryLoadStateByPath);
-  const workspaceId = useWorkspaceFilesStore((s) => s.workspaceId);
-  const runtimeWorkspaceId = useWorkspaceFilesStore((s) => s.runtimeWorkspaceId);
+  const workspaceUiKey = useWorkspaceFilesStore((s) => s.workspaceUiKey);
+  const materializedWorkspaceId = useWorkspaceFilesStore((s) => s.materializedWorkspaceId);
+  const anyharnessWorkspaceId = useWorkspaceFilesStore((s) => s.anyharnessWorkspaceId);
   const runtimeUrl = useWorkspaceFilesStore((s) => s.runtimeUrl);
   const authToken = useWorkspaceFilesStore((s) => s.authToken);
   const treeStateKey = useWorkspaceFilesStore((s) => s.treeStateKey);
@@ -66,18 +68,28 @@ export function FileTreePane() {
     return (
       <div className="p-3 text-center">
         <p className="text-xs text-destructive mb-2">Failed to load files</p>
-        <button
-          onClick={() => workspaceId && runtimeUrl && treeStateKey && initForWorkspace(
-            workspaceId,
-            runtimeUrl,
-            treeStateKey,
-            runtimeWorkspaceId ?? undefined,
-            authToken ?? undefined,
-          )}
-          className="text-xs text-foreground hover:underline"
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            workspaceUiKey
+            && materializedWorkspaceId
+            && anyharnessWorkspaceId
+            && runtimeUrl
+            && treeStateKey
+            && initForWorkspace({
+              workspaceUiKey,
+              materializedWorkspaceId,
+              anyharnessWorkspaceId,
+              runtimeUrl,
+              treeStateKey,
+              authToken,
+            })}
+          className="h-7 px-2 text-xs"
         >
           Retry
-        </button>
+        </Button>
       </div>
     );
   }

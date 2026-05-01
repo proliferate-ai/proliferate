@@ -14,6 +14,7 @@ import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
 } from "@/lib/domain/chat/file-mentions";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
 import {
   failLatencyFlow,
   startLatencyFlow,
@@ -26,10 +27,11 @@ export function useChatLaunchActions() {
   const setWorkspaceArrivalEvent = useHarnessStore((state) => state.setWorkspaceArrivalEvent);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
+  const workspaceUiKey = resolveWorkspaceUiKey(selectedLogicalWorkspaceId, selectedWorkspaceId);
   const currentDraft = useChatInputStore((state) =>
     serializeChatDraftToPrompt(
-      (selectedLogicalWorkspaceId ?? selectedWorkspaceId)
-        ? state.draftByWorkspaceId[selectedLogicalWorkspaceId ?? selectedWorkspaceId!] ?? EMPTY_CHAT_DRAFT
+      workspaceUiKey
+        ? state.draftByWorkspaceId[workspaceUiKey] ?? EMPTY_CHAT_DRAFT
         : EMPTY_CHAT_DRAFT,
     ),
   );

@@ -48,7 +48,7 @@ import {
   fileWorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
-import { useWorkspaceTabsStore } from "@/stores/workspaces/workspace-tabs-store";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { startMeasurementOperation } from "@/lib/infra/debug-measurement";
 
@@ -72,12 +72,14 @@ export function HeaderTabs() {
 
   const closeTab = useWorkspaceFilesStore((state) => state.closeTab);
   const setActiveTab = useWorkspaceFilesStore((state) => state.setActiveTab);
-  const setActiveShellTabKey = useWorkspaceTabsStore((state) => state.setActiveShellTabKey);
+  const setActiveShellTabKey = useWorkspaceUiStore(
+    (state) => state.setActiveShellTabKeyForWorkspace,
+  );
 
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
   const shellStrip = useResizeObserverWidth<HTMLDivElement>();
   const shellTabOrderActions = useShellTabOrderActions({
-    workspaceId: viewModel.selectedWorkspaceId,
+    workspaceId: viewModel.workspaceUiKey,
   });
 
   useShortcutHandler("session.rename", () => {
@@ -87,12 +89,12 @@ export function HeaderTabs() {
   });
 
   const multiSelect = useHeaderTabsMultiSelect({
-    workspaceId: viewModel.selectedWorkspaceId,
+    workspaceId: viewModel.workspaceUiKey,
     chatTabs: viewModel.chatTabs,
     stripChatSessionIds: viewModel.stripChatSessionIds,
   });
   const groupEditorWorkflow = useHeaderTabsGroupEditor({
-    workspaceId: viewModel.selectedWorkspaceId,
+    workspaceId: viewModel.workspaceUiKey,
     displayManualGroups: viewModel.displayManualGroups,
     onCreateComplete: multiSelect.clearSelection,
   });
@@ -110,7 +112,7 @@ export function HeaderTabs() {
   const dismissChatSession = useCallback((sessionId: string) => {
     void dismissSession(sessionId).then(() => {
       if (viewModel.selectedWorkspaceId) {
-        removeSessionsFromManualChatGroups(viewModel.selectedWorkspaceId, [sessionId]);
+        removeSessionsFromManualChatGroups(viewModel.workspaceUiKey ?? viewModel.selectedWorkspaceId, [sessionId]);
       }
       multiSelect.clearSelection();
     }).catch((error) => {
@@ -123,6 +125,7 @@ export function HeaderTabs() {
     removeSessionsFromManualChatGroups,
     showToast,
     viewModel.selectedWorkspaceId,
+    viewModel.workspaceUiKey,
   ]);
 
   const {
@@ -218,9 +221,9 @@ export function HeaderTabs() {
                       return;
                     }
                     setActiveTab(path);
-                    if (viewModel.selectedWorkspaceId) {
+                    if (viewModel.workspaceUiKey) {
                       setActiveShellTabKey(
-                        viewModel.selectedWorkspaceId,
+                        viewModel.workspaceUiKey,
                         fileWorkspaceShellTabKey(path),
                       );
                     }
@@ -281,10 +284,10 @@ export function HeaderTabs() {
                     : undefined}
                   onUngroup={row.groupKind === "manual"
                     ? () => {
-                      if (!viewModel.selectedWorkspaceId) {
+                      if (!viewModel.workspaceUiKey) {
                         return;
                       }
-                      deleteManualChatGroup(viewModel.selectedWorkspaceId, row.manualGroupId);
+                      deleteManualChatGroup(viewModel.workspaceUiKey, row.manualGroupId);
                       multiSelect.clearSelection();
                     }
                     : undefined}

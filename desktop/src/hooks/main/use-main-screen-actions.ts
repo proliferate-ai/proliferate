@@ -34,9 +34,9 @@ export function useMainScreenActions({
   existingPr,
 }: UseMainScreenActionsArgs) {
   const queryClient = useQueryClient();
-  const renameBranchMutation = useRenameGitBranchMutation();
   const runtimeUrl = useHarnessStore((state) => state.runtimeUrl);
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
+  const renameBranchMutation = useRenameGitBranchMutation({ workspaceId: selectedWorkspaceId });
   const selectedLogicalWorkspaceId = useLogicalWorkspaceStore((state) => state.selectedLogicalWorkspaceId);
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);

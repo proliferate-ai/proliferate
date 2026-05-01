@@ -5,28 +5,38 @@ import {
   type HeaderShellStripRow,
   type ShellChatTab,
 } from "@/lib/domain/workspaces/tabs/shell-rows";
+import { resolveWorkspaceShellTabsState } from "@/lib/domain/workspaces/tabs/shell-tab-state";
 import {
   parseWorkspaceShellTabKey,
   type WorkspaceShellTab,
   type WorkspaceShellTabKey,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { resolveWorkspaceShellTabsState } from "@/lib/domain/workspaces/tabs/shell-tab-state";
-import { useWorkspaceTabsStore } from "@/stores/workspaces/workspace-tabs-store";
+import {
+  resolveWithWorkspaceFallback,
+  sameStringArray,
+} from "@/lib/domain/workspaces/workspace-keyed-preferences";
+import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 const EMPTY_SHELL_TAB_ORDER_KEYS: readonly WorkspaceShellTabKey[] = [];
 
 export function useWorkspaceActiveChatTabId({
-  selectedWorkspaceId,
+  workspaceUiKey,
+  materializedWorkspaceId,
   fallbackSessionId,
 }: {
-  selectedWorkspaceId: string | null;
+  workspaceUiKey: string | null;
+  materializedWorkspaceId: string | null;
   fallbackSessionId: string | null;
 }): string | null {
-  const storedActiveShellTabKey = useWorkspaceTabsStore((state) =>
-    selectedWorkspaceId
-      ? state.activeShellTabKeyByWorkspace[selectedWorkspaceId] ?? null
-      : null
+  const activeShellTabKeyByWorkspace = useWorkspaceUiStore(
+    (state) => state.activeShellTabKeyByWorkspace,
   );
+  const storedActiveShellTabKey = resolveWithWorkspaceFallback(
+    activeShellTabKeyByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  ).value ?? null;
   const storedActiveShellTab = storedActiveShellTabKey
     ? parseWorkspaceShellTabKey(storedActiveShellTabKey)
     : null;
@@ -40,7 +50,8 @@ export function useWorkspaceActiveChatTabId({
 }
 
 export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
-  selectedWorkspaceId,
+  workspaceUiKey,
+  materializedWorkspaceId,
   activeSessionId,
   shellChatSessionIds,
   openTabs,
@@ -48,7 +59,8 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   displayManualGroups,
   subagentChildIdsByParentId,
 }: {
-  selectedWorkspaceId: string | null;
+  workspaceUiKey: string | null;
+  materializedWorkspaceId: string | null;
   activeSessionId: string | null;
   shellChatSessionIds: readonly string[];
   openTabs: string[];
@@ -62,22 +74,55 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   orderedTabs: WorkspaceShellTab[];
   orderedShellTabKeys: string[];
 } {
-  const storedActiveShellTabKey = useWorkspaceTabsStore((state) =>
-    selectedWorkspaceId
-      ? state.activeShellTabKeyByWorkspace[selectedWorkspaceId] ?? null
-      : null
+  const activeShellTabKeyByWorkspace = useWorkspaceUiStore(
+    (state) => state.activeShellTabKeyByWorkspace,
   );
-  const persistedShellOrderKeys = useWorkspaceTabsStore((state) =>
-    selectedWorkspaceId
-      ? state.shellTabOrderByWorkspace[selectedWorkspaceId] ?? EMPTY_SHELL_TAB_ORDER_KEYS
-      : EMPTY_SHELL_TAB_ORDER_KEYS
+  const shellTabOrderByWorkspace = useWorkspaceUiStore(
+    (state) => state.shellTabOrderByWorkspace,
   );
-  const setActiveShellTabKey = useWorkspaceTabsStore((state) => state.setActiveShellTabKey);
-  const setShellTabOrder = useWorkspaceTabsStore((state) => state.setShellTabOrder);
+  const setActiveShellTabKey = useWorkspaceUiStore(
+    (state) => state.setActiveShellTabKeyForWorkspace,
+  );
+  const setShellTabOrder = useWorkspaceUiStore(
+    (state) => state.setShellTabOrderForWorkspace,
+  );
+  const fileRestoreMarker = useWorkspaceFilesStore((state) => state.fileRestoreMarker);
+
+  const activeShellTabFallback = resolveWithWorkspaceFallback(
+    activeShellTabKeyByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  );
+  const shellOrderFallback = resolveWithWorkspaceFallback(
+    shellTabOrderByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  );
+  const storedActiveShellTabKey = activeShellTabFallback.value ?? null;
+  const persistedShellOrderKeys =
+    shellOrderFallback.value ?? EMPTY_SHELL_TAB_ORDER_KEYS;
+  const persistedShellStateIncludesFile = useMemo(
+    () => {
+      if (persistedShellOrderKeys.some((key) =>
+        parseWorkspaceShellTabKey(key)?.kind === "file"
+      )) {
+        return true;
+      }
+      return storedActiveShellTabKey
+        ? parseWorkspaceShellTabKey(storedActiveShellTabKey)?.kind === "file"
+        : false;
+    },
+    [persistedShellOrderKeys, storedActiveShellTabKey],
+  );
+  const fileRestoreReady = !persistedShellStateIncludesFile || Boolean(
+    fileRestoreMarker?.ready
+      && fileRestoreMarker.workspaceUiKey === workspaceUiKey
+      && fileRestoreMarker.materializedWorkspaceId === materializedWorkspaceId,
+  );
 
   const resolved = useMemo(
     () => resolveWorkspaceShellTabsState({
-      selectedWorkspaceId,
+      selectedWorkspaceId: materializedWorkspaceId,
       activeSessionId,
       storedActiveShellTabKey,
       persistedShellOrderKeys,
@@ -92,7 +137,7 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
       displayManualGroups,
       openTabs,
       persistedShellOrderKeys,
-      selectedWorkspaceId,
+      materializedWorkspaceId,
       shellChatSessionIds,
       storedActiveShellTabKey,
       stripRows,
@@ -108,23 +153,40 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
   } = resolved;
 
   useEffect(() => {
-    if (!selectedWorkspaceId) {
+    if (!workspaceUiKey) {
+      return;
+    }
+    let wroteFallback = false;
+    if (shellOrderFallback.shouldWriteBack && shellOrderFallback.value !== undefined) {
+      setShellTabOrder(workspaceUiKey, shellOrderFallback.value);
+      wroteFallback = true;
+    }
+    if (activeShellTabFallback.shouldWriteBack) {
+      setActiveShellTabKey(workspaceUiKey, activeShellTabFallback.value ?? null);
+      wroteFallback = true;
+    }
+    if (wroteFallback || !fileRestoreReady) {
       return;
     }
     if (!sameStringArray(persistedShellOrderKeys, orderedShellTabKeys)) {
-      setShellTabOrder(selectedWorkspaceId, orderedShellTabKeys);
+      setShellTabOrder(workspaceUiKey, orderedShellTabKeys);
     }
     if (storedActiveShellTabKey !== activeShellTabKey) {
-      setActiveShellTabKey(selectedWorkspaceId, activeShellTabKey);
+      setActiveShellTabKey(workspaceUiKey, activeShellTabKey);
     }
   }, [
+    activeShellTabFallback.shouldWriteBack,
+    activeShellTabFallback.value,
     activeShellTabKey,
+    fileRestoreReady,
     orderedShellTabKeys,
     persistedShellOrderKeys,
-    selectedWorkspaceId,
     setActiveShellTabKey,
     setShellTabOrder,
+    shellOrderFallback.shouldWriteBack,
+    shellOrderFallback.value,
     storedActiveShellTabKey,
+    workspaceUiKey,
   ]);
 
   return {
@@ -134,8 +196,4 @@ export function useWorkspaceShellTabsState<TTab extends ShellChatTab>({
     orderedTabs,
     orderedShellTabKeys,
   };
-}
-
-function sameStringArray(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
 }

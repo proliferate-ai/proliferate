@@ -7,6 +7,8 @@ import {
   clearViewedSessionErrors,
 } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
 
 export function useDismissedSessionCleanup() {
   const { activateSession, closeSessionSlotStream } = useSessionRuntimeActions();
@@ -19,6 +21,12 @@ export function useDismissedSessionCleanup() {
     const workspaceId = closingSlot?.workspaceId
       ?? workspaceIdHint
       ?? initialState.selectedWorkspaceId;
+    const selectedWorkspaceId = initialState.selectedWorkspaceId;
+    const selectedLogicalWorkspaceId =
+      useLogicalWorkspaceStore.getState().selectedLogicalWorkspaceId;
+    const cleanupUiKey = workspaceId && workspaceId === selectedWorkspaceId
+      ? resolveWorkspaceUiKey(selectedLogicalWorkspaceId, selectedWorkspaceId)
+      : workspaceId;
 
     closeSessionSlotStream(sessionId);
     removeSessionSlot(sessionId);
@@ -37,7 +45,9 @@ export function useDismissedSessionCleanup() {
     }
 
     if (workspaceId) {
-      clearLastViewedSession(workspaceId, sessionId);
+      if (cleanupUiKey) {
+        clearLastViewedSession(cleanupUiKey, sessionId);
+      }
       removeWorkspaceSessionRecord(workspaceId, sessionId);
     }
   }, [activateSession, closeSessionSlotStream, removeSessionSlot, removeWorkspaceSessionRecord]);

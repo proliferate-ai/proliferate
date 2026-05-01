@@ -17,6 +17,7 @@ import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
 } from "@/lib/domain/chat/file-mentions";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
 import { createPromptId } from "@/lib/domain/chat/prompt-id";
 import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
 import {
@@ -51,7 +52,7 @@ export function useChatPromptActions() {
       return;
     }
 
-    const draftKey = selectedLogicalWorkspaceId ?? selectedWorkspaceId;
+    const draftKey = resolveWorkspaceUiKey(selectedLogicalWorkspaceId, selectedWorkspaceId);
     const currentDraft = draftKey
       ? useChatInputStore.getState().draftByWorkspaceId[draftKey] ?? EMPTY_CHAT_DRAFT
       : EMPTY_CHAT_DRAFT;

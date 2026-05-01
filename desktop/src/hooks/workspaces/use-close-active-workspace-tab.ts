@@ -7,7 +7,7 @@ import {
   resolveFallbackWorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
-import { useWorkspaceTabsStore } from "@/stores/workspaces/workspace-tabs-store";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 export type CloseActiveWorkspaceTabResult = "closed" | "blocked" | "noop";
 
@@ -23,7 +23,9 @@ export function useCloseActiveWorkspaceTab() {
   const buffersByPath = useWorkspaceFilesStore((state) => state.buffersByPath);
   const closeTab = useWorkspaceFilesStore((state) => state.closeTab);
   const setActiveFileTab = useWorkspaceFilesStore((state) => state.setActiveTab);
-  const setActiveShellTabKey = useWorkspaceTabsStore((state) => state.setActiveShellTabKey);
+  const setActiveShellTabKey = useWorkspaceUiStore(
+    (state) => state.setActiveShellTabKeyForWorkspace,
+  );
   const headerTabs = useWorkspaceHeaderTabsViewModel();
   const chatVisibilityActions = useChatTabVisibilityActions({
     visibleIds: headerTabs.visibleChatSessionIds,
@@ -46,18 +48,18 @@ export function useCloseActiveWorkspaceTab() {
         activeTab: activeShellTab,
       });
       closeTab(path);
-      if (fallback && headerTabs.selectedWorkspaceId) {
+      if (fallback && headerTabs.workspaceUiKey) {
         if (fallback.kind === "chat") {
           chatVisibilityActions.showChatSessionTab(fallback.sessionId, { select: true });
         } else {
           setActiveFileTab(fallback.path);
           setActiveShellTabKey(
-            headerTabs.selectedWorkspaceId,
+            headerTabs.workspaceUiKey,
             fileWorkspaceShellTabKey(fallback.path),
           );
         }
-      } else if (headerTabs.selectedWorkspaceId) {
-        setActiveShellTabKey(headerTabs.selectedWorkspaceId, null);
+      } else if (headerTabs.workspaceUiKey) {
+        setActiveShellTabKey(headerTabs.workspaceUiKey, null);
       }
       return "closed";
     }
@@ -69,7 +71,7 @@ export function useCloseActiveWorkspaceTab() {
       );
       if (!hidden && headerTabs.selectedWorkspaceId) {
         setActiveShellTabKey(
-          headerTabs.selectedWorkspaceId,
+          headerTabs.workspaceUiKey ?? headerTabs.selectedWorkspaceId,
           getWorkspaceShellTabKey(activeShellTab),
         );
       }
@@ -84,6 +86,7 @@ export function useCloseActiveWorkspaceTab() {
     headerTabs.activeShellTab,
     headerTabs.orderedTabs,
     headerTabs.selectedWorkspaceId,
+    headerTabs.workspaceUiKey,
     setActiveFileTab,
     setActiveShellTabKey,
   ]);

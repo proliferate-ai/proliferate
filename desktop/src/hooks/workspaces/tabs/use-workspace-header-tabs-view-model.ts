@@ -44,6 +44,9 @@ import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore, type SessionSlot } from "@/stores/sessions/harness-store";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
+import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
+import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/workspace-ui-key";
+import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 
 export interface HeaderChatTabEntry extends GroupedChatTab {
   id: string;
@@ -76,6 +79,14 @@ export function useWorkspaceHeaderTabsViewModel() {
   const tabModes = useWorkspaceFilesStore((s) => s.tabModes);
 
   const selectedWorkspaceId = useHarnessStore((s) => s.selectedWorkspaceId);
+  const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
+    (s) => s.selectedLogicalWorkspaceId,
+  );
+  const selectedIdentity = resolveSelectedWorkspaceIdentity({
+    selectedLogicalWorkspaceId,
+    materializedWorkspaceId: selectedWorkspaceId,
+  });
+  const { workspaceUiKey, materializedWorkspaceId } = selectedIdentity;
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const activeSessionId = useHarnessStore((s) => s.activeSessionId);
   const sessionSlots = useHarnessStore((s) => s.sessionSlots);
@@ -151,20 +162,29 @@ export function useWorkspaceHeaderTabsViewModel() {
     [liveVisibilityCandidates],
   );
 
-  const persistedVisibleIds = selectedWorkspaceId
-    ? visibleByWorkspace[selectedWorkspaceId]
-    : undefined;
-  const recentlyHiddenIds = selectedWorkspaceId
-    ? hiddenByWorkspace[selectedWorkspaceId] ?? []
-    : [];
-  const collapsedParentIds = selectedWorkspaceId
-    ? collapsedGroupsByWorkspace[selectedWorkspaceId] ?? []
-    : [];
-  const persistedManualGroups = selectedWorkspaceId
-    ? manualGroupsByWorkspace[selectedWorkspaceId] ?? []
-    : [];
+  const persistedVisibleIds = resolveWithWorkspaceFallback(
+    visibleByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  ).value;
+  const recentlyHiddenIds = resolveWithWorkspaceFallback(
+    hiddenByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  ).value ?? [];
+  const collapsedParentIds = resolveWithWorkspaceFallback(
+    collapsedGroupsByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  ).value ?? [];
+  const persistedManualGroups = resolveWithWorkspaceFallback(
+    manualGroupsByWorkspace,
+    workspaceUiKey,
+    materializedWorkspaceId,
+  ).value ?? [];
   const activeChatSessionIdForTabs = useWorkspaceActiveChatTabId({
-    selectedWorkspaceId,
+    workspaceUiKey,
+    materializedWorkspaceId,
     fallbackSessionId: activeSessionId,
   });
   const persistedVisibleIdsForResolution = useMemo(
@@ -205,7 +225,7 @@ export function useWorkspaceHeaderTabsViewModel() {
   const workspaceSessionsLoaded = workspaceSessionsQuery.data !== undefined;
 
   useEffect(() => {
-    if (!selectedWorkspaceId) {
+    if (!workspaceUiKey) {
       return;
     }
     if (!sameStringArray(persistedVisibleIds ?? [], visibleChatSessionIds)) {
@@ -219,7 +239,7 @@ export function useWorkspaceHeaderTabsViewModel() {
       );
       if (isSuperset || workspaceSessionsLoaded) {
         setVisibleChatSessionIdsForWorkspace(
-          selectedWorkspaceId,
+          workspaceUiKey,
           visibleChatSessionIds,
         );
       }
@@ -229,17 +249,17 @@ export function useWorkspaceHeaderTabsViewModel() {
         (id) => !visibleResolution.prunedRecentlyHiddenIds.includes(id),
       );
       if (staleHiddenIds.length > 0 && workspaceSessionsLoaded) {
-        clearHiddenChatSessionsForWorkspace(selectedWorkspaceId, staleHiddenIds);
+        clearHiddenChatSessionsForWorkspace(workspaceUiKey, staleHiddenIds);
       }
     }
   }, [
     clearHiddenChatSessionsForWorkspace,
     persistedVisibleIds,
     recentlyHiddenIds,
-    selectedWorkspaceId,
     setVisibleChatSessionIdsForWorkspace,
     visibleChatSessionIds,
     visibleResolution.prunedRecentlyHiddenIds,
+    workspaceUiKey,
     workspaceSessionsLoaded,
   ]);
 
@@ -351,7 +371,8 @@ export function useWorkspaceHeaderTabsViewModel() {
     orderedTabs,
     orderedShellTabKeys,
   } = useWorkspaceShellTabsState({
-    selectedWorkspaceId,
+    workspaceUiKey,
+    materializedWorkspaceId,
     activeSessionId,
     shellChatSessionIds: stripVisibleChatSessionIds,
     openTabs,
@@ -361,7 +382,7 @@ export function useWorkspaceHeaderTabsViewModel() {
   });
 
   useEffect(() => {
-    if (!selectedWorkspaceId || collapsedParentIds.length === 0) {
+    if (!workspaceUiKey || collapsedParentIds.length === 0) {
       return;
     }
     const manualGroupIds = new Set(persistedManualGroups.map((group) => group.id));
@@ -378,7 +399,7 @@ export function useWorkspaceHeaderTabsViewModel() {
         || (!!activeParentId && groupId === activeParentId);
     });
     if (staleOrActiveIds.length > 0) {
-      clearChatGroupCollapsedForWorkspace(selectedWorkspaceId, staleOrActiveIds);
+      clearChatGroupCollapsedForWorkspace(workspaceUiKey, staleOrActiveIds);
     }
   }, [
     activeSessionId,
@@ -387,11 +408,11 @@ export function useWorkspaceHeaderTabsViewModel() {
     hierarchy.childToParent,
     hierarchy.childrenByParentSessionId,
     persistedManualGroups,
-    selectedWorkspaceId,
+    workspaceUiKey,
   ]);
 
   useEffect(() => {
-    if (!selectedWorkspaceId || !workspaceSessionsLoaded || persistedManualGroups.length === 0) {
+    if (!workspaceUiKey || !workspaceSessionsLoaded || persistedManualGroups.length === 0) {
       return;
     }
     const knownSessionIdSet = new Set(knownSessionIds);
@@ -410,15 +431,15 @@ export function useWorkspaceHeaderTabsViewModel() {
       resolvedHierarchySessionIds: hierarchy.resolvedSessionIds,
     });
     if (JSON.stringify(normalized) !== JSON.stringify(persistedManualGroups)) {
-      setManualChatGroupsForWorkspace(selectedWorkspaceId, normalized);
+      setManualChatGroupsForWorkspace(workspaceUiKey, normalized);
     }
   }, [
     hierarchy.childToParent,
     hierarchy.resolvedSessionIds,
     knownSessionIds,
     persistedManualGroups,
-    selectedWorkspaceId,
     setManualChatGroupsForWorkspace,
+    workspaceUiKey,
     workspaceSessionsLoaded,
   ]);
 
@@ -449,6 +470,8 @@ export function useWorkspaceHeaderTabsViewModel() {
     activeShellTab,
     activeShellTabKey,
     selectedWorkspaceId,
+    workspaceUiKey,
+    materializedWorkspaceId,
     openTabs,
     buffersByPath,
     tabModes,

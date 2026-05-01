@@ -13,7 +13,7 @@ import {
   type WorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
-import { useWorkspaceTabsStore } from "@/stores/workspaces/workspace-tabs-store";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   failLatencyFlow,
@@ -22,7 +22,9 @@ import {
 
 export function useWorkspaceTabActions() {
   const setActiveTab = useWorkspaceFilesStore((state) => state.setActiveTab);
-  const setActiveShellTabKey = useWorkspaceTabsStore((state) => state.setActiveShellTabKey);
+  const setActiveShellTabKey = useWorkspaceUiStore(
+    (state) => state.setActiveShellTabKeyForWorkspace,
+  );
 
   const headerTabs = useWorkspaceHeaderTabsViewModel();
   const showToast = useToastStore((state) => state.show);
@@ -48,16 +50,16 @@ export function useWorkspaceTabActions() {
     }
 
     setActiveTab(tab.path);
-    if (headerTabs.selectedWorkspaceId) {
+    if (headerTabs.workspaceUiKey) {
       setActiveShellTabKey(
-        headerTabs.selectedWorkspaceId,
+        headerTabs.workspaceUiKey,
         fileWorkspaceShellTabKey(tab.path),
       );
     }
     return true;
   }, [
     chatVisibilityActions,
-    headerTabs.selectedWorkspaceId,
+    headerTabs.workspaceUiKey,
     setActiveShellTabKey,
     setActiveTab,
   ]);

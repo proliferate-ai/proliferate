@@ -199,8 +199,8 @@ export function WorkspaceArrivalAttachedPanel() {
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  clearSetupFailureDismissal(panelState.workspaceId);
-                  void rerunSetup.mutateAsync(panelState.workspaceId);
+                  clearSetupFailureDismissal(panelState.workspaceUiKey);
+                  void rerunSetup.mutateAsync(panelState.materializedWorkspaceId);
                 }}
                 className="h-6 px-2"
               >
@@ -209,7 +209,7 @@ export function WorkspaceArrivalAttachedPanel() {
               <IconButton
                 title="Dismiss"
                 size="sm"
-                onClick={() => dismissSetupFailure(panelState.workspaceId)}
+                onClick={() => dismissSetupFailure(panelState.workspaceUiKey)}
               >
                 <X className="size-3.5" />
               </IconButton>

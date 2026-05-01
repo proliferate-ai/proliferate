@@ -158,7 +158,10 @@ export function useCloudWorkspaceActions() {
     onSuccess: async (_, workspaceId, context) => {
       const runtimeWorkspaceId = resolveCloudWorkspaceRuntimeId(workspaceId);
       clearViewedSessionErrors(context?.viewedSessionErrorIdsToClear ?? EMPTY_SESSION_IDS);
-      clearWorkspaceRuntimeState(runtimeWorkspaceId, { clearSelection: true });
+      clearWorkspaceRuntimeState(runtimeWorkspaceId, {
+        clearSelection: true,
+        clearDraftUiKey: workspaceId,
+      });
       clearDeferredLaunchesForWorkspace(runtimeWorkspaceId);
       await invalidateCloudResources();
       trackProductEvent("cloud_workspace_deleted", {

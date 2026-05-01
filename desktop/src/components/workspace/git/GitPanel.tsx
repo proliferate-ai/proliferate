@@ -100,8 +100,6 @@ export function GitPanel() {
   const [changesFilter, setChangesFilter] = useState<GitPanelMode>("unstaged");
   const [manualToggled, setManualToggled] = useState<Set<string>>(new Set());
   const { openFile, openFileDiff } = useWorkspaceFileActions();
-  const stageMutation = useStageGitPathsMutation();
-  const unstageMutation = useUnstageGitPathsMutation();
   const {
     activeWorkspaceId,
     baseRef,
@@ -115,6 +113,8 @@ export function GitPanel() {
     errorMessage,
     refetch,
   } = useGitPanelState(changesFilter);
+  const stageMutation = useStageGitPathsMutation({ workspaceId: activeWorkspaceId });
+  const unstageMutation = useUnstageGitPathsMutation({ workspaceId: activeWorkspaceId });
   const diffScope = gitPanelDiffScope(changesFilter);
   const isBranchMode = changesFilter === "branch";
 

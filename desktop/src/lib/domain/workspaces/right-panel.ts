@@ -3,6 +3,20 @@ export type RightPanelHeaderTool = Exclude<RightPanelTool, "terminal">;
 export type RightPanelHeaderEntryKey =
   | `tool:${RightPanelHeaderTool}`
   | `terminal:${string}`;
+export type RightPanelActiveEntryKey = RightPanelHeaderEntryKey;
+
+export interface RightPanelDurableState {
+  open: boolean;
+  width: number;
+  toolOrder: RightPanelHeaderTool[];
+}
+
+export interface RightPanelMaterializedState {
+  activeEntryKey: RightPanelActiveEntryKey;
+  headerOrder: RightPanelHeaderEntryKey[];
+  terminalOrder: string[];
+  activeTerminalId: string | null;
+}
 
 export interface RightPanelWorkspaceState {
   activeTool: RightPanelTool;
@@ -23,6 +37,19 @@ export const DEFAULT_RIGHT_PANEL_TOOL_ORDER: RightPanelTool[] = [
 ];
 export const DEFAULT_RIGHT_PANEL_HEADER_ORDER: RightPanelHeaderEntryKey[] =
   DEFAULT_RIGHT_PANEL_TOOL_ORDER.map((tool) => rightPanelToolHeaderKey(tool));
+export const DEFAULT_RIGHT_PANEL_DURABLE_STATE: RightPanelDurableState = {
+  open: false,
+  width: RIGHT_PANEL_DEFAULT_WIDTH,
+  toolOrder: DEFAULT_RIGHT_PANEL_TOOL_ORDER.filter(
+    (tool): tool is RightPanelHeaderTool => tool !== "terminal",
+  ),
+};
+export const DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE: RightPanelMaterializedState = {
+  activeEntryKey: "tool:git",
+  headerOrder: DEFAULT_RIGHT_PANEL_HEADER_ORDER,
+  terminalOrder: [],
+  activeTerminalId: null,
+};
 
 export const DEFAULT_RIGHT_PANEL_WORKSPACE_STATE: RightPanelWorkspaceState = {
   activeTool: "git",
@@ -158,6 +185,136 @@ export function resolveActiveTerminalId(
   return terminalOrder[0] ?? null;
 }
 
+export function normalizeRightPanelDurableState(
+  input: Partial<RightPanelDurableState> | undefined,
+  isCloudWorkspaceSelected: boolean,
+): RightPanelDurableState {
+  return {
+    open: typeof input?.open === "boolean" ? input.open : DEFAULT_RIGHT_PANEL_DURABLE_STATE.open,
+    width: clampRightPanelWidth(input?.width ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE.width),
+    toolOrder: normalizeRightPanelToolOrder(
+      input?.toolOrder,
+      isCloudWorkspaceSelected,
+    ).filter((tool): tool is RightPanelHeaderTool => tool !== "terminal"),
+  };
+}
+
+export function resolveFallbackRightPanelActiveEntryKey(
+  toolOrder: readonly RightPanelHeaderTool[],
+): RightPanelActiveEntryKey {
+  if (toolOrder.includes("git")) {
+    return "tool:git";
+  }
+  return toolOrder[0] ? rightPanelToolHeaderKey(toolOrder[0]) : "tool:files";
+}
+
+export function normalizeRightPanelMaterializedState(
+  input: Partial<RightPanelMaterializedState> | undefined,
+  durableState: RightPanelDurableState,
+  options?: {
+    liveTerminalIds?: readonly string[];
+  },
+): RightPanelMaterializedState {
+  const terminalOrderHints = [
+    ...terminalIdsFromHeaderOrder(input?.headerOrder),
+    ...(input?.terminalOrder ?? []),
+  ];
+  const terminalOrder = options?.liveTerminalIds
+    ? mergeTerminalOrder(terminalOrderHints, options.liveTerminalIds)
+    : uniqueStringList(terminalOrderHints);
+  const activeTerminalId = resolveActiveTerminalId(input?.activeTerminalId, terminalOrder);
+  const headerOrder = normalizeRightPanelHeaderOrder(
+    input?.headerOrder,
+    durableState.toolOrder,
+    terminalOrder,
+  );
+  const activeEntryKey = resolveRightPanelActiveEntryKey(
+    input?.activeEntryKey,
+    durableState.toolOrder,
+    terminalOrder,
+  );
+
+  return {
+    activeEntryKey,
+    headerOrder,
+    terminalOrder,
+    activeTerminalId,
+  };
+}
+
+export function mergeRightPanelState(args: {
+  durableState: Partial<RightPanelDurableState> | undefined;
+  materializedState: Partial<RightPanelMaterializedState> | undefined;
+  isCloudWorkspaceSelected: boolean;
+  liveTerminalIds?: readonly string[];
+}): RightPanelWorkspaceState {
+  const durableState = normalizeRightPanelDurableState(
+    args.durableState,
+    args.isCloudWorkspaceSelected,
+  );
+  const materializedState = normalizeRightPanelMaterializedState(
+    args.materializedState,
+    durableState,
+    { liveTerminalIds: args.liveTerminalIds },
+  );
+  const activeEntry = parseRightPanelHeaderEntryKey(materializedState.activeEntryKey);
+  const activeTool = activeEntry?.kind === "terminal" ? "terminal" : activeEntry?.tool ?? "git";
+
+  return {
+    activeTool,
+    toolOrder: durableState.toolOrder,
+    terminalOrder: materializedState.terminalOrder,
+    headerOrder: materializedState.headerOrder,
+    activeTerminalId: materializedState.activeTerminalId,
+  };
+}
+
+export function splitLegacyRightPanelWorkspaceState(args: {
+  state: Partial<RightPanelWorkspaceState> | undefined;
+  width: number | undefined;
+  isCloudWorkspaceSelected: boolean;
+}): {
+  durableState: RightPanelDurableState;
+  materializedState: RightPanelMaterializedState;
+} {
+  const legacyState = reconcileRightPanelWorkspaceState(args.state, {
+    isCloudWorkspaceSelected: args.isCloudWorkspaceSelected,
+  });
+  const toolOrderHints = [
+    ...toolsFromHeaderOrder(legacyState.headerOrder),
+    ...legacyState.toolOrder,
+  ];
+  const durableState = normalizeRightPanelDurableState(
+    {
+      open: false,
+      width: args.width ?? RIGHT_PANEL_DEFAULT_WIDTH,
+      toolOrder: toolOrderHints.filter(
+        (tool): tool is RightPanelHeaderTool => tool !== "terminal",
+      ),
+    },
+    args.isCloudWorkspaceSelected,
+  );
+  const activeEntryKey = legacyState.activeTool === "terminal"
+    && legacyState.activeTerminalId
+    && legacyState.terminalOrder.includes(legacyState.activeTerminalId)
+    ? rightPanelTerminalHeaderKey(legacyState.activeTerminalId)
+    : legacyState.activeTool !== "terminal"
+      && durableState.toolOrder.includes(legacyState.activeTool)
+      ? rightPanelToolHeaderKey(legacyState.activeTool)
+      : resolveFallbackRightPanelActiveEntryKey(durableState.toolOrder);
+  const materializedState = normalizeRightPanelMaterializedState(
+    {
+      activeEntryKey,
+      headerOrder: legacyState.headerOrder,
+      terminalOrder: legacyState.terminalOrder,
+      activeTerminalId: legacyState.activeTerminalId,
+    },
+    durableState,
+  );
+
+  return { durableState, materializedState };
+}
+
 export function reconcileRightPanelWorkspaceState(
   input: Partial<RightPanelWorkspaceState> | undefined,
   options: {
@@ -194,6 +351,21 @@ export function reconcileRightPanelWorkspaceState(
     headerOrder,
     activeTerminalId,
   };
+}
+
+function resolveRightPanelActiveEntryKey(
+  input: RightPanelActiveEntryKey | undefined,
+  toolOrder: readonly RightPanelHeaderTool[],
+  terminalOrder: readonly string[],
+): RightPanelActiveEntryKey {
+  const parsed = parseRightPanelHeaderEntryKey(input);
+  if (parsed?.kind === "tool" && toolOrder.includes(parsed.tool)) {
+    return rightPanelToolHeaderKey(parsed.tool);
+  }
+  if (parsed?.kind === "terminal" && terminalOrder.includes(parsed.terminalId)) {
+    return rightPanelTerminalHeaderKey(parsed.terminalId);
+  }
+  return resolveFallbackRightPanelActiveEntryKey(toolOrder);
 }
 
 export function removeTerminalFromRightPanelState(

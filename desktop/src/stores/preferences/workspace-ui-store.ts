@@ -21,16 +21,26 @@ import {
 } from "@/lib/domain/workspaces/sidebar";
 import {
   clampRightPanelWidth,
+  DEFAULT_RIGHT_PANEL_DURABLE_STATE,
+  DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
   DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
   isRightPanelTool,
+  mergeRightPanelState,
   parseRightPanelHeaderEntryKey,
-  RIGHT_PANEL_DEFAULT_WIDTH,
   reconcileRightPanelWorkspaceState,
   rightPanelTerminalHeaderKey,
   rightPanelToolHeaderKey,
+  splitLegacyRightPanelWorkspaceState,
+  type RightPanelDurableState,
   type RightPanelHeaderEntryKey,
+  type RightPanelMaterializedState,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/right-panel";
+import type { WorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import {
+  sanitizeWorkspaceShellTabKeys,
+} from "@/lib/domain/workspaces/tabs/shell-file-seed";
+import { sameStringArray } from "@/lib/domain/workspaces/workspace-keyed-preferences";
 import { readPersistedValue, persistValue } from "@/lib/infra/preferences-persistence";
 
 export interface WorkspaceUiState {
@@ -41,8 +51,10 @@ export interface WorkspaceUiState {
   threadsCollapsed: boolean;
   sidebarOpen: boolean;
   sidebarWidth: number;
-  rightPanelByWorkspace: Record<string, RightPanelWorkspaceState>;
-  rightPanelWidthByWorkspace: Record<string, number>;
+  rightPanelDurableByWorkspace: Record<string, RightPanelDurableState>;
+  rightPanelMaterializedByWorkspace: Record<string, RightPanelMaterializedState>;
+  activeShellTabKeyByWorkspace: Record<string, WorkspaceShellTabKey | null>;
+  shellTabOrderByWorkspace: Record<string, WorkspaceShellTabKey[]>;
   workspaceTypes: SidebarWorkspaceVariant[];
   lastViewedAt: Record<string, string>;
   lastViewedSessionByWorkspace: Record<string, string>;
@@ -66,14 +78,32 @@ export interface WorkspaceUiState {
   setThreadsCollapsed: (value: boolean) => void;
   setSidebarOpen: (value: SetStateAction<boolean>) => void;
   setSidebarWidth: (value: SetStateAction<number>) => void;
-  setRightPanelForWorkspace: (
+  setRightPanelForWorkspace: (workspaceId: string, value: SetStateAction<RightPanelWorkspaceState>) => void;
+  setRightPanelDurableForWorkspace: (
     workspaceId: string,
-    value: SetStateAction<RightPanelWorkspaceState>,
+    value: SetStateAction<RightPanelDurableState>,
+  ) => void;
+  setRightPanelMaterializedForWorkspace: (
+    workspaceId: string,
+    value: SetStateAction<RightPanelMaterializedState>,
   ) => void;
   setRightPanelWidthForWorkspace: (
     workspaceId: string,
     value: SetStateAction<number>,
   ) => void;
+  setRightPanelOpenForWorkspace: (
+    workspaceId: string,
+    value: SetStateAction<boolean>,
+  ) => void;
+  setActiveShellTabKeyForWorkspace: (
+    workspaceId: string,
+    key: WorkspaceShellTabKey | null,
+  ) => void;
+  setShellTabOrderForWorkspace: (
+    workspaceId: string,
+    order: WorkspaceShellTabKey[],
+  ) => void;
+  resetWorkspaceShellTabs: (workspaceId: string) => void;
   toggleSidebarWorkspaceType: (type: SidebarWorkspaceVariant) => void;
   markWorkspaceViewed: (workspaceId: string) => void;
   setLastViewedSessionForWorkspace: (workspaceId: string, sessionId: string) => void;
@@ -114,6 +144,7 @@ export interface WorkspaceUiState {
  * polluting the archive model.
  * v4: add workspace-scoped right-panel preferences.
  * v5: add unified right-panel header order hints.
+ * v6: split right-panel durable/materialized state and persist shell tab maps.
  */
 const WORKSPACE_UI_MIGRATION_VERSION = 6;
 export const WORKSPACE_SIDEBAR_DEFAULT_WIDTH = 280;
@@ -128,8 +159,10 @@ export interface PersistedWorkspaceUiState {
   threadsCollapsed: boolean;
   sidebarOpen: boolean;
   sidebarWidth: number;
-  rightPanelByWorkspace: Record<string, RightPanelWorkspaceState>;
-  rightPanelWidthByWorkspace: Record<string, number>;
+  rightPanelDurableByWorkspace: Record<string, RightPanelDurableState>;
+  rightPanelMaterializedByWorkspace: Record<string, RightPanelMaterializedState>;
+  activeShellTabKeyByWorkspace: Record<string, WorkspaceShellTabKey | null>;
+  shellTabOrderByWorkspace: Record<string, WorkspaceShellTabKey[]>;
   workspaceTypes: SidebarWorkspaceVariant[];
   lastViewedAt: Record<string, string>;
   lastViewedSessionByWorkspace: Record<string, string>;
@@ -151,8 +184,10 @@ export const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
   threadsCollapsed: false,
   sidebarOpen: false,
   sidebarWidth: WORKSPACE_SIDEBAR_DEFAULT_WIDTH,
-  rightPanelByWorkspace: {},
-  rightPanelWidthByWorkspace: {},
+  rightPanelDurableByWorkspace: {},
+  rightPanelMaterializedByWorkspace: {},
+  activeShellTabKeyByWorkspace: {},
+  shellTabOrderByWorkspace: {},
   workspaceTypes: DEFAULT_SIDEBAR_WORKSPACE_TYPES,
   lastViewedAt: {},
   lastViewedSessionByWorkspace: {},
@@ -193,8 +228,10 @@ async function readAll(): Promise<{ state: PersistedWorkspaceUiState; didMigrate
       hiddenRepoRootIds: WORKSPACE_UI_DEFAULTS.hiddenRepoRootIds,
       sidebarOpen: WORKSPACE_UI_DEFAULTS.sidebarOpen,
       sidebarWidth: WORKSPACE_UI_DEFAULTS.sidebarWidth,
-      rightPanelByWorkspace: WORKSPACE_UI_DEFAULTS.rightPanelByWorkspace,
-      rightPanelWidthByWorkspace: WORKSPACE_UI_DEFAULTS.rightPanelWidthByWorkspace,
+      rightPanelDurableByWorkspace: WORKSPACE_UI_DEFAULTS.rightPanelDurableByWorkspace,
+      rightPanelMaterializedByWorkspace: WORKSPACE_UI_DEFAULTS.rightPanelMaterializedByWorkspace,
+      activeShellTabKeyByWorkspace: WORKSPACE_UI_DEFAULTS.activeShellTabKeyByWorkspace,
+      shellTabOrderByWorkspace: WORKSPACE_UI_DEFAULTS.shellTabOrderByWorkspace,
       workspaceTypes: WORKSPACE_UI_DEFAULTS.workspaceTypes,
       lastViewedAt:
         (await readPersistedValue<Record<string, string>>("lastViewedAt"))
@@ -226,12 +263,31 @@ async function readAll(): Promise<{ state: PersistedWorkspaceUiState; didMigrate
 export function migrateWorkspaceUiState(
   input: PersistedWorkspaceUiState,
 ): { state: PersistedWorkspaceUiState; didMigrate: boolean } {
+  const legacyInput = input as PersistedWorkspaceUiState & {
+    rightPanelByWorkspace?: Record<string, RightPanelWorkspaceState>;
+    rightPanelWidthByWorkspace?: Record<string, number>;
+  };
   const state = {
     ...WORKSPACE_UI_DEFAULTS,
     ...input,
   };
   let didMigrate = false;
   const previousMigrationVersion = state.migrationVersion ?? 0;
+  if (previousMigrationVersion < 6) {
+    const migratedRightPanel = migrateLegacyRightPanelPreferences({
+      rightPanelByWorkspace: legacyInput.rightPanelByWorkspace,
+      rightPanelWidthByWorkspace: legacyInput.rightPanelWidthByWorkspace,
+    });
+    state.rightPanelDurableByWorkspace = {
+      ...migratedRightPanel.durableByWorkspace,
+      ...state.rightPanelDurableByWorkspace,
+    };
+    state.rightPanelMaterializedByWorkspace = {
+      ...migratedRightPanel.materializedByWorkspace,
+      ...state.rightPanelMaterializedByWorkspace,
+    };
+    didMigrate = true;
+  }
   if (previousMigrationVersion < 3) {
     state.archivedWorkspaceIds = [];
     didMigrate = true;
@@ -264,19 +320,38 @@ export function migrateWorkspaceUiState(
     didMigrate = true;
   }
 
-  const sanitizedRightPanelByWorkspace = sanitizeRightPanelByWorkspace(
-    state.rightPanelByWorkspace,
+  const sanitizedRightPanelDurable = sanitizeRightPanelDurableByWorkspace(
+    state.rightPanelDurableByWorkspace,
   );
-  if (JSON.stringify(sanitizedRightPanelByWorkspace) !== JSON.stringify(state.rightPanelByWorkspace)) {
-    state.rightPanelByWorkspace = sanitizedRightPanelByWorkspace;
+  if (JSON.stringify(sanitizedRightPanelDurable) !== JSON.stringify(state.rightPanelDurableByWorkspace)) {
+    state.rightPanelDurableByWorkspace = sanitizedRightPanelDurable;
     didMigrate = true;
   }
 
-  const sanitizedRightPanelWidths = sanitizeRightPanelWidths(
-    state.rightPanelWidthByWorkspace,
+  const sanitizedRightPanelMaterialized = sanitizeRightPanelMaterializedByWorkspace(
+    state.rightPanelMaterializedByWorkspace,
   );
-  if (JSON.stringify(sanitizedRightPanelWidths) !== JSON.stringify(state.rightPanelWidthByWorkspace)) {
-    state.rightPanelWidthByWorkspace = sanitizedRightPanelWidths;
+  if (
+    JSON.stringify(sanitizedRightPanelMaterialized)
+    !== JSON.stringify(state.rightPanelMaterializedByWorkspace)
+  ) {
+    state.rightPanelMaterializedByWorkspace = sanitizedRightPanelMaterialized;
+    didMigrate = true;
+  }
+
+  const sanitizedActiveShellTabs = sanitizeActiveShellTabKeysByWorkspace(
+    state.activeShellTabKeyByWorkspace,
+  );
+  if (JSON.stringify(sanitizedActiveShellTabs) !== JSON.stringify(state.activeShellTabKeyByWorkspace)) {
+    state.activeShellTabKeyByWorkspace = sanitizedActiveShellTabs;
+    didMigrate = true;
+  }
+
+  const sanitizedShellOrder = sanitizeShellTabOrderByWorkspace(
+    state.shellTabOrderByWorkspace,
+  );
+  if (JSON.stringify(sanitizedShellOrder) !== JSON.stringify(state.shellTabOrderByWorkspace)) {
+    state.shellTabOrderByWorkspace = sanitizedShellOrder;
     didMigrate = true;
   }
 
@@ -343,8 +418,10 @@ function selectPersistedSlice(state: WorkspaceUiState): PersistedWorkspaceUiStat
     threadsCollapsed: state.threadsCollapsed,
     sidebarOpen: state.sidebarOpen,
     sidebarWidth: state.sidebarWidth,
-    rightPanelByWorkspace: state.rightPanelByWorkspace,
-    rightPanelWidthByWorkspace: state.rightPanelWidthByWorkspace,
+    rightPanelDurableByWorkspace: state.rightPanelDurableByWorkspace,
+    rightPanelMaterializedByWorkspace: state.rightPanelMaterializedByWorkspace,
+    activeShellTabKeyByWorkspace: state.activeShellTabKeyByWorkspace,
+    shellTabOrderByWorkspace: state.shellTabOrderByWorkspace,
     workspaceTypes: state.workspaceTypes,
     lastViewedAt: state.lastViewedAt,
     lastViewedSessionByWorkspace: state.lastViewedSessionByWorkspace,
@@ -371,6 +448,140 @@ function isStringRecord(value: unknown): value is Record<string, string> {
   return typeof value === "object"
     && value !== null
     && Object.values(value).every((entry) => typeof entry === "string");
+}
+
+function migrateLegacyRightPanelPreferences(args: {
+  rightPanelByWorkspace?: Record<string, RightPanelWorkspaceState>;
+  rightPanelWidthByWorkspace?: Record<string, number>;
+}): {
+  durableByWorkspace: Record<string, RightPanelDurableState>;
+  materializedByWorkspace: Record<string, RightPanelMaterializedState>;
+} {
+  const legacyPanels = sanitizeRightPanelByWorkspace(args.rightPanelByWorkspace);
+  const legacyWidths = sanitizeRightPanelWidths(args.rightPanelWidthByWorkspace);
+  const workspaceIds = new Set([
+    ...Object.keys(legacyPanels),
+    ...Object.keys(legacyWidths),
+  ]);
+  const durableByWorkspace: Record<string, RightPanelDurableState> = {};
+  const materializedByWorkspace: Record<string, RightPanelMaterializedState> = {};
+
+  for (const workspaceId of workspaceIds) {
+    const { durableState, materializedState } = splitLegacyRightPanelWorkspaceState({
+      state: legacyPanels[workspaceId],
+      width: legacyWidths[workspaceId],
+      isCloudWorkspaceSelected: true,
+    });
+    durableByWorkspace[workspaceId] = durableState;
+    materializedByWorkspace[workspaceId] = materializedState;
+  }
+
+  return { durableByWorkspace, materializedByWorkspace };
+}
+
+function sanitizeRightPanelDurableByWorkspace(
+  value: unknown,
+): Record<string, RightPanelDurableState> {
+  if (typeof value !== "object" || value === null) {
+    return {};
+  }
+
+  const next: Record<string, RightPanelDurableState> = {};
+  for (const [workspaceId, rawState] of Object.entries(value)) {
+    if (typeof rawState !== "object" || rawState === null) {
+      continue;
+    }
+    next[workspaceId] = splitLegacyRightPanelWorkspaceState({
+      state: {
+        toolOrder: (rawState as Partial<RightPanelDurableState>).toolOrder,
+      },
+      width: (rawState as Partial<RightPanelDurableState>).width,
+      isCloudWorkspaceSelected: true,
+    }).durableState;
+    next[workspaceId].open = typeof (rawState as Partial<RightPanelDurableState>).open === "boolean"
+      ? Boolean((rawState as Partial<RightPanelDurableState>).open)
+      : DEFAULT_RIGHT_PANEL_DURABLE_STATE.open;
+  }
+  return next;
+}
+
+function sanitizeRightPanelMaterializedByWorkspace(
+  value: unknown,
+): Record<string, RightPanelMaterializedState> {
+  if (typeof value !== "object" || value === null) {
+    return {};
+  }
+
+  const next: Record<string, RightPanelMaterializedState> = {};
+  for (const [workspaceId, rawState] of Object.entries(value)) {
+    if (typeof rawState !== "object" || rawState === null) {
+      continue;
+    }
+    const durableState = DEFAULT_RIGHT_PANEL_DURABLE_STATE;
+    next[workspaceId] = splitLegacyRightPanelWorkspaceState({
+      state: {
+        activeTool: activeToolFromEntry(
+          (rawState as Partial<RightPanelMaterializedState>).activeEntryKey,
+        ),
+        headerOrder: (rawState as Partial<RightPanelMaterializedState>).headerOrder,
+        terminalOrder: (rawState as Partial<RightPanelMaterializedState>).terminalOrder,
+        activeTerminalId: (rawState as Partial<RightPanelMaterializedState>).activeTerminalId,
+      },
+      width: durableState.width,
+      isCloudWorkspaceSelected: true,
+    }).materializedState;
+    const activeEntryKey = (rawState as Partial<RightPanelMaterializedState>).activeEntryKey;
+    if (typeof activeEntryKey === "string") {
+      next[workspaceId] = {
+        ...next[workspaceId],
+        activeEntryKey,
+      };
+    }
+  }
+  return next;
+}
+
+function activeToolFromEntry(entryKey: unknown): RightPanelWorkspaceState["activeTool"] {
+  const entry = parseRightPanelHeaderEntryKey(entryKey);
+  return entry?.kind === "terminal" ? "terminal" : entry?.tool ?? "git";
+}
+
+function sanitizeActiveShellTabKeysByWorkspace(
+  value: unknown,
+): Record<string, WorkspaceShellTabKey | null> {
+  if (typeof value !== "object" || value === null) {
+    return {};
+  }
+  const next: Record<string, WorkspaceShellTabKey | null> = {};
+  for (const [workspaceId, key] of Object.entries(value)) {
+    if (key === null) {
+      next[workspaceId] = null;
+      continue;
+    }
+    if (typeof key === "string" && sanitizeWorkspaceShellTabKeys([key]).length === 1) {
+      next[workspaceId] = key;
+    }
+  }
+  return next;
+}
+
+function sanitizeShellTabOrderByWorkspace(
+  value: unknown,
+): Record<string, WorkspaceShellTabKey[]> {
+  if (typeof value !== "object" || value === null) {
+    return {};
+  }
+  const next: Record<string, WorkspaceShellTabKey[]> = {};
+  for (const [workspaceId, order] of Object.entries(value)) {
+    if (!Array.isArray(order)) {
+      continue;
+    }
+    const sanitized = sanitizeWorkspaceShellTabKeys(order);
+    if (sanitized.length > 0) {
+      next[workspaceId] = sanitized;
+    }
+  }
+  return next;
 }
 
 function sanitizeRightPanelByWorkspace(
@@ -525,6 +736,42 @@ function uniqueStringList(value: readonly unknown[]): string[] {
   return next;
 }
 
+function splitRightPanelStateUpdate(
+  state: WorkspaceUiState,
+  workspaceId: string,
+  value: SetStateAction<RightPanelWorkspaceState>,
+): Pick<WorkspaceUiState, "rightPanelDurableByWorkspace" | "rightPanelMaterializedByWorkspace"> {
+  const currentDurable = state.rightPanelDurableByWorkspace[workspaceId]
+    ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE;
+  const currentMaterialized = state.rightPanelMaterializedByWorkspace[workspaceId]
+    ?? DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE;
+  const currentMerged = mergeRightPanelState({
+    durableState: currentDurable,
+    materializedState: currentMaterialized,
+    isCloudWorkspaceSelected: true,
+  });
+  const nextMerged = resolveStateValue(value, currentMerged);
+  const { durableState, materializedState } = splitLegacyRightPanelWorkspaceState({
+    state: nextMerged,
+    width: currentDurable.width,
+    isCloudWorkspaceSelected: true,
+  });
+
+  return {
+    rightPanelDurableByWorkspace: {
+      ...state.rightPanelDurableByWorkspace,
+      [workspaceId]: {
+        ...durableState,
+        open: currentDurable.open,
+      },
+    },
+    rightPanelMaterializedByWorkspace: {
+      ...state.rightPanelMaterializedByWorkspace,
+      [workspaceId]: materializedState,
+    },
+  };
+}
+
 export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
   ...WORKSPACE_UI_DEFAULTS,
   _hydrated: false,
@@ -592,28 +839,110 @@ export const useWorkspaceUiStore = create<WorkspaceUiState>((set, get) => ({
 
   setRightPanelForWorkspace: (workspaceId, value) => {
     set((state) => ({
-      rightPanelByWorkspace: {
-        ...state.rightPanelByWorkspace,
+      ...splitRightPanelStateUpdate(state, workspaceId, value),
+    }));
+  },
+
+  setRightPanelDurableForWorkspace: (workspaceId, value) => {
+    set((state) => ({
+      rightPanelDurableByWorkspace: {
+        ...state.rightPanelDurableByWorkspace,
         [workspaceId]: resolveStateValue(
           value,
-          state.rightPanelByWorkspace[workspaceId] ?? DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+          state.rightPanelDurableByWorkspace[workspaceId] ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE,
+        ),
+      },
+    }));
+  },
+
+  setRightPanelMaterializedForWorkspace: (workspaceId, value) => {
+    set((state) => ({
+      rightPanelMaterializedByWorkspace: {
+        ...state.rightPanelMaterializedByWorkspace,
+        [workspaceId]: resolveStateValue(
+          value,
+          state.rightPanelMaterializedByWorkspace[workspaceId]
+            ?? DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
         ),
       },
     }));
   },
 
   setRightPanelWidthForWorkspace: (workspaceId, value) => {
-    set((state) => ({
-      rightPanelWidthByWorkspace: {
-        ...state.rightPanelWidthByWorkspace,
-        [workspaceId]: clampRightPanelWidth(
-          resolveStateValue(
-            value,
-            state.rightPanelWidthByWorkspace[workspaceId] ?? RIGHT_PANEL_DEFAULT_WIDTH,
-          ),
-        ),
+    set((state) => {
+      const current = state.rightPanelDurableByWorkspace[workspaceId]
+        ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE;
+      return {
+        rightPanelDurableByWorkspace: {
+          ...state.rightPanelDurableByWorkspace,
+          [workspaceId]: {
+            ...current,
+            width: clampRightPanelWidth(resolveStateValue(value, current.width)),
+          },
+        },
+      };
+    });
+  },
+
+  setRightPanelOpenForWorkspace: (workspaceId, value) => {
+    set((state) => {
+      const current = state.rightPanelDurableByWorkspace[workspaceId]
+        ?? DEFAULT_RIGHT_PANEL_DURABLE_STATE;
+      return {
+        rightPanelDurableByWorkspace: {
+          ...state.rightPanelDurableByWorkspace,
+          [workspaceId]: {
+            ...current,
+            open: resolveStateValue(value, current.open),
+          },
+        },
+      };
+    });
+  },
+
+  setActiveShellTabKeyForWorkspace: (workspaceId, key) => {
+    const hasCurrent = Object.prototype.hasOwnProperty.call(
+      get().activeShellTabKeyByWorkspace,
+      workspaceId,
+    );
+    const current = hasCurrent ? get().activeShellTabKeyByWorkspace[workspaceId] : null;
+    if (hasCurrent && current === key) {
+      return;
+    }
+    set({
+      activeShellTabKeyByWorkspace: {
+        ...get().activeShellTabKeyByWorkspace,
+        [workspaceId]: key,
       },
-    }));
+    });
+  },
+
+  setShellTabOrderForWorkspace: (workspaceId, order) => {
+    const hasCurrent = Object.prototype.hasOwnProperty.call(
+      get().shellTabOrderByWorkspace,
+      workspaceId,
+    );
+    const current = hasCurrent ? get().shellTabOrderByWorkspace[workspaceId] : [];
+    if (hasCurrent && sameStringArray(current, order)) {
+      return;
+    }
+    set({
+      shellTabOrderByWorkspace: {
+        ...get().shellTabOrderByWorkspace,
+        [workspaceId]: order,
+      },
+    });
+  },
+
+  resetWorkspaceShellTabs: (workspaceId) => {
+    const active = { ...get().activeShellTabKeyByWorkspace };
+    const order = { ...get().shellTabOrderByWorkspace };
+    delete active[workspaceId];
+    delete order[workspaceId];
+    set({
+      activeShellTabKeyByWorkspace: active,
+      shellTabOrderByWorkspace: order,
+    });
   },
 
   toggleSidebarWorkspaceType: (type) => {

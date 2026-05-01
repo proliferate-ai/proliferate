@@ -63,7 +63,8 @@ export function ChatInput({
     activeSessionId,
     isRunning,
   } = useActiveChatSessionState();
-  const { selectedWorkspaceId, draft, setDraft, isEmpty } = useChatDraftState();
+  const { workspaceUiKey, materializedWorkspaceId, draft, setDraft, isEmpty } =
+    useChatDraftState();
   const { isDisabled, areRuntimeControlsDisabled } = useChatAvailabilityState();
   const modelSelectorProps = useChatModelSelectorState();
   const { agentKind, controls: sessionConfigControls, modeControl } = useChatSessionControls();
@@ -77,13 +78,16 @@ export function ChatInput({
     cancelEdit,
     commitEdit,
   } = useQueuedPromptEdit();
-  const planAttachments = usePlanDraftAttachments(selectedWorkspaceId);
+  const planAttachments = usePlanDraftAttachments({
+    workspaceUiKey,
+    sdkWorkspaceId: materializedWorkspaceId,
+  });
   const canUseUtilityActions =
     !isEditingQueuedPrompt && !isDisabled && !areRuntimeControlsDisabled;
   const canAttach = canUseUtilityActions && attachments.canAttachFiles;
   // Plan references are resolved to markdown text by the runtime, so they do
   // not depend on file/image attachment capabilities.
-  const canAttachPlan = canUseUtilityActions && !!selectedWorkspaceId;
+  const canAttachPlan = canUseUtilityActions && !!workspaceUiKey && !!materializedWorkspaceId;
   const canStartReview = canUseUtilityActions
     && reviewActions.canStartCodeReview
     && !activeReview.run
@@ -101,7 +105,7 @@ export function ChatInput({
   })();
   const attachPlanDetail = canAttachPlan
     ? "Attach an existing plan snapshot."
-    : selectedWorkspaceId
+    : workspaceUiKey
       ? "Chat is unavailable right now"
       : "Select a workspace before attaching a plan";
   const reviewDetail = (() => {
@@ -201,7 +205,7 @@ export function ChatInput({
   }, [attachments, canAttach]);
 
   useEffect(() => {
-    if (!selectedWorkspaceId && !activeSessionId) {
+    if (!workspaceUiKey && !activeSessionId) {
       return;
     }
 
@@ -212,7 +216,7 @@ export function ChatInput({
   }, [
     activeSessionId,
     focusComposer,
-    selectedWorkspaceId,
+    workspaceUiKey,
     workspaceSelectionNonce,
   ]);
 
@@ -337,7 +341,8 @@ export function ChatInput({
                   attachPlanDetail={attachPlanDetail}
                   canStartReview={canStartReview}
                   reviewDetail={reviewDetail}
-                  draftWorkspaceId={selectedWorkspaceId}
+                  workspaceUiKey={workspaceUiKey}
+                  sdkWorkspaceId={materializedWorkspaceId}
                   onAttachFile={() => fileInputRef.current?.click()}
                   onStartReview={(anchor) => {
                     reviewActions.startCodeReview(anchor);
