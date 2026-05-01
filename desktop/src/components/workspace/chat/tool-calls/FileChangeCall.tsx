@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/icons";
 import { useOpenInDefaultEditor } from "@/hooks/editor/use-open-in-default-editor";
 import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
+import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@/lib/domain/chat/tool-call-layout";
 import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
 import { ToolActionRow } from "./ToolActionRow";
 import { ToolFileChip } from "./ToolFileChip";
@@ -104,6 +105,7 @@ export function FileChangeCall({
                 patch={patch!}
                 filePath={displayPath}
                 className="w-full"
+                viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
                 variant="chat"
               />
             </FileDiffCard>
@@ -130,6 +132,7 @@ export function FileChangeCall({
               patch={patch!}
               filePath={displayPath}
               className="w-full"
+              viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
               variant="chat"
             />
           ) : preview ? (
@@ -139,6 +142,7 @@ export function FileChangeCall({
                 filename={displayPath}
                 showLanguageLabel={false}
                 className="border-0 bg-transparent"
+                contentClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
               />
             </div>
           ) : null}

@@ -259,6 +259,7 @@ function EditActionRow({
                 patch={part.patch}
                 filePath={pathLabel}
                 className="w-full"
+                viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
                 variant="chat"
               />
             </FileDiffCard>
@@ -269,6 +270,7 @@ function EditActionRow({
             filename={pathLabel}
             showLanguageLabel={false}
             className="mt-1.5 border-border/60 bg-foreground/[0.04]"
+            contentClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
           />
         ) : null
       )}

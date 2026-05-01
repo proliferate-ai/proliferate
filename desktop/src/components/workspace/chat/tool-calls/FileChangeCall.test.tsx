@@ -23,11 +23,11 @@ describe("FileChangeCall", () => {
     expect(html).toContain("data-diff-surface=\"chat\"");
     expect(html).toContain("thread-diff-virtualized");
     expect(html).toContain("overflow-x-auto overflow-y-auto");
-    expect(html).not.toContain("max-h-[220px]");
+    expect(html).toContain("max-h-[220px]");
     expect(html).not.toContain("1 file changed");
   });
 
-  it("does not cap expanded edit previews", () => {
+  it("keeps expanded edit previews individually scrollable", () => {
     const html = renderToStaticMarkup(
       createElement(FileChangeCall, {
         operation: "create",
@@ -40,6 +40,6 @@ describe("FileChangeCall", () => {
     );
 
     expect(html).toContain("Long preview body");
-    expect(html).not.toContain("max-h-[220px]");
+    expect(html).toContain("max-h-[220px]");
   });
 });
