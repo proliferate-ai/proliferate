@@ -133,7 +133,7 @@ export function useCoworkThreadWorkflow() {
 
     try {
       const resolveStartedAt = startLatencyTimer();
-      const { mcpServers, mcpBindingSummaries } = await resolveSessionMcpServersForLaunch({
+      const mcpLaunch = await resolveSessionMcpServersForLaunch({
         targetLocation: "local",
         workspacePath: COWORK_WORKSPACE_PATH_PLACEHOLDER,
         launchId: entry.attemptId,
@@ -143,6 +143,8 @@ export function useCoworkThreadWorkflow() {
           enabled: true,
         },
       });
+      const { mcpServers, mcpBindingSummaries } = mcpLaunch;
+      const releaseRuntimeReservations = mcpLaunch.releaseRuntimeReservations ?? (async () => {});
       logLatency("workspace.cowork.create.mcp_resolved", {
         attemptId: entry.attemptId,
         pluginsEnabled: true,
@@ -151,6 +153,7 @@ export function useCoworkThreadWorkflow() {
       });
 
       if (!isAttemptCurrent(entry.attemptId)) {
+        await releaseRuntimeReservations();
         return null;
       }
 
@@ -165,14 +168,20 @@ export function useCoworkThreadWorkflow() {
         elapsedSincePendingMs: elapsedSince(entry.createdAt),
       });
 
-      const result = await createCoworkThreadMutation.mutateAsync({
-        agentKind: input.agentKind,
-        modelId: input.modelId,
-        coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
-        ...(modeId ? { modeId } : {}),
-        ...(mcpServers.length > 0 ? { mcpServers } : {}),
-        mcpBindingSummaries,
-      });
+      const result = await (async () => {
+        try {
+          return await createCoworkThreadMutation.mutateAsync({
+            agentKind: input.agentKind,
+            modelId: input.modelId,
+            coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
+            ...(modeId ? { modeId } : {}),
+            ...(mcpServers.length > 0 ? { mcpServers } : {}),
+            mcpBindingSummaries,
+          });
+        } finally {
+          await releaseRuntimeReservations();
+        }
+      })();
 
       logLatency("workspace.cowork.create.request.success", {
         attemptId: entry.attemptId,

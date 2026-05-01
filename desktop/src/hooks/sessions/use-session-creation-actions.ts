@@ -330,11 +330,7 @@ export function useSessionCreationActions() {
       const pluginsInCodingSessionsEnabled = useUserPreferencesStore.getState()
         .pluginsInCodingSessionsEnabled;
       const subagentsEnabled = useUserPreferencesStore.getState().subagentsEnabled;
-      const {
-        mcpServers,
-        mcpBindingSummaries,
-        warnings: connectorWarnings,
-      } = await resolveSessionMcpServersForLaunch({
+      const mcpLaunch = await resolveSessionMcpServersForLaunch({
         targetLocation: target.location,
         workspacePath: targetWorkspace?.path ?? null,
         launchId: crypto.randomUUID(),
@@ -344,19 +340,30 @@ export function useSessionCreationActions() {
           enabled: pluginsInCodingSessionsEnabled,
         },
       });
-
-      const session = await client.sessions.create({
-        workspaceId: target.anyharnessWorkspaceId,
-        agentKind: options.agentKind,
-        modelId: options.modelId,
-        ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
-        mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
-        mcpBindingSummaries: mcpBindingSummaries.length > 0
-          ? mcpBindingSummaries
-          : undefined,
-        subagentsEnabled,
-        origin: DESKTOP_ORIGIN,
-      }, requestOptions);
+      const {
+        mcpServers,
+        mcpBindingSummaries,
+        warnings: connectorWarnings,
+      } = mcpLaunch;
+      const releaseRuntimeReservations = mcpLaunch.releaseRuntimeReservations ?? (async () => {});
+      const session = await (async () => {
+        try {
+          return await client.sessions.create({
+            workspaceId: target.anyharnessWorkspaceId,
+            agentKind: options.agentKind,
+            modelId: options.modelId,
+            ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
+            mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
+            mcpBindingSummaries: mcpBindingSummaries.length > 0
+              ? mcpBindingSummaries
+              : undefined,
+            subagentsEnabled,
+            origin: DESKTOP_ORIGIN,
+          }, requestOptions);
+        } finally {
+          await releaseRuntimeReservations();
+        }
+      })();
 
       annotateLatencyFlow(options.latencyFlowId, {
         targetSessionId: session.id,

@@ -190,6 +190,7 @@ pub fn run() {
             google_workspace_mcp::delete_google_workspace_mcp_local_data,
             google_workspace_mcp::reconcile_google_workspace_mcp_pending_setups,
             google_workspace_mcp::resolve_google_workspace_mcp_runtime_env,
+            google_workspace_mcp::release_google_workspace_mcp_runtime_env,
             window_chrome::apply_macos_window_chrome,
             process::command_exists,
             keychain::list_configured_env_var_names,

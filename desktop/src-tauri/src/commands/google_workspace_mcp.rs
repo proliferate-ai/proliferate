@@ -25,11 +25,16 @@ const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
 type ChildHandle = Arc<Mutex<Child>>;
 
 static SETUP_PORT_LEASES: OnceLock<Mutex<HashSet<u16>>> = OnceLock::new();
+static RUNTIME_PORT_LEASES: OnceLock<Mutex<HashMap<String, u16>>> = OnceLock::new();
 static SETUP_CHILDREN: OnceLock<Mutex<HashMap<String, ChildHandle>>> = OnceLock::new();
 static CANCELLED_SETUPS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 fn setup_port_leases() -> &'static Mutex<HashSet<u16>> {
     SETUP_PORT_LEASES.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn runtime_port_leases() -> &'static Mutex<HashMap<String, u16>> {
+    RUNTIME_PORT_LEASES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 fn setup_children() -> &'static Mutex<HashMap<String, ChildHandle>> {
@@ -149,6 +154,13 @@ pub struct ReconcilePendingInput {
 pub struct RuntimeEnvInput {
     connection_id: String,
     user_google_email: String,
+    launch_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeEnvReleaseInput {
+    connection_id: String,
     launch_id: String,
 }
 
@@ -323,10 +335,24 @@ pub async fn resolve_google_workspace_mcp_runtime_env(
     let app_dir = app_dir().map_err(|_| "app_dir_unavailable".to_string())?;
     let credentials_dir = credentials_dir(&app_dir);
     let attachments_dir = runtime_attachments_dir(&app_dir, &connection_id);
-    let port = select_runtime_port(&launch_id, &connection_id);
+    let port = match lease_runtime_port(&launch_id, &connection_id).await {
+        Ok(port) => port,
+        Err(code) => return Ok(RuntimeEnvResult::NotReady { code }),
+    };
     Ok(RuntimeEnvResult::Ready {
         env: local_workspace_env(credentials_dir, attachments_dir, port, &email),
     })
+}
+
+#[tauri::command]
+pub async fn release_google_workspace_mcp_runtime_env(
+    input: RuntimeEnvReleaseInput,
+) -> Result<OkResponse, String> {
+    let connection_id =
+        validate_id(&input.connection_id).map_err(|_| "invalid_connection_id".to_string())?;
+    let launch_id = validate_id(&input.launch_id).map_err(|_| "invalid_launch_id".to_string())?;
+    release_runtime_port(&launch_id, &connection_id).await;
+    Ok(OkResponse { ok: true })
 }
 
 async fn run_auth_flow(
@@ -1037,18 +1063,48 @@ async fn release_setup_port(port: u16) {
     setup_port_leases().lock().await.remove(&port);
 }
 
-fn select_runtime_port(launch_id: &str, connection_id: &str) -> u16 {
+async fn lease_runtime_port(
+    launch_id: &str,
+    connection_id: &str,
+) -> Result<u16, LocalMcpOAuthCode> {
+    let key = runtime_port_lease_key(launch_id, connection_id);
     let base = configured_port_base();
     let primary_offset = hash_port_offset(launch_id, connection_id);
-    let primary = base.saturating_add(primary_offset);
+    let mut leases = runtime_port_leases().lock().await;
+    if let Some(port) = leases.get(&key).copied() {
+        return Ok(port);
+    }
     for step in 0..PORT_POOL_SIZE {
         let offset = (primary_offset + step) % PORT_POOL_SIZE;
-        let port = base.saturating_add(offset);
+        let Some(port) = base.checked_add(offset) else {
+            continue;
+        };
+        if leases.values().any(|leased_port| *leased_port == port) {
+            continue;
+        }
         if port_is_available(port) {
-            return port;
+            leases.insert(key, port);
+            return Ok(port);
         }
     }
-    primary
+    Err(LocalMcpOAuthCode::PortUnavailable)
+}
+
+async fn release_runtime_port(launch_id: &str, connection_id: &str) {
+    runtime_port_leases()
+        .lock()
+        .await
+        .remove(&runtime_port_lease_key(launch_id, connection_id));
+}
+
+fn runtime_port_lease_key(launch_id: &str, connection_id: &str) -> String {
+    format!("{launch_id}\n{connection_id}")
+}
+
+fn primary_runtime_port(launch_id: &str, connection_id: &str) -> u16 {
+    let base = configured_port_base();
+    let primary_offset = hash_port_offset(launch_id, connection_id);
+    base.saturating_add(primary_offset)
 }
 
 fn hash_port_offset(launch_id: &str, connection_id: &str) -> u16 {
@@ -1368,9 +1424,30 @@ mod tests {
 
     #[test]
     fn runtime_port_is_deterministic_for_launch_and_connection() {
-        let first = select_runtime_port("launch-1", "connection-1");
-        let second = select_runtime_port("launch-1", "connection-1");
+        let first = primary_runtime_port("launch-1", "connection-1");
+        let second = primary_runtime_port("launch-1", "connection-1");
         assert_eq!(first, second);
+    }
+
+    #[tokio::test]
+    async fn runtime_port_lease_is_reused_and_released_by_launch_connection() {
+        let unique = Utc::now().timestamp_nanos_opt().unwrap_or(0);
+        let launch_id = format!("test_launch_{unique}");
+        let connection_id = "connection-1";
+
+        let first = lease_runtime_port(&launch_id, connection_id)
+            .await
+            .expect("runtime port should lease");
+        let second = lease_runtime_port(&launch_id, connection_id)
+            .await
+            .expect("same runtime lease should be idempotent");
+        assert_eq!(first, second);
+
+        release_runtime_port(&launch_id, connection_id).await;
+        assert!(!runtime_port_leases()
+            .lock()
+            .await
+            .contains_key(&runtime_port_lease_key(&launch_id, connection_id)));
     }
 
     #[test]

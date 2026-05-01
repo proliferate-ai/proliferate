@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   commandExistsMock: vi.fn(async () => true),
   materializeCloudMcpServersMock: vi.fn(),
   resolveGoogleWorkspaceMcpRuntimeEnvMock: vi.fn(),
+  releaseGoogleWorkspaceMcpRuntimeEnvMock: vi.fn(),
 }));
 
 vi.mock("@/platform/tauri/process", () => ({
@@ -16,6 +17,7 @@ vi.mock("@/lib/integrations/cloud/mcp_materialization", () => ({
 
 vi.mock("@/platform/tauri/google-workspace-mcp", () => ({
   resolveGoogleWorkspaceMcpRuntimeEnv: mocks.resolveGoogleWorkspaceMcpRuntimeEnvMock,
+  releaseGoogleWorkspaceMcpRuntimeEnv: mocks.releaseGoogleWorkspaceMcpRuntimeEnvMock,
 }));
 
 import {
@@ -65,6 +67,8 @@ describe("cloud MCP launch resolution", () => {
       status: "ready",
       env: [],
     });
+    mocks.releaseGoogleWorkspaceMcpRuntimeEnvMock.mockReset();
+    mocks.releaseGoogleWorkspaceMcpRuntimeEnvMock.mockResolvedValue({ ok: true });
   });
 
   it("uses cloud materialization for concrete remote MCP servers", async () => {
@@ -132,6 +136,7 @@ describe("cloud MCP launch resolution", () => {
       mcpServers: [],
       mcpBindingSummaries: [],
       warnings: [],
+      releaseRuntimeReservations: expect.any(Function),
     });
   });
 
@@ -406,6 +411,11 @@ describe("cloud MCP launch resolution", () => {
     const summaryJson = JSON.stringify(resolution.mcpBindingSummaries);
     expect(summaryJson).not.toContain("user@example.com");
     expect(summaryJson).not.toContain("/local/private");
+    await resolution.releaseRuntimeReservations();
+    expect(mocks.releaseGoogleWorkspaceMcpRuntimeEnvMock).toHaveBeenCalledWith({
+      connectionId: "conn_gmail",
+      launchId: "launch-gmail",
+    });
   });
 
   it("marks Gmail local OAuth candidates as needing reconnect when credentials are missing", async () => {

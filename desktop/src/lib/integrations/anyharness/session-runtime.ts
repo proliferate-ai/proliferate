@@ -413,8 +413,8 @@ export async function resumeSession(
     ),
   );
   const isCowork = workspace.surface === "cowork";
-  const shouldResolveLaunchMcp = options?.pluginsInCodingSessionsEnabled === true;
-  const { mcpServers, mcpBindingSummaries } = shouldResolveLaunchMcp
+  const shouldResolveLaunchMcp = isCowork || options?.pluginsInCodingSessionsEnabled === true;
+  const mcpLaunch = shouldResolveLaunchMcp
     ? await measureSessionWorkflowStep(
       measurementOperationId,
       "session.resume.resolve_mcp",
@@ -429,7 +429,13 @@ export async function resumeSession(
         },
       }),
     )
-    : { mcpServers: [], mcpBindingSummaries: [] };
+    : {
+      mcpServers: [],
+      mcpBindingSummaries: [],
+      releaseRuntimeReservations: async () => {},
+    };
+  const { mcpServers, mcpBindingSummaries } = mcpLaunch;
+  const releaseRuntimeReservations = mcpLaunch.releaseRuntimeReservations ?? (async () => {});
   if (!shouldResolveLaunchMcp) {
     recordMeasurementWorkflowStep({
       operationId: measurementOperationId,
@@ -438,20 +444,24 @@ export async function resumeSession(
       outcome: "skipped",
     });
   }
-  return client.sessions.resume(
-    sessionId,
-    {
-      mcpServers,
-      mcpBindingSummaries: mcpBindingSummaries.length > 0
-        ? mcpBindingSummaries
-        : undefined,
-    },
-    getMeasurementRequestOptions({
-      operationId: measurementOperationId,
-      category: "session.resume",
-      headers: options?.requestHeaders,
-    }),
-  );
+  try {
+    return await client.sessions.resume(
+      sessionId,
+      {
+        mcpServers,
+        mcpBindingSummaries: mcpBindingSummaries.length > 0
+          ? mcpBindingSummaries
+          : undefined,
+      },
+      getMeasurementRequestOptions({
+        operationId: measurementOperationId,
+        category: "session.resume",
+        headers: options?.requestHeaders,
+      }),
+    );
+  } finally {
+    await releaseRuntimeReservations();
+  }
 }
 
 export function collectInactiveSessionStreamIds(

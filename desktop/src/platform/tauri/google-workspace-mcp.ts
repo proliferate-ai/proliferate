@@ -30,7 +30,7 @@ export type LocalDataDeleteResult =
 
 export type RuntimeEnvResult =
   | { status: "ready"; env: { name: string; value: string }[] }
-  | { status: "not_ready"; code: CredentialStatusNotReadyCode };
+  | { status: "not_ready"; code: CredentialStatusNotReadyCode | "port_unavailable" };
 
 export interface GmailConnectionHint {
   connectionId: string;
@@ -95,6 +95,13 @@ export async function resolveGoogleWorkspaceMcpRuntimeEnv(input: {
   launchId: string;
 }): Promise<RuntimeEnvResult> {
   return invoke<RuntimeEnvResult>("resolve_google_workspace_mcp_runtime_env", { input });
+}
+
+export async function releaseGoogleWorkspaceMcpRuntimeEnv(input: {
+  connectionId: string;
+  launchId: string;
+}): Promise<{ ok: true }> {
+  return invoke<{ ok: true }>("release_google_workspace_mcp_runtime_env", { input });
 }
 
 export function localMcpOAuthMessage(code: LocalMcpOAuthCode): string {

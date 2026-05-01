@@ -5,7 +5,10 @@ import type {
 import { finalizeLocalStdioCandidates } from "@/lib/domain/mcp/local-stdio-finalizer";
 import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
 import { materializeCloudMcpServers } from "@/lib/integrations/cloud/mcp_materialization";
-import { resolveGoogleWorkspaceMcpRuntimeEnv } from "@/platform/tauri/google-workspace-mcp";
+import {
+  releaseGoogleWorkspaceMcpRuntimeEnv,
+  resolveGoogleWorkspaceMcpRuntimeEnv,
+} from "@/platform/tauri/google-workspace-mcp";
 import { commandExists } from "@/platform/tauri/process";
 
 export interface ConnectorLaunchContext {
@@ -34,12 +37,14 @@ export async function resolveSessionMcpServersForLaunch(
   mcpServers: SessionMcpServer[];
   mcpBindingSummaries: SessionMcpBindingSummary[];
   warnings: ConnectorLaunchResolutionWarning[];
+  releaseRuntimeReservations: () => Promise<void>;
 }> {
   if (!launchContext.policy.enabled) {
     return {
       mcpServers: [],
       mcpBindingSummaries: [],
       warnings: [],
+      releaseRuntimeReservations: async () => {},
     };
   }
 
@@ -85,5 +90,13 @@ export async function resolveSessionMcpServersForLaunch(
       } as ConnectorLaunchResolutionWarning)),
       ...finalizedStdio.warnings,
     ],
+    releaseRuntimeReservations: async () => {
+      await Promise.all(finalizedStdio.runtimeReservations.map((reservation) =>
+        releaseGoogleWorkspaceMcpRuntimeEnv({
+          connectionId: reservation.connectionId,
+          launchId: reservation.launchId,
+        }).catch(() => undefined)
+      ));
+    },
   };
 }

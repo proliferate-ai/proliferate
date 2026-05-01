@@ -10,6 +10,12 @@ export interface LocalStdioFinalizationContext {
   launchId: string;
 }
 
+export interface LocalStdioRuntimeReservation {
+  provider: "google_workspace";
+  connectionId: string;
+  launchId: string;
+}
+
 export interface LocalStdioFinalizerDependencies {
   commandExists: (command: string) => Promise<boolean>;
   resolveGoogleWorkspaceMcpRuntimeEnv: (input: {
@@ -33,10 +39,12 @@ export async function finalizeLocalStdioCandidates(
   mcpServers: SessionMcpServer[];
   summaries: SessionMcpBindingSummary[];
   warnings: ConnectorLaunchResolutionWarning[];
+  runtimeReservations: LocalStdioRuntimeReservation[];
 }> {
   const mcpServers: SessionMcpServer[] = [];
   const summaries: SessionMcpBindingSummary[] = [];
   const warnings: ConnectorLaunchResolutionWarning[] = [];
+  const runtimeReservations: LocalStdioRuntimeReservation[] = [];
   const commandAvailabilityCache = new Map<string, boolean>();
 
   async function commandAvailable(command: string): Promise<boolean> {
@@ -64,11 +72,19 @@ export async function finalizeLocalStdioCandidates(
         launchId: context.launchId,
       });
       if (runtimeEnv.status === "not_ready") {
-        summaries.push(buildNotAppliedSummary(candidate, "needs_reconnect"));
-        warnings.push(buildWarning(candidate, "needs_reconnect"));
+        const warningKind = runtimeEnv.code === "port_unavailable"
+          ? "resolver_error"
+          : "needs_reconnect";
+        summaries.push(buildNotAppliedSummary(candidate, warningKind));
+        warnings.push(buildWarning(candidate, warningKind));
         continue;
       }
       localOauthEnv = runtimeEnv.env;
+      runtimeReservations.push({
+        provider: "google_workspace",
+        connectionId: candidate.connectionId,
+        launchId: context.launchId,
+      });
     }
     const needsWorkspacePath = candidate.args.some(
       (arg) => arg.source.kind === "workspace_path",
@@ -108,7 +124,7 @@ export async function finalizeLocalStdioCandidates(
     });
   }
 
-  return { mcpServers, summaries, warnings };
+  return { mcpServers, summaries, warnings, runtimeReservations };
 }
 
 function getLocalOauthMetadata(candidate: LocalStdioCandidate): {
