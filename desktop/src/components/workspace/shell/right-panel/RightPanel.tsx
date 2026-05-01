@@ -7,7 +7,6 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import type { TerminalRecord } from "@anyharness/sdk";
 import { useTerminalsQuery } from "@anyharness/sdk-react";
 import { useNavigate } from "react-router-dom";
 import { WorkspaceFilesPanel } from "@/components/workspace/files/panel/WorkspaceFilesPanel";
@@ -28,8 +27,13 @@ import {
   type RightPanelTool,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/right-panel";
+import {
+  orderTerminals,
+  resolvePrimaryDigitShortcutIndex,
+  rightPanelStateEqual,
+} from "@/lib/domain/workspaces/right-panel-view";
 import { createTerminalRuntimeIdentity } from "@/lib/integrations/anyharness/terminal-handles";
-import { isApplePlatform, isTextEntryTarget } from "@/lib/domain/shortcuts/matching";
+import { isTextEntryTarget } from "@/lib/domain/shortcuts/matching";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -562,56 +566,4 @@ export function RightPanel({
       </div>
     </div>
   );
-}
-
-function orderTerminals(
-  terminals: readonly TerminalRecord[],
-  terminalOrder: readonly string[],
-): TerminalRecord[] {
-  const byId = new Map(terminals.map((terminal) => [terminal.id, terminal]));
-  const ordered: TerminalRecord[] = [];
-  for (const terminalId of terminalOrder) {
-    const terminal = byId.get(terminalId);
-    if (terminal) {
-      ordered.push(terminal);
-      byId.delete(terminalId);
-    }
-  }
-  ordered.push(...byId.values());
-  return ordered;
-}
-
-function rightPanelStateEqual(
-  left: RightPanelWorkspaceState,
-  right: RightPanelWorkspaceState,
-): boolean {
-  return left.activeTool === right.activeTool
-    && left.activeTerminalId === right.activeTerminalId
-    && arraysEqual(left.toolOrder, right.toolOrder)
-    && arraysEqual(left.terminalOrder, right.terminalOrder)
-    && arraysEqual(left.headerOrder, right.headerOrder);
-}
-
-function arraysEqual(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((item, index) => item === right[index]);
-}
-
-function resolvePrimaryDigitShortcutIndex(event: KeyboardEvent): number | null {
-  if (event.shiftKey || event.altKey) {
-    return null;
-  }
-
-  const isApple = isApplePlatform();
-  const hasPrimaryModifier = isApple
-    ? event.metaKey && !event.ctrlKey
-    : event.ctrlKey && !event.metaKey;
-  if (!hasPrimaryModifier) {
-    return null;
-  }
-
-  const keyDigit = /^[1-9]$/.test(event.key) ? Number.parseInt(event.key, 10) : null;
-  const codeMatch = /^Digit([1-9])$/.exec(event.code);
-  const codeDigit = codeMatch ? Number.parseInt(codeMatch[1]!, 10) : null;
-  const digit = keyDigit ?? codeDigit;
-  return digit ? digit - 1 : null;
 }
