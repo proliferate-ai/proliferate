@@ -1,13 +1,11 @@
 import {
   useCallback,
-  useMemo,
   useRef,
   useState,
   type ComponentType,
   type PointerEvent,
   type ReactNode,
 } from "react";
-import type { TerminalRecord } from "@anyharness/sdk";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { PopoverButton } from "@/components/ui/PopoverButton";
@@ -26,7 +24,6 @@ import {
   type RightPanelHeaderEntryKey,
   type RightPanelTool,
 } from "@/lib/domain/workspaces/right-panel";
-import { TerminalHeaderIcon } from "@/components/workspace/shell/right-panel/TerminalHeaderIcon";
 
 interface PanelToolConfig {
   id: RightPanelTool;
@@ -44,9 +41,7 @@ const PANEL_TOOLS: Record<RightPanelTool, PanelToolConfig> = {
 const HEADER_STABLE_TAB_CLASS = "ui-tab-system-tab";
 const HEADER_DRAG_THRESHOLD_PX = 4;
 
-export type HeaderEntry =
-  | { kind: "tool"; key: RightPanelHeaderEntryKey; tool: RightPanelTool }
-  | { kind: "terminal"; key: RightPanelHeaderEntryKey; terminal: TerminalRecord };
+export type HeaderEntry = { kind: "tool"; key: RightPanelHeaderEntryKey; tool: RightPanelTool };
 
 interface HeaderDragSession {
   key: RightPanelHeaderEntryKey;
@@ -66,14 +61,9 @@ interface HeaderDragPreview {
 interface RightPanelHeaderTabsProps {
   entries: readonly HeaderEntry[];
   activeTool: RightPanelTool;
-  activeTerminalId: string | null;
-  orderedTerminals: readonly TerminalRecord[];
-  unreadByTerminal: Record<string, boolean>;
+  hasTerminalUnread: boolean;
   isWorkspaceReady: boolean;
   onActivateTool: (tool: RightPanelTool) => void;
-  onSelectTerminal: (terminalId: string) => void;
-  onCloseTerminal: (terminalId: string) => void;
-  onRenameTerminal: (terminalId: string, title: string) => Promise<void>;
   onCreateTerminal: () => void;
   onOpenRepoSettings: () => void;
   onReorderHeaderEntry: (
@@ -85,14 +75,9 @@ interface RightPanelHeaderTabsProps {
 export function RightPanelHeaderTabs({
   entries,
   activeTool,
-  activeTerminalId,
-  orderedTerminals,
-  unreadByTerminal,
+  hasTerminalUnread,
   isWorkspaceReady,
   onActivateTool,
-  onSelectTerminal,
-  onCloseTerminal,
-  onRenameTerminal,
   onCreateTerminal,
   onOpenRepoSettings,
   onReorderHeaderEntry,
@@ -102,10 +87,6 @@ export function RightPanelHeaderTabs({
   const headerEntryNodesRef = useRef(new Map<RightPanelHeaderEntryKey, HTMLDivElement>());
   const headerDragSessionRef = useRef<HeaderDragSession | null>(null);
   const suppressNextHeaderClickRef = useRef(false);
-  const terminalIndexesById = useMemo(
-    () => new Map(orderedTerminals.map((terminal, index) => [terminal.id, index])),
-    [orderedTerminals],
-  );
 
   const registerHeaderEntryNode = useCallback((
     entryKey: RightPanelHeaderEntryKey,
@@ -247,70 +228,9 @@ export function RightPanelHeaderTabs({
             >
               <div className="ui-tab-system-tabs__section" data-tab-section="workspace">
                 {entries.map((entry) => {
-                  if (entry.kind === "tool") {
-                    const panelTool = PANEL_TOOLS[entry.tool];
-                    const Icon = panelTool.icon;
-                    const isActive = activeTool === entry.tool;
-                    const isEntryDragging = headerDragPreview?.key === entry.key;
-                    return (
-                      <RightPanelHeaderEntryDropZone
-                        key={entry.key}
-                        entryKey={entry.key}
-                        isDragging={isEntryDragging}
-                        dragOffsetX={isEntryDragging ? headerDragPreview.offsetX : 0}
-                        showDropIndicator={headerDragPreview?.beforeKey === entry.key}
-                        onRegister={registerHeaderEntryNode}
-                        onPointerDown={handleHeaderPointerDown}
-                        onPointerMove={handleHeaderPointerMove}
-                        onPointerUp={finishHeaderPointerDrag}
-                        onPointerCancel={cancelHeaderPointerDrag}
-                      >
-                        <Tooltip
-                          content={panelTool.label}
-                          className="right-panel-tab-tooltip"
-                        >
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            role="tab"
-                            aria-selected={isActive}
-                            aria-controls={`tabpanel-workspace-right-panel-${entry.tool}`}
-                            tabIndex={isActive ? 0 : -1}
-                            data-reorderable="true"
-                            data-stable="true"
-                            data-active={isActive ? true : undefined}
-                            data-app-active={isActive ? true : undefined}
-                            aria-grabbed={draggedHeaderKey === entry.key}
-                            aria-label={panelTool.label}
-                            onClick={() => {
-                              if (shouldSuppressHeaderClick()) {
-                                return;
-                              }
-                              onActivateTool(entry.tool);
-                            }}
-                            className={HEADER_STABLE_TAB_CLASS}
-                          >
-                            <span className="ui-tab-system-tab__content">
-                              <Icon className="ui-tab-system-tab__icon" />
-                              <span
-                                className="ui-tab-system-tab__dirty-indicator"
-                                aria-hidden="true"
-                              />
-                            </span>
-                          </Button>
-                        </Tooltip>
-                      </RightPanelHeaderEntryDropZone>
-                    );
-                  }
-
-                  const terminal = entry.terminal;
-                  const terminalIndex = terminalIndexesById.get(terminal.id) ?? 0;
-                  const isActive = activeTool === "terminal" && terminal.id === activeTerminalId;
-                  const fallbackTitle = `Terminal ${terminalIndex + 1}`;
-                  const displayTitle = terminal.title === "Terminal"
-                    ? fallbackTitle
-                    : terminal.title;
+                  const panelTool = PANEL_TOOLS[entry.tool];
+                  const Icon = panelTool.icon;
+                  const isActive = activeTool === entry.tool;
                   const isEntryDragging = headerDragPreview?.key === entry.key;
                   return (
                     <RightPanelHeaderEntryDropZone
@@ -325,18 +245,42 @@ export function RightPanelHeaderTabs({
                       onPointerUp={finishHeaderPointerDrag}
                       onPointerCancel={cancelHeaderPointerDrag}
                     >
-                      <TerminalHeaderIcon
-                        terminal={terminal}
-                        displayTitle={displayTitle}
-                        isActive={isActive}
-                        unread={unreadByTerminal[terminal.id] === true}
-                        isRuntimeReady={isWorkspaceReady}
-                        isDragging={draggedHeaderKey === entry.key}
-                        shouldSuppressClick={shouldSuppressHeaderClick}
-                        onSelect={() => onSelectTerminal(terminal.id)}
-                        onClose={() => onCloseTerminal(terminal.id)}
-                        onRename={(title) => onRenameTerminal(terminal.id, title)}
-                      />
+                      <Tooltip
+                        content={panelTool.label}
+                        className="right-panel-tab-tooltip"
+                      >
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          role="tab"
+                          aria-selected={isActive}
+                          aria-controls={`tabpanel-workspace-right-panel-${entry.tool}`}
+                          tabIndex={isActive ? 0 : -1}
+                          data-reorderable="true"
+                          data-stable="true"
+                          data-active={isActive ? true : undefined}
+                          data-app-active={isActive ? true : undefined}
+                          aria-grabbed={draggedHeaderKey === entry.key}
+                          aria-label={panelTool.label}
+                          onClick={() => {
+                            if (shouldSuppressHeaderClick()) {
+                              return;
+                            }
+                            onActivateTool(entry.tool);
+                          }}
+                          className={HEADER_STABLE_TAB_CLASS}
+                        >
+                          <span className="ui-tab-system-tab__content">
+                            <Icon className="ui-tab-system-tab__icon" />
+                            <span
+                              className="ui-tab-system-tab__dirty-indicator"
+                              data-dirty={entry.tool === "terminal" && hasTerminalUnread ? true : undefined}
+                              aria-hidden="true"
+                            />
+                          </span>
+                        </Button>
+                      </Tooltip>
                     </RightPanelHeaderEntryDropZone>
                   );
                 })}

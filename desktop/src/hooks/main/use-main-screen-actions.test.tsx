@@ -86,6 +86,29 @@ describe("useMainScreenActions publish actions", () => {
     expect(spies.setRightPanelState).not.toHaveBeenCalled();
     expect(spies.setRightPanelOpen).not.toHaveBeenCalled();
   });
+
+  it("opens a requested terminal without adding terminal header entries", () => {
+    const { result, spies } = renderActions();
+
+    act(() => {
+      expect(result.current.openTerminalPanel("terminal-1")).toBe(true);
+    });
+
+    expect(spies.setRightPanelOpen).toHaveBeenCalledWith(true);
+    expect(spies.setRightPanelState).toHaveBeenCalledTimes(1);
+    const update = spies.setRightPanelState.mock.calls[0]![0] as (
+      previous: MainScreenLayoutState["rightPanelState"],
+    ) => MainScreenLayoutState["rightPanelState"];
+    const next = update({
+      ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+      headerOrder: ["tool:files", "tool:git", "tool:terminal", "tool:settings"],
+    });
+
+    expect(next.activeTool).toBe("terminal");
+    expect(next.activeTerminalId).toBe("terminal-1");
+    expect(next.terminalOrder).toEqual(["terminal-1"]);
+    expect(next.headerOrder).toEqual(["tool:files", "tool:git", "tool:terminal", "tool:settings"]);
+  });
 });
 
 function renderActions() {
