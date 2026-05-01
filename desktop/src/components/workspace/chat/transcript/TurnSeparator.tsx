@@ -41,7 +41,7 @@ export function TurnSeparator({
         size="sm"
         data-chat-transcript-ignore
         onClick={onClick}
-        className="h-auto w-full gap-2 whitespace-normal rounded-md border border-transparent bg-transparent px-0 py-1 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground hover:bg-transparent hover:text-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="h-auto w-full gap-2 whitespace-normal rounded-md border border-transparent bg-transparent px-0 py-1 text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] text-muted-foreground hover:bg-transparent hover:text-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-expanded={expanded}
       >
         {content}

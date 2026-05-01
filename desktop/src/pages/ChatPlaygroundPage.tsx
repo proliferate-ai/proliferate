@@ -1,6 +1,7 @@
 import { useSearchParams } from "react-router-dom";
 import { PlaygroundComposer } from "@/components/playground/PlaygroundComposer";
 import { PlaygroundScenarioBar } from "@/components/playground/PlaygroundScenarioBar";
+import { PlaygroundSidebarGitDiff } from "@/components/playground/PlaygroundSidebarGitDiff";
 import { PlaygroundTranscript } from "@/components/playground/PlaygroundTranscript";
 import {
   resolvePlaygroundScenarioSelection,
@@ -22,6 +23,8 @@ export function ChatPlaygroundPage() {
   const replay = useReplaySession(
     selection.kind === "recording" ? selection.recordingId : null,
   );
+  const showSidebarGitDiff =
+    selection.kind === "fixture" && selection.key === "git-diff-panel";
 
   const handleSelectFixture = (key: ScenarioKey) => {
     const next = new URLSearchParams(params);
@@ -64,6 +67,11 @@ export function ChatPlaygroundPage() {
           selection={selection}
           replay={replay}
         />
+        {showSidebarGitDiff && (
+          <aside className="hidden w-[22rem] shrink-0 border-l border-sidebar-border bg-sidebar-background lg:block">
+            <PlaygroundSidebarGitDiff />
+          </aside>
+        )}
       </main>
       <footer className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
         <code className="font-mono">?s={selection.raw}</code>

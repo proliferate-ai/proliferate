@@ -26,8 +26,8 @@ interface FilePathLinkProps {
  *  - Two-finger click (context menu) → popover with `Open file` and
  *    `Copy path`.
  *
- * Style: plain inline link in `text-link-foreground`, no pill, no border;
- * underline on hover only.
+ * Style: Codex-style local file/doc link in `text-link-foreground`, no pill,
+ * no border, underline on hover only.
  */
 export function FilePathLink({ rawPath, children }: FilePathLinkProps) {
   const { resolveAbsolute } = useWorkspacePath();
@@ -58,7 +58,7 @@ export function FilePathLink({ rawPath, children }: FilePathLinkProps) {
       onClick={handleOpen}
       onContextMenuCapture={onContextMenuCapture}
       title={absolute ?? rawPath}
-      className="m-0 inline h-auto whitespace-normal break-words border-0 bg-transparent p-0 align-baseline font-mono text-[inherit] leading-[inherit] text-link-foreground shadow-none hover:bg-transparent hover:text-link-foreground hover:underline focus-visible:outline-none focus-visible:underline"
+      className="m-0 inline-block h-auto max-w-full whitespace-normal break-words border-0 bg-transparent p-0 text-left align-baseline font-[inherit] leading-[inherit] text-link-foreground shadow-none hover:bg-transparent hover:text-link-foreground hover:underline focus-visible:outline-none focus-visible:underline"
     >
       {children ?? rawPath}
     </Button>

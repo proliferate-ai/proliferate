@@ -42,7 +42,10 @@ export function TurnDiffPanel({ turn, transcript, onOpenFile }: TurnDiffPanelPro
   };
 
   return (
-    <FileChangesCard fileCount={fileCount} className="mt-2">
+    <FileChangesCard
+      fileCount={fileCount}
+      className="mt-2"
+    >
       {filePatches.map((fp) => {
         const isExpanded = expandedPaths.has(fp.path);
         const combinedPatch = fp.patches.join("\n");

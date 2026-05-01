@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { type CSSProperties, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { ArrowUpRight, ChevronDown, ChevronRight } from "@/components/ui/icons";
 
@@ -144,7 +144,7 @@ export function FileChangesCard({
 }: FileChangesCardProps) {
   return (
     <div
-      className={`mb-2 flex flex-col overflow-hidden rounded-xl bg-[var(--color-diff-surface)] text-base text-foreground ${className ?? ""}`}
+      className={`mb-2 flex flex-col overflow-hidden rounded-xl bg-[var(--color-diff-panel-surface)] text-base text-foreground ${className ?? ""}`}
     >
       <div className="flex items-center gap-2">
         <div className="flex w-full min-w-0 flex-nowrap items-center gap-1 pr-1 pl-3">
@@ -155,7 +155,7 @@ export function FileChangesCard({
           {actions && <div className="flex shrink-0 items-center">{actions}</div>}
         </div>
       </div>
-      <div className="flex flex-col divide-y-[0.5px] divide-border/70">
+      <div className="flex flex-col divide-y-[0.5px] divide-border">
         {children}
       </div>
     </div>
@@ -172,6 +172,7 @@ interface FileDiffCardProps {
   actions?: ReactNode;
   children?: ReactNode;
   embedded?: boolean;
+  surface?: "chat" | "sidebar";
 }
 
 export function FileDiffCard({
@@ -184,122 +185,145 @@ export function FileDiffCard({
   actions,
   children,
   embedded = false,
+  surface = "chat",
 }: FileDiffCardProps) {
   const canExpand = !!children || additions > 0 || deletions > 0;
   const basename = extractBasename(filePath);
+  const surfaceTextClass = surface === "sidebar" ? "text-sidebar-foreground" : "text-foreground";
+  const surfaceActionClass = surface === "sidebar"
+    ? "text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-sidebar-ring"
+    : "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-border";
+  const cardStyle = {
+    "--codex-diffs-surface":
+      "var(--codex-diffs-surface-override, var(--color-diff-surface))",
+    "--codex-diffs-header-surface": "var(--codex-diffs-surface)",
+    backgroundColor: "var(--codex-diffs-surface)",
+  } as CSSProperties;
   const pathContent = (
     <>
-      <span className="min-w-0 truncate [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:hidden">
+      <span className="min-w-0 truncate text-chat leading-[var(--text-chat--line-height)] [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:hidden">
         {basename}
       </span>
-      <span className="hidden min-w-0 truncate [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:inline">
+      <span className="hidden min-w-0 truncate text-chat leading-[var(--text-chat--line-height)] [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:inline">
         {filePath}
       </span>
     </>
   );
 
   return (
-    <div
-      className={`group/file-diff flex flex-col overflow-clip bg-[var(--color-diff-surface)] ${
-        embedded ? "" : "rounded-lg"
-      }`}
-    >
+    <div className="thread-diff-virtualized">
       <div
-        role={canExpand ? "button" : undefined}
-        tabIndex={canExpand ? 0 : undefined}
-        onClick={canExpand ? onToggleExpand : undefined}
-        onKeyDown={
-          canExpand
-            ? (e) => {
-                if (
-                  e.target === e.currentTarget
-                  && (e.key === "Enter" || e.key === " ")
-                ) {
-                  e.preventDefault();
-                  onToggleExpand();
-                }
-              }
-            : undefined
-        }
-        className={`select-none bg-[var(--color-diff-surface)] ${canExpand ? "cursor-pointer" : ""}`}
+        data-diff-surface={surface}
+        style={cardStyle}
+        className={`group/file-diff flex flex-col overflow-clip bg-[var(--codex-diffs-surface)] ${
+          embedded ? "" : "rounded-lg"
+        }`}
       >
-        <div className="bg-[var(--color-diff-header-surface)]">
-          <div className="group @container/diff-header relative flex items-center gap-2 pt-1 pr-1 pb-1 pl-3 text-chat leading-[var(--text-chat--line-height)]">
-            <div className="flex min-w-0 items-center gap-2 pb-0.5 text-foreground">
-              {onOpenFile ? (
-                <button
-                  type="button"
-                  title={filePath}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpenFile();
-                  }}
-                  className="min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-start text-chat leading-[var(--text-chat--line-height)] text-foreground select-text [direction:rtl] hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
-                >
-                  {pathContent}
-                </button>
-              ) : (
-                <span
-                  className="min-w-0 truncate text-start [direction:rtl]"
-                  title={filePath}
-                >
-                  {pathContent}
-                </span>
-              )}
-              <span className="ml-auto shrink-0">
-                <FileChangeStats additions={additions} deletions={deletions} />
-              </span>
-            </div>
-
-            <div className="ms-auto mr-1 flex items-center gap-1">
-              {onOpenFile && (
-                <div className="shrink-0 opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100">
-                  <button
+        <div
+          role={canExpand ? "button" : undefined}
+          tabIndex={canExpand ? 0 : undefined}
+          onClick={canExpand ? onToggleExpand : undefined}
+          onKeyDown={
+            canExpand
+              ? (e) => {
+                  if (
+                    e.target === e.currentTarget
+                    && (e.key === "Enter" || e.key === " ")
+                  ) {
+                    e.preventDefault();
+                    onToggleExpand();
+                  }
+                }
+              : undefined
+          }
+          className={`select-none bg-[var(--codex-diffs-surface)] ${canExpand ? "cursor-pointer" : ""}`}
+        >
+          <div className="bg-[var(--codex-diffs-header-surface)]">
+            <div className="group @container/diff-header relative flex items-center gap-2 pt-1 pr-1 pb-1 pl-3 text-chat leading-[var(--text-chat--line-height)]">
+              <div className={`flex min-w-0 items-center gap-2 pb-0.5 ${surfaceTextClass}`}>
+                {onOpenFile ? (
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
+                    title={filePath}
                     onClick={(event) => {
                       event.stopPropagation();
                       onOpenFile();
                     }}
-                    className="inline-flex size-5 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
-                    aria-label={`Open ${filePath}`}
-                    title="Open file"
-                  >
-                    <ArrowUpRight className="size-3" />
-                  </button>
-                </div>
-              )}
-              {actions && (
-                <div className="flex items-center opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100">
-                  {actions}
-                </div>
-              )}
-              {canExpand && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleExpand();
-                  }}
-                  className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
-                  aria-label="Toggle file diff"
-                >
-                  <ChevronDown
-                    className={`size-3 transition-transform duration-200 ${
-                      isExpanded ? "rotate-180" : "rotate-0"
+                    className={`h-auto min-w-0 truncate rounded-none border-0 bg-transparent p-0 text-start text-chat font-normal leading-[var(--text-chat--line-height)] shadow-none select-text [direction:rtl] hover:bg-transparent hover:underline focus-visible:ring-1 ${
+                      surface === "sidebar" ? "text-sidebar-foreground hover:text-sidebar-foreground focus-visible:ring-sidebar-ring" : "text-foreground hover:text-foreground focus-visible:ring-border"
                     }`}
-                  />
-                </button>
-              )}
+                  >
+                    {pathContent}
+                  </Button>
+                ) : (
+                  <span
+                    className="min-w-0 truncate text-start text-chat leading-[var(--text-chat--line-height)] [direction:rtl]"
+                    title={filePath}
+                  >
+                    {pathContent}
+                  </span>
+                )}
+                <span className="ml-auto shrink-0">
+                  <FileChangeStats additions={additions} deletions={deletions} />
+                </span>
+              </div>
+
+              <div className="ms-auto mr-1 flex items-center gap-1">
+                {onOpenFile && (
+                  <div className="shrink-0 opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenFile();
+                      }}
+                      className={`size-5 rounded-full border-0 bg-transparent p-0 transition-colors focus-visible:ring-1 ${surfaceActionClass}`}
+                      aria-label={`Open ${filePath}`}
+                      title="Open file"
+                    >
+                      <ArrowUpRight className="size-3" />
+                    </Button>
+                  </div>
+                )}
+                {actions && (
+                  <div className="flex items-center opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100">
+                    {actions}
+                  </div>
+                )}
+                {canExpand && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleExpand();
+                    }}
+                    className={`size-5 shrink-0 rounded-full border-0 bg-transparent p-0 transition-colors focus-visible:ring-1 ${surfaceActionClass}`}
+                    aria-label="Toggle file diff"
+                  >
+                    <ChevronDown
+                      className={`size-3 transition-transform duration-200 ${
+                        isExpanded ? "rotate-180" : "rotate-0"
+                      }`}
+                    />
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {canExpand && isExpanded && children && (
-        <div className="relative overflow-hidden">
-          {children}
-        </div>
-      )}
+        {canExpand && isExpanded && children && (
+          <div className="relative overflow-hidden">
+            {children}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

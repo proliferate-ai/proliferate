@@ -185,17 +185,17 @@ type ChatDiffRow =
 
 const CHAT_DIFF_PRE_STYLE = {
   color: "var(--diffs-fg)",
-  backgroundColor: "var(--codex-diffs-surface)",
+  backgroundColor: "var(--diffs-bg)",
   "--diffs-bg": "var(--codex-diffs-surface)",
-  "--diffs-addition-color": "var(--color-diff-added)",
-  "--diffs-deletion-color": "var(--color-diff-deleted)",
-  "--diffs-min-number-column-width-default": "2ch",
+  "--diffs-addition-color": "var(--diffs-addition-color-override)",
+  "--diffs-deletion-color": "var(--diffs-deletion-color-override)",
+  "--diffs-min-number-column-width": "4ch",
+  "--diffs-min-number-column-width-default": "3ch",
 } as CSSProperties;
 
-const CHAT_DIFF_CODE_STYLE = {
+const CHAT_DIFF_CODE_BASE_STYLE = {
   "--diffs-column-content-width": "700px",
   "--diffs-column-width": "736px",
-  "--diffs-column-number-width": "36px",
 } as CSSProperties;
 
 function getChatLineType(line: DiffLine): "context" | "change-addition" | "change-deletion" {
@@ -256,6 +256,15 @@ function getChatRows(
   return rows;
 }
 
+function getChatLineNumberDigits(rows: ChatDiffRow[]): number {
+  let maxLineNumber = 0;
+  for (const row of rows) {
+    if (row.kind !== "line") continue;
+    maxLineNumber = Math.max(maxLineNumber, getChatLineNumber(row.line) ?? 0);
+  }
+  return Math.max(String(maxLineNumber).length, 1);
+}
+
 function ChatGutterCell({ line }: { line: DiffLine }) {
   const lineType = getChatLineType(line);
   const lineNumber = getChatLineNumber(line);
@@ -289,7 +298,7 @@ function ChatContentCell({
       data-alt-line={altLineNumber}
       data-line-type={lineType}
       data-line-index={getChatLineIndex(line)}
-      className="diff-content-cell flex min-h-[var(--diffs-line-height)] min-w-max items-center pr-3 whitespace-pre"
+      className="diff-content-cell relative flex min-h-[var(--diffs-line-height)] min-w-max items-center pr-3 pl-2 whitespace-pre"
     >
       <TokenizedContent line={line} tokens={tokens} />
     </div>
@@ -335,6 +344,14 @@ function ChatDiffViewer({
     [parsed, expandedCollapsedKeys],
   );
   const rowSpan = Math.max(rows.length, 1);
+  const lineNumberDigits = getChatLineNumberDigits(rows);
+  const codeStyle = useMemo(
+    () => ({
+      ...CHAT_DIFF_CODE_BASE_STYLE,
+      "--diffs-column-number-width": `max(36px, ${lineNumberDigits + 1}ch)`,
+    }) as CSSProperties,
+    [lineNumberDigits],
+  );
 
   const expandCollapsedRow = (key: string) => {
     setExpandedCollapsedKeys((prev) => {
@@ -345,10 +362,10 @@ function ChatDiffViewer({
   };
 
   return (
-    <div className={`thread-diff-virtualized ${className ?? ""}`}>
+    <div className={className ?? ""}>
       <div
         style={{ overscrollBehavior: "none" }}
-        className={`relative [contain:content] composer-diff-simple-line overflow-auto ${
+        className={`relative [contain:content] composer-diff-simple-line overflow-x-auto overflow-y-auto ${
           viewportClassName ?? ""
         }`}
       >
@@ -368,7 +385,7 @@ function ChatDiffViewer({
           <code
             data-code=""
             data-unified=""
-            style={CHAT_DIFF_CODE_STYLE}
+            style={codeStyle}
             className="grid grid-cols-[var(--diffs-column-number-width)_minmax(max-content,1fr)]"
           >
             <div

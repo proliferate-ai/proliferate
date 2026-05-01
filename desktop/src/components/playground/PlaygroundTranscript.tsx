@@ -18,6 +18,7 @@ import {
   CLAUDE_PLAN_LONG,
   CLAUDE_PLAN_SHORT,
   PLAYGROUND_COWORK_ARTIFACT_TOOL_CALL,
+  PLAYGROUND_END_TURN_DIFF_TRANSCRIPT,
   PLAYGROUND_SUBAGENT_TRANSCRIPT,
   PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT,
 } from "@/lib/domain/chat/__fixtures__/playground";
@@ -366,6 +367,20 @@ export function PlaygroundTranscript({
       </div>
     );
   }
+  if (scenario === "end-turn-multi-file-diff") {
+    return (
+      <div className="h-[min(720px,calc(100vh-13rem))] min-h-[420px]">
+        <MessageList
+          activeSessionId="playground-end-turn-diff"
+          selectedWorkspaceId={selectedWorkspaceId ?? "playground-workspace"}
+          optimisticPrompt={null}
+          transcript={PLAYGROUND_END_TURN_DIFF_TRANSCRIPT}
+          sessionViewState="idle"
+          bottomInsetPx={stickyBottomInsetPx}
+        />
+      </div>
+    );
+  }
   if (scenario === "subagent-wake-card") {
     return (
       <div className="h-[min(720px,calc(100vh-13rem))] min-h-[420px]">
@@ -398,7 +413,7 @@ function TranscriptPreviewShell({ children }: { children: ReactNode }) {
 
 function TransientStatusRow({ text }: { text: string }) {
   return (
-    <div className="flex min-h-[2.625rem] items-start gap-2 py-1 text-xs text-muted-foreground">
+    <div className="flex min-h-[calc(var(--text-chat--line-height)+1.5rem)] items-start gap-2 py-1 text-xs text-muted-foreground">
       <Sparkles className="mt-0.5 size-3.5 shrink-0" />
       <span className="min-w-0 truncate">{text}</span>
     </div>

@@ -157,7 +157,7 @@ type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
  * the trailing status should stay compact instead of creating an empty block
  * between the prose and future tool activity.
  */
-const TRAILING_STATUS_MIN_HEIGHT = "min-h-[2.625rem]";
+const TRAILING_STATUS_MIN_HEIGHT = "min-h-[calc(var(--text-chat--line-height)+1.5rem)]";
 const LIVE_STATUS_GRACE_MS = 700;
 
 interface MessageListProps {
@@ -1040,7 +1040,7 @@ function TranscriptItemBlock({
     case "thought":
       return (
         <div className="flex justify-start relative">
-          <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
+          <div className="flex flex-col w-full max-w-full space-y-1 break-words">
             <ReasoningBlock content={item.text || undefined} />
           </div>
         </div>
@@ -1054,7 +1054,7 @@ function TranscriptItemBlock({
         const body = extractClaudePlanBody(item) ?? "";
         return (
           <div className="flex justify-start relative">
-            <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
+            <div className="flex flex-col w-full max-w-full space-y-1 break-words">
               <ClaudePlanCard
                 content={body}
                 isStreaming={item.status === "in_progress"}
@@ -1065,7 +1065,7 @@ function TranscriptItemBlock({
       }
       return (
         <div className="flex justify-start relative">
-          <div className="flex flex-col w-full max-w-xl lg:max-w-3xl space-y-1 break-words">
+          <div className="flex flex-col w-full max-w-full space-y-1 break-words">
             <ToolCallItemBlock
               item={item}
               workspaceId={workspaceId}

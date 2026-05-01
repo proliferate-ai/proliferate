@@ -38,6 +38,11 @@ const TOOL_CALL_SCENARIOS: ScenarioKey[] = [
   "tool-subagent-task",
 ];
 
+const DIFF_PLAYGROUND_SCENARIOS: ScenarioKey[] = [
+  "end-turn-multi-file-diff",
+  "git-diff-panel",
+];
+
 const SUBAGENT_PLAYGROUND_SCENARIOS: ScenarioKey[] = [
   "subagents-composer-few",
   "subagents-composer-many",
@@ -73,6 +78,10 @@ describe("playground scenarios", () => {
 
   it("includes compact tool-call scenarios for visual iteration", () => {
     expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(TOOL_CALL_SCENARIOS));
+  });
+
+  it("includes Codex-style diff scenarios for visual iteration", () => {
+    expect(Object.keys(SCENARIOS)).toEqual(expect.arrayContaining(DIFF_PLAYGROUND_SCENARIOS));
   });
 
   it("includes subagent composer and wake scenarios for visual iteration", () => {
