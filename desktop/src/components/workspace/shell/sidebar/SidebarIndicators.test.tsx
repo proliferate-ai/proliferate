@@ -78,7 +78,7 @@ describe("SidebarDetailIndicatorsView", () => {
     const actions: SidebarIndicatorAction[] = [];
     const indicator: SidebarDetailIndicator = {
       kind: "finish_suggestion",
-      tooltip: "Ready to mark done",
+      tooltip: "Ready to delete workspace",
       workspaceId: "workspace-1",
       logicalWorkspaceId: "path:/repo",
       readinessFingerprint: "fingerprint-1",
@@ -94,7 +94,7 @@ describe("SidebarDetailIndicatorsView", () => {
     });
 
     const trigger = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Ready to mark done"]',
+      'button[aria-label="Ready to delete workspace"]',
     );
     expect(trigger).not.toBeNull();
 
@@ -102,7 +102,7 @@ describe("SidebarDetailIndicatorsView", () => {
       trigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(findButtonByText("Mark done")).not.toBeNull();
+    expect(findButtonByText("Delete workspace...")).not.toBeNull();
     const keepActive = findButtonByText("Keep active");
     expect(keepActive).not.toBeNull();
 

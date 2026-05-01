@@ -13,7 +13,7 @@ use url::form_urlencoded;
 use super::http::{
     agents, cowork, files, git, health, hosting, mobility, model_registries, plans, processes,
     provider_configs, replay, repo_roots, reviews, sessions, subagents, terminals,
-    workspace_naming, workspaces,
+    workspace_naming, workspaces, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -54,7 +54,35 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/workspaces/resolve", post(workspaces::resolve_workspace))
         .route("/workspaces/worktrees", post(workspaces::create_worktree))
-        .route("/workspaces/{workspace_id}", get(workspaces::get_workspace))
+        .route(
+            "/workspaces/{workspace_id}",
+            get(workspaces::get_workspace).delete(workspaces::purge_workspace),
+        )
+        .route(
+            "/workspaces/{workspace_id}/purge/preflight",
+            get(workspaces::purge_workspace_preflight),
+        )
+        .route(
+            "/workspaces/{workspace_id}/purge/retry",
+            post(workspaces::retry_purge_workspace),
+        )
+        .route(
+            "/worktrees/inventory",
+            get(worktrees::get_worktree_inventory),
+        )
+        .route(
+            "/worktrees/orphans/prune",
+            post(worktrees::prune_orphan_worktree),
+        )
+        .route(
+            "/worktrees/retention-policy",
+            get(worktrees::get_worktree_retention_policy)
+                .put(worktrees::update_worktree_retention_policy),
+        )
+        .route(
+            "/worktrees/retention/run",
+            post(worktrees::run_worktree_retention),
+        )
         .route(
             "/workspaces/{workspace_id}/retire/preflight",
             get(workspaces::retire_workspace_preflight),

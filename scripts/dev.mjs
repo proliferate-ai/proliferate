@@ -30,6 +30,7 @@ const persistedKeys = [
   "PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE",
   "ANYHARNESS_PORT",
   "ANYHARNESS_RUNTIME_HOME",
+  "ANYHARNESS_WORKTREES_ROOT",
   "PROLIFERATE_DEV_HOME",
   "PROLIFERATE_DEV_DB_NAME",
 ];
@@ -179,6 +180,7 @@ function profilePaths(profile) {
     runLock: path.join(root, "run.lock"),
     appHome: path.join(root, "app"),
     runtimeHome: path.join(homedir(), ".proliferate-local", "runtimes", profile),
+    worktreesRoot: path.join(homedir(), ".proliferate-local", "worktrees"),
   };
 }
 
@@ -433,6 +435,7 @@ async function resolveProfileEnv(profile, paths) {
       const allocated = {
         PROLIFERATE_DEV_PROFILE: profile,
         ANYHARNESS_RUNTIME_HOME: persisted.ANYHARNESS_RUNTIME_HOME ?? paths.runtimeHome,
+        ANYHARNESS_WORKTREES_ROOT: persisted.ANYHARNESS_WORKTREES_ROOT ?? paths.worktreesRoot,
         PROLIFERATE_DEV_HOME: persisted.PROLIFERATE_DEV_HOME ?? paths.appHome,
         PROLIFERATE_DEV_DB_NAME: persisted.PROLIFERATE_DEV_DB_NAME ?? dbNameForProfile(profile),
       };
@@ -460,6 +463,7 @@ async function resolveProfileEnv(profile, paths) {
   }
   for (const key of [
     "ANYHARNESS_RUNTIME_HOME",
+    "ANYHARNESS_WORKTREES_ROOT",
     "PROLIFERATE_DEV_HOME",
     "PROLIFERATE_DEV_DB_NAME",
   ]) {

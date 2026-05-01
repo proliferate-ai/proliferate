@@ -122,6 +122,7 @@ export type {
   WorkspaceSurface,
   WorkspaceExecutionPhase,
   WorkspaceExecutionSummary,
+  WorkspaceCleanupOperation,
   OriginKind,
   OriginEntrypoint,
   OriginContext,
@@ -149,7 +150,24 @@ export type {
   WorkspaceRetireOutcome,
   WorkspaceRetirePreflightResponse,
   WorkspaceRetireResponse,
+  WorkspacePurgeOutcome,
+  WorkspacePurgePreflightResponse,
+  WorkspacePurgeResponse,
 } from "./types/workspaces.js";
+
+export type {
+  WorktreeInventoryState,
+  WorktreeInventoryAction,
+  WorktreeInventoryWorkspaceSummary,
+  WorktreeInventoryRow,
+  WorktreeInventoryResponse,
+  PruneOrphanWorktreeRequest,
+  WorktreeRetentionPolicy,
+  UpdateWorktreeRetentionPolicyRequest,
+  WorktreeRetentionRowOutcome,
+  WorktreeRetentionRunRow,
+  RunWorktreeRetentionResponse,
+} from "./types/worktrees.js";
 
 export type {
   SessionStatus,

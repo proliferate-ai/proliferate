@@ -5,6 +5,7 @@ pub mod mcp_elicitation;
 pub mod permission_broker;
 mod permission_context;
 mod permission_payload;
+pub mod persistence_sanitizer;
 pub mod provider_errors;
 pub mod replay_actor;
 pub mod runtime_client;

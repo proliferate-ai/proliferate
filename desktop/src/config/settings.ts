@@ -6,6 +6,7 @@ import {
   CircleUser,
   CloudIcon,
   FolderList,
+  GitBranch,
   Keyboard,
   RefreshCw,
   Settings,
@@ -24,6 +25,7 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "cloud",
   "organization",
   "repo",
+  "worktrees",
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_CONTENT_SECTIONS)[number];
@@ -60,6 +62,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       { kind: "section", id: "agents", label: "Agents", icon: Blocks },
       { kind: "section", id: "agent-defaults", label: "Agent Defaults", icon: Settings },
       { kind: "section", id: "review", label: "Review", icon: BrainOutline },
+      { kind: "section", id: "worktrees", label: "Worktrees", icon: GitBranch },
       { kind: "section", id: "repo", label: "Environments", icon: FolderList },
     ],
   },

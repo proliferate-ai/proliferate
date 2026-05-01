@@ -141,6 +141,14 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0038_workspace_cleanup_details",
         include_str!("sql/0038_workspace_cleanup_details.sql"),
     ),
+    (
+        "0039_workspace_cleanup_operation",
+        include_str!("sql/0039_workspace_cleanup_operation.sql"),
+    ),
+    (
+        "0040_worktree_retention_policy",
+        include_str!("sql/0040_worktree_retention_policy.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

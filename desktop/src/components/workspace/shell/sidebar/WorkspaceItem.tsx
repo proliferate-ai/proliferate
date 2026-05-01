@@ -204,10 +204,10 @@ export function WorkspaceItem({
           {doneConfirmOpen ? (
             <>
               <div className="px-2.5 py-2 text-sm text-foreground">
-                <div className="font-medium">Mark done?</div>
+                <div className="font-medium">Delete workspace?</div>
                 <div className="mt-1 text-xs leading-4 text-muted-foreground">
-                  This removes the local worktree and hides this workspace and its chats from the app.
-                  Commits, branches, and pull requests are not deleted.
+                  This removes the local worktree, workspace record, chat history, and local agent
+                  artifacts for this workspace. Commits, branches, and pull requests are not deleted.
                 </div>
                 <div className="mt-1 text-xs leading-4 text-muted-foreground">
                   This cannot be undone from Proliferate.
@@ -215,7 +215,7 @@ export function WorkspaceItem({
               </div>
               <PopoverMenuItem
                 icon={<GitMerge className="size-3.5 shrink-0 text-muted-foreground" />}
-                label="Confirm done"
+                label="Delete workspace"
                 variant="sidebar"
                 onClick={() => {
                   close();
@@ -248,7 +248,7 @@ export function WorkspaceItem({
           {onMarkDone && (
             <PopoverMenuItem
               icon={<GitMerge className="size-3.5 shrink-0 text-muted-foreground" />}
-              label="Mark done..."
+              label="Delete workspace..."
               variant="sidebar"
               onClick={() => {
                 handleMarkDoneCommand();

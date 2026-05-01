@@ -6,6 +6,9 @@ use super::model::{
     SessionBackgroundWorkTrackerKind, SessionEventRecord, SessionLiveConfigSnapshotRecord,
     SessionMcpBindingPolicy, SessionRawNotificationRecord, SessionRecord,
 };
+use crate::acp::persistence_sanitizer::{
+    sanitize_raw_notification_json_for_sqlite, sanitize_session_event_for_sqlite,
+};
 use crate::origin::{decode_origin_json, encode_origin_json};
 use crate::persistence::Db;
 use crate::sessions::prompt::PromptPayload;
@@ -28,96 +31,7 @@ impl SessionStore {
     }
 
     pub fn delete_session(&self, id: &str) -> anyhow::Result<()> {
-        self.db.with_tx(|conn| {
-            // Several durable tables still reference sessions without
-            // database-level cascade rules, so session deletion must clear
-            // dependent rows explicitly.
-            conn.execute("DELETE FROM cowork_threads WHERE session_id = ?1", [id])?;
-            conn.execute(
-                "DELETE FROM cowork_managed_workspaces WHERE parent_session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_background_work WHERE session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM review_feedback_jobs
-                 WHERE review_run_id IN (
-                    SELECT id FROM review_runs
-                    WHERE parent_session_id = ?1
-                 )",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM review_run_candidate_plans
-                 WHERE review_run_id IN (
-                    SELECT id FROM review_runs
-                    WHERE parent_session_id = ?1
-                 )",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM review_assignments
-                 WHERE review_run_id IN (
-                    SELECT id FROM review_runs
-                    WHERE parent_session_id = ?1
-                 ) OR reviewer_session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM review_rounds
-                 WHERE review_run_id IN (
-                    SELECT id FROM review_runs
-                    WHERE parent_session_id = ?1
-                 )",
-                [id],
-            )?;
-            conn.execute("DELETE FROM review_runs WHERE parent_session_id = ?1", [id])?;
-            conn.execute(
-                "DELETE FROM session_link_wake_schedules
-                 WHERE session_link_id IN (
-                    SELECT id FROM session_links
-                    WHERE parent_session_id = ?1 OR child_session_id = ?1
-                 )",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_link_completions
-                 WHERE session_link_id IN (
-                    SELECT id FROM session_links
-                    WHERE parent_session_id = ?1 OR child_session_id = ?1
-                 )",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_links WHERE parent_session_id = ?1 OR child_session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_pending_prompts WHERE session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_prompt_attachments WHERE session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_pending_config_changes WHERE session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_live_config_snapshots WHERE session_id = ?1",
-                [id],
-            )?;
-            conn.execute(
-                "DELETE FROM session_raw_notifications WHERE session_id = ?1",
-                [id],
-            )?;
-            conn.execute("DELETE FROM session_events WHERE session_id = ?1", [id])?;
-            conn.execute("DELETE FROM sessions WHERE id = ?1", [id])?;
-            Ok(())
-        })
+        self.db.with_tx(|conn| delete_session_in_tx(conn, id))
     }
 
     pub fn find_by_id(&self, id: &str) -> anyhow::Result<Option<SessionRecord>> {
@@ -937,7 +851,8 @@ impl SessionStore {
                 item_id: None,
                 event,
             };
-            let payload_json = serde_json::to_string(&envelope.event)
+            let persisted_event = sanitize_session_event_for_sqlite(&envelope.event);
+            let payload_json = serde_json::to_string(&persisted_event)
                 .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
             conn.execute(
                 "INSERT INTO session_events (
@@ -962,13 +877,14 @@ impl SessionStore {
         timestamp: &str,
         payload_json: &str,
     ) -> anyhow::Result<()> {
+        let sanitized_payload_json = sanitize_raw_notification_json_for_sqlite(payload_json);
         self.db.with_conn(|conn| {
             conn.execute(
                 "INSERT INTO session_raw_notifications (session_id, seq, timestamp, notification_kind, payload_json)
                  SELECT ?1, COALESCE(MAX(seq), 0) + 1, ?2, ?3, ?4
                  FROM session_raw_notifications
                  WHERE session_id = ?1",
-                params![session_id, timestamp, notification_kind, payload_json],
+                params![session_id, timestamp, notification_kind, sanitized_payload_json],
             )?;
             Ok(())
         })
@@ -1375,6 +1291,96 @@ impl SessionStore {
     }
 }
 
+pub(crate) fn delete_session_in_tx(conn: &rusqlite::Connection, id: &str) -> rusqlite::Result<()> {
+    // Several durable tables still reference sessions without database-level
+    // cascade rules, so session deletion must clear dependent rows explicitly.
+    conn.execute("DELETE FROM cowork_threads WHERE session_id = ?1", [id])?;
+    conn.execute(
+        "DELETE FROM cowork_managed_workspaces WHERE parent_session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_background_work WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM review_feedback_jobs
+         WHERE review_run_id IN (
+            SELECT id FROM review_runs
+            WHERE parent_session_id = ?1
+         )",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM review_run_candidate_plans
+         WHERE review_run_id IN (
+            SELECT id FROM review_runs
+            WHERE parent_session_id = ?1
+         )",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM review_assignments
+         WHERE review_run_id IN (
+            SELECT id FROM review_runs
+            WHERE parent_session_id = ?1
+         ) OR reviewer_session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM review_rounds
+         WHERE review_run_id IN (
+            SELECT id FROM review_runs
+            WHERE parent_session_id = ?1
+         )",
+        [id],
+    )?;
+    conn.execute("DELETE FROM review_runs WHERE parent_session_id = ?1", [id])?;
+    conn.execute(
+        "DELETE FROM session_link_wake_schedules
+         WHERE session_link_id IN (
+            SELECT id FROM session_links
+            WHERE parent_session_id = ?1 OR child_session_id = ?1
+         )",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_link_completions
+         WHERE session_link_id IN (
+            SELECT id FROM session_links
+            WHERE parent_session_id = ?1 OR child_session_id = ?1
+         )",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_links WHERE parent_session_id = ?1 OR child_session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_pending_prompts WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_prompt_attachments WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_pending_config_changes WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_live_config_snapshots WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_raw_notifications WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute("DELETE FROM session_events WHERE session_id = ?1", [id])?;
+    conn.execute("DELETE FROM sessions WHERE id = ?1", [id])?;
+    Ok(())
+}
+
 fn map_session(row: &rusqlite::Row) -> rusqlite::Result<SessionRecord> {
     let id: String = row.get("id")?;
     let origin_json: Option<String> = row.get("origin_json")?;
@@ -1633,6 +1639,7 @@ fn insert_event_row(
     conn: &rusqlite::Connection,
     record: &SessionEventRecord,
 ) -> rusqlite::Result<()> {
+    let payload_json = sanitize_session_event_payload_json(&record.payload_json)?;
     conn.execute(
         "INSERT INTO session_events (session_id, seq, timestamp, event_type, turn_id, item_id, payload_json)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -1643,16 +1650,27 @@ fn insert_event_row(
             record.event_type,
             record.turn_id,
             record.item_id,
-            record.payload_json,
+            payload_json,
         ],
     )?;
     Ok(())
+}
+
+fn sanitize_session_event_payload_json(payload_json: &str) -> rusqlite::Result<String> {
+    let Ok(event) = serde_json::from_str::<anyharness_contract::v1::SessionEvent>(payload_json)
+    else {
+        return Ok(payload_json.to_string());
+    };
+    let sanitized = sanitize_session_event_for_sqlite(&event);
+    serde_json::to_string(&sanitized)
+        .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))
 }
 
 fn insert_raw_notification_row(
     conn: &rusqlite::Connection,
     record: &SessionRawNotificationRecord,
 ) -> rusqlite::Result<()> {
+    let payload_json = sanitize_raw_notification_json_for_sqlite(&record.payload_json);
     conn.execute(
         "INSERT INTO session_raw_notifications (session_id, seq, timestamp, notification_kind, payload_json)
          VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -1661,7 +1679,7 @@ fn insert_raw_notification_row(
             record.seq,
             record.timestamp,
             record.notification_kind,
-            record.payload_json,
+            payload_json,
         ],
     )?;
     Ok(())

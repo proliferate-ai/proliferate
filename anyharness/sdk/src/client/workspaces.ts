@@ -9,6 +9,8 @@ import type {
   StartWorkspaceSetupRequest,
   UpdateWorkspaceDisplayNameRequest,
   Workspace,
+  WorkspacePurgePreflightResponse,
+  WorkspacePurgeResponse,
   WorkspaceRetirePreflightResponse,
   WorkspaceRetireResponse,
   WorkspaceSessionLaunchCatalog,
@@ -153,6 +155,37 @@ export class WorkspacesClient {
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/retire/cleanup-retry`,
       {},
       withTimingCategory(options, "workspace.retire.cleanup_retry"),
+    );
+  }
+
+  async purgePreflight(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<WorkspacePurgePreflightResponse> {
+    return this.transport.get<WorkspacePurgePreflightResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/purge/preflight`,
+      withTimingCategory(options, "workspace.purge.preflight"),
+    );
+  }
+
+  async purge(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<WorkspacePurgeResponse> {
+    return this.transport.deleteJson<WorkspacePurgeResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}`,
+      withTimingCategory(options, "workspace.purge"),
+    );
+  }
+
+  async retryPurge(
+    workspaceId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<WorkspacePurgeResponse> {
+    return this.transport.post<WorkspacePurgeResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/purge/retry`,
+      {},
+      withTimingCategory(options, "workspace.purge.retry"),
     );
   }
 }

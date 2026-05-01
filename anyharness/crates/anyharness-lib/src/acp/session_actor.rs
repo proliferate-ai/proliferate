@@ -18,6 +18,7 @@ use super::permission_broker::{
     InteractionBroker, InteractionBrokerOutcome, InteractionCancelOutcome, PermissionDecision,
     PermissionOutcome, ResolveInteractionError, UserInputOutcome,
 };
+use super::persistence_sanitizer::sanitize_raw_notification_for_sqlite;
 use super::provider_errors::{classify_provider_rate_limit_error, PROVIDER_RATE_LIMIT_CODE};
 use super::runtime_client::RuntimeClient;
 use crate::agents::model::{AgentKind, ResolvedAgent};
@@ -3488,7 +3489,7 @@ fn persist_raw_notification(
     kind: &str,
     notif: &acp::SessionNotification,
 ) -> anyhow::Result<()> {
-    let payload_json = serde_json::to_string(notif)?;
+    let payload_json = serde_json::to_string(&sanitize_raw_notification_for_sqlite(notif))?;
     session_store.append_raw_notification(
         session_id,
         kind,

@@ -20,6 +20,7 @@ pub struct WorkspaceRecord {
     pub creator_context: Option<WorkspaceCreatorContext>,
     pub lifecycle_state: String,
     pub cleanup_state: String,
+    pub cleanup_operation: Option<String>,
     pub cleanup_error_message: Option<String>,
     pub cleanup_failed_at: Option<String>,
     pub cleanup_attempted_at: Option<String>,

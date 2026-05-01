@@ -476,6 +476,8 @@ impl StoredPromptBlock {
                 mime_type: mime_type.clone(),
                 size: Some(*size),
                 preview: preview.clone(),
+                preview_truncated: None,
+                preview_original_bytes: None,
             },
             Self::ResourceLink {
                 uri,
