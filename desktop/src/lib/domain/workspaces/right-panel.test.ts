@@ -12,8 +12,8 @@ import {
 
 describe("right panel domain", () => {
   it("gates cloud settings to cloud workspaces", () => {
-    expect(availableRightPanelTools(false)).toEqual(["files", "git"]);
-    expect(availableRightPanelTools(true)).toEqual(["files", "git", "settings"]);
+    expect(availableRightPanelTools(false)).toEqual(["files", "git", "terminal"]);
+    expect(availableRightPanelTools(true)).toEqual(["files", "git", "terminal", "settings"]);
   });
 
   it("falls back to git when the active tool is no longer valid", () => {
@@ -25,8 +25,17 @@ describe("right panel domain", () => {
       { isCloudWorkspaceSelected: false },
     );
 
-    expect(state.activeTool).toBe("git");
-    expect(state.toolOrder).toEqual(["files", "git"]);
+    expect(state.activeTool).toBe("terminal");
+    expect(state.toolOrder).toEqual(["terminal", "files", "git"]);
+  });
+
+  it("defaults new workspace state to an open terminal singleton", () => {
+    const state = reconcileRightPanelWorkspaceState(undefined, {
+      isCloudWorkspaceSelected: true,
+    });
+
+    expect(state.activeTool).toBe("terminal");
+    expect(state.headerOrder).toEqual(["tool:files", "tool:git", "tool:terminal", "tool:settings"]);
   });
 
   it("keeps a terminal active when it points at a live terminal entry", () => {
@@ -68,7 +77,7 @@ describe("right panel domain", () => {
     const state = reconcileRightPanelWorkspaceState(
       {
         terminalOrder: ["stale", "t2"],
-        headerOrder: ["terminal:stale", "tool:git", "terminal:t2"],
+        headerOrder: ["terminal:stale", "tool:git", "terminal:t2"] as never,
         activeTerminalId: "stale",
       },
       {
@@ -78,16 +87,16 @@ describe("right panel domain", () => {
     );
 
     expect(state.terminalOrder).toEqual(["t2", "t1"]);
-    expect(state.headerOrder).toEqual(["tool:git", "terminal:t2", "tool:files", "terminal:t1"]);
+    expect(state.headerOrder).toEqual(["tool:git", "tool:files", "tool:terminal"]);
     expect(state.activeTerminalId).toBe("t2");
   });
 
-  it("reconciles one mixed header order for tools and terminal tabs", () => {
+  it("uses legacy terminal header entries only as terminal order hints", () => {
     const state = reconcileRightPanelWorkspaceState(
       {
         toolOrder: ["files", "git"],
         terminalOrder: ["t1", "t2", "t3"],
-        headerOrder: ["terminal:t2", "tool:git", "terminal:t1", "tool:files"],
+        headerOrder: ["terminal:t2", "tool:git", "terminal:t1", "tool:files"] as never,
       },
       {
         isCloudWorkspaceSelected: false,
@@ -96,13 +105,11 @@ describe("right panel domain", () => {
     );
 
     expect(state.headerOrder).toEqual([
-      "terminal:t2",
       "tool:git",
-      "terminal:t1",
       "tool:files",
-      "terminal:t3",
+      "tool:terminal",
     ]);
-    expect(state.toolOrder).toEqual(["git", "files"]);
+    expect(state.toolOrder).toEqual(["git", "files", "terminal"]);
     expect(state.terminalOrder).toEqual(["t2", "t1", "t3"]);
   });
 
@@ -135,27 +142,26 @@ describe("right panel domain", () => {
     expect(state.activeTerminalId).toBe("t1");
   });
 
-  it("reorders tools and terminals across the same header", () => {
+  it("derives header order from tool order after a header reorder", () => {
     const state = reorderHeaderEntryInRightPanelState(
       {
-        toolOrder: ["files", "git"],
+        toolOrder: ["files", "git", "terminal"],
         terminalOrder: ["t1", "t2"],
-        headerOrder: ["tool:files", "terminal:t1", "tool:git", "terminal:t2"],
+        headerOrder: ["tool:files", "tool:git", "tool:terminal"],
         activeTool: "git",
       },
-      "terminal:t2",
+      "tool:terminal",
       "tool:files",
       false,
     );
 
     expect(state.headerOrder).toEqual([
-      "terminal:t2",
+      "tool:terminal",
       "tool:files",
-      "terminal:t1",
       "tool:git",
     ]);
-    expect(state.toolOrder).toEqual(["files", "git"]);
-    expect(state.terminalOrder).toEqual(["t2", "t1"]);
+    expect(state.toolOrder).toEqual(["terminal", "files", "git"]);
+    expect(state.terminalOrder).toEqual(["t1", "t2"]);
   });
 
   it("reorders right panel tools immediately", () => {
@@ -169,21 +175,22 @@ describe("right panel domain", () => {
       true,
     );
 
-    expect(state.toolOrder).toEqual(["settings", "files", "git"]);
+    expect(state.toolOrder).toEqual(["settings", "files", "git", "terminal"]);
     expect(state.activeTool).toBe("git");
   });
 
-  it("does not allow the terminal group sentinel into the tool order", () => {
+  it("reorders the terminal singleton as a normal tool", () => {
     const state = reorderToolInRightPanelState(
       {
-        toolOrder: ["files", "git"],
+        toolOrder: ["files", "git", "terminal"],
       },
       "terminal",
       "files",
       false,
     );
 
-    expect(state.toolOrder).toEqual(["files", "git"]);
+    expect(state.toolOrder).toEqual(["terminal", "files", "git"]);
+    expect(state.headerOrder).toEqual(["tool:terminal", "tool:files", "tool:git"]);
   });
 
   it("clamps persisted right panel widths", () => {

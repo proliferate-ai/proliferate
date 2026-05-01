@@ -8,9 +8,25 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "@/components/ui/Button";
-import { RefreshCw, Terminal as TerminalIcon } from "@/components/ui/icons";
+import { IconButton } from "@/components/ui/IconButton";
+import { Input } from "@/components/ui/Input";
+import { PopoverButton } from "@/components/ui/PopoverButton";
+import {
+  Check,
+  ChevronDown,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Terminal as TerminalIcon,
+  X,
+} from "@/components/ui/icons";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
-import { getTerminalWsHandle, onTerminalData } from "@/lib/integrations/anyharness/terminal-handles";
+import {
+  subscribeWithReplay,
+  TERMINAL_OUTPUT_GAP_MESSAGE,
+  type TerminalReplayEntry,
+  type TerminalStreamIdentity,
+} from "@/lib/integrations/anyharness/terminal-handles";
 import { useTerminalActions } from "@/hooks/terminals/use-terminal-actions";
 import { getTerminalTheme, onThemeChange } from "@/config/theme";
 import { useRerunSetupMutation } from "@anyharness/sdk-react";
@@ -26,7 +42,11 @@ interface TerminalPanelProps {
   isLoading?: boolean;
   errorMessage?: string | null;
   focusRequestToken?: number;
+  unreadByTerminal: Record<string, boolean>;
   onNewTerminal: () => void;
+  onSelectTerminal: (terminalId: string) => void;
+  onCloseTerminal: (terminalId: string) => void;
+  onRenameTerminal: (terminalId: string, title: string) => Promise<void>;
 }
 
 export function TerminalPanel({
@@ -39,12 +59,26 @@ export function TerminalPanel({
   isLoading = false,
   errorMessage = null,
   focusRequestToken = 0,
+  unreadByTerminal,
   onNewTerminal,
+  onSelectTerminal,
+  onCloseTerminal,
+  onRenameTerminal,
 }: TerminalPanelProps) {
   const activeTerminal = terminals.find((terminal) => terminal.id === activeTerminalId) ?? null;
 
   return (
     <div className="flex h-full flex-col" data-telemetry-block data-focus-zone="terminal">
+      <TerminalTopBar
+        terminals={terminals}
+        activeTerminalId={activeTerminalId}
+        unreadByTerminal={unreadByTerminal}
+        isRuntimeReady={isRuntimeReady}
+        onSelectTerminal={onSelectTerminal}
+        onCloseTerminal={onCloseTerminal}
+        onRenameTerminal={onRenameTerminal}
+        onNewTerminal={onNewTerminal}
+      />
       <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-background">
         {isLoading ? (
           <TerminalEmptyState label="Loading terminals" />
@@ -78,6 +112,191 @@ export function TerminalPanel({
           />
         )}
       </div>
+    </div>
+  );
+}
+
+function TerminalTopBar({
+  terminals,
+  activeTerminalId,
+  unreadByTerminal,
+  isRuntimeReady,
+  onSelectTerminal,
+  onCloseTerminal,
+  onRenameTerminal,
+  onNewTerminal,
+}: {
+  terminals: readonly TerminalRecord[];
+  activeTerminalId: string | null;
+  unreadByTerminal: Record<string, boolean>;
+  isRuntimeReady: boolean;
+  onSelectTerminal: (terminalId: string) => void;
+  onCloseTerminal: (terminalId: string) => void;
+  onRenameTerminal: (terminalId: string, title: string) => Promise<void>;
+  onNewTerminal: () => void;
+}) {
+  const [editingTerminalId, setEditingTerminalId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renamingTerminalId, setRenamingTerminalId] = useState<string | null>(null);
+  const activeTerminalIndex = terminals.findIndex((terminal) => terminal.id === activeTerminalId);
+  const activeTerminal = activeTerminalIndex >= 0 ? terminals[activeTerminalIndex] : null;
+  const activeTitle = activeTerminal
+    ? terminalDisplayTitle(activeTerminal, activeTerminalIndex)
+    : "Terminal";
+
+  const beginRename = (terminal: TerminalRecord, index: number) => {
+    setEditingTerminalId(terminal.id);
+    setRenameDraft(terminalDisplayTitle(terminal, index));
+  };
+
+  const submitRename = (terminalId: string) => {
+    const title = renameDraft.trim();
+    if (!title || title.length > 160) {
+      return;
+    }
+    setRenamingTerminalId(terminalId);
+    onRenameTerminal(terminalId, title)
+      .then(() => {
+        setEditingTerminalId(null);
+      })
+      .catch(() => undefined)
+      .finally(() => setRenamingTerminalId(null));
+  };
+
+  return (
+    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-sidebar-border bg-sidebar-background px-2 text-sidebar-foreground">
+      <PopoverButton
+        align="start"
+        trigger={
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="min-w-0 flex-1 justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          >
+            <TerminalIcon className="size-3.5 shrink-0" />
+            <span className="min-w-0 truncate text-left">{activeTitle}</span>
+            <ChevronDown className="size-3.5 shrink-0 text-sidebar-muted-foreground" />
+          </Button>
+        }
+        className="w-72 rounded-md border border-sidebar-border bg-sidebar-background p-1 shadow-floating"
+      >
+        {(close) => (
+          <div className="max-h-80 overflow-y-auto py-0.5">
+            {terminals.length === 0 ? (
+              <div className="px-2.5 py-2 text-xs text-sidebar-muted-foreground">
+                No terminals
+              </div>
+            ) : (
+              terminals.map((terminal, index) => {
+                const displayTitle = terminalDisplayTitle(terminal, index);
+                const isActive = terminal.id === activeTerminalId;
+                const isEditing = editingTerminalId === terminal.id;
+                const isRenaming = renamingTerminalId === terminal.id;
+                return (
+                  <div
+                    key={terminal.id}
+                    className="group/terminal-row flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-sidebar-foreground hover:bg-sidebar-accent"
+                  >
+                    {isEditing ? (
+                      <form
+                        className="flex min-w-0 flex-1 items-center gap-1"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          submitRename(terminal.id);
+                        }}
+                      >
+                        <Input
+                          value={renameDraft}
+                          maxLength={160}
+                          autoFocus
+                          onChange={(event) => setRenameDraft(event.target.value)}
+                          className="h-7 min-w-0 flex-1 border-sidebar-border bg-sidebar-background text-xs text-sidebar-foreground"
+                        />
+                        <IconButton
+                          size="xs"
+                          tone="sidebar"
+                          title="Save terminal title"
+                          type="submit"
+                          disabled={isRenaming || !renameDraft.trim()}
+                        >
+                          <Check className="ui-icon" />
+                        </IconButton>
+                        <IconButton
+                          size="xs"
+                          tone="sidebar"
+                          title="Cancel terminal title edit"
+                          onClick={() => setEditingTerminalId(null)}
+                        >
+                          <X className="ui-icon" />
+                        </IconButton>
+                      </form>
+                    ) : (
+                      <>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="unstyled"
+                          className="min-w-0 flex-1 justify-start gap-2 rounded-md px-1.5 py-1 text-xs text-sidebar-foreground hover:bg-transparent hover:text-sidebar-foreground"
+                          onClick={() => {
+                            onSelectTerminal(terminal.id);
+                            close();
+                          }}
+                        >
+                          <TerminalIcon className="size-3.5 shrink-0 text-sidebar-muted-foreground" />
+                          <span className="min-w-0 flex-1 truncate text-left">
+                            {displayTitle}
+                          </span>
+                          {unreadByTerminal[terminal.id] && (
+                            <span
+                              className="size-1.5 rounded-full bg-sidebar-foreground"
+                              aria-hidden="true"
+                            />
+                          )}
+                          {isActive && (
+                            <span className="text-[10px] text-sidebar-muted-foreground">
+                              Active
+                            </span>
+                          )}
+                        </Button>
+                        <IconButton
+                          size="xs"
+                          tone="sidebar"
+                          title={`Rename ${displayTitle}`}
+                          onClick={() => beginRename(terminal, index)}
+                        >
+                          <Pencil className="ui-icon" />
+                        </IconButton>
+                        <IconButton
+                          size="xs"
+                          tone="sidebar"
+                          title={`Close ${displayTitle}`}
+                          disabled={!isRuntimeReady}
+                          onClick={() => {
+                            onCloseTerminal(terminal.id);
+                            close();
+                          }}
+                        >
+                          <X className="ui-icon" />
+                        </IconButton>
+                      </>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+      </PopoverButton>
+      <IconButton
+        size="sm"
+        tone="sidebar"
+        title="New terminal"
+        disabled={!isRuntimeReady}
+        onClick={onNewTerminal}
+      >
+        <Plus className="ui-icon" />
+      </IconButton>
     </div>
   );
 }
@@ -159,10 +378,12 @@ function TerminalViewport({
   const fitAddonRef = useRef<import("@xterm/addon-fit").FitAddon | null>(null);
   const [isTerminalReady, setIsTerminalReady] = useState(false);
   const [hasBeenVisible, setHasBeenVisible] = useState(visible);
+  const streamIdentityRef = useRef<TerminalStreamIdentity | null>(null);
+  const unsubscribeReplayRef = useRef<(() => void) | null>(null);
   const connectionVersion = useTerminalStore(
     (state) => state.connectionVersionByTerminal[terminal.id] ?? 0,
   );
-  const { ensureTabConnection, resizeTab } = useTerminalActions();
+  const { ensureTabConnection, resizeTab, sendInput, sendResize } = useTerminalActions();
 
   useEffect(() => {
     if (visible) {
@@ -180,7 +401,6 @@ function TerminalViewport({
     let cancelled = false;
     let resizeObserver: ResizeObserver | null = null;
     let unsubscribeTheme = () => {};
-    let unsubscribeData = () => {};
 
     void (async () => {
       const { Terminal } = await import("@xterm/xterm");
@@ -230,21 +450,21 @@ function TerminalViewport({
         term.options.theme = getTerminalTheme();
       });
 
-      unsubscribeData = onTerminalData(terminal.id, (data) => {
-        term.write(data);
-      });
-
       term.onData((data) => {
-        const wsHandle = getTerminalWsHandle(terminal.id);
-        wsHandle?.send(data);
+        const identity = streamIdentityRef.current;
+        if (identity) {
+          sendInput(identity, data);
+        }
       });
 
       term.onResize(({ cols, rows }) => {
         if (workspaceId) {
           void resizeTab(terminal.id, workspaceId, cols, rows);
         }
-        const handle = getTerminalWsHandle(terminal.id);
-        handle?.sendResize(cols, rows);
+        const identity = streamIdentityRef.current;
+        if (identity) {
+          sendResize(identity, cols, rows);
+        }
       });
 
       resizeObserver = new ResizeObserver(() => {
@@ -257,7 +477,8 @@ function TerminalViewport({
     return () => {
       cancelled = true;
       resizeObserver?.disconnect();
-      unsubscribeData();
+      unsubscribeReplayRef.current?.();
+      unsubscribeReplayRef.current = null;
       unsubscribeTheme();
       xtermRef.current?.dispose();
       xtermRef.current = null;
@@ -269,7 +490,26 @@ function TerminalViewport({
     if (!visible || !isTerminalReady || !canConnect || !workspaceId) {
       return;
     }
-    void ensureTabConnection(terminal.id, workspaceId, terminal.status);
+    void ensureTabConnection(terminal.id, workspaceId, terminal.status).then((identity) => {
+      if (!identity || !xtermRef.current) {
+        return;
+      }
+      const existingIdentity = streamIdentityRef.current;
+      if (
+        existingIdentity?.workspaceId === identity.workspaceId
+        && existingIdentity.terminalId === identity.terminalId
+        && existingIdentity.runtimeIdentity === identity.runtimeIdentity
+        && unsubscribeReplayRef.current
+      ) {
+        return;
+      }
+      unsubscribeReplayRef.current?.();
+      streamIdentityRef.current = identity;
+      const term = xtermRef.current;
+      unsubscribeReplayRef.current = subscribeWithReplay(identity, (entry) => {
+        writeTerminalReplayEntry(term, entry);
+      });
+    });
   }, [
     canConnect,
     connectionVersion,
@@ -298,6 +538,28 @@ function TerminalViewport({
       data-terminal-id={terminal.id}
     />
   );
+}
+
+function terminalDisplayTitle(terminal: TerminalRecord, index: number): string {
+  const fallbackTitle = `Terminal ${index + 1}`;
+  return terminal.title === "Terminal" ? fallbackTitle : terminal.title;
+}
+
+function writeTerminalReplayEntry(
+  terminal: import("@xterm/xterm").Terminal,
+  entry: TerminalReplayEntry,
+): void {
+  if (entry.type === "data") {
+    terminal.write(entry.data);
+    return;
+  }
+  if (entry.type === "runtime-gap" || entry.type === "local-overflow") {
+    terminal.write(`\r\n${TERMINAL_OUTPUT_GAP_MESSAGE}\r\n`);
+    return;
+  }
+  if (entry.type === "exit") {
+    terminal.write("\r\n");
+  }
 }
 
 class TerminalErrorBoundary extends Component<

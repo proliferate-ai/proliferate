@@ -7,10 +7,10 @@ import {
 import { createManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
 
 describe("workspace ui tab persistence", () => {
-  it("preserves archived workspaces for current v7 preference blobs", () => {
+  it("preserves archived workspaces for current v8 preference blobs", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 7,
+      migrationVersion: 8,
       archivedWorkspaceIds: ["workspace-a"],
     });
 
@@ -21,7 +21,7 @@ describe("workspace ui tab persistence", () => {
   it("defaults missing visible tab fields without bumping migration", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 7,
+      migrationVersion: 8,
       visibleChatSessionIdsByWorkspace: undefined as unknown as Record<string, string[]>,
       recentlyHiddenChatSessionIdsByWorkspace: undefined as unknown as Record<string, string[]>,
       collapsedChatGroupsByWorkspace: undefined as unknown as Record<string, string[]>,
@@ -29,7 +29,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(7);
+    expect(state.migrationVersion).toBe(8);
     expect(state.visibleChatSessionIdsByWorkspace).toEqual({});
     expect(state.recentlyHiddenChatSessionIdsByWorkspace).toEqual({});
     expect(state.collapsedChatGroupsByWorkspace).toEqual({});
@@ -39,7 +39,7 @@ describe("workspace ui tab persistence", () => {
   it("defaults missing session error views without bumping migration", () => {
     const legacyState = {
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 7,
+      migrationVersion: 8,
     } as Partial<typeof WORKSPACE_UI_DEFAULTS> & { migrationVersion: number };
     delete legacyState.lastViewedSessionErrorAtBySession;
 
@@ -48,14 +48,14 @@ describe("workspace ui tab persistence", () => {
     );
 
     expect(didMigrate).toBe(false);
-    expect(state.migrationVersion).toBe(7);
+    expect(state.migrationVersion).toBe(8);
     expect(state.lastViewedSessionErrorAtBySession).toEqual({});
   });
 
   it("sanitizes malformed manual chat groups without bumping migration", () => {
     const { state, didMigrate } = migrateWorkspaceUiState({
       ...WORKSPACE_UI_DEFAULTS,
-      migrationVersion: 7,
+      migrationVersion: 8,
       manualChatGroupsByWorkspace: {
         w1: [
           {
@@ -75,7 +75,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(7);
+    expect(state.migrationVersion).toBe(8);
     expect(state.manualChatGroupsByWorkspace).toEqual({
       w1: [
         {
@@ -97,7 +97,7 @@ describe("workspace ui tab persistence", () => {
     });
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(7);
+    expect(state.migrationVersion).toBe(8);
     expect(state.rightPanelDurableByWorkspace).toEqual({});
     expect(state.rightPanelMaterializedByWorkspace).toEqual({});
   });
@@ -126,14 +126,14 @@ describe("workspace ui tab persistence", () => {
       w1: {
         open: false,
         width: 700,
-        toolOrder: ["files", "git", "settings"],
+        toolOrder: ["terminal", "files", "git", "settings"],
       },
     });
     expect(state.rightPanelMaterializedByWorkspace).toEqual({
       w1: {
         activeEntryKey: "tool:git",
         terminalOrder: ["t1", "t2"],
-        headerOrder: ["tool:files", "tool:git", "tool:settings", "terminal:t1", "terminal:t2"],
+        headerOrder: ["tool:terminal", "tool:files", "tool:git", "tool:settings"],
         activeTerminalId: "t2",
       },
     });
@@ -158,18 +158,114 @@ describe("workspace ui tab persistence", () => {
     } as never);
 
     expect(didMigrate).toBe(true);
-    expect(state.migrationVersion).toBe(7);
+    expect(state.migrationVersion).toBe(8);
     expect(state.rightPanelDurableByWorkspace.w1).toEqual({
       open: false,
       width: 512,
-      toolOrder: ["git", "files", "settings"],
+      toolOrder: ["git", "terminal", "files", "settings"],
     });
     expect(state.rightPanelMaterializedByWorkspace.w1).toEqual({
-      activeEntryKey: "terminal:terminal-b",
+      activeEntryKey: "tool:terminal",
       terminalOrder: ["terminal-b", "terminal-a"],
-      headerOrder: ["tool:git", "terminal:terminal-b", "tool:files", "terminal:terminal-a", "tool:settings"],
+      headerOrder: ["tool:git", "tool:terminal", "tool:files", "tool:settings"],
       activeTerminalId: "terminal-b",
     });
+  });
+
+  it("sanitizes malformed legacy right panel preference arrays during migration", () => {
+    const { state, didMigrate } = migrateWorkspaceUiState({
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: 6,
+      rightPanelByWorkspace: {
+        w1: {
+          activeTool: "git",
+          toolOrder: 42,
+          terminalOrder: 17,
+          headerOrder: 19,
+          activeTerminalId: "t1",
+        },
+      },
+      rightPanelWidthByWorkspace: {
+        w1: 420,
+      },
+    } as never);
+
+    expect(didMigrate).toBe(true);
+    expect(state.migrationVersion).toBe(8);
+    expect(state.rightPanelDurableByWorkspace.w1).toEqual({
+      open: false,
+      width: 420,
+      toolOrder: ["files", "git", "terminal", "settings"],
+    });
+    expect(state.rightPanelMaterializedByWorkspace.w1).toEqual({
+      activeEntryKey: "tool:git",
+      terminalOrder: [],
+      headerOrder: ["tool:files", "tool:git", "tool:terminal", "tool:settings"],
+      activeTerminalId: null,
+    });
+  });
+
+  it("migrates v7 terminal headers to the v8 singleton terminal tool", () => {
+    const { state, didMigrate } = migrateWorkspaceUiState({
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: 7,
+      rightPanelDurableByWorkspace: {
+        w1: {
+          open: true,
+          width: 512,
+          toolOrder: ["git", "files", "settings"] as never,
+        },
+      },
+      rightPanelMaterializedByWorkspace: {
+        w1: {
+          activeEntryKey: "terminal:t2" as never,
+          headerOrder: ["tool:git", "terminal:t2", "tool:files", "terminal:t1", "tool:settings"] as never,
+          terminalOrder: ["t1", "t2"],
+          activeTerminalId: "t2",
+        },
+      },
+    });
+
+    expect(didMigrate).toBe(true);
+    expect(state.migrationVersion).toBe(8);
+    expect(state.rightPanelDurableByWorkspace.w1).toEqual({
+      open: true,
+      width: 512,
+      toolOrder: ["git", "terminal", "files", "settings"],
+    });
+    expect(state.rightPanelMaterializedByWorkspace.w1).toEqual({
+      activeEntryKey: "tool:terminal",
+      headerOrder: ["tool:git", "tool:terminal", "tool:files", "tool:settings"],
+      terminalOrder: ["t2", "t1"],
+      activeTerminalId: "t2",
+    });
+  });
+
+  it("places terminal before settings for v7 state without terminal headers", () => {
+    const { state } = migrateWorkspaceUiState({
+      ...WORKSPACE_UI_DEFAULTS,
+      migrationVersion: 7,
+      rightPanelDurableByWorkspace: {
+        w1: {
+          open: false,
+          width: 420,
+          toolOrder: ["git", "files", "settings"] as never,
+        },
+      },
+      rightPanelMaterializedByWorkspace: {
+        w1: {
+          activeEntryKey: "tool:git",
+          headerOrder: ["tool:git", "tool:files", "tool:settings"] as never,
+          terminalOrder: [],
+          activeTerminalId: null,
+        },
+      },
+    });
+
+    expect(state.rightPanelDurableByWorkspace.w1?.toolOrder)
+      .toEqual(["git", "files", "terminal", "settings"]);
+    expect(state.rightPanelMaterializedByWorkspace.w1?.headerOrder)
+      .toEqual(["tool:git", "tool:files", "tool:terminal", "tool:settings"]);
   });
 
   it("stores visible and hidden chat ids per workspace", () => {
@@ -199,13 +295,15 @@ describe("workspace ui tab persistence", () => {
       activeTool: "terminal",
       toolOrder: ["files", "git"],
       terminalOrder: ["t1"],
-      headerOrder: ["tool:files", "tool:git", "terminal:t1"],
+      headerOrder: ["tool:files", "tool:git", "tool:terminal", "tool:settings"],
       activeTerminalId: "t1",
     });
     store.setRightPanelWidthForWorkspace("w1", 900);
 
     expect(useWorkspaceUiStore.getState().rightPanelMaterializedByWorkspace.w1?.activeEntryKey)
-      .toBe("terminal:t1");
+      .toBe("tool:terminal");
+    expect(useWorkspaceUiStore.getState().rightPanelMaterializedByWorkspace.w1?.headerOrder)
+      .toEqual(["tool:files", "tool:git", "tool:terminal", "tool:settings"]);
     expect(useWorkspaceUiStore.getState().rightPanelDurableByWorkspace.w1?.width).toBe(700);
   });
 

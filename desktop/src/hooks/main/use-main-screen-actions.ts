@@ -8,10 +8,7 @@ import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-id
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import {
-  rightPanelTerminalHeaderKey,
-  type RightPanelTool,
-} from "@/lib/domain/workspaces/right-panel";
+import type { RightPanelTool } from "@/lib/domain/workspaces/right-panel";
 import type {
   MainScreenDataState,
   MainScreenLayoutState,
@@ -63,16 +60,12 @@ export function useMainScreenActions({
     }
 
     if (terminalId) {
-      const terminalKey = rightPanelTerminalHeaderKey(terminalId);
       setRightPanelState((previous) => ({
         ...previous,
         activeTool: "terminal",
         terminalOrder: previous.terminalOrder.includes(terminalId)
           ? previous.terminalOrder
           : [...previous.terminalOrder, terminalId],
-        headerOrder: previous.headerOrder.includes(terminalKey)
-          ? previous.headerOrder
-          : [...previous.headerOrder, terminalKey],
         activeTerminalId: terminalId,
       }));
       setRightPanelOpen(true);
