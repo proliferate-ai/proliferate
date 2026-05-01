@@ -29,6 +29,7 @@ import {
   type MeasurementOperationId,
   type MeasurementWorkflowStep,
 } from "@/lib/infra/debug-measurement";
+import { clearSessionReconnectTimer } from "@/lib/integrations/anyharness/session-reconnect-state";
 import {
   resolveRuntimeTargetForWorkspace,
   type RuntimeTarget,
@@ -51,6 +52,10 @@ interface SessionStreamCallbacks {
   onError: () => void;
   onClose: () => void;
   measurementOperationId?: MeasurementOperationId | null;
+}
+
+export interface FlushAwareSessionStreamHandle extends SessionStreamHandle {
+  flushPendingEvents?: () => void;
 }
 
 const SESSION_HISTORY_FETCH_TIMEOUT_MS = 10_000;
@@ -479,30 +484,43 @@ export function detachAndCloseSessionSlotStreams(
   }
 
   const state = useHarnessStore.getState();
-  const nextSlots = { ...state.sessionSlots };
-  const handles: SessionStreamHandle[] = [];
+  const streams: { sessionId: string; handle: SessionStreamHandle }[] = [];
   for (const sessionId of uniqueSessionIds) {
-    const slot = nextSlots[sessionId];
+    const slot = state.sessionSlots[sessionId];
     if (!slot?.sseHandle) {
       continue;
     }
-    handles.push(slot.sseHandle);
+    streams.push({ sessionId, handle: slot.sseHandle });
+  }
+
+  if (streams.length === 0) {
+    return 0;
+  }
+
+  for (const { sessionId, handle } of streams) {
+    handle.close();
+    clearSessionReconnectTimer(sessionId);
+  }
+
+  const latestState = useHarnessStore.getState();
+  const nextSlots = { ...latestState.sessionSlots };
+  let didDetachStream = false;
+  for (const { sessionId, handle } of streams) {
+    const slot = nextSlots[sessionId];
+    if (slot?.sseHandle !== handle) {
+      continue;
+    }
     nextSlots[sessionId] = {
       ...slot,
       sseHandle: null,
       streamConnectionState: "disconnected",
     };
+    didDetachStream = true;
   }
-
-  if (handles.length === 0) {
-    return 0;
+  if (didDetachStream) {
+    useHarnessStore.setState({ sessionSlots: nextSlots });
   }
-
-  useHarnessStore.setState({ sessionSlots: nextSlots });
-  for (const handle of handles) {
-    handle.close();
-  }
-  return handles.length;
+  return streams.length;
 }
 
 export function pruneInactiveSessionStreams(
@@ -510,6 +528,7 @@ export function pruneInactiveSessionStreams(
     preserveSessionIds?: Iterable<string>;
   },
 ): string[] {
+  flushPendingSessionSlotStreamEvents(useHarnessStore.getState().sessionSlots);
   const state = useHarnessStore.getState();
   const prunableSessionIds = collectInactiveSessionStreamIds(
     state.sessionSlots,
@@ -524,6 +543,15 @@ export function pruneInactiveSessionStreams(
     closedSessionCount: prunableSessionIds.length,
   });
   return prunableSessionIds;
+}
+
+function flushPendingSessionSlotStreamEvents(
+  sessionSlots: Record<string, SessionSlot>,
+): void {
+  for (const slot of Object.values(sessionSlots)) {
+    const handle = slot.sseHandle as FlushAwareSessionStreamHandle | null;
+    handle?.flushPendingEvents?.();
+  }
 }
 
 export async function openSessionStream(

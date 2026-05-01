@@ -1,12 +1,5 @@
 import {
-  anyHarnessCoworkManagedWorkspacesKey,
-  anyHarnessGitStatusKey,
-  anyHarnessSessionReviewsKey,
-  anyHarnessSessionSubagentsKey,
-} from "@anyharness/sdk-react";
-import {
   appendHistoryTail,
-  applyStreamEnvelope,
   replaySessionHistory,
 } from "@/lib/integrations/anyharness/session-stream-state";
 import {
@@ -15,7 +8,6 @@ import {
   type SessionEventEnvelope,
   type SessionStreamHandle,
   type TranscriptState,
-  type ToolCallItem,
 } from "@anyharness/sdk";
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -23,9 +15,9 @@ import {
   fetchSessionHistory,
   fetchSessionSummary,
   getSessionClientAndWorkspace,
-  logDevSSEEvent,
   openSessionStream,
   resumeSession,
+  type FlushAwareSessionStreamHandle,
 } from "@/lib/integrations/anyharness/session-runtime";
 import { logLatency } from "@/lib/infra/debug-latency";
 import {
@@ -52,19 +44,15 @@ import {
   shouldAcceptAuthoritativeLiveConfig,
   type PendingSessionConfigChange,
 } from "@/lib/domain/sessions/pending-config";
-import { shouldClearOptimisticPendingPrompt } from "@/lib/domain/chat/pending-prompts";
 import { buildSessionSlotPatchFromSummary } from "@/lib/domain/sessions/summary";
-import { buildSessionStreamPatch } from "@/lib/domain/sessions/stream-patch";
 import {
   clearSessionReconnectTimer,
   scheduleSessionReconnectTimer,
 } from "@/lib/integrations/anyharness/session-reconnect-state";
-import { notifyTurnEnd } from "@/lib/integrations/anyharness/turn-end-events";
 import {
   rememberLastViewedSession,
   trackWorkspaceInteraction,
 } from "@/stores/preferences/workspace-ui-store";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/query-keys";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/workspace-ui-key";
@@ -78,13 +66,12 @@ import {
 } from "@/hooks/sessions/session-runtime-helpers";
 import {
   clearPendingConfigRollbackCheck,
-  schedulePendingConfigRollbackCheck,
 } from "@/hooks/sessions/session-runtime-pending-config";
-import {
-  parseSubagentLaunchResult,
-  resolveSubagentLaunchDisplay,
-} from "@/lib/domain/chat/subagent-launch";
 import { useLinkedSessionMounting } from "@/hooks/chat/subagents/use-linked-session-mounting";
+import {
+  useSessionStreamFlushControllerFactory,
+  type SessionStreamFlushController,
+} from "@/hooks/sessions/use-session-stream-flush";
 
 const ACTIVE_SUMMARY_REFRESH_DELAY_MS = 8_000;
 const SESSION_APPLY_MEASUREMENT_SURFACES: readonly MeasurementSurface[] = [
@@ -97,8 +84,6 @@ const SESSION_APPLY_MEASUREMENT_SURFACES: readonly MeasurementSurface[] = [
   "chat-composer-dock",
 ];
 const SESSION_HISTORY_APPLY_MAX_DURATION_MS = 30_000;
-const SESSION_STREAM_EVENT_BATCH_IDLE_MS = 350;
-const SESSION_STREAM_EVENT_BATCH_MAX_DURATION_MS = 5_000;
 
 export function useSessionRuntimeActions() {
   const queryClient = useQueryClient();
@@ -622,16 +607,31 @@ export function useSessionRuntimeActions() {
     }
   }, [applySessionSummary, pluginsInCodingSessionsEnabled]);
 
+  const createSessionStreamFlushController = useSessionStreamFlushControllerFactory({
+    queryClient,
+    mountSubagentChildSession,
+    persistReconciledModePreferences,
+    refreshSessionSlotMeta,
+    showToast,
+  });
+
   const closeSessionSlotStream = useCallback((sessionId: string) => {
     clearSessionReconnectTimer(sessionId);
     const slot = useHarnessStore.getState().sessionSlots[sessionId];
     if (slot) {
       const handle = slot.sseHandle;
-      useHarnessStore.getState().patchSessionSlot(sessionId, {
-        sseHandle: null,
-        streamConnectionState: "disconnected",
-      });
       handle?.close();
+      clearSessionReconnectTimer(sessionId);
+      const latestSlot = useHarnessStore.getState().sessionSlots[sessionId];
+      if (!latestSlot) {
+        return;
+      }
+      if (!handle || latestSlot.sseHandle === handle) {
+        useHarnessStore.getState().patchSessionSlot(sessionId, {
+          sseHandle: null,
+          streamConnectionState: "disconnected",
+        });
+      }
     }
   }, []);
 
@@ -903,6 +903,20 @@ export function useSessionRuntimeActions() {
           });
       }, delayMs);
     };
+    const streamFlushController = createSessionStreamFlushController({
+      sessionId,
+      streamMeasurementOperationId,
+      requestHeaders: options?.requestHeaders,
+      isStillCurrent,
+      isCurrentStream: () => !!handle && isCurrentStreamHandle(sessionId, handle),
+      closeCurrentHandle: () => {
+        handle?.close();
+      },
+      scheduleReconnect,
+      clearActiveSummaryRefreshTimer,
+      scheduleActiveSummaryRefresh,
+      scheduleStartupReadyRefresh,
+    });
 
     await openSessionStream(sessionId, {
       afterSeq,
@@ -913,9 +927,13 @@ export function useSessionRuntimeActions() {
           nextHandle.close();
           return;
         }
-        handle = nextHandle;
+        const flushAwareHandle = createFlushAwareSessionStreamHandle(
+          nextHandle,
+          streamFlushController,
+        );
+        handle = flushAwareHandle;
         useHarnessStore.getState().patchSessionSlot(sessionId, {
-          sseHandle: nextHandle,
+          sseHandle: flushAwareHandle,
           streamConnectionState: "connecting",
         });
       },
@@ -944,262 +962,11 @@ export function useSessionRuntimeActions() {
         if (!isStillCurrent() || !handle || !isCurrentStreamHandle(sessionId, handle)) {
           return;
         }
-
-        const currentState = useHarnessStore.getState();
-        const slotState = currentState.sessionSlots[sessionId];
-        if (!slotState) {
-          return;
-        }
-
-        const streamEventBatchOperationId = startMeasurementOperation({
-          kind: "session_stream_event_batch",
-          sampleKey: "stream",
-          surfaces: SESSION_APPLY_MEASUREMENT_SURFACES,
-          idleTimeoutMs: SESSION_STREAM_EVENT_BATCH_IDLE_MS,
-          maxDurationMs: SESSION_STREAM_EVENT_BATCH_MAX_DURATION_MS,
-        });
-        const streamApplyOperationIds = uniqueMeasurementOperationIds([
-          streamMeasurementOperationId,
-          streamEventBatchOperationId,
-        ]);
-        for (const operationId of streamApplyOperationIds) {
-          recordStreamStateCounts(
-            operationId,
-            "before",
-            slotState.events,
-            slotState.transcript,
-          );
-        }
-
-        const reducerStartedAt = performance.now();
-        const result = applyStreamEnvelope(
-          {
-            events: slotState.events,
-            transcript: slotState.transcript,
-          },
-          envelope,
-        );
-        for (const operationId of streamApplyOperationIds) {
-          recordMeasurementMetric({
-            type: "reducer",
-            category: "session.stream",
-            operationId,
-            durationMs: performance.now() - reducerStartedAt,
-          });
-        }
-
-        if (result.status === "duplicate") {
-          logDevSSEEvent(sessionId, envelope, "duplicate");
-          return;
-        }
-
-        if (result.status === "gap") {
-          logDevSSEEvent(sessionId, envelope, "gap");
-          clearActiveSummaryRefreshTimer();
-          useHarnessStore.getState().patchSessionSlot(sessionId, {
-            sseHandle: null,
-            streamConnectionState: "disconnected",
-          });
-          handle.close();
-          scheduleReconnect(0);
-          return;
-        }
-
-        logDevSSEEvent(sessionId, envelope, "applied");
-        const event = envelope.event;
-        if (event.type === "available_commands_update") {
-          scheduleStartupReadyRefresh("available_commands", 0);
-        }
-        if (event.type === "turn_started" || event.type === "session_ended") {
-          clearPendingConfigRollbackCheck(sessionId);
-        }
-
-        const patch = buildSessionStreamPatch({
-          slot: slotState,
-          nextTranscript: result.state.transcript,
-          envelope,
-        });
-        const reconcileResult = event.type === "config_option_update"
-          ? reconcilePendingConfigChanges(
-            event.liveConfig,
-            slotState.pendingConfigChanges,
-          )
-          : {
-            pendingConfigChanges: slotState.pendingConfigChanges,
-            reconciledChanges: [] as PendingSessionConfigChange[],
-          };
-
-        const storeStartedAt = performance.now();
-        useHarnessStore.getState().patchSessionSlot(sessionId, {
-          events: result.state.events,
-          ...patch,
-          optimisticPrompt: shouldClearOptimisticPendingPrompt(event.type)
-            ? null
-            : slotState.optimisticPrompt,
-          pendingConfigChanges: reconcileResult.pendingConfigChanges,
-        });
-        for (const operationId of streamApplyOperationIds) {
-          recordMeasurementMetric({
-            type: "store",
-            category: "session.stream",
-            operationId,
-            durationMs: performance.now() - storeStartedAt,
-          });
-          recordStreamStateCounts(
-            operationId,
-            "after",
-            result.state.events,
-            result.state.transcript,
-          );
-          markSessionApplyForNextCommit(operationId);
-        }
-
-        if (shouldScheduleActiveSummaryRefresh(event.type)) {
-          scheduleActiveSummaryRefresh();
-        }
-        if (
-          event.type === "turn_ended"
-          || event.type === "error"
-          || event.type === "session_ended"
-        ) {
-          clearActiveSummaryRefreshTimer();
-        }
-
-        if (event.type === "subagent_turn_completed") {
-          void mountSubagentChildSession({
-            childSessionId: event.childSessionId,
-            label: event.label ?? null,
-            workspaceId: slotState.workspaceId,
-            requestHeaders: options?.requestHeaders,
-          });
-          void queryClient.invalidateQueries({
-            queryKey: anyHarnessSessionSubagentsKey(
-              currentState.runtimeUrl,
-              slotState.workspaceId,
-              sessionId,
-            ),
-          });
-        }
-
-        if (
-          event.type === "session_link_turn_completed"
-          && event.relation === "cowork_coding_session"
-        ) {
-          void queryClient.invalidateQueries({
-            queryKey: anyHarnessCoworkManagedWorkspacesKey(
-              currentState.runtimeUrl,
-              sessionId,
-            ),
-          });
-        }
-
-        if (event.type === "review_run_updated") {
-          void queryClient.invalidateQueries({
-            queryKey: anyHarnessSessionReviewsKey(
-              currentState.runtimeUrl,
-              slotState.workspaceId,
-              event.parentSessionId,
-            ),
-          });
-        }
-
-        if (event.type === "item_completed" && envelope.itemId) {
-          const item = result.state.transcript.itemsById[envelope.itemId];
-          if (item?.kind === "tool_call" && isSubagentMcpMutation(item)) {
-            const launchResult = parseSubagentLaunchResult(item);
-            const display = resolveSubagentLaunchDisplay(item);
-            if (launchResult?.childSessionId) {
-              void mountSubagentChildSession({
-                childSessionId: launchResult.childSessionId,
-                label: display.title,
-                workspaceId: slotState.workspaceId,
-                requestHeaders: options?.requestHeaders,
-              });
-            }
-            void queryClient.invalidateQueries({
-              queryKey: anyHarnessSessionSubagentsKey(
-                currentState.runtimeUrl,
-                slotState.workspaceId,
-                sessionId,
-              ),
-            });
-          }
-          if (
-            item?.kind === "tool_call"
-            && item.status === "completed"
-            && isCoworkCodingCreateMcpMutation(item)
-          ) {
-            void queryClient.invalidateQueries({
-              queryKey: anyHarnessCoworkManagedWorkspacesKey(
-                currentState.runtimeUrl,
-                sessionId,
-              ),
-            });
-            void queryClient.invalidateQueries({
-              queryKey: workspaceCollectionsScopeKey(currentState.runtimeUrl),
-            });
-          }
-        }
-
-        if (reconcileResult.reconciledChanges.length > 0) {
-          persistReconciledModePreferences(
-            slotState.workspaceId,
-            slotState.agentKind,
-            event.type === "config_option_update"
-              ? event.liveConfig.normalizedControls.mode?.rawConfigId ?? null
-              : null,
-            reconcileResult.reconciledChanges,
-            (rawConfigId) => (
-              event.type === "config_option_update"
-                ? getAuthoritativeConfigValue(event.liveConfig, rawConfigId)
-                : null
-            ),
-          );
-        }
-
-        if (!hasQueuedPendingConfigChanges(reconcileResult.pendingConfigChanges)) {
-          clearPendingConfigRollbackCheck(sessionId);
-        }
-
-        if (
-          event.type === "turn_started"
-          || event.type === "interaction_requested"
-          || event.type === "interaction_resolved"
-          || event.type === "turn_ended"
-          || event.type === "error"
-          || event.type === "session_ended"
-        ) {
-          void queryClient.invalidateQueries({
-            queryKey: workspaceCollectionsScopeKey(currentState.runtimeUrl),
-          });
-        }
-
-        if (slotState.workspaceId && shouldTrackWorkspaceWorkActivity(event.type)) {
-          trackWorkspaceInteraction(slotState.workspaceId, envelope.timestamp);
-        }
-
-        if (event.type === "turn_ended" || event.type === "error") {
-          if (hasQueuedPendingConfigChanges(reconcileResult.pendingConfigChanges)) {
-            schedulePendingConfigRollbackCheck(
-              sessionId,
-              refreshSessionSlotMeta,
-              showToast,
-            );
-          }
-
-          if (slotState.workspaceId) {
-            void queryClient.invalidateQueries({
-              queryKey: anyHarnessGitStatusKey(
-                currentState.runtimeUrl,
-                slotState.workspaceId,
-              ),
-            });
-          }
-
-          notifyTurnEnd(sessionId, event.type);
-        }
+        streamFlushController.enqueue(envelope);
       },
       onError: () => {
+        streamFlushController.flushNow();
+        streamFlushController.dispose();
         finishStreamConnectMeasurement("aborted");
         resolveOpen?.();
         clearStartupReadyRefreshTimer();
@@ -1214,6 +981,8 @@ export function useSessionRuntimeActions() {
         scheduleReconnect();
       },
       onClose: () => {
+        streamFlushController.flushNow();
+        streamFlushController.dispose();
         finishStreamConnectMeasurement(openResolved ? "completed" : "aborted");
         resolveOpen?.();
         clearStartupReadyRefreshTimer();
@@ -1257,12 +1026,9 @@ export function useSessionRuntimeActions() {
     ]);
   }, [
     closeSessionSlotStream,
-    mountSubagentChildSession,
-    persistReconciledModePreferences,
-    queryClient,
+    createSessionStreamFlushController,
     refreshSessionSlotMeta,
     rehydrateSessionSlotFromHistory,
-    showToast,
   ]);
 
   return {
@@ -1336,6 +1102,28 @@ function uniqueMeasurementOperationIds(
   return [...new Set(operationIds.filter((id): id is MeasurementOperationId => !!id))];
 }
 
+function createFlushAwareSessionStreamHandle(
+  handle: SessionStreamHandle,
+  streamFlushController: SessionStreamFlushController,
+): FlushAwareSessionStreamHandle {
+  let closed = false;
+
+  return {
+    close() {
+      streamFlushController.flushNow();
+      streamFlushController.dispose();
+      if (closed) {
+        return;
+      }
+      closed = true;
+      handle.close();
+    },
+    flushPendingEvents() {
+      streamFlushController.flushNow();
+    },
+  };
+}
+
 function recordHistoryStateCounts(
   operationId: MeasurementOperationId | null | undefined,
   phase: "before" | "after",
@@ -1366,36 +1154,6 @@ function recordHistoryStateCounts(
   });
 }
 
-function recordStreamStateCounts(
-  operationId: MeasurementOperationId | null | undefined,
-  phase: "before" | "after",
-  events: readonly SessionEventEnvelope[],
-  transcript: TranscriptState,
-): void {
-  if (!operationId) {
-    return;
-  }
-  const isBefore = phase === "before";
-  recordMeasurementMetric({
-    type: "state_count",
-    operationId,
-    target: isBefore ? "session.stream.events_before" : "session.stream.events_after",
-    count: events.length,
-  });
-  recordMeasurementMetric({
-    type: "state_count",
-    operationId,
-    target: isBefore ? "session.stream.turns_before" : "session.stream.turns_after",
-    count: transcript.turnOrder.length,
-  });
-  recordMeasurementMetric({
-    type: "state_count",
-    operationId,
-    target: isBefore ? "session.stream.items_before" : "session.stream.items_after",
-    count: Object.keys(transcript.itemsById).length,
-  });
-}
-
 function mergeFetchedHistoryWithExistingEvents(
   fetchedEvents: SessionEventEnvelope[],
   currentEvents: SessionEventEnvelope[],
@@ -1413,52 +1171,4 @@ function mergeFetchedHistoryWithExistingEvents(
   }
 
   return Array.from(eventsBySeq.values()).sort((a, b) => a.seq - b.seq);
-}
-
-function isSubagentMcpMutation(item: ToolCallItem): boolean {
-  const nativeToolName = item.nativeToolName?.trim().toLowerCase();
-  return nativeToolName === "mcp__subagents__create_subagent"
-    || nativeToolName === "mcp__subagents__send_subagent_message"
-    || nativeToolName === "mcp__subagents__schedule_subagent_wake";
-}
-
-function isCoworkCodingCreateMcpMutation(item: ToolCallItem): boolean {
-  const nativeToolName = item.nativeToolName?.trim().toLowerCase();
-  return nativeToolName === "mcp__cowork__create_coding_workspace"
-    || nativeToolName === "mcp__cowork__create_coding_session"
-    || nativeToolName === "mcp__cowork__send_coding_message"
-    || nativeToolName === "mcp__cowork__schedule_coding_wake";
-}
-
-function shouldScheduleActiveSummaryRefresh(eventType: string): boolean {
-  switch (eventType) {
-    case "turn_started":
-    case "item_started":
-    case "item_delta":
-    case "item_completed":
-    case "usage_update":
-    case "interaction_resolved":
-      return true;
-    default:
-      return false;
-  }
-}
-
-function shouldTrackWorkspaceWorkActivity(eventType: string): boolean {
-  switch (eventType) {
-    case "turn_started":
-    case "item_started":
-    case "item_completed":
-    case "interaction_requested":
-    case "interaction_resolved":
-    case "turn_ended":
-    case "error":
-    case "session_ended":
-    case "subagent_turn_completed":
-    case "session_link_turn_completed":
-    case "review_run_updated":
-      return true;
-    default:
-      return false;
-  }
 }

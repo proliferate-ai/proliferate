@@ -32,6 +32,135 @@ describe("transcript reducer", () => {
     expect(state.openAssistantItemId).toBeNull();
   });
 
+  it("does not mutate previous item or content part references on deltas", () => {
+    const before = reduceEvents(
+      [
+        turnStarted(1),
+        assistantStarted(2, "assistant-1", "Hel"),
+      ],
+      "session-1",
+    );
+    const beforeItem = before.itemsById["assistant-1"];
+    if (beforeItem.kind !== "assistant_prose") {
+      throw new Error("expected assistant prose item");
+    }
+    const beforeContentParts = beforeItem.contentParts;
+    const beforeContentPart = beforeContentParts[0];
+
+    const after = reduceEvent(before, assistantDelta(3, "assistant-1", "lo"));
+    const afterItem = after.itemsById["assistant-1"];
+    if (afterItem.kind !== "assistant_prose") {
+      throw new Error("expected assistant prose item");
+    }
+
+    expect(before.itemsById["assistant-1"]).toBe(beforeItem);
+    expect(beforeItem.text).toBe("Hel");
+    expect(beforeItem.contentParts).toBe(beforeContentParts);
+    expect(beforeContentParts[0]).toBe(beforeContentPart);
+    expect(beforeContentPart).toEqual({ type: "text", text: "Hel" });
+    expect(afterItem).not.toBe(beforeItem);
+    expect(afterItem.contentParts).not.toBe(beforeContentParts);
+    expect(afterItem.contentParts[0]).not.toBe(beforeContentPart);
+    expect(afterItem.text).toBe("Hello");
+  });
+
+  it("preserves unchanged item references when one item changes", () => {
+    const before = reduceEvents(
+      [
+        turnStarted(1),
+        assistantStarted(2, "assistant-1", "Hel"),
+        completedToolItem(3, "tool-1"),
+      ],
+      "session-1",
+    );
+    const unchangedTool = before.itemsById["tool-1"];
+
+    const after = reduceEvent(before, assistantDelta(4, "assistant-1", "lo"));
+
+    expect(after.itemsById["tool-1"]).toBe(unchangedTool);
+    expect(after.itemsById["assistant-1"]).not.toBe(before.itemsById["assistant-1"]);
+  });
+
+  it("keeps the owning turn reference stable when completing an existing item", () => {
+    const before = reduceEvents(
+      [
+        turnStarted(1),
+        assistantStarted(2, "assistant-1", "Hel"),
+      ],
+      "session-1",
+    );
+    const beforeTurn = before.turnsById["turn-1"];
+
+    const after = reduceEvent(before, assistantCompleted(3, "assistant-1", "Hello"));
+
+    expect(after.turnsById["turn-1"]).toBe(beforeTurn);
+    expect(after.itemsById["assistant-1"]).not.toBe(before.itemsById["assistant-1"]);
+  });
+
+  it("does not mutate previous turn records when a turn completes", () => {
+    const before = reduceEvents(
+      [
+        turnStarted(1),
+        completedToolItem(2, "tool-1", {
+          type: "file_change",
+          operation: "edit",
+          path: "src/app.ts",
+          workspacePath: "src/app.ts",
+          additions: 3,
+          deletions: 1,
+        }),
+      ],
+      "session-1",
+    );
+    const beforeTurn = before.turnsById["turn-1"];
+
+    const after = reduceEvent(before, turnEnded(3));
+
+    expect(before.turnsById["turn-1"]).toBe(beforeTurn);
+    expect(beforeTurn.completedAt).toBeNull();
+    expect(beforeTurn.fileBadges).toEqual([]);
+    expect(after.turnsById["turn-1"]).not.toBe(beforeTurn);
+    expect(after.turnsById["turn-1"].completedAt).toBe("2026-04-04T00:00:03Z");
+    expect(after.turnsById["turn-1"].fileBadges).toEqual([
+      { path: "src/app.ts", additions: 3, deletions: 1 },
+    ]);
+  });
+
+  it("does not mutate previous tool items for interaction state updates", () => {
+    const before = reduceEvents(
+      [
+        turnStarted(1),
+        completedToolItem(2, "tool-1"),
+      ],
+      "session-1",
+    );
+    const beforeTool = before.itemsById["tool-1"] as ToolCallItem;
+
+    const afterRequest = reduceEvent(before, permissionRequested(3, "tool-1"));
+    const requestedTool = afterRequest.itemsById["tool-1"] as ToolCallItem;
+    const afterResolved = reduceEvent(afterRequest, {
+      sessionId: "session-1",
+      seq: 4,
+      timestamp: "2026-04-04T00:00:04Z",
+      turnId: "turn-1",
+      event: {
+        type: "interaction_resolved",
+        requestId: "perm-1",
+        kind: "permission",
+        outcome: {
+          outcome: "selected",
+          optionId: "allow",
+        },
+      },
+    });
+
+    expect(beforeTool.approvalState).toBe("none");
+    expect(requestedTool).not.toBe(beforeTool);
+    expect(requestedTool.approvalState).toBe("pending");
+    expect((afterResolved.itemsById["tool-1"] as ToolCallItem)).not.toBe(requestedTool);
+    expect((afterResolved.itemsById["tool-1"] as ToolCallItem).approvalState).toBe("approved");
+  });
+
   it("preserves prompt attachment content parts across item completion", () => {
     const contentParts: ContentPart[] = [
       { type: "text", text: "see attached" },

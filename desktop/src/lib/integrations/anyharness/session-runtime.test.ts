@@ -4,9 +4,11 @@ import {
   collectInactiveSessionStreamIds,
   createEmptySessionSlot,
   createSessionSlotFromSummary,
+  detachAndCloseSessionSlotStreams,
+  pruneInactiveSessionStreams,
   resumeSession,
 } from "./session-runtime";
-import type { Session } from "@anyharness/sdk";
+import type { Session, SessionStreamHandle } from "@anyharness/sdk";
 
 const mocks = vi.hoisted(() => ({
   resume: vi.fn(),
@@ -87,6 +89,61 @@ describe("collectInactiveSessionStreamIds", () => {
     });
 
     expect(prunableSessionIds).toEqual(["session-idle"]);
+  });
+});
+
+describe("detachAndCloseSessionSlotStreams", () => {
+  it("closes the current handle before detaching it from the store", () => {
+    let handle: SessionStreamHandle;
+    const close = vi.fn(() => {
+      expect(useHarnessStore.getState().sessionSlots["session-1"].sseHandle).toBe(handle);
+      useHarnessStore.getState().patchSessionSlot("session-1", {
+        title: "flushed title",
+      });
+    });
+    handle = { close };
+    useHarnessStore.getState().patchSessionSlot("session-1", {
+      streamConnectionState: "open",
+      sseHandle: handle,
+      title: "initial title",
+    });
+
+    expect(detachAndCloseSessionSlotStreams(["session-1"])).toBe(1);
+
+    const slot = useHarnessStore.getState().sessionSlots["session-1"];
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(slot.sseHandle).toBeNull();
+    expect(slot.streamConnectionState).toBe("disconnected");
+    expect(slot.title).toBe("flushed title");
+  });
+});
+
+describe("pruneInactiveSessionStreams", () => {
+  it("flushes pending stream events before deciding whether an idle stream is prunable", () => {
+    const close = vi.fn();
+    const flushPendingEvents = vi.fn(() => {
+      useHarnessStore.getState().patchSessionSlot("session-1", {
+        status: "running",
+      });
+    });
+    const handle = {
+      close,
+      flushPendingEvents,
+    } as SessionStreamHandle & { flushPendingEvents: () => void };
+    useHarnessStore.getState().patchSessionSlot("session-1", {
+      streamConnectionState: "open",
+      sseHandle: handle,
+      transcriptHydrated: true,
+      status: "idle",
+    });
+
+    expect(pruneInactiveSessionStreams()).toEqual([]);
+
+    const slot = useHarnessStore.getState().sessionSlots["session-1"];
+    expect(flushPendingEvents).toHaveBeenCalledTimes(1);
+    expect(close).not.toHaveBeenCalled();
+    expect(slot.sseHandle).toBe(handle);
+    expect(slot.status).toBe("running");
   });
 });
 

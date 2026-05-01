@@ -7,7 +7,6 @@ import type {
   SessionStatus,
   TranscriptState,
 } from "@anyharness/sdk";
-import type { SessionStreamConnectionState } from "@/stores/sessions/harness-store";
 
 export interface SessionStreamPatchInput {
   slot: {
@@ -29,8 +28,12 @@ export interface SessionStreamPatch {
   modeId?: string | null;
   title?: string | null;
   status?: SessionStatus | null;
-  sseHandle?: null;
-  streamConnectionState?: SessionStreamConnectionState;
+}
+
+export interface SessionStreamBatchPatchInput {
+  slot: SessionStreamPatchInput["slot"];
+  nextTranscript: TranscriptState;
+  envelopes: SessionEventEnvelope[];
 }
 
 export function buildSessionStreamPatch({
@@ -135,10 +138,51 @@ export function buildSessionStreamPatch({
     };
   }
 
-  if (patch.title === undefined) {
-    patch.title = slot.title;
+  return patch;
+}
+
+export function buildSessionStreamBatchPatch({
+  slot,
+  nextTranscript,
+  envelopes,
+}: SessionStreamBatchPatchInput): SessionStreamPatch {
+  const patch: SessionStreamPatch = {
+    transcript: nextTranscript,
+  };
+  let foldedSlot: SessionStreamPatchInput["slot"] = slot;
+
+  for (const envelope of envelopes) {
+    const eventPatch = buildSessionStreamPatch({
+      slot: foldedSlot,
+      nextTranscript,
+      envelope,
+    });
+    Object.assign(patch, eventPatch);
+    foldedSlot = {
+      modelId:
+        eventPatch.modelId !== undefined
+          ? eventPatch.modelId
+          : foldedSlot.modelId,
+      modeId:
+        eventPatch.modeId !== undefined
+          ? eventPatch.modeId
+          : foldedSlot.modeId,
+      title:
+        eventPatch.title !== undefined
+          ? eventPatch.title
+          : foldedSlot.title,
+      status:
+        eventPatch.status !== undefined
+          ? eventPatch.status
+          : foldedSlot.status,
+      executionSummary:
+        eventPatch.executionSummary !== undefined
+          ? eventPatch.executionSummary
+          : foldedSlot.executionSummary,
+    };
   }
 
+  patch.transcript = nextTranscript;
   return patch;
 }
 

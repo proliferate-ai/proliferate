@@ -115,14 +115,11 @@ export function reduceEvent(
     }
 
     case "turn_ended": {
-      ensureTurn(s, turnId, ts);
+      const turn = ensureMutableTurn(s, turnId, ts);
       closeStreamingItems(s);
-      const turn = s.turnsById[turnId];
-      if (turn) {
-        turn.completedAt = ts;
-        turn.stopReason = evt.stopReason;
-        turn.fileBadges = collectFileBadges(s, turnId);
-      }
+      turn.completedAt = ts;
+      turn.stopReason = evt.stopReason;
+      turn.fileBadges = collectFileBadges(s, turnId);
       s.isStreaming = false;
       break;
     }
@@ -130,7 +127,7 @@ export function reduceEvent(
     case "item_started": {
       ensureTurn(s, turnId, ts);
       const item = createItemFromPayload(itemId, turnId, evt.item, ts, envelope.seq);
-      s.itemsById[itemId] = item;
+      setItem(s, itemId, item);
       addItemToTurn(s, turnId, itemId);
       openStreamingItem(s, itemId, item);
       s.isStreaming = s.isStreaming || item.status === "in_progress";
@@ -143,9 +140,9 @@ export function reduceEvent(
         recordUnknown(s, envelope, itemId, ts, turnId);
         break;
       }
-      const updated = { ...existing };
+      const updated = cloneKnownTranscriptItem(existing);
       applyItemDelta(updated, evt, ts, envelope.seq);
-      s.itemsById = { ...s.itemsById, [itemId]: updated };
+      setItem(s, itemId, updated);
       syncStreamingPointers(s, itemId, updated);
       break;
     }
@@ -154,9 +151,9 @@ export function reduceEvent(
       ensureTurn(s, turnId, ts);
       const existing = s.itemsById[itemId];
       const item = existing && existing.kind !== "unknown"
-        ? applyCompletion(existing, evt, ts, envelope.seq)
+        ? applyCompletion(cloneKnownTranscriptItem(existing), evt, ts, envelope.seq)
         : createCompletedItem(itemId, turnId, evt, ts, envelope.seq);
-      s.itemsById[itemId] = item;
+      setItem(s, itemId, item);
       addItemToTurn(s, turnId, itemId);
       closeStreamingPointer(s, itemId);
       break;
@@ -293,7 +290,7 @@ export function reduceEvent(
         code: evt.code ?? null,
         details: evt.details ?? null,
       };
-      s.itemsById[itemId] = item;
+      setItem(s, itemId, item);
       addItemToTurn(s, turnId, itemId);
       s.isStreaming = false;
       break;
@@ -611,7 +608,7 @@ function applyInteractionRequested(s: TranscriptState, evt: InteractionRequested
   let pendingInteraction: PendingInteraction;
   if (evt.kind === "permission" && evt.payload.type === "permission") {
     if (toolCallId) {
-      const item = findToolItemByToolCallId(s, toolCallId);
+      const item = findMutableToolItemByToolCallId(s, toolCallId);
       if (item) item.approvalState = "pending";
     }
     pendingInteraction = {
@@ -663,7 +660,7 @@ function clearPendingInteraction(
 ): void {
   const pendingInteraction = s.pendingInteractions.find((entry) => entry.requestId === requestId);
   if (pendingInteraction?.toolCallId) {
-    const item = findToolItemByToolCallId(s, pendingInteraction.toolCallId);
+    const item = findMutableToolItemByToolCallId(s, pendingInteraction.toolCallId);
     if (item) {
       item.approvalState = toolApprovalState;
     }
@@ -677,7 +674,7 @@ function clearPendingInteractions(
 ): void {
   for (const pendingInteraction of s.pendingInteractions) {
     if (pendingInteraction.toolCallId) {
-      const item = findToolItemByToolCallId(s, pendingInteraction.toolCallId);
+      const item = findMutableToolItemByToolCallId(s, pendingInteraction.toolCallId);
       if (item) {
         item.approvalState = toolApprovalState;
       }
@@ -709,19 +706,24 @@ function approvalStateForOutcome(
   }
 }
 
-function findToolItemByToolCallId(
+function findMutableToolItemByToolCallId(
   s: TranscriptState,
   toolCallId: string,
 ): ToolCallItem | null {
-  for (const item of Object.values(s.itemsById)) {
-    if (item.kind === "tool_call" && item.toolCallId === toolCallId) return item;
+  for (const [itemId, item] of Object.entries(s.itemsById)) {
+    if (item.kind === "tool_call" && item.toolCallId === toolCallId) {
+      const nextItem = cloneKnownTranscriptItem(item);
+      setItem(s, itemId, nextItem);
+      return nextItem;
+    }
   }
   return null;
 }
 
 function ensureTurn(s: TranscriptState, turnId: string, ts: string): TurnRecord {
-  if (!s.turnsById[turnId]) {
-    s.turnsById[turnId] = {
+  const existing = s.turnsById[turnId];
+  if (!existing) {
+    const turn: TurnRecord = {
       turnId,
       itemOrder: [],
       startedAt: ts,
@@ -729,17 +731,28 @@ function ensureTurn(s: TranscriptState, turnId: string, ts: string): TurnRecord 
       stopReason: null,
       fileBadges: [],
     };
+    setTurn(s, turnId, turn);
     s.turnOrder = [...s.turnOrder, turnId];
+    return turn;
   }
-  return s.turnsById[turnId];
+  return existing;
+}
+
+function ensureMutableTurn(s: TranscriptState, turnId: string, ts: string): TurnRecord {
+  const turn = cloneTurn(ensureTurn(s, turnId, ts));
+  setTurn(s, turnId, turn);
+  return turn;
 }
 
 function addItemToTurn(s: TranscriptState, turnId: string, itemId: string): void {
-  const turn = s.turnsById[turnId];
-  if (!turn) return;
-  if (!turn.itemOrder.includes(itemId)) {
-    turn.itemOrder = [...turn.itemOrder, itemId];
+  const existing = s.turnsById[turnId];
+  if (!existing) return;
+  if (existing.itemOrder.includes(itemId)) {
+    return;
   }
+  const turn = cloneTurn(existing);
+  setTurn(s, turnId, turn);
+  turn.itemOrder = [...turn.itemOrder, itemId];
 }
 
 function openStreamingItem(s: TranscriptState, itemId: string, item: TranscriptItem): void {
@@ -770,7 +783,9 @@ function closeStreamingPointer(s: TranscriptState, itemId: string): void {
   const item = s.itemsById[itemId];
   if (!item) return;
   if (item.kind === "user_message" || item.kind === "assistant_prose" || item.kind === "thought") {
-    item.isStreaming = false;
+    const nextItem = cloneKnownTranscriptItem(item);
+    nextItem.isStreaming = false;
+    setItem(s, itemId, nextItem);
   }
 }
 
@@ -781,15 +796,25 @@ function closeStreamingItems(s: TranscriptState): void {
 
 function closeAssistantPointer(s: TranscriptState): void {
   if (!s.openAssistantItemId) return;
-  const item = s.itemsById[s.openAssistantItemId];
-  if (item?.kind === "assistant_prose") item.isStreaming = false;
+  const itemId = s.openAssistantItemId;
+  const item = s.itemsById[itemId];
+  if (item?.kind === "assistant_prose") {
+    const nextItem = cloneKnownTranscriptItem(item);
+    nextItem.isStreaming = false;
+    setItem(s, itemId, nextItem);
+  }
   s.openAssistantItemId = null;
 }
 
 function closeThoughtPointer(s: TranscriptState): void {
   if (!s.openThoughtItemId) return;
-  const item = s.itemsById[s.openThoughtItemId];
-  if (item?.kind === "thought") item.isStreaming = false;
+  const itemId = s.openThoughtItemId;
+  const item = s.itemsById[itemId];
+  if (item?.kind === "thought") {
+    const nextItem = cloneKnownTranscriptItem(item);
+    nextItem.isStreaming = false;
+    setItem(s, itemId, nextItem);
+  }
   s.openThoughtItemId = null;
 }
 
@@ -809,12 +834,60 @@ function recordUnknown(
     timestamp: ts,
     startedSeq: envelope.seq,
   };
-  s.itemsById[itemId] = item;
+  setItem(s, itemId, item);
   if (turnId) {
     ensureTurn(s, turnId, ts);
     addItemToTurn(s, turnId, itemId);
   }
   s.unknownEvents = [...s.unknownEvents, envelope];
+}
+
+function setItem(
+  s: TranscriptState,
+  itemId: string,
+  item: TranscriptItem,
+): void {
+  s.itemsById = {
+    ...s.itemsById,
+    [itemId]: item,
+  };
+}
+
+function setTurn(
+  s: TranscriptState,
+  turnId: string,
+  turn: TurnRecord,
+): void {
+  s.turnsById = {
+    ...s.turnsById,
+    [turnId]: turn,
+  };
+}
+
+function cloneTurn(turn: TurnRecord): TurnRecord {
+  return {
+    ...turn,
+    itemOrder: [...turn.itemOrder],
+    fileBadges: [...turn.fileBadges],
+  };
+}
+
+function cloneKnownTranscriptItem<T extends KnownTranscriptItem>(item: T): T {
+  const cloned = {
+    ...item,
+    contentParts: item.contentParts.map(cloneContentPart),
+  };
+  if (item.kind === "plan") {
+    return {
+      ...cloned,
+      entries: [...item.entries],
+    } as T;
+  }
+  return cloned as T;
+}
+
+function cloneContentPart(part: ContentPart): ContentPart {
+  return { ...part } as ContentPart;
 }
 
 function extractText(parts: ContentPart[]): string {

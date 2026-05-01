@@ -4,6 +4,7 @@ import type { SessionEventEnvelope } from "@anyharness/sdk";
 import {
   appendHistoryTail,
   applyStreamEnvelope,
+  applyStreamEnvelopeBatch,
   replaySessionHistory,
 } from "@/lib/integrations/anyharness/session-stream-state";
 
@@ -43,6 +44,55 @@ describe("session-stream-state", () => {
     expect(tailResult.state.transcript).toEqual(
       reduceEvents(events, "session-1", { replayMode: true }),
     );
+  });
+
+  it("applies a contiguous stream batch with one events array copy", () => {
+    const state = replaySessionHistory("session-1", [turnStarted(1)]);
+
+    const result = applyStreamEnvelopeBatch(state, [
+      assistantStarted(2, "assistant-1", "Hel"),
+      assistantDelta(3, "assistant-1", "lo"),
+      assistantCompleted(4, "assistant-1", "Hello"),
+    ]);
+
+    expect(result.gapEnvelope).toBeNull();
+    expect(result.appliedEnvelopes.map((event) => event.seq)).toEqual([2, 3, 4]);
+    expect(result.state.events.map((event) => event.seq)).toEqual([1, 2, 3, 4]);
+    expect(result.state.events).not.toBe(state.events);
+    expect(result.state.transcript.lastSeq).toBe(4);
+  });
+
+  it("applies the contiguous prefix before a mid-batch gap", () => {
+    const state = replaySessionHistory("session-1", [turnStarted(1)]);
+
+    const result = applyStreamEnvelopeBatch(state, [
+      assistantStarted(2, "assistant-1", "Hel"),
+      turnEnded(4),
+      assistantDelta(5, "assistant-1", "lo"),
+    ]);
+
+    expect(result.appliedEnvelopes.map((event) => event.seq)).toEqual([2]);
+    expect(result.gapEnvelope?.seq).toBe(4);
+    expect(result.skippedAfterGapEnvelopes.map((event) => event.seq)).toEqual([5]);
+    expect(result.state.events.map((event) => event.seq)).toEqual([1, 2]);
+    expect(result.state.transcript.lastSeq).toBe(2);
+  });
+
+  it("does not mutate tail history state while appending", () => {
+    const state = replaySessionHistory("session-1", [
+      turnStarted(1),
+      assistantStarted(2, "assistant-1", "Hel"),
+    ]);
+    const previousItem = state.transcript.itemsById["assistant-1"];
+    const previousEvents = state.events;
+
+    const result = appendHistoryTail(state, [assistantDelta(3, "assistant-1", "lo")]);
+
+    expect(result.applied).toBe(true);
+    expect(state.events).toBe(previousEvents);
+    expect(state.transcript.itemsById["assistant-1"]).toBe(previousItem);
+    expect(result.state.events).not.toBe(previousEvents);
+    expect(result.state.transcript.itemsById["assistant-1"]).not.toBe(previousItem);
   });
 });
 
