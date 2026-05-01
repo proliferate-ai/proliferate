@@ -66,6 +66,7 @@ impl AcpManager {
         mcp_servers: Vec<SessionMcpServer>,
         startup_strategy: SessionStartupStrategy,
         system_prompt_append: Option<String>,
+        first_prompt_system_prompt_append: Option<String>,
         on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync + 'static>>,
         latency: Option<LatencyRequestContext>,
     ) -> anyhow::Result<(Arc<LiveSessionHandle>, ActorReadyResult)> {
@@ -160,6 +161,7 @@ impl AcpManager {
             startup_strategy,
             last_seq,
             system_prompt_append,
+            first_prompt_system_prompt_append,
             on_turn_finish,
             latency,
             on_exit: Some(on_exit),
@@ -552,6 +554,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
             )
             .await
             .expect("reuse existing handle");
@@ -597,6 +600,7 @@ mod tests {
                     SessionStore::new(Db::open_in_memory().expect("open db")),
                     vec![],
                     SessionStartupStrategy::ResumeSeqFreshNative,
+                    None,
                     None,
                     None,
                     None,

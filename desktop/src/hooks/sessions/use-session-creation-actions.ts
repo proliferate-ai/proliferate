@@ -7,7 +7,6 @@ import type {
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { hasPromptContent } from "@/lib/domain/chat/prompt-input";
-import { getCloudWorkspace } from "@/lib/integrations/cloud/workspaces";
 import { resolveSessionMcpServersForLaunch } from "@/lib/integrations/anyharness/mcp_launch";
 import { resolveRuntimeTargetForWorkspace } from "@/lib/integrations/anyharness/runtime-target";
 import { restartHarnessRuntime } from "@/lib/integrations/anyharness/runtime-bootstrap";
@@ -17,9 +16,7 @@ import {
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud-ids";
-import { buildFirstSessionBranchNamingPrompt } from "@/lib/domain/workspaces/branch-naming";
 import { useAgentInstallationActions } from "@/hooks/agents/use-agent-installation-actions";
-import { useAuthStore } from "@/stores/auth/auth-store";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
@@ -27,7 +24,6 @@ import {
   useHarnessStore,
 } from "@/stores/sessions/harness-store";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useBranchRenameStore } from "@/stores/workspaces/branch-rename-store";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/use-workspace-runtime-block";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
 import { useDismissedSessionCleanup } from "@/hooks/sessions/use-dismissed-session-cleanup";
@@ -41,20 +37,17 @@ import { useSessionPromptWorkflow } from "@/hooks/sessions/use-session-prompt-wo
 import {
   createEmptySessionSlot,
   createPendingSessionId,
-  getSessionClientAndWorkspace,
   pruneInactiveSessionStreams,
 } from "@/lib/integrations/anyharness/session-runtime";
 import { bootstrapHarnessRuntime } from "@/lib/integrations/anyharness/runtime-bootstrap";
 import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
 import { useWorkspaceSessionCache } from "@/hooks/sessions/use-workspace-session-cache";
-import type { WorkspaceSession } from "@/hooks/sessions/use-session-selection-actions";
 import {
   annotateLatencyFlow,
   cancelLatencyFlow,
 } from "@/lib/infra/latency-flow";
 import { DESKTOP_ORIGIN } from "@/lib/integrations/anyharness/origin";
 import {
-  beginPendingBranchRenameTracking,
   buildLatencyRequestOptions,
   buildPausedModelAvailability,
   hasImmediateLaunchModelMismatch,
@@ -63,10 +56,6 @@ import {
   reportConnectorLaunchWarnings,
   resolveSessionCreationModeId,
 } from "@/hooks/sessions/session-creation-helpers";
-
-interface SessionCreationDeps {
-  ensureWorkspaceSessions: (workspaceId: string) => Promise<WorkspaceSession[]>;
-}
 
 interface InFlightSessionCreate {
   sessionId: string;
@@ -132,9 +121,7 @@ function updateInFlightSessionCreateId(
   });
 }
 
-export function useSessionCreationActions({
-  ensureWorkspaceSessions,
-}: SessionCreationDeps) {
+export function useSessionCreationActions() {
   const navigate = useNavigate();
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
@@ -147,46 +134,6 @@ export function useSessionCreationActions({
   } = useAgentInstallationActions();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const showToast = useToastStore((state) => state.show);
-
-  const maybeStartFirstSessionBranchRenameTracking = useCallback(async (
-    sessionId: string,
-    workspaceId: string,
-  ) => {
-    if (useBranchRenameStore.getState().pendingByWorkspaceId[workspaceId]) {
-      return;
-    }
-
-    const slot = useHarnessStore.getState().sessionSlots[sessionId] ?? null;
-    if (slot && slot.events.length > 0) {
-      return;
-    }
-
-    const sessions = await ensureWorkspaceSessions(workspaceId).catch(() => []);
-    if (sessions.length !== 1 || sessions[0]?.id !== sessionId) {
-      return;
-    }
-
-    const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
-    const { connection, target } = await getSessionClientAndWorkspace(sessionId);
-    const workspace = await getAnyHarnessClient(connection).workspaces.get(
-      target.anyharnessWorkspaceId,
-    ).catch(() => null);
-    const placeholderBranch = workspace?.originalBranch?.trim()
-      || workspace?.currentBranch?.trim()
-      || null;
-    const currentBranch = workspace?.currentBranch?.trim() || placeholderBranch;
-    const isBranchBackedWorkspace =
-      cloudWorkspaceId !== null || workspace?.kind === "worktree";
-    if (!isBranchBackedWorkspace || !placeholderBranch || currentBranch !== placeholderBranch) {
-      return;
-    }
-
-    beginPendingBranchRenameTracking({
-      workspaceId,
-      placeholderBranch,
-      cloudWorkspaceId,
-    });
-  }, [ensureWorkspaceSessions]);
 
   const closeCreatedMismatchSession = useCallback(async (
     client: ReturnType<typeof getAnyHarnessClient>,
@@ -247,7 +194,6 @@ export function useSessionCreationActions({
       }
     }
 
-    const branchPrefixType = useUserPreferencesStore.getState().branchPrefixType;
     const preferredModeId = useUserPreferencesStore.getState()
       .defaultSessionModeByAgentKind[options.agentKind]
       ?.trim() || undefined;
@@ -258,7 +204,6 @@ export function useSessionCreationActions({
       agentKind: options.agentKind,
       preferredModeId,
     });
-    const authUser = useAuthStore.getState().user;
     const pendingSessionId = createPendingSessionId(options.agentKind);
     annotateLatencyFlow(options.latencyFlowId, {
       targetWorkspaceId: workspaceId,
@@ -280,13 +225,9 @@ export function useSessionCreationActions({
     activateSession(pendingSessionId);
     pruneInactiveSessionStreams();
 
-    let didStartBranchRenameTracking = false;
-
     const createPromise = (async () => {
       const requestOptions = buildLatencyRequestOptions(options.latencyFlowId);
       const runtimeUrl = await ensureRuntimeReadyForSessions();
-      const existingSessions = await ensureWorkspaceSessions(workspaceId).catch(() => []);
-
       const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
       const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId);
       const client = getAnyHarnessClient({
@@ -313,39 +254,6 @@ export function useSessionCreationActions({
           enabled: pluginsInCodingSessionsEnabled,
         },
       });
-      const localWorkspace = cloudWorkspaceId ? null : targetWorkspace;
-      const cloudWorkspace = cloudWorkspaceId
-        ? await getCloudWorkspace(cloudWorkspaceId).catch(() => undefined)
-        : undefined;
-
-      const placeholderBranch = cloudWorkspaceId
-        ? cloudWorkspace?.repo.branch?.trim() || null
-        : localWorkspace?.originalBranch?.trim()
-          || localWorkspace?.currentBranch?.trim()
-          || null;
-      const isBranchBackedWorkspace =
-        cloudWorkspaceId !== null || localWorkspace?.kind === "worktree";
-      const shouldInjectBranchNaming =
-        existingSessions.length === 0 && isBranchBackedWorkspace && !!placeholderBranch;
-      const systemPromptAppend = shouldInjectBranchNaming
-        ? [
-          buildFirstSessionBranchNamingPrompt({
-            placeholderBranch,
-            prefixType: branchPrefixType,
-            user: authUser,
-          }),
-        ]
-        : undefined;
-
-      if (shouldInjectBranchNaming && placeholderBranch && hasPrompt) {
-        beginPendingBranchRenameTracking({
-          workspaceId,
-          placeholderBranch,
-          cloudWorkspaceId,
-        });
-        didStartBranchRenameTracking = true;
-      }
-
       const session = await client.sessions.create({
         workspaceId: target.anyharnessWorkspaceId,
         agentKind: options.agentKind,
@@ -355,7 +263,6 @@ export function useSessionCreationActions({
         mcpBindingSummaries: mcpBindingSummaries.length > 0
           ? mcpBindingSummaries
           : undefined,
-        systemPromptAppend,
         subagentsEnabled,
         origin: DESKTOP_ORIGIN,
       }, requestOptions);
@@ -548,9 +455,6 @@ export function useSessionCreationActions({
       } else {
         useHarnessStore.getState().setActiveSessionId(null);
       }
-      if (didStartBranchRenameTracking) {
-        useBranchRenameStore.getState().clearPendingRename(workspaceId);
-      }
       throw error;
     } finally {
       const currentInFlight = inFlightSessionCreatesByWorkspace.get(workspaceId);
@@ -562,7 +466,6 @@ export function useSessionCreationActions({
     activateSession,
     closeCreatedMismatchSession,
     ensureSessionStreamConnected,
-    ensureWorkspaceSessions,
     getWorkspaceRuntimeBlockReason,
     getWorkspaceSurface,
     installAgent,
@@ -590,6 +493,5 @@ export function useSessionCreationActions({
   return {
     createEmptySessionWithResolvedConfig,
     createSessionWithResolvedConfig,
-    maybeStartFirstSessionBranchRenameTracking,
   };
 }

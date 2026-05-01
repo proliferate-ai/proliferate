@@ -72,10 +72,6 @@ interface SessionControlDeps {
     workspaceId: string;
     lastPromptAt?: string | null;
   }>>;
-  maybeStartFirstSessionBranchRenameTracking: (
-    sessionId: string,
-    workspaceId: string,
-  ) => Promise<void>;
   selectSession: (
     sessionId: string,
     options?: SessionLatencyFlowOptions,
@@ -111,7 +107,6 @@ export function useSessionControlActions({
   activateSession,
   createSessionWithResolvedConfig,
   ensureWorkspaceSessions,
-  maybeStartFirstSessionBranchRenameTracking,
   selectSession,
 }: SessionControlDeps) {
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
@@ -299,15 +294,8 @@ export function useSessionControlActions({
       workspaceId,
       latencyFlowId: options?.latencyFlowId,
       promptId: options?.promptId,
-      onBeforePrompt: workspaceId
-        ? () => maybeStartFirstSessionBranchRenameTracking(sessionId, workspaceId)
-        : undefined,
     });
-  }, [
-    getWorkspaceRuntimeBlockReason,
-    maybeStartFirstSessionBranchRenameTracking,
-    promptSession,
-  ]);
+  }, [getWorkspaceRuntimeBlockReason, promptSession]);
 
   const cancelActiveSession = useCallback(async () => {
     const state = useHarnessStore.getState();
@@ -475,9 +463,6 @@ export function useSessionControlActions({
           optimisticContentParts,
           workspaceId,
           onBeforeOptimisticPrompt,
-          onBeforePrompt: workspaceId
-            ? () => maybeStartFirstSessionBranchRenameTracking(slot.sessionId, workspaceId)
-            : undefined,
         });
         return;
       }
@@ -495,8 +480,6 @@ export function useSessionControlActions({
           optimisticContentParts,
           workspaceId,
           onBeforeOptimisticPrompt,
-          onBeforePrompt: () =>
-            maybeStartFirstSessionBranchRenameTracking(backendSession.id, workspaceId),
         });
         return;
       }
@@ -515,7 +498,6 @@ export function useSessionControlActions({
     createSessionWithResolvedConfig,
     ensureWorkspaceSessions,
     getWorkspaceRuntimeBlockReason,
-    maybeStartFirstSessionBranchRenameTracking,
     promptSession,
     selectSession,
   ]);
@@ -551,8 +533,6 @@ export function useSessionControlActions({
           workspaceId,
           latencyFlowId,
           onBeforeOptimisticPrompt,
-          onBeforePrompt: () =>
-            maybeStartFirstSessionBranchRenameTracking(slot.sessionId, workspaceId),
         });
         return;
       }
@@ -572,8 +552,6 @@ export function useSessionControlActions({
         workspaceId,
         latencyFlowId,
         onBeforeOptimisticPrompt,
-        onBeforePrompt: () =>
-          maybeStartFirstSessionBranchRenameTracking(backendSession.id, workspaceId),
       });
       return;
     }
@@ -593,7 +571,6 @@ export function useSessionControlActions({
     createSessionWithResolvedConfig,
     ensureWorkspaceSessions,
     getWorkspaceRuntimeBlockReason,
-    maybeStartFirstSessionBranchRenameTracking,
     promptSession,
     selectSession,
   ]);

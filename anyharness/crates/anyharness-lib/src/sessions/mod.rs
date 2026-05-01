@@ -12,3 +12,4 @@ pub mod runtime_event;
 pub mod service;
 pub mod store;
 pub mod subagents;
+pub mod workspace_naming;

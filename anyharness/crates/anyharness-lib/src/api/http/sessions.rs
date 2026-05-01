@@ -1169,12 +1169,12 @@ mod tests {
             Some(20),
             None
         ));
-        assert!(is_unsupported_event_history_window(
-            Some(10),
+        assert!(is_unsupported_event_history_window(Some(10), None, Some(2)));
+        assert!(!is_unsupported_event_history_window(Some(10), None, None));
+        assert!(!is_unsupported_event_history_window(
             None,
+            Some(20),
             Some(2)
         ));
-        assert!(!is_unsupported_event_history_window(Some(10), None, None));
-        assert!(!is_unsupported_event_history_window(None, Some(20), Some(2)));
     }
 }

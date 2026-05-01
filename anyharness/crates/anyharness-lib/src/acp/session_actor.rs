@@ -585,6 +585,7 @@ pub struct SessionActorConfig {
     pub startup_strategy: SessionStartupStrategy,
     pub last_seq: i64,
     pub system_prompt_append: Option<String>,
+    pub first_prompt_system_prompt_append: Option<String>,
     pub on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync + 'static>>,
     pub latency: Option<LatencyRequestContext>,
     /// Called after the actor loop exits (normal or error). The bool indicates
@@ -1572,7 +1573,7 @@ async fn run_actor(
                                     prompt_id = latency_fields.prompt_id,
                                     "[workspace-latency] session.actor.prompt.received"
                                 );
-                                let acp_blocks = match current_payload.to_acp_blocks(&store, &session_id) {
+                                let mut acp_blocks = match current_payload.to_acp_blocks(&store, &session_id) {
                                     Ok(blocks) => blocks,
                                     Err(error) => {
                                         let detail = error.detail.clone();
@@ -1588,6 +1589,27 @@ async fn run_actor(
                                         break 'drain;
                                     }
                                 };
+                                match store.has_turn_started_event(&session_id) {
+                                    Ok(has_turn_started) => {
+                                        if let Some(append) = first_prompt_system_prompt_append_for_codex_prompt(
+                                            &source_agent_kind,
+                                            config.first_prompt_system_prompt_append.as_deref(),
+                                            has_turn_started,
+                                        ) {
+                                            prepend_system_prompt_append_to_acp_blocks(
+                                                &mut acp_blocks,
+                                                append,
+                                            );
+                                        }
+                                    }
+                                    Err(error) => {
+                                        tracing::warn!(
+                                            session_id = %session_id,
+                                            error = %error,
+                                            "failed to determine whether prompt should inline system prompt append"
+                                        );
+                                    }
+                                }
                                 let turn_id;
                                 {
                                     let mut sink = event_sink.lock().await;
@@ -3438,6 +3460,31 @@ fn build_system_prompt_meta(system_prompt_append: Option<&str>) -> Option<acp::M
     )]))
 }
 
+fn first_prompt_system_prompt_append_for_codex_prompt<'a>(
+    source_agent_kind: &str,
+    first_prompt_system_prompt_append: Option<&'a str>,
+    has_turn_started: bool,
+) -> Option<&'a str> {
+    if source_agent_kind != AgentKind::Codex.as_str() || has_turn_started {
+        return None;
+    }
+
+    let append = first_prompt_system_prompt_append?.trim();
+    if append.is_empty() {
+        return None;
+    }
+    Some(append)
+}
+
+fn prepend_system_prompt_append_to_acp_blocks(blocks: &mut Vec<acp::ContentBlock>, append: &str) {
+    blocks.insert(
+        0,
+        acp::ContentBlock::Text(acp::TextContent::new(format!(
+            "System instruction from AnyHarness, not user content:\n{append}"
+        ))),
+    );
+}
+
 async fn start_new_session(
     conn: &acp::ClientSideConnection,
     workspace_path: &std::path::PathBuf,
@@ -4585,10 +4632,11 @@ mod tests {
     use super::{
         build_client_capabilities, build_system_prompt_meta, classify_agent_stderr_line,
         extract_tagged_proposed_plan, finalize_established_actor_exit,
-        find_select_option_for_request, handle_notification,
-        handle_notification_with_resume_replay_filter, is_missing_load_session_resource,
-        is_mode_config_request, is_model_config_request, load_startup_restore_snapshot,
-        merge_spawn_env, normalized_key_rank, pending_config_rank, persisted_control_values,
+        find_select_option_for_request, first_prompt_system_prompt_append_for_codex_prompt,
+        handle_notification, handle_notification_with_resume_replay_filter,
+        is_missing_load_session_resource, is_mode_config_request, is_model_config_request,
+        load_startup_restore_snapshot, merge_spawn_env, normalized_key_rank, pending_config_rank,
+        persisted_control_values, prepend_system_prompt_append_to_acp_blocks,
         resolve_pending_interactions, sanitize_agent_stderr_line, serialize_meta,
         should_try_direct_claude_model_setter, title_from_markdown, tracked_config_purpose,
         ActorExitDisposition, AgentStderrSeverity, InteractionResolution,
@@ -5717,6 +5765,54 @@ mod tests {
     fn build_system_prompt_meta_skips_blank_values() {
         assert!(build_system_prompt_meta(None).is_none());
         assert!(build_system_prompt_meta(Some("   ")).is_none());
+    }
+
+    #[test]
+    fn codex_prompt_inlines_first_prompt_append_only_before_first_turn() {
+        assert_eq!(
+            first_prompt_system_prompt_append_for_codex_prompt(
+                "codex",
+                Some("  Name workspace  "),
+                false
+            ),
+            Some("Name workspace")
+        );
+        assert!(first_prompt_system_prompt_append_for_codex_prompt(
+            "codex",
+            Some("Name workspace"),
+            true
+        )
+        .is_none());
+        assert!(first_prompt_system_prompt_append_for_codex_prompt(
+            "claude",
+            Some("Name workspace"),
+            false
+        )
+        .is_none());
+        assert!(
+            first_prompt_system_prompt_append_for_codex_prompt("codex", Some("   "), false)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn prepend_system_prompt_append_adds_hidden_instruction_block() {
+        let mut blocks = vec![acp::ContentBlock::Text(acp::TextContent::new(
+            "Build a product".to_string(),
+        ))];
+
+        prepend_system_prompt_append_to_acp_blocks(&mut blocks, "Name the workspace first.");
+
+        assert_eq!(blocks.len(), 2);
+        let acp::ContentBlock::Text(first) = &blocks[0] else {
+            panic!("first block should be text");
+        };
+        assert!(first.text.contains("System instruction from AnyHarness"));
+        assert!(first.text.contains("Name the workspace first."));
+        let acp::ContentBlock::Text(second) = &blocks[1] else {
+            panic!("second block should be text");
+        };
+        assert_eq!(second.text, "Build a product");
     }
 
     #[test]

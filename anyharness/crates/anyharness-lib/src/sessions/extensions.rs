@@ -8,6 +8,7 @@ use super::model::SessionRecord;
 #[derive(Debug, Clone, Default)]
 pub struct SessionLaunchExtras {
     pub system_prompt_append: Vec<String>,
+    pub first_prompt_system_prompt_append: Vec<String>,
     pub mcp_servers: Vec<SessionMcpServer>,
     pub mcp_binding_summaries: Vec<SessionMcpBindingSummary>,
 }

@@ -12,7 +12,8 @@ use url::form_urlencoded;
 
 use super::http::{
     agents, cowork, files, git, health, hosting, mobility, model_registries, plans, processes,
-    provider_configs, replay, repo_roots, reviews, sessions, subagents, terminals, workspaces,
+    provider_configs, replay, repo_roots, reviews, sessions, subagents, terminals,
+    workspace_naming, workspaces,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::terminals as ws_terminals;
@@ -105,6 +106,11 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}/sessions/{session_id}/reviews/mcp",
             get(reviews::get_reviews_mcp_endpoint).post(reviews::post_reviews_mcp_endpoint),
+        )
+        .route(
+            "/workspaces/{workspace_id}/sessions/{session_id}/workspace-naming/mcp",
+            get(workspace_naming::get_workspace_naming_mcp_endpoint)
+                .post(workspace_naming::post_workspace_naming_mcp_endpoint),
         )
         .route(
             "/workspaces/{workspace_id}/display-name",

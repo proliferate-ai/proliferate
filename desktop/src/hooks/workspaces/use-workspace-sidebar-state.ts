@@ -15,7 +15,7 @@ import {
 import { getEffectiveSessionTitle } from "@/lib/domain/sessions/title";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/use-logical-workspaces";
 import { useStandardRepoProjection } from "@/hooks/workspaces/use-standard-repo-projection";
-import { useWorkspaceBranchRenameMonitor } from "@/hooks/workspaces/use-workspace-branch-rename-monitor";
+import { useWorkspaceMetadataSync } from "@/hooks/workspaces/use-workspace-metadata-sync";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
@@ -93,7 +93,7 @@ export function useWorkspaceSidebarState({
 
   const { logicalWorkspaces, isLoading: workspacesLoading } = useLogicalWorkspaces();
   const { repoRoots } = useStandardRepoProjection();
-  const { data: gitStatus } = useWorkspaceBranchRenameMonitor();
+  const { data: gitStatus } = useWorkspaceMetadataSync();
 
   const archivedSet = useMemo(
     () => new Set(archivedWorkspaceIds),
