@@ -3,7 +3,7 @@ import type {
   CoworkCodingSessionSummary,
   CoworkManagedWorkspaceSummary,
 } from "@anyharness/sdk";
-import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
+import { useActiveSessionId } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
@@ -48,7 +48,7 @@ export interface CoworkComposerStripViewModel {
 }
 
 export function useCoworkComposerStrip(): CoworkComposerStripViewModel | null {
-  const { activeSessionId } = useActiveChatSessionState();
+  const activeSessionId = useActiveSessionId();
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const activeCodingSessionId = useHarnessStore((state) => state.activeSessionId);
   const { selectWorkspace } = useWorkspaceSelection();

@@ -9,7 +9,7 @@ import {
   resolveModelDisplayName,
 } from "@/lib/domain/chat/model-display";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useActiveChatSessionState } from "./use-active-chat-session-state";
+import { useActiveSessionLaunchState } from "./use-active-chat-session-selectors";
 import { useConfiguredLaunchReadiness } from "./use-configured-launch-readiness";
 import { useChatLaunchActions } from "./use-chat-launch-actions";
 import { useChatLaunchCatalog } from "./use-chat-launch-catalog";
@@ -43,7 +43,11 @@ function resolveCurrentModelDisplayName(args: {
 export function useChatModelSelectorState() {
   const connectionState = useHarnessStore((state) => state.connectionState);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
-  const { activeSlot, currentLaunchIdentity } = useActiveChatSessionState();
+  const {
+    currentLaunchIdentity,
+    pendingConfigChanges,
+    modelControl,
+  } = useActiveSessionLaunchState();
   const { handleLaunchSelect } = useChatLaunchActions();
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
   const launchCatalog = useChatLaunchCatalog({
@@ -52,11 +56,10 @@ export function useChatModelSelectorState() {
   const { hasAgents, isLoading: agentsLoading, notReadyAgents } = useAgentCatalog();
 
   const pendingModelChange = getPendingSessionConfigChange(
-    activeSlot?.pendingConfigChanges,
-    activeSlot?.liveConfig?.normalizedControls.model?.rawConfigId ?? null,
+    pendingConfigChanges,
+    modelControl?.rawConfigId ?? null,
   );
   const currentSelection = currentLaunchIdentity ?? configuredLaunch.selection;
-  const modelControl = activeSlot?.liveConfig?.normalizedControls.model ?? null;
   const displayedModelValue =
     pendingModelChange?.value
     ?? modelControl?.currentValue

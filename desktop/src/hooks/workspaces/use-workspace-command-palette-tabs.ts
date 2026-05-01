@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
+import { useActiveSessionLaunchState } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/use-configured-launch-readiness";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { isSessionModelAvailabilityInterruption } from "@/hooks/sessions/use-session-model-availability-workflow";
@@ -51,7 +51,7 @@ export function useWorkspaceCommandPaletteTabs() {
     liveIds: model.liveChatSessionIds,
     childToParent: model.childToParent,
   });
-  const { currentLaunchIdentity } = useActiveChatSessionState();
+  const { currentLaunchIdentity } = useActiveSessionLaunchState();
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
   const { createEmptySessionWithResolvedConfig } = useSessionActions();
 

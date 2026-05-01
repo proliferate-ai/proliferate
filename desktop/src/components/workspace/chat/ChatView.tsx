@@ -11,7 +11,10 @@ import { NoWorkspaceState } from "@/components/workspace/chat/surface/NoWorkspac
 import { SessionTranscriptPane } from "@/components/workspace/chat/surface/SessionTranscriptPane";
 import { WorkspaceMobilityOverlay } from "@/components/workspace/chat/surface/WorkspaceMobilityOverlay";
 import { type ChatSurfaceState, useChatSurfaceState } from "@/hooks/chat/use-chat-surface-state";
-import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
+import {
+  useActiveSessionId,
+  useActiveSessionPromptCapabilities,
+} from "@/hooks/chat/use-active-chat-session-selectors";
 import { useChatAvailabilityState } from "@/hooks/chat/use-chat-availability-state";
 import { useChatDockInset } from "@/hooks/chat/use-chat-dock-inset";
 import { useChatPromptAttachments } from "@/hooks/chat/use-chat-prompt-attachments";
@@ -91,16 +94,13 @@ function shouldShowSessionInputChrome(mode: ChatSurfaceState): boolean {
 export function ChatView() {
   useDebugRenderCount("chat-surface");
   const { mode } = useChatSurfaceState();
-  const {
-    activeSessionId,
-    activeSlot,
-  } = useActiveChatSessionState();
+  const activeSessionId = useActiveSessionId();
+  const promptCapabilities = useActiveSessionPromptCapabilities();
   const availability = useChatAvailabilityState();
   const queuedPromptEditStatus = useQueuedPromptEditStatus();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const isSessionMode = shouldShowSessionInputChrome(mode);
   const composerDockSlots = useComposerDockSlots();
-  const promptCapabilities = activeSlot?.liveConfig?.promptCapabilities ?? null;
   const supportsAttachments = canAttachPromptContent(promptCapabilities);
   const canAcceptFileDrop = canAcceptChatFileDrop({
     isEditingQueuedPrompt: queuedPromptEditStatus.isEditing,

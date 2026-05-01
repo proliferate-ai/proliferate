@@ -1,15 +1,25 @@
 import { QueryClient } from "@tanstack/react-query";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionEventEnvelope } from "@anyharness/sdk";
 import { createEmptySessionSlot } from "@/lib/integrations/anyharness/session-runtime";
 import { replaySessionHistory } from "@/lib/integrations/anyharness/session-stream-state";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
+import { clearPendingConfigRollbackCheck } from "@/hooks/sessions/session-runtime-pending-config";
 import {
   createSessionStreamFlushController,
   type SessionStreamFlushScheduler,
 } from "@/hooks/sessions/use-session-stream-flush";
 
+const originalPatchSessionSlot = useHarnessStore.getState().patchSessionSlot;
+
 describe("session stream flush controller", () => {
+  afterEach(() => {
+    clearPendingConfigRollbackCheck("session-1");
+    useHarnessStore.setState({ patchSessionSlot: originalPatchSessionSlot });
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() => {
     const state = replaySessionHistory("session-1", [turnStarted(1)]);
     useHarnessStore.setState({
@@ -71,18 +81,90 @@ describe("session stream flush controller", () => {
     expect(closeCurrentHandle).toHaveBeenCalledTimes(1);
     expect(scheduleReconnect).toHaveBeenCalledWith(0);
   });
+
+  it("keeps the active summary refresh scheduled when a new turn starts after a turn end in one flush", () => {
+    const scheduled = createManualScheduler();
+    const clearActiveSummaryRefreshTimer = vi.fn();
+    const scheduleActiveSummaryRefresh = vi.fn();
+    const controller = createTestController({
+      scheduler: scheduled.scheduler,
+      clearActiveSummaryRefreshTimer,
+      scheduleActiveSummaryRefresh,
+    });
+
+    controller.enqueue(turnEnded(2));
+    controller.enqueue(turnStarted(3, "turn-2"));
+    scheduled.flush();
+
+    expect(scheduleActiveSummaryRefresh).toHaveBeenCalledTimes(1);
+    if (clearActiveSummaryRefreshTimer.mock.invocationCallOrder.length > 0) {
+      expect(clearActiveSummaryRefreshTimer.mock.invocationCallOrder[0]).toBeLessThan(
+        scheduleActiveSummaryRefresh.mock.invocationCallOrder[0]!,
+      );
+    }
+  });
+
+  it("clears pending config rollback when a new turn starts after a turn end in one flush", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("window", {
+      clearTimeout,
+      setTimeout,
+    });
+    const scheduled = createManualScheduler();
+    const refreshSessionSlotMeta = vi.fn().mockResolvedValue(undefined);
+    const controller = createTestController({
+      scheduler: scheduled.scheduler,
+      refreshSessionSlotMeta,
+    });
+    useHarnessStore.getState().patchSessionSlot("session-1", {
+      pendingConfigChanges: {
+        effort: {
+          rawConfigId: "effort",
+          value: "high",
+          status: "queued",
+          mutationId: 1,
+        },
+      },
+    });
+
+    controller.enqueue(turnEnded(2));
+    controller.enqueue(turnStarted(3, "turn-2"));
+    scheduled.flush();
+    vi.advanceTimersByTime(300);
+
+    expect(refreshSessionSlotMeta).not.toHaveBeenCalled();
+  });
+
+  it("flushes with the fallback timer when requestAnimationFrame does not run", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const patchSpy = spyOnPatchSessionSlot();
+    const controller = createTestController();
+
+    controller.enqueue(assistantStarted(2, "assistant-1", "Hello"));
+    expect(patchSpy).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(100);
+
+    expect(patchSpy).toHaveBeenCalledTimes(1);
+    const slot = useHarnessStore.getState().sessionSlots["session-1"];
+    expect(slot.events.map((event) => event.seq)).toEqual([1, 2]);
+  });
 });
 
 function createTestController(options?: {
   scheduler?: SessionStreamFlushScheduler;
   closeCurrentHandle?: () => void;
   scheduleReconnect?: (delayMs?: number) => void;
+  clearActiveSummaryRefreshTimer?: () => void;
+  scheduleActiveSummaryRefresh?: () => void;
+  refreshSessionSlotMeta?: () => Promise<void>;
 }) {
   return createSessionStreamFlushController({
     queryClient: new QueryClient(),
     mountSubagentChildSession: vi.fn(),
     persistReconciledModePreferences: vi.fn(),
-    refreshSessionSlotMeta: vi.fn(),
+    refreshSessionSlotMeta: options?.refreshSessionSlotMeta ?? vi.fn(),
     showToast: vi.fn(),
     scheduler: options?.scheduler,
     sessionId: "session-1",
@@ -91,8 +173,8 @@ function createTestController(options?: {
     isCurrentStream: () => true,
     closeCurrentHandle: options?.closeCurrentHandle ?? vi.fn(),
     scheduleReconnect: options?.scheduleReconnect ?? vi.fn(),
-    clearActiveSummaryRefreshTimer: vi.fn(),
-    scheduleActiveSummaryRefresh: vi.fn(),
+    clearActiveSummaryRefreshTimer: options?.clearActiveSummaryRefreshTimer ?? vi.fn(),
+    scheduleActiveSummaryRefresh: options?.scheduleActiveSummaryRefresh ?? vi.fn(),
     scheduleStartupReadyRefresh: vi.fn(),
   });
 }
@@ -117,7 +199,6 @@ function createManualScheduler() {
 }
 
 function spyOnPatchSessionSlot() {
-  const originalPatchSessionSlot = useHarnessStore.getState().patchSessionSlot;
   const patchSpy = vi.fn(originalPatchSessionSlot);
   useHarnessStore.setState({
     patchSessionSlot: patchSpy,
@@ -125,12 +206,12 @@ function spyOnPatchSessionSlot() {
   return patchSpy;
 }
 
-function turnStarted(seq: number): SessionEventEnvelope {
+function turnStarted(seq: number, turnId = "turn-1"): SessionEventEnvelope {
   return {
     sessionId: "session-1",
     seq,
     timestamp: `2026-04-04T00:00:0${seq}Z`,
-    turnId: "turn-1",
+    turnId,
     event: { type: "turn_started" },
   };
 }

@@ -10,7 +10,10 @@ import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
-import { useActiveChatSessionState } from "./use-active-chat-session-state";
+import {
+  useActiveSessionLaunchState,
+  useActiveSessionSurfaceSnapshot,
+} from "./use-active-chat-session-selectors";
 import { useChatAvailabilityState } from "./use-chat-availability-state";
 import { useConfiguredLaunchReadiness } from "./use-configured-launch-readiness";
 import {
@@ -37,9 +40,9 @@ export function useChatPromptActions() {
   const clearDraft = useChatInputStore((state) => state.clearDraft);
   const {
     activeSessionId,
-    activeSlot,
     currentLaunchIdentity,
-  } = useActiveChatSessionState();
+  } = useActiveSessionLaunchState();
+  const { hasSlot } = useActiveSessionSurfaceSnapshot();
   const { isDisabled } = useChatAvailabilityState();
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
 
@@ -63,7 +66,7 @@ export function useChatPromptActions() {
     }
 
     const launchSelection = currentLaunchIdentity ?? configuredLaunch.selection;
-    const targetSessionId = activeSlot ? activeSessionId : null;
+    const targetSessionId = hasSlot ? activeSessionId : null;
     const promptId = createPromptId();
     const latencyFlowId = targetSessionId
       ? startLatencyFlow({
@@ -137,11 +140,11 @@ export function useChatPromptActions() {
     }
   }, [
     activeSessionId,
-    activeSlot,
     clearDraft,
     configuredLaunch.selection,
     currentLaunchIdentity,
     findOrCreateSession,
+    hasSlot,
     isDisabled,
     promptActiveSession,
     queryClient,

@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
-import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
+import { useActivePendingInteractionState } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useChatUserInputActions } from "@/hooks/chat/use-chat-user-input-actions";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
 
@@ -228,7 +228,7 @@ export function UserInputCard({
 }
 
 export function ConnectedUserInputCard() {
-  const { pendingUserInput } = useActiveChatSessionState();
+  const { pendingUserInput } = useActivePendingInteractionState();
   const { handleSubmitUserInput, handleCancelUserInput } = useChatUserInputActions();
 
   if (!pendingUserInput) {

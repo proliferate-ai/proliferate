@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
+import { useActiveSessionLaunchState } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/use-configured-launch-readiness";
 import { useCloseActiveWorkspaceTab } from "@/hooks/workspaces/use-close-active-workspace-tab";
 import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
@@ -35,7 +35,7 @@ export function useWorkspaceTabActions() {
     childToParent: headerTabs.childToParent,
   });
 
-  const { currentLaunchIdentity } = useActiveChatSessionState();
+  const { currentLaunchIdentity } = useActiveSessionLaunchState();
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
   const {
     createEmptySessionWithResolvedConfig,

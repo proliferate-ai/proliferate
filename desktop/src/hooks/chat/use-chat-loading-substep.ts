@@ -4,7 +4,7 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaces } from "@/hooks/workspaces/use-workspaces";
 import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/workspace-bootstrap-memory";
 import { workspaceDisplayName } from "@/lib/domain/workspaces/workspace-display";
-import { useActiveChatSessionState } from "./use-active-chat-session-state";
+import { useActiveSessionSurfaceSnapshot } from "./use-active-chat-session-selectors";
 
 /**
  * Disambiguates the loading sub-states that feed ChatLoadingHero. The loading
@@ -41,12 +41,8 @@ export interface ChatLoadingSubstepState {
 export function useChatLoadingSubstep(): ChatLoadingSubstepState {
   const selectedWorkspaceId = useHarnessStore((state) => state.selectedWorkspaceId);
   const activeSessionId = useHarnessStore((state) => state.activeSessionId);
-  const streamConnectionState = useHarnessStore((state) =>
-    state.activeSessionId
-      ? state.sessionSlots[state.activeSessionId]?.streamConnectionState ?? null
-      : null,
-  );
-  const { hasSlot, transcriptHydrated, isEmpty, isRunning } = useActiveChatSessionState();
+  const { hasSlot, transcriptHydrated, isEmpty, isRunning, streamConnectionState } =
+    useActiveSessionSurfaceSnapshot();
   const { data: workspaceCollections } = useWorkspaces();
 
   const workspaceName = useMemo(() => {

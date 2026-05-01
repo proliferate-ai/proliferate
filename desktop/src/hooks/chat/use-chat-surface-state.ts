@@ -12,7 +12,7 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
 import { hasWorkspaceBootstrappedInSession } from "@/hooks/workspaces/workspace-bootstrap-memory";
-import { useActiveChatSessionState } from "./use-active-chat-session-state";
+import { useActiveSessionSurfaceSnapshot } from "./use-active-chat-session-selectors";
 
 export type ChatSurfaceState =
   | { kind: "no-workspace" }
@@ -44,12 +44,8 @@ export function useChatSurfaceState(): {
     transcriptHydrated,
     isEmpty,
     isRunning,
-  } = useActiveChatSessionState();
-  const streamConnectionState = useHarnessStore((state) =>
-    state.activeSessionId
-      ? state.sessionSlots[state.activeSessionId]?.streamConnectionState ?? null
-      : null,
-  );
+    streamConnectionState,
+  } = useActiveSessionSurfaceSnapshot();
 
   if (!selectedWorkspaceId && !pendingWorkspaceEntry && !activeLaunchIntent) {
     return { mode: { kind: "no-workspace" }, selectedWorkspaceId };

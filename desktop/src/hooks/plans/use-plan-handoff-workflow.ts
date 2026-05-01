@@ -7,7 +7,7 @@ import type {
 import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import { PLAN_HANDOFF_DEFAULT_PROMPT } from "@/config/plan-prompts";
 import { useAgentCatalog } from "@/hooks/agents/use-agent-catalog";
-import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
+import { useActiveSessionLaunchState } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useChatLaunchCatalog } from "@/hooks/chat/use-chat-launch-catalog";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/use-configured-launch-readiness";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
@@ -44,7 +44,7 @@ export function usePlanHandoffWorkflow({
   const connectionState = useHarnessStore((state) => state.connectionState);
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const showToast = useToastStore((state) => state.show);
-  const { currentLaunchIdentity } = useActiveChatSessionState();
+  const { currentLaunchIdentity } = useActiveSessionLaunchState();
   const configuredLaunch = useConfiguredLaunchReadiness(currentLaunchIdentity);
   const [promptText, setPromptText] = useState(PLAN_HANDOFF_DEFAULT_PROMPT);
   const [selection, setSelection] = useState<ModelSelectorSelection | null>(null);

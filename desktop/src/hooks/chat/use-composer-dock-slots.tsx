@@ -11,7 +11,10 @@ import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/De
 import { SubagentComposerControl } from "@/components/workspace/chat/input/SubagentComposerStrip";
 import { ConnectedUserInputCard } from "@/components/workspace/chat/input/UserInputCard";
 import { useCoworkComposerStrip } from "@/hooks/cowork/use-cowork-composer-strip";
-import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
+import {
+  useActivePendingInteractionState,
+  useActivePendingPrompts,
+} from "@/hooks/chat/use-active-chat-session-selectors";
 import { useActiveTodoTracker } from "@/hooks/chat/use-active-todo-tracker";
 import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
 import { useSubagentComposerStrip } from "@/hooks/chat/subagents/use-subagent-composer-strip";
@@ -26,7 +29,8 @@ export interface ComposerDockSlots {
 }
 
 export function useComposerDockSlots(): ComposerDockSlots {
-  const { primaryPendingInteraction, pendingPrompts } = useActiveChatSessionState();
+  const { primaryPendingInteraction } = useActivePendingInteractionState();
+  const pendingPrompts = useActivePendingPrompts();
   const activeTodoTracker = useActiveTodoTracker();
   const activeReviewRun = useActiveReviewRun();
   const subagentComposerStrip = useSubagentComposerStrip();

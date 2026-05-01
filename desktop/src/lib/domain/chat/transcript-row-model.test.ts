@@ -1,18 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { createTranscriptState, type PendingPromptEntry, type TranscriptState } from "@anyharness/sdk";
 import {
-  buildTranscriptVirtualRows,
+  buildTranscriptRowModel,
+  createTranscriptRowModelCache,
+} from "@/lib/domain/chat/transcript-row-model";
+import {
   shouldStickToVirtualBottom,
 } from "@/lib/domain/chat/transcript-virtual-rows";
 
-describe("buildTranscriptVirtualRows", () => {
+describe("buildTranscriptRowModel", () => {
   it("creates stable turn rows for large transcripts", () => {
     const transcript = createTranscriptState("session-1");
     for (let index = 0; index < 1000; index += 1) {
       addTurn(transcript, `turn-${index}`, true);
     }
 
-    const rows = buildTranscriptVirtualRows({
+    const rows = buildTranscriptRowModel({
       activeSessionId: "session-1",
       transcript,
       visibleOptimisticPrompt: null,
@@ -21,8 +24,18 @@ describe("buildTranscriptVirtualRows", () => {
     });
 
     expect(rows).toHaveLength(1000);
-    expect(rows[0]).toEqual({ kind: "turn", key: "turn:turn-0", turnId: "turn-0" });
-    expect(rows[999]).toEqual({ kind: "turn", key: "turn:turn-999", turnId: "turn-999" });
+    expect(rows[0]).toEqual(expect.objectContaining({
+      kind: "turn",
+      key: "turn:turn-0:block:content",
+      turnId: "turn-0",
+      blockKey: "content",
+    }));
+    expect(rows[999]).toEqual(expect.objectContaining({
+      kind: "turn",
+      key: "turn:turn-999:block:content",
+      turnId: "turn-999",
+      blockKey: "content",
+    }));
   });
 
   it("hides an empty in-progress latest turn behind the visible pending prompt", () => {
@@ -30,7 +43,7 @@ describe("buildTranscriptVirtualRows", () => {
     addTurn(transcript, "turn-complete", true);
     addTurn(transcript, "turn-live", false);
 
-    const rows = buildTranscriptVirtualRows({
+    const rows = buildTranscriptRowModel({
       activeSessionId: "session-1",
       transcript,
       visibleOptimisticPrompt: pendingPrompt(),
@@ -39,7 +52,12 @@ describe("buildTranscriptVirtualRows", () => {
     });
 
     expect(rows).toEqual([
-      { kind: "turn", key: "turn:turn-complete", turnId: "turn-complete" },
+      expect.objectContaining({
+        kind: "turn",
+        key: "turn:turn-complete:block:content",
+        turnId: "turn-complete",
+        blockKey: "content",
+      }),
       { kind: "pending_prompt", key: "pending-prompt:session-1" },
     ]);
   });
@@ -48,7 +66,7 @@ describe("buildTranscriptVirtualRows", () => {
     const transcript = createTranscriptState("session-1");
     addTurn(transcript, "turn-live", false);
 
-    const rows = buildTranscriptVirtualRows({
+    const rows = buildTranscriptRowModel({
       activeSessionId: "session-1",
       transcript,
       visibleOptimisticPrompt: pendingPrompt(),
@@ -57,14 +75,42 @@ describe("buildTranscriptVirtualRows", () => {
     });
 
     expect(rows).toEqual([
-      { kind: "turn", key: "turn:turn-live", turnId: "turn-live" },
+      expect.objectContaining({
+        kind: "turn",
+        key: "turn:turn-live:block:content",
+        turnId: "turn-live",
+        blockKey: "content",
+      }),
       { kind: "pending_prompt", key: "pending-prompt:session-1" },
     ]);
   });
 
+  it("reuses unchanged turn rows from the presentation cache", () => {
+    const transcript = createTranscriptState("session-1");
+    addTurn(transcript, "turn-1", true);
+    const cache = createTranscriptRowModelCache();
+
+    const firstRows = buildTranscriptRowModel({
+      activeSessionId: "session-1",
+      transcript,
+      visibleOptimisticPrompt: null,
+      latestTurnId: "turn-1",
+      latestTurnHasAssistantRenderableContent: true,
+    }, cache);
+    const secondRows = buildTranscriptRowModel({
+      activeSessionId: "session-1",
+      transcript,
+      visibleOptimisticPrompt: null,
+      latestTurnId: "turn-1",
+      latestTurnHasAssistantRenderableContent: true,
+    }, cache);
+
+    expect(secondRows[0]).toBe(firstRows[0]);
+  });
+
   it("keys pending prompts by active session", () => {
     const transcript = createTranscriptState("session-1");
-    const rows = buildTranscriptVirtualRows({
+    const rows = buildTranscriptRowModel({
       activeSessionId: "session-2",
       transcript,
       visibleOptimisticPrompt: pendingPrompt(),

@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
-import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
+import { useActiveTranscriptPaneState } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { MessageList } from "@/components/workspace/chat/transcript/MessageList";
 import { ConnectedPlanHandoffDialog } from "@/components/workspace/chat/plans/ConnectedPlanHandoffDialog";
@@ -27,12 +27,11 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
   const [olderHistoryLoadingSessionId, setOlderHistoryLoadingSessionId] = useState<string | null>(null);
   const {
     activeSessionId,
-    activeSlot,
     optimisticPrompt,
     transcript,
     sessionViewState,
-  } = useActiveChatSessionState();
-  const oldestLoadedEventSeq = activeSlot?.events[0]?.seq ?? null;
+    oldestLoadedEventSeq,
+  } = useActiveTranscriptPaneState();
   const hasOlderHistory = oldestLoadedEventSeq !== null && oldestLoadedEventSeq > 1;
   const isLoadingOlderHistory = olderHistoryLoadingSessionId === activeSessionId;
   const loadOlderHistory = useCallback(() => {
@@ -78,7 +77,7 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
     selectedWorkspaceId,
   ]);
 
-  if (!activeSessionId) {
+  if (!activeSessionId || !transcript) {
     return null;
   }
 

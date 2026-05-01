@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Select } from "@/components/ui/Select";
-import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
+import { useActivePendingInteractionState } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useChatMcpElicitationActions } from "@/hooks/chat/use-chat-mcp-elicitation-actions";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
 
@@ -405,7 +405,7 @@ function buildSubmittedFields(
 }
 
 export function ConnectedMcpElicitationCard() {
-  const { pendingMcpElicitation } = useActiveChatSessionState();
+  const { pendingMcpElicitation } = useActivePendingInteractionState();
   const {
     handleAcceptMcpElicitation,
     handleCancelMcpElicitation,

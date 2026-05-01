@@ -11,16 +11,15 @@ import {
 import { AssistantMessage } from "./AssistantMessage";
 import { ClaudePlanCard } from "./ClaudePlanCard";
 import { ConnectedProposedPlanItem } from "./ConnectedProposedPlanItem";
-import { CopyMessageButton } from "./CopyMessageButton";
 import { SystemMessage } from "./SystemMessage";
 import { UserMessage } from "./UserMessage";
-import { StreamingIndicator } from "./StreamingIndicator";
 import { TurnSeparator } from "./TurnSeparator";
 import { DebugProfiler } from "@/components/ui/DebugProfiler";
 import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
 import { Button } from "@/components/ui/Button";
 import { ReasoningBlock } from "@/components/workspace/chat/tool-calls/ReasoningBlock";
 import { GenericToolResultRow } from "@/components/workspace/chat/tool-calls/GenericToolResultRow";
+import { ToolActionLeadingAffordance } from "@/components/workspace/chat/tool-calls/ToolActionRow";
 import { BashCommandCall } from "@/components/workspace/chat/tool-calls/BashCommandCall";
 import { FileChangeCall } from "@/components/workspace/chat/tool-calls/FileChangeCall";
 import { FileReadCall } from "@/components/workspace/chat/tool-calls/FileReadCall";
@@ -32,7 +31,6 @@ import { TurnDiffPanel } from "./TurnDiffPanel";
 import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
 import {
   ClipboardList,
-  ChevronRight,
   CircleQuestion,
   FilePen,
   FilePlus,
@@ -50,6 +48,7 @@ import { useOpenCoworkArtifact } from "@/hooks/cowork/use-open-cowork-artifact";
 import { useOpenCoworkCodingSession } from "@/hooks/cowork/use-open-cowork-coding-session";
 import { useChatTranscriptSelection } from "@/hooks/chat/use-chat-transcript-selection";
 import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
+import { useBrailleFillsweep } from "@/hooks/ui/use-braille-sweep";
 import type { PromptPlanAttachmentDescriptor } from "@/lib/domain/chat/prompt-content";
 import {
   collectTurnCoworkArtifactToolCalls,
@@ -79,6 +78,7 @@ import {
   resolveSubagentExecutionState,
   isSubagentExecutionStateRunning,
   isSubagentWorkComplete,
+  type SubagentExecutionState,
 } from "@/lib/domain/chat/subagent-launch";
 import {
   finishOrCancelMeasurementOperation,
@@ -87,10 +87,14 @@ import {
   type MeasurementOperationId,
 } from "@/lib/infra/debug-measurement";
 import {
+  resolveSubagentColor,
+} from "@/lib/domain/chat/subagent-braille-color";
+import {
   isAgentSessionProvenance,
   resolveReviewFeedbackPromptReference,
   isSubagentWakeProvenance,
 } from "@/lib/domain/chat/subagents/provenance";
+import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { SubagentWakeBadge } from "@/components/workspace/chat/transcript/SubagentWakeBadge";
 import { ReviewFeedbackSummary } from "@/components/workspace/reviews/ReviewFeedbackSummary";
 import { SubagentLaunchLedger } from "@/components/workspace/chat/transcript/SubagentLaunchLedger";
@@ -107,9 +111,9 @@ import {
   shouldShowPendingPromptActivity,
 } from "@/lib/domain/chat/pending-prompts";
 import {
-  buildTranscriptVirtualRows,
   type TranscriptVirtualRow,
 } from "@/lib/domain/chat/transcript-virtual-rows";
+import { useTranscriptRowModel } from "@/hooks/chat/use-transcript-row-model";
 import {
   lastTopLevelItemIsAssistantProseWithText,
   latestTransientStatusText,
@@ -134,9 +138,14 @@ import type {
 } from "@anyharness/sdk";
 import type { SessionViewState } from "@/lib/domain/sessions/activity";
 import { VirtualTurnList } from "@/components/workspace/chat/transcript/VirtualTurnList";
+import {
+  resolvePendingPromptTrailingStatus,
+  resolveTurnTrailingStatus,
+  TRAILING_STATUS_MIN_HEIGHT,
+  TurnAssistantActionRow,
+  TurnShell,
+} from "@/components/workspace/chat/transcript/TranscriptTurnChrome";
 
-const TURN_HORIZONTAL_PADDING = "px-0";
-const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
 const EMPTY_PROPOSED_PLAN_TOOL_CALL_IDS = new Set<string>();
 const ProposedPlanToolCallIdsContext = createContext<ReadonlySet<string>>(
   EMPTY_PROPOSED_PLAN_TOOL_CALL_IDS,
@@ -146,12 +155,6 @@ const TranscriptOpenSessionContext = createContext<((sessionId: string) => void)
 const noop = () => {};
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 
-/**
- * Minimum height for a turn that has no assistant text yet. Once prose exists,
- * the trailing status should stay compact instead of creating an empty block
- * between the prose and future tool activity.
- */
-const TRAILING_STATUS_MIN_HEIGHT = "min-h-[calc(var(--text-chat--line-height)+1.5rem)]";
 const LIVE_STATUS_GRACE_MS = 700;
 
 interface MessageListProps {
@@ -207,30 +210,29 @@ export function MessageList({
       true,
     )
     : null;
-  const virtualRows = useMemo(
-    () => buildTranscriptVirtualRows({
+  const virtualRows = useTranscriptRowModel({
       activeSessionId,
       transcript,
       visibleOptimisticPrompt,
       latestTurnId,
       latestTurnHasAssistantRenderableContent,
-    }),
-    [
-      activeSessionId,
-      latestTurnHasAssistantRenderableContent,
-      latestTurnId,
-      transcript,
-      visibleOptimisticPrompt,
-    ],
-  );
+    });
   const visibleTurnIds = useMemo(
     () => virtualRows.flatMap((row) => row.kind === "turn" ? [row.turnId] : []),
     [virtualRows],
   );
   const latestTurnInProgress = !!latestTurn && !latestTurn.completedAt;
   const latestTurnPresentation = useMemo(
-    () => latestTurn ? buildTurnPresentation(latestTurn, transcript) : null,
-    [latestTurn, transcript],
+    () => {
+      if (!latestTurnId) {
+        return null;
+      }
+      const latestRow = virtualRows.find((row) =>
+        row.kind === "turn" && row.turnId === latestTurnId
+      );
+      return latestRow?.kind === "turn" ? latestRow.presentation : null;
+    },
+    [latestTurnId, virtualRows],
   );
   const latestLiveExplorationBlock = useMemo(
     () => latestTurnPresentation
@@ -351,6 +353,7 @@ export function MessageList({
                   <div className="flex justify-end">
                     <SubagentWakeBadge
                       label={visibleOptimisticPrompt.promptProvenance.label ?? null}
+                      color={resolveSubagentColor(visibleOptimisticPrompt.promptProvenance.sessionLinkId)}
                     />
                   </div>
                 );
@@ -361,6 +364,7 @@ export function MessageList({
                     reference={reviewFeedbackReference}
                     sessionId={activeSessionId}
                     state="queued"
+                    onOpenSession={onOpenSession}
                   />
                 );
               }
@@ -390,9 +394,7 @@ export function MessageList({
     const isLatestTurn = row.turnId === latestTurnId;
     const isLatestTurnInProgress = isLatestTurn && !turn.completedAt;
     const hasFileBadges = turn.fileBadges.length > 0;
-    const presentation = isLatestTurn && latestTurnPresentation
-      ? latestTurnPresentation
-      : buildTurnPresentation(turn, transcript);
+    const presentation = row.presentation;
     const liveExplorationBlock = isLatestTurn ? latestLiveExplorationBlock : null;
     const tailAssistantProseRootId = findTailAssistantProseRootId(
       presentation,
@@ -472,7 +474,6 @@ export function MessageList({
     latestLiveExplorationBlock,
     latestLiveStatus,
     latestTurnId,
-    latestTurnPresentation,
     onHandOffPlanToNewSession,
     onOpenSession,
     openArtifact,
@@ -509,57 +510,6 @@ export function MessageList({
       </div>
     </DebugProfiler>
   );
-}
-
-function resolvePendingPromptTrailingStatus(
-  queuedAt: string,
-  sessionViewState: SessionViewState,
-  forceWorking: boolean,
-): ReactNode {
-  if (sessionViewState === "needs_input") {
-    return (
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <CircleQuestion className="size-3.5 shrink-0 text-warning-foreground" />
-        <span>Waiting for your input</span>
-      </div>
-    );
-  }
-
-  if (forceWorking || sessionViewState === "working") {
-    return <StreamingIndicator startedAt={queuedAt} />;
-  }
-
-  return null;
-}
-
-function resolveTurnTrailingStatus(
-  startedAt: string,
-  sessionViewState: SessionViewState,
-  transientStatusText: string | null,
-): ReactNode {
-  if (sessionViewState === "working" && transientStatusText) {
-    return (
-      <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
-        <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 truncate">{transientStatusText}</span>
-      </div>
-    );
-  }
-
-  if (sessionViewState === "working") {
-    return <StreamingIndicator startedAt={startedAt} />;
-  }
-
-  if (sessionViewState === "needs_input") {
-    return (
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <CircleQuestion className="size-3.5 shrink-0 text-warning-foreground" />
-        <span>Waiting for your input</span>
-      </div>
-    );
-  }
-
-  return null;
 }
 
 function findTailAssistantProseRootId(
@@ -915,20 +865,6 @@ function FragmentWithArtifacts({
   );
 }
 
-function TurnShell({
-  children,
-  isFirst = false,
-}: {
-  children: ReactNode;
-  isFirst?: boolean;
-}) {
-  return (
-    <div className={`${TURN_HORIZONTAL_PADDING} w-full max-w-full ${isFirst ? "pt-0" : "pt-2"} pb-2`}>
-      {children}
-    </div>
-  );
-}
-
 function TranscriptItemBlock({
   item,
   transcript,
@@ -945,18 +881,28 @@ function TranscriptItemBlock({
   const toolCallIdsWithProposedPlan = useContext(ProposedPlanToolCallIdsContext);
   const sessionId = useContext(TranscriptSessionIdContext);
   const openSession = useContext(TranscriptOpenSessionContext);
+  const subagentWakeCompletion =
+    item.kind === "user_message" && isSubagentWakeProvenance(item.promptProvenance)
+      ? transcript.linkCompletionsByCompletionId[item.promptProvenance.completionId] ?? null
+      : null;
+  const subagentWakeChildSessionId = subagentWakeCompletion?.childSessionId ?? null;
+  const subagentWakeChildAgentKind = useHarnessStore((state) =>
+    subagentWakeChildSessionId
+      ? state.sessionSlots[subagentWakeChildSessionId]?.agentKind ?? null
+      : null,
+  );
 
   switch (item.kind) {
     case "user_message": {
       if (isSubagentWakeProvenance(item.promptProvenance)) {
-        const completion =
-          transcript.linkCompletionsByCompletionId[item.promptProvenance.completionId] ?? null;
         return (
           <div className="flex justify-end">
             <SubagentWakeBadge
-              label={item.promptProvenance.label ?? completion?.label ?? null}
-              childSessionId={completion?.childSessionId ?? null}
-              outcome={completion?.outcome ?? null}
+              label={item.promptProvenance.label ?? subagentWakeCompletion?.label ?? null}
+              childSessionId={subagentWakeChildSessionId}
+              outcome={subagentWakeCompletion?.outcome ?? null}
+              color={resolveSubagentColor(item.promptProvenance.sessionLinkId)}
+              agentKind={subagentWakeChildAgentKind}
               titleFallback={
                 item.promptProvenance.type === "linkWake"
                 && item.promptProvenance.relation === "cowork_coding_session"
@@ -978,6 +924,7 @@ function TranscriptItemBlock({
           <ReviewFeedbackSummary
             reference={reviewFeedbackReference}
             sessionId={sessionId}
+            onOpenSession={openSession ?? undefined}
           />
         );
       }
@@ -994,6 +941,7 @@ function TranscriptItemBlock({
               <UserMessageProvenanceChrome
                 sourceSessionId={item.promptProvenance.sourceSessionId}
                 label={item.promptProvenance.label ?? null}
+                color={resolveSubagentColor(item.promptProvenance.sessionLinkId ?? item.promptProvenance.sourceSessionId)}
                 onOpenParent={openSession ?? undefined}
               />
             )}
@@ -1136,36 +1084,6 @@ function TranscriptTreeNode({
       onOpenArtifact={onOpenArtifact}
       onHandOffPlanToNewSession={onHandOffPlanToNewSession}
     />
-  );
-}
-
-function TurnAssistantActionRow({
-  content,
-  showCopyButton = false,
-  reserveSlot = false,
-  timestampLabel = null,
-}: {
-  content: string | null;
-  showCopyButton?: boolean;
-  reserveSlot?: boolean;
-  timestampLabel?: string | null;
-}) {
-  if (!content || (!showCopyButton && !reserveSlot)) {
-    return null;
-  }
-
-  return (
-    <div className="flex justify-start relative">
-      <div className={`pl-1 pt-0.5 ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
-        {showCopyButton && (
-          <CopyMessageButton
-            content={content}
-            timestampLabel={timestampLabel}
-            visibilityClassName="opacity-0 group-hover/turn:opacity-100"
-          />
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -1467,6 +1385,9 @@ function AgentGroupBlock({
   const asyncLaunch = parseAsyncSubagentLaunch(item);
   const provisioningStatus = parseSubagentProvisioningStatus(item);
   const launchResult = parseSubagentLaunchResult(item);
+  const brailleColor = launchResult?.sessionLinkId
+    ? resolveSubagentColor(launchResult.sessionLinkId)
+    : resolveSubagentColor(item.toolCallId ?? item.itemId);
   const openSession = useContext(TranscriptOpenSessionContext);
   const isRunning = isSubagentExecutionStateRunning(executionState);
   const isWorkComplete = isSubagentWorkComplete(item);
@@ -1516,9 +1437,7 @@ function AgentGroupBlock({
     subagents: 0,
   });
 
-  const description = subagentDisplay.title.trim();
-  const shouldShowDescription = description.length > 0
-    && description.toLowerCase() !== "subagent";
+  const description = subagentDisplay.title;
   const hasWork = childIds.length > 0;
   const hasLaunchLedger = !!normalizedPrompt || !!provisioningStatus;
   const hasBodyContent = hasWork || hasLaunchLedger || !!normalizedAgentResult;
@@ -1545,7 +1464,10 @@ function AgentGroupBlock({
     ? "Subagent launch failed"
     : isRunning
       ? "Creating subagent"
-      : "Subagent created";
+      : "Created subagent";
+  const headerIcon = isRunning || executionState === "expired_background"
+    ? <AgentHeaderIcon state={executionState} color={brailleColor} />
+    : null;
   const collapsedSummary =
     workSummary
     || (executionState === "background"
@@ -1571,20 +1493,21 @@ function AgentGroupBlock({
             : "cursor-default text-muted-foreground"
         }`}
       >
-        {headerExpandable && (
-          <ChevronRight
-            className={`size-2.5 shrink-0 text-faint transition-transform duration-200 ${
-              expanded ? "rotate-90" : ""
-            }`}
+        {headerIcon && (
+          <ToolActionLeadingAffordance
+            icon={headerIcon}
+            expandable={headerExpandable}
+            expanded={expanded}
           />
         )}
         <span className="font-[460] text-foreground/90">{headerVerb}</span>
-        {shouldShowDescription && (
-          <span className="min-w-0 truncate text-foreground/90">{description}</span>
+        <span className="min-w-0 truncate text-foreground/90">{description}</span>
+        {subagentDisplay.meta && (
+          <span className="ml-1 text-sm text-muted-foreground">{subagentDisplay.meta}</span>
         )}
         {!expanded && collapsedSummary && (
           <span className="ml-1 text-sm text-muted-foreground">
-            · {collapsedSummary}
+            {subagentDisplay.meta ? `· ${collapsedSummary}` : collapsedSummary}
           </span>
         )}
       </div>
@@ -1627,7 +1550,7 @@ function AgentGroupBlock({
         {/* Agent's synthesis / result */}
         {normalizedAgentResult && (
           asyncLaunch
-            ? <AsyncAgentLaunchBlock launch={asyncLaunch} />
+            ? <AsyncAgentLaunchBlock launch={asyncLaunch} color={brailleColor} />
             : <AgentResultBlock content={normalizedAgentResult} />
         )}
       </div>}
@@ -1638,19 +1561,50 @@ function AgentGroupBlock({
 
 const AGENT_RESULT_COLLAPSED_HEIGHT = 200;
 
+function AgentHeaderIcon({
+  state,
+  color,
+}: {
+  state: SubagentExecutionState;
+  color?: string;
+}) {
+  return state === "running" || state === "background"
+    ? <AgentHeaderRunningIcon color={color} />
+    : state === "expired_background"
+      ? <CircleQuestion className="size-4 text-muted-foreground" />
+    : <Sparkles />;
+}
+
+function AgentHeaderRunningIcon({ color }: { color?: string }) {
+  const frame = useBrailleFillsweep();
+  return (
+    <span
+      className="inline-block w-[1em] shrink-0 font-mono leading-none tracking-[-0.18em] opacity-80"
+      style={color ? { color } : undefined}
+    >
+      {frame}
+    </span>
+  );
+}
+
 function AsyncAgentLaunchBlock({
   launch,
+  color,
 }: {
   launch: { rawText: string; agentId: string | null; outputFile: string | null };
+  color?: string;
 }) {
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const hasLaunchDetails = !!launch.agentId || !!launch.outputFile;
 
   return (
-    <div className="mt-1 rounded-md bg-foreground/5 px-3 py-2">
-      <div className="text-sm font-medium text-foreground/90">Running in background</div>
+    <div className="mt-1 rounded-md border border-border/60 bg-muted/25 px-3 py-2">
+      <div className="flex items-center gap-2 text-sm font-medium text-foreground/90">
+        <AgentHeaderRunningIcon color={color} />
+        <span>Running in background</span>
+      </div>
       <p className="mt-1 text-sm leading-[var(--text-sm--line-height)] text-muted-foreground">
-        You&apos;ll be notified when it finishes.
+        Async subagent launched successfully. You&apos;ll be notified automatically when it completes.
       </p>
       {hasLaunchDetails && (
         <div className="mt-2">

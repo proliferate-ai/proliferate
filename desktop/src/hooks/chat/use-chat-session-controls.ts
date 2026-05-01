@@ -5,8 +5,8 @@ import {
 } from "@/lib/domain/chat/session-controls";
 import { useSessionActions } from "@/hooks/sessions/use-session-actions";
 import { useWorkspaceSurfaceLookup } from "@/hooks/workspaces/use-workspace-surface-lookup";
-import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { useActiveSessionConfigState } from "./use-active-chat-session-selectors";
 
 const EMPTY_CONTROLS: LiveSessionControlDescriptor[] = [];
 
@@ -15,9 +15,7 @@ export function useChatSessionControls(): {
   controls: LiveSessionControlDescriptor[];
   modeControl: LiveSessionControlDescriptor | null;
 } {
-  const activeSlot = useHarnessStore((state) =>
-    state.activeSessionId ? state.sessionSlots[state.activeSessionId] ?? null : null,
-  );
+  const activeSessionConfig = useActiveSessionConfigState();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const showToast = useToastStore((state) => state.show);
   const { setActiveSessionConfigOption } = useSessionActions();
@@ -30,16 +28,16 @@ export function useChatSessionControls(): {
   }, [setActiveSessionConfigOption, showToast]);
 
   const controls = useMemo(() => {
-    if (!activeSlot?.liveConfig?.normalizedControls) {
+    if (!activeSessionConfig.normalizedControls) {
       return EMPTY_CONTROLS;
     }
 
     const nextControls = buildLiveSessionControlDescriptors(
-      activeSlot.liveConfig.normalizedControls,
-      activeSlot.pendingConfigChanges,
+      activeSessionConfig.normalizedControls,
+      activeSessionConfig.pendingConfigChanges,
       onSelect,
     );
-    if (getWorkspaceSurface(activeSlot.workspaceId) !== "cowork") {
+    if (getWorkspaceSurface(activeSessionConfig.workspaceId) !== "cowork") {
       return nextControls;
     }
 
@@ -49,9 +47,9 @@ export function useChatSessionControls(): {
       control.key !== "mode" && control.key !== "collaboration_mode"
     );
   }, [
-    activeSlot?.liveConfig?.normalizedControls,
-    activeSlot?.pendingConfigChanges,
-    activeSlot?.workspaceId,
+    activeSessionConfig.normalizedControls,
+    activeSessionConfig.pendingConfigChanges,
+    activeSessionConfig.workspaceId,
     getWorkspaceSurface,
     onSelect,
   ]);
@@ -65,7 +63,7 @@ export function useChatSessionControls(): {
   );
 
   return {
-    agentKind: activeSlot?.agentKind ?? null,
+    agentKind: activeSessionConfig.agentKind,
     controls,
     modeControl,
   };

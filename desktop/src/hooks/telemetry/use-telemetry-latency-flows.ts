@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
+import { useActiveSessionSurfaceSnapshot } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useChatSurfaceState } from "@/hooks/chat/use-chat-surface-state";
 import {
   finishLatencyFlow,
@@ -96,7 +96,7 @@ export function useTelemetryLatencyFlows() {
   const {
     activeSessionId,
     sessionViewState,
-  } = useActiveChatSessionState();
+  } = useActiveSessionSurfaceSnapshot();
 
   useEffect(() => {
     const completions = collectTelemetryLatencyFlowCompletions({

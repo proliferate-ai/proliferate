@@ -1,65 +1,7 @@
-import type { PendingPromptEntry, TranscriptState } from "@anyharness/sdk";
-
-export type TranscriptVirtualRow =
-  | {
-    kind: "turn";
-    key: `turn:${string}`;
-    turnId: string;
-  }
-  | {
-    kind: "pending_prompt";
-    key: `pending-prompt:${string}`;
-  };
-
-export interface BuildTranscriptVirtualRowsInput {
-  activeSessionId: string;
-  transcript: TranscriptState;
-  visibleOptimisticPrompt: PendingPromptEntry | null;
-  latestTurnId: string | null;
-  latestTurnHasAssistantRenderableContent: boolean;
-}
-
-export function buildTranscriptVirtualRows({
-  activeSessionId,
-  transcript,
-  visibleOptimisticPrompt,
-  latestTurnId,
-  latestTurnHasAssistantRenderableContent,
-}: BuildTranscriptVirtualRowsInput): TranscriptVirtualRow[] {
-  const rows: TranscriptVirtualRow[] = [];
-
-  for (const turnId of transcript.turnOrder) {
-    const turn = transcript.turnsById[turnId];
-    if (!turn) {
-      continue;
-    }
-
-    const isLatestTurn = turnId === latestTurnId;
-    const isLatestTurnInProgress = isLatestTurn && !turn.completedAt;
-    if (
-      visibleOptimisticPrompt !== null
-      && isLatestTurnInProgress
-      && !latestTurnHasAssistantRenderableContent
-    ) {
-      continue;
-    }
-
-    rows.push({
-      kind: "turn",
-      key: `turn:${turnId}`,
-      turnId,
-    });
-  }
-
-  if (visibleOptimisticPrompt) {
-    rows.push({
-      kind: "pending_prompt",
-      key: `pending-prompt:${activeSessionId}`,
-    });
-  }
-
-  return rows;
-}
+export {
+  buildTranscriptRowModel as buildTranscriptVirtualRows,
+  type TranscriptRow as TranscriptVirtualRow,
+} from "@/lib/domain/chat/transcript-row-model";
 
 export function resolveVirtualBottomDistance(input: {
   scrollOffset: number;

@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/Button";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
-import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
+import { useActivePendingApproval } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useChatPermissionActions } from "@/hooks/chat/use-chat-permission-actions";
 import type { PermissionOptionAction } from "@/lib/domain/chat/chat-input-helpers";
 
@@ -50,7 +50,7 @@ export function ApprovalCard({
 }
 
 export function ConnectedApprovalCard() {
-  const { pendingApproval, pendingApprovalActions } = useActiveChatSessionState();
+  const { pendingApproval, pendingApprovalActions } = useActivePendingApproval();
   const {
     handleSelectPermissionOption,
     handleAllowPermission,

@@ -29,6 +29,7 @@ import {
 
 const SESSION_STREAM_EVENT_BATCH_IDLE_MS = 350;
 const SESSION_STREAM_EVENT_BATCH_MAX_DURATION_MS = 5_000;
+const SESSION_STREAM_FLUSH_MAX_PAINT_WAIT_MS = 50;
 const SESSION_APPLY_MEASUREMENT_SURFACES: readonly MeasurementSurface[] = [
   "session-transcript-pane",
   "transcript-list",
@@ -100,12 +101,44 @@ interface BatchConfigReconcileResult {
 
 export const animationFrameSessionStreamFlushScheduler: SessionStreamFlushScheduler = {
   schedule(callback) {
+    let settled = false;
+    let frameId: number | null = null;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+    const run = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (frameId !== null && typeof cancelAnimationFrame === "function") {
+        cancelAnimationFrame(frameId);
+      }
+      if (timerId !== null) {
+        clearTimeout(timerId);
+      }
+      callback();
+    };
     if (typeof requestAnimationFrame === "function") {
-      const frameId = requestAnimationFrame(() => callback());
-      return () => cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(run);
+      // Hidden or minimized WebViews can pause rAF while SSE keeps delivering.
+      // Keep stream state application bounded by a regular timer.
+      timerId = setTimeout(run, SESSION_STREAM_FLUSH_MAX_PAINT_WAIT_MS);
+      return () => {
+        settled = true;
+        if (frameId !== null && typeof cancelAnimationFrame === "function") {
+          cancelAnimationFrame(frameId);
+        }
+        if (timerId !== null) {
+          clearTimeout(timerId);
+        }
+      };
     }
-    const timer = setTimeout(callback, 0);
-    return () => clearTimeout(timer);
+    timerId = setTimeout(run, 0);
+    return () => {
+      settled = true;
+      if (timerId !== null) {
+        clearTimeout(timerId);
+      }
+    };
   },
 };
 

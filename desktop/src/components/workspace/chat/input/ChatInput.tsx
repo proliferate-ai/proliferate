@@ -12,7 +12,10 @@ import {
   WORKSPACE_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
-import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
+import {
+  useActiveSessionId,
+  useActiveSessionRunningState,
+} from "@/hooks/chat/use-active-chat-session-selectors";
 import { useChatAvailabilityState } from "@/hooks/chat/use-chat-availability-state";
 import { useChatComposerKeyboard } from "@/hooks/chat/use-chat-composer-keyboard";
 import { useChatDraftState } from "@/hooks/chat/use-chat-draft-state";
@@ -59,10 +62,8 @@ export function ChatInput({
   const [mentionSearchHost, setMentionSearchHost] = useState<HTMLDivElement | null>(null);
   const workspaceSelectionNonce = useHarnessStore((state) => state.workspaceSelectionNonce);
   const focusRequestNonce = useChatInputStore((state) => state.focusRequestNonce);
-  const {
-    activeSessionId,
-    isRunning,
-  } = useActiveChatSessionState();
+  const activeSessionId = useActiveSessionId();
+  const isRunning = useActiveSessionRunningState();
   const { workspaceUiKey, materializedWorkspaceId, draft, setDraft, isEmpty } =
     useChatDraftState();
   const { isDisabled, areRuntimeControlsDisabled } = useChatAvailabilityState();

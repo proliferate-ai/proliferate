@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/Button";
 import { Pencil, X } from "@/components/ui/icons";
-import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
+import { useActiveSessionId } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useQueuedPromptEditReader } from "@/hooks/chat/use-queued-prompt-edit";
 import { useDeletePendingPrompt } from "@/hooks/sessions/use-delete-pending-prompt";
 import {
@@ -49,7 +49,7 @@ export function PendingPromptList({
 }
 
 export function ConnectedPendingPromptList() {
-  const { activeSessionId } = useActiveChatSessionState();
+  const activeSessionId = useActiveSessionId();
   const { visiblePendingPrompts, beginEdit } = useQueuedPromptEditReader();
   const deletePendingPrompt = useDeletePendingPrompt();
   const rows = useMemo(

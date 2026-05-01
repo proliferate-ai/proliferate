@@ -9,7 +9,7 @@ import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useLogicalWorkspaceStore } from "@/stores/workspaces/logical-workspace-store";
-import { useActiveChatSessionState } from "./use-active-chat-session-state";
+import { useActiveSessionLaunchState } from "./use-active-chat-session-selectors";
 import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
@@ -44,7 +44,7 @@ export function useChatLaunchActions() {
     activeSessionId,
     currentLaunchIdentity,
     currentModelConfigId,
-  } = useActiveChatSessionState();
+  } = useActiveSessionLaunchState();
 
   const handleLaunchSelect = useCallback((selection: ModelSelectorSelection) => {
     if (

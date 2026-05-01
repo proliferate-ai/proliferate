@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo } from "react";
 import type { PendingPromptEntry } from "@anyharness/sdk";
-import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
+import {
+  useActivePendingPrompts,
+  useActiveSessionId,
+} from "@/hooks/chat/use-active-chat-session-selectors";
 import { useEditPendingPrompt } from "@/hooks/sessions/use-edit-pending-prompt";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 
@@ -10,7 +13,7 @@ export interface VisiblePendingPromptEntry extends PendingPromptEntry {
 
 interface DerivedEditingState {
   activeSessionId: string | null;
-  pendingPrompts: PendingPromptEntry[];
+  pendingPrompts: readonly PendingPromptEntry[];
   storedEditingSeq: number | null;
   editingSeq: number | null;
   isStoredSeqLive: boolean;
@@ -23,7 +26,8 @@ interface DerivedEditingState {
  * next render without any sync bookkeeping.
  */
 function useDerivedEditingState(): DerivedEditingState {
-  const { activeSessionId, pendingPrompts } = useActiveChatSessionState();
+  const activeSessionId = useActiveSessionId();
+  const pendingPrompts = useActivePendingPrompts();
   const storedEditingSeq = useChatInputStore((state) =>
     activeSessionId ? state.editingQueueSeqBySessionId[activeSessionId] ?? null : null,
   );
