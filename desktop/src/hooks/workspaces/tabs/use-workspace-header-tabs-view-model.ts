@@ -1,8 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useWorkspaceSessionsQuery } from "@anyharness/sdk-react";
-import {
-  useWorkspaceHeaderSubagentHierarchy,
-} from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
+import { useWorkspaceHeaderSubagentHierarchy } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
 import {
   collectHierarchyChildren,
   getKnownSessionCanFork,
@@ -13,17 +11,9 @@ import {
   getLinkedChildViewState,
   type KnownHeaderSession,
 } from "@/hooks/workspaces/tabs/workspace-header-tabs-model-helpers";
-import {
-  buildGroupedChatTabs,
-  type GroupedChatTab,
-} from "@/lib/domain/workspaces/tabs/grouping";
-import {
-  buildHeaderStripRows,
-  type HeaderStripRow,
-} from "@/lib/domain/workspaces/tabs/group-rows";
-import {
-  type HeaderShellStripRow,
-} from "@/lib/domain/workspaces/tabs/shell-rows";
+import { buildGroupedChatTabs, type GroupedChatTab } from "@/lib/domain/workspaces/tabs/grouping";
+import { buildHeaderStripRows, type HeaderStripRow } from "@/lib/domain/workspaces/tabs/group-rows";
+import { type HeaderShellStripRow } from "@/lib/domain/workspaces/tabs/shell-rows";
 import {
   deriveManualChatGroupsForDisplay,
   isManualChatGroupId,
@@ -45,10 +35,7 @@ import {
   useWorkspaceShellTabsState,
 } from "@/hooks/workspaces/tabs/use-workspace-shell-tabs-state";
 import { parseWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import {
-  useWorkspaceFilesStore,
-  type WorkspaceFileBuffer,
-} from "@/stores/editor/workspace-files-store";
+import { useWorkspaceFilesStore, type WorkspaceFileBuffer } from "@/stores/editor/workspace-files-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
