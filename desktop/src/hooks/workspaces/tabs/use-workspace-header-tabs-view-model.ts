@@ -40,7 +40,10 @@ import {
   useWorkspaceActiveChatTabId,
   useWorkspaceShellTabsState,
 } from "@/hooks/workspaces/tabs/use-workspace-shell-tabs-state";
-import { useWorkspaceFilesStore } from "@/stores/editor/workspace-files-store";
+import {
+  useWorkspaceFilesStore,
+  type WorkspaceFileBuffer,
+} from "@/stores/editor/workspace-files-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useHarnessStore, type SessionSlot } from "@/stores/sessions/harness-store";
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/use-hot-paint-gate";
@@ -73,10 +76,19 @@ export interface HeaderChatMenuEntry {
 export type HeaderChatStripRow = HeaderStripRow<HeaderChatTabEntry>;
 export type HeaderWorkspaceShellStripRow = HeaderShellStripRow<HeaderChatTabEntry>;
 
+const EMPTY_OPEN_TABS: string[] = [];
+type WorkspaceFileTabMode = "edit" | "diff";
+
+const EMPTY_BUFFERS_BY_PATH: Record<string, WorkspaceFileBuffer> = {};
+const EMPTY_TAB_MODES: Record<string, WorkspaceFileTabMode> = {};
+
 export function useWorkspaceHeaderTabsViewModel() {
-  const openTabs = useWorkspaceFilesStore((s) => s.openTabs);
-  const buffersByPath = useWorkspaceFilesStore((s) => s.buffersByPath);
-  const tabModes = useWorkspaceFilesStore((s) => s.tabModes);
+  const rawOpenTabs = useWorkspaceFilesStore((s) => s.openTabs);
+  const rawBuffersByPath = useWorkspaceFilesStore((s) => s.buffersByPath);
+  const rawTabModes = useWorkspaceFilesStore((s) => s.tabModes);
+  const fileStoreMaterializedWorkspaceId = useWorkspaceFilesStore(
+    (s) => s.materializedWorkspaceId,
+  );
 
   const selectedWorkspaceId = useHarnessStore((s) => s.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
@@ -87,6 +99,13 @@ export function useWorkspaceHeaderTabsViewModel() {
     materializedWorkspaceId: selectedWorkspaceId,
   });
   const { workspaceUiKey, materializedWorkspaceId } = selectedIdentity;
+  const isFileStoreCurrent = Boolean(
+    materializedWorkspaceId
+      && fileStoreMaterializedWorkspaceId === materializedWorkspaceId,
+  );
+  const openTabs = isFileStoreCurrent ? rawOpenTabs : EMPTY_OPEN_TABS;
+  const buffersByPath = isFileStoreCurrent ? rawBuffersByPath : EMPTY_BUFFERS_BY_PATH;
+  const tabModes = isFileStoreCurrent ? rawTabModes : EMPTY_TAB_MODES;
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const activeSessionId = useHarnessStore((s) => s.activeSessionId);
   const sessionSlots = useHarnessStore((s) => s.sessionSlots);

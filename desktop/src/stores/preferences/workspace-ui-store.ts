@@ -144,9 +144,10 @@ export interface WorkspaceUiState {
  * polluting the archive model.
  * v4: add workspace-scoped right-panel preferences.
  * v5: add unified right-panel header order hints.
- * v6: split right-panel durable/materialized state and persist shell tab maps.
+ * v6: current mainline schema with legacy unified right-panel preferences.
+ * v7: split right-panel durable/materialized state and persist shell tab maps.
  */
-const WORKSPACE_UI_MIGRATION_VERSION = 6;
+const WORKSPACE_UI_MIGRATION_VERSION = 7;
 export const WORKSPACE_SIDEBAR_DEFAULT_WIDTH = 280;
 export const WORKSPACE_SIDEBAR_MIN_WIDTH = 220;
 export const WORKSPACE_SIDEBAR_MAX_WIDTH = 420;
@@ -273,7 +274,7 @@ export function migrateWorkspaceUiState(
   };
   let didMigrate = false;
   const previousMigrationVersion = state.migrationVersion ?? 0;
-  if (previousMigrationVersion < 6) {
+  if (previousMigrationVersion < 7) {
     const migratedRightPanel = migrateLegacyRightPanelPreferences({
       rightPanelByWorkspace: legacyInput.rightPanelByWorkspace,
       rightPanelWidthByWorkspace: legacyInput.rightPanelWidthByWorkspace,

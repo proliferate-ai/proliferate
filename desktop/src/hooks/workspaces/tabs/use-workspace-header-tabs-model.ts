@@ -58,8 +58,13 @@ export interface HeaderChatMenuEntry {
 
 export type HeaderChatStripRow = HeaderStripRow<HeaderChatTabEntry>;
 
+const EMPTY_OPEN_TABS: string[] = [];
+
 export function useWorkspaceHeaderTabsModel() {
-  const openTabs = useWorkspaceFilesStore((s) => s.openTabs);
+  const rawOpenTabs = useWorkspaceFilesStore((s) => s.openTabs);
+  const fileStoreMaterializedWorkspaceId = useWorkspaceFilesStore(
+    (s) => s.materializedWorkspaceId,
+  );
   const selectedWorkspaceId = useHarnessStore((s) => s.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useLogicalWorkspaceStore(
     (s) => s.selectedLogicalWorkspaceId,
@@ -68,6 +73,10 @@ export function useWorkspaceHeaderTabsModel() {
     selectedLogicalWorkspaceId,
     materializedWorkspaceId: selectedWorkspaceId,
   });
+  const openTabs = materializedWorkspaceId
+    && fileStoreMaterializedWorkspaceId === materializedWorkspaceId
+    ? rawOpenTabs
+    : EMPTY_OPEN_TABS;
   const hotPaintPending = useIsHotPaintGatePendingForWorkspace(selectedWorkspaceId);
   const activeSessionId = useHarnessStore((s) => s.activeSessionId);
   const sessionSlots = useHarnessStore((s) => s.sessionSlots);
