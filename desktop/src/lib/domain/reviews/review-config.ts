@@ -9,7 +9,7 @@ import { listConfiguredSessionControlValues } from "@/lib/domain/chat/session-mo
 
 export const DEFAULT_REVIEW_MAX_ROUNDS = 2;
 export const MAX_REVIEWERS_PER_RUN = 4;
-export const MAX_REVIEW_ROUNDS = 5;
+export const MAX_REVIEW_ROUNDS = 10;
 
 export interface ReviewSetupReviewerDraft {
   id: string;

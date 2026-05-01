@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   createReviewSetupDraft,
   createReviewSetupReviewerDraft,
+  clampRounds,
   draftToStoredReviewDefaults,
   listReviewPersonaTemplates,
+  MAX_REVIEW_ROUNDS,
   nextReviewReviewerId,
   resolveReviewPersonaTemplates,
   resolveReviewExecutionModeIdForAgent,
@@ -203,5 +205,10 @@ describe("review setup config", () => {
       label: "Strict plan reviewer",
       prompt: "Use the reusable prompt.",
     });
+  });
+
+  it("caps auto-iteration rounds at the configured maximum", () => {
+    expect(MAX_REVIEW_ROUNDS).toBe(10);
+    expect(clampRounds(99)).toBe(10);
   });
 });

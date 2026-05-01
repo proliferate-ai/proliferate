@@ -20,7 +20,7 @@ use crate::sessions::store::SessionStore;
 
 pub const REVIEWER_DEADLINE_MINUTES: i64 = 30;
 pub const MAX_REVIEWERS_PER_RUN: usize = 4;
-pub const MAX_REVIEW_ROUNDS: u32 = 5;
+pub const MAX_REVIEW_ROUNDS: u32 = 10;
 pub const MAX_REVIEW_SUMMARY_BYTES: usize = 4 * 1024;
 pub const MAX_REVIEW_CRITIQUE_BYTES: usize = 64 * 1024;
 

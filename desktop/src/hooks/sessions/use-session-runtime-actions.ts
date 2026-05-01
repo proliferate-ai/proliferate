@@ -212,14 +212,15 @@ export function useSessionRuntimeActions() {
       replace?: boolean;
       requestHeaders?: HeadersInit;
       measurementOperationId?: MeasurementOperationId | null;
+      timeoutMs?: number;
       isCurrent?: () => boolean;
     },
   ): Promise<boolean> => {
+    const startedAt = performance.now();
     try {
       if (options?.isCurrent && !options.isCurrent()) {
         return false;
       }
-      const startedAt = performance.now();
       const slot = useHarnessStore.getState().sessionSlots[sessionId];
       if (!slot) {
         return false;
@@ -235,6 +236,7 @@ export function useSessionRuntimeActions() {
           || options?.turnLimit != null
           || options?.requestHeaders
           || options?.measurementOperationId
+          || options?.timeoutMs != null
           ? {
             ...(afterSeq != null ? { afterSeq } : {}),
             ...(beforeSeq != null ? { beforeSeq } : {}),
@@ -246,6 +248,7 @@ export function useSessionRuntimeActions() {
             ...(options?.measurementOperationId
               ? { measurementOperationId: options.measurementOperationId }
               : {}),
+            ...(options?.timeoutMs != null ? { timeoutMs: options.timeoutMs } : {}),
           }
           : undefined,
       );
@@ -460,6 +463,13 @@ export function useSessionRuntimeActions() {
       }
       logLatency("session.history.rehydrate.failed", {
         sessionId,
+        afterSeq: options?.afterSeq ?? null,
+        beforeSeq: options?.beforeSeq ?? null,
+        limit: options?.limit ?? null,
+        turnLimit: options?.turnLimit ?? null,
+        timeoutMs: options?.timeoutMs ?? null,
+        elapsedMs: Math.round(performance.now() - startedAt),
+        errorName: error instanceof Error ? error.name : "unknown",
       });
       return false;
     }

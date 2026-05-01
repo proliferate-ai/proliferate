@@ -33,6 +33,7 @@ e2b-connection.json
 .env.prod
 .env.*.local
 
+reference/
 references/
 # Generated cloud client OpenAPI spec (intermediate artifact, regenerated from Python)
 server/openapi.json
