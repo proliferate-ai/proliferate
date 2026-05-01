@@ -1279,6 +1279,34 @@ impl SessionStore {
         })
     }
 
+    pub fn count_turn_started_events(&self, session_id: &str) -> anyhow::Result<i64> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*)
+                 FROM session_events
+                 WHERE session_id = ?1 AND event_type = 'turn_started'",
+                [session_id],
+                |row| row.get(0),
+            )
+        })
+    }
+
+    pub fn has_terminal_turn_event(&self, session_id: &str) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT EXISTS(
+                     SELECT 1
+                     FROM session_events
+                     WHERE session_id = ?1
+                       AND event_type IN ('turn_ended', 'error', 'session_ended')
+                     LIMIT 1
+                 )",
+                [session_id],
+                |row| row.get(0),
+            )
+        })
+    }
+
     /// Find turns that have a `turn_started` but no corresponding `turn_ended`
     /// (or `error` / `session_ended`) and close them with a synthetic
     /// `turn_ended` event carrying `stop_reason: cancelled`. Returns the number

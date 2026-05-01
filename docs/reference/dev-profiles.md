@@ -34,8 +34,11 @@ and the desktop file-backed app home. AnyHarness runtime state lives in:
 ```
 
 The default database is `proliferate_dev_<name>` on the local Docker Postgres
-server. Use `DATABASE_URL=... make dev PROFILE=<name>` when you intentionally
-want to bypass the profile database for a one-off run.
+server. On macOS, profile database URLs default to `::1` so Docker Desktop's
+Postgres listener is not confused with a Homebrew Postgres bound to
+`127.0.0.1:5432`. Use `DATABASE_URL=... make dev PROFILE=<name>` when you
+intentionally want to bypass the profile database for a one-off run, or
+`LOCAL_PGHOST=127.0.0.1` when you intentionally want a separate local Postgres.
 
 Desktop auth sessions and pending-auth entries are profile-scoped in the dev
 Keychain so per-profile databases do not reuse each other's login tokens.

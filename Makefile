@@ -1,7 +1,11 @@
 export PATH := $(HOME)/.cargo/bin:$(PATH)
 CARGO := $(HOME)/.cargo/bin/cargo
 TARGET := aarch64-apple-darwin
+ifeq ($(shell uname -s),Darwin)
+LOCAL_PGHOST ?= ::1
+else
 LOCAL_PGHOST ?= 127.0.0.1
+endif
 LOCAL_PGPORT ?= 5432
 LOCAL_PGUSER ?= proliferate
 LOCAL_PGPASSWORD ?= localdev
@@ -345,7 +349,7 @@ prod-rds:
 
 server-db-ready:
 ifeq ($(USE_EXISTING_POSTGRES),1)
-	@host="$${LOCAL_PGHOST:-127.0.0.1}"; port="$${LOCAL_PGPORT:-5432}"; \
+	@host="$(LOCAL_PGHOST)"; port="$(LOCAL_PGPORT)"; \
 	for _ in $$(seq 1 30); do \
 		python3 -c 'import socket, sys; socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=1).close()' "$$host" "$$port" >/dev/null 2>&1 && exit 0; \
 		sleep 1; \

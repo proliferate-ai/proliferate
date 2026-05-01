@@ -6,7 +6,6 @@ import type {
 } from "@anyharness/sdk";
 import type { ConnectorLaunchResolutionWarning } from "@/lib/domain/mcp/types";
 import type { SessionSlot } from "@/stores/sessions/harness-store";
-import { useBranchRenameStore } from "@/stores/workspaces/branch-rename-store";
 import { useHarnessStore } from "@/stores/sessions/harness-store";
 import { getLatencyFlowRequestHeaders } from "@/lib/infra/latency-flow";
 import { trackProductEvent } from "@/lib/integrations/telemetry/client";
@@ -34,29 +33,6 @@ export function resolveSessionCreationModeId(input: {
 export function buildLatencyRequestOptions(latencyFlowId?: string | null) {
   const headers = getLatencyFlowRequestHeaders(latencyFlowId);
   return headers ? { headers } : undefined;
-}
-
-export function beginPendingBranchRenameTracking(input: {
-  workspaceId: string;
-  placeholderBranch: string;
-  cloudWorkspaceId: string | null;
-}): void {
-  if (!input.placeholderBranch.trim()) {
-    return;
-  }
-
-  const existingPending =
-    useBranchRenameStore.getState().pendingByWorkspaceId[input.workspaceId] ?? null;
-  if (existingPending?.placeholderBranch === input.placeholderBranch) {
-    return;
-  }
-
-  useBranchRenameStore.getState().setPendingRename({
-    workspaceId: input.workspaceId,
-    placeholderBranch: input.placeholderBranch,
-    startedAt: Date.now(),
-    cloudWorkspaceId: input.cloudWorkspaceId,
-  });
 }
 
 export function replacePendingSessionSlot(

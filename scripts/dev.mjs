@@ -180,6 +180,14 @@ function dbNameForProfile(profile) {
   return `proliferate_dev_${profile.replaceAll("-", "_")}`;
 }
 
+function hostForUrl(host) {
+  const value = host.trim();
+  if (value.includes(":") && !value.startsWith("[") && !value.endsWith("]")) {
+    return `[${value}]`;
+  }
+  return value;
+}
+
 function displayNameForProfile(profile) {
   return `Proliferate (${profile})`;
 }
@@ -570,7 +578,7 @@ async function ensureProfile(options) {
 
 function dbUrlFor(dbName) {
   validateDbName(dbName);
-  const host = process.env.LOCAL_PGHOST || "127.0.0.1";
+  const host = hostForUrl(process.env.LOCAL_PGHOST || "127.0.0.1");
   const port = process.env.LOCAL_PGPORT || "5432";
   const user = process.env.LOCAL_PGUSER || "proliferate";
   const password = process.env.LOCAL_PGPASSWORD || "localdev";
