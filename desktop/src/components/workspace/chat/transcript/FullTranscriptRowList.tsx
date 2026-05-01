@@ -15,17 +15,15 @@ import {
 import type { TranscriptVirtualizationMode } from "@/lib/domain/chat/transcript-virtualization-config";
 import {
   HISTORY_PREFETCH_TOP_THRESHOLD_PX,
+  logHistoryPrefetchDecisionOnce,
   STICKY_BOTTOM_THRESHOLD_PX,
   TRANSCRIPT_TOP_PADDING_PX,
   TranscriptHistoryLoadingRow,
+  type HistoryPrefetchDecisionReason,
+  type HistoryPrefetchTrigger,
+  type HistoryPrependScrollAnchor,
   type TranscriptRowListBaseProps,
 } from "@/components/workspace/chat/transcript/TranscriptRowListShared";
-
-interface PrependScrollAnchor {
-  rowCount: number;
-  scrollHeight: number;
-  scrollTop: number;
-}
 
 interface FullTranscriptRowListProps extends TranscriptRowListBaseProps {
   fallbackReason: string | null;
@@ -51,8 +49,9 @@ export function FullTranscriptRowList({
 }: FullTranscriptRowListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldStickToBottomRef = useRef(true);
-  const pendingPrependAnchorRef = useRef<PrependScrollAnchor | null>(null);
+  const pendingPrependAnchorRef = useRef<HistoryPrependScrollAnchor | null>(null);
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
+  const lastPrefetchDecisionLogRef = useRef<string | null>(null);
 
   const scrollToBottom = useCallback(() => {
     const viewport = scrollRef.current;
@@ -71,35 +70,78 @@ export function FullTranscriptRowList({
     });
   }, []);
 
-  const handleViewportScroll = useCallback((viewport: HTMLDivElement) => {
-    updateStickiness(viewport);
+  const logPrefetchDecision = useCallback((
+    trigger: HistoryPrefetchTrigger,
+    reason: HistoryPrefetchDecisionReason,
+    viewport: HTMLDivElement,
+  ) => {
+    logHistoryPrefetchDecisionOnce({
+      component: "full",
+      trigger,
+      reason,
+      sessionId: activeSessionId,
+      workspaceId: selectedWorkspaceId,
+      cursor: olderHistoryCursor,
+      lastRequestedCursor: lastOlderHistoryCursorRequestRef.current,
+      hasOlderHistory,
+      isLoadingOlderHistory,
+      pendingAnchor: pendingPrependAnchorRef.current,
+      rowCount: rows.length,
+      viewport,
+    }, lastPrefetchDecisionLogRef);
+  }, [
+    activeSessionId,
+    hasOlderHistory,
+    isLoadingOlderHistory,
+    olderHistoryCursor,
+    rows.length,
+    selectedWorkspaceId,
+  ]);
+
+  const maybeLoadOlderHistory = useCallback((
+    viewport: HTMLDivElement,
+    trigger: "scroll" | "settled",
+  ) => {
     if (viewport.scrollTop > HISTORY_PREFETCH_TOP_THRESHOLD_PX) {
       lastOlderHistoryCursorRequestRef.current = null;
+      logPrefetchDecision(trigger, "below_threshold", viewport);
+      return;
     }
     if (
       hasOlderHistory
       && !isLoadingOlderHistory
       && olderHistoryCursor !== null
       && lastOlderHistoryCursorRequestRef.current !== olderHistoryCursor
-      && viewport.scrollTop <= HISTORY_PREFETCH_TOP_THRESHOLD_PX
       && pendingPrependAnchorRef.current === null
     ) {
       lastOlderHistoryCursorRequestRef.current = olderHistoryCursor;
       pendingPrependAnchorRef.current = {
+        cursor: olderHistoryCursor,
         rowCount: rows.length,
         scrollHeight: viewport.scrollHeight,
         scrollTop: viewport.scrollTop,
       };
       onLoadOlderHistory();
+      logPrefetchDecision(trigger, "requested", viewport);
+      return;
     }
-    onScrollSample();
+    logPrefetchDecision(trigger, "blocked", viewport);
   }, [
     hasOlderHistory,
     isLoadingOlderHistory,
+    logPrefetchDecision,
     olderHistoryCursor,
     onLoadOlderHistory,
-    onScrollSample,
     rows.length,
+  ]);
+
+  const handleViewportScroll = useCallback((viewport: HTMLDivElement) => {
+    updateStickiness(viewport);
+    maybeLoadOlderHistory(viewport, "scroll");
+    onScrollSample();
+  }, [
+    maybeLoadOlderHistory,
+    onScrollSample,
     updateStickiness,
   ]);
 
@@ -107,6 +149,7 @@ export function FullTranscriptRowList({
     shouldStickToBottomRef.current = true;
     pendingPrependAnchorRef.current = null;
     lastOlderHistoryCursorRequestRef.current = null;
+    lastPrefetchDecisionLogRef.current = null;
   }, [activeSessionId, selectedWorkspaceId]);
 
   useLayoutEffect(() => {
@@ -118,7 +161,10 @@ export function FullTranscriptRowList({
 
   useLayoutEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
-    if (!anchor || anchor.rowCount >= rows.length) {
+    if (
+      !anchor
+      || (anchor.rowCount >= rows.length && anchor.cursor === olderHistoryCursor)
+    ) {
       return;
     }
 
@@ -131,14 +177,28 @@ export function FullTranscriptRowList({
     shouldStickToBottomRef.current = false;
     const scrollDelta = viewport.scrollHeight - anchor.scrollHeight;
     viewport.scrollTop = anchor.scrollTop + scrollDelta;
-  }, [rows.length]);
+  }, [olderHistoryCursor, rows.length]);
 
   useEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
     if (!isLoadingOlderHistory && anchor?.rowCount === rows.length) {
       pendingPrependAnchorRef.current = null;
     }
-  }, [isLoadingOlderHistory, rows.length]);
+    if (isLoadingOlderHistory) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const viewport = scrollRef.current;
+      if (!viewport || pendingPrependAnchorRef.current !== null) {
+        return;
+      }
+      maybeLoadOlderHistory(viewport, "settled");
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [isLoadingOlderHistory, maybeLoadOlderHistory, rows.length]);
 
   useLayoutEffect(() => {
     if (!shouldStickToBottomRef.current) {

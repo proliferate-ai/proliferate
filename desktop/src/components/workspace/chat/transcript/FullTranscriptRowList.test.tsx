@@ -1,10 +1,14 @@
 /* @vitest-environment jsdom */
 
 import { createRef } from "react";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TranscriptVirtualRow } from "@/lib/domain/chat/transcript-virtual-rows";
 import { FullTranscriptRowList } from "./FullTranscriptRowList";
+
+vi.mock("@/lib/infra/debug-latency", () => ({
+  logLatency: vi.fn(),
+}));
 
 const ROWS: TranscriptVirtualRow[] = [
   {
@@ -34,14 +38,13 @@ afterEach(() => {
 });
 
 describe("FullTranscriptRowList", () => {
-  it("does not repeatedly request the same older-history cursor while pinned at the top", () => {
+  it("continues from a newer older-history cursor while pinned at the top", async () => {
     const onLoadOlderHistory = vi.fn();
     const props = makeProps(onLoadOlderHistory, 50);
     const { container, rerender } = render(<FullTranscriptRowList {...props} />);
     const viewport = getViewport(container);
 
-    fireEvent.scroll(viewport, { target: { scrollTop: 0 } });
-    expect(onLoadOlderHistory).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onLoadOlderHistory).toHaveBeenCalledTimes(1));
 
     rerender(<FullTranscriptRowList {...makeProps(onLoadOlderHistory, 50, true)} />);
     rerender(<FullTranscriptRowList {...props} />);
@@ -49,11 +52,11 @@ describe("FullTranscriptRowList", () => {
     expect(onLoadOlderHistory).toHaveBeenCalledTimes(1);
 
     rerender(<FullTranscriptRowList {...makeProps(onLoadOlderHistory, 40)} />);
-    fireEvent.scroll(viewport, { target: { scrollTop: 0 } });
-    expect(onLoadOlderHistory).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(onLoadOlderHistory).toHaveBeenCalledTimes(2));
 
     rerender(<FullTranscriptRowList {...makeProps(onLoadOlderHistory, 40, true)} />);
     rerender(<FullTranscriptRowList {...makeProps(onLoadOlderHistory, 40)} />);
+    await waitFor(() => expect(onLoadOlderHistory).toHaveBeenCalledTimes(2));
     fireEvent.scroll(viewport, { target: { scrollTop: 600 } });
     fireEvent.scroll(viewport, { target: { scrollTop: 0 } });
     expect(onLoadOlderHistory).toHaveBeenCalledTimes(3);

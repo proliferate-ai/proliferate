@@ -14,7 +14,6 @@ import {
 } from "@/config/chat-layout";
 import {
   shouldStickToVirtualBottom,
-  type TranscriptVirtualRow,
 } from "@/lib/domain/chat/transcript-virtual-rows";
 import {
   parseTranscriptVirtualizationMode,
@@ -28,22 +27,27 @@ import {
 } from "@/lib/infra/debug-measurement";
 import { FullTranscriptRowList } from "@/components/workspace/chat/transcript/FullTranscriptRowList";
 import {
+  buildRenderableRows,
+  estimateRenderableRowHeight,
+  estimateRenderableRowsHeight,
   HISTORY_PREFETCH_TOP_THRESHOLD_PX,
+  logHistoryPrefetchDecisionOnce,
   STICKY_BOTTOM_THRESHOLD_PX,
   TRANSCRIPT_TOP_PADDING_PX,
   TranscriptHistoryLoadingRow,
+  type HistoryPrefetchDecisionReason,
+  type HistoryPrefetchTrigger,
+  type HistoryPrependScrollAnchor,
+  type TranscriptRenderableRow,
   type TranscriptRowListBaseProps,
 } from "@/components/workspace/chat/transcript/TranscriptRowListShared";
 
-const ESTIMATED_TURN_HEIGHT_PX = 360;
-const ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX = 32;
 const VIRTUALIZER_OVERSCAN = 8;
 const BLANK_VIEWPORT_MIN_SCROLLABLE_PX = 32;
 const LEGACY_ENABLE_VIRTUALIZATION_STORAGE_KEY =
   "proliferate:enableTranscriptVirtualization";
 const LEGACY_DISABLE_VIRTUALIZATION_STORAGE_KEY =
   "proliferate:disableTranscriptVirtualization";
-const HISTORY_LOADING_ROW_KEY = "history-loader";
 
 interface VirtualScrollAnchor {
   key: TranscriptRenderableRow["key"];
@@ -51,24 +55,6 @@ interface VirtualScrollAnchor {
   rowIndex: number;
   rowCount: number;
 }
-
-interface PrependScrollAnchor {
-  rowCount: number;
-  scrollHeight: number;
-  scrollTop: number;
-}
-
-type TranscriptRenderableRow =
-  | {
-    kind: "history_loader";
-    key: typeof HISTORY_LOADING_ROW_KEY;
-  }
-  | {
-    kind: "transcript";
-    key: TranscriptVirtualRow["key"];
-    row: TranscriptVirtualRow;
-    rowIndex: number;
-  };
 
 export function VirtualTranscriptRowList({
   rows,
@@ -164,8 +150,9 @@ function VirtualizedTranscriptRowList({
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldStickToBottomRef = useRef(true);
   const pendingAnchorRef = useRef<VirtualScrollAnchor | null>(null);
-  const pendingPrependAnchorRef = useRef<PrependScrollAnchor | null>(null);
+  const pendingPrependAnchorRef = useRef<HistoryPrependScrollAnchor | null>(null);
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
+  const lastPrefetchDecisionLogRef = useRef<string | null>(null);
   const lastBlankReportSignatureRef = useRef<string | null>(null);
   const renderableRows = useMemo(
     () => buildRenderableRows(rows, isLoadingOlderHistory),
@@ -217,35 +204,84 @@ function VirtualizedTranscriptRowList({
     });
   }, []);
 
-  const handleViewportScroll = useCallback((viewport: HTMLDivElement) => {
-    updateStickiness(viewport);
+  const logPrefetchDecision = useCallback((
+    trigger: HistoryPrefetchTrigger,
+    reason: HistoryPrefetchDecisionReason,
+    viewport: HTMLDivElement,
+  ) => {
+    logHistoryPrefetchDecisionOnce({
+      component: "virtual",
+      trigger,
+      reason,
+      sessionId: activeSessionId,
+      workspaceId: selectedWorkspaceId,
+      cursor: olderHistoryCursor,
+      lastRequestedCursor: lastOlderHistoryCursorRequestRef.current,
+      hasOlderHistory,
+      isLoadingOlderHistory,
+      pendingAnchor: pendingPrependAnchorRef.current,
+      rowCount: rows.length,
+      renderableRowCount: renderableRows.length,
+      virtualItemCount: virtualItems.length,
+      totalContentHeight,
+      viewport,
+    }, lastPrefetchDecisionLogRef);
+  }, [
+    activeSessionId,
+    hasOlderHistory,
+    isLoadingOlderHistory,
+    olderHistoryCursor,
+    renderableRows.length,
+    rows.length,
+    selectedWorkspaceId,
+    totalContentHeight,
+    virtualItems.length,
+  ]);
+
+  const maybeLoadOlderHistory = useCallback((
+    viewport: HTMLDivElement,
+    trigger: "scroll" | "settled",
+  ) => {
     if (viewport.scrollTop > HISTORY_PREFETCH_TOP_THRESHOLD_PX) {
       lastOlderHistoryCursorRequestRef.current = null;
+      logPrefetchDecision(trigger, "below_threshold", viewport);
+      return;
     }
     if (
       hasOlderHistory
       && !isLoadingOlderHistory
       && olderHistoryCursor !== null
       && lastOlderHistoryCursorRequestRef.current !== olderHistoryCursor
-      && viewport.scrollTop <= HISTORY_PREFETCH_TOP_THRESHOLD_PX
       && pendingPrependAnchorRef.current === null
     ) {
       lastOlderHistoryCursorRequestRef.current = olderHistoryCursor;
       pendingPrependAnchorRef.current = {
+        cursor: olderHistoryCursor,
         rowCount: rows.length,
         scrollHeight: viewport.scrollHeight,
         scrollTop: viewport.scrollTop,
       };
       onLoadOlderHistory();
+      logPrefetchDecision(trigger, "requested", viewport);
+      return;
     }
-    onScrollSample();
+    logPrefetchDecision(trigger, "blocked", viewport);
   }, [
     hasOlderHistory,
     isLoadingOlderHistory,
+    logPrefetchDecision,
     olderHistoryCursor,
     onLoadOlderHistory,
-    onScrollSample,
     rows.length,
+  ]);
+
+  const handleViewportScroll = useCallback((viewport: HTMLDivElement) => {
+    updateStickiness(viewport);
+    maybeLoadOlderHistory(viewport, "scroll");
+    onScrollSample();
+  }, [
+    maybeLoadOlderHistory,
+    onScrollSample,
     updateStickiness,
   ]);
 
@@ -254,6 +290,7 @@ function VirtualizedTranscriptRowList({
     lastBlankReportSignatureRef.current = null;
     pendingPrependAnchorRef.current = null;
     lastOlderHistoryCursorRequestRef.current = null;
+    lastPrefetchDecisionLogRef.current = null;
   }, [activeSessionId, selectedWorkspaceId]);
 
   useLayoutEffect(() => {
@@ -265,7 +302,10 @@ function VirtualizedTranscriptRowList({
 
   useLayoutEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
-    if (!anchor || anchor.rowCount >= rows.length) {
+    if (
+      !anchor
+      || (anchor.rowCount >= rows.length && anchor.cursor === olderHistoryCursor)
+    ) {
       return;
     }
 
@@ -278,14 +318,28 @@ function VirtualizedTranscriptRowList({
     shouldStickToBottomRef.current = false;
     const scrollDelta = viewport.scrollHeight - anchor.scrollHeight;
     viewport.scrollTop = anchor.scrollTop + scrollDelta;
-  }, [rows.length]);
+  }, [olderHistoryCursor, rows.length]);
 
   useEffect(() => {
     const anchor = pendingPrependAnchorRef.current;
     if (!isLoadingOlderHistory && anchor?.rowCount === rows.length) {
       pendingPrependAnchorRef.current = null;
     }
-  }, [isLoadingOlderHistory, rows.length]);
+    if (isLoadingOlderHistory) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const viewport = scrollRef.current;
+      if (!viewport || pendingPrependAnchorRef.current !== null) {
+        return;
+      }
+      maybeLoadOlderHistory(viewport, "settled");
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [isLoadingOlderHistory, maybeLoadOlderHistory, rows.length]);
 
   useLayoutEffect(() => {
     const anchor = pendingAnchorRef.current;
@@ -498,41 +552,6 @@ function VirtualizedTranscriptRowList({
       </div>
     </AutoHideScrollArea>
   );
-}
-
-function buildRenderableRows(
-  rows: readonly TranscriptVirtualRow[],
-  isLoadingOlderHistory: boolean,
-): TranscriptRenderableRow[] {
-  const renderableRows: TranscriptRenderableRow[] = [];
-  if (isLoadingOlderHistory) {
-    renderableRows.push({
-      kind: "history_loader",
-      key: HISTORY_LOADING_ROW_KEY,
-    });
-  }
-  rows.forEach((row, rowIndex) => {
-    renderableRows.push({
-      kind: "transcript",
-      key: row.key,
-      row,
-      rowIndex,
-    });
-  });
-  return renderableRows;
-}
-
-function estimateRenderableRowsHeight(rows: readonly TranscriptRenderableRow[]): number {
-  return rows.reduce(
-    (sum, row) => sum + estimateRenderableRowHeight(row),
-    0,
-  );
-}
-
-function estimateRenderableRowHeight(row: TranscriptRenderableRow | undefined): number {
-  return row?.kind === "history_loader"
-    ? ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX
-    : ESTIMATED_TURN_HEIGHT_PX;
 }
 
 function readTranscriptVirtualizationMode(): TranscriptVirtualizationMode {
