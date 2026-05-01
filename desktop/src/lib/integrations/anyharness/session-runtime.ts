@@ -401,7 +401,7 @@ export async function resumeSession(
     ),
   );
   const isCowork = workspace.surface === "cowork";
-  const shouldResolveLaunchMcp = isCowork || options?.pluginsInCodingSessionsEnabled === true;
+  const shouldResolveLaunchMcp = options?.pluginsInCodingSessionsEnabled === true;
   const { mcpServers, mcpBindingSummaries } = shouldResolveLaunchMcp
     ? await measureSessionWorkflowStep(
       measurementOperationId,

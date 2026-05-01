@@ -169,6 +169,15 @@ impl CoworkSessionHooks {
             return Ok(SessionLaunchExtras::default());
         }
 
+        if cowork_launch_extras_disabled() {
+            tracing::warn!(
+                workspace_id = %workspace.id,
+                session_id,
+                "[workspace-latency] cowork.runtime.launch_extras.disabled"
+            );
+            return Ok(SessionLaunchExtras::default());
+        }
+
         let capability_token = self
             .mcp_auth
             .mint_capability_token(&workspace.id, session_id)?;
@@ -1252,6 +1261,17 @@ impl CoworkRuntime {
             );
         }
     }
+}
+
+fn cowork_launch_extras_disabled() -> bool {
+    std::env::var("ANYHARNESS_DISABLE_COWORK_LAUNCH_EXTRAS")
+        .ok()
+        .is_some_and(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
 }
 
 fn cowork_artifact_system_prompt_append() -> Vec<String> {

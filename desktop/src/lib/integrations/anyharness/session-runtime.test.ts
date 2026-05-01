@@ -152,7 +152,7 @@ describe("resumeSession", () => {
     );
   });
 
-  it("resolves cowork launch MCP even when user Plugins are disabled", async () => {
+  it("does not force user Plugins on when resuming cowork sessions", async () => {
     mocks.resolveRuntimeTargetForWorkspace.mockResolvedValue({
       anyharnessWorkspaceId: "runtime-workspace-1",
       baseUrl: "http://runtime.local",
@@ -174,15 +174,7 @@ describe("resumeSession", () => {
       pluginsInCodingSessionsEnabled: false,
     });
 
-    expect(mocks.resolveSessionMcpServersForLaunch).toHaveBeenCalledWith({
-      targetLocation: "local",
-      workspacePath: "/cowork/thread-1",
-      policy: {
-        workspaceSurface: "cowork",
-        lifecycle: "resume",
-        enabled: true,
-      },
-    });
+    expect(mocks.resolveSessionMcpServersForLaunch).not.toHaveBeenCalled();
   });
 
   it("resolves launch MCP when Plugins are enabled for resume", async () => {

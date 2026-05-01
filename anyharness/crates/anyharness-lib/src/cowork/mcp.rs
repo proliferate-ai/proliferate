@@ -149,7 +149,7 @@ pub async fn handle_json_rpc(
     };
     let response = response?;
 
-    tracing::debug!(
+    tracing::info!(
         workspace_id = %workspace.id,
         session_id,
         method = %method,
