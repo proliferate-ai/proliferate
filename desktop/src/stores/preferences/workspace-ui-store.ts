@@ -23,7 +23,6 @@ import {
   clampRightPanelWidth,
   DEFAULT_RIGHT_PANEL_DURABLE_STATE,
   DEFAULT_RIGHT_PANEL_MATERIALIZED_STATE,
-  migrateLegacyRightPanelWorkspaceState,
   normalizeRightPanelDurableState,
   normalizeRightPanelMaterializedState,
   reconcileRightPanelWorkspaceState,
@@ -31,6 +30,7 @@ import {
   type RightPanelMaterializedState,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/right-panel";
+import { migrateLegacyRightPanelWorkspaceState } from "@/lib/domain/workspaces/right-panel-migration";
 import type { PendingChatActivation } from "@/lib/domain/workspaces/tabs/shell-activation";
 import type {
   WorkspaceShellIntentKey,
