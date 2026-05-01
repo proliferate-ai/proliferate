@@ -19,7 +19,6 @@ import type {
 import {
   CLOSED_PUBLISH_DIALOG_STATE,
   openPublishDialogState,
-  reviewDiffsFromPublishState,
 } from "./publish-dialog-state";
 import type { PublishIntent } from "@/lib/domain/workspaces/publish-workflow";
 
@@ -114,14 +113,16 @@ export function useMainScreenActions({
     openPrInBrowser(pullRequest);
   }, [openPrInBrowser, openRightPanelTool]);
 
+  const handlePublishDialogViewPr = useCallback((pullRequest?: MainScreenDataState["existingPr"]) => {
+    openPrInBrowser(pullRequest);
+  }, [openPrInBrowser]);
+
   const openPublishDialog = useCallback((intent: PublishIntent) => {
-    openRightPanelTool("git");
     setPublishDialog(openPublishDialogState(
       selectedWorkspaceId,
       intent,
     ));
   }, [
-    openRightPanelTool,
     selectedWorkspaceId,
     setPublishDialog,
   ]);
@@ -129,12 +130,6 @@ export function useMainScreenActions({
   const closePublishDialog = useCallback(() => {
     setPublishDialog(CLOSED_PUBLISH_DIALOG_STATE);
   }, [setPublishDialog]);
-
-  const reviewDiffsFromPublish = useCallback(() => {
-    const next = reviewDiffsFromPublishState();
-    setPublishDialog(next.publishDialog);
-    openRightPanelTool(next.rightPanelTool);
-  }, [openRightPanelTool, setPublishDialog]);
 
   const renameBranch = useCallback(async (newName: string) => {
     const blockedReason = getWorkspaceRuntimeBlockReason(selectedWorkspaceId);
@@ -170,8 +165,8 @@ export function useMainScreenActions({
     handlePrOpen: () => openPublishDialog("pull_request"),
     handleCommandPaletteOpen,
     handleViewPr,
+    handlePublishDialogViewPr,
     closePublishDialog,
-    reviewDiffsFromPublish,
     onCommandPaletteClose: () => setCommandPaletteOpen(false),
   };
 }

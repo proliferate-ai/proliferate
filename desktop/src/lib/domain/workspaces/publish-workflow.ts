@@ -41,6 +41,7 @@ export interface PublishViewState {
   hasUnstagedChanges: boolean;
   partialWarning: string | null;
   publishStatus: string | null;
+  summary: string;
   primaryLabel: string;
   disabledReason: string | null;
   workflowSteps: PublishWorkflowStep[];
@@ -143,6 +144,13 @@ export function buildPublishViewState(input: BuildPublishViewStateInput): Publis
     hasUnstagedChanges,
     partialWarning,
     publishStatus,
+    summary: workflowSummary({
+      intent: input.initialIntent,
+      gitStatus,
+      existingPr,
+      publishStatus,
+      workflowSteps,
+    }),
     primaryLabel: primaryLabel({
       intent: input.initialIntent,
       gitStatus,
@@ -332,6 +340,87 @@ function buildWorkflowSteps(input: {
   }
 
   return steps;
+}
+
+function workflowSummary(input: {
+  intent: PublishIntent;
+  gitStatus: GitStatusSnapshot | null;
+  existingPr: NonNullable<CurrentPullRequestResponse["pullRequest"]> | null;
+  publishStatus: string | null;
+  workflowSteps: PublishWorkflowStep[];
+}): string {
+  const hasStageStep = input.workflowSteps.some((step) => step.kind === "stage");
+  const hasCommitStep = input.workflowSteps.some((step) => step.kind === "commit");
+  const hasPushStep = input.workflowSteps.some((step) => step.kind === "push");
+  const hasCreatePrStep = input.workflowSteps.some((step) => step.kind === "create_pull_request");
+  const pushLabel = (input.gitStatus?.actions.pushLabel ?? "Publish").toLowerCase();
+
+  if (input.workflowSteps.length === 0) {
+    if (input.intent === "pull_request" && input.existingPr) {
+      return "A pull request already exists for this branch.";
+    }
+    if (input.publishStatus) {
+      return input.publishStatus;
+    }
+    if (input.intent === "commit") {
+      return "Commit changes in this workspace.";
+    }
+    if (input.intent === "publish") {
+      return "Publish local commits when this branch is ready.";
+    }
+    return "Create a pull request from this branch.";
+  }
+
+  if (input.intent === "commit") {
+    return hasStageStep
+      ? "Stage unstaged changes, then commit them."
+      : "Commit the selected staged changes.";
+  }
+
+  if (input.intent === "publish") {
+    if (hasCommitStep && hasPushStep) {
+      return hasStageStep
+        ? `Stage unstaged changes, commit them, then ${pushLabel}.`
+        : `Commit changes, then ${pushLabel}.`;
+    }
+    if (hasPushStep) {
+      return input.publishStatus ?? "Publish this branch.";
+    }
+    return "Commit changes before publishing this branch.";
+  }
+
+  if (input.existingPr && !hasCreatePrStep) {
+    if (hasCommitStep && hasPushStep) {
+      return hasStageStep
+        ? "Stage unstaged changes, commit them, then update the existing pull request branch."
+        : "Commit changes, then update the existing pull request branch.";
+    }
+    if (hasPushStep) {
+      return "Update the existing pull request branch.";
+    }
+    return "A pull request already exists for this branch.";
+  }
+
+  if (hasCommitStep && hasPushStep && hasCreatePrStep) {
+    return hasStageStep
+      ? "Stage unstaged changes, commit them, publish the branch, then create a pull request."
+      : "Commit changes, publish the branch, then create a pull request.";
+  }
+  if (hasPushStep && hasCreatePrStep) {
+    return "Publish this branch, then create a pull request.";
+  }
+  if (hasCommitStep && hasCreatePrStep) {
+    return hasStageStep
+      ? "Stage unstaged changes, commit them, then create a pull request."
+      : "Commit changes, then create a pull request.";
+  }
+  if (hasCreatePrStep) {
+    return "Create a pull request from this branch.";
+  }
+  if (hasPushStep) {
+    return "Publish this branch.";
+  }
+  return "Prepare this branch for a pull request.";
 }
 
 function primaryLabel(input: {

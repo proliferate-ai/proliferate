@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useCommitGitMutation,
   useCreatePullRequestMutation,
@@ -42,6 +42,8 @@ export function useWorkspacePublishWorkflow({
     draft: false,
   });
   const [error, setError] = useState<string | null>(null);
+  const draftWorkspaceIdRef = useRef<string | null>(workspaceId);
+  const runtimeReadyRef = useRef(runtimeBlockedReason === null);
 
   const gitStatusQuery = useGitStatusQuery({ workspaceId, enabled });
   const currentPullRequestEnabled = enabled && Boolean(gitStatusQuery.data?.currentBranch?.trim());
@@ -98,6 +100,21 @@ export function useWorkspacePublishWorkflow({
     setError(null);
   }, []);
 
+  useEffect(() => {
+    if (workspaceId && draftWorkspaceIdRef.current !== workspaceId) {
+      draftWorkspaceIdRef.current = workspaceId;
+      resetDrafts();
+    }
+  }, [resetDrafts, workspaceId]);
+
+  useEffect(() => {
+    const runtimeReady = runtimeBlockedReason === null;
+    if (runtimeReadyRef.current && !runtimeReady) {
+      resetDrafts();
+    }
+    runtimeReadyRef.current = runtimeReady;
+  }, [resetDrafts, runtimeBlockedReason]);
+
   const submit = useCallback(async () => {
     if (viewState.disabledReason) {
       setError(viewState.disabledReason);
@@ -146,7 +163,6 @@ export function useWorkspacePublishWorkflow({
     setPullRequestDraft,
     viewState,
     error,
-    resetDrafts,
     submit,
     isLoading: gitStatusQuery.isLoading,
     isSubmitting:

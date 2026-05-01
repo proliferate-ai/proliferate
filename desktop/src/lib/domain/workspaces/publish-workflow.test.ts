@@ -84,7 +84,9 @@ function view(overrides: {
 
 describe("buildPublishViewState", () => {
   it("commits staged-only dirty trees without staging first", () => {
-    expect(view().workflowSteps).toEqual([{ kind: "commit", summary: "Update app" }]);
+    const result = view();
+    expect(result.summary).toBe("Commit the selected staged changes.");
+    expect(result.workflowSteps).toEqual([{ kind: "commit", summary: "Update app" }]);
   });
 
   it("disables unstaged-only commits when includeUnstaged is off", () => {
@@ -105,6 +107,7 @@ describe("buildPublishViewState", () => {
       { kind: "stage", paths: ["src/app.ts"] },
       { kind: "commit", summary: "Update app" },
     ]);
+    expect(result.summary).toBe("Stage unstaged changes, then commit them.");
   });
 
   it("warns and stages partial paths when includeUnstaged is on", () => {
@@ -140,6 +143,7 @@ describe("buildPublishViewState", () => {
     });
     expect(result.primaryLabel).toBe("Publish branch");
     expect(result.publishStatus).toBe("Publish this branch and set its upstream.");
+    expect(result.summary).toBe("Publish this branch and set its upstream.");
     expect(result.workflowSteps).toEqual([{ kind: "push" }]);
   });
 
@@ -212,6 +216,7 @@ describe("buildPublishViewState", () => {
     });
     expect(result.disabledReason).toBeNull();
     expect(result.primaryLabel).toBe("Create PR");
+    expect(result.summary).toBe("Create a pull request from this branch.");
     expect(result.workflowSteps).toEqual([
       {
         kind: "create_pull_request",
@@ -286,6 +291,7 @@ describe("buildPublishViewState", () => {
       },
     });
     expect(result.primaryLabel).toBe("View pull request");
+    expect(result.summary).toBe("A pull request already exists for this branch.");
     expect(result.workflowSteps).toEqual([]);
   });
 
@@ -303,6 +309,7 @@ describe("buildPublishViewState", () => {
       },
     });
     expect(result.primaryLabel).toBe("Commit and push");
+    expect(result.summary).toBe("Commit changes, then update the existing pull request branch.");
     expect(result.workflowSteps).toEqual([
       { kind: "commit", summary: "Update app" },
       { kind: "push" },
