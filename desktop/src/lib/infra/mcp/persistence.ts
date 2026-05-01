@@ -6,10 +6,7 @@ import {
 import {
   validateOAuthConnectorSettings,
 } from "@/lib/domain/mcp/oauth";
-import {
-  connectorSettingsToCloud as domainConnectorSettingsToCloud,
-  normalizeConnectorSettings,
-} from "@/lib/domain/mcp/settings-schema";
+import { connectorSettingsToCloud as domainConnectorSettingsToCloud } from "@/lib/domain/mcp/settings-schema";
 import { normalizeConnectorSecretValue, validateConnectorSecretValue } from "@/lib/domain/mcp/validation";
 import type {
   ConnectorCatalogEntry,
@@ -31,6 +28,15 @@ import {
 } from "@/lib/integrations/cloud/mcp_oauth";
 import { getCloudMcpCatalog } from "@/lib/integrations/cloud/mcp_catalog";
 import type { CloudMcpCatalogEntry, CloudMcpConnection } from "@/lib/integrations/cloud/client";
+import {
+  augmentLocalOAuthInstalledStatus,
+  deleteLocalOAuthConnectorDataBeforeCloudDelete,
+  installLocalOAuthConnector,
+  reconnectLocalOAuthConnector,
+  reconcileLocalOAuthPendingSetups,
+  sanitizeCloudConnectorSettings,
+  unavailableInstalledCatalogEntry,
+} from "./local-oauth-persistence";
 import { openExternal } from "@/platform/tauri/shell";
 
 export interface ConnectorPaneData {
@@ -53,9 +59,11 @@ async function loadCloudConnectorPaneData(): Promise<ConnectorPaneData> {
     .map(cloudCatalogEntryToLocal)
     .filter(isConnectorCatalogEntryAvailable);
   const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
-  const installed = connectionsResponse.connections
+  const installedBase = connectionsResponse.connections
     .map((connection) => cloudConnectionToInstalledRecord(connection, entriesById))
     .filter((record): record is InstalledConnectorRecord => record !== null);
+  const installed = await augmentLocalOAuthInstalledStatus(installedBase);
+  void reconcileLocalOAuthPendingSetups(installed);
   const installedEntryIds = new Set(installed.map((record) => record.catalogEntry.id));
   return {
     installed,
@@ -83,6 +91,7 @@ function cloudCatalogEntryToLocal(entry: CloudMcpCatalogEntry): ConnectorCatalog
     docsUrl: entry.docsUrl,
     availability: entry.availability,
     cloudSecretSync: entry.cloudSecretSync,
+    setupKind: entry.setupKind ?? "none",
     serverNameBase: entry.serverNameBase,
     iconId: entry.iconId as ConnectorCatalogEntry["iconId"],
     displayUrl: entry.displayUrl ?? entry.url,
@@ -198,7 +207,8 @@ function cloudConnectionToInstalledRecord(
   connection: CloudMcpConnection,
   entriesById: Map<string, ConnectorCatalogEntry>,
 ): InstalledConnectorRecord | null {
-  const catalogEntry = entriesById.get(connection.catalogEntryId);
+  const catalogEntry = entriesById.get(connection.catalogEntryId)
+    ?? unavailableInstalledCatalogEntry(connection);
   if (!catalogEntry) {
     return null;
   }
@@ -219,16 +229,6 @@ function cloudConnectionToInstalledRecord(
   };
 }
 
-function sanitizeCloudConnectorSettings(
-  catalogEntry: ConnectorCatalogEntry,
-  settings: Record<string, unknown>,
-): ConnectorSettings | undefined {
-  if (catalogEntry.settingsSchema.length === 0) {
-    return undefined;
-  }
-  return normalizeConnectorSettings(catalogEntry, settings);
-}
-
 export async function installConnector(
   catalogEntryId: string,
   secretValues: Record<string, string>,
@@ -240,6 +240,10 @@ export async function installConnector(
   }
   if (isOAuthConnectorCatalogEntry(catalogEntry)) {
     throw new Error(`${catalogEntry.name} uses browser auth.`);
+  }
+  if (catalogEntry.setupKind === "local_oauth") {
+    await installLocalOAuthConnector(catalogEntry, settings);
+    return;
   }
 
   const normalizedSecrets = normalizeConnectorSecretValues(catalogEntry, secretValues);
@@ -286,6 +290,8 @@ export async function connectOAuthConnector(
   }
   return result;
 }
+
+export { cancelLocalOAuthConnectorConnect } from "./local-oauth-persistence";
 
 export async function cancelOAuthConnectorConnect(connectionId: string): Promise<void> {
   const flowId = pendingCloudOAuthFlows.get(connectionId);
@@ -361,6 +367,9 @@ export async function reconnectOAuthConnector(
     throw new Error("Connector was not found.");
   }
   const catalogEntry = await loadCloudCatalogEntry(connection.catalogEntryId);
+  if (catalogEntry.setupKind === "local_oauth") {
+    return reconnectLocalOAuthConnector(connection, catalogEntry);
+  }
   if (!isOAuthConnectorCatalogEntry(catalogEntry)) {
     throw new Error("Connector doesn't use browser auth.");
   }
@@ -435,5 +444,8 @@ export async function setConnectorEnabled(
 }
 
 export async function deleteConnector(connectionId: string): Promise<void> {
+  const connection = (await listCloudMcpConnections()).connections
+    .find((item) => item.connectionId === connectionId);
+  await deleteLocalOAuthConnectorDataBeforeCloudDelete(connection);
   await deleteCloudMcpConnectionV2(connectionId);
 }

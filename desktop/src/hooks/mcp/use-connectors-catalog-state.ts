@@ -14,6 +14,7 @@ const EMPTY_AVAILABLE: readonly ConnectorCatalogEntry[] = [];
 
 export type ConnectorSetupVariant =
   | "no_setup"
+  | "local_oauth"
   | "api_key"
   | "oauth"
   | "oauth_structured";
@@ -80,6 +81,9 @@ export type ResolvedConnectorModal =
   | ResolvedManageConnectorModal;
 
 export function resolveConnectorVariant(entry: ConnectorCatalogEntry): ConnectorSetupVariant {
+  if (entry.setupKind === "local_oauth") {
+    return "local_oauth";
+  }
   if (entry.transport === "http" && entry.authKind === "oauth") {
     return entry.settingsSchema.length > 0 ? "oauth_structured" : "oauth";
   }
@@ -92,8 +96,9 @@ export function resolveConnectorVariant(entry: ConnectorCatalogEntry): Connector
 export function resolveConnectorStatus(record: InstalledConnectorRecord): ConnectorCardStatus {
   const isOAuth =
     record.catalogEntry.transport === "http" && record.catalogEntry.authKind === "oauth";
+  const isLocalOAuth = record.catalogEntry.setupKind === "local_oauth";
 
-  if (record.broken && isOAuth) {
+  if (record.broken && (isOAuth || isLocalOAuth)) {
     return {
       intent: "needs_reconnect",
       label: "Needs reconnect",

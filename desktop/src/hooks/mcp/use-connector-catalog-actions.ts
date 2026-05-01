@@ -57,6 +57,7 @@ export function useConnectorCatalogActions({
     onCancelOAuth: async () => {
       await connectOAuthMutation.cancelPendingConnection();
       await reconnectOAuthMutation.cancelPendingConnection();
+      await installMutation.cancelPendingLocalOAuth();
     },
     onConnectOAuth: (catalogEntryId, settings) =>
       connectOAuthMutation.mutateAsync({ catalogEntryId, settings }),

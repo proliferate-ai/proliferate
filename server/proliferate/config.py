@@ -111,6 +111,9 @@ class Settings(BaseSettings):
     cloud_mcp_slack_client_id: str = ""
     cloud_mcp_slack_client_secret: str = ""
     cloud_mcp_slack_token_endpoint_auth_method: str = "client_secret_post"
+    cloud_mcp_google_workspace_enabled: bool = False
+    cloud_mcp_google_workspace_oauth_client_id: str = ""
+    cloud_mcp_google_workspace_oauth_client_secret: str = ""
     e2b_api_key: str = ""
     e2b_template_name: str = ""
     e2b_webhook_signature_secret: str = ""

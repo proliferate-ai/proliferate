@@ -95,6 +95,7 @@ export function ConnectorDetailModal({
   }, [entry.id, connectionId, existingSettings]);
 
   const { variant } = modal;
+  const isInitialLocalOAuthConnect = modal.kind === "connect" && variant === "local_oauth";
   const oauthEntry =
     entry.transport === "http" && entry.authKind === "oauth" ? entry : null;
   const oauthValidationError = oauthEntry
@@ -103,7 +104,7 @@ export function ConnectorDetailModal({
         entry.settingsSchema.length > 0 ? settings : undefined,
       )
     : null;
-  const settingsValidationError = entry.settingsSchema.length > 0
+  const settingsValidationError = !isInitialLocalOAuthConnect && entry.settingsSchema.length > 0
     ? validateConnectorSettings(entry, settings)
     : null;
   const secretValidationError =
@@ -135,6 +136,24 @@ export function ConnectorDetailModal({
         return;
       }
       showToast(`${entry.name} ${successLabel}.`, "info");
+      onClose();
+    } catch (opError) {
+      setError(
+        opError instanceof Error
+          ? opError.message
+          : `Couldn't save ${entry.name}. Try again.`,
+      );
+    } finally {
+      setReconnecting(false);
+    }
+  }
+
+  async function runLocalOAuth(op: () => Promise<void>, successLabel: string) {
+    setReconnecting(true);
+    setError(null);
+    try {
+      await op();
+      showToast(localOAuthSuccessToast(entry.name, successLabel), "info");
       onClose();
     } catch (opError) {
       setError(
@@ -190,6 +209,18 @@ export function ConnectorDetailModal({
         }
         return;
       }
+      if (variant === "local_oauth") {
+        const validation = settingsValidationError;
+        if (validation) {
+          setError(validation);
+          return;
+        }
+        await runLocalOAuth(
+          () => callbacks.onInstallSecret(entry.id, {}, settings),
+          "connected",
+        );
+        return;
+      }
       await runOauth(
         () =>
           callbacks.onConnectOAuth(
@@ -229,6 +260,18 @@ export function ConnectorDetailModal({
       onClose();
       return;
     }
+    if (variant === "local_oauth") {
+      await runLocalOAuth(
+        () =>
+          callbacks.onReconnect(
+            connectionId,
+            entry.id,
+            entry.settingsSchema.length > 0 ? settings : undefined,
+          ).then(() => undefined),
+        "reconnected",
+      );
+      return;
+    }
     await runOauth(
       () =>
         callbacks.onReconnect(
@@ -249,6 +292,7 @@ export function ConnectorDetailModal({
   }
 
   const primary = resolvePrimaryButton({
+    entry,
     isConnected,
     variant,
     hasRequiredSecrets,
@@ -383,6 +427,13 @@ function hasAllSecretValues(
   );
 }
 
+function localOAuthSuccessToast(entryName: string, successLabel: string): string {
+  if (successLabel === "reconnected") {
+    return `${entryName} reconnected. Restart or resume the local session to refresh tools.`;
+  }
+  return `${entryName} connected. Start a new local session with plugins enabled to use it.`;
+}
+
 function validateSecretValues(
   entry: ConnectorCatalogEntry,
   values: Record<string, string>,
@@ -402,14 +453,16 @@ interface PrimaryButtonSpec {
 }
 
 function resolvePrimaryButton({
+  entry,
   isConnected,
   variant,
   hasRequiredSecrets,
   secretValidationError,
   oauthValidationError,
 }: {
+  entry: ConnectorCatalogEntry;
   isConnected: boolean;
-  variant: "no_setup" | "api_key" | "oauth" | "oauth_structured";
+  variant: "no_setup" | "local_oauth" | "api_key" | "oauth" | "oauth_structured";
   hasRequiredSecrets: boolean;
   secretValidationError: string | null;
   oauthValidationError: string | null;
@@ -422,6 +475,12 @@ function resolvePrimaryButton({
       return {
         label: "Connect",
         disabled: !hasRequiredSecrets || Boolean(secretValidationError) || Boolean(oauthValidationError),
+      };
+    }
+    if (variant === "local_oauth") {
+      return {
+        label: "Connect in browser",
+        disabled: Boolean(oauthValidationError),
       };
     }
     return {
@@ -443,6 +502,12 @@ function resolvePrimaryButton({
     };
   }
   if (variant === "oauth") {
+    return { label: "Reconnect", disabled: Boolean(oauthValidationError) };
+  }
+  if (variant === "local_oauth") {
+    if (entry.transport === "stdio" && entry.command.length === 0) {
+      return null;
+    }
     return { label: "Reconnect", disabled: Boolean(oauthValidationError) };
   }
   return null;

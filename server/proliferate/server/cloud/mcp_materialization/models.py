@@ -90,11 +90,26 @@ class LocalStdioEnvTemplateModel(BaseModel):
     source: LocalStdioStaticSourceModel
 
 
+class LocalStdioOAuthMetadataModel(BaseModel):
+    provider: Literal["google_workspace"]
+    user_google_email: str = Field(serialization_alias="userGoogleEmail", repr=False)
+    required_scope: str = Field(serialization_alias="requiredScope", repr=False)
+
+
 class LocalStdioCandidateModel(BaseModel):
     connection_id: str = Field(serialization_alias="connectionId")
     catalog_entry_id: str = Field(serialization_alias="catalogEntryId")
     server_name: str = Field(serialization_alias="serverName")
     connector_name: str = Field(serialization_alias="connectorName")
+    setup_kind: Literal["none", "local_oauth"] = Field(
+        default="none",
+        serialization_alias="setupKind",
+    )
+    local_oauth: LocalStdioOAuthMetadataModel | None = Field(
+        default=None,
+        serialization_alias="localOauth",
+        repr=False,
+    )
     command: str
     args: list[LocalStdioArgTemplateModel] = Field(repr=False)
     env: list[LocalStdioEnvTemplateModel] = Field(repr=False)

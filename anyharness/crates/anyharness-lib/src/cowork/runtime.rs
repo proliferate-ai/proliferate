@@ -608,61 +608,104 @@ impl CoworkRuntime {
             }
         };
         let start_started = Instant::now();
-        let session_runtime = self.session_runtime.clone();
-        let session_for_start = durable_session.clone();
-        let start_thread_id = thread_id.clone();
-        let start_workspace_id = worktree.workspace.id.clone();
-        let start_session_store = self.session_service.store().clone();
-        tokio::spawn(async move {
+        let mut response_session = durable_session.clone();
+        if mcp_server_count > 0 {
             tracing::info!(
-                thread_id = %start_thread_id,
-                workspace_id = %start_workspace_id,
-                session_id = %session_for_start.id,
+                thread_id = %thread_id,
+                workspace_id = %worktree.workspace.id,
+                session_id = %durable_session.id,
                 "[workspace-latency] cowork.runtime.create_thread.live_start.start"
             );
-            match session_runtime
-                .start_persisted_session(&session_for_start, None)
+            match self
+                .session_runtime
+                .start_persisted_session(&durable_session, None)
                 .await
             {
                 Ok(started) => {
                     tracing::info!(
-                        thread_id = %start_thread_id,
-                        workspace_id = %start_workspace_id,
+                        thread_id = %thread_id,
+                        workspace_id = %worktree.workspace.id,
                         session_id = %started.id,
                         native_session_id = %started.native_session_id.as_deref().unwrap_or_default(),
                         elapsed_ms = start_started.elapsed().as_millis(),
                         "[workspace-latency] cowork.runtime.create_thread.live_start.completed"
                     );
+                    response_session = started;
                 }
                 Err(error) => {
-                    let now = chrono::Utc::now().to_rfc3339();
-                    if let Err(status_error) =
-                        start_session_store.update_status(&session_for_start.id, "errored", &now)
+                    if let Ok(Some(updated)) = self.session_service.get_session(&durable_session.id)
                     {
-                        tracing::warn!(
-                            thread_id = %start_thread_id,
-                            workspace_id = %start_workspace_id,
-                            session_id = %session_for_start.id,
-                            error = %status_error,
-                            "[workspace-latency] cowork.runtime.create_thread.live_start.status_update_failed"
-                        );
+                        response_session = updated;
                     }
                     tracing::warn!(
-                        thread_id = %start_thread_id,
-                        workspace_id = %start_workspace_id,
-                        session_id = %session_for_start.id,
+                        thread_id = %thread_id,
+                        workspace_id = %worktree.workspace.id,
+                        session_id = %durable_session.id,
                         elapsed_ms = start_started.elapsed().as_millis(),
                         error = ?error,
                         "[workspace-latency] cowork.runtime.create_thread.live_start.failed"
                     );
                 }
             }
-        });
+        } else {
+            let session_runtime = self.session_runtime.clone();
+            let session_for_start = durable_session.clone();
+            let start_thread_id = thread_id.clone();
+            let start_workspace_id = worktree.workspace.id.clone();
+            let start_session_store = self.session_service.store().clone();
+            tokio::spawn(async move {
+                tracing::info!(
+                    thread_id = %start_thread_id,
+                    workspace_id = %start_workspace_id,
+                    session_id = %session_for_start.id,
+                    "[workspace-latency] cowork.runtime.create_thread.live_start.start"
+                );
+                match session_runtime
+                    .start_persisted_session(&session_for_start, None)
+                    .await
+                {
+                    Ok(started) => {
+                        tracing::info!(
+                            thread_id = %start_thread_id,
+                            workspace_id = %start_workspace_id,
+                            session_id = %started.id,
+                            native_session_id = %started.native_session_id.as_deref().unwrap_or_default(),
+                            elapsed_ms = start_started.elapsed().as_millis(),
+                            "[workspace-latency] cowork.runtime.create_thread.live_start.completed"
+                        );
+                    }
+                    Err(error) => {
+                        let now = chrono::Utc::now().to_rfc3339();
+                        if let Err(status_error) = start_session_store.update_status(
+                            &session_for_start.id,
+                            "errored",
+                            &now,
+                        ) {
+                            tracing::warn!(
+                                thread_id = %start_thread_id,
+                                workspace_id = %start_workspace_id,
+                                session_id = %session_for_start.id,
+                                error = %status_error,
+                                "[workspace-latency] cowork.runtime.create_thread.live_start.status_update_failed"
+                            );
+                        }
+                        tracing::warn!(
+                            thread_id = %start_thread_id,
+                            workspace_id = %start_workspace_id,
+                            session_id = %session_for_start.id,
+                            elapsed_ms = start_started.elapsed().as_millis(),
+                            error = ?error,
+                            "[workspace-latency] cowork.runtime.create_thread.live_start.failed"
+                        );
+                    }
+                }
+            });
+        }
         tracing::info!(
             thread_id = %thread_id,
             workspace_id = %worktree.workspace.id,
-            session_id = %durable_session.id,
-            start_deferred = true,
+            session_id = %response_session.id,
+            start_deferred = mcp_server_count == 0,
             total_elapsed_ms = total_started.elapsed().as_millis(),
             "[workspace-latency] cowork.runtime.create_thread.completed"
         );
@@ -670,12 +713,12 @@ impl CoworkRuntime {
         Ok(CreateCoworkThreadResult {
             thread: CoworkThreadSummary {
                 thread,
-                title: durable_session.title.clone(),
-                updated_at: durable_session.updated_at.clone(),
-                last_activity_at: durable_session.last_prompt_at.clone(),
+                title: response_session.title.clone(),
+                updated_at: response_session.updated_at.clone(),
+                last_activity_at: response_session.last_prompt_at.clone(),
             },
             workspace: worktree.workspace,
-            session: durable_session,
+            session: response_session,
         })
     }
 

@@ -110,7 +110,8 @@ export function ConnectorCatalogPage() {
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Pick an integration below. Connected integrations are
-                    available automatically in every session.
+                    available to new sessions when plugins are enabled for that
+                    session type.
                   </p>
                 </div>
               )}

@@ -1857,6 +1857,12 @@ export interface components {
             /** Cloudsecretsync */
             cloudSecretSync: boolean;
             /**
+             * Setupkind
+             * @default none
+             * @enum {string}
+             */
+            setupKind: "none" | "local_oauth";
+            /**
              * Transport
              * @enum {string}
              */
@@ -2289,6 +2295,13 @@ export interface components {
             serverName: string;
             /** Connectorname */
             connectorName: string;
+            /**
+             * Setupkind
+             * @default none
+             * @enum {string}
+             */
+            setupKind: "none" | "local_oauth";
+            localOauth?: components["schemas"]["LocalStdioOAuthMetadataModel"] | null;
             /** Command */
             command: string;
             /** Args */
@@ -2301,6 +2314,18 @@ export interface components {
             /** Name */
             name: string;
             source: components["schemas"]["LocalStdioStaticSourceModel"];
+        };
+        /** LocalStdioOAuthMetadataModel */
+        LocalStdioOAuthMetadataModel: {
+            /**
+             * Provider
+             * @constant
+             */
+            provider: "google_workspace";
+            /** Usergoogleemail */
+            userGoogleEmail: string;
+            /** Requiredscope */
+            requiredScope: string;
         };
         /** LocalStdioStaticSourceModel */
         LocalStdioStaticSourceModel: {

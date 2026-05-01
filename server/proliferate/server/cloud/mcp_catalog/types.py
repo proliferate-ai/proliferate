@@ -8,6 +8,7 @@ ConnectorTransport = Literal["http", "stdio"]
 ConnectorAuthKind = Literal["secret", "oauth", "none"]
 ConnectorOAuthClientMode = Literal["dcr", "static"]
 ConnectorSettingKind = Literal["string", "boolean", "select", "url"]
+ConnectorSetupKind = Literal["none", "local_oauth"]
 LaunchUrlContext = Literal[
     "catalog",
     "local_materialization",
@@ -129,6 +130,7 @@ class CatalogEntry:
     server_name_base: str
     icon_id: str
     capabilities: tuple[str, ...]
+    setup_kind: ConnectorSetupKind = "none"
     oauth_client_mode: ConnectorOAuthClientMode | None = None
     cloud_secret_sync: bool = False
     secret_fields: tuple[CatalogSecretField, ...] = ()

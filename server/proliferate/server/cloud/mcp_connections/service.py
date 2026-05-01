@@ -53,6 +53,7 @@ from proliferate.utils.crypto import encrypt_json
 _CONNECTION_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,255}$")
 _SERVER_NAME_CHARS = re.compile(r"[^a-z0-9]+")
 _EDGE_UNDERSCORES = re.compile(r"^_+|_+$")
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def _invalid_payload(message: str) -> NoReturn:
@@ -100,9 +101,31 @@ def _validate_settings(
     settings: dict[str, object] | None,
 ) -> dict[str, object]:
     try:
-        return catalog_validate_settings(entry, settings)
+        cleaned = catalog_validate_settings(entry, settings)
     except CatalogConfigurationError as exc:
         _invalid_payload(str(exc))
+    if entry.id == "gmail" and entry.setup_kind == "local_oauth":
+        raw_email = cleaned.get("userGoogleEmail")
+        if not isinstance(raw_email, str):
+            _invalid_payload("Gmail requires a Google account email.")
+        email = raw_email.strip().lower()
+        if not _EMAIL_RE.fullmatch(email):
+            _invalid_payload("Gmail requires a valid Google account email.")
+        cleaned["userGoogleEmail"] = email
+    return cleaned
+
+
+def _reject_local_oauth_account_change(
+    entry: CatalogEntry,
+    old_settings: dict[str, object],
+    new_settings: dict[str, object],
+) -> None:
+    if entry.setup_kind != "local_oauth":
+        return
+    old_email = str(old_settings.get("userGoogleEmail", "")).strip().lower()
+    new_email = str(new_settings.get("userGoogleEmail", "")).strip().lower()
+    if old_email and new_email and old_email != new_email:
+        _invalid_payload("Disconnect and reconnect Gmail to change Google accounts.")
 
 
 def _clean_secret_fields(entry: CatalogEntry, secret_fields: dict[str, str]) -> dict[str, str]:
@@ -218,8 +241,10 @@ async def patch_cloud_mcp_connection(
     settings_json = None
     if body.settings is not None:
         new_settings = _validate_settings(entry, body.settings)
+        old_settings = _parse_settings(existing.settings_json)
+        _reject_local_oauth_account_change(entry, old_settings, new_settings)
         if entry.auth_kind == "oauth" and existing.auth and existing.auth.auth_status == "ready":
-            old_resource = _oauth_resource_url(entry, _parse_settings(existing.settings_json))
+            old_resource = _oauth_resource_url(entry, old_settings)
             new_resource = _oauth_resource_url(entry, new_settings)
             if old_resource != new_resource:
                 _invalid_payload("Reconnect this MCP before changing URL-affecting settings.")

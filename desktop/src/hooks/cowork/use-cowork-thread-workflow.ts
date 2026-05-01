@@ -79,7 +79,6 @@ export function useCoworkThreadWorkflow() {
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
     defaultChatModelIdByAgentKind: state.defaultChatModelIdByAgentKind,
-    pluginsInCodingSessionsEnabled: state.pluginsInCodingSessionsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
   })));
   const showToast = useToastStore((state) => state.show);
@@ -134,25 +133,27 @@ export function useCoworkThreadWorkflow() {
 
     try {
       const resolveStartedAt = startLatencyTimer();
-      const { mcpServers, mcpBindingSummaries } = preferences.pluginsInCodingSessionsEnabled
-        ? await resolveSessionMcpServersForLaunch({
-          targetLocation: "local",
-          workspacePath: COWORK_WORKSPACE_PATH_PLACEHOLDER,
-          policy: {
-            workspaceSurface: "cowork",
-            lifecycle: "create",
-            enabled: true,
-          },
-        })
-        : { mcpServers: [], mcpBindingSummaries: [] };
+      const mcpLaunch = await resolveSessionMcpServersForLaunch({
+        targetLocation: "local",
+        workspacePath: COWORK_WORKSPACE_PATH_PLACEHOLDER,
+        launchId: entry.attemptId,
+        policy: {
+          workspaceSurface: "cowork",
+          lifecycle: "create",
+          enabled: true,
+        },
+      });
+      const { mcpServers, mcpBindingSummaries } = mcpLaunch;
+      const releaseRuntimeReservations = mcpLaunch.releaseRuntimeReservations ?? (async () => {});
       logLatency("workspace.cowork.create.mcp_resolved", {
         attemptId: entry.attemptId,
-        pluginsEnabled: preferences.pluginsInCodingSessionsEnabled,
+        pluginsEnabled: true,
         mcpServerCount: mcpServers.length,
         elapsedMs: elapsedMs(resolveStartedAt),
       });
 
       if (!isAttemptCurrent(entry.attemptId)) {
+        await releaseRuntimeReservations();
         return null;
       }
 
@@ -167,14 +168,20 @@ export function useCoworkThreadWorkflow() {
         elapsedSincePendingMs: elapsedSince(entry.createdAt),
       });
 
-      const result = await createCoworkThreadMutation.mutateAsync({
-        agentKind: input.agentKind,
-        modelId: input.modelId,
-        coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
-        ...(modeId ? { modeId } : {}),
-        ...(mcpServers.length > 0 ? { mcpServers } : {}),
-        mcpBindingSummaries,
-      });
+      const result = await (async () => {
+        try {
+          return await createCoworkThreadMutation.mutateAsync({
+            agentKind: input.agentKind,
+            modelId: input.modelId,
+            coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
+            ...(modeId ? { modeId } : {}),
+            ...(mcpServers.length > 0 ? { mcpServers } : {}),
+            mcpBindingSummaries,
+          });
+        } finally {
+          await releaseRuntimeReservations();
+        }
+      })();
 
       logLatency("workspace.cowork.create.request.success", {
         attemptId: entry.attemptId,
@@ -303,7 +310,6 @@ export function useCoworkThreadWorkflow() {
     navigateToWorkspaceShell,
     putSessionSlot,
     preferences.coworkWorkspaceDelegationEnabled,
-    preferences.pluginsInCodingSessionsEnabled,
     queryClient,
     requestComposerFocus,
     runtimeUrl,

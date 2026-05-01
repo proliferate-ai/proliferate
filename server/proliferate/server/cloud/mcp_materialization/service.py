@@ -36,6 +36,7 @@ from proliferate.server.cloud.mcp_materialization.models import (
     LocalStdioArgTemplateModel,
     LocalStdioCandidateModel,
     LocalStdioEnvTemplateModel,
+    LocalStdioOAuthMetadataModel,
     MaterializeCloudMcpRequest,
     MaterializeCloudMcpResponse,
     McpNotAppliedReason,
@@ -314,11 +315,29 @@ def _materialize_stdio_candidate(
             catalog_entry_id=entry.id,
             server_name=record.server_name,
             connector_name=entry.name,
+            setup_kind=entry.setup_kind,
+            local_oauth=_local_oauth_metadata(entry, settings_for_record),
             command=entry.command,
             args=args,
             env=env,
         ),
         None,
+    )
+
+
+def _local_oauth_metadata(
+    entry: CatalogEntry,
+    settings_for_record: dict[str, object],
+) -> LocalStdioOAuthMetadataModel | None:
+    if entry.setup_kind != "local_oauth" or entry.id != "gmail":
+        return None
+    email = settings_for_record.get("userGoogleEmail")
+    if not isinstance(email, str) or not email.strip():
+        return None
+    return LocalStdioOAuthMetadataModel(
+        provider="google_workspace",
+        user_google_email=email.strip().lower(),
+        required_scope="https://www.googleapis.com/auth/gmail.readonly",
     )
 
 

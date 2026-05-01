@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   commandExistsMock: vi.fn(async () => true),
   materializeCloudMcpServersMock: vi.fn(),
+  resolveGoogleWorkspaceMcpRuntimeEnvMock: vi.fn(),
+  releaseGoogleWorkspaceMcpRuntimeEnvMock: vi.fn(),
 }));
 
 vi.mock("@/platform/tauri/process", () => ({
@@ -13,6 +15,11 @@ vi.mock("@/lib/integrations/cloud/mcp_materialization", () => ({
   materializeCloudMcpServers: mocks.materializeCloudMcpServersMock,
 }));
 
+vi.mock("@/platform/tauri/google-workspace-mcp", () => ({
+  resolveGoogleWorkspaceMcpRuntimeEnv: mocks.resolveGoogleWorkspaceMcpRuntimeEnvMock,
+  releaseGoogleWorkspaceMcpRuntimeEnv: mocks.releaseGoogleWorkspaceMcpRuntimeEnvMock,
+}));
+
 import {
   COWORK_WORKSPACE_PATH_PLACEHOLDER,
   resolveSessionMcpServersForLaunch,
@@ -21,9 +28,13 @@ import {
 type LaunchContext = Parameters<typeof resolveSessionMcpServersForLaunch>[0];
 
 function launchContext(
-  overrides: Omit<LaunchContext, "policy"> & { policy?: Partial<LaunchContext["policy"]> },
+  overrides: Omit<LaunchContext, "policy" | "launchId"> & {
+    launchId?: string;
+    policy?: Partial<LaunchContext["policy"]>;
+  },
 ): LaunchContext {
   return {
+    launchId: "test-launch",
     ...overrides,
     policy: {
       workspaceSurface: "coding",
@@ -51,6 +62,13 @@ describe("cloud MCP launch resolution", () => {
     mocks.commandExistsMock.mockResolvedValue(true);
     mocks.materializeCloudMcpServersMock.mockReset();
     mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized());
+    mocks.resolveGoogleWorkspaceMcpRuntimeEnvMock.mockReset();
+    mocks.resolveGoogleWorkspaceMcpRuntimeEnvMock.mockResolvedValue({
+      status: "ready",
+      env: [],
+    });
+    mocks.releaseGoogleWorkspaceMcpRuntimeEnvMock.mockReset();
+    mocks.releaseGoogleWorkspaceMcpRuntimeEnvMock.mockResolvedValue({ ok: true });
   });
 
   it("uses cloud materialization for concrete remote MCP servers", async () => {
@@ -118,6 +136,7 @@ describe("cloud MCP launch resolution", () => {
       mcpServers: [],
       mcpBindingSummaries: [],
       warnings: [],
+      releaseRuntimeReservations: expect.any(Function),
     });
   });
 
@@ -299,6 +318,43 @@ describe("cloud MCP launch resolution", () => {
     ]);
   });
 
+  it("does not reserve Gmail runtime env when command availability fails", async () => {
+    mocks.commandExistsMock.mockRejectedValue(new Error("lookup failed"));
+    mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized({
+      localStdioCandidates: [
+        {
+          connectionId: "conn_gmail",
+          catalogEntryId: "gmail",
+          serverName: "gmail",
+          connectorName: "Gmail",
+          setupKind: "local_oauth",
+          localOauth: {
+            provider: "google_workspace",
+            userGoogleEmail: "user@example.com",
+            requiredScope: "https://www.googleapis.com/auth/gmail.readonly",
+          },
+          command: "uvx",
+          args: [],
+          env: [],
+        },
+      ],
+    }));
+
+    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
+      targetLocation: "local",
+      workspacePath: "/workspace",
+    }));
+
+    expect(mocks.resolveGoogleWorkspaceMcpRuntimeEnvMock).not.toHaveBeenCalled();
+    expect(resolution.mcpServers).toEqual([]);
+    expect(resolution.warnings).toEqual([
+      expect.objectContaining({
+        kind: "command_missing",
+        catalogEntryId: "gmail",
+      }),
+    ]);
+  });
+
   it("keeps cowork workspace-bound stdio connectors resolvable before thread path exists", async () => {
     mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized({
       mcpBindingSummaries: [
@@ -338,6 +394,103 @@ describe("cloud MCP launch resolution", () => {
         catalogEntryId: "filesystem",
         transport: "stdio",
       }),
+    ]);
+  });
+
+  it("injects Gmail local OAuth env without leaking email into summaries", async () => {
+    mocks.resolveGoogleWorkspaceMcpRuntimeEnvMock.mockResolvedValue({
+      status: "ready",
+      env: [
+        { name: "USER_GOOGLE_EMAIL", value: "user@example.com" },
+        { name: "WORKSPACE_MCP_CREDENTIALS_DIR", value: "/local/private/credentials" },
+      ],
+    });
+    mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized({
+      localStdioCandidates: [
+        {
+          connectionId: "conn_gmail",
+          catalogEntryId: "gmail",
+          serverName: "gmail",
+          connectorName: "Gmail",
+          setupKind: "local_oauth",
+          localOauth: {
+            provider: "google_workspace",
+            userGoogleEmail: "user@example.com",
+            requiredScope: "https://www.googleapis.com/auth/gmail.readonly",
+          },
+          command: "uvx",
+          args: [{ source: { kind: "static", value: "workspace-mcp" } }],
+          env: [{ name: "GOOGLE_OAUTH_CLIENT_ID", source: { kind: "static", value: "client-id" } }],
+        },
+      ],
+    }));
+
+    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
+      targetLocation: "local",
+      workspacePath: "/workspace",
+      launchId: "launch-gmail",
+    }));
+
+    expect(mocks.resolveGoogleWorkspaceMcpRuntimeEnvMock).toHaveBeenCalledWith({
+      connectionId: "conn_gmail",
+      userGoogleEmail: "user@example.com",
+      launchId: "launch-gmail",
+    });
+    expect(resolution.mcpServers).toEqual([
+      expect.objectContaining({
+        catalogEntryId: "gmail",
+        env: expect.arrayContaining([
+          { name: "GOOGLE_OAUTH_CLIENT_ID", value: "client-id" },
+          { name: "USER_GOOGLE_EMAIL", value: "user@example.com" },
+        ]),
+      }),
+    ]);
+    const summaryJson = JSON.stringify(resolution.mcpBindingSummaries);
+    expect(summaryJson).not.toContain("user@example.com");
+    expect(summaryJson).not.toContain("/local/private");
+    await resolution.releaseRuntimeReservations();
+    expect(mocks.releaseGoogleWorkspaceMcpRuntimeEnvMock).toHaveBeenCalledWith({
+      connectionId: "conn_gmail",
+      launchId: "launch-gmail",
+    });
+  });
+
+  it("marks Gmail local OAuth candidates as needing reconnect when credentials are missing", async () => {
+    mocks.resolveGoogleWorkspaceMcpRuntimeEnvMock.mockResolvedValue({
+      status: "not_ready",
+      code: "credential_missing",
+    });
+    mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized({
+      localStdioCandidates: [
+        {
+          connectionId: "conn_gmail",
+          catalogEntryId: "gmail",
+          serverName: "gmail",
+          connectorName: "Gmail",
+          setupKind: "local_oauth",
+          localOauth: {
+            provider: "google_workspace",
+            userGoogleEmail: "user@example.com",
+            requiredScope: "https://www.googleapis.com/auth/gmail.readonly",
+          },
+          command: "uvx",
+          args: [],
+          env: [],
+        },
+      ],
+    }));
+
+    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
+      targetLocation: "local",
+      workspacePath: "/workspace",
+    }));
+
+    expect(resolution.mcpServers).toEqual([]);
+    expect(resolution.warnings).toEqual([
+      expect.objectContaining({ kind: "needs_reconnect", catalogEntryId: "gmail" }),
+    ]);
+    expect(resolution.mcpBindingSummaries).toEqual([
+      expect.objectContaining({ outcome: "not_applied", reason: "needs_reconnect" }),
     ]);
   });
 });

@@ -87,6 +87,12 @@
   description: Profile-specific local Vite hot-module-reload websocket port
   tags: [local-dev, desktop]
 
+- name: PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE
+  secret: false
+  default: "49321"
+  description: Base port for the profile-scoped 64-port Google Workspace MCP loopback OAuth pool
+  tags: [local-dev, desktop]
+
 - name: PROLIFERATE_DEV_DB_NAME
   secret: false
   default: ""
@@ -311,6 +317,24 @@
   secret: false
   default: "client_secret_post"
   description: "Slack MCP token endpoint auth method: client_secret_post or client_secret_basic"
+  tags: [local-dev, self-hosted, production]
+
+- name: CLOUD_MCP_GOOGLE_WORKSPACE_ENABLED
+  secret: false
+  default: "false"
+  description: Shows the local-only Gmail MCP connector when Google Desktop OAuth client credentials are configured
+  tags: [local-dev, self-hosted, production]
+
+- name: CLOUD_MCP_GOOGLE_WORKSPACE_OAUTH_CLIENT_ID
+  secret: false
+  default: ""
+  description: Google Desktop OAuth client ID used by the local-only Gmail MCP connector
+  tags: [local-dev, self-hosted, production]
+
+- name: CLOUD_MCP_GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET
+  secret: false
+  default: ""
+  description: Google Desktop OAuth installed-app client secret passed to local workspace-mcp; this is serialized to desktop catalog responses and is not treated as a confidential server secret
   tags: [local-dev, self-hosted, production]
 
 # ═══════════════════════════════════════════════════════════════════════

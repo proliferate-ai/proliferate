@@ -133,9 +133,17 @@ lives in `server/proliferate/constants/billing.py`. It is not env-overridable.
 | `CLOUD_MCP_SLACK_CLIENT_ID` | Yes | Only when Slack MCP is enabled for this deployment | Static Slack OAuth client ID |
 | `CLOUD_MCP_SLACK_CLIENT_SECRET` | Yes | Only when Slack MCP is enabled for this deployment | Static Slack OAuth client secret |
 | `CLOUD_MCP_SLACK_TOKEN_ENDPOINT_AUTH_METHOD` | No | No | Slack token endpoint auth method (`client_secret_post` or `client_secret_basic`) |
+| `CLOUD_MCP_GOOGLE_WORKSPACE_ENABLED` | No | No | Shows the local-only Gmail MCP connector |
+| `CLOUD_MCP_GOOGLE_WORKSPACE_OAUTH_CLIENT_ID` | No | Only when Gmail MCP is enabled for this deployment | Google Desktop OAuth client ID for local Gmail OAuth |
+| `CLOUD_MCP_GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET` | No | Only when Gmail MCP is enabled for this deployment | Google Desktop OAuth installed-app client secret passed to local Gmail OAuth setup; serialized to desktop catalog responses |
 
 Static OAuth MCP connectors are hidden from the catalog when their required
 deployment config is missing or their explicit connector enable flag is false.
+Gmail uses a Google restricted scope and must stay in test-user/dev mode until
+Google verification for the Proliferate OAuth app is accepted.
+The Google Desktop OAuth "client secret" is not a confidential server secret in
+this connector shape because the local MCP process must receive it to complete
+installed-app OAuth.
 
 ## Sandbox Provider Settings
 

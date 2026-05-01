@@ -45,7 +45,11 @@ export function ConnectorConfigureTab({
 
   return (
     <div className="space-y-4">
-      {showReconnectBanner && (variant === "oauth" || variant === "oauth_structured") && (
+      {showReconnectBanner && (
+        variant === "oauth"
+        || variant === "oauth_structured"
+        || variant === "local_oauth"
+      ) && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           Reconnect in your browser to use {entry.name} again.
         </div>
@@ -117,6 +121,26 @@ export function ConnectorConfigureTab({
                 : "We'll authorize the specific project and access mode you choose here."
             }
           />
+        </div>
+      )}
+
+      {variant === "local_oauth" && (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">{entry.description}</p>
+          {isConnected ? (
+            <ConnectorSettingsFields
+              settings={settings}
+              onChange={onSettingsChange}
+              entry={entry}
+              error={error}
+              disabled
+              helperText="This Gmail account is local to this desktop. Delete and reconnect to use another account."
+            />
+          ) : (
+            <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+              Choose the Gmail account in your browser. Gmail is available only in new local desktop sessions with plugins enabled.
+            </div>
+          )}
         </div>
       )}
 

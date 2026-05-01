@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ConnectorSettings } from "@/lib/domain/mcp/types";
 import { classifyTelemetryFailure } from "@/lib/domain/telemetry/failures";
-import { installConnector } from "@/lib/infra/mcp/persistence";
+import { cancelLocalOAuthConnectorConnect, installConnector } from "@/lib/infra/mcp/persistence";
 import {
   captureTelemetryException,
   trackProductEvent,
@@ -11,7 +11,7 @@ import { refreshMcpConnectorsQuery } from "./use-connectors";
 export function useInstallConnector() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  const mutation = useMutation({
     meta: {
       telemetryHandled: true,
     },
@@ -45,6 +45,11 @@ export function useInstallConnector() {
       });
     },
   });
+
+  return {
+    ...mutation,
+    cancelPendingLocalOAuth: cancelLocalOAuthConnectorConnect,
+  };
 }
 
 export function trackConnectorConnectClicked(catalogEntryId: string) {

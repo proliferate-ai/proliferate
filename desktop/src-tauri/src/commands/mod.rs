@@ -1,6 +1,7 @@
 pub mod anonymous_telemetry;
 pub mod config;
 pub mod diagnostics;
+pub mod google_workspace_mcp;
 pub mod keychain;
 pub mod process;
 pub mod runtime;
