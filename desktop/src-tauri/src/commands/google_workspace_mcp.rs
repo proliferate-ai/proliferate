@@ -24,17 +24,28 @@ const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
 
 type ChildHandle = Arc<Mutex<Child>>;
 
-static SETUP_PORT_LEASES: OnceLock<Mutex<HashSet<u16>>> = OnceLock::new();
-static RUNTIME_PORT_LEASES: OnceLock<Mutex<HashMap<String, u16>>> = OnceLock::new();
+static PORT_LEASES: OnceLock<Mutex<PortLeaseState>> = OnceLock::new();
 static SETUP_CHILDREN: OnceLock<Mutex<HashMap<String, ChildHandle>>> = OnceLock::new();
 static CANCELLED_SETUPS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
-fn setup_port_leases() -> &'static Mutex<HashSet<u16>> {
-    SETUP_PORT_LEASES.get_or_init(|| Mutex::new(HashSet::new()))
+#[derive(Default)]
+struct PortLeaseState {
+    setup: HashSet<u16>,
+    runtime: HashMap<String, u16>,
 }
 
-fn runtime_port_leases() -> &'static Mutex<HashMap<String, u16>> {
-    RUNTIME_PORT_LEASES.get_or_init(|| Mutex::new(HashMap::new()))
+impl PortLeaseState {
+    fn is_port_leased(&self, port: u16) -> bool {
+        self.setup.contains(&port)
+            || self
+                .runtime
+                .values()
+                .any(|leased_port| *leased_port == port)
+    }
+}
+
+fn port_leases() -> &'static Mutex<PortLeaseState> {
+    PORT_LEASES.get_or_init(|| Mutex::new(PortLeaseState::default()))
 }
 
 fn setup_children() -> &'static Mutex<HashMap<String, ChildHandle>> {
@@ -1043,16 +1054,16 @@ fn remove_dir_if_exists(path: &Path) -> Result<(), ()> {
 
 async fn lease_setup_port() -> Result<u16, LocalMcpOAuthCode> {
     let base = configured_port_base();
-    let mut leases = setup_port_leases().lock().await;
+    let mut leases = port_leases().lock().await;
     for offset in 0..PORT_POOL_SIZE {
         let Some(port) = base.checked_add(offset) else {
             continue;
         };
-        if leases.contains(&port) {
+        if leases.is_port_leased(port) {
             continue;
         }
         if port_is_available(port) {
-            leases.insert(port);
+            leases.setup.insert(port);
             return Ok(port);
         }
     }
@@ -1060,7 +1071,7 @@ async fn lease_setup_port() -> Result<u16, LocalMcpOAuthCode> {
 }
 
 async fn release_setup_port(port: u16) {
-    setup_port_leases().lock().await.remove(&port);
+    port_leases().lock().await.setup.remove(&port);
 }
 
 async fn lease_runtime_port(
@@ -1070,8 +1081,8 @@ async fn lease_runtime_port(
     let key = runtime_port_lease_key(launch_id, connection_id);
     let base = configured_port_base();
     let primary_offset = hash_port_offset(launch_id, connection_id);
-    let mut leases = runtime_port_leases().lock().await;
-    if let Some(port) = leases.get(&key).copied() {
+    let mut leases = port_leases().lock().await;
+    if let Some(port) = leases.runtime.get(&key).copied() {
         return Ok(port);
     }
     for step in 0..PORT_POOL_SIZE {
@@ -1079,11 +1090,11 @@ async fn lease_runtime_port(
         let Some(port) = base.checked_add(offset) else {
             continue;
         };
-        if leases.values().any(|leased_port| *leased_port == port) {
+        if leases.is_port_leased(port) {
             continue;
         }
         if port_is_available(port) {
-            leases.insert(key, port);
+            leases.runtime.insert(key, port);
             return Ok(port);
         }
     }
@@ -1091,9 +1102,10 @@ async fn lease_runtime_port(
 }
 
 async fn release_runtime_port(launch_id: &str, connection_id: &str) {
-    runtime_port_leases()
+    port_leases()
         .lock()
         .await
+        .runtime
         .remove(&runtime_port_lease_key(launch_id, connection_id));
 }
 
@@ -1101,6 +1113,7 @@ fn runtime_port_lease_key(launch_id: &str, connection_id: &str) -> String {
     format!("{launch_id}\n{connection_id}")
 }
 
+#[cfg(test)]
 fn primary_runtime_port(launch_id: &str, connection_id: &str) -> u16 {
     let base = configured_port_base();
     let primary_offset = hash_port_offset(launch_id, connection_id);
@@ -1444,10 +1457,24 @@ mod tests {
         assert_eq!(first, second);
 
         release_runtime_port(&launch_id, connection_id).await;
-        assert!(!runtime_port_leases()
+        assert!(!port_leases()
             .lock()
             .await
+            .runtime
             .contains_key(&runtime_port_lease_key(&launch_id, connection_id)));
+    }
+
+    #[test]
+    fn port_lease_state_treats_setup_and_runtime_as_one_pool() {
+        let mut leases = PortLeaseState::default();
+        leases.setup.insert(49_321);
+        leases
+            .runtime
+            .insert(runtime_port_lease_key("launch-1", "connection-1"), 49_322);
+
+        assert!(leases.is_port_leased(49_321));
+        assert!(leases.is_port_leased(49_322));
+        assert!(!leases.is_port_leased(49_323));
     }
 
     #[test]

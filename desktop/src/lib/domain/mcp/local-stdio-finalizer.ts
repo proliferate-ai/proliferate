@@ -52,40 +52,13 @@ export async function finalizeLocalStdioCandidates(
     if (cached !== undefined) {
       return cached;
     }
-    const available = await dependencies.commandExists(command);
+    const available = await dependencies.commandExists(command).catch(() => false);
     commandAvailabilityCache.set(command, available);
     return available;
   }
 
   for (const candidate of candidates) {
     const localOauth = getLocalOauthMetadata(candidate);
-    let localOauthEnv: { name: string; value: string }[] = [];
-    if (candidate.setupKind === "local_oauth") {
-      if (!localOauth || localOauth.provider !== "google_workspace") {
-        summaries.push(buildNotAppliedSummary(candidate, "resolver_error"));
-        warnings.push(buildWarning(candidate, "resolver_error"));
-        continue;
-      }
-      const runtimeEnv = await dependencies.resolveGoogleWorkspaceMcpRuntimeEnv({
-        connectionId: candidate.connectionId,
-        userGoogleEmail: localOauth.userGoogleEmail,
-        launchId: context.launchId,
-      });
-      if (runtimeEnv.status === "not_ready") {
-        const warningKind = runtimeEnv.code === "port_unavailable"
-          ? "resolver_error"
-          : "needs_reconnect";
-        summaries.push(buildNotAppliedSummary(candidate, warningKind));
-        warnings.push(buildWarning(candidate, warningKind));
-        continue;
-      }
-      localOauthEnv = runtimeEnv.env;
-      runtimeReservations.push({
-        provider: "google_workspace",
-        connectionId: candidate.connectionId,
-        launchId: context.launchId,
-      });
-    }
     const needsWorkspacePath = candidate.args.some(
       (arg) => arg.source.kind === "workspace_path",
     );
@@ -104,6 +77,33 @@ export async function finalizeLocalStdioCandidates(
       summaries.push(buildNotAppliedSummary(candidate, "resolver_error"));
       warnings.push(buildWarning(candidate, "resolver_error"));
       continue;
+    }
+    let localOauthEnv: { name: string; value: string }[] = [];
+    if (candidate.setupKind === "local_oauth") {
+      if (!localOauth || localOauth.provider !== "google_workspace") {
+        summaries.push(buildNotAppliedSummary(candidate, "resolver_error"));
+        warnings.push(buildWarning(candidate, "resolver_error"));
+        continue;
+      }
+      const runtimeEnv = await dependencies.resolveGoogleWorkspaceMcpRuntimeEnv({
+        connectionId: candidate.connectionId,
+        userGoogleEmail: localOauth.userGoogleEmail,
+        launchId: context.launchId,
+      }).catch(() => ({ status: "not_ready" as const, code: "port_unavailable" as const }));
+      if (runtimeEnv.status === "not_ready") {
+        const warningKind = runtimeEnv.code === "port_unavailable"
+          ? "resolver_error"
+          : "needs_reconnect";
+        summaries.push(buildNotAppliedSummary(candidate, warningKind));
+        warnings.push(buildWarning(candidate, warningKind));
+        continue;
+      }
+      localOauthEnv = runtimeEnv.env;
+      runtimeReservations.push({
+        provider: "google_workspace",
+        connectionId: candidate.connectionId,
+        launchId: context.launchId,
+      });
     }
     resolved.env.push(...localOauthEnv);
     mcpServers.push({

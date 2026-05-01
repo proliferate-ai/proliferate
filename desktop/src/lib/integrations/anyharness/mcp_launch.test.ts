@@ -318,6 +318,43 @@ describe("cloud MCP launch resolution", () => {
     ]);
   });
 
+  it("does not reserve Gmail runtime env when command availability fails", async () => {
+    mocks.commandExistsMock.mockRejectedValue(new Error("lookup failed"));
+    mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized({
+      localStdioCandidates: [
+        {
+          connectionId: "conn_gmail",
+          catalogEntryId: "gmail",
+          serverName: "gmail",
+          connectorName: "Gmail",
+          setupKind: "local_oauth",
+          localOauth: {
+            provider: "google_workspace",
+            userGoogleEmail: "user@example.com",
+            requiredScope: "https://www.googleapis.com/auth/gmail.readonly",
+          },
+          command: "uvx",
+          args: [],
+          env: [],
+        },
+      ],
+    }));
+
+    const resolution = await resolveSessionMcpServersForLaunch(launchContext({
+      targetLocation: "local",
+      workspacePath: "/workspace",
+    }));
+
+    expect(mocks.resolveGoogleWorkspaceMcpRuntimeEnvMock).not.toHaveBeenCalled();
+    expect(resolution.mcpServers).toEqual([]);
+    expect(resolution.warnings).toEqual([
+      expect.objectContaining({
+        kind: "command_missing",
+        catalogEntryId: "gmail",
+      }),
+    ]);
+  });
+
   it("keeps cowork workspace-bound stdio connectors resolvable before thread path exists", async () => {
     mocks.materializeCloudMcpServersMock.mockResolvedValue(materialized({
       mcpBindingSummaries: [
