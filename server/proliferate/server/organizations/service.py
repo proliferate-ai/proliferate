@@ -31,16 +31,20 @@ from proliferate.constants.organizations import (
     PUBLIC_EMAIL_DOMAINS,
 )
 from proliferate.db.models.auth import User
+from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.billing import get_or_create_stripe_customer_state_for_user
-from proliferate.db.store.organizations import (
+from proliferate.db.store.organization_records import (
+    InvitationCreateRecord,
     InvitationRecord,
     MemberRecord,
     MembershipRecord,
     OrganizationRecord,
     OrganizationWithMembershipRecord,
+    normalize_invitation_email,
 )
 from proliferate.integrations import resend
+from proliferate.server.organizations.landing import build_landing_html
 from proliferate.utils.time import utcnow
 
 OwnerScope = Literal["personal", "organization"]
@@ -84,7 +88,7 @@ class InvitationDeliveryResult:
 
 
 def normalize_email(email: str) -> str:
-    return organization_store.normalize_invitation_email(email)
+    return normalize_invitation_email(email)
 
 
 def derive_logo_domain_from_email(email: str) -> str | None:
@@ -420,7 +424,7 @@ async def create_invitation(
         require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
     normalized_email = normalize_email(email)
     token = _new_token()
-    record = await organization_store.create_or_rotate_organization_invitation(
+    record = await invitation_store.create_or_rotate_organization_invitation(
         organization_id=organization_id,
         email=normalized_email,
         role=_require_role(role),
@@ -433,7 +437,7 @@ async def create_invitation(
     delivery = await _send_invitation_email(record, token, actor_user)
     invitation = record.invitation
     if delivery.sent or delivery.skipped:
-        invitation = await organization_store.mark_invitation_delivery(
+        invitation = await invitation_store.mark_invitation_delivery(
             invitation_id=record.invitation.id,
             sent=delivery.sent,
             skipped=delivery.skipped,
@@ -455,7 +459,7 @@ async def resend_invitation(
     )
     require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
     token = _new_token()
-    record = await organization_store.rotate_organization_invitation(
+    record = await invitation_store.rotate_organization_invitation(
         organization_id=organization_id,
         invitation_id=invitation_id,
         token_hash=_hash_token(token, ORGANIZATION_INVITE_TOKEN_DOMAIN),
@@ -470,7 +474,7 @@ async def resend_invitation(
     delivery = await _send_invitation_email(record, token, actor_user)
     invitation = record.invitation
     if delivery.sent or delivery.skipped:
-        invitation = await organization_store.mark_invitation_delivery(
+        invitation = await invitation_store.mark_invitation_delivery(
             invitation_id=record.invitation.id,
             sent=delivery.sent,
             skipped=delivery.skipped,
@@ -482,7 +486,7 @@ async def resend_invitation(
 
 
 async def _send_invitation_email(
-    record: organization_store.InvitationCreateRecord,
+    record: InvitationCreateRecord,
     token: str,
     actor_user: User,
 ) -> InvitationDeliveryResult:
@@ -495,7 +499,7 @@ async def _send_invitation_email(
             invite_url=invite_url,
         )
     except resend.ResendEmailError as error:
-        await organization_store.mark_invitation_delivery(
+        await invitation_store.mark_invitation_delivery(
             invitation_id=record.invitation.id,
             sent=False,
             skipped=False,
@@ -519,7 +523,7 @@ async def list_invitations(actor_user: User, organization_id: UUID) -> list[Invi
         actor_user,
         OwnerSelection(owner_scope="organization", organization_id=organization_id),
     )
-    return await organization_store.list_organization_invitations(organization_id)
+    return await invitation_store.list_organization_invitations(organization_id)
 
 
 async def revoke_invitation(
@@ -532,7 +536,7 @@ async def revoke_invitation(
         OwnerSelection(owner_scope="organization", organization_id=organization_id),
     )
     require_org_role(context, {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN})
-    invitation = await organization_store.revoke_organization_invitation(
+    invitation = await invitation_store.revoke_organization_invitation(
         organization_id=organization_id,
         invitation_id=invitation_id,
     )
@@ -547,7 +551,7 @@ async def revoke_invitation(
 
 async def create_invitation_landing_handoff(raw_token: str) -> str:
     handoff_token = _new_token()
-    handoff = await organization_store.create_invitation_handoff(
+    handoff = await invitation_store.create_invitation_handoff(
         token_hash=_hash_token(raw_token, ORGANIZATION_INVITE_TOKEN_DOMAIN),
         handoff_token_hash=_hash_token(handoff_token, ORGANIZATION_INVITE_HANDOFF_TOKEN_DOMAIN),
         handoff_token=handoff_token,
@@ -560,14 +564,14 @@ async def create_invitation_landing_handoff(raw_token: str) -> str:
             "Organization invitation not found or expired.",
             status_code=404,
         )
-    return _landing_html(handoff.organization_name, handoff.handoff_token)
+    return build_landing_html(handoff.organization_name, handoff.handoff_token)
 
 
 async def accept_invitation(
     actor_user: User,
     invite_handoff: str,
 ) -> OrganizationWithMembershipRecord:
-    accepted, error = await organization_store.accept_invitation_handoff(
+    accepted, error = await invitation_store.accept_invitation_handoff(
         handoff_token_hash=_hash_token(invite_handoff, ORGANIZATION_INVITE_HANDOFF_TOKEN_DOMAIN),
         authenticated_user_id=actor_user.id,
         authenticated_email=actor_user.email,
@@ -587,40 +591,4 @@ async def accept_invitation(
     return OrganizationWithMembershipRecord(
         organization=accepted.organization,
         membership=accepted.membership,
-    )
-
-
-def _landing_html(organization_name: str, handoff_token: str) -> str:
-    deep_link = (
-        "proliferate://settings/organization?"
-        + urlencode({"inviteHandoff": handoff_token})
-    )
-    escaped_deep_link = _escape_html(deep_link)
-    escaped_name = _escape_html(organization_name)
-    return (
-        "<!doctype html>"
-        "<html><head><meta charset=\"utf-8\">"
-        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-        f"<title>Join {escaped_name}</title></head>"
-        "<body>"
-        f"<p>Opening Proliferate to join {escaped_name}.</p>"
-        f"<p><a href=\"{escaped_deep_link}\">Open Proliferate</a></p>"
-        "<script>"
-        f"window.location.replace({_quote_js_string(deep_link)});"
-        "</script>"
-        "</body></html>"
-    )
-
-
-def _quote_js_string(value: str) -> str:
-    return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
-
-
-def _escape_html(value: str) -> str:
-    return (
-        value.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-        .replace("'", "&#x27;")
     )

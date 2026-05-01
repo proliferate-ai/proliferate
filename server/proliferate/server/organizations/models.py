@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from proliferate.db.store.organizations import (
+from proliferate.db.store.organization_records import (
     InvitationRecord,
     MemberRecord,
     MembershipRecord,
