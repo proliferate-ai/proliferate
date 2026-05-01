@@ -9,7 +9,12 @@ import {
   type KeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
+import {
+  CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
+  WORKSPACE_CHAT_COMPOSER_INPUT,
+} from "@/config/chat";
 import { useChatFileMentionSearch } from "@/hooks/chat/use-chat-file-mention-search";
+import { useComposerTextareaAutosize } from "@/hooks/chat/use-composer-textarea-autosize";
 import {
   isComposerMentionSelectKey,
   isRawComposerSubmitKey,
@@ -32,6 +37,7 @@ import {
 } from "@/lib/infra/debug-measurement";
 import { ComposerFileMentionSearch } from "./ComposerFileMentionSearch";
 import { ComposerTextarea } from "./ComposerTextarea";
+import { ComposerTextareaFrame, type ComposerTextareaFrameTopInset } from "./ComposerTextareaFrame";
 
 type FileSearchResult = SearchWorkspaceFilesResponse["results"][number];
 
@@ -43,8 +49,7 @@ interface ComposerMentionEditorProps {
   disabled: boolean;
   onSubmit: () => void;
   onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
-  minHeightRem: number;
-  maxHeightRem: number;
+  topInset: ComposerTextareaFrameTopInset;
   searchHostElement?: HTMLElement | null;
 }
 
@@ -56,8 +61,7 @@ export function ComposerMentionEditor({
   disabled,
   onSubmit,
   onKeyDown,
-  minHeightRem,
-  maxHeightRem,
+  topInset,
   searchHostElement,
 }: ComposerMentionEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -80,30 +84,14 @@ export function ComposerMentionEditor({
     setSearchSuppressed(false);
     return next;
   }, [text.length]);
-
-  const resizeTextarea = useCallback(() => {
-    const el = textareaRef.current;
-    if (!el) {
-      return;
-    }
-
-    const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-    const minPx = Number.isFinite(rootFontSizePx)
-      ? rootFontSizePx * minHeightRem
-      : minHeightRem * 16;
-    const maxPx = Number.isFinite(rootFontSizePx)
-      ? rootFontSizePx * maxHeightRem
-      : maxHeightRem * 16;
-    el.style.height = "auto";
-    const contentHeight = el.scrollHeight;
-    const next = Math.min(maxPx, Math.max(minPx, contentHeight));
-    el.style.height = `${next}px`;
-    el.style.overflowY = contentHeight > maxPx ? "auto" : "hidden";
-  }, [maxHeightRem, minHeightRem]);
-
-  useLayoutEffect(() => {
-    resizeTextarea();
-  }, [resizeTextarea, text]);
+  const { resizeTextarea } = useComposerTextareaAutosize({
+    textareaRef,
+    value: text,
+    lineHeightRem: CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
+    minRows: WORKSPACE_CHAT_COMPOSER_INPUT.minRows,
+    maxRows: WORKSPACE_CHAT_COMPOSER_INPUT.maxRows,
+    minHeightRem: WORKSPACE_CHAT_COMPOSER_INPUT.minHeightRem,
+  });
 
   useLayoutEffect(() => {
     const next = pendingSelectionRef.current;
@@ -253,18 +241,12 @@ export function ComposerMentionEditor({
       {searchTray && searchHostElement
         ? createPortal(searchTray, searchHostElement)
         : searchTray}
-      <div
-        className="mb-2 flex-grow select-text overflow-y-auto px-4"
-        style={{
-          minHeight: `${minHeightRem}rem`,
-          maxHeight: `${maxHeightRem}rem`,
-        }}
-      >
+      <ComposerTextareaFrame topInset={topInset}>
         <ComposerTextarea
           data-chat-composer-editor
           data-telemetry-mask
           ref={textareaRef}
-          rows={2}
+          rows={WORKSPACE_CHAT_COMPOSER_INPUT.minRows}
           value={text}
           onChange={(event) => handleChange(event.target.value)}
           onKeyDown={handleKeyDown}
@@ -278,13 +260,9 @@ export function ComposerMentionEditor({
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
-          style={{
-            minHeight: `${minHeightRem}rem`,
-            maxHeight: `${maxHeightRem}rem`,
-          }}
           className={disabled ? "opacity-60" : ""}
         />
-      </div>
+      </ComposerTextareaFrame>
     </>
   );
 }

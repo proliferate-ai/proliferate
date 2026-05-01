@@ -5,6 +5,7 @@ import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposer
 import { SCENARIOS, type ScenarioKey } from "./playground";
 import {
   renderContextSlot,
+  renderComposerSurfaceForScenario,
   renderDelegationSlot,
   renderInteractionSlot,
   renderMobilityOverlayPreview,
@@ -203,5 +204,12 @@ describe("playground scenarios", () => {
     expect(FILE_MENTION_SEARCH_RESULTS.every((result) =>
       isValidWorkspaceRelativePath(result.path)
     )).toBe(true);
+  });
+
+  it("renders a long composer input scenario through the shared editor surface", () => {
+    expect(Object.keys(SCENARIOS)).toContain("composer-long-input");
+    const html = renderToStaticMarkup(renderComposerSurfaceForScenario("composer-long-input"));
+    expect(html).toContain("data-chat-composer-editor");
+    expect(html).toContain("data-telemetry-mask");
   });
 });
