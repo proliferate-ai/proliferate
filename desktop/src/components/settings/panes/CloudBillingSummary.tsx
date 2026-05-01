@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Switch";
 import { SettingsCard } from "@/components/settings/SettingsCard";
-import { Badge } from "@/components/ui/Badge";
 import {
   descriptionForStartBlockReason,
   titleForStartBlockReason,
@@ -60,54 +59,12 @@ export function CloudBillingSummary({
   return (
     <div className="space-y-3">
       <SettingsCard>
-        <div className="p-3 text-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="text-sm font-medium text-foreground">Status</span>
-              <Badge>{cloudAccessStatusLabel(billingPlan)}</Badge>
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              {billingPlan.isPaidCloud ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    loading={billingActions.creatingBillingPortal}
-                    onClick={() => {
-                      void billingActions.createBillingPortal().catch(() => undefined);
-                    }}
-                  >
-                    Manage billing
-                  </Button>
-                  {!hasUnlimitedHours && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      loading={billingActions.creatingRefillCheckout}
-                      onClick={() => {
-                        void billingActions.createRefillCheckout().catch(() => undefined);
-                      }}
-                    >
-                      Refill 10h
-                    </Button>
-                  )}
-                </>
-              ) : (
-                <Button
-                  type="button"
-                  variant="primary"
-                  loading={billingActions.creatingCloudCheckout}
-                  onClick={() => {
-                    void billingActions.createCloudCheckout().catch(() => undefined);
-                  }}
-                >
-                  Upgrade to unlimited
-                </Button>
-              )}
-            </div>
-          </div>
+        <div className="space-y-4 p-3 text-sm">
+          <p className="text-sm font-medium text-foreground">
+            {cloudAccessStatusLabel(billingPlan)}
+          </p>
 
-          <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="min-w-0">
               <dt className="text-xs text-muted-foreground">
                 {hasUnlimitedHours
@@ -136,6 +93,46 @@ export function CloudBillingSummary({
               </dd>
             </div>
           </dl>
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+            {billingPlan.isPaidCloud ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  loading={billingActions.creatingBillingPortal}
+                  onClick={() => {
+                    void billingActions.createBillingPortal().catch(() => undefined);
+                  }}
+                >
+                  Manage billing
+                </Button>
+                {!hasUnlimitedHours && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    loading={billingActions.creatingRefillCheckout}
+                    onClick={() => {
+                      void billingActions.createRefillCheckout().catch(() => undefined);
+                    }}
+                  >
+                    Refill 10h
+                  </Button>
+                )}
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="primary"
+                loading={billingActions.creatingCloudCheckout}
+                onClick={() => {
+                  void billingActions.createCloudCheckout().catch(() => undefined);
+                }}
+              >
+                Upgrade to unlimited
+              </Button>
+            )}
+          </div>
         </div>
       </SettingsCard>
 
