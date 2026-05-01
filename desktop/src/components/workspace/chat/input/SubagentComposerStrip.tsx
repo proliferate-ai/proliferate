@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/Button";
 import { PopoverButton } from "@/components/ui/PopoverButton";
-import { ChevronDown, ProliferateIcon } from "@/components/ui/icons";
+import { AgentGlyph, ChevronDown, ProliferateIcon } from "@/components/ui/icons";
 import { useSubagentComposerStrip } from "@/hooks/chat/subagents/use-subagent-composer-strip";
 import { ComposerControlButton } from "@/components/workspace/chat/input/ComposerControlButton";
 import { ComposerPopoverSurface } from "@/components/workspace/chat/input/ComposerPopoverSurface";
@@ -27,15 +27,16 @@ interface SubagentComposerStripProps {
   rows: Array<{
     sessionLinkId: string;
     childSessionId: string;
+    agentKind: string;
     label: string;
     statusLabel: string;
     meta: string | null;
     latestCompletionLabel: string | null;
     wakeScheduled: boolean;
-    color: string;
   }>;
   parent: {
     parentSessionId: string;
+    agentKind: string;
     label: string;
     meta: string | null;
   } | null;
@@ -114,7 +115,10 @@ export function SubagentComposerControl({
                   close();
                 }}
               >
-                <ProliferateIcon className="size-5 shrink-0 text-muted-foreground" />
+                <AgentGlyph
+                  agentKind={parent.agentKind}
+                  className="size-5 shrink-0 text-muted-foreground"
+                />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-foreground">
                     {parent.label}
@@ -139,13 +143,10 @@ export function SubagentComposerControl({
                   close();
                 }}
               >
-                <span
-                  className="flex size-5 shrink-0 items-center justify-center rounded-full"
-                  style={{ color: row.color }}
-                  aria-hidden="true"
-                >
-                  <ProliferateIcon className="size-5" />
-                </span>
+                <AgentGlyph
+                  agentKind={row.agentKind}
+                  className="size-5 shrink-0 text-muted-foreground"
+                />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-foreground">
                     {row.label}

@@ -4,7 +4,6 @@ import type { ChildSubagentSummary, ParentSubagentLinkSummary } from "@anyharnes
 import { getProviderDisplayName } from "@/config/providers";
 import { useActiveChatSessionState } from "@/hooks/chat/use-active-chat-session-state";
 import { useSessionSelectionActions } from "@/hooks/sessions/use-session-selection-actions";
-import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
 import { formatSubagentLabel } from "@/lib/domain/chat/subagents/provenance";
 
 const EMPTY_CHILDREN: ChildSubagentSummary[] = [];
@@ -12,12 +11,12 @@ const EMPTY_CHILDREN: ChildSubagentSummary[] = [];
 export interface SubagentComposerStripRow {
   sessionLinkId: string;
   childSessionId: string;
+  agentKind: string;
   label: string;
   statusLabel: string;
   meta: string | null;
   latestCompletionLabel: string | null;
   wakeScheduled: boolean;
-  color: string;
 }
 
 export interface SubagentComposerStripViewModel {
@@ -37,6 +36,7 @@ export interface SubagentComposerStripSummary {
 
 export interface SubagentComposerParent {
   parentSessionId: string;
+  agentKind: string;
   label: string;
   meta: string | null;
 }
@@ -131,6 +131,7 @@ function buildParent(parent: ParentSubagentLinkSummary | null): SubagentComposer
   }
   return {
     parentSessionId: parent.parentSessionId,
+    agentKind: parent.parentAgentKind,
     label: parent.parentTitle?.trim()
       || parent.label?.trim()
       || getProviderDisplayName(parent.parentAgentKind),
@@ -145,6 +146,7 @@ function buildSubagentRow(
   return {
     sessionLinkId: child.sessionLinkId,
     childSessionId: child.childSessionId,
+    agentKind: child.agentKind,
     label: formatSubagentLabel(child.label ?? child.title, ordinal),
     statusLabel: formatSessionStatus(child.status),
     meta: formatMeta(child),
@@ -152,7 +154,6 @@ function buildSubagentRow(
       ? `Turn ${child.latestCompletion.outcome}`
       : null,
     wakeScheduled: child.wakeScheduled,
-    color: resolveSubagentColor(child.sessionLinkId),
   };
 }
 

@@ -36,7 +36,7 @@ export function useHeaderTabsLayout({
 
       const row = shellRow.row;
       if (row.kind === "pill") {
-        if (row.isCollapsed) {
+        if (row.isCollapsed || !row.color) {
           return;
         }
         const left = layout.positions[index] ?? 0;

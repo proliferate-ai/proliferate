@@ -99,6 +99,10 @@ describe("playground scenarios", () => {
     expect(isValidElement(renderQueueSlot("subagents-queued-wake-with-approval"))).toBe(true);
     expect(isValidElement(renderInteractionSlot("subagents-queued-wake-with-approval"))).toBe(true);
     expect(isValidElement(renderInteractionSlot("subagents-coding-review-with-approval"))).toBe(true);
+
+    const subagentComposerHtml = renderToStaticMarkup(renderDelegationSlot("subagents-composer-many"));
+    expect(subagentComposerHtml).not.toContain("color-mix");
+    expect(subagentComposerHtml).not.toContain("style=");
   });
 
   it("renders cloud composer context-slot scenarios", () => {

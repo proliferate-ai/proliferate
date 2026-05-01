@@ -108,7 +108,7 @@ describe("buildHeaderShellRows", () => {
           groupKind: "subagent",
           groupId: "parent",
           parentId: "parent",
-          color: "blue",
+          color: null,
           label: "Agents",
           isCollapsed: true,
         },

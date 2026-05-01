@@ -8,9 +8,9 @@ import {
 import { createPortal } from "react-dom";
 import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
 import {
+  AgentGlyph,
   BrailleSweepBadge,
   ChevronRight,
-  ProliferateIcon,
 } from "@/components/ui/icons";
 import type { HeaderChatMenuEntry } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
 import type { HeaderSubagentChildRow } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";
@@ -204,13 +204,10 @@ function SubagentFlyout({
         <PopoverMenuItem
           key={child.sessionLinkId}
           icon={(
-            <span
-              className="flex size-4 shrink-0 items-center justify-center"
-              style={{ color: child.color }}
-              aria-hidden="true"
-            >
-              <ProliferateIcon className="size-4" />
-            </span>
+            <AgentGlyph
+              agentKind={child.agentKind}
+              className="size-4 shrink-0 text-muted-foreground"
+            />
           )}
           label={child.title}
           trailing={renderSubagentTrailing(child)}

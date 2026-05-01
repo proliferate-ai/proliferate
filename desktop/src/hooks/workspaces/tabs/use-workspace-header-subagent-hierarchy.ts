@@ -15,7 +15,6 @@ import type {
   SessionReviewsResponse,
 } from "@anyharness/sdk";
 import { getProviderDisplayName } from "@/config/providers";
-import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
 import { formatSubagentLabel } from "@/lib/domain/chat/subagents/provenance";
 import {
   reviewAssignmentHeaderStatusLabel,
@@ -39,7 +38,6 @@ export interface HeaderSubagentChildRow {
   meta: string | null;
   statusLabel: string;
   wakeScheduled: boolean;
-  color: string;
   isActive: boolean;
 }
 
@@ -181,7 +179,6 @@ function buildChildRow(
     meta: formatMeta([child.modelId, child.modeId]),
     statusLabel: formatSessionStatus(child.status),
     wakeScheduled: child.wakeScheduled,
-    color: resolveSubagentColor(child.sessionLinkId),
     isActive: child.childSessionId === activeSessionId,
   };
 }
@@ -209,7 +206,6 @@ function buildReviewChildRows(
           ]),
           statusLabel: reviewAssignmentHeaderStatusLabel(assignment),
           wakeScheduled: false,
-          color: resolveSubagentColor(assignment.sessionLinkId ?? assignment.id),
           isActive: sessionId === activeSessionId,
         });
       }
