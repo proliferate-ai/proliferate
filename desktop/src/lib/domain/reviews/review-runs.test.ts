@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
-import type { ReviewRunDetail } from "@anyharness/sdk";
+import type { ReviewKind, ReviewRunDetail } from "@anyharness/sdk";
 import {
   isReviewRunBlocking,
+  reviewRunReplacesStartingReview,
   selectBlockingReviewRun,
   selectComposerReviewRun,
 } from "./review-runs";
+
+interface StartingReviewFixture {
+  parentSessionId: string;
+  kind: ReviewKind;
+  maxRounds: number;
+  autoIterate: boolean;
+  startedAt: number;
+}
 
 describe("review run composer selection", () => {
   it("selects a blocking review before terminal notices", () => {
@@ -36,6 +45,51 @@ describe("review run composer selection", () => {
     expect(isReviewRunBlocking(reviewRun({ id: "passed", status: "passed" }))).toBe(false);
     expect(isReviewRunBlocking(reviewRun({ id: "stopped", status: "stopped" }))).toBe(false);
   });
+
+  it("lets any blocking server run replace optimistic start state", () => {
+    expect(reviewRunReplacesStartingReview(
+      reviewRun({
+        id: "reviewing",
+        status: "reviewing",
+        createdAt: "2026-04-29T00:00:00Z",
+      }),
+      startingReview({ startedAt: Date.parse("2026-04-29T01:00:00Z") }),
+    )).toBe(true);
+  });
+
+  it("lets a matching newly-created terminal run replace optimistic start state", () => {
+    expect(reviewRunReplacesStartingReview(
+      reviewRun({
+        id: "failed-fast",
+        status: "system_failed",
+        createdAt: "2026-04-29T01:00:01Z",
+      }),
+      startingReview({ startedAt: Date.parse("2026-04-29T01:00:00Z") }),
+    )).toBe(true);
+  });
+
+  it("keeps older terminal notices behind optimistic start state", () => {
+    expect(reviewRunReplacesStartingReview(
+      reviewRun({
+        id: "older-failed",
+        status: "system_failed",
+        createdAt: "2026-04-29T00:59:59Z",
+      }),
+      startingReview({ startedAt: Date.parse("2026-04-29T01:00:00Z") }),
+    )).toBe(false);
+  });
+
+  it("does not let terminal runs for a different review setup replace optimistic start state", () => {
+    expect(reviewRunReplacesStartingReview(
+      reviewRun({
+        id: "plan-failed",
+        kind: "plan",
+        status: "system_failed",
+        createdAt: "2026-04-29T01:00:01Z",
+      }),
+      startingReview({ startedAt: Date.parse("2026-04-29T01:00:00Z") }),
+    )).toBe(false);
+  });
 });
 
 function reviewRun(
@@ -63,5 +117,16 @@ function reviewRun(
     updatedAt: "2026-04-29T00:00:00Z",
     workspaceId: "workspace",
     ...rest,
+  };
+}
+
+function startingReview(overrides: Partial<StartingReviewFixture> = {}): StartingReviewFixture {
+  return {
+    autoIterate: false,
+    kind: "code",
+    maxRounds: 2,
+    parentSessionId: "parent-session",
+    startedAt: Date.parse("2026-04-29T00:00:00Z"),
+    ...overrides,
   };
 }

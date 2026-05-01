@@ -15,7 +15,6 @@ import {
 import { useActiveReviewRun } from "@/hooks/reviews/use-active-review-run";
 import { useReviewActions } from "@/hooks/reviews/use-review-actions";
 import {
-  isReviewRunBlocking,
   latestReviewRound,
   reviewAssignmentStatusLabel,
   reviewFeedbackDeliveryLabel,
@@ -24,6 +23,7 @@ import {
   reviewRunHasNextRound,
   reviewKindLabel,
   reviewRoundProgress,
+  reviewRunReplacesStartingReview,
 } from "@/lib/domain/reviews/review-runs";
 import {
   type StartingReviewState,
@@ -44,16 +44,15 @@ function ConnectedComposerReviewRunSurface({ panel = false }: { panel?: boolean 
   const openCritique = useReviewUiStore((state) => state.openCritique);
   const dismissTerminalNotice = useReviewUiStore((state) => state.dismissTerminalNotice);
   const clearStartingReview = useReviewUiStore((state) => state.clearStartingReview);
+  const runReplacesStartingReview = run
+    ? reviewRunReplacesStartingReview(run, startingReview)
+    : false;
 
   useEffect(() => {
-    if (
-      run
-      && startingReview?.parentSessionId === run.parentSessionId
-      && isReviewRunBlocking(run)
-    ) {
+    if (runReplacesStartingReview) {
       clearStartingReview();
     }
-  }, [clearStartingReview, run, startingReview?.parentSessionId]);
+  }, [clearStartingReview, runReplacesStartingReview]);
 
   const handleOpenCritique = (assignment: ReviewAssignmentDetail) => {
     if (!run) {
@@ -66,7 +65,7 @@ function ConnectedComposerReviewRunSurface({ panel = false }: { panel?: boolean 
     });
   };
 
-  if (run && (!startingReview || isReviewRunBlocking(run))) {
+  if (run && (!startingReview || runReplacesStartingReview)) {
     const control = (
       <ReviewComposerControl
         summary={summaryForRun(run)}

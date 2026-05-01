@@ -52,6 +52,38 @@ export function isReviewRunTerminal(run: ReviewRunDetail): boolean {
   return run.status === "passed" || run.status === "stopped" || run.status === "system_failed";
 }
 
+interface StartingReviewLike {
+  parentSessionId: string;
+  kind: ReviewKind;
+  maxRounds: number;
+  autoIterate: boolean;
+  startedAt: number;
+}
+
+export function reviewRunReplacesStartingReview(
+  run: ReviewRunDetail,
+  startingReview: StartingReviewLike | null | undefined,
+): boolean {
+  if (!startingReview || run.parentSessionId !== startingReview.parentSessionId) {
+    return false;
+  }
+
+  if (isReviewRunBlocking(run)) {
+    return true;
+  }
+
+  if (
+    run.kind !== startingReview.kind
+    || run.maxRounds !== startingReview.maxRounds
+    || run.autoIterate !== startingReview.autoIterate
+  ) {
+    return false;
+  }
+
+  const createdAtMs = Date.parse(run.createdAt);
+  return Number.isFinite(createdAtMs) && createdAtMs >= startingReview.startedAt;
+}
+
 export function selectBlockingReviewRun(
   runs: readonly ReviewRunDetail[] | null,
 ): ReviewRunDetail | null {
