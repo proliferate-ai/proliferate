@@ -40,9 +40,6 @@ export function useHomeNextState({
   });
 
   const targetDisabledReason = useMemo(() => {
-    if (model.disabledReason) {
-      return model.disabledReason;
-    }
     if (destination === "cowork") {
       return null;
     }
@@ -88,7 +85,6 @@ export function useHomeNextState({
     return repository.launchTarget ? null : "Choose where to launch";
   }, [
     destination,
-    model.disabledReason,
     repoLaunchKind,
     repository.branchOptions.length,
     repository.branchQuery.isError,
@@ -110,7 +106,6 @@ export function useHomeNextState({
     targetDisabledReason,
     canLaunchTarget:
       targetDisabledReason === null
-      && repository.launchTarget !== null
-      && model.effectiveModelSelection !== null,
+      && repository.launchTarget !== null,
   };
 }

@@ -1,7 +1,6 @@
 import type { Workspace } from "@anyharness/sdk";
 import { HOME_SCREEN_LABELS } from "@/config/home";
 import {
-  joinLabels,
   workspaceBranchLabel,
   workspaceRepoName,
 } from "@/lib/domain/workspaces/workspace-display";
@@ -20,15 +19,6 @@ export interface HomeActionCardModel {
   description: string;
   icon: HomeActionIcon;
   emphasis: "primary" | "secondary";
-}
-
-export type HomeStatusIcon = "spinner" | "check" | "warning";
-
-export interface HomeStatusMessageModel {
-  text: string;
-  icon?: HomeStatusIcon;
-  actionId?: "agent-settings";
-  actionLabel?: string;
 }
 
 export function buildHomeActionCards(args: {
@@ -79,43 +69,4 @@ export function buildHomeActionCards(args: {
   };
 
   return [leadingCard, middleCard, trailingCard];
-}
-
-export function buildHomeStatusMessage(args: {
-  readyAgentNames: string[];
-  agentsNeedingSetupNames: string[];
-  agentsLoading: boolean;
-  isReconcilingAgents: boolean;
-}): HomeStatusMessageModel | null {
-  const { readyAgentNames, agentsNeedingSetupNames, agentsLoading, isReconcilingAgents } = args;
-
-  if (isReconcilingAgents) {
-    const installedCount = readyAgentNames.length;
-    const totalCount = installedCount + agentsNeedingSetupNames.length;
-    const progress = totalCount > 0 ? ` (${installedCount}/${totalCount})` : "";
-    return {
-      text: `Setting up agents${progress}...`,
-      icon: "spinner",
-      actionId: "agent-settings",
-      actionLabel: HOME_SCREEN_LABELS.agentsAction,
-    };
-  }
-
-  if (!agentsLoading && readyAgentNames.length > 0) {
-    return {
-      text: `${joinLabels(readyAgentNames)} ${HOME_SCREEN_LABELS.agentsConfiguredSuffix}`,
-      icon: "check",
-    };
-  }
-
-  if (!agentsLoading && agentsNeedingSetupNames.length > 0) {
-    return {
-      text: `${HOME_SCREEN_LABELS.agentsSetupPrefix} ${joinLabels(agentsNeedingSetupNames)} ${HOME_SCREEN_LABELS.agentsSetupSuffix}`,
-      icon: "warning",
-      actionId: "agent-settings",
-      actionLabel: HOME_SCREEN_LABELS.agentsAction,
-    };
-  }
-
-  return null;
 }

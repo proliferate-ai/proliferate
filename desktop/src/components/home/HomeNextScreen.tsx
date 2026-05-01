@@ -23,19 +23,8 @@ import {
 } from "@/lib/domain/home/home-next-launch";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
-import { Check, CircleAlert, Clock, Folder, LoaderCircle, Settings } from "@/components/ui/icons";
-import type { HomeActionId, HomeStatusIcon } from "@/lib/domain/home/home-screen";
-
-function resolveStatusIcon(icon: HomeStatusIcon) {
-  switch (icon) {
-    case "spinner":
-      return <LoaderCircle className="size-3.5 animate-spin" />;
-    case "check":
-      return <Check className="size-3.5" />;
-    case "warning":
-      return <CircleAlert className="size-3.5" />;
-  }
-}
+import { Clock, Folder, Settings } from "@/components/ui/icons";
+import type { HomeActionId } from "@/lib/domain/home/home-screen";
 
 function resolveActionIcon(actionId: HomeActionId) {
   switch (actionId) {
@@ -66,7 +55,6 @@ export function HomeNextScreen() {
   const clearRestoredDraftText = useHomeDraftHandoffStore((state) => state.clearDraftText);
   const {
     actionCards,
-    statusMessage,
     isAddingRepo,
     handleHomeAction,
   } = useHomeScreen();
@@ -96,8 +84,21 @@ export function HomeNextScreen() {
   const submitDisabledReason = draft.trim().length === 0
     ? null
     : homeNext.targetDisabledReason;
+  const modelAvailabilityNotice =
+    homeNext.modelAvailabilityState === "no_launchable_model"
+      ? {
+        text: "Finish agent setup to start a chat.",
+        actionLabel: "Agents",
+      }
+      : homeNext.modelAvailabilityState === "load_error"
+        ? {
+          text: "Models are unavailable right now. Try again in a moment.",
+          actionLabel: null,
+        }
+        : null;
   const canSubmit =
     draft.trim().length > 0
+    && homeNext.modelAvailabilityState === "launchable"
     && homeNext.canLaunchTarget
     && !!homeNext.effectiveModelSelection
     && !!homeNext.launchTarget
@@ -269,6 +270,22 @@ export function HomeNextScreen() {
             </form>
           </ChatComposerSurface>
 
+          {modelAvailabilityNotice ? (
+            <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-sm text-muted-foreground">
+              <span>{modelAvailabilityNotice.text}</span>
+              {modelAvailabilityNotice.actionLabel ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleHomeAction("agent-settings")}
+                  className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
+                >
+                  {modelAvailabilityNotice.actionLabel}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+
           {submitDisabledReason ? (
             <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-sm text-muted-foreground">
               <span>{submitDisabledReason}</span>
@@ -301,25 +318,6 @@ export function HomeNextScreen() {
                 </Button>
               ))}
             </div>
-
-            {statusMessage ? (
-              <div className="mt-3 flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
-                {statusMessage.icon && resolveStatusIcon(statusMessage.icon)}
-                <span>
-                  {statusMessage.text}{" "}
-                  {statusMessage.actionId && statusMessage.actionLabel ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleHomeAction(statusMessage.actionId!)}
-                      className="inline h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
-                    >
-                      {statusMessage.actionLabel}
-                    </Button>
-                  ) : null}
-                </span>
-              </div>
-            ) : null}
           </div>
         </div>
       </main>

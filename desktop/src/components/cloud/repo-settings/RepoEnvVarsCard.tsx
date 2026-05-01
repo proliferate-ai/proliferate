@@ -1,5 +1,5 @@
 import type { ChangeEvent } from "react";
-import { EnvironmentField } from "@/components/settings/EnvironmentSettingsLayout";
+import { EnvironmentField } from "@/components/ui/EnvironmentLayout";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";

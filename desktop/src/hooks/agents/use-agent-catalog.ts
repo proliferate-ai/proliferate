@@ -40,6 +40,8 @@ export function useAgentCatalog() {
   return {
     ...agentsQuery,
     agents,
+    isError: agentsQuery.isError,
+    error: agentsQuery.error,
     ...derived,
   };
 }
