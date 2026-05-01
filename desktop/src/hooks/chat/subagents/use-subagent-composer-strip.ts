@@ -1,13 +1,11 @@
 import { useCallback, useMemo } from "react";
 import { useSessionSubagentsQuery } from "@anyharness/sdk-react";
 import type { ChildSubagentSummary, ParentSubagentLinkSummary } from "@anyharness/sdk";
-import { getProviderDisplayName } from "@/config/providers";
 import {
   useActiveSessionId,
   useActiveSessionWorkspaceId,
 } from "@/hooks/chat/use-active-chat-session-selectors";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
-import { resolveSubagentColor } from "@/lib/domain/chat/subagent-braille-color";
 import { formatSubagentLabel } from "@/lib/domain/chat/subagents/provenance";
 
 const EMPTY_CHILDREN: ChildSubagentSummary[] = [];
@@ -17,10 +15,8 @@ export interface SubagentComposerStripRow {
   childSessionId: string;
   label: string;
   statusLabel: string;
-  meta: string | null;
   latestCompletionLabel: string | null;
   wakeScheduled: boolean;
-  color: string;
 }
 
 export interface SubagentComposerStripViewModel {
@@ -41,7 +37,6 @@ export interface SubagentComposerStripSummary {
 export interface SubagentComposerParent {
   parentSessionId: string;
   label: string;
-  meta: string | null;
 }
 
 export function useSubagentComposerStrip(): SubagentComposerStripViewModel | null {
@@ -147,8 +142,7 @@ function buildParent(parent: ParentSubagentLinkSummary | null): SubagentComposer
     parentSessionId: parent.parentSessionId,
     label: parent.parentTitle?.trim()
       || parent.label?.trim()
-      || getProviderDisplayName(parent.parentAgentKind),
-    meta: parent.parentModelId?.trim() || null,
+      || "Parent agent",
   };
 }
 
@@ -161,30 +155,30 @@ function buildSubagentRow(
     childSessionId: child.childSessionId,
     label: formatSubagentLabel(child.label ?? child.title, ordinal),
     statusLabel: formatSessionStatus(child.status),
-    meta: formatMeta(child),
     latestCompletionLabel: child.latestCompletion
-      ? `Turn ${child.latestCompletion.outcome}`
+      ? formatCompletionLabel(child.latestCompletion.outcome)
       : null,
     wakeScheduled: child.wakeScheduled,
-    color: resolveSubagentColor(child.sessionLinkId),
   };
 }
 
-function formatMeta(child: ChildSubagentSummary): string | null {
-  const parts = [
-    formatAgentKind(child.agentKind),
-    child.modelId,
-    child.modeId,
-  ].filter((value): value is string => !!value && value.trim().length > 0);
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
-
-function formatAgentKind(agentKind: string): string {
-  return agentKind
+function formatCompletionLabel(outcome: string): string {
+  const normalized = outcome
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+    .toLowerCase();
+  if (normalized === "completed") {
+    return "Completed turn";
+  }
+  if (normalized === "failed") {
+    return "Failed turn";
+  }
+  if (normalized === "cancelled" || normalized === "canceled") {
+    return "Cancelled turn";
+  }
+  const title = normalized.replace(/\b\w/g, (char) => char.toUpperCase());
+  return `${title || "Finished"} turn`;
 }
 
 function formatSessionStatus(status: ChildSubagentSummary["status"]): string {
